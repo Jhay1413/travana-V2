@@ -1088,13 +1088,6 @@ export default function CommandCenterPage() {
                             </div>
                           </div>
 
-                          <div
-                            className="mt-2 line-clamp-2 text-xs text-black/60 dark:text-white/60"
-                            data-testid={`text-social-post-copy-${p.id}`}
-                          >
-                            {p.copy}
-                          </div>
-
                           <div className="mt-3 flex items-center gap-2">
                             <span
                               className={
