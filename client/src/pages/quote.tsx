@@ -346,20 +346,34 @@ export default function QuotePage() {
                         <div className="truncate text-base font-semibold" data-testid="text-itinerary-quote-title">
                           {quote.quoteTitle}
                         </div>
-                        <div className="flex items-center gap-2" data-testid="row-itinerary-total-owner">
+
+                        <div className="ml-auto flex items-center gap-2" data-testid="row-itinerary-total-owner">
                           <span className="text-sm font-semibold text-black/85" data-testid="text-itinerary-total">
                             {currency.format(quote.commissions.price)}
                           </span>
-                          <span className="text-xs text-black/25" aria-hidden>
-                            •
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70" data-testid="pill-itinerary-owner">
-                            <span className="h-1.5 w-1.5 rounded-full bg-black/40" aria-hidden />
-                            <span data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
-                            <span className="text-black/35" aria-hidden>
-                              ·
+
+                          <span
+                            className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
+                            data-testid="pill-itinerary-owner"
+                          >
+                            <span
+                              className="grid h-6 w-6 place-items-center rounded-full border border-black/10 bg-gradient-to-b from-white/80 to-white/50 text-[10px] font-bold text-black/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
+                              data-testid="avatar-itinerary-owner"
+                              aria-hidden
+                            >
+                              {quote.owner.name
+                                .split(" ")
+                                .filter(Boolean)
+                                .slice(0, 2)
+                                .map((p) => p[0])
+                                .join("")
+                                .toUpperCase()}
                             </span>
-                            <span className="text-black/55" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
+
+                            <span className="flex min-w-0 flex-col leading-tight" data-testid="col-itinerary-owner">
+                              <span className="truncate" data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
+                              <span className="text-[10px] font-semibold text-black/50" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
+                            </span>
                           </span>
                         </div>
                       </div>
