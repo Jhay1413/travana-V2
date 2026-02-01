@@ -1396,7 +1396,27 @@ export default function CommandCenterPage() {
                               </span>
                             </div>
                           </div>
-                          <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-black/40 transition group-hover:translate-x-0.5 dark:text-white/45" />
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={
+                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
+                                (p.status === "Posted"
+                                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                  : p.status === "Scheduled"
+                                    ? "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                                    : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300")
+                              }
+                              data-testid={`status-social-post-${p.id}`}
+                            >
+                              {p.status}
+                            </span>
+                            <span
+                              className="inline-flex items-center rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
+                              data-testid={`pill-social-post-origin-${p.id}`}
+                            >
+                              From quote
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex items-start gap-3">
@@ -1459,28 +1479,6 @@ export default function CommandCenterPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={
-                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
-                              (p.status === "Posted"
-                                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                : p.status === "Scheduled"
-                                  ? "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                                  : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300")
-                            }
-                            data-testid={`status-social-post-${p.id}`}
-                          >
-                            {p.status}
-                          </span>
-
-                          <span
-                            className="inline-flex items-center rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
-                            data-testid={`pill-social-post-origin-${p.id}`}
-                          >
-                            From quote
-                          </span>
-                        </div>
                       </div>
                     </button>
                   ))}
