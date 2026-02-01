@@ -677,7 +677,7 @@ export default function CommandCenterPage() {
   const [role, setRole] = useState<Role>("Agent");
   const [active, setActive] = useState<string>("overview");
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"clients" | "pipeline" | "calendar">("clients");
+  const [tab, setTab] = useState<"clients" | "pipeline" | "calendar" | "news">("clients");
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   const themeClass = theme === "dark" ? "dark" : "";
@@ -729,6 +729,9 @@ export default function CommandCenterPage() {
                   </TabsTrigger>
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-calendar">
                     Calendar
+                  </TabsTrigger>
+                  <TabsTrigger value="news" className="rounded-xl" data-testid="tab-news">
+                    News
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -910,6 +913,65 @@ export default function CommandCenterPage() {
                         </button>
                       </div>
                     </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="news" className="mt-0">
+                <div className="space-y-3" data-testid="panel-news">
+                  {([
+                    {
+                      id: "hub-001",
+                      title: "Profile badges now supported",
+                      source: "TheHub",
+                      time: "2h",
+                      tag: "Training",
+                      body: "New badge packs are available for Agent profiles. Add credibility to your outreach with verified credentials.",
+                    },
+                    {
+                      id: "hub-002",
+                      title: "Supplier bulletin: 2026 cabin allocation",
+                      source: "TheHub",
+                      time: "Yesterday",
+                      tag: "News",
+                      body: "Early access allocations released for key routes. Review priority clients and prepare pre-quotes.",
+                    },
+                    {
+                      id: "hub-003",
+                      title: "SOP update: deposit & payment schedule",
+                      source: "TheHub",
+                      time: "3d",
+                      tag: "SOP",
+                      body: "A revised deposit timeline is live. Use the new schedule in all quotes to avoid reconciliation issues.",
+                    },
+                  ] as const).map((n) => (
+                    <button
+                      key={n.id}
+                      className="w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                      data-testid={`card-news-${n.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div className="truncate text-sm font-semibold" data-testid={`text-news-title-${n.id}`}>
+                              {n.title}
+                            </div>
+                            <span className="text-xs text-black/35 dark:text-white/35" data-testid={`text-news-time-${n.id}`}>
+                              {n.time}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55 dark:text-white/55">
+                            <span data-testid={`text-news-source-${n.id}`}>{n.source}</span>
+                            <span className="text-black/25 dark:text-white/25">•</span>
+                            <span data-testid={`text-news-tag-${n.id}`}>{n.tag}</span>
+                          </div>
+                          <div className="mt-2 text-xs text-black/60 dark:text-white/60" data-testid={`text-news-body-${n.id}`}>
+                            {n.body}
+                          </div>
+                        </div>
+                        <ChevronRight className="mt-1 h-4 w-4 text-black/40 dark:text-white/45" />
+                      </div>
+                    </button>
                   ))}
                 </div>
               </TabsContent>
