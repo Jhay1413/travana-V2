@@ -470,6 +470,16 @@ function ShellNav({
             const item = map[key];
             const isActive = active === `connect-${key}`;
 
+            const awaitingMap: Record<string, number> = {
+              whatsapp: 43,
+              facebook: 2,
+              tickets: 6,
+              instagram: 0,
+              email: 9,
+              "internal-chat": 4,
+            };
+            const awaiting = awaitingMap[key] ?? 0;
+
             return (
               <button
                 key={key}
@@ -496,9 +506,27 @@ function ShellNav({
                   </span>
                   <span className="text-sm font-medium" data-testid={`text-connect-label-${key}`}>{item.label}</span>
                 </div>
-                <ChevronRight
-                  className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
-                />
+
+                <div className="flex items-center gap-2">
+                  {awaiting > 0 ? (
+                    <span
+                      className={
+                        "inline-flex min-w-[28px] items-center justify-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums " +
+                        (isActive
+                          ? "border-black/10 bg-black/10 text-black dark:border-white/15 dark:bg-white/15 dark:text-white"
+                          : "border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/10 dark:text-white/80")
+                      }
+                      data-testid={`badge-connect-awaiting-${key}`}
+                      aria-label={`${awaiting} awaiting`}
+                    >
+                      {awaiting}
+                    </span>
+                  ) : null}
+
+                  <ChevronRight
+                    className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                  />
+                </div>
               </button>
             );
           })}
