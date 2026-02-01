@@ -1049,9 +1049,9 @@ export default function CommandCenterPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start gap-4 text-left">
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-start gap-2 text-left">
                                 <div
-                                  className="truncate text-sm font-semibold"
+                                  className="truncate text-sm font-semibold text-left"
                                   data-testid={`text-social-post-title-${p.id}`}
                                 >
                                   {p.title}
