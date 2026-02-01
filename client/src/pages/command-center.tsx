@@ -2772,7 +2772,9 @@ export default function CommandCenterPage() {
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div className="space-y-1">
                   <div className="text-sm font-semibold" data-testid="text-airports-title">Airports</div>
-                  <div className="text-xs text-muted-foreground">Manage airports for quotes and bookings.</div>
+                  <div className="text-xs text-muted-foreground">
+                    {airportSearch ? `Showing ${filteredAirports.length} of ${airportsList?.length || 0} airports` : "Manage airports for quotes and bookings."}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <div className="relative z-10">
@@ -2815,9 +2817,9 @@ export default function CommandCenterPage() {
                   </Button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm">
                     <tr className="border-b border-black/10 dark:border-white/10">
                       <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Airport Name</th>
                       <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Airport Code</th>
