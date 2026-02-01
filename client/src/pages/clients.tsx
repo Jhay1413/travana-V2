@@ -394,7 +394,10 @@ export default function ClientsPage() {
                         <motion.button
                           key={c.id}
                           type="button"
-                          onClick={() => setSelectedId(c.id)}
+                          onClick={() => {
+                            setSelectedId(c.id);
+                            navigate(`/clients/${c.id}`);
+                          }}
                           className={
                             "group w-full rounded-3xl border p-4 text-left transition active:scale-[0.99] " +
                             (isSelected
