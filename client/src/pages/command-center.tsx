@@ -1418,8 +1418,10 @@ export default function CommandCenterPage() {
                                 From quote
                               </span>
                             </div>
-                            <div className="text-xs text-black/55 dark:text-white/55" data-testid={`text-social-post-platform-${p.id}`}>
-                              {p.audience}
+                            <div className="flex items-center gap-2 text-xs text-black/55 dark:text-white/55">
+                              <span data-testid={`text-social-post-quote-${p.id}`}>Quote #{p.quoteId}</span>
+                              <span className="text-black/25 dark:text-white/25">•</span>
+                              <span data-testid={`text-social-post-platform-${p.id}`}>{p.audience}</span>
                             </div>
                           </div>
                         </div>
@@ -1462,15 +1464,7 @@ export default function CommandCenterPage() {
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-between gap-3 pt-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-black/45 dark:text-white/45" data-testid={`text-social-post-quote-${p.id}`}>
-                                  Quote #{p.quoteId}
-                                </span>
-                                <span className="text-black/25 dark:text-white/25">•</span>
-                                <span data-testid={`text-social-post-audience-${p.id}`}>{p.audience}</span>
-                              </div>
-
+                            <div className="flex justify-end pt-1">
                               <a
                                 href={p.liveHref}
                                 className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/5 px-2 py-1 text-[11px] font-semibold text-black/75 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
