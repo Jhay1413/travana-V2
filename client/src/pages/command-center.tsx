@@ -2640,7 +2640,7 @@ export default function CommandCenterPage() {
                 </div>
                 <div className="flex gap-2">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
                     <Input
                       placeholder="Search operators..."
                       value={tourOperatorSearch}
@@ -2775,7 +2775,7 @@ export default function CommandCenterPage() {
                 </div>
                 <div className="flex gap-2">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
                     <Input
                       placeholder="Search airports..."
                       value={airportSearch}
