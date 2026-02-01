@@ -1028,10 +1028,10 @@ export default function CommandCenterPage() {
                         className="group w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
                         data-testid={`card-social-post-${p.id}`}
                       >
-                      <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4">
                         <div className="hidden sm:block shrink-0">
                           <div
-                            className="relative h-20 w-28 overflow-hidden rounded-2xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
+                            className="relative h-28 w-40 overflow-hidden rounded-3xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
                             data-testid={`img-social-post-${p.id}`}
                           >
                             {p.imageSrc ? (
@@ -1046,20 +1046,25 @@ export default function CommandCenterPage() {
                           </div>
                         </div>
 
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="truncate text-sm font-semibold"
-                              data-testid={`text-social-post-title-${p.id}`}
-                            >
-                              {p.title}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="truncate text-sm font-semibold"
+                                  data-testid={`text-social-post-title-${p.id}`}
+                                >
+                                  {p.title}
+                                </div>
+                                <span
+                                  className="text-xs text-black/35 dark:text-white/35"
+                                  data-testid={`text-social-post-time-${p.id}`}
+                                >
+                                  {p.time}
+                                </span>
+                              </div>
                             </div>
-                            <span
-                              className="text-xs text-black/35 dark:text-white/35"
-                              data-testid={`text-social-post-time-${p.id}`}
-                            >
-                              {p.time}
-                            </span>
+                            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-black/40 transition group-hover:translate-x-0.5 dark:text-white/45" />
                           </div>
 
                           <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
@@ -1133,7 +1138,6 @@ export default function CommandCenterPage() {
                           </div>
                         </div>
 
-                        <ChevronRight className="mt-1 h-4 w-4 text-black/40 transition group-hover:translate-x-0.5 dark:text-white/45" />
                       </div>
                     </button>
                   ))}
