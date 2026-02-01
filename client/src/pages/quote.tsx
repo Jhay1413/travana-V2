@@ -348,32 +348,32 @@ export default function QuotePage() {
                             {quote.quoteTitle}
                           </div>
                         </div>
+                      </div>
 
-                        <div className="ml-auto flex shrink-0 items-center justify-end" data-testid="row-itinerary-total-owner">
+                      <div className="mt-2 flex items-center justify-end" data-testid="row-itinerary-owner-far-right">
+                        <span
+                          className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
+                          data-testid="pill-itinerary-owner"
+                        >
                           <span
-                            className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
-                            data-testid="pill-itinerary-owner"
+                            className="relative grid h-6 w-6 shrink-0 overflow-hidden rounded-full border border-black/10 bg-white/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
+                            data-testid="avatar-itinerary-owner"
+                            aria-hidden
                           >
-                            <span
-                              className="relative grid h-6 w-6 shrink-0 overflow-hidden rounded-full border border-black/10 bg-white/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
-                              data-testid="avatar-itinerary-owner"
-                              aria-hidden
-                            >
-                              <img
-                                src="/attached_assets/Avatar3_1769960371403.png"
-                                alt=""
-                                className="h-full w-full object-cover"
-                                data-testid="img-itinerary-owner-avatar"
-                              />
-                              <span className="pointer-events-none absolute inset-0 ring-1 ring-white/40" aria-hidden />
-                            </span>
-
-                            <span className="flex flex-col items-end leading-tight" data-testid="col-itinerary-owner">
-                              <span className="whitespace-nowrap" data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
-                              <span className="whitespace-nowrap text-[10px] font-semibold text-black/50" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
-                            </span>
+                            <img
+                              src="/attached_assets/Avatar3_1769960371403.png"
+                              alt=""
+                              className="h-full w-full object-cover"
+                              data-testid="img-itinerary-owner-avatar"
+                            />
+                            <span className="pointer-events-none absolute inset-0 ring-1 ring-white/40" aria-hidden />
                           </span>
-                        </div>
+
+                          <span className="flex flex-col items-end leading-tight" data-testid="col-itinerary-owner">
+                            <span className="whitespace-nowrap" data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
+                            <span className="whitespace-nowrap text-[10px] font-semibold text-black/50" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
+                          </span>
+                        </span>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
                         <span className="text-sm text-black/55" data-testid="text-itinerary-location">{quote.destination}</span>
@@ -393,7 +393,7 @@ export default function QuotePage() {
                   </div>
 
                   <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
-                    <div className="grid gap-2" data-testid="col-itinerary-left">
+                    <div className="grid auto-rows-fr gap-2" data-testid="col-itinerary-left">
                       <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-operator-label">Tour Operator</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
@@ -419,7 +419,7 @@ export default function QuotePage() {
 
                     </div>
 
-                    <div className="grid gap-2" data-testid="col-itinerary-right">
+                    <div className="grid auto-rows-fr gap-2" data-testid="col-itinerary-right">
                       <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-hotel-label">Hotel</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
