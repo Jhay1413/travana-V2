@@ -236,19 +236,13 @@ function KpiCard({
     <Card className="glass ringed grain rounded-2xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <div
-            className="flex items-center gap-2 text-xs text-muted-foreground"
-            data-testid={`text-kpi-label-${id}`}
-          >
+          <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid={`text-kpi-label-${id}`}>
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-xl border border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/80">
               {icon}
             </span>
             {label}
           </div>
-          <div
-            className="text-2xl font-semibold tracking-tight"
-            data-testid={`text-kpi-value-${id}`}
-          >
+          <div className="text-2xl font-semibold tracking-tight" data-testid={`text-kpi-value-${id}`}>
             {value}
           </div>
         </div>
@@ -326,7 +320,7 @@ function ShellNav({
 
   return (
     <aside className="hidden lg:block">
-      <div className="glass ringed grain sticky top-6 rounded-3xl p-4">
+      <div className="glass ringed grain sticky top-4 rounded-3xl p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
@@ -363,9 +357,7 @@ function ShellNav({
               className="glass ringed w-56 rounded-2xl border-black/10 bg-[hsl(var(--popover))] p-2 dark:border-white/10"
               data-testid="menu-role"
             >
-              <DropdownMenuLabel className="text-xs text-black/70 dark:text-white/70">
-                Access profile
-              </DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs text-black/70 dark:text-white/70">Access profile</DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-black/10 dark:bg-white/10" />
               {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
                 <DropdownMenuItem
@@ -412,7 +404,9 @@ function ShellNav({
                   </span>
                   <span className="text-sm font-medium">{item.label}</span>
                 </div>
-                <ChevronRight className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                <ChevronRight
+                  className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                />
               </button>
             );
           })}
@@ -525,11 +519,7 @@ function TopBar({
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
               <span data-testid="text-theme-label">Light</span>
-              <Switch
-                data-testid="switch-theme"
-                checked={theme === "dark"}
-                onCheckedChange={onToggleTheme}
-              />
+              <Switch data-testid="switch-theme" checked={theme === "dark"} onCheckedChange={onToggleTheme} />
               <span className="text-black/45 dark:text-white/45" data-testid="text-theme-label-dark">
                 Dark
               </span>
@@ -574,7 +564,10 @@ function EmptyState({ title, desc, action }: { title: string; desc: string; acti
           {desc}
         </div>
         <div className="pt-2">
-          <Button className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90" data-testid="button-empty-action">
+          <Button
+            className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+            data-testid="button-empty-action"
+          >
             <Bolt className="mr-2 h-4 w-4" />
             {action}
           </Button>
@@ -701,7 +694,10 @@ export default function CommandCenterPage() {
                           </div>
 
                           <div className="mt-3 grid gap-1">
-                            <div className="text-xs text-black/45 dark:text-white/45" data-testid={`text-client-nexttrip-label-${c.id}`}>
+                            <div
+                              className="text-xs text-black/45 dark:text-white/45"
+                              data-testid={`text-client-nexttrip-label-${c.id}`}
+                            >
                               Next trip
                             </div>
                             <div className="truncate text-sm" data-testid={`text-client-nexttrip-${c.id}`}>
@@ -1092,19 +1088,34 @@ export default function CommandCenterPage() {
                         {row.p}
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-black/65 dark:text-white/65">
-                        <span className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5" data-testid={`pill-perm-admin-${idx}`}>
+                        <span
+                          className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5"
+                          data-testid={`pill-perm-admin-${idx}`}
+                        >
                           A: {row.a ? "✓" : "—"}
                         </span>
-                        <span className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5" data-testid={`pill-perm-manager-${idx}`}>
+                        <span
+                          className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5"
+                          data-testid={`pill-perm-manager-${idx}`}
+                        >
                           M: {row.m ? "✓" : "—"}
                         </span>
-                        <span className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5" data-testid={`pill-perm-agent-${idx}`}>
+                        <span
+                          className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5"
+                          data-testid={`pill-perm-agent-${idx}`}
+                        >
                           Ag: {row.ag ? "✓" : "—"}
                         </span>
-                        <span className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5" data-testid={`pill-perm-homeworker-${idx}`}>
+                        <span
+                          className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5"
+                          data-testid={`pill-perm-homeworker-${idx}`}
+                        >
                           H: {row.h ? "✓" : "—"}
                         </span>
-                        <span className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5" data-testid={`pill-perm-referer-${idx}`}>
+                        <span
+                          className="rounded-full border border-black/10 bg-black/5 px-2 py-1 dark:border-white/10 dark:bg-white/5"
+                          data-testid={`pill-perm-referer-${idx}`}
+                        >
                           R: {row.r ? "✓" : "—"}
                         </span>
                       </div>
@@ -1153,7 +1164,12 @@ export default function CommandCenterPage() {
 
             <div className="grid gap-3 md:grid-cols-3">
               <KpiCard label="At-risk quotes" value="3" delta="Needs attention" icon={<Sparkles className="h-4 w-4" />} />
-              <KpiCard label="Response time" value="1h 12m" delta="Top quartile" icon={<MessageSquare className="h-4 w-4" />} />
+              <KpiCard
+                label="Response time"
+                value="1h 12m"
+                delta="Top quartile"
+                icon={<MessageSquare className="h-4 w-4" />}
+              />
               <KpiCard label="Win rate" value="41%" delta="+6 pts" icon={<BadgeCheck className="h-4 w-4" />} />
             </div>
 
@@ -1210,7 +1226,11 @@ export default function CommandCenterPage() {
               </div>
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
               <div className="grid gap-2">
-                {["No reply 48h — Noah Patel", "Budget mismatch — Ethan Brooks", "Dates shifting — Sofia Martínez"].map((t, i) => (
+                {[
+                  "No reply 48h — Noah Patel",
+                  "Budget mismatch — Ethan Brooks",
+                  "Dates shifting — Sofia Martínez",
+                ].map((t, i) => (
                   <div
                     key={i}
                     className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
@@ -1337,43 +1357,45 @@ export default function CommandCenterPage() {
                 />
               </section>
 
-              <div className="min-h-0 flex-1 overflow-auto pr-1" data-testid="panel-scroll">\n                {content}\n              </div>
+              <div className="min-h-0 flex-1 overflow-auto pr-1" data-testid="panel-scroll">
+                {content}
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="glass ringed grain rounded-3xl p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="text-xs text-black/70 dark:text-white/70" data-testid="text-footer-left-label">
-                        Status
+                <div className="mt-3 grid gap-3 md:grid-cols-2" data-testid="section-footer">
+                  <div className="glass ringed grain rounded-3xl p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="text-xs text-black/70 dark:text-white/70" data-testid="text-footer-left-label">
+                          Status
+                        </div>
+                        <div className="text-sm font-semibold" data-testid="text-footer-left-title">
+                          System healthy
+                        </div>
+                        <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-footer-left-sub">
+                          Mock data · UI-only prototype
+                        </div>
                       </div>
-                      <div className="text-sm font-semibold" data-testid="text-footer-left-title">
-                        System healthy
+                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                        <Globe className="h-5 w-5 text-black/70 dark:text-white/80" />
                       </div>
-                      <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-footer-left-sub">
-                        Mock data · UI-only prototype
-                      </div>
-                    </div>
-                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                      <Globe className="h-5 w-5 text-black/70 dark:text-white/80" />
                     </div>
                   </div>
-                </div>
 
-                <div className="glass ringed grain rounded-3xl p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="text-xs text-black/70 dark:text-white/70" data-testid="text-footer-right-label">
-                        Security
+                  <div className="glass ringed grain rounded-3xl p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="text-xs text-black/70 dark:text-white/70" data-testid="text-footer-right-label">
+                          Security
+                        </div>
+                        <div className="text-sm font-semibold" data-testid="text-footer-right-title">
+                          Role-aware surfaces
+                        </div>
+                        <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-footer-right-sub">
+                          Admin, Manager, Agent, Homeworker, Referer
+                        </div>
                       </div>
-                      <div className="text-sm font-semibold" data-testid="text-footer-right-title">
-                        Role-aware surfaces
+                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                        <Shield className="h-5 w-5 text-black/70 dark:text-white/80" />
                       </div>
-                      <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-footer-right-sub">
-                        Admin, Manager, Agent, Homeworker, Referer
-                      </div>
-                    </div>
-                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                      <Shield className="h-5 w-5 text-black/70 dark:text-white/80" />
                     </div>
                   </div>
                 </div>
