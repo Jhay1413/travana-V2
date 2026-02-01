@@ -305,14 +305,31 @@ export default function QuotePage() {
           <div className="grid gap-3 lg:grid-cols-3" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-2" data-testid="card-quote-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
-                <div className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
-                  <img
-                    src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    data-testid="img-itinerary-hero-photo"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0" aria-hidden />
+                <div className="grid gap-3" data-testid="col-itinerary-media">
+                  <div className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
+                    <img
+                      src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      data-testid="img-itinerary-hero-photo"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0" aria-hidden />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2" data-testid="grid-itinerary-gallery">
+                    {["/attached_assets/Hotel_1_1769959304412.jpg", "/attached_assets/Hotel_2_1769959304413.jpg", "/attached_assets/Hotel_3_1769959304414.jpg", "/attached_assets/Hotel_4_1769959304414.jpg"].map((src, idx) => (
+                      <button
+                        key={src}
+                        type="button"
+                        className="group relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
+                        data-testid={`button-gallery-image-${idx}`}
+                        onClick={() => {}}
+                      >
+                        <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100" aria-hidden />
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="min-w-0" data-testid="section-itinerary-summary">
