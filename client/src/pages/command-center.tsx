@@ -842,14 +842,11 @@ function TopBar({
   return (
     <div className="glass ringed grain rounded-3xl p-4 md:p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
+        <div className="flex items-center gap-4">
           <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
             {title}
           </h1>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative w-full sm:w-[360px]">
+          <div className="relative hidden sm:block w-[320px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/50" />
             <Input
               value={query}
@@ -859,8 +856,9 @@ function TopBar({
               data-testid="input-search"
             />
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
               <span data-testid="text-theme-label">Light</span>
               <Switch data-testid="switch-theme" checked={theme === "dark"} onCheckedChange={onToggleTheme} />
@@ -933,7 +931,6 @@ function TopBar({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-          </div>
         </div>
       </div>
     </div>
