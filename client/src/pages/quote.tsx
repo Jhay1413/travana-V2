@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, Plane, UsersRound } from "lucide-react";
+import { ChevronLeft, Copy, FileText, Plane, Tag, X } from "lucide-react";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -230,6 +231,10 @@ function KeyValue({ label, value, testid }: { label: string; value: string; test
   );
 }
 
+function formatTagLabel(raw: string) {
+  return raw.trim().replace(/\s+/g, " ");
+}
+
 export default function QuotePage() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/clients/:clientId/quotes/:quoteId");
@@ -449,23 +454,55 @@ export default function QuotePage() {
                 </div>
               </Card>
 
-              <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-passengers">
-                <div className="flex items-center justify-between" data-testid="row-passengers-header">
+              <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-tags">
+                <div className="flex items-center justify-between" data-testid="row-tags-header">
                   <div>
-                    <div className="text-sm font-semibold" data-testid="text-passengers-title">
-                      Passengers
+                    <div className="text-sm font-semibold" data-testid="text-tags-title">
+                      Tags
                     </div>
-                    <div className="mt-1 text-xs text-black/55" data-testid="text-passengers-subtitle">
-                      Party details.
+                    <div className="mt-1 text-xs text-black/55" data-testid="text-tags-subtitle">
+                      Add quick labels to this quote.
                     </div>
                   </div>
-                  <UsersRound className="h-4 w-4 text-black/35" aria-hidden />
+                  <Tag className="h-4 w-4 text-black/35" aria-hidden />
                 </div>
 
-                <div className="mt-3 grid gap-2" data-testid="list-passengers">
-                  <KeyValue label="Adults" value={String(quote.passengers.adults)} testid="kv-adults" />
-                  <KeyValue label="Children" value={String(quote.passengers.children)} testid="kv-children" />
-                  <KeyValue label="Child ages" value={quote.passengers.childAges.length ? quote.passengers.childAges.join(", ") : "—"} testid="kv-child-ages" />
+                <div className="mt-3 flex flex-wrap gap-2" data-testid="list-tags">
+                  {["VIP", "Family", "Flexible dates"].map((t) => (
+                    <span
+                      key={t}
+                      className="group inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-black/70"
+                      data-testid={`pill-tag-${t}`}
+                    >
+                      {t}
+                      <button
+                        type="button"
+                        className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-black/35 transition hover:bg-black/[0.06] hover:text-black/60"
+                        data-testid={`button-remove-tag-${t}`}
+                        onClick={() => {}}
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-3 flex items-center gap-2" data-testid="row-add-tag">
+                  <Input
+                    placeholder="Add tag…"
+                    className="h-9 rounded-2xl border-black/10 bg-white/70"
+                    data-testid="input-add-tag"
+                    value={""}
+                    onChange={() => {}}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
+                    data-testid="button-add-tag"
+                    onClick={() => {}}
+                  >
+                    Add
+                  </Button>
                 </div>
               </Card>
 
