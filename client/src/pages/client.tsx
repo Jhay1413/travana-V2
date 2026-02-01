@@ -839,54 +839,53 @@ export default function ClientPage() {
                       </div>
 
                       <div className="mt-4" data-testid="section-quotes-groups">
-                        {(
-                          [
-                            {
-                              id: "in-play",
-                              title: "In Play",
-                              rows: [
-                                {
-                                  id: seedQuote.id,
-                                  title: seedQuote.quoteTitle,
-                                  destination: seedQuote.destination,
-                                  travelDate: seedQuote.travelDate,
-                                  createdAt: "Today",
-                                  tourOperator: seedQuote.commissions.tourOperator,
-                                  totalCost: seedQuote.commissions.price,
-                                },
-                                {
-                                  id: "Q-00037",
-                                  title: "Japan — Kyoto + Tokyo, 12 nights",
-                                  destination: "Japan",
-                                  travelDate: "2026-03-18",
-                                  createdAt: "3d",
-                                  tourOperator: "Trailfinders",
-                                  totalCost: 12990,
-                                },
-                              ],
-                            },
-                            {
-                              id: "won",
-                              title: "Won",
-                              rows: [
-                                {
-                                  id: "Q-00036",
-                                  title: "Bali — Private Pool Villa, 10 nights",
-                                  destination: "Bali",
-                                  travelDate: "2026-05-06",
-                                  createdAt: "1w",
-                                  tourOperator: "Kuoni",
-                                  totalCost: 10450,
-                                },
-                              ],
-                            },
-                            {
-                              id: "lost",
-                              title: "Lost",
-                              rows: [],
-                            },
-                          ] as const
-                        ).map((group) => (
+                        {[
+                          {
+                            id: "in-play",
+                            title: "In Play",
+                            rows: quotes
+                              .filter((q) => q.status === "In Play")
+                              .map((q) => ({
+                                id: q.id,
+                                title: q.quoteTitle || `${q.destination} Trip`,
+                                destination: q.destination,
+                                travelDate: q.travelDate,
+                                createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
+                                tourOperator: q.packageType || "—",
+                                totalCost: 0,
+                              })),
+                          },
+                          {
+                            id: "won",
+                            title: "Won",
+                            rows: quotes
+                              .filter((q) => q.status === "Won")
+                              .map((q) => ({
+                                id: q.id,
+                                title: q.quoteTitle || `${q.destination} Trip`,
+                                destination: q.destination,
+                                travelDate: q.travelDate,
+                                createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
+                                tourOperator: q.packageType || "—",
+                                totalCost: 0,
+                              })),
+                          },
+                          {
+                            id: "lost",
+                            title: "Lost",
+                            rows: quotes
+                              .filter((q) => q.status === "Lost")
+                              .map((q) => ({
+                                id: q.id,
+                                title: q.quoteTitle || `${q.destination} Trip`,
+                                destination: q.destination,
+                                travelDate: q.travelDate,
+                                createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
+                                tourOperator: q.packageType || "—",
+                                totalCost: 0,
+                              })),
+                          },
+                        ].map((group) => (
                           <div key={group.id} className="rounded-3xl border border-black/10 bg-white/60 p-2" data-testid={`group-quotes-${group.id}`}>
                             <div className="flex items-center justify-between gap-3 px-2 py-2" data-testid={`row-quotes-group-header-${group.id}`}>
                               <div className="flex items-center gap-2">
