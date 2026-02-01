@@ -676,6 +676,12 @@ const sampleNotifications = [
 ];
 
 function NotificationsPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState<"unread" | "all">("unread");
+  
+  const filteredNotifications = activeTab === "unread" 
+    ? sampleNotifications.filter(n => !n.read)
+    : sampleNotifications;
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -685,76 +691,96 @@ function NotificationsPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-40"
             onClick={onClose}
           />
           <motion.div
-            initial={{ x: "-100%" }}
+            initial={{ x: "100%" }}
             animate={{ x: 0 }}
-            exit={{ x: "-100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed left-0 top-0 z-50 h-full w-full max-w-md bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-2xl border-r border-black/10 dark:border-white/10"
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 350 }}
+            className="fixed right-0 top-0 z-50 h-full w-80 bg-white dark:bg-zinc-900 shadow-2xl border-l border-gray-200 dark:border-zinc-800"
           >
             <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 p-5">
-                <div className="flex items-center gap-3">
-                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/5 dark:bg-white/10">
-                    <Bell className="h-5 w-5 text-black/70 dark:text-white/80" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-black dark:text-white">Notifications</h2>
-                    <p className="text-xs text-black/50 dark:text-white/50">
-                      {sampleNotifications.filter(n => !n.read).length} unread
-                    </p>
-                  </div>
-                </div>
+              <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 px-4 py-4">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">Notifications</h2>
                 <button
                   onClick={onClose}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-zinc-800"
                   data-testid="button-close-notifications"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="space-y-3">
-                  {sampleNotifications.map((notification) => (
-                    <motion.div
-                      key={notification.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: notification.id * 0.05 }}
-                      className={`group relative rounded-2xl border p-4 transition cursor-pointer ${
-                        notification.read
-                          ? "border-black/5 bg-black/[0.02] hover:bg-black/5 dark:border-white/5 dark:bg-white/[0.02] dark:hover:bg-white/5"
-                          : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                      }`}
-                      data-testid={`notification-${notification.id}`}
-                    >
-                      {!notification.read && (
-                        <span className="absolute right-4 top-4 h-2 w-2 rounded-full bg-blue-500" />
-                      )}
-                      <h4 className={`text-sm font-semibold ${notification.read ? "text-black/60 dark:text-white/60" : "text-black dark:text-white"}`}>
-                        {notification.title}
-                      </h4>
-                      <p className={`mt-1 text-sm ${notification.read ? "text-black/40 dark:text-white/40" : "text-black/60 dark:text-white/60"}`}>
-                        {notification.message}
-                      </p>
-                      <span className="mt-2 block text-xs text-black/40 dark:text-white/40">
-                        {notification.time}
-                      </span>
-                    </motion.div>
-                  ))}
+              <div className="border-b border-gray-200 dark:border-zinc-800 px-4 py-2">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveTab("unread")}
+                    className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
+                      activeTab === "unread"
+                        ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                        : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-zinc-800"
+                    }`}
+                    data-testid="tab-unread"
+                  >
+                    Unread
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("all")}
+                    className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
+                      activeTab === "all"
+                        ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                        : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-zinc-800"
+                    }`}
+                    data-testid="tab-all"
+                  >
+                    All
+                  </button>
                 </div>
               </div>
               
-              <div className="border-t border-black/10 dark:border-white/10 p-4">
+              <div className="flex-1 overflow-y-auto">
+                {filteredNotifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
+                    <Bell className="h-10 w-10 mb-2 opacity-50" />
+                    <p className="text-sm">No notifications</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+                    {filteredNotifications.map((notification) => (
+                      <div
+                        key={notification.id}
+                        className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800/50 cursor-pointer transition"
+                        data-testid={`notification-${notification.id}`}
+                      >
+                        <div className="flex-shrink-0 mt-0.5">
+                          <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                            <Bell className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900 dark:text-white">
+                            {notification.message}
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0 flex items-center gap-1">
+                          {!notification.read && (
+                            <span className="h-2 w-2 rounded-full bg-blue-500" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <div className="border-t border-gray-200 dark:border-zinc-800 p-3">
                 <button
-                  className="w-full rounded-2xl border border-black/10 bg-black/5 px-4 py-3 text-sm font-medium text-black/70 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-                  data-testid="button-mark-all-read"
+                  className="w-full rounded-lg bg-gray-100 dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 transition hover:bg-gray-200 dark:hover:bg-zinc-700"
+                  data-testid="button-clear-notifications"
                 >
-                  Mark all as read
+                  Clear Notification
                 </button>
               </div>
             </div>
