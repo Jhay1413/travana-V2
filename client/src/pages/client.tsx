@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation, useRoute } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import {
   BadgeCheck,
@@ -13,10 +13,12 @@ import {
   Mail,
   MapPin,
   Phone,
+  Plane,
   Search,
   Sparkles,
   Ticket,
   UserRound,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchClient, fetchQuotes, type Client as ApiClient, type Quote as ApiQuote } from "@/lib/api";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
@@ -300,6 +305,50 @@ export default function ClientPage() {
   const [tab, setTab] = useState<"overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "tags">(
     "overview",
   );
+  const [showNewQuoteModal, setShowNewQuoteModal] = useState(false);
+  const [newQuote, setNewQuote] = useState({
+    packageType: "",
+    quoteTitle: "",
+    quoteLink: "",
+    jsonPayload: "",
+    travelDate: "",
+    passengersAdults: 2,
+    passengersChildren: 0,
+    passengersInfants: 0,
+    childAges: [] as number[],
+    country: "",
+    destination: "",
+    resort: "",
+    accommodation: "",
+    checkInDate: "",
+    checkInTime: "",
+    nights: 7,
+    boardBasis: "",
+    roomType: "",
+    transferType: "",
+    preBookedSeats: "",
+    flightMeals: "",
+    outboundDepartAirport: "",
+    outboundDepartDate: "",
+    outboundDepartTime: "",
+    outboundArriveAirport: "",
+    outboundArriveDate: "",
+    outboundArriveTime: "",
+    inboundDepartAirport: "",
+    inboundDepartDate: "",
+    inboundDepartTime: "",
+    inboundArriveAirport: "",
+    inboundArriveDate: "",
+    inboundArriveTime: "",
+    tourOperator: "",
+    sales: 0,
+    price: 0,
+    commission: 0,
+    discount: 0,
+    serviceCharge: 0,
+    pricePerPerson: 0,
+  });
+  const queryClient = useQueryClient();
 
   const clientId = params?.clientId ?? "";
 
@@ -831,7 +880,7 @@ export default function ClientPage() {
                           size="sm"
                           className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
                           data-testid="button-quotes-new"
-                          onClick={() => {}}
+                          onClick={() => setShowNewQuoteModal(true)}
                         >
                           <Sparkles className="mr-2 h-4 w-4" />
                           New quote
@@ -1099,6 +1148,531 @@ export default function ClientPage() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={showNewQuoteModal} onOpenChange={setShowNewQuoteModal}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">New Quote</DialogTitle>
+            <DialogDescription className="text-sm text-black/55">
+              Create a new quote for {client?.name || "this client"}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 grid gap-6">
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Package Details</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Package Type</Label>
+                  <Select value={newQuote.packageType} onValueChange={(v) => setNewQuote({ ...newQuote, packageType: v })}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-package-type">
+                      <SelectValue placeholder="Select type..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Package (Flight + Hotel)">Package (Flight + Hotel)</SelectItem>
+                      <SelectItem value="Flight Only">Flight Only</SelectItem>
+                      <SelectItem value="Hotel Only">Hotel Only</SelectItem>
+                      <SelectItem value="Cruise">Cruise</SelectItem>
+                      <SelectItem value="Tour">Tour</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Quote Title</Label>
+                  <Input
+                    placeholder="e.g. Maldives — Overwater Villa, 9 nights"
+                    value={newQuote.quoteTitle}
+                    onChange={(e) => setNewQuote({ ...newQuote, quoteTitle: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-quote-title"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Quote Link</Label>
+                  <Input
+                    placeholder="https://..."
+                    value={newQuote.quoteLink}
+                    onChange={(e) => setNewQuote({ ...newQuote, quoteLink: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-quote-link"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">JSON Upload</Label>
+                  <Input
+                    type="file"
+                    accept=".json"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setNewQuote({ ...newQuote, jsonPayload: ev.target?.result as string || "" });
+                        reader.readAsText(file);
+                      }
+                    }}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-json-upload"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Travel Details</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Travel Date</Label>
+                  <Input
+                    type="date"
+                    value={newQuote.travelDate}
+                    onChange={(e) => setNewQuote({ ...newQuote, travelDate: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-travel-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Adults</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={newQuote.passengersAdults}
+                    onChange={(e) => setNewQuote({ ...newQuote, passengersAdults: parseInt(e.target.value) || 1 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-adults"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Children</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newQuote.passengersChildren}
+                    onChange={(e) => {
+                      const count = parseInt(e.target.value) || 0;
+                      setNewQuote({ ...newQuote, passengersChildren: count, childAges: Array(count).fill(0) });
+                    }}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-children"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Infants</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newQuote.passengersInfants}
+                    onChange={(e) => setNewQuote({ ...newQuote, passengersInfants: parseInt(e.target.value) || 0 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-infants"
+                  />
+                </div>
+                {newQuote.passengersChildren > 0 && (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {newQuote.childAges.map((age, idx) => (
+                        <Input
+                          key={idx}
+                          type="number"
+                          min={0}
+                          max={17}
+                          value={age}
+                          onChange={(e) => {
+                            const ages = [...newQuote.childAges];
+                            ages[idx] = parseInt(e.target.value) || 0;
+                            setNewQuote({ ...newQuote, childAges: ages });
+                          }}
+                          className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
+                          data-testid={`input-child-age-${idx}`}
+                          placeholder={`Child ${idx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Destination & Accommodation</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Country</Label>
+                  <Input
+                    placeholder="e.g. United Kingdom"
+                    value={newQuote.country}
+                    onChange={(e) => setNewQuote({ ...newQuote, country: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-country"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Destination</Label>
+                  <Input
+                    placeholder="e.g. Maldives"
+                    value={newQuote.destination}
+                    onChange={(e) => setNewQuote({ ...newQuote, destination: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-destination"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Resort</Label>
+                  <Input
+                    placeholder="e.g. North Malé Atoll"
+                    value={newQuote.resort}
+                    onChange={(e) => setNewQuote({ ...newQuote, resort: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-resort"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Accommodation</Label>
+                  <Input
+                    placeholder="e.g. Azure Overwater Resort"
+                    value={newQuote.accommodation}
+                    onChange={(e) => setNewQuote({ ...newQuote, accommodation: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-accommodation"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
+                  <Input
+                    type="date"
+                    value={newQuote.checkInDate}
+                    onChange={(e) => setNewQuote({ ...newQuote, checkInDate: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-checkin-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Check-in Time</Label>
+                  <Input
+                    type="time"
+                    value={newQuote.checkInTime}
+                    onChange={(e) => setNewQuote({ ...newQuote, checkInTime: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-checkin-time"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={newQuote.nights}
+                    onChange={(e) => setNewQuote({ ...newQuote, nights: parseInt(e.target.value) || 1 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-nights"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Board Basis</Label>
+                  <Select value={newQuote.boardBasis} onValueChange={(v) => setNewQuote({ ...newQuote, boardBasis: v })}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-board-basis">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Room Only">Room Only</SelectItem>
+                      <SelectItem value="Bed & Breakfast">Bed & Breakfast</SelectItem>
+                      <SelectItem value="Half Board">Half Board</SelectItem>
+                      <SelectItem value="Full Board">Full Board</SelectItem>
+                      <SelectItem value="All Inclusive">All Inclusive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Room Type</Label>
+                  <Input
+                    placeholder="e.g. Overwater Villa"
+                    value={newQuote.roomType}
+                    onChange={(e) => setNewQuote({ ...newQuote, roomType: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-room-type"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Transfer Type</Label>
+                  <Select value={newQuote.transferType} onValueChange={(v) => setNewQuote({ ...newQuote, transferType: v })}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-transfer-type">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Private Transfer">Private Transfer</SelectItem>
+                      <SelectItem value="Shared Transfer">Shared Transfer</SelectItem>
+                      <SelectItem value="Seaplane">Seaplane</SelectItem>
+                      <SelectItem value="Speedboat">Speedboat</SelectItem>
+                      <SelectItem value="Self-drive">Self-drive</SelectItem>
+                      <SelectItem value="None">None</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Pre-booked Seats</Label>
+                  <Input
+                    placeholder="e.g. Extra legroom (row 12)"
+                    value={newQuote.preBookedSeats}
+                    onChange={(e) => setNewQuote({ ...newQuote, preBookedSeats: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-prebooked-seats"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Flight Meals</Label>
+                  <Input
+                    placeholder="e.g. Standard + child meal"
+                    value={newQuote.flightMeals}
+                    onChange={(e) => setNewQuote({ ...newQuote, flightMeals: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-flight-meals"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <Plane className="h-4 w-4" />
+                Flights — Outbound
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                  <Input
+                    placeholder="e.g. LHR"
+                    value={newQuote.outboundDepartAirport}
+                    onChange={(e) => setNewQuote({ ...newQuote, outboundDepartAirport: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-outbound-depart-airport"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                  <Input
+                    type="date"
+                    value={newQuote.outboundDepartDate}
+                    onChange={(e) => setNewQuote({ ...newQuote, outboundDepartDate: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-outbound-depart-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                  <Input
+                    type="time"
+                    value={newQuote.outboundDepartTime}
+                    onChange={(e) => setNewQuote({ ...newQuote, outboundDepartTime: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-outbound-depart-time"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                  <Input
+                    placeholder="e.g. MLE"
+                    value={newQuote.outboundArriveAirport}
+                    onChange={(e) => setNewQuote({ ...newQuote, outboundArriveAirport: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-outbound-arrive-airport"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                  <Input
+                    type="date"
+                    value={newQuote.outboundArriveDate}
+                    onChange={(e) => setNewQuote({ ...newQuote, outboundArriveDate: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-outbound-arrive-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                  <Input
+                    type="time"
+                    value={newQuote.outboundArriveTime}
+                    onChange={(e) => setNewQuote({ ...newQuote, outboundArriveTime: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-outbound-arrive-time"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <Plane className="h-4 w-4 rotate-180" />
+                Flights — Inbound
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                  <Input
+                    placeholder="e.g. MLE"
+                    value={newQuote.inboundDepartAirport}
+                    onChange={(e) => setNewQuote({ ...newQuote, inboundDepartAirport: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-inbound-depart-airport"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                  <Input
+                    type="date"
+                    value={newQuote.inboundDepartDate}
+                    onChange={(e) => setNewQuote({ ...newQuote, inboundDepartDate: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-inbound-depart-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                  <Input
+                    type="time"
+                    value={newQuote.inboundDepartTime}
+                    onChange={(e) => setNewQuote({ ...newQuote, inboundDepartTime: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-inbound-depart-time"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                  <Input
+                    placeholder="e.g. LHR"
+                    value={newQuote.inboundArriveAirport}
+                    onChange={(e) => setNewQuote({ ...newQuote, inboundArriveAirport: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-inbound-arrive-airport"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                  <Input
+                    type="date"
+                    value={newQuote.inboundArriveDate}
+                    onChange={(e) => setNewQuote({ ...newQuote, inboundArriveDate: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-inbound-arrive-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                  <Input
+                    type="time"
+                    value={newQuote.inboundArriveTime}
+                    onChange={(e) => setNewQuote({ ...newQuote, inboundArriveTime: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-inbound-arrive-time"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Package Commissions</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Tour Operator</Label>
+                  <Input
+                    placeholder="e.g. Luxury Escapes UK"
+                    value={newQuote.tourOperator}
+                    onChange={(e) => setNewQuote({ ...newQuote, tourOperator: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-tour-operator"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Sales (£)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newQuote.sales}
+                    onChange={(e) => setNewQuote({ ...newQuote, sales: parseFloat(e.target.value) || 0 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-sales"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Price (£)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newQuote.price}
+                    onChange={(e) => setNewQuote({ ...newQuote, price: parseFloat(e.target.value) || 0 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-price"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Commission (£)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newQuote.commission}
+                    onChange={(e) => setNewQuote({ ...newQuote, commission: parseFloat(e.target.value) || 0 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-commission"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Discount (£)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newQuote.discount}
+                    onChange={(e) => setNewQuote({ ...newQuote, discount: parseFloat(e.target.value) || 0 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-discount"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Service Charge (£)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newQuote.serviceCharge}
+                    onChange={(e) => setNewQuote({ ...newQuote, serviceCharge: parseFloat(e.target.value) || 0 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-service-charge"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Price per Person (£)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newQuote.pricePerPerson}
+                    onChange={(e) => setNewQuote({ ...newQuote, pricePerPerson: parseFloat(e.target.value) || 0 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="input-price-per-person"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                className="rounded-2xl border-black/10 px-4"
+                onClick={() => setShowNewQuoteModal(false)}
+                data-testid="button-cancel-quote"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
+                onClick={() => {
+                  setShowNewQuoteModal(false);
+                }}
+                data-testid="button-save-quote"
+              >
+                Create Quote
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </CommandCenterShell>
   );
 }
