@@ -392,24 +392,24 @@ export default function QuotePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-2 md:grid-cols-2 md:auto-rows-fr" data-testid="grid-itinerary-specs">
+                  <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
                     <div className="grid gap-2" data-testid="col-itinerary-left">
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-operator-label">Tour Operator</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-travel-date-label">Travel Date</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-departure-airport">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-departure-airport">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-departure-airport-label">Departure Airport</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-departure-airport-value">{quote.flights.outbound.from}</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-passengers-label">Passengers</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
                           {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children (${[12, 7].join(", ")})` : ""}
@@ -420,27 +420,27 @@ export default function QuotePage() {
                     </div>
 
                     <div className="grid gap-2" data-testid="col-itinerary-right">
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-hotel-label">Hotel</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-room-label">Room Type</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-board">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-board">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-board-label">Board Basis</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-transfer-label">Transfer type</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-transfer-value">Private Transfer</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-source">
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-source">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-source-label">Lead Source</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-source-value">Shop</div>
                       </div>
