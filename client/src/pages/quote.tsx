@@ -355,7 +355,7 @@ export default function QuotePage() {
                           </span>
 
                           <span
-                            className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70 text-right pl-[10px] pr-[10px] mt-[20px] mb-[20px]"
+                            className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70 text-right pl-[10px] pr-[10px] mt-[0px] mb-[0px] ml-[20px] mr-[20px]"
                             data-testid="pill-itinerary-owner"
                           >
                             <span
