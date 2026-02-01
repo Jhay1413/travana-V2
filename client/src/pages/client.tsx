@@ -200,6 +200,152 @@ function filesFor(clientId: string): FileItem[] {
   ];
 }
 
+type QuotePassenger = {
+  adults: number;
+  children: number;
+  infants: number;
+  childAges: number[];
+};
+
+type QuoteFlightLeg = {
+  departAirport: string;
+  departCity: string;
+  departDate: string;
+  departTime: string;
+  arriveAirport: string;
+  arriveCity: string;
+  arriveDate: string;
+  arriveTime: string;
+};
+
+type QuoteCommission = {
+  tourOperator: string;
+  sales: number;
+  price: number;
+  commission: number;
+  discount: number;
+  serviceCharge: number;
+  pricePerPerson: number;
+};
+
+type Quote = {
+  id: string;
+  packageType: string;
+  quoteTitle: string;
+  quoteLink: string;
+  images: { id: string; label: string }[];
+  travelDate: string;
+  passengers: QuotePassenger;
+  country: string;
+  destination: string;
+  resort: string;
+  accommodation: string;
+  checkInDate: string;
+  checkInTime: string;
+  nights: number;
+  boardBasis: string;
+  roomType: string;
+  transferType: string;
+  preBookedSeats: string;
+  flightMeals: string;
+  flights: {
+    outbound: QuoteFlightLeg;
+    inbound: QuoteFlightLeg;
+  };
+  commissions: QuoteCommission;
+  jsonPayload: string;
+};
+
+function safeJsonParse(value: string): { ok: true; data: any } | { ok: false; error: string } {
+  try {
+    const data = JSON.parse(value);
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Invalid JSON" };
+  }
+}
+
+function formatPax(p: QuotePassenger) {
+  const parts: string[] = [];
+  parts.push(`${p.adults} adult${p.adults === 1 ? "" : "s"}`);
+  if (p.children > 0) parts.push(`${p.children} child${p.children === 1 ? "" : "ren"}`);
+  if (p.infants > 0) parts.push(`${p.infants} infant${p.infants === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
+function computePaxTotal(p: QuotePassenger) {
+  return p.adults + p.children + p.infants;
+}
+
+const seedQuote: Quote = {
+  id: "Q-00038",
+  packageType: "Package (Flight + Hotel)",
+  quoteTitle: "Maldives — Overwater Villa, 9 nights",
+  quoteLink: "https://example.com/quotes/Q-00038",
+  images: [
+    { id: "img-hero", label: "Resort hero" },
+    { id: "img-room", label: "Room" },
+    { id: "img-beach", label: "Beach" },
+  ],
+  travelDate: "2026-04-12",
+  passengers: { adults: 2, children: 1, infants: 0, childAges: [7] },
+  country: "United Kingdom",
+  destination: "Maldives",
+  resort: "North Malé Atoll",
+  accommodation: "Azure Overwater Resort",
+  checkInDate: "2026-04-12",
+  checkInTime: "15:00",
+  nights: 9,
+  boardBasis: "Half Board",
+  roomType: "Overwater Villa",
+  transferType: "Seaplane",
+  preBookedSeats: "Extra legroom (row 12)",
+  flightMeals: "Standard + child meal",
+  flights: {
+    outbound: {
+      departAirport: "LHR",
+      departCity: "London Heathrow",
+      departDate: "2026-04-12",
+      departTime: "21:10",
+      arriveAirport: "MLE",
+      arriveCity: "Malé",
+      arriveDate: "2026-04-13",
+      arriveTime: "11:55",
+    },
+    inbound: {
+      departAirport: "MLE",
+      departCity: "Malé",
+      departDate: "2026-04-22",
+      departTime: "09:15",
+      arriveAirport: "LHR",
+      arriveCity: "London Heathrow",
+      arriveDate: "2026-04-22",
+      arriveTime: "18:05",
+    },
+  },
+  commissions: {
+    tourOperator: "Luxury Escapes UK",
+    sales: 18450,
+    price: 18450,
+    commission: 1380,
+    discount: 250,
+    serviceCharge: 120,
+    pricePerPerson: 6150,
+  },
+  jsonPayload: JSON.stringify(
+    {
+      quoteId: "Q-00038",
+      packageType: "Package (Flight + Hotel)",
+      destination: "Maldives",
+      pax: { adults: 2, children: [{ age: 7 }], infants: 0 },
+      room: { type: "Overwater Villa", board: "Half Board" },
+      transfers: "Seaplane",
+    },
+    null,
+    2,
+  ),
+};
+
 export default function ClientPage() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/clients/:clientId");
@@ -662,26 +808,468 @@ export default function ClientPage() {
                 </TabsContent>
 
                 <TabsContent value="quotes" className="mt-3">
-                  <div className="grid gap-3" data-testid="list-quotes">
-                    {["Quote v1", "Quote v2", "Quote v3"].map((title, idx) => (
-                      <div
-                        key={title}
-                        className="rounded-3xl border border-black/10 bg-white/70 p-4"
-                        data-testid={`card-quote-${idx}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold" data-testid={`text-quote-title-${idx}`}>
-                              {title}
-                            </div>
-                            <div className="mt-1 text-xs text-black/55" data-testid={`text-quote-meta-${idx}`}>
-                              Updated {idx === 2 ? "Today" : idx === 1 ? "2d" : "6d"} · {currency.format((client?.value ?? 0) - idx * 450)}
-                            </div>
+                  <div className="grid gap-3 lg:grid-cols-12" data-testid="layout-quote-view">
+                    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-7" data-testid="card-quote-left">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-black/55" data-testid="label-quote-id">
+                            Quote
                           </div>
-                          <FileText className="h-4 w-4 text-black/35" aria-hidden />
+                          <div className="mt-1 truncate text-lg font-semibold" data-testid="text-quote-title">
+                            {seedQuote.quoteTitle}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-quote-meta">
+                            <Badge
+                              variant="outline"
+                              className="rounded-full border-black/10 bg-black/[0.03] text-black/70"
+                              data-testid="pill-package-type"
+                            >
+                              {seedQuote.packageType}
+                            </Badge>
+                            <span className="text-xs text-black/40" data-testid="text-quote-id">
+                              {seedQuote.id}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-black hover:bg-black/[0.03]"
+                            data-testid="button-copy-quote-link"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(seedQuote.quoteLink);
+                              } catch {
+                                // noop
+                              }
+                            }}
+                          >
+                            Copy link
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
+                            data-testid="button-open-quote-link"
+                            onClick={() => window.open(seedQuote.quoteLink, "_blank")}
+                          >
+                            Open
+                            <ChevronRight className="ml-1 h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                    ))}
+
+                      <div className="mt-4 grid gap-3" data-testid="section-quote-core">
+                        <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-quote-travel">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold" data-testid="text-travel-title">
+                                Travel
+                              </div>
+                              <div className="mt-1 text-xs text-black/55" data-testid="text-travel-subtitle">
+                                Dates, passengers, and key package details
+                              </div>
+                            </div>
+                            <Calendar className="h-4 w-4 text-black/35" aria-hidden />
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-2" data-testid="grid-travel-fields">
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-travel-date">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-travel-date">
+                                Travel date
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-travel-date">
+                                {seedQuote.travelDate}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-passengers">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-passengers">
+                                Passengers
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-passengers">
+                                {formatPax(seedQuote.passengers)}
+                              </div>
+                              {seedQuote.passengers.children > 0 ? (
+                                <div className="mt-1 text-[11px] text-black/55" data-testid="value-children-ages">
+                                  Children\'s ages: {seedQuote.passengers.childAges.join(", ")}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-location">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-location">
+                                Country / Destination
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-location">
+                                {seedQuote.country} \u2192 {seedQuote.destination}
+                              </div>
+                              <div className="mt-1 text-[11px] text-black/55" data-testid="value-resort">
+                                {seedQuote.resort}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-accommodation">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-accommodation">
+                                Accommodation
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-accommodation">
+                                {seedQuote.accommodation}
+                              </div>
+                              <div className="mt-1 text-[11px] text-black/55" data-testid="value-room-board">
+                                {seedQuote.roomType} \u00b7 {seedQuote.boardBasis}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-checkin">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-checkin">
+                                Check-in
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-checkin">
+                                {seedQuote.checkInDate} \u00b7 {seedQuote.checkInTime}
+                              </div>
+                              <div className="mt-1 text-[11px] text-black/55" data-testid="value-nights">
+                                {seedQuote.nights} nights
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-extras">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-extras">
+                                Extras
+                              </div>
+                              <div className="mt-1 text-[11px] text-black/70" data-testid="value-transfer-type">
+                                Transfer: <span className="font-semibold text-black/85">{seedQuote.transferType}</span>
+                              </div>
+                              <div className="mt-1 text-[11px] text-black/70" data-testid="value-prebooked-seats">
+                                Seats: <span className="font-semibold text-black/85">{seedQuote.preBookedSeats}</span>
+                              </div>
+                              <div className="mt-1 text-[11px] text-black/70" data-testid="value-flight-meals">
+                                Meals: <span className="font-semibold text-black/85">{seedQuote.flightMeals}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-quote-flights">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold" data-testid="text-flights-title">
+                                Flights
+                              </div>
+                              <div className="mt-1 text-xs text-black/55" data-testid="text-flights-subtitle">
+                                Outbound and inbound timing for the package
+                              </div>
+                            </div>
+                            <Ticket className="h-4 w-4 text-black/35" aria-hidden />
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-2" data-testid="grid-flights">
+                            <div className="rounded-3xl border border-black/10 bg-black/[0.03] p-4" data-testid="card-flight-outbound">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-xs font-semibold" data-testid="text-outbound-title">
+                                  Outbound
+                                </div>
+                                <span className="text-[11px] font-semibold text-black/55" data-testid="text-outbound-route">
+                                  {seedQuote.flights.outbound.departAirport} \u2192 {seedQuote.flights.outbound.arriveAirport}
+                                </span>
+                              </div>
+                              <div className="mt-3 grid gap-2" data-testid="list-outbound-fields">
+                                <div className="flex items-start justify-between gap-3" data-testid="row-outbound-depart">
+                                  <div>
+                                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-outbound-depart">
+                                      Departing airport
+                                    </div>
+                                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-outbound-depart">
+                                      {seedQuote.flights.outbound.departCity} ({seedQuote.flights.outbound.departAirport})
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-outbound-depart-dt">
+                                      Departure
+                                    </div>
+                                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-outbound-depart-dt">
+                                      {seedQuote.flights.outbound.departDate} \u00b7 {seedQuote.flights.outbound.departTime}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="h-px w-full bg-black/10" aria-hidden />
+
+                                <div className="flex items-start justify-between gap-3" data-testid="row-outbound-arrive">
+                                  <div>
+                                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-outbound-arrive">
+                                      Arrival airport
+                                    </div>
+                                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-outbound-arrive">
+                                      {seedQuote.flights.outbound.arriveCity} ({seedQuote.flights.outbound.arriveAirport})
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-outbound-arrive-dt">
+                                      Arrival
+                                    </div>
+                                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-outbound-arrive-dt">
+                                      {seedQuote.flights.outbound.arriveDate} \u00b7 {seedQuote.flights.outbound.arriveTime}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="rounded-3xl border border-black/10 bg-black/[0.03] p-4" data-testid="card-flight-inbound">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-xs font-semibold" data-testid="text-inbound-title">
+                                  Inbound
+                                </div>
+                                <span className="text-[11px] font-semibold text-black/55" data-testid="text-inbound-route">
+                                  {seedQuote.flights.inbound.departAirport} \u2192 {seedQuote.flights.inbound.arriveAirport}
+                                </span>
+                              </div>
+                              <div className="mt-3 grid gap-2" data-testid="list-inbound-fields">
+                                <div className="flex items-start justify-between gap-3" data-testid="row-inbound-depart">
+                                  <div>
+                                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-inbound-depart">
+                                      Departing airport
+                                    </div>
+                                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-inbound-depart">
+                                      {seedQuote.flights.inbound.departCity} ({seedQuote.flights.inbound.departAirport})
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-inbound-depart-dt">
+                                      Departure
+                                    </div>
+                                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-inbound-depart-dt">
+                                      {seedQuote.flights.inbound.departDate} \u00b7 {seedQuote.flights.inbound.departTime}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="h-px w-full bg-black/10" aria-hidden />
+
+                                <div className="flex items-start justify-between gap-3" data-testid="row-inbound-arrive">
+                                  <div>
+                                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-inbound-arrive">
+                                      Arrival airport
+                                    </div>
+                                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-inbound-arrive">
+                                      {seedQuote.flights.inbound.arriveCity} ({seedQuote.flights.inbound.arriveAirport})
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-inbound-arrive-dt">
+                                      Arrival
+                                    </div>
+                                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-inbound-arrive-dt">
+                                      {seedQuote.flights.inbound.arriveDate} \u00b7 {seedQuote.flights.inbound.arriveTime}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-quote-commissions">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold" data-testid="text-commissions-title">
+                                Package commissions
+                              </div>
+                              <div className="mt-1 text-xs text-black/55" data-testid="text-commissions-subtitle">
+                                Operator pricing and fee breakdown (GBP)
+                              </div>
+                            </div>
+                            <BadgeCheck className="h-4 w-4 text-black/35" aria-hidden />
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-2" data-testid="grid-commissions">
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-tour-operator">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-tour-operator">
+                                Tour operator
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-tour-operator">
+                                {seedQuote.commissions.tourOperator}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-sales">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-sales">
+                                Sales
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-sales">
+                                {currency.format(seedQuote.commissions.sales)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-price">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-price">
+                                Price
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-price">
+                                {currency.format(seedQuote.commissions.price)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-commission">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-commission">
+                                Commission
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-commission">
+                                {currency.format(seedQuote.commissions.commission)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-discount">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-discount">
+                                Discount
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-discount">
+                                -{currency.format(seedQuote.commissions.discount)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3" data-testid="field-service-charge">
+                              <div className="text-[11px] font-semibold text-black/55" data-testid="label-service-charge">
+                                Service charge
+                              </div>
+                              <div className="mt-1 text-sm font-semibold" data-testid="value-service-charge">
+                                {currency.format(seedQuote.commissions.serviceCharge)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-3 md:col-span-2" data-testid="field-price-per-person">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-[11px] font-semibold text-black/55" data-testid="label-price-per-person">
+                                    Price per person
+                                  </div>
+                                  <div className="mt-1 text-sm font-semibold" data-testid="value-price-per-person">
+                                    {currency.format(seedQuote.commissions.pricePerPerson)}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-[11px] font-semibold text-black/55" data-testid="label-total-pax">
+                                    Total pax
+                                  </div>
+                                  <div className="mt-1 text-sm font-semibold" data-testid="value-total-pax">
+                                    {computePaxTotal(seedQuote.passengers)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+
+                    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-5" data-testid="card-quote-right">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold" data-testid="text-quote-assets-title">
+                            Quote assets
+                          </div>
+                          <div className="mt-1 text-xs text-black/55" data-testid="text-quote-assets-subtitle">
+                            Images and JSON payload used for this quote
+                          </div>
+                        </div>
+                        <FileText className="h-4 w-4 text-black/35" aria-hidden />
+                      </div>
+
+                      <div className="mt-4" data-testid="section-images">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-xs font-semibold" data-testid="text-images-title">
+                            Images
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-black hover:bg-black/[0.03]"
+                            data-testid="button-images-add"
+                            onClick={() => {}}
+                          >
+                            Add
+                          </Button>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-3 gap-2" data-testid="grid-images">
+                          {seedQuote.images.map((img) => (
+                            <div
+                              key={img.id}
+                              className="group relative overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.03] via-white/30 to-transparent"
+                              data-testid={`card-image-${img.id}`}
+                            >
+                              <div className="aspect-[4/3] w-full" />
+                              <div className="absolute inset-x-0 bottom-0 border-t border-black/10 bg-white/70 px-2 py-1 backdrop-blur" data-testid={`text-image-label-${img.id}`}>
+                                <div className="truncate text-[11px] font-semibold text-black/70">{img.label}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-5" data-testid="section-json-upload">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-xs font-semibold" data-testid="text-json-title">
+                            JSON upload
+                          </div>
+                          <label
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/80 transition hover:bg-black/[0.03]"
+                            data-testid="button-json-upload"
+                          >
+                            <input
+                              type="file"
+                              accept="application/json"
+                              className="hidden"
+                              data-testid="input-json-file"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  const text = String(reader.result ?? "");
+                                  // we keep this as a mockup view for now
+                                  // (wire to state in next iteration if needed)
+                                  void text;
+                                };
+                                reader.readAsText(f);
+                              }}
+                            />
+                            Upload
+                          </label>
+                        </div>
+
+                        <div className="mt-3 rounded-3xl border border-black/10 bg-black/[0.03] p-3" data-testid="card-json-preview">
+                          {(() => {
+                            const parsed = safeJsonParse(seedQuote.jsonPayload);
+                            return parsed.ok ? (
+                              <pre
+                                className="max-h-[280px] overflow-auto text-[11px] leading-relaxed text-black/80"
+                                data-testid="pre-json"
+                              >
+                                {JSON.stringify(parsed.data, null, 2)}
+                              </pre>
+                            ) : (
+                              <div className="text-xs text-black/60" data-testid="text-json-error">
+                                {parsed.error}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      <div className="mt-5" data-testid="section-quote-link">
+                        <div className="text-xs font-semibold" data-testid="text-link-title">
+                          Quote link
+                        </div>
+                        <div className="mt-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="card-quote-link">
+                          <div className="truncate text-xs font-semibold text-black/80" data-testid="text-quote-link">
+                            {seedQuote.quoteLink}
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
                   </div>
                 </TabsContent>
 
