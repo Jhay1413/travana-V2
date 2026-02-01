@@ -430,7 +430,7 @@ function ShellNav({
               <div>
                 <div className="text-sm font-semibold" data-testid="text-support-title">TheHub</div>
                 <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-support-sub">
-                  Playbooks, SOPs, help.
+                  Profile, News & Training
                 </div>
               </div>
             </div>
