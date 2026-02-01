@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
+import CommandCenterPage from "@/pages/command-center";
 import {
   BadgeCheck,
   Calendar,
@@ -162,6 +163,8 @@ const seedClients: Client[] = [
 
 export default function ClientsPage() {
   const [, navigate] = useLocation();
+  const [role, setRole] = useState<"Admin" | "Manager" | "Agent" | "Homeworker" | "Referer">("Agent");
+  const [active, setActive] = useState<string>("clients");
 
   const [q, setQ] = useState("");
   const [stage, setStage] = useState<"all" | Stage>("all");
@@ -222,11 +225,29 @@ export default function ClientsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white text-black">
-      <div className="relative mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
+    <div className="app-shell px-2 py-2 text-black md:px-3 md:py-3 lg:px-4 lg:py-4">
+      <div className="w-full space-y-3">
+        <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
+          <CommandCenterPage.ShellNav role={role} onRoleChange={setRole} active={active} onActiveChange={(k) => {
+            if (k === "clients") navigate("/clients");
+            else navigate("/");
+            setActive(k);
+          }} />
 
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-col gap-3">
+            <CommandCenterPage.TopBar
+              role={role}
+              active={"clients"}
+              query={q}
+              onQuery={setQ}
+              theme={"light"}
+              onToggleTheme={() => {}}
+            />
+
+            <div className="relative mx-auto w-full max-w-7xl px-4 pb-6 md:px-6 md:pb-8">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
+
+              <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2">
               <button
