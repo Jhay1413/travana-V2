@@ -2756,15 +2756,19 @@ export default function CommandCenterPage() {
           e.target.value = "";
         };
 
+        console.log("airportSearch:", airportSearch, "airportsList length:", airportsList?.length);
         const filteredAirports = (airportsList || []).filter((airport) => {
           const q = airportSearch.trim().toLowerCase();
           if (!q) return true;
-          return (
-            airport.name.toLowerCase().includes(q) ||
+          const matches = airport.name.toLowerCase().includes(q) ||
             airport.code.toLowerCase().includes(q) ||
-            airport.country.toLowerCase().includes(q)
-          );
+            airport.country.toLowerCase().includes(q);
+          if (q === "man") {
+            console.log("Checking:", airport.name, airport.code, "matches:", matches);
+          }
+          return matches;
         });
+        console.log("filteredAirports count:", filteredAirports.length);
 
         return (
           <section>
