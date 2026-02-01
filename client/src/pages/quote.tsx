@@ -392,8 +392,8 @@ export default function QuotePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
-                    <div className="grid auto-rows-fr gap-2" data-testid="col-itinerary-left">
+                  <div className="mt-3 grid gap-2 md:grid-cols-2 md:auto-rows-fr" data-testid="grid-itinerary-specs">
+                    <div className="grid gap-2" data-testid="col-itinerary-left">
                       <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-operator-label">Tour Operator</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
@@ -419,7 +419,7 @@ export default function QuotePage() {
 
                     </div>
 
-                    <div className="grid auto-rows-fr gap-2" data-testid="col-itinerary-right">
+                    <div className="grid gap-2" data-testid="col-itinerary-right">
                       <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-hotel-label">Hotel</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
