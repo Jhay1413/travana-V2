@@ -300,7 +300,7 @@ export default function QuotePage() {
           <div className="grid gap-3 lg:grid-cols-3" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-2" data-testid="card-quote-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
-                <div className="relative overflow-hidden rounded-3xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
+                <div className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
                   <img
                     src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
                     alt=""
