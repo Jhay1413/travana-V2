@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchDashboardStats, fetchClients, fetchTourOperators, type TourOperator } from "@/lib/api";
+import { fetchDashboardStats, fetchClients, fetchTourOperators, fetchAirports, type TourOperator, type Airport } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Activity,
@@ -316,6 +316,7 @@ function ShellNav({
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
               { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: [
                 { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
+                { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
               ] },
             ],
           },
@@ -883,6 +884,7 @@ function TopBar({
       audit: "Audit",
       settings: "Settings",
       "tour-operators": "Tour Operators",
+      airports: "Airports",
       "agent-settings": "Settings",
       team: "Team Pipeline",
       coverage: "Coverage",
@@ -1141,6 +1143,41 @@ export default function CommandCenterPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tour-operators"] });
+    },
+  });
+
+  // Fetch airports
+  const { data: airportsList } = useQuery({
+    queryKey: ["/api/airports"],
+    queryFn: fetchAirports,
+  });
+
+  const createAirportMutation = useMutation({
+    mutationFn: async (airport: Omit<Airport, "id" | "createdAt">) => {
+      const res = await fetch("/api/airports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(airport),
+      });
+      if (!res.ok) throw new Error("Failed to create airport");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/airports"] });
+    },
+  });
+
+  const deleteAirportMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/airports/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete airport");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/airports"] });
     },
   });
 
@@ -2662,6 +2699,112 @@ export default function CommandCenterPage() {
                       <tr>
                         <td colSpan={7} className="py-8 text-center text-black/50 dark:text-white/50">
                           No tour operators yet. Add your first operator above.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </section>
+        );
+      }
+
+      if (active === "airports") {
+        const handleAirportCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const lines = text.split("\n").filter(line => line.trim());
+            const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+            for (let i = 1; i < lines.length; i++) {
+              const values = lines[i].split(",").map(v => v.trim());
+              const row: Record<string, string> = {};
+              headers.forEach((h, idx) => { row[h] = values[idx] || ""; });
+              createAirportMutation.mutate({
+                name: row.name || row["airport name"] || "",
+                code: row.code || row["airport code"] || row.iata || "",
+                country: row.country || "",
+              });
+            }
+          };
+          reader.readAsText(file);
+          e.target.value = "";
+        };
+
+        return (
+          <section>
+            <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold" data-testid="text-airports-title">Airports</div>
+                  <div className="text-xs text-muted-foreground">Manage airports for quotes and bookings.</div>
+                </div>
+                <div className="flex gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv,.txt"
+                      className="hidden"
+                      onChange={handleAirportCsvUpload}
+                      data-testid="input-airports-csv-upload"
+                    />
+                    <span className="inline-flex items-center rounded-2xl border border-black/10 bg-black/5 px-4 py-2 text-sm font-medium text-black hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload CSV
+                    </span>
+                  </label>
+                  <Button
+                    onClick={() => {
+                      const name = prompt("Enter airport name:");
+                      if (!name) return;
+                      const code = prompt("Airport code (e.g. LHR, JFK):") || "";
+                      const country = prompt("Country:") || "";
+                      createAirportMutation.mutate({ name, code, country });
+                    }}
+                    className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                    data-testid="button-add-airport"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Airport
+                  </Button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-black/10 dark:border-white/10">
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Airport Name</th>
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Airport Code</th>
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Country</th>
+                      <th className="py-3 px-2 text-right font-medium text-black/70 dark:text-white/70">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(airportsList || []).map((airport) => (
+                      <tr key={airport.id} className="border-b border-black/5 dark:border-white/5" data-testid={`row-airport-${airport.id}`}>
+                        <td className="py-3 px-2 font-medium">{airport.name}</td>
+                        <td className="py-3 px-2 font-mono">{airport.code}</td>
+                        <td className="py-3 px-2">{airport.country}</td>
+                        <td className="py-3 px-2 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteAirportMutation.mutate(airport.id)}
+                            className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                            data-testid={`button-delete-airport-${airport.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!airportsList || airportsList.length === 0) && (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-black/50 dark:text-white/50">
+                          No airports yet. Add your first airport above.
                         </td>
                       </tr>
                     )}

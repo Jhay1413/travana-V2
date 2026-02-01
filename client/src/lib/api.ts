@@ -176,3 +176,18 @@ export async function fetchTourOperators(): Promise<TourOperator[]> {
   if (!res.ok) throw new Error("Failed to fetch tour operators");
   return res.json();
 }
+
+// Airports
+export interface Airport {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  createdAt: string;
+}
+
+export async function fetchAirports(): Promise<Airport[]> {
+  const res = await fetch("/api/airports");
+  if (!res.ok) throw new Error("Failed to fetch airports");
+  return res.json();
+}

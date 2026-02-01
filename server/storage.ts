@@ -11,6 +11,7 @@ import {
   quoteImages,
   notes,
   tourOperators,
+  airports,
   type User,
   type InsertUser,
   type Client,
@@ -29,6 +30,8 @@ import {
   type InsertNote,
   type TourOperator,
   type InsertTourOperator,
+  type Airport,
+  type InsertAirport,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -105,6 +108,13 @@ export interface IStorage {
   createTourOperator(op: InsertTourOperator): Promise<TourOperator>;
   updateTourOperator(id: string, op: Partial<InsertTourOperator>): Promise<TourOperator | undefined>;
   deleteTourOperator(id: string): Promise<void>;
+
+  // Airports
+  listAirports(): Promise<Airport[]>;
+  getAirport(id: string): Promise<Airport | undefined>;
+  createAirport(airport: InsertAirport): Promise<Airport>;
+  updateAirport(id: string, airport: Partial<InsertAirport>): Promise<Airport | undefined>;
+  deleteAirport(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -329,6 +339,30 @@ export class DbStorage implements IStorage {
 
   async deleteTourOperator(id: string): Promise<void> {
     await db.delete(tourOperators).where(eq(tourOperators.id, id));
+  }
+
+  // Airports
+  async listAirports(): Promise<Airport[]> {
+    return db.select().from(airports).orderBy(airports.name);
+  }
+
+  async getAirport(id: string): Promise<Airport | undefined> {
+    const result = await db.select().from(airports).where(eq(airports.id, id));
+    return result[0];
+  }
+
+  async createAirport(airport: InsertAirport): Promise<Airport> {
+    const result = await db.insert(airports).values(airport).returning();
+    return result[0];
+  }
+
+  async updateAirport(id: string, airport: Partial<InsertAirport>): Promise<Airport | undefined> {
+    const result = await db.update(airports).set(airport).where(eq(airports.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteAirport(id: string): Promise<void> {
+    await db.delete(airports).where(eq(airports.id, id));
   }
 }
 

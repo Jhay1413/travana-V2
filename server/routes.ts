@@ -12,6 +12,7 @@ import {
   insertQuoteImageSchema,
   insertNoteSchema,
   insertTourOperatorSchema,
+  insertAirportSchema,
 } from "@shared/schema";
 
 // Helper to extract string parameter
@@ -470,6 +471,35 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete tour operator" });
+    }
+  });
+
+  // ============ Airports ============
+  app.get("/api/airports", async (req: Request, res: Response) => {
+    try {
+      const airports = await storage.listAirports();
+      res.json(airports);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch airports" });
+    }
+  });
+
+  app.post("/api/airports", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertAirportSchema.parse(req.body);
+      const airport = await storage.createAirport(parsed);
+      res.status(201).json(airport);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid airport data" });
+    }
+  });
+
+  app.delete("/api/airports/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteAirport(getParam(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete airport" });
     }
   });
 

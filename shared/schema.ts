@@ -163,3 +163,16 @@ export const tourOperators = pgTable("tour_operators", {
 export const insertTourOperatorSchema = createInsertSchema(tourOperators).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertTourOperator = z.infer<typeof insertTourOperatorSchema>;
 export type TourOperator = typeof tourOperators.$inferSelect;
+
+// Airports table
+export const airports = pgTable("airports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  code: text("code").notNull(),
+  country: text("country").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAirportSchema = createInsertSchema(airports).omit({ id: true, createdAt: true });
+export type InsertAirport = z.infer<typeof insertAirportSchema>;
+export type Airport = typeof airports.$inferSelect;
