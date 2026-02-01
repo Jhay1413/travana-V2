@@ -293,6 +293,11 @@ function ShellNav({
         { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
         { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
         { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+        { key: "divider", label: "Agent Tools", icon: null },
+        { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+        { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
+        { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
+        { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
       ];
     }
 
@@ -361,6 +366,15 @@ function ShellNav({
 
         <nav className="space-y-1">
           {nav.map((item) => {
+            if (item.key === "divider") {
+              return (
+                <div key={item.key} className="pt-4 pb-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40 px-3">
+                    {item.label}
+                  </div>
+                </div>
+              );
+            }
             const isActive = active === item.key;
             return (
               <button
@@ -773,7 +787,12 @@ export default function CommandCenterPage() {
   }, [dashboardStats, allClients]);
 
   const content = useMemo(() => {
-    if (role === "Agent" && ["overview", "clients", "enquiries", "quotes", "bookings"].includes(active)) {
+    // Show Agent workspace for Agents, or for Admins when viewing agent sections
+    const agentSections = ["clients", "enquiries", "quotes", "bookings"];
+    const showAgentContent = (role === "Agent" && ["overview", ...agentSections].includes(active)) || 
+                             (role === "Admin" && agentSections.includes(active));
+    
+    if (showAgentContent) {
       return (
         <section className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
           <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
