@@ -3419,7 +3419,7 @@ export default function CommandCenterPage() {
         action="Design client record"
       />
     );
-  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole]);
+  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole, airportSearch, tourOperatorSearch, airportsList, tourOperators]);
 
   return (
     <div className={themeClass}>
