@@ -42,6 +42,10 @@ import {
   UserRound,
   Users,
   X,
+  Moon,
+  Sun,
+  Camera,
+  Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -285,6 +289,7 @@ function ShellNav({
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
       { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
     if (role === "Admin") {
@@ -312,6 +317,7 @@ function ShellNav({
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
               { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ],
           },
         ],
@@ -1615,6 +1621,217 @@ export default function CommandCenterPage() {
       );
     }
 
+    if (active === "agent-settings") {
+      return (
+        <section className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
+          <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold" data-testid="text-settings-title">
+                  Settings
+                </div>
+                <div className="text-xs text-muted-foreground" data-testid="text-settings-subtitle">
+                  Manage your profile and preferences.
+                </div>
+              </div>
+            </div>
+
+            <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Appearance</div>
+                <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      {theme === "dark" ? <Moon className="h-4 w-4 text-black/70 dark:text-white/80" /> : <Sun className="h-4 w-4 text-black/70 dark:text-white/80" />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">Theme</div>
+                      <div className="text-xs text-black/55 dark:text-white/55">Switch between light and dark mode</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs dark:border-white/10 dark:bg-white/5">
+                    <span className={theme === "light" ? "text-black font-medium" : "text-black/45 dark:text-white/45"}>Light</span>
+                    <Switch checked={theme === "dark"} onCheckedChange={() => setTheme(t => t === "dark" ? "light" : "dark")} />
+                    <span className={theme === "dark" ? "text-white font-medium" : "text-black/45 dark:text-white/45"}>Dark</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Profile</div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                    <div className="flex items-center gap-3">
+                      {user?.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="h-12 w-12 rounded-2xl" />
+                      ) : (
+                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-medium">
+                          {displayName?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-sm font-medium">Avatar</div>
+                        <div className="text-xs text-black/55 dark:text-white/55">Update your profile picture</div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                      data-testid="button-change-avatar"
+                    >
+                      <Camera className="mr-2 h-4 w-4" />
+                      Change
+                    </Button>
+                  </div>
+
+                  <div className="rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                        <Mail className="h-4 w-4 text-black/70 dark:text-white/80" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Email Address</div>
+                        <div className="text-xs text-black/55 dark:text-white/55">Your primary email for notifications</div>
+                      </div>
+                    </div>
+                    <Input
+                      type="email"
+                      defaultValue={user?.email || ""}
+                      placeholder="email@example.com"
+                      className="h-10 rounded-xl border-black/10 bg-white/50 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                      data-testid="input-email"
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                        <Phone className="h-4 w-4 text-black/70 dark:text-white/80" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Phone Number</div>
+                        <div className="text-xs text-black/55 dark:text-white/55">Contact number for urgent matters</div>
+                      </div>
+                    </div>
+                    <Input
+                      type="tel"
+                      placeholder="+44 7XXX XXX XXX"
+                      className="h-10 rounded-xl border-black/10 bg-white/50 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                      data-testid="input-phone"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Notifications</div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                        <Bell className="h-4 w-4 text-black/70 dark:text-white/80" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Email Notifications</div>
+                        <div className="text-xs text-black/55 dark:text-white/55">Receive updates about enquiries and bookings</div>
+                      </div>
+                    </div>
+                    <Switch defaultChecked data-testid="switch-email-notifications" />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                        <MessageSquare className="h-4 w-4 text-black/70 dark:text-white/80" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">SMS Notifications</div>
+                        <div className="text-xs text-black/55 dark:text-white/55">Get text alerts for urgent bookings</div>
+                      </div>
+                    </div>
+                    <Switch data-testid="switch-sms-notifications" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                  data-testid="button-save-settings"
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          <div className="space-y-4">
+            <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold" data-testid="text-account-title">Account</div>
+                <div className="text-xs text-muted-foreground">Manage your account settings</div>
+              </div>
+
+              <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+              <div className="space-y-2">
+                <button
+                  className="w-full flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                  data-testid="button-change-password"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      <Shield className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">Change Password</div>
+                      <div className="text-xs text-black/55 dark:text-white/55">Update your security credentials</div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-black/40 dark:text-white/45" />
+                </button>
+
+                <button
+                  className="w-full flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                  data-testid="button-two-factor"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      <Smartphone className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">Two-Factor Authentication</div>
+                      <div className="text-xs text-black/55 dark:text-white/55">Add an extra layer of security</div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-black/40 dark:text-white/45" />
+                </button>
+
+                <button
+                  className="w-full flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                  data-testid="button-connected-accounts"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      <Link2 className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">Connected Accounts</div>
+                      <div className="text-xs text-black/55 dark:text-white/55">Manage linked services</div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-black/40 dark:text-white/45" />
+                </button>
+              </div>
+            </Card>
+          </div>
+        </section>
+      );
+    }
+
     if (role === "Referer") {
       return (
         <section className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
@@ -2021,7 +2238,7 @@ export default function CommandCenterPage() {
         action="Design client record"
       />
     );
-  }, [active, clients, role, tab]);
+  }, [active, clients, role, tab, theme, setTheme, user, displayName]);
 
   return (
     <div className={themeClass}>
