@@ -269,12 +269,10 @@ function KpiCard({
 
 function ShellNav({
   role,
-  onRoleChange,
   active,
   onActiveChange,
 }: {
   role: Role;
-  onRoleChange: (r: Role) => void;
   active: string;
   onActiveChange: (k: string) => void;
 }) {
@@ -349,37 +347,14 @@ function ShellNav({
             </div>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs font-medium text-black/70 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-                data-testid="button-role-switch"
-              >
-                <span className="inline-flex h-6 items-center rounded-full bg-black/10 px-2 text-[11px] text-black/70 dark:bg-white/10 dark:text-white/80">
-                  {role}
-                </span>
-                <ChevronDown className="h-4 w-4 text-black/50 dark:text-white/60" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="glass ringed w-56 rounded-2xl border-black/10 bg-[hsl(var(--popover))] p-2 dark:border-white/10"
-              data-testid="menu-role"
-            >
-              <DropdownMenuLabel className="text-xs text-black/70 dark:text-white/70">Access profile</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-black/10 dark:bg-white/10" />
-              {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
-                <DropdownMenuItem
-                  key={r}
-                  className="cursor-pointer rounded-xl text-sm text-black/85 focus:bg-black/5 focus:text-black dark:text-white/85 dark:focus:bg-white/10 dark:focus:text-white"
-                  onSelect={() => onRoleChange(r)}
-                  data-testid={`menuitem-role-${r.toLowerCase()}`}
-                >
-                  {r}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div
+            className="inline-flex items-center rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs font-medium text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/80"
+            data-testid="badge-role"
+          >
+            <span className="inline-flex h-6 items-center rounded-full bg-black/10 px-2 text-[11px] text-black/70 dark:bg-white/10 dark:text-white/80">
+              {role}
+            </span>
+          </div>
         </div>
 
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
@@ -724,7 +699,6 @@ function EmptyState({ title, desc, action }: { title: string; desc: string; acti
 
 export default function CommandCenterPage() {
   const { user, logout } = useAuth();
-  const [role, setRole] = useState<Role>("Agent");
   const [active, setActive] = useState<string>("overview");
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"clients" | "pipeline" | "calendar" | "news">("clients");
@@ -734,6 +708,9 @@ export default function CommandCenterPage() {
 
   const themeClass = theme === "dark" ? "dark" : "";
   const displayName = user?.firstName || user?.name || user?.email || "User";
+  
+  // Use the user's role from database, default to Agent
+  const role = (user?.role as Role) || "Agent";
 
   // Fetch dashboard stats from API
   const { data: dashboardStats } = useQuery({
@@ -1793,7 +1770,7 @@ export default function CommandCenterPage() {
       <div className="app-shell px-2 py-2 md:px-3 md:py-3 lg:px-4 lg:py-4">
         <div className="w-full space-y-3">
           <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
-            <ShellNav role={role} onRoleChange={setRole} active={active} onActiveChange={setActive} />
+            <ShellNav role={role} active={active} onActiveChange={setActive} />
 
             <div className="flex flex-col gap-3">
               <TopBar
