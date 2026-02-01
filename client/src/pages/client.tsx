@@ -836,91 +836,138 @@ export default function ClientPage() {
                         </Button>
                       </div>
 
-                      <div className="mt-4 grid gap-2" data-testid="list-quotes-intro">
-                        {([
-                          {
-                            id: seedQuote.id,
-                            title: seedQuote.quoteTitle,
-                            destination: seedQuote.destination,
-                            travelDate: seedQuote.travelDate,
-                            createdAt: "Today",
-                            tourOperator: seedQuote.commissions.tourOperator,
-                            totalCost: seedQuote.commissions.price,
-                            coverLabel: "Resort hero",
-                          },
-                          {
-                            id: "Q-00037",
-                            title: "Japan — Kyoto + Tokyo, 12 nights",
-                            destination: "Japan",
-                            travelDate: "2026-03-18",
-                            createdAt: "3d",
-                            tourOperator: "Trailfinders",
-                            totalCost: 12990,
-                            coverLabel: "City skyline",
-                          },
-                          {
-                            id: "Q-00036",
-                            title: "Bali — Private Pool Villa, 10 nights",
-                            destination: "Bali",
-                            travelDate: "2026-05-06",
-                            createdAt: "1w",
-                            tourOperator: "Kuoni",
-                            totalCost: 10450,
-                            coverLabel: "Villa",
-                          },
-                        ] as const).map((q, idx) => (
-                          <button
-                            key={q.id}
-                            type="button"
-                            className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
-                            data-testid={`card-quote-intro-${q.id}`}
-                            onClick={() => {}}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div
-                                className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
-                                data-testid={`img-quote-${q.id}`}
-                                aria-hidden
-                              >
-                                <img
-                                  src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
-                                  alt=""
-                                  className="absolute inset-0 h-full w-full object-cover"
-                                  data-testid={`img-quote-photo-${q.id}`}
-                                />
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold" data-testid={`text-quote-title-${q.id}`}>
-                                      {q.title}
-                                    </div>
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                      <span data-testid={`text-quote-destination-${q.id}`}>{q.destination}</span>
-                                      <span className="text-black/25">•</span>
-                                      <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
-                                      <span className="text-black/25">•</span>
-                                      <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt}</span>
-                                    </div>
-                                    <div className="mt-1 text-xs text-black/60" data-testid={`text-quote-operator-${q.id}`}>
-                                      Tour operator: <span className="font-semibold text-black/80">{q.tourOperator}</span>
-                                    </div>
-                                  </div>
-
-                                  <div className="shrink-0 text-right">
-                                    <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
-                                      {currency.format(q.totalCost)}
-                                    </div>
-                                    <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-black/60">
-                                      View
-                                      <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                                    </div>
-                                  </div>
+                      <div className="mt-4" data-testid="section-quotes-groups">
+                        {(
+                          [
+                            {
+                              id: "in-play",
+                              title: "In Play",
+                              rows: [
+                                {
+                                  id: seedQuote.id,
+                                  title: seedQuote.quoteTitle,
+                                  destination: seedQuote.destination,
+                                  travelDate: seedQuote.travelDate,
+                                  createdAt: "Today",
+                                  tourOperator: seedQuote.commissions.tourOperator,
+                                  totalCost: seedQuote.commissions.price,
+                                },
+                                {
+                                  id: "Q-00037",
+                                  title: "Japan — Kyoto + Tokyo, 12 nights",
+                                  destination: "Japan",
+                                  travelDate: "2026-03-18",
+                                  createdAt: "3d",
+                                  tourOperator: "Trailfinders",
+                                  totalCost: 12990,
+                                },
+                              ],
+                            },
+                            {
+                              id: "won",
+                              title: "Won",
+                              rows: [
+                                {
+                                  id: "Q-00036",
+                                  title: "Bali — Private Pool Villa, 10 nights",
+                                  destination: "Bali",
+                                  travelDate: "2026-05-06",
+                                  createdAt: "1w",
+                                  tourOperator: "Kuoni",
+                                  totalCost: 10450,
+                                },
+                              ],
+                            },
+                            {
+                              id: "lost",
+                              title: "Lost",
+                              rows: [],
+                            },
+                          ] as const
+                        ).map((group) => (
+                          <div key={group.id} className="rounded-3xl border border-black/10 bg-white/60 p-2" data-testid={`group-quotes-${group.id}`}>
+                            <div className="flex items-center justify-between gap-3 px-2 py-2" data-testid={`row-quotes-group-header-${group.id}`}>
+                              <div className="flex items-center gap-2">
+                                <div className="text-xs font-semibold text-black/80" data-testid={`text-quotes-group-title-${group.id}`}>
+                                  {group.title}
                                 </div>
+                                <span
+                                  className="rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/60"
+                                  data-testid={`pill-quotes-group-count-${group.id}`}
+                                >
+                                  {group.rows.length}
+                                </span>
                               </div>
                             </div>
-                          </button>
+
+                            <div className="grid gap-2" data-testid={`list-quotes-${group.id}`}>
+                              {group.rows.map((q) => (
+                                <button
+                                  key={q.id}
+                                  type="button"
+                                  className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
+                                  data-testid={`card-quote-intro-${q.id}`}
+                                  onClick={() => {}}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div
+                                      className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
+                                      data-testid={`img-quote-${q.id}`}
+                                      aria-hidden
+                                    >
+                                      <img
+                                        src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
+                                        alt=""
+                                        className="absolute inset-0 h-full w-full object-cover"
+                                        data-testid={`img-quote-photo-${q.id}`}
+                                      />
+                                    </div>
+
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="truncate text-sm font-semibold" data-testid={`text-quote-title-${q.id}`}>
+                                            {q.title}
+                                          </div>
+                                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
+                                            <span data-testid={`text-quote-destination-${q.id}`}>{q.destination}</span>
+                                            <span className="text-black/25">•</span>
+                                            <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
+                                            <span className="text-black/25">•</span>
+                                            <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt}</span>
+                                          </div>
+                                          <div className="mt-1 text-xs text-black/60" data-testid={`text-quote-operator-${q.id}`}>
+                                            Tour operator: <span className="font-semibold text-black/80">{q.tourOperator}</span>
+                                          </div>
+                                        </div>
+
+                                        <div className="shrink-0 text-right">
+                                          <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
+                                            {currency.format(q.totalCost)}
+                                          </div>
+                                          <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-black/60">
+                                            View
+                                            <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+
+                              {group.rows.length === 0 ? (
+                                <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid={`empty-quotes-${group.id}`}>
+                                  <div className="text-sm font-semibold" data-testid={`text-empty-quotes-title-${group.id}`}>
+                                    No quotes
+                                  </div>
+                                  <div className="mt-1 text-xs text-black/55" data-testid={`text-empty-quotes-subtitle-${group.id}`}>
+                                    Nothing in {group.title.toLowerCase()} yet.
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </Card>
