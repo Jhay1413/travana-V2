@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboardStats, fetchClients } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Activity,
   BadgeCheck,
@@ -26,6 +27,7 @@ import {
   LifeBuoy,
   Link2,
   ListChecks,
+  LogOut,
   Mail,
   MapPin,
   MessageSquare,
@@ -36,6 +38,7 @@ import {
   Shield,
   Sparkles,
   Ticket,
+  User2,
   UserRound,
   Users,
 } from "lucide-react";
@@ -547,6 +550,9 @@ function TopBar({
   onQuery,
   theme,
   onToggleTheme,
+  userName,
+  userAvatar,
+  onLogout,
 }: {
   role: Role;
   active: string;
@@ -554,6 +560,9 @@ function TopBar({
   onQuery: (v: string) => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  userName?: string;
+  userAvatar?: string | null;
+  onLogout?: () => void;
 }) {
   const title = useMemo(() => {
     const map: Record<string, string> = {
@@ -646,6 +655,42 @@ function TopBar({
             >
               <Bell className="h-4 w-4" />
             </button>
+
+            {userName && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 text-black/70 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                    data-testid="button-user-menu"
+                  >
+                    {userAvatar ? (
+                      <img src={userAvatar} alt="" className="h-6 w-6 rounded-full" />
+                    ) : (
+                      <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-medium">
+                        {userName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="hidden sm:inline text-sm font-medium">{userName}</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                  <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-profile">
+                    <User2 className="mr-2 h-4 w-4" />
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer text-red-600 focus:text-red-600"
+                    onClick={onLogout}
+                    data-testid="menu-item-logout"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </div>
@@ -678,6 +723,7 @@ function EmptyState({ title, desc, action }: { title: string; desc: string; acti
 }
 
 export default function CommandCenterPage() {
+  const { user, logout } = useAuth();
   const [role, setRole] = useState<Role>("Agent");
   const [active, setActive] = useState<string>("overview");
   const [query, setQuery] = useState("");
@@ -687,6 +733,7 @@ export default function CommandCenterPage() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   const themeClass = theme === "dark" ? "dark" : "";
+  const displayName = user?.firstName || user?.name || user?.email || "User";
 
   // Fetch dashboard stats from API
   const { data: dashboardStats } = useQuery({
@@ -1756,6 +1803,9 @@ export default function CommandCenterPage() {
                 onQuery={setQuery}
                 theme={theme}
                 onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                userName={displayName}
+                userAvatar={user?.profileImageUrl}
+                onLogout={() => window.location.href = "/api/logout"}
               />
 
               <section className="grid gap-3 md:grid-cols-4">

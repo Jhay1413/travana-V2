@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import {
   insertUserSchema,
   insertClientSchema,
@@ -21,6 +22,10 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  
+  // Setup authentication FIRST before other routes
+  await setupAuth(app);
+  registerAuthRoutes(app);
   
   // ============ Users ============
   app.get("/api/users", async (req: Request, res: Response) => {
