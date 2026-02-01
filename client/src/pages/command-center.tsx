@@ -460,6 +460,8 @@ function ShellNav({
           </div>
         </div>
 
+        <Separator className="my-4 bg-black/10 dark:bg-white/10" data-testid="separator-connect" />
+
         <div className="space-y-1" data-testid="section-connect">
           {["whatsapp", "facebook", "instagram", "email", "internal-chat"].map((key) => {
             const map: Record<string, { label: string; icon: React.ReactNode }> = {
