@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { fetchDashboardStats, fetchClients } from "@/lib/api";
 import {
   Activity,
   BadgeCheck,
@@ -686,17 +688,55 @@ export default function CommandCenterPage() {
 
   const themeClass = theme === "dark" ? "dark" : "";
 
+  // Fetch dashboard stats from API
+  const { data: dashboardStats } = useQuery({
+    queryKey: ["/api/dashboard/stats"],
+    queryFn: fetchDashboardStats,
+  });
+
+  // Fetch clients from API
+  const { data: apiClients } = useQuery({
+    queryKey: ["/api/clients"],
+    queryFn: fetchClients,
+  });
+
+  // Transform API clients to display format
+  const allClients = useMemo(() => {
+    if (!apiClients) return seedClients;
+    return apiClients.map((c) => ({
+      id: c.id,
+      name: c.name,
+      tier: c.tier as "Platinum" | "Gold" | "Standard",
+      stage: c.stage as Stage,
+      location: c.location || "",
+      nextTrip: c.nextTrip || "",
+      value: parseFloat(c.value),
+      lastTouch: c.lastTouch || "",
+    }));
+  }, [apiClients]);
+
   const clients = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return seedClients;
-    return seedClients.filter((c) =>
+    if (!q) return allClients;
+    return allClients.filter((c) =>
       [c.name, c.id, c.location, c.nextTrip, c.stage, c.tier].join(" ").toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [query, allClients]);
 
   const totals = useMemo(() => {
-    const booked = seedClients.filter((c) => c.stage === "Booked");
-    const open = seedClients.filter((c) => c.stage !== "Booked");
+    if (dashboardStats) {
+      // Use API stats if available
+      return {
+        bookedCount: dashboardStats.wonCount,
+        openCount: dashboardStats.inPlayCount + dashboardStats.lostCount,
+        bookedValue: dashboardStats.totalRevenue,
+        openValue: (dashboardStats.totalQuotes - dashboardStats.wonCount) * dashboardStats.avgDealSize,
+        avgDeal: Math.round(dashboardStats.avgDealSize),
+      };
+    }
+    // Fallback to calculating from clients
+    const booked = allClients.filter((c) => c.stage === "Booked");
+    const open = allClients.filter((c) => c.stage !== "Booked");
     const bookedValue = booked.reduce((sum, c) => sum + c.value, 0);
     const openValue = open.reduce((sum, c) => sum + c.value, 0);
     return {
@@ -704,9 +744,9 @@ export default function CommandCenterPage() {
       openCount: open.length,
       bookedValue,
       openValue,
-      avgDeal: Math.round((bookedValue + openValue) / seedClients.length),
+      avgDeal: Math.round((bookedValue + openValue) / allClients.length),
     };
-  }, []);
+  }, [dashboardStats, allClients]);
 
   const content = useMemo(() => {
     if (role === "Agent" && ["overview", "clients", "enquiries", "quotes", "bookings"].includes(active)) {
@@ -834,7 +874,7 @@ export default function CommandCenterPage() {
                     { stage: "Quote" as const, hint: "In progress" },
                     { stage: "Booked" as const, hint: "Confirmed" },
                   ] as const).map((col) => {
-                    const items = seedClients.filter((c) => c.stage === col.stage);
+                    const items = allClients.filter((c) => c.stage === col.stage);
                     const sum = items.reduce((s, i) => s + i.value, 0);
                     return (
                       <div key={col.stage} className="space-y-3">

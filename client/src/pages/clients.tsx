@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import {
   BadgeCheck,
@@ -23,12 +24,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { fetchClients } from "@/lib/api";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 
 type ClientTier = "Platinum" | "Gold" | "Standard";
 
-type Client = {
+type ClientDisplay = {
   id: string;
   name: string;
   tier: ClientTier;
@@ -80,103 +82,53 @@ function shortInitials(name: string) {
   return (a + b).toUpperCase();
 }
 
-const seedClients: Client[] = [
-  {
-    id: "CL-10842",
-    name: "Ava Harrington",
-    tier: "Platinum",
-    stage: "Booked",
-    location: "Kensington, London",
-    nextTrip: "Maldives · 9 nights · Overwater villa",
-    value: 18450,
-    lastTouch: "Today",
-    email: "ava.harrington@example.com",
-    phone: "+44 20 7946 0821",
-    tags: ["Honeymoon", "VIP", "WhatsApp"],
-  },
-  {
-    id: "CL-09117",
-    name: "James Whitmore",
-    tier: "Gold",
-    stage: "Quote",
-    location: "Edinburgh",
-    nextTrip: "Japan · 12 nights · Kyoto + Tokyo",
-    value: 12990,
-    lastTouch: "2d",
-    email: "james.whitmore@example.com",
-    phone: "+44 131 496 2011",
-    tags: ["Ski", "Family", "Email"],
-  },
-  {
-    id: "CL-04301",
-    name: "Noah Bennett",
-    tier: "Standard",
-    stage: "Enquiry",
-    location: "Manchester",
-    nextTrip: "Dubai · 5 nights · Weekend escape",
-    value: 3990,
-    lastTouch: "6d",
-    email: "noah.bennett@example.com",
-    phone: "+44 161 496 3102",
-    tags: ["New", "Lead", "Call"],
-  },
-  {
-    id: "CL-05528",
-    name: "Sofia Clarke",
-    tier: "Gold",
-    stage: "Booked",
-    location: "Bristol",
-    nextTrip: "Bali · 10 nights · Private pool villa",
-    value: 10450,
-    lastTouch: "1d",
-    email: "sofia.clarke@example.com",
-    phone: "+44 117 496 7442",
-    tags: ["Anniversary", "VIP", "Call"],
-  },
-  {
-    id: "CL-07190",
-    name: "Ethan Cole",
-    tier: "Standard",
-    stage: "Quote",
-    location: "Leeds",
-    nextTrip: "New York · 6 nights · Broadway",
-    value: 5220,
-    lastTouch: "4d",
-    email: "ethan.cole@example.com",
-    phone: "+44 113 496 5580",
-    tags: ["Corporate", "Email"],
-  },
-  {
-    id: "CL-06214",
-    name: "Mia Sinclair",
-    tier: "Platinum",
-    stage: "Booked",
-    location: "Chelsea, London",
-    nextTrip: "St Lucia · 8 nights · Butler suite",
-    value: 15690,
-    lastTouch: "3d",
-    email: "mia.sinclair@example.com",
-    phone: "+44 20 7946 1141",
-    tags: ["VIP", "Repeat", "WhatsApp"],
-  },
-];
-
 export default function ClientsPage() {
   const [, navigate] = useLocation();
   const [role, setRole] = useState<Role>("Agent");
   const [active] = useState<string>("clients");
+
+  // Fetch clients from API
+  const { data: apiClients, isLoading } = useQuery({
+    queryKey: ["/api/clients"],
+    queryFn: fetchClients,
+  });
+
+  // Transform API clients to display format
+  const clients = useMemo((): ClientDisplay[] => {
+    if (!apiClients) return [];
+    return apiClients.map((c) => ({
+      id: c.id,
+      name: c.name,
+      tier: c.tier as ClientTier,
+      stage: c.stage as Stage,
+      location: c.location || "",
+      nextTrip: c.nextTrip || "",
+      value: parseFloat(c.value),
+      lastTouch: c.lastTouch || "",
+      email: c.email,
+      phone: c.phone,
+      tags: c.tags,
+    }));
+  }, [apiClients]);
 
   const [q, setQ] = useState("");
   const [stage, setStage] = useState<"all" | Stage>("all");
   const [tier, setTier] = useState<"all" | ClientTier>("all");
   const [sort, setSort] = useState<"value" | "lastTouch" | "name">("value");
   const [tab, setTab] = useState<"directory" | "segments">("directory");
-  const [selectedId, setSelectedId] = useState<string>(seedClients[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState<string>("");
+
+  // Update selectedId when clients are loaded
+  useMemo(() => {
+    if (clients.length > 0 && !selectedId) {
+      setSelectedId(clients[0].id);
+    }
+  }, [clients, selectedId]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
 
-    const base = seedClients.filter((c) => {
+    const base = clients.filter((c) => {
       const matchesQuery =
         !query ||
         c.name.toLowerCase().includes(query) ||
@@ -213,19 +165,19 @@ export default function ClientsPage() {
   );
 
   const totals = useMemo(() => {
-    const booked = seedClients.filter((c) => c.stage === "Booked");
-    const inPipe = seedClients.filter((c) => c.stage !== "Booked");
+    const booked = clients.filter((c) => c.stage === "Booked");
+    const inPipe = clients.filter((c) => c.stage !== "Booked");
     const bookedValue = booked.reduce((s, i) => s + i.value, 0);
     const pipeValue = inPipe.reduce((s, i) => s + i.value, 0);
     return {
-      total: seedClients.length,
+      total: clients.length,
       bookedCount: booked.length,
       pipelineCount: inPipe.length,
       bookedValue,
       pipeValue,
-      avg: Math.round((bookedValue + pipeValue) / Math.max(seedClients.length, 1)),
+      avg: Math.round((bookedValue + pipeValue) / Math.max(clients.length, 1)),
     };
-  }, []);
+  }, [clients]);
 
   return (
     <CommandCenterShell

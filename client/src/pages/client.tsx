@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation, useRoute } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import {
   BadgeCheck,
@@ -22,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Spinner } from "@/components/ui/spinner";
+import { fetchClient, fetchQuotes, type Client as ApiClient, type Quote as ApiQuote } from "@/lib/api";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 
@@ -84,86 +87,21 @@ function stagePill(stage: Stage) {
   }
 }
 
-const seedClients: Client[] = [
-  {
-    id: "CL-10842",
-    name: "Ava Harrington",
-    tier: "Platinum",
-    stage: "Booked",
-    location: "Kensington, London",
-    nextTrip: "Maldives · 9 nights · Overwater villa",
-    value: 18450,
-    lastTouch: "Today",
-    email: "ava.harrington@example.com",
-    phone: "+44 20 7946 0821",
-    tags: ["Honeymoon", "VIP", "WhatsApp"],
-  },
-  {
-    id: "CL-09117",
-    name: "James Whitmore",
-    tier: "Gold",
-    stage: "Quote",
-    location: "Edinburgh",
-    nextTrip: "Japan · 12 nights · Kyoto + Tokyo",
-    value: 12990,
-    lastTouch: "2d",
-    email: "james.whitmore@example.com",
-    phone: "+44 131 496 2011",
-    tags: ["Ski", "Family", "Email"],
-  },
-  {
-    id: "CL-04301",
-    name: "Noah Bennett",
-    tier: "Standard",
-    stage: "Enquiry",
-    location: "Manchester",
-    nextTrip: "Dubai · 5 nights · Weekend escape",
-    value: 3990,
-    lastTouch: "6d",
-    email: "noah.bennett@example.com",
-    phone: "+44 161 496 3102",
-    tags: ["New", "Lead", "Call"],
-  },
-  {
-    id: "CL-05528",
-    name: "Sofia Clarke",
-    tier: "Gold",
-    stage: "Booked",
-    location: "Bristol",
-    nextTrip: "Bali · 10 nights · Private pool villa",
-    value: 10450,
-    lastTouch: "1d",
-    email: "sofia.clarke@example.com",
-    phone: "+44 117 496 7442",
-    tags: ["Anniversary", "VIP", "Call"],
-  },
-  {
-    id: "CL-07190",
-    name: "Ethan Cole",
-    tier: "Standard",
-    stage: "Quote",
-    location: "Leeds",
-    nextTrip: "New York · 6 nights · Broadway",
-    value: 5220,
-    lastTouch: "4d",
-    email: "ethan.cole@example.com",
-    phone: "+44 113 496 5580",
-    tags: ["Corporate", "Email"],
-  },
-  {
-    id: "CL-06214",
-    name: "Mia Sinclair",
-    tier: "Platinum",
-    stage: "Booked",
-    location: "Chelsea, London",
-    nextTrip: "St Lucia · 8 nights · Butler suite",
-    value: 15690,
-    lastTouch: "3d",
-    email: "mia.sinclair@example.com",
-    phone: "+44 20 7946 1141",
-    tags: ["VIP", "Repeat", "WhatsApp"],
-  },
-];
+function transformClientData(apiData: ApiClient): Client {
+  return {
+    id: apiData.id,
+    name: apiData.name,
+    tier: apiData.tier as ClientTier,
+    stage: apiData.stage as Stage,
+    location: apiData.location || "",
+    nextTrip: apiData.nextTrip || "",
+    value: parseFloat(apiData.value || "0"),
+    lastTouch: apiData.lastTouch || "",
+    email: apiData.email,
+    phone: apiData.phone,
+    tags: apiData.tags,
+  };
+}
 
 function ticketsFor(clientId: string): TicketItem[] {
   const base: TicketItem[] = [
@@ -365,10 +303,24 @@ export default function ClientPage() {
 
   const clientId = params?.clientId ?? "";
 
-  const client = useMemo(
-    () => seedClients.find((c) => c.id === clientId) ?? seedClients[0] ?? null,
-    [clientId],
-  );
+  const { data: clientData, isLoading: isLoadingClient } = useQuery({
+    queryKey: ["client", clientId],
+    queryFn: () => fetchClient(clientId),
+    enabled: !!clientId,
+  });
+
+  const { data: quotesData, isLoading: isLoadingQuotes } = useQuery({
+    queryKey: ["quotes", "client", clientId],
+    queryFn: () => fetchQuotes({ clientId }),
+    enabled: !!clientId,
+  });
+
+  const client = useMemo(() => {
+    if (!clientData) return null;
+    return transformClientData(clientData);
+  }, [clientData]);
+
+  const quotes = useMemo(() => quotesData || [], [quotesData]);
 
   const tickets = useMemo(() => (client ? ticketsFor(client.id) : []), [client]);
   const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
@@ -387,13 +339,63 @@ export default function ClientPage() {
     return files.filter((f) => `${f.id} ${f.name} ${f.type} ${f.updated}`.toLowerCase().includes(query));
   }, [q, files]);
 
+  if (isLoadingClient) {
+    return (
+      <CommandCenterShell
+        role={role}
+        onRoleChange={setRole}
+        active={active}
+        title="Client"
+        subtitle="Loading..."
+        query={q}
+        onQuery={setQ}
+        theme="light"
+        onToggleTheme={() => {}}
+      >
+        <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-client">
+          <Spinner className="h-8 w-8" />
+        </div>
+      </CommandCenterShell>
+    );
+  }
+
+  if (!client) {
+    return (
+      <CommandCenterShell
+        role={role}
+        onRoleChange={setRole}
+        active={active}
+        title="Client"
+        subtitle="Not found"
+        query={q}
+        onQuery={setQ}
+        theme="light"
+        onToggleTheme={() => {}}
+      >
+        <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-client">
+          <div className="text-center">
+            <p className="text-sm text-black/70">Client not found</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-4"
+              onClick={() => navigate("/clients")}
+            >
+              Back to Clients
+            </Button>
+          </div>
+        </div>
+      </CommandCenterShell>
+    );
+  }
+
   return (
     <CommandCenterShell
       role={role}
       onRoleChange={setRole}
       active={active}
-      title={client ? client.name : "Client"}
-      subtitle={client ? `${client.id} · ${client.location}` : ""}
+      title={client.name}
+      subtitle={`${client.id} · ${client.location}`}
       query={q}
       onQuery={setQ}
       theme="light"

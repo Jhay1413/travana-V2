@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, Copy, FileText, Plane, Tag, X } from "lucide-react";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import { fetchQuoteFull, type QuoteFull } from "@/lib/api";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -62,152 +65,63 @@ type Quote = {
   notes: string[];
 };
 
-const seedQuotesById: Record<string, Quote> = {
-  "Q-00042": {
-    id: "Q-00042",
-    status: "In Play",
-    packageType: "Luxury Beach",
-    quoteTitle: "Maldives — Coco Beach Resort, 7 nights",
-    travelDate: "2026-02-14",
-    returnDate: "2026-02-21",
-    destination: "Maldives",
-    createdAt: "2026-02-01",
-    passengers: { adults: 2, children: 2, childAges: [6, 10] },
+function transformQuoteData(apiData: QuoteFull): Quote {
+  const outboundFlight = apiData.flights.find(f => f.direction === "outbound");
+  const inboundFlight = apiData.flights.find(f => f.direction === "inbound");
+  
+  return {
+    id: apiData.id,
+    status: apiData.status as "In Play" | "Won" | "Lost",
+    packageType: apiData.packageType,
+    quoteTitle: apiData.quoteTitle,
+    travelDate: apiData.travelDate,
+    returnDate: apiData.returnDate,
+    destination: apiData.destination,
+    createdAt: apiData.createdAt,
+    passengers: {
+      adults: apiData.passengersAdults,
+      children: apiData.passengersChildren,
+      childAges: apiData.childAges,
+    },
     accommodation: {
-      property: "Luxury Coco Beach Resort",
-      board: "Half Board",
-      roomType: "Overwater Villa (Private Pool)",
-      notes: "Early check-in requested · Anniversary amenities",
+      property: apiData.accommodation?.property || "",
+      board: apiData.accommodation?.board || "",
+      roomType: apiData.accommodation?.roomType || "",
+      notes: apiData.accommodation?.notes || "",
     },
     flights: {
       outbound: {
-        from: "LHR",
-        to: "MLE",
-        carrier: "BA",
-        flightNo: "BA061",
-        depart: "2026-02-14T10:15:00",
-        arrive: "2026-02-14T22:40:00",
+        from: outboundFlight?.fromAirport || "",
+        to: outboundFlight?.toAirport || "",
+        carrier: outboundFlight?.carrier || "",
+        flightNo: outboundFlight?.flightNo || "",
+        depart: outboundFlight?.depart || "",
+        arrive: outboundFlight?.arrive || "",
       },
       inbound: {
-        from: "MLE",
-        to: "LHR",
-        carrier: "BA",
-        flightNo: "BA060",
-        depart: "2026-02-21T00:30:00",
-        arrive: "2026-02-21T06:55:00",
+        from: inboundFlight?.fromAirport || "",
+        to: inboundFlight?.toAirport || "",
+        carrier: inboundFlight?.carrier || "",
+        flightNo: inboundFlight?.flightNo || "",
+        depart: inboundFlight?.depart || "",
+        arrive: inboundFlight?.arrive || "",
       },
     },
-    owner: { name: "Sophie Turner", role: "Agent" },
+    owner: {
+      name: apiData.owner?.name || "Unknown",
+      role: (apiData.owner?.role as "Agent" | "Manager" | "Homeworker") || "Agent",
+    },
     commissions: {
-      tourOperator: "Elegant Escapes",
-      price: 18950,
-      commissionPercent: 12,
-      commissionValue: 2274,
-      agentSplitPercent: 35,
-      agentSplitValue: 795,
-      netToAgency: 1479,
+      tourOperator: apiData.commission?.tourOperator || "",
+      price: parseFloat(apiData.commission?.price || "0"),
+      commissionPercent: parseFloat(apiData.commission?.commissionPercent || "0"),
+      commissionValue: parseFloat(apiData.commission?.commissionValue || "0"),
+      agentSplitPercent: parseFloat(apiData.commission?.agentSplitPercent || "0"),
+      agentSplitValue: parseFloat(apiData.commission?.agentSplitValue || "0"),
+      netToAgency: parseFloat(apiData.commission?.netToAgency || "0"),
     },
-    notes: [
-      "Client prefers sunset side villa; avoid near pier.",
-      "Offer two options: 7 nights + upgrade vs 10 nights standard.",
-    ],
-  },
-  "Q-00037": {
-    id: "Q-00037",
-    status: "In Play",
-    packageType: "Tailor-Made",
-    quoteTitle: "Japan — Kyoto + Tokyo, 12 nights",
-    travelDate: "2026-03-18",
-    returnDate: "2026-03-30",
-    destination: "Japan",
-    createdAt: "2026-01-29",
-    passengers: { adults: 2, children: 0, childAges: [] },
-    accommodation: {
-      property: "Mixed (Kyoto + Tokyo)",
-      board: "B&B",
-      roomType: "King room",
-      notes: "Include private guide 2 days in Kyoto",
-    },
-    flights: {
-      outbound: {
-        from: "LHR",
-        to: "HND",
-        carrier: "BA",
-        flightNo: "BA007",
-        depart: "2026-03-18T12:30:00",
-        arrive: "2026-03-19T10:15:00",
-      },
-      inbound: {
-        from: "HND",
-        to: "LHR",
-        carrier: "BA",
-        flightNo: "BA006",
-        depart: "2026-03-30T13:05:00",
-        arrive: "2026-03-30T19:45:00",
-      },
-    },
-    owner: { name: "Amelia Brooks", role: "Homeworker" },
-    commissions: {
-      tourOperator: "Trailfinders",
-      price: 12990,
-      commissionPercent: 10,
-      commissionValue: 1299,
-      agentSplitPercent: 35,
-      agentSplitValue: 455,
-      netToAgency: 844,
-    },
-    notes: ["Propose two hotel tiers in Tokyo.", "Add rail pass vs flights internal as option."],
-  },
-  "Q-00036": {
-    id: "Q-00036",
-    status: "Won",
-    packageType: "Luxury Villa",
-    quoteTitle: "Bali — Private Pool Villa, 10 nights",
-    travelDate: "2026-05-06",
-    returnDate: "2026-05-16",
-    destination: "Bali",
-    createdAt: "2026-01-22",
-    passengers: { adults: 2, children: 0, childAges: [] },
-    accommodation: {
-      property: "Ubud Private Estate",
-      board: "Breakfast",
-      roomType: "One Bedroom Villa",
-      notes: "Private driver included · Late checkout",
-    },
-    flights: {
-      outbound: {
-        from: "LGW",
-        to: "DPS",
-        carrier: "EK",
-        flightNo: "EK016",
-        depart: "2026-05-06T20:10:00",
-        arrive: "2026-05-07T19:20:00",
-      },
-      inbound: {
-        from: "DPS",
-        to: "LGW",
-        carrier: "EK",
-        flightNo: "EK017",
-        depart: "2026-05-16T21:55:00",
-        arrive: "2026-05-17T06:35:00",
-      },
-    },
-    owner: { name: "Noah Bennett", role: "Manager" },
-    commissions: {
-      tourOperator: "Kuoni",
-      price: 10450,
-      commissionPercent: 12,
-      commissionValue: 1254,
-      agentSplitPercent: 35,
-      agentSplitValue: 439,
-      netToAgency: 815,
-    },
-    notes: ["Client confirmed deposit paid.", "Upsell: spa package + beach club day."],
-  },
-};
-
-function getQuoteFor(id: string) {
-  return seedQuotesById[id] ?? seedQuotesById["Q-00042"]; // fallback for mockup
+    notes: apiData.notes.map(n => n.content),
+  };
 }
 
 function StatusPill({ status }: { status: Quote["status"] }) {
@@ -247,10 +161,49 @@ export default function QuotePage() {
   const [, params] = useRoute("/clients/:clientId/quotes/:quoteId");
 
   const role = (new URLSearchParams(window.location.search).get("role") as Role) ?? "Agent";
-  const clientId = params?.clientId ?? "C-00001";
-  const quoteId = params?.quoteId ?? "Q-00042";
+  const clientId = params?.clientId ?? "";
+  const quoteId = params?.quoteId ?? "";
 
-  const quote = useMemo(() => getQuoteFor(quoteId), [quoteId]);
+  const { data: quoteData, isLoading, error } = useQuery({
+    queryKey: ["quote", quoteId],
+    queryFn: () => fetchQuoteFull(quoteId),
+    enabled: !!quoteId,
+  });
+
+  const quote = useMemo(() => {
+    if (!quoteData) return null;
+    return transformQuoteData(quoteData);
+  }, [quoteData]);
+
+  if (isLoading) {
+    return (
+      <CommandCenterShell role={role} title="Quote" subtitle="Loading..." theme="light" onRoleChange={() => {}}>
+        <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-quote">
+          <Spinner className="h-8 w-8" />
+        </div>
+      </CommandCenterShell>
+    );
+  }
+
+  if (error || !quote) {
+    return (
+      <CommandCenterShell role={role} title="Quote" subtitle="Error" theme="light" onRoleChange={() => {}}>
+        <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-quote">
+          <div className="text-center">
+            <p className="text-sm text-black/70">Failed to load quote</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-4"
+              onClick={() => setLocation("/clients")}
+            >
+              Back to Clients
+            </Button>
+          </div>
+        </div>
+      </CommandCenterShell>
+    );
+  }
 
   return (
     <CommandCenterShell role={role} title="Quote" subtitle={`Client ${clientId} · Quote ${quote.id}`} theme="light" onRoleChange={() => {}}>
