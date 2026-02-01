@@ -428,7 +428,10 @@ function ShellNav({
                           return (
                             <button
                               key={item.key}
-                              onClick={() => (item.key === "clients" ? navigate("/clients") : onActiveChange(item.key))}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                item.key === "clients" ? navigate("/clients") : onActiveChange(item.key);
+                              }}
                               className={
                                 "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                                 (isActive
