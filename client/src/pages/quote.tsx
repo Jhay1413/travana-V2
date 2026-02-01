@@ -375,6 +375,11 @@ export default function QuotePage() {
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
                       </div>
 
+                      <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-price-pp">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-price-pp-label">Price per person</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-price-pp-value">{currency.format(1785)}pp</div>
+                      </div>
+
                       <div className="flex min-h-10 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-room-label">Room Type</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
