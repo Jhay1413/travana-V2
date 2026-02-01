@@ -843,13 +843,6 @@ function TopBar({
     <div className="glass ringed grain rounded-3xl p-4 md:p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
-          <div
-            className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs text-black/80 dark:border-white/10 dark:bg-white/5 dark:text-white/80"
-            data-testid="status-command-center"
-          >
-            <Globe className="h-4 w-4" />
-            Apple Travel · {role}
-          </div>
           <div className="flex items-baseline gap-3">
             <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
               {title}
