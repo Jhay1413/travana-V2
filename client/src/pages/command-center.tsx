@@ -943,6 +943,7 @@ export default function CommandCenterPage() {
                       id: "post-001",
                       title: "Maldives Winter Escape — from £2,495pp",
                       subtitle: "Overwater villa + private transfers",
+                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
                       hotel: "Soneva Jani",
                       departing: "BAA",
                       nights: 7,
@@ -961,6 +962,7 @@ export default function CommandCenterPage() {
                       id: "post-002",
                       title: "Rome & Amalfi — from £1,349pp",
                       subtitle: "Split-stay with private transfers",
+                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
                       hotel: "Hotel de la Ville + Il San Pietro",
                       departing: "LGW",
                       nights: 5,
@@ -979,6 +981,7 @@ export default function CommandCenterPage() {
                       id: "post-003",
                       title: "Dubai Half-Term — from £1,199pp",
                       subtitle: "Family suite + pool access",
+                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
                       hotel: "Atlantis The Royal",
                       departing: "MAN",
                       nights: 4,
@@ -997,6 +1000,7 @@ export default function CommandCenterPage() {
                       id: "post-004",
                       title: "New York City Weekend — from £899pp",
                       subtitle: "Premium hotel + Broadway options",
+                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
                       hotel: "The Peninsula New York",
                       departing: "LHR",
                       nights: 3,
@@ -1025,6 +1029,23 @@ export default function CommandCenterPage() {
                         data-testid={`card-social-post-${p.id}`}
                       >
                       <div className="flex items-start justify-between gap-4">
+                        <div className="hidden sm:block shrink-0">
+                          <div
+                            className="relative h-20 w-28 overflow-hidden rounded-2xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
+                            data-testid={`img-social-post-${p.id}`}
+                          >
+                            {p.imageSrc ? (
+                              <img
+                                src={p.imageSrc}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : null}
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0 dark:from-black/45" />
+                          </div>
+                        </div>
+
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <div
