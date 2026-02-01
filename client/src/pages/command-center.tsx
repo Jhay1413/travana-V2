@@ -1023,6 +1023,7 @@ function EmptyState({ title, desc, action }: { title: string; desc: string; acti
 }
 
 export default function CommandCenterPage() {
+  const [, navigate] = useLocation();
   const { user, logout } = useAuth();
   const [active, setActive] = useState<string>("overview");
   const [query, setQuery] = useState("");
