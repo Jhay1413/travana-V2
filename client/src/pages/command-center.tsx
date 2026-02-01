@@ -872,21 +872,24 @@ function TopBar({
         </div>
 
         <div className="flex items-center gap-2">
-            <select
-              value={rolePreview || actualRole}
-              onChange={(e) => {
-                const newRole = e.target.value as Role;
-                onRoleChange(newRole === actualRole ? null : newRole);
-              }}
-              className="h-10 rounded-2xl border border-black/10 bg-black/5 px-3 text-sm text-black dark:border-white/10 dark:bg-white/5 dark:text-white cursor-pointer"
-              data-testid="select-role-preview"
-            >
-              {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
-                <option key={r} value={r}>
-                  {r}{r === actualRole ? " ✓" : ""}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 h-10 rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3">
+              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">View as:</span>
+              <select
+                value={rolePreview || actualRole}
+                onChange={(e) => {
+                  const newRole = e.target.value as Role;
+                  onRoleChange(newRole === actualRole ? null : newRole);
+                }}
+                className="bg-transparent text-sm font-medium text-blue-700 dark:text-blue-300 cursor-pointer outline-none"
+                data-testid="select-role-preview"
+              >
+                {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                  <option key={r} value={r} className="text-black">
+                    {r}{r === actualRole ? " ✓" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
               <span data-testid="text-theme-label">Light</span>
               <Switch data-testid="switch-theme" checked={theme === "dark"} onCheckedChange={onToggleTheme} />
