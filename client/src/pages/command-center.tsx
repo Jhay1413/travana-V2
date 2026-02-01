@@ -2639,13 +2639,13 @@ export default function CommandCenterPage() {
                   <div className="text-xs text-muted-foreground">Manage your tour operator partnerships.</div>
                 </div>
                 <div className="flex gap-2">
-                  <div className="relative">
+                  <div className="relative z-10">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
                     <Input
                       placeholder="Search operators..."
                       value={tourOperatorSearch}
                       onChange={(e) => setTourOperatorSearch(e.target.value)}
-                      className="w-48 pl-9 rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                      className="w-48 pl-9 rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5 relative z-20"
                       data-testid="input-search-tour-operators"
                     />
                   </div>
@@ -2774,13 +2774,13 @@ export default function CommandCenterPage() {
                   <div className="text-xs text-muted-foreground">Manage airports for quotes and bookings.</div>
                 </div>
                 <div className="flex gap-2">
-                  <div className="relative">
+                  <div className="relative z-10">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
                     <Input
                       placeholder="Search airports..."
                       value={airportSearch}
                       onChange={(e) => setAirportSearch(e.target.value)}
-                      className="w-48 pl-9 rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                      className="w-48 pl-9 rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5 relative z-20"
                       data-testid="input-search-airports"
                     />
                   </div>
