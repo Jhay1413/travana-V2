@@ -876,9 +876,13 @@ export default function ClientPage() {
                                 data-testid={`img-quote-${q.id}`}
                                 aria-hidden
                               >
-                                <div className="absolute inset-0 opacity-[0.35]">
-                                  <div className="h-full w-full bg-[radial-gradient(circle_at_30%_20%,rgba(0,0,0,0.10),transparent_55%),radial-gradient(circle_at_70%_80%,rgba(0,0,0,0.08),transparent_55%)]" />
-                                </div>
+                                <img
+                                  src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
+                                  alt=""
+                                  className="absolute inset-0 h-full w-full object-cover"
+                                  data-testid={`img-quote-photo-${q.id}`}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-transparent to-black/10" aria-hidden />
                                 <div className="absolute inset-x-0 bottom-0 border-t border-black/10 bg-white/70 px-2 py-1 backdrop-blur">
                                   <div
                                     className="truncate text-[11px] font-semibold text-black/70"
