@@ -874,7 +874,7 @@ export default function CommandCenterPage() {
               </div>
             </Card>
 
-            <div className="rounded-3xl border border-black/10 bg-gradient-to-b from-black/5 to-black/3 p-4 ringed dark:border-white/10 dark:from-white/10 dark:to-white/5">
+            <div className="rounded-3xl border border-black/10 bg-black/5 p-4 ringed dark:border-white/10 dark:bg-white/5">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="text-xs text-black/70 dark:text-white/70" data-testid="text-assist-label">

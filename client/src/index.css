@@ -158,26 +158,26 @@
   .glass {
     background: linear-gradient(
       180deg,
-      hsl(0 0% 100% / 0.72),
-      hsl(240 10% 98% / 0.60)
+      hsl(0 0% 100% / 0.60),
+      hsl(240 10% 98% / 0.52)
     );
     border: 1px solid hsl(240 12% 86% / 0.8);
     box-shadow:
-      0 30px 80px hsl(240 30% 2% / 0.10),
-      0 1px 0 hsl(0 0% 100% / 0.55) inset;
+      0 30px 80px hsl(240 30% 2% / 0.08),
+      0 1px 0 hsl(0 0% 100% / 0.45) inset;
     backdrop-filter: blur(16px);
   }
 
   .dark .glass {
     background: linear-gradient(
       180deg,
-      hsl(240 10% 8% / 0.72),
-      hsl(240 10% 6% / 0.60)
+      hsl(240 10% 8% / 0.58),
+      hsl(240 10% 6% / 0.50)
     );
     border: 1px solid hsl(240 8% 18% / 0.7);
     box-shadow:
-      0 30px 80px hsl(240 30% 2% / 0.55),
-      0 1px 0 hsl(0 0% 100% / 0.05) inset;
+      0 30px 80px hsl(240 30% 2% / 0.45),
+      0 1px 0 hsl(0 0% 100% / 0.04) inset;
   }
 
   .grain {
