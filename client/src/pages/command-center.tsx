@@ -2489,11 +2489,282 @@ export default function CommandCenterPage() {
         );
       }
 
+      if (active === "settings") {
+        return (
+          <section className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
+            <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold" data-testid="text-admin-settings-title">
+                    Admin Settings
+                  </div>
+                  <div className="text-xs text-muted-foreground" data-testid="text-admin-settings-subtitle">
+                    Configure organisation-wide preferences.
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="text-sm font-semibold">Organisation</div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                          <Building2 className="h-4 w-4 text-black/70 dark:text-white/80" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">Company Name</div>
+                          <div className="text-xs text-black/55 dark:text-white/55">Displayed across the platform</div>
+                        </div>
+                      </div>
+                      <Input 
+                        defaultValue="Travana Travel" 
+                        className="w-48 rounded-xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                        data-testid="input-company-name"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                          <Mail className="h-4 w-4 text-black/70 dark:text-white/80" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">Support Email</div>
+                          <div className="text-xs text-black/55 dark:text-white/55">For customer enquiries</div>
+                        </div>
+                      </div>
+                      <Input 
+                        defaultValue="hello@travana.co.uk" 
+                        className="w-48 rounded-xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                        data-testid="input-support-email"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                          <Phone className="h-4 w-4 text-black/70 dark:text-white/80" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">Support Phone</div>
+                          <div className="text-xs text-black/55 dark:text-white/55">UK business line</div>
+                        </div>
+                      </div>
+                      <Input 
+                        defaultValue="+44 20 7946 0958" 
+                        className="w-48 rounded-xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                        data-testid="input-support-phone"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator className="bg-black/10 dark:bg-white/10" />
+
+                <div className="space-y-3">
+                  <div className="text-sm font-semibold">Defaults</div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                          <CircleDollarSign className="h-4 w-4 text-black/70 dark:text-white/80" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">Currency</div>
+                          <div className="text-xs text-black/55 dark:text-white/55">Default for all quotes</div>
+                        </div>
+                      </div>
+                      <select 
+                        defaultValue="GBP"
+                        className="rounded-xl border border-black/10 bg-black/5 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
+                        data-testid="select-currency"
+                      >
+                        <option value="GBP">GBP (£)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="USD">USD ($)</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                          <Ticket className="h-4 w-4 text-black/70 dark:text-white/80" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">Default Commission</div>
+                          <div className="text-xs text-black/55 dark:text-white/55">Applied to new bookings</div>
+                        </div>
+                      </div>
+                      <select 
+                        defaultValue="10"
+                        className="rounded-xl border border-black/10 bg-black/5 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
+                        data-testid="select-commission"
+                      >
+                        <option value="5">5%</option>
+                        <option value="10">10%</option>
+                        <option value="12">12%</option>
+                        <option value="15">15%</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button 
+                    className="w-full rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                    data-testid="button-save-org-settings"
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            <div className="flex flex-col gap-4">
+              <Card className="glass ringed grain rounded-3xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="text-xs text-black/70 dark:text-white/70">Integrations</div>
+                    <div className="title-serif text-lg font-semibold">Connected Services</div>
+                  </div>
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                    <Link2 className="h-5 w-5 text-black/70 dark:text-white/80" />
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {[
+                    { name: "Travelport GDS", status: "connected", icon: "✈️" },
+                    { name: "Stripe Payments", status: "connected", icon: "💳" },
+                    { name: "Mailchimp", status: "pending", icon: "📧" },
+                    { name: "Xero Accounting", status: "disconnected", icon: "📊" },
+                  ].map((int, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5"
+                      data-testid={`row-integration-${i}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{int.icon}</span>
+                        <span className="text-sm font-medium">{int.name}</span>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full text-xs ${
+                          int.status === "connected"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                            : int.status === "pending"
+                            ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                            : "border-black/10 bg-black/5 text-black/50 dark:border-white/10 dark:bg-white/5 dark:text-white/50"
+                        }`}
+                        data-testid={`status-integration-${i}`}
+                      >
+                        {int.status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  className="mt-3 w-full rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                  data-testid="button-manage-integrations"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Integration
+                </Button>
+              </Card>
+
+              <Card className="glass ringed grain rounded-3xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="text-xs text-black/70 dark:text-white/70">Security</div>
+                    <div className="title-serif text-lg font-semibold">Access Controls</div>
+                  </div>
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                    <Shield className="h-5 w-5 text-black/70 dark:text-white/80" />
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+                    <span className="text-sm">Require 2FA for all users</span>
+                    <button
+                      className="h-6 w-11 rounded-full bg-emerald-500 p-0.5 transition"
+                      data-testid="toggle-2fa"
+                    >
+                      <div className="h-5 w-5 translate-x-5 rounded-full bg-white shadow transition" />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+                    <span className="text-sm">Session timeout (hours)</span>
+                    <select 
+                      defaultValue="8"
+                      className="rounded-lg border border-black/10 bg-black/5 px-2 py-1 text-sm dark:border-white/10 dark:bg-white/5"
+                      data-testid="select-session-timeout"
+                    >
+                      <option value="4">4</option>
+                      <option value="8">8</option>
+                      <option value="24">24</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+                    <span className="text-sm">IP Allowlisting</span>
+                    <button
+                      className="h-6 w-11 rounded-full bg-black/20 p-0.5 transition dark:bg-white/20"
+                      data-testid="toggle-ip-allowlist"
+                    >
+                      <div className="h-5 w-5 translate-x-0 rounded-full bg-white shadow transition" />
+                    </button>
+                  </div>
+                </div>
+              </Card>
+
+              <div className="rounded-3xl border border-black/10 bg-black/5 p-4 ringed dark:border-white/10 dark:bg-white/5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="text-xs text-black/70 dark:text-white/70">Data</div>
+                    <div className="title-serif text-lg font-semibold">Export & Backup</div>
+                  </div>
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                    <FileText className="h-5 w-5 text-black/70 dark:text-white/80" />
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                    data-testid="button-export-clients"
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    Export All Clients (CSV)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                    data-testid="button-export-bookings"
+                  >
+                    <Ticket className="mr-2 h-4 w-4" />
+                    Export Bookings (CSV)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                    data-testid="button-backup"
+                  >
+                    <Activity className="mr-2 h-4 w-4" />
+                    Create Full Backup
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      }
+
       return (
         <EmptyState
-          title="Admin surfaces, designed first."
-          desc="Open Users & Roles to preview the access model UI. Other admin modules can be designed next: audit trails, organisation settings, and policy approvals."
-          action="Open Users & Roles"
+          title="Admin module"
+          desc="Select a section from the navigation to configure organisation settings, users, or view audit logs."
+          action="Open Settings"
         />
       );
     }
