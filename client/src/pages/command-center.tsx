@@ -854,9 +854,6 @@ function TopBar({
             <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
               {title}
             </h1>
-            <span className="hidden md:inline text-xs text-black/45 dark:text-white/45" data-testid="text-page-hint">
-              designed for high-signal selling
-            </span>
           </div>
           <p className="text-sm text-muted-foreground" data-testid="text-page-subtitle">
             A calm, premium command surface for clients, enquiries, quotes, and bookings.
