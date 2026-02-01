@@ -1381,44 +1381,39 @@ export default function CommandCenterPage() {
                         className="group w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
                         data-testid={`card-social-post-${p.id}`}
                       >
-                      <div className="flex items-start gap-4">
-                        <div className="hidden sm:block shrink-0">
-                          <div className="w-40" data-testid={`wrap-social-post-left-${p.id}`}>
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-right" data-testid={`text-social-post-title-${p.id}`}>
-                                {p.title}
-                              </div>
-                              <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60 text-right" data-testid={`text-social-post-subtitle-${p.id}`}>
-                                {p.subtitle}
-                              </div>
-                              <div className="mt-1 text-xs text-black/35 dark:text-white/35 text-right" data-testid={`text-social-post-time-${p.id}`}>
-                                {p.time}
-                              </div>
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold" data-testid={`text-social-post-title-${p.id}`}>
+                              {p.title}
                             </div>
-
-                            <div
-                              className="relative mt-3 h-28 w-40 overflow-hidden rounded-3xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
-                              data-testid={`img-social-post-${p.id}`}
-                            >
-                              {p.imageSrc ? (
-                                <img
-                                  src={p.imageSrc}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                  loading="lazy"
-                                />
-                              ) : null}
-                              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0 dark:from-black/45" />
+                            <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
+                              {p.subtitle}
+                            </div>
+                            <div className="mt-1 text-xs text-black/35 dark:text-white/35" data-testid={`text-social-post-time-${p.id}`}>
+                              {p.time}
                             </div>
                           </div>
+                          <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-black/40 transition group-hover:translate-x-0.5 dark:text-white/45" />
                         </div>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-end">
-                            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-black/40 transition group-hover:translate-x-0.5 dark:text-white/45" />
+                        <div className="flex items-start gap-3">
+                          <div
+                            className="hidden sm:block relative shrink-0 h-24 w-32 overflow-hidden rounded-2xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
+                            data-testid={`img-social-post-${p.id}`}
+                          >
+                            {p.imageSrc ? (
+                              <img
+                                src={p.imageSrc}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : null}
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0 dark:from-black/45" />
                           </div>
 
-                          <div className="mt-2 grid gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/65 dark:border-white/10 dark:bg-white/5 dark:text-white/65">
+                          <div className="min-w-0 flex-1 grid gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/65 dark:border-white/10 dark:bg-white/5 dark:text-white/65">
                             <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                               <div className="truncate" data-testid={`text-social-post-hotel-${p.id}`}>
                                 <span className="text-black/45 dark:text-white/45">Hotel</span>: {p.hotel}
@@ -1460,31 +1455,30 @@ export default function CommandCenterPage() {
                               </a>
                             </div>
                           </div>
-
-                          <div className="mt-3 flex items-center gap-2">
-                            <span
-                              className={
-                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
-                                (p.status === "Posted"
-                                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                  : p.status === "Scheduled"
-                                    ? "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                                    : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300")
-                              }
-                              data-testid={`status-social-post-${p.id}`}
-                            >
-                              {p.status}
-                            </span>
-
-                            <span
-                              className="inline-flex items-center rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
-                              data-testid={`pill-social-post-origin-${p.id}`}
-                            >
-                              From quote
-                            </span>
-                          </div>
                         </div>
 
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={
+                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
+                              (p.status === "Posted"
+                                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                : p.status === "Scheduled"
+                                  ? "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                                  : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300")
+                            }
+                            data-testid={`status-social-post-${p.id}`}
+                          >
+                            {p.status}
+                          </span>
+
+                          <span
+                            className="inline-flex items-center rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
+                            data-testid={`pill-social-post-origin-${p.id}`}
+                          >
+                            From quote
+                          </span>
+                        </div>
                       </div>
                     </button>
                   ))}
