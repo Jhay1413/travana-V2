@@ -882,15 +882,6 @@ export default function ClientPage() {
                                   className="absolute inset-0 h-full w-full object-cover"
                                   data-testid={`img-quote-photo-${q.id}`}
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-transparent to-black/10" aria-hidden />
-                                <div className="absolute inset-x-0 bottom-0 border-t border-black/10 bg-white/70 px-2 py-1 backdrop-blur">
-                                  <div
-                                    className="truncate text-[11px] font-semibold text-black/70"
-                                    data-testid={`text-quote-cover-${q.id}`}
-                                  >
-                                    {q.coverLabel}
-                                  </div>
-                                </div>
                               </div>
 
                               <div className="min-w-0 flex-1">
