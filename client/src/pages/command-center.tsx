@@ -440,15 +440,20 @@ function ShellNav({
           </button>
         </div>
 
-        <Separator className="my-4 bg-black/10 dark:bg-white/10" />
-
-        <div className="space-y-2">
-          <div className="px-1 text-[11px] font-semibold tracking-wide text-black/45 dark:text-white/45" data-testid="text-connect-title">
-            Connect
+        <div className="mt-3 glass ringed grain rounded-3xl p-4" data-testid="panel-connect">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold" data-testid="text-connect-title">Connect</div>
+              <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-sub">All contact channels</div>
+            </div>
+            <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+              <MessageSquare className="h-5 w-5 text-black/70 dark:text-white/80" />
+            </div>
           </div>
-          <div className="grid gap-2">
+
+          <div className="mt-3 grid gap-2">
             <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2.5 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
               data-testid="button-connect-whatsapp"
             >
               <div className="flex items-center gap-3">
@@ -464,7 +469,7 @@ function ShellNav({
             </button>
 
             <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2.5 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
               data-testid="button-connect-facebook"
             >
               <div className="flex items-center gap-3">
@@ -480,7 +485,7 @@ function ShellNav({
             </button>
 
             <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2.5 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
               data-testid="button-connect-instagram"
             >
               <div className="flex items-center gap-3">
@@ -496,7 +501,7 @@ function ShellNav({
             </button>
 
             <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2.5 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
               data-testid="button-connect-email"
             >
               <div className="flex items-center gap-3">
@@ -512,7 +517,7 @@ function ShellNav({
             </button>
 
             <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2.5 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
               data-testid="button-connect-internal-chat"
             >
               <div className="flex items-center gap-3">
@@ -528,7 +533,7 @@ function ShellNav({
             </button>
 
             <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2.5 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
               data-testid="button-connect-phone"
             >
               <div className="flex items-center gap-3">
