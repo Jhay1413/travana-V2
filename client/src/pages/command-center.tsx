@@ -1294,7 +1294,7 @@ export default function CommandCenterPage() {
                   {([
                     {
                       id: "post-001",
-                      title: "Maldives Winter Escape — from £2,495pp",
+                      title: "Maldives Winter Escape — £2,495pp",
                       subtitle: "Overwater villa + private transfers",
                       imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
                       hotel: "Soneva Jani",
@@ -1314,7 +1314,7 @@ export default function CommandCenterPage() {
                     },
                     {
                       id: "post-002",
-                      title: "Rome & Amalfi — from £1,349pp",
+                      title: "Rome & Amalfi — £1,349pp",
                       subtitle: "Split-stay with private transfers",
                       imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
                       hotel: "Hotel de la Ville + Il San Pietro",
@@ -1334,7 +1334,7 @@ export default function CommandCenterPage() {
                     },
                     {
                       id: "post-003",
-                      title: "Dubai Half-Term — from £1,199pp",
+                      title: "Dubai Half-Term — £1,199pp",
                       subtitle: "Family suite + pool access",
                       imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
                       hotel: "Atlantis The Royal",
@@ -1354,7 +1354,7 @@ export default function CommandCenterPage() {
                     },
                     {
                       id: "post-004",
-                      title: "New York City Weekend — from £899pp",
+                      title: "New York City Weekend — £899pp",
                       subtitle: "Premium hotel + Broadway options",
                       imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
                       hotel: "The Peninsula New York",
