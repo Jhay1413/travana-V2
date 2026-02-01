@@ -1421,7 +1421,7 @@ export default function CommandCenterPage() {
 
                         <div className="flex items-start gap-3">
                           <div
-                            className="hidden sm:block relative shrink-0 h-24 w-32 overflow-hidden rounded-2xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
+                            className="hidden sm:block relative shrink-0 self-stretch w-36 overflow-hidden rounded-2xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
                             data-testid={`img-social-post-${p.id}`}
                           >
                             {p.imageSrc ? (
