@@ -273,6 +273,7 @@ function ShellNav({
   active: string;
   onActiveChange: (k: string) => void;
 }) {
+  const [, navigate] = useLocation();
   const nav = useMemo(() => {
     const base = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
@@ -384,7 +385,7 @@ function ShellNav({
             return (
               <button
                 key={item.key}
-                onClick={() => onActiveChange(item.key)}
+                onClick={() => (item.key === "clients" ? navigate("/clients") : onActiveChange(item.key))}
                 className={
                   "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                   (isActive
@@ -552,7 +553,6 @@ function TopBar({
   theme: "light" | "dark";
   onToggleTheme: () => void;
 }) {
-  const [, navigate] = useLocation();
   const title = useMemo(() => {
     const map: Record<string, string> = {
       overview: "Overview",
@@ -629,15 +629,6 @@ function TopBar({
             >
               <Filter className="mr-2 h-4 w-4" />
               Filters
-            </Button>
-            <Button
-              variant="outline"
-              className="h-10 rounded-2xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
-              data-testid="button-go-clients"
-              onClick={() => navigate("/clients")}
-            >
-              <Users className="mr-2 h-4 w-4" />
-              Clients
             </Button>
             <Button
               className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
