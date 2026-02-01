@@ -1385,16 +1385,14 @@ export default function CommandCenterPage() {
                         <div className="hidden sm:block shrink-0">
                           <div className="w-40" data-testid={`wrap-social-post-left-${p.id}`}>
                             <div className="min-w-0">
-                              <div className="flex items-center justify-start gap-2 text-left">
-                                <div className="truncate text-sm font-semibold text-left" data-testid={`text-social-post-title-${p.id}`}>
-                                  {p.title}
-                                </div>
-                                <span className="text-xs text-black/35 dark:text-white/35" data-testid={`text-social-post-time-${p.id}`}>
-                                  {p.time}
-                                </span>
+                              <div className="truncate text-sm font-semibold text-right" data-testid={`text-social-post-title-${p.id}`}>
+                                {p.title}
                               </div>
-                              <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
+                              <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60 text-right" data-testid={`text-social-post-subtitle-${p.id}`}>
                                 {p.subtitle}
+                              </div>
+                              <div className="mt-1 text-xs text-black/35 dark:text-white/35 text-right" data-testid={`text-social-post-time-${p.id}`}>
+                                {p.time}
                               </div>
                             </div>
 
