@@ -296,14 +296,6 @@ export default function QuotePage() {
         </div>
 
         <div className="mt-4 grid gap-3" data-testid="layout-quote-body">
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-summary">
-            <div className="grid gap-3 md:grid-cols-4" data-testid="grid-quote-kpis">
-              <KeyValue label="Total" value={currency.format(quote.commissions.price)} testid="kpi-quote-total" />
-              <KeyValue label="Commission" value={`${quote.commissions.commissionPercent}% · ${currency.format(quote.commissions.commissionValue)}`} testid="kpi-quote-commission" />
-              <KeyValue label="Agent split" value={`${quote.commissions.agentSplitPercent}% · ${currency.format(quote.commissions.agentSplitValue)}`} testid="kpi-quote-agent-split" />
-              <KeyValue label="Net to agency" value={currency.format(quote.commissions.netToAgency)} testid="kpi-quote-net" />
-            </div>
-          </Card>
 
           <div className="grid gap-3 lg:grid-cols-3" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-2" data-testid="card-quote-itinerary">
