@@ -807,6 +807,9 @@ function TopBar({
   userName,
   userAvatar,
   onLogout,
+  actualRole,
+  rolePreview,
+  onRoleChange,
 }: {
   role: Role;
   active: string;
@@ -817,6 +820,9 @@ function TopBar({
   userName?: string;
   userAvatar?: string | null;
   onLogout?: () => void;
+  actualRole: Role;
+  rolePreview: Role | null;
+  onRoleChange: (role: Role | null) => void;
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   
@@ -866,6 +872,21 @@ function TopBar({
         </div>
 
         <div className="flex items-center gap-2">
+            <select
+              value={rolePreview || actualRole}
+              onChange={(e) => {
+                const newRole = e.target.value as Role;
+                onRoleChange(newRole === actualRole ? null : newRole);
+              }}
+              className="h-10 rounded-2xl border border-black/10 bg-black/5 px-3 text-sm text-black dark:border-white/10 dark:bg-white/5 dark:text-white cursor-pointer"
+              data-testid="select-role-preview"
+            >
+              {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                <option key={r} value={r}>
+                  {r}{r === actualRole ? " ✓" : ""}
+                </option>
+              ))}
+            </select>
             <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
               <span data-testid="text-theme-label">Light</span>
               <Switch data-testid="switch-theme" checked={theme === "dark"} onCheckedChange={onToggleTheme} />
@@ -2291,6 +2312,9 @@ export default function CommandCenterPage() {
                 userName={displayName}
                 userAvatar={user?.profileImageUrl}
                 onLogout={() => window.location.href = "/api/logout"}
+                actualRole={actualRole}
+                rolePreview={rolePreview}
+                onRoleChange={setRolePreview}
               />
 
               <section className="grid gap-3 md:grid-cols-4">
