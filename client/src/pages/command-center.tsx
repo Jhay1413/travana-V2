@@ -348,14 +348,19 @@ function ShellNav({
     return { grouped: false, items: base };
   }, [role]);
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(["admin", "agent"]);
+  const [expandedSections, setExpandedSections] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem("admin-nav-expanded");
+    return saved ? JSON.parse(saved) : ["admin", "agent"];
+  });
   
   const toggleSection = (sectionId: string) => {
-    setExpandedSections(prev => 
-      prev.includes(sectionId) 
+    setExpandedSections(prev => {
+      const next = prev.includes(sectionId) 
         ? prev.filter(id => id !== sectionId)
-        : [...prev, sectionId]
-    );
+        : [...prev, sectionId];
+      sessionStorage.setItem("admin-nav-expanded", JSON.stringify(next));
+      return next;
+    });
   };
 
   return (
