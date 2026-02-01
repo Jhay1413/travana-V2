@@ -157,3 +157,22 @@ export async function fetchUsers(): Promise<User[]> {
   if (!res.ok) throw new Error("Failed to fetch users");
   return res.json();
 }
+
+// Tour Operators
+export interface TourOperator {
+  id: string;
+  name: string;
+  holidayType: string;
+  commissionPercent: string;
+  username: string | null;
+  password: string | null;
+  contact: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export async function fetchTourOperators(): Promise<TourOperator[]> {
+  const res = await fetch("/api/tour-operators");
+  if (!res.ok) throw new Error("Failed to fetch tour operators");
+  return res.json();
+}

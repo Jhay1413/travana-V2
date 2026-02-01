@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchDashboardStats, fetchClients } from "@/lib/api";
+import { fetchDashboardStats, fetchClients, fetchTourOperators, type TourOperator } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Activity,
@@ -998,6 +998,7 @@ export default function CommandCenterPage() {
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [rolePreview, setRolePreview] = useState<Role | null>(null);
+  const [settingsTab, setSettingsTab] = useState<"general" | "tour-operators">("general");
 
   const themeClass = theme === "dark" ? "dark" : "";
   const displayName = user?.firstName || user?.name || user?.email || "User";
@@ -1057,6 +1058,58 @@ export default function CommandCenterPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    },
+  });
+
+  // Fetch tour operators
+  const { data: tourOperators } = useQuery({
+    queryKey: ["/api/tour-operators"],
+    queryFn: fetchTourOperators,
+  });
+
+  // Tour Operator mutations
+  const createTourOperatorMutation = useMutation({
+    mutationFn: async (op: Omit<TourOperator, "id" | "createdAt" | "updatedAt">) => {
+      const res = await fetch("/api/tour-operators", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(op),
+      });
+      if (!res.ok) throw new Error("Failed to create tour operator");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tour-operators"] });
+    },
+  });
+
+  const updateTourOperatorMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Partial<TourOperator>) => {
+      const res = await fetch(`/api/tour-operators/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update tour operator");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tour-operators"] });
+    },
+  });
+
+  const deleteTourOperatorMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tour-operators/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete tour operator");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tour-operators"] });
     },
   });
 
@@ -2473,7 +2526,105 @@ export default function CommandCenterPage() {
 
       if (active === "settings") {
         return (
-          <section className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
+          <section className="space-y-4">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSettingsTab("general")}
+                className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
+                  settingsTab === "general"
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "bg-black/5 text-black/70 hover:bg-black/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                }`}
+                data-testid="tab-settings-general"
+              >
+                General
+              </button>
+              <button
+                onClick={() => setSettingsTab("tour-operators")}
+                className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
+                  settingsTab === "tour-operators"
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "bg-black/5 text-black/70 hover:bg-black/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                }`}
+                data-testid="tab-settings-tour-operators"
+              >
+                Tour Operators
+              </button>
+            </div>
+
+            {settingsTab === "tour-operators" ? (
+              <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <div className="space-y-1">
+                    <div className="text-sm font-semibold" data-testid="text-tour-operators-title">Tour Operators</div>
+                    <div className="text-xs text-muted-foreground">Manage your tour operator partnerships.</div>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      const name = prompt("Enter operator name:");
+                      if (!name) return;
+                      const holidayType = prompt("Holiday type (e.g. Beach, Ski, Adventure):") || "";
+                      const commissionPercent = prompt("Commission % (e.g. 10):") || "10";
+                      const username = prompt("Login username:") || "";
+                      const password = prompt("Login password:") || "";
+                      const contact = prompt("Contact info:") || "";
+                      createTourOperatorMutation.mutate({ name, holidayType, commissionPercent, username, password, contact });
+                    }}
+                    className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                    data-testid="button-add-tour-operator"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Operator
+                  </Button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-black/10 dark:border-white/10">
+                        <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Name</th>
+                        <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Holiday Type</th>
+                        <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Commission %</th>
+                        <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Username</th>
+                        <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Password</th>
+                        <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Contact</th>
+                        <th className="py-3 px-2 text-right font-medium text-black/70 dark:text-white/70">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(tourOperators || []).map((op) => (
+                        <tr key={op.id} className="border-b border-black/5 dark:border-white/5" data-testid={`row-tour-operator-${op.id}`}>
+                          <td className="py-3 px-2 font-medium">{op.name}</td>
+                          <td className="py-3 px-2">{op.holidayType}</td>
+                          <td className="py-3 px-2">{op.commissionPercent}%</td>
+                          <td className="py-3 px-2 font-mono text-xs">{op.username || "—"}</td>
+                          <td className="py-3 px-2 font-mono text-xs">{op.password ? "••••••" : "—"}</td>
+                          <td className="py-3 px-2">{op.contact || "—"}</td>
+                          <td className="py-3 px-2 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteTourOperatorMutation.mutate(op.id)}
+                              className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                              data-testid={`button-delete-tour-operator-${op.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                      {(!tourOperators || tourOperators.length === 0) && (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-black/50 dark:text-white/50">
+                            No tour operators yet. Add your first operator above.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            ) : (
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
             <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1">
@@ -2738,6 +2889,8 @@ export default function CommandCenterPage() {
                 </div>
               </div>
             </div>
+            </div>
+            )}
           </section>
         );
       }

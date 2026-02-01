@@ -11,6 +11,7 @@ import {
   insertCommissionSchema,
   insertQuoteImageSchema,
   insertNoteSchema,
+  insertTourOperatorSchema,
 } from "@shared/schema";
 
 // Helper to extract string parameter
@@ -416,6 +417,59 @@ export async function registerRoutes(
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch dashboard stats" });
+    }
+  });
+
+  // ============ Tour Operators ============
+  app.get("/api/tour-operators", async (req: Request, res: Response) => {
+    try {
+      const operators = await storage.listTourOperators();
+      res.json(operators);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tour operators" });
+    }
+  });
+
+  app.get("/api/tour-operators/:id", async (req: Request, res: Response) => {
+    try {
+      const operator = await storage.getTourOperator(getParam(req.params.id));
+      if (!operator) {
+        return res.status(404).json({ error: "Tour operator not found" });
+      }
+      res.json(operator);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tour operator" });
+    }
+  });
+
+  app.post("/api/tour-operators", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertTourOperatorSchema.parse(req.body);
+      const operator = await storage.createTourOperator(parsed);
+      res.status(201).json(operator);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid tour operator data" });
+    }
+  });
+
+  app.patch("/api/tour-operators/:id", async (req: Request, res: Response) => {
+    try {
+      const operator = await storage.updateTourOperator(getParam(req.params.id), req.body);
+      if (!operator) {
+        return res.status(404).json({ error: "Tour operator not found" });
+      }
+      res.json(operator);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid tour operator data" });
+    }
+  });
+
+  app.delete("/api/tour-operators/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteTourOperator(getParam(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete tour operator" });
     }
   });
 

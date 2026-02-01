@@ -146,3 +146,20 @@ export const notes = pgTable("notes", {
 export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, createdAt: true });
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
+
+// Tour Operators table
+export const tourOperators = pgTable("tour_operators", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  holidayType: text("holiday_type").notNull(),
+  commissionPercent: decimal("commission_percent", { precision: 5, scale: 2 }).notNull().default("10"),
+  username: text("username"),
+  password: text("password"),
+  contact: text("contact"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertTourOperatorSchema = createInsertSchema(tourOperators).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertTourOperator = z.infer<typeof insertTourOperatorSchema>;
+export type TourOperator = typeof tourOperators.$inferSelect;

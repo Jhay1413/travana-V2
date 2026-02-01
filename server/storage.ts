@@ -10,6 +10,7 @@ import {
   commissions,
   quoteImages,
   notes,
+  tourOperators,
   type User,
   type InsertUser,
   type Client,
@@ -26,6 +27,8 @@ import {
   type InsertQuoteImage,
   type Note,
   type InsertNote,
+  type TourOperator,
+  type InsertTourOperator,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -95,6 +98,13 @@ export interface IStorage {
     wonCount: number;
     lostCount: number;
   }>;
+
+  // Tour Operators
+  listTourOperators(): Promise<TourOperator[]>;
+  getTourOperator(id: string): Promise<TourOperator | undefined>;
+  createTourOperator(op: InsertTourOperator): Promise<TourOperator>;
+  updateTourOperator(id: string, op: Partial<InsertTourOperator>): Promise<TourOperator | undefined>;
+  deleteTourOperator(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -291,6 +301,34 @@ export class DbStorage implements IStorage {
       wonCount: Number(won[0]?.count || 0),
       lostCount: Number(lost[0]?.count || 0),
     };
+  }
+
+  // Tour Operators
+  async listTourOperators(): Promise<TourOperator[]> {
+    return db.select().from(tourOperators).orderBy(tourOperators.name);
+  }
+
+  async getTourOperator(id: string): Promise<TourOperator | undefined> {
+    const result = await db.select().from(tourOperators).where(eq(tourOperators.id, id));
+    return result[0];
+  }
+
+  async createTourOperator(op: InsertTourOperator): Promise<TourOperator> {
+    const result = await db.insert(tourOperators).values(op).returning();
+    return result[0];
+  }
+
+  async updateTourOperator(id: string, op: Partial<InsertTourOperator>): Promise<TourOperator | undefined> {
+    const result = await db
+      .update(tourOperators)
+      .set({ ...op, updatedAt: new Date() })
+      .where(eq(tourOperators.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteTourOperator(id: string): Promise<void> {
+    await db.delete(tourOperators).where(eq(tourOperators.id, id));
   }
 }
 
