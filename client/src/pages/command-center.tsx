@@ -458,13 +458,14 @@ function ShellNav({
         <Separator className="mt-3 mb-1 bg-black/10 dark:bg-white/10" data-testid="separator-connect" />
 
         <div className="space-y-1" data-testid="section-connect">
-          {["whatsapp", "facebook", "instagram", "email", "internal-chat"].map((key) => {
+          {["whatsapp", "facebook", "tickets", "instagram", "email", "internal-chat"].map((key) => {
             const map: Record<string, { label: string; icon: React.ReactNode }> = {
               whatsapp: { label: "WhatsApp", icon: <MessageSquare className="h-4 w-4" /> },
               facebook: { label: "Facebook", icon: <Users className="h-4 w-4" /> },
+              tickets: { label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
               instagram: { label: "Instagram", icon: <Sparkles className="h-4 w-4" /> },
               email: { label: "Email", icon: <Mail className="h-4 w-4" /> },
-              "internal-chat": { label: "Internal chat", icon: <MessageSquare className="h-4 w-4" /> },
+              "internal-chat": { label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
             };
             const item = map[key];
             const isActive = active === `connect-${key}`;
