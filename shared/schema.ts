@@ -1,18 +1,131 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  role: text("role").notNull(), // Admin, Manager, Agent, Homeworker, Referer
+  avatar: text("avatar"),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
+export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Clients table
+export const clients = pgTable("clients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  tier: text("tier").notNull().default("Standard"), // Platinum, Gold, Standard
+  stage: text("stage").notNull().default("Enquiry"), // Enquiry, Quote, Booked
+  location: text("location"),
+  nextTrip: text("next_trip"),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull().default("0"),
+  lastTouch: text("last_touch"),
+  tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+  userId: varchar("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true });
+export type InsertClient = z.infer<typeof insertClientSchema>;
+export type Client = typeof clients.$inferSelect;
+
+// Quotes table
+export const quotes = pgTable("quotes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id), // owner
+  status: text("status").notNull().default("In Play"), // In Play, Won, Lost
+  packageType: text("package_type").notNull(),
+  quoteTitle: text("quote_title").notNull(),
+  destination: text("destination").notNull(),
+  travelDate: text("travel_date").notNull(),
+  returnDate: text("return_date").notNull(),
+  passengersAdults: integer("passengers_adults").notNull().default(2),
+  passengersChildren: integer("passengers_children").notNull().default(0),
+  childAges: integer("child_ages").array().notNull().default(sql`'{}'::integer[]`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true });
+export type InsertQuote = z.infer<typeof insertQuoteSchema>;
+export type Quote = typeof quotes.$inferSelect;
+
+// Accommodations table
+export const accommodations = pgTable("accommodations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").notNull().references(() => quotes.id, { onDelete: "cascade" }),
+  property: text("property").notNull(),
+  board: text("board").notNull(),
+  roomType: text("room_type").notNull(),
+  notes: text("notes"),
+});
+
+export const insertAccommodationSchema = createInsertSchema(accommodations).omit({ id: true });
+export type InsertAccommodation = z.infer<typeof insertAccommodationSchema>;
+export type Accommodation = typeof accommodations.$inferSelect;
+
+// Flights table
+export const flights = pgTable("flights", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").notNull().references(() => quotes.id, { onDelete: "cascade" }),
+  direction: text("direction").notNull(), // outbound, inbound
+  fromAirport: text("from_airport").notNull(),
+  toAirport: text("to_airport").notNull(),
+  carrier: text("carrier").notNull(),
+  flightNo: text("flight_no").notNull(),
+  depart: timestamp("depart").notNull(),
+  arrive: timestamp("arrive").notNull(),
+});
+
+export const insertFlightSchema = createInsertSchema(flights).omit({ id: true });
+export type InsertFlight = z.infer<typeof insertFlightSchema>;
+export type Flight = typeof flights.$inferSelect;
+
+// Commissions table
+export const commissions = pgTable("commissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").notNull().references(() => quotes.id, { onDelete: "cascade" }).unique(),
+  tourOperator: text("tour_operator").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  commissionPercent: decimal("commission_percent", { precision: 5, scale: 2 }).notNull(),
+  commissionValue: decimal("commission_value", { precision: 10, scale: 2 }).notNull(),
+  agentSplitPercent: decimal("agent_split_percent", { precision: 5, scale: 2 }).notNull(),
+  agentSplitValue: decimal("agent_split_value", { precision: 10, scale: 2 }).notNull(),
+  netToAgency: decimal("net_to_agency", { precision: 10, scale: 2 }).notNull(),
+});
+
+export const insertCommissionSchema = createInsertSchema(commissions).omit({ id: true });
+export type InsertCommission = z.infer<typeof insertCommissionSchema>;
+export type Commission = typeof commissions.$inferSelect;
+
+// Quote Images table
+export const quoteImages = pgTable("quote_images", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").notNull().references(() => quotes.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  isPrimary: boolean("is_primary").notNull().default(false),
+});
+
+export const insertQuoteImageSchema = createInsertSchema(quoteImages).omit({ id: true });
+export type InsertQuoteImage = z.infer<typeof insertQuoteImageSchema>;
+export type QuoteImage = typeof quoteImages.$inferSelect;
+
+// Notes table
+export const notes = pgTable("notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quoteId: varchar("quote_id").notNull().references(() => quotes.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, createdAt: true });
+export type InsertNote = z.infer<typeof insertNoteSchema>;
+export type Note = typeof notes.$inferSelect;
