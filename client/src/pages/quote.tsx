@@ -357,17 +357,17 @@ export default function QuotePage() {
                             data-testid="pill-itinerary-owner"
                           >
                             <span
-                              className="grid h-6 w-6 place-items-center rounded-full border border-black/10 bg-gradient-to-b from-white/80 to-white/50 text-[10px] font-bold text-black/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
+                              className="relative grid h-6 w-6 overflow-hidden rounded-full border border-black/10 bg-white/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
                               data-testid="avatar-itinerary-owner"
                               aria-hidden
                             >
-                              {quote.owner.name
-                                .split(" ")
-                                .filter(Boolean)
-                                .slice(0, 2)
-                                .map((p) => p[0])
-                                .join("")
-                                .toUpperCase()}
+                              <img
+                                src="/attached_assets/Avatar3_1769960371403.png"
+                                alt=""
+                                className="h-full w-full object-cover"
+                                data-testid="img-itinerary-owner-avatar"
+                              />
+                              <span className="pointer-events-none absolute inset-0 ring-1 ring-white/40" aria-hidden />
                             </span>
 
                             <span className="flex min-w-0 flex-col leading-tight" data-testid="col-itinerary-owner">
