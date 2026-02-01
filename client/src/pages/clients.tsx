@@ -239,24 +239,12 @@ export default function ClientsPage() {
       theme="light"
       onToggleTheme={() => {}}
     >
-      <div className="relative mx-auto w-full max-w-7xl px-4 pb-6 md:px-6 md:pb-8">
+      <div className="relative min-h-[calc(100vh-56px)] w-full px-4 pb-6 md:px-6 md:pb-8">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
 
         <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => navigate("/")}
-                className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-sm font-semibold text-black/80 transition hover:bg-black/[0.03]"
-                data-testid="button-back-command-center"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Command Center
-              </button>
-            </div>
-
-            <div className="mt-4 inline-flex items-center gap-2">
               <div
                 className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03] ring-1 ring-black/[0.04]"
                 data-testid="icon-clients"
