@@ -428,9 +428,7 @@ function ShellNav({
                 <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
               </div>
               <div>
-                <div className="text-sm font-semibold" data-testid="text-support-title">
-                  Support
-                </div>
+                <div className="text-sm font-semibold" data-testid="text-support-title">TheHub</div>
                 <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-support-sub">
                   Playbooks, SOPs, help.
                 </div>
