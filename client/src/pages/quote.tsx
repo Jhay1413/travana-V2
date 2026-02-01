@@ -382,11 +382,6 @@ export default function QuotePage() {
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-expiry">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-expiry-label">Date Expiry</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-expiry-value">{formatUKDate(quote.returnDate)}</div>
-                      </div>
-
                       <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-transfer-label">Transfer type</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-transfer-value">Private Transfer</div>
