@@ -1666,7 +1666,7 @@ export default function CommandCenterPage() {
                         <ChevronDown className="ml-2 h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[140px]">
+                    <DropdownMenuContent align="end" className="w-[140px] z-50">
                       <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Role</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
