@@ -1028,17 +1028,17 @@ export default function CommandCenterPage() {
                         className="group w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
                         data-testid={`card-social-post-${p.id}`}
                       >
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <div className="truncate text-sm font-semibold" data-testid={`text-social-post-title-${p.id}`}>
-                                {p.title}
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className="truncate text-sm font-semibold" data-testid={`text-social-post-title-${p.id}`}>
+                                  {p.title}
+                                </div>
+                                <span className="text-xs text-black/35 dark:text-white/35" data-testid={`text-social-post-time-${p.id}`}>
+                                  {p.time}
+                                </span>
                               </div>
-                              <span className="text-xs text-black/35 dark:text-white/35" data-testid={`text-social-post-time-${p.id}`}>
-                                {p.time}
-                              </span>
-                            </div>
 
                             <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
                               {p.subtitle}
@@ -1062,46 +1062,46 @@ export default function CommandCenterPage() {
 
                         <div className="mt-2 grid gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/65 dark:border-white/10 dark:bg-white/5 dark:text-white/65">
                           <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                              <div className="truncate" data-testid={`text-social-post-hotel-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Hotel</span>: {p.hotel}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-departing-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Departing</span>: {p.departing}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-nights-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Nights</span>: {p.nights}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-board-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Board</span>: {p.board}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-travel-date-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travelDate}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-created-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Date created</span>: {p.createdAt}
-                              </div>
+                            <div className="truncate" data-testid={`text-social-post-hotel-${p.id}`}>
+                              <span className="text-black/45 dark:text-white/45">Hotel</span>: {p.hotel}
                             </div>
-
-                            <div className="flex items-center justify-between gap-3 pt-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-black/45 dark:text-white/45" data-testid={`text-social-post-quote-${p.id}`}>
-                                  Quote #{p.quoteId}
-                                </span>
-                                <span className="text-black/25 dark:text-white/25">•</span>
-                                <span data-testid={`text-social-post-audience-${p.id}`}>{p.audience}</span>
-                              </div>
-
-                              <a
-                                href={p.liveHref}
-                                className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/5 px-2 py-1 text-[11px] font-semibold text-black/75 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-                                data-testid={`link-social-post-live-${p.id}`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View live deal
-                                <ChevronRight className="h-3.5 w-3.5" />
-                              </a>
+                            <div className="truncate" data-testid={`text-social-post-departing-${p.id}`}>
+                              <span className="text-black/45 dark:text-white/45">Departing</span>: {p.departing}
+                            </div>
+                            <div className="truncate" data-testid={`text-social-post-nights-${p.id}`}>
+                              <span className="text-black/45 dark:text-white/45">Nights</span>: {p.nights}
+                            </div>
+                            <div className="truncate" data-testid={`text-social-post-board-${p.id}`}>
+                              <span className="text-black/45 dark:text-white/45">Board</span>: {p.board}
+                            </div>
+                            <div className="truncate" data-testid={`text-social-post-travel-date-${p.id}`}>
+                              <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travelDate}
+                            </div>
+                            <div className="truncate" data-testid={`text-social-post-created-${p.id}`}>
+                              <span className="text-black/45 dark:text-white/45">Date created</span>: {p.createdAt}
                             </div>
                           </div>
+
+                          <div className="flex items-center justify-between gap-3 pt-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-black/45 dark:text-white/45" data-testid={`text-social-post-quote-${p.id}`}>
+                                Quote #{p.quoteId}
+                              </span>
+                              <span className="text-black/25 dark:text-white/25">•</span>
+                              <span data-testid={`text-social-post-audience-${p.id}`}>{p.audience}</span>
+                            </div>
+
+                            <a
+                              href={p.liveHref}
+                              className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/5 px-2 py-1 text-[11px] font-semibold text-black/75 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                              data-testid={`link-social-post-live-${p.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              View live deal
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </a>
+                          </div>
+                        </div>
 
                           <div className="mt-3 flex items-center gap-2">
                             <span
