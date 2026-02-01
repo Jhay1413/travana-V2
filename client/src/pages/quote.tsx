@@ -309,8 +309,8 @@ export default function QuotePage() {
 
         <div className="mt-4 grid gap-3" data-testid="layout-quote-body">
 
-          <div className="grid gap-3 lg:grid-cols-3" data-testid="grid-quote-sections">
-            <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-2" data-testid="card-quote-itinerary">
+          <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-quote-sections">
+            <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
                 <div className="grid gap-3" data-testid="col-itinerary-media">
                   <div className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
@@ -349,13 +349,9 @@ export default function QuotePage() {
                           </div>
                         </div>
 
-                        <div className="ml-auto flex shrink-0 items-center justify-end gap-2" data-testid="row-itinerary-total-owner">
-                          <span className="text-sm font-semibold text-black/85" data-testid="text-itinerary-total">
-                            {currency.format(quote.commissions.price)}
-                          </span>
-
+                        <div className="ml-auto flex shrink-0 items-center justify-end" data-testid="row-itinerary-total-owner">
                           <span
-                            className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70 text-right pl-[10px] pr-[10px] mt-[0px] mb-[0px] ml-[20px] mr-[20px]"
+                            className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
                             data-testid="pill-itinerary-owner"
                           >
                             <span
