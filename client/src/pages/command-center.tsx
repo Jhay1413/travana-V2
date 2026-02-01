@@ -1029,46 +1029,42 @@ export default function CommandCenterPage() {
                         data-testid={`card-social-post-${p.id}`}
                       >
                       <div className="flex items-start gap-4">
-                        <div className="hidden sm:block shrink-0 pt-4">
-                          <div
-                            className="relative h-28 w-40 overflow-hidden rounded-3xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
-                            data-testid={`img-social-post-${p.id}`}
-                          >
-                            {p.imageSrc ? (
-                              <img
-                                src={p.imageSrc}
-                                alt=""
-                                className="h-full w-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : null}
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0 dark:from-black/45" />
+                        <div className="hidden sm:block shrink-0">
+                          <div className="w-40" data-testid={`wrap-social-post-left-${p.id}`}>
+                            <div className="min-w-0">
+                              <div className="flex items-center justify-start gap-2 text-left">
+                                <div className="truncate text-sm font-semibold text-left" data-testid={`text-social-post-title-${p.id}`}>
+                                  {p.title}
+                                </div>
+                                <span className="text-xs text-black/35 dark:text-white/35" data-testid={`text-social-post-time-${p.id}`}>
+                                  {p.time}
+                                </span>
+                              </div>
+                              <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
+                                {p.subtitle}
+                              </div>
+                            </div>
+
+                            <div
+                              className="relative mt-3 h-28 w-40 overflow-hidden rounded-3xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
+                              data-testid={`img-social-post-${p.id}`}
+                            >
+                              {p.imageSrc ? (
+                                <img
+                                  src={p.imageSrc}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                              ) : null}
+                              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0 dark:from-black/45" />
+                            </div>
                           </div>
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-start gap-4 text-left">
-                            <div className="min-w-0">
-                              <div className="flex items-center justify-start gap-2 text-left">
-                                <div
-                                  className="truncate text-sm font-semibold text-left"
-                                  data-testid={`text-social-post-title-${p.id}`}
-                                >
-                                  {p.title}
-                                </div>
-                                <span
-                                  className="text-xs text-black/35 dark:text-white/35"
-                                  data-testid={`text-social-post-time-${p.id}`}
-                                >
-                                  {p.time}
-                                </span>
-                              </div>
-                            </div>
+                          <div className="flex items-start justify-end">
                             <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-black/40 transition group-hover:translate-x-0.5 dark:text-white/45" />
-                          </div>
-
-                          <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
-                            {p.subtitle}
                           </div>
 
                           <div className="mt-2 grid gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/65 dark:border-white/10 dark:bg-white/5 dark:text-white/65">
