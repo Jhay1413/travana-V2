@@ -90,15 +90,19 @@ const currency = new Intl.NumberFormat(undefined, {
 });
 
 function stagePill(stage: Stage) {
-  if (stage === "Booked") return "bg-emerald-500/15 text-emerald-200 border-emerald-500/20";
-  if (stage === "Quote") return "bg-sky-500/15 text-sky-200 border-sky-500/20";
-  return "bg-violet-500/15 text-violet-200 border-violet-500/20";
+  if (stage === "Booked")
+    return "bg-emerald-500/18 text-emerald-900 border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/20";
+  if (stage === "Quote")
+    return "bg-sky-500/18 text-sky-900 border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/20";
+  return "bg-violet-500/18 text-violet-950 border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-500/20";
 }
 
 function tierPill(tier: Client["tier"]) {
-  if (tier === "Platinum") return "bg-white/10 text-white border-white/15";
-  if (tier === "Gold") return "bg-amber-400/15 text-amber-200 border-amber-400/20";
-  return "bg-slate-400/10 text-slate-200 border-slate-400/15";
+  if (tier === "Platinum")
+    return "bg-black/8 text-black border-black/20 dark:bg-white/10 dark:text-white dark:border-white/15";
+  if (tier === "Gold")
+    return "bg-amber-400/20 text-amber-950 border-amber-400/35 dark:bg-amber-400/15 dark:text-amber-200 dark:border-amber-400/20";
+  return "bg-slate-900/8 text-slate-900 border-slate-900/18 dark:bg-slate-400/10 dark:text-slate-200 dark:border-slate-400/15";
 }
 
 const seedClients: Client[] = [
