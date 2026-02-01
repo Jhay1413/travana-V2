@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchDashboardStats, fetchClients } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -46,6 +46,7 @@ import {
   Sun,
   Camera,
   Smartphone,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1033,6 +1034,48 @@ export default function CommandCenterPage() {
   const { data: apiClients } = useQuery({
     queryKey: ["/api/clients"],
     queryFn: fetchClients,
+  });
+
+  // Fetch users for admin panel
+  const queryClient = useQueryClient();
+  const { data: apiUsers } = useQuery({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch users");
+      return res.json();
+    },
+  });
+
+  // Mutation to update user role
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) throw new Error("Failed to update user");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    },
+  });
+
+  // Mutation to delete user
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete user");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    },
   });
 
   // Transform API clients to display format
@@ -2313,38 +2356,62 @@ export default function CommandCenterPage() {
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
               <div className="grid gap-2">
-                {([
-                  { name: "Olivia Reed", role: "Manager", status: "Active" },
-                  { name: "Kai Nakamura", role: "Agent", status: "Active" },
-                  { name: "Amara Mensah", role: "Homeworker", status: "Pending" },
-                ] as const).map((u, idx) => (
-                  <button
-                    key={idx}
-                    className="flex items-center justify-between rounded-3xl border border-black/10 bg-black/5 px-4 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                    data-testid={`row-user-${idx}`}
+                {(apiUsers || []).map((u: any, idx: number) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center justify-between rounded-3xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5"
+                    data-testid={`row-user-${u.id}`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                        <UserRound className="h-4 w-4 text-black/70 dark:text-white/80" />
+                      <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5 overflow-hidden">
+                        {u.avatar || u.profileImageUrl ? (
+                          <img src={u.avatar || u.profileImageUrl} alt="" className="h-9 w-9 object-cover" />
+                        ) : (
+                          <UserRound className="h-4 w-4 text-black/70 dark:text-white/80" />
+                        )}
                       </div>
                       <div>
-                        <div className="text-sm font-semibold" data-testid={`text-user-name-${idx}`}>
+                        <div className="text-sm font-semibold" data-testid={`text-user-name-${u.id}`}>
                           {u.name}
                         </div>
-                        <div className="text-xs text-black/55 dark:text-white/55" data-testid={`text-user-role-${idx}`}>
-                          {u.role}
+                        <div className="text-xs text-black/55 dark:text-white/55" data-testid={`text-user-email-${u.id}`}>
+                          {u.email}
                         </div>
                       </div>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className="rounded-full border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/80"
-                      data-testid={`status-user-${idx}`}
-                    >
-                      {u.status}
-                    </Badge>
-                  </button>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={u.role}
+                        onChange={(e) => updateUserMutation.mutate({ userId: u.id, role: e.target.value })}
+                        className="rounded-xl border border-black/10 bg-black/5 px-2 py-1 text-xs font-medium text-black dark:border-white/10 dark:bg-white/5 dark:text-white cursor-pointer"
+                        data-testid={`select-user-role-${u.id}`}
+                        disabled={u.id === user?.id}
+                      >
+                        {["Admin", "Manager", "Agent", "Homeworker", "Referer"].map((r) => (
+                          <option key={r} value={r} className="text-black bg-white">{r}</option>
+                        ))}
+                      </select>
+                      {u.id !== user?.id && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to remove ${u.name}?`)) {
+                              deleteUserMutation.mutate(u.id);
+                            }
+                          }}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 dark:border-red-900 dark:bg-red-950 dark:text-red-400"
+                          data-testid={`button-delete-user-${u.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 ))}
+                {(!apiUsers || apiUsers.length === 0) && (
+                  <div className="rounded-2xl border border-dashed border-black/10 p-4 text-center text-sm text-black/45 dark:border-white/10 dark:text-white/45">
+                    No users found
+                  </div>
+                )}
               </div>
             </Card>
 
