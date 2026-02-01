@@ -152,6 +152,7 @@
 @layer utilities {
   .app-shell {
     min-height: 100vh;
+    background: hsl(var(--background));
   }
 
   .glass {
