@@ -398,21 +398,14 @@ function ShellNav({
             </div>
           </div>
 
-          <select
-            value={rolePreview || actualRole}
-            onChange={(e) => {
-              const newRole = e.target.value as Role;
-              onRoleChange(newRole === actualRole ? null : newRole);
-            }}
-            className="rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
-            data-testid="select-role-nav"
+          <div
+            className="inline-flex items-center rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs font-medium text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/80"
+            data-testid="badge-role"
           >
-            {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
-              <option key={r} value={r} className="text-black bg-white">
-                {r}{r === actualRole ? " ✓" : ""}
-              </option>
-            ))}
-          </select>
+            <span className="inline-flex h-6 items-center rounded-full bg-black/10 px-2 text-[11px] text-black/70 dark:bg-white/10 dark:text-white/80">
+              {role}
+            </span>
+          </div>
         </div>
 
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
