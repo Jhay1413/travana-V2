@@ -730,9 +730,7 @@ export default function CommandCenterPage() {
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-calendar">
                     Calendar
                   </TabsTrigger>
-                  <TabsTrigger value="news" className="rounded-xl" data-testid="tab-news">
-                    News
-                  </TabsTrigger>
+                  <TabsTrigger value="news" className="rounded-xl" data-testid="tab-news">TheHub</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -977,7 +975,6 @@ export default function CommandCenterPage() {
               </TabsContent>
             </Tabs>
           </Card>
-
           <div className="space-y-4">
             <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
               <div className="flex items-start justify-between gap-4">
