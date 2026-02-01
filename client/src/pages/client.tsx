@@ -1208,6 +1208,15 @@ export default function ClientPage() {
                         const reader = new FileReader();
                         reader.onload = (ev) => {
                           const content = ev.target?.result as string || "";
+                          const toIsoDate = (d: string | undefined): string => {
+                            if (!d) return "";
+                            const match = d.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+                            if (match) {
+                              const [, day, month, year] = match;
+                              return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+                            }
+                            return d;
+                          };
                           try {
                             const data = JSON.parse(content);
                             setNewQuote((prev) => ({
@@ -1216,7 +1225,7 @@ export default function ClientPage() {
                               packageType: data.packageType || data.package_type || prev.packageType,
                               quoteTitle: data.quoteTitle || data.quote_title || data.title || prev.quoteTitle,
                               quoteLink: data.quoteLink || data.quote_link || data.link || prev.quoteLink,
-                              travelDate: data.travelDate || data.travel_date || data.departureDate || prev.travelDate,
+                              travelDate: toIsoDate(data.travelDate || data.travel_date || data.departureDate) || prev.travelDate,
                               passengersAdults: data.passengers?.adults || data.adults || data.passengersAdults || prev.passengersAdults,
                               passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
                               passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
@@ -1225,7 +1234,7 @@ export default function ClientPage() {
                               destination: data.destination || prev.destination,
                               resort: data.resort || prev.resort,
                               accommodation: data.accommodation || data.hotel || data.property || prev.accommodation,
-                              checkInDate: data.checkInDate || data.check_in_date || data.checkin || prev.checkInDate,
+                              checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
                               checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
                               nights: data.nights || data.duration || prev.nights,
                               boardBasis: data.boardBasis || data.board_basis || data.board || prev.boardBasis,
@@ -1234,16 +1243,16 @@ export default function ClientPage() {
                               preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
                               flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
                               outboundDepartAirport: data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || prev.outboundDepartAirport,
-                              outboundDepartDate: data.flights?.outbound?.departDate || data.outbound?.date || prev.outboundDepartDate,
+                              outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
                               outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
                               outboundArriveAirport: data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || prev.outboundArriveAirport,
-                              outboundArriveDate: data.flights?.outbound?.arriveDate || prev.outboundArriveDate,
+                              outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
                               outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
                               inboundDepartAirport: data.flights?.inbound?.departAirport || data.inbound?.from || prev.inboundDepartAirport,
-                              inboundDepartDate: data.flights?.inbound?.departDate || data.inbound?.date || prev.inboundDepartDate,
+                              inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
                               inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
                               inboundArriveAirport: data.flights?.inbound?.arriveAirport || data.inbound?.to || prev.inboundArriveAirport,
-                              inboundArriveDate: data.flights?.inbound?.arriveDate || prev.inboundArriveDate,
+                              inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
                               inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
                               tourOperator: data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || prev.tourOperator,
                               sales: data.commissions?.sales || data.sales || prev.sales,
