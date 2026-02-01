@@ -942,7 +942,15 @@ export default function CommandCenterPage() {
                     {
                       id: "post-001",
                       title: "Maldives Winter Escape — from £2,495pp",
-                      meta: "Quote #Q-1082 · 7 nights · BAA → MLE",
+                      subtitle: "Overwater villa + private transfers",
+                      hotel: "Soneva Jani",
+                      departing: "BAA",
+                      nights: 7,
+                      board: "Half Board",
+                      travelDate: "2026-02-18",
+                      createdAt: "2026-02-01",
+                      quoteId: "Q-1082",
+                      liveHref: "/command-center?quote=Q-1082",
                       audience: "Facebook",
                       status: "Scheduled",
                       time: "Today 18:00",
@@ -952,7 +960,15 @@ export default function CommandCenterPage() {
                     {
                       id: "post-002",
                       title: "Rome & Amalfi — from £1,349pp",
-                      meta: "Quote #Q-1075 · 5 nights · LGW → FCO",
+                      subtitle: "Split-stay with private transfers",
+                      hotel: "Hotel de la Ville + Il San Pietro",
+                      departing: "LGW",
+                      nights: 5,
+                      board: "B&B",
+                      travelDate: "2026-02-10",
+                      createdAt: "2026-01-31",
+                      quoteId: "Q-1075",
+                      liveHref: "/command-center?quote=Q-1075",
                       audience: "Facebook",
                       status: "Draft",
                       time: "Tomorrow 10:30",
@@ -962,7 +978,15 @@ export default function CommandCenterPage() {
                     {
                       id: "post-003",
                       title: "Dubai Half-Term — from £1,199pp",
-                      meta: "Quote #Q-1069 · 4 nights · MAN → DXB",
+                      subtitle: "Family suite + pool access",
+                      hotel: "Atlantis The Royal",
+                      departing: "MAN",
+                      nights: 4,
+                      board: "Half Board",
+                      travelDate: "2026-02-15",
+                      createdAt: "2026-01-30",
+                      quoteId: "Q-1069",
+                      liveHref: "/command-center?quote=Q-1069",
                       audience: "Facebook",
                       status: "Posted",
                       time: "Yesterday",
@@ -972,7 +996,15 @@ export default function CommandCenterPage() {
                     {
                       id: "post-004",
                       title: "New York City Weekend — from £899pp",
-                      meta: "Quote #Q-1058 · 3 nights · LHR → JFK",
+                      subtitle: "Premium hotel + Broadway options",
+                      hotel: "The Peninsula New York",
+                      departing: "LHR",
+                      nights: 3,
+                      board: "Room Only",
+                      travelDate: "2026-03-01",
+                      createdAt: "2026-01-29",
+                      quoteId: "Q-1058",
+                      liveHref: "/command-center?quote=Q-1058",
                       audience: "Facebook",
                       status: "Draft",
                       time: "In review",
@@ -1009,10 +1041,51 @@ export default function CommandCenterPage() {
                             </span>
                           </div>
 
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55 dark:text-white/55">
-                            <span data-testid={`text-social-post-meta-${p.id}`}>{p.meta}</span>
-                            <span className="text-black/25 dark:text-white/25">•</span>
-                            <span data-testid={`text-social-post-audience-${p.id}`}>{p.audience}</span>
+                          <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
+                            {p.subtitle}
+                          </div>
+
+                          <div className="mt-2 grid gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/65 dark:border-white/10 dark:bg-white/5 dark:text-white/65">
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                              <div className="truncate" data-testid={`text-social-post-hotel-${p.id}`}>
+                                <span className="text-black/45 dark:text-white/45">Hotel</span>: {p.hotel}
+                              </div>
+                              <div className="truncate" data-testid={`text-social-post-departing-${p.id}`}>
+                                <span className="text-black/45 dark:text-white/45">Departing</span>: {p.departing}
+                              </div>
+                              <div className="truncate" data-testid={`text-social-post-nights-${p.id}`}>
+                                <span className="text-black/45 dark:text-white/45">Nights</span>: {p.nights}
+                              </div>
+                              <div className="truncate" data-testid={`text-social-post-board-${p.id}`}>
+                                <span className="text-black/45 dark:text-white/45">Board</span>: {p.board}
+                              </div>
+                              <div className="truncate" data-testid={`text-social-post-travel-date-${p.id}`}>
+                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travelDate}
+                              </div>
+                              <div className="truncate" data-testid={`text-social-post-created-${p.id}`}>
+                                <span className="text-black/45 dark:text-white/45">Date created</span>: {p.createdAt}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3 pt-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-black/45 dark:text-white/45" data-testid={`text-social-post-quote-${p.id}`}>
+                                  Quote #{p.quoteId}
+                                </span>
+                                <span className="text-black/25 dark:text-white/25">•</span>
+                                <span data-testid={`text-social-post-audience-${p.id}`}>{p.audience}</span>
+                              </div>
+
+                              <a
+                                href={p.liveHref}
+                                className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/5 px-2 py-1 text-[11px] font-semibold text-black/75 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                                data-testid={`link-social-post-live-${p.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                View live deal
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </a>
+                            </div>
                           </div>
 
                           <div
