@@ -164,7 +164,7 @@ const seedClients: Client[] = [
 export default function ClientsPage() {
   const [, navigate] = useLocation();
   const [role, setRole] = useState<Role>("Agent");
-  const [active, setActive] = useState<string>("clients");
+  const [active] = useState<string>("clients");
 
   const [q, setQ] = useState("");
   const [stage, setStage] = useState<"all" | Stage>("all");
@@ -207,7 +207,10 @@ export default function ClientsPage() {
     return s;
   }, [q, stage, tier, sort]);
 
-  const selected = useMemo(() => filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? null, [filtered, selectedId]);
+  const selected = useMemo(
+    () => filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? null,
+    [filtered, selectedId],
+  );
 
   const totals = useMemo(() => {
     const booked = seedClients.filter((c) => c.stage === "Booked");
@@ -237,40 +240,40 @@ export default function ClientsPage() {
       onToggleTheme={() => {}}
     >
       <div className="relative mx-auto w-full max-w-7xl px-4 pb-6 md:px-6 md:pb-8">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
 
-              <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <div className="space-y-2">
-                  <div className="inline-flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate("/")}
-                      className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-sm font-semibold text-black/80 transition hover:bg-black/[0.03]"
-                      data-testid="button-back-command-center"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Command Center
-                    </button>
-                  </div>
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-sm font-semibold text-black/80 transition hover:bg-black/[0.03]"
+                data-testid="button-back-command-center"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Command Center
+              </button>
+            </div>
 
-                  <div className="mt-4 inline-flex items-center gap-2">
-                    <div
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03] ring-1 ring-black/[0.04]"
-                      data-testid="icon-clients"
-                      aria-hidden
-                    >
-                      <Users className="h-5 w-5 text-black/70" />
-                    </div>
-                    <div>
-                      <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-clients-title">
-                        Clients
-                      </h1>
-                      <p className="text-sm text-black/60" data-testid="text-clients-subtitle">
-                        A premium directory with segments, quick actions, and pipeline context.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            <div className="mt-4 inline-flex items-center gap-2">
+              <div
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03] ring-1 ring-black/[0.04]"
+                data-testid="icon-clients"
+                aria-hidden
+              >
+                <Users className="h-5 w-5 text-black/70" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-clients-title">
+                  Clients
+                </h1>
+                <p className="text-sm text-black/60" data-testid="text-clients-subtitle">
+                  A premium directory with segments, quick actions, and pipeline context.
+                </p>
+              </div>
+            </div>
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -453,12 +456,17 @@ export default function ClientsPage() {
                                   data-testid={`avatar-client-${c.id}`}
                                   aria-hidden
                                 >
-                                  <span className="text-xs font-semibold text-black/85">{shortInitials(c.name)}</span>
+                                  <span className="text-xs font-semibold text-black/85">
+                                    {shortInitials(c.name)}
+                                  </span>
                                 </div>
 
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <div className="truncate text-sm font-semibold" data-testid={`text-client-name-${c.id}`}>
+                                    <div
+                                      className="truncate text-sm font-semibold"
+                                      data-testid={`text-client-name-${c.id}`}
+                                    >
                                       {c.name}
                                     </div>
                                     <span className="text-xs text-black/40" data-testid={`text-client-id-${c.id}`}>
@@ -480,7 +488,10 @@ export default function ClientsPage() {
                                     </Badge>
                                   </div>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                    <span className="inline-flex items-center gap-1" data-testid={`text-client-location-${c.id}`}>
+                                    <span
+                                      className="inline-flex items-center gap-1"
+                                      data-testid={`text-client-location-${c.id}`}
+                                    >
                                       <MapPin className="h-3.5 w-3.5" />
                                       {c.location}
                                     </span>
@@ -523,7 +534,10 @@ export default function ClientsPage() {
                     })}
 
                     {filtered.length === 0 ? (
-                      <div className="rounded-3xl border border-black/10 bg-white/70 p-8 text-center" data-testid="empty-client-results">
+                      <div
+                        className="rounded-3xl border border-black/10 bg-white/70 p-8 text-center"
+                        data-testid="empty-client-results"
+                      >
                         <div
                           className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
                           aria-hidden
@@ -658,7 +672,10 @@ export default function ClientsPage() {
                           >
                             {selected.stage}
                           </Badge>
-                          <span className="inline-flex items-center gap-1 text-xs text-black/60" data-testid="text-selected-location">
+                          <span
+                            className="inline-flex items-center gap-1 text-xs text-black/60"
+                            data-testid="text-selected-location"
+                          >
                             <MapPin className="h-3.5 w-3.5" />
                             {selected.location}
                           </span>
@@ -843,7 +860,6 @@ export default function ClientsPage() {
           </Card>
         </div>
       </div>
-    </div>
-  </CommandCenterShell>
+    </CommandCenterShell>
   );
 }
