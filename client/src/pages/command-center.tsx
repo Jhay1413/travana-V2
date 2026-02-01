@@ -2625,7 +2625,7 @@ export default function CommandCenterPage() {
         };
 
         const filteredTourOperators = (tourOperators || []).filter((op) => {
-          const q = tourOperatorSearch.toLowerCase();
+          const q = tourOperatorSearch.trim().toLowerCase();
           if (!q) return true;
           return [op.name, op.holidayType, op.contact || ""].join(" ").toLowerCase().includes(q);
         });
@@ -2756,9 +2756,13 @@ export default function CommandCenterPage() {
         };
 
         const filteredAirports = (airportsList || []).filter((airport) => {
-          const q = airportSearch.toLowerCase();
+          const q = airportSearch.trim().toLowerCase();
           if (!q) return true;
-          return [airport.name, airport.code, airport.country].join(" ").toLowerCase().includes(q);
+          return (
+            airport.name.toLowerCase().includes(q) ||
+            airport.code.toLowerCase().includes(q) ||
+            airport.country.toLowerCase().includes(q)
+          );
         });
 
         return (
