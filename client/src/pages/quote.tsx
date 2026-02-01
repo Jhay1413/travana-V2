@@ -46,6 +46,10 @@ type Quote = {
     outbound: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string };
     inbound: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string };
   };
+  owner: {
+    name: string;
+    role: "Agent" | "Manager" | "Homeworker";
+  };
   commissions: {
     tourOperator: string;
     price: number;
@@ -93,6 +97,7 @@ const seedQuotesById: Record<string, Quote> = {
         arrive: "2026-02-21T06:55:00",
       },
     },
+    owner: { name: "Sophie Turner", role: "Agent" },
     commissions: {
       tourOperator: "Elegant Escapes",
       price: 18950,
@@ -141,6 +146,7 @@ const seedQuotesById: Record<string, Quote> = {
         arrive: "2026-03-30T19:45:00",
       },
     },
+    owner: { name: "Amelia Brooks", role: "Homeworker" },
     commissions: {
       tourOperator: "Trailfinders",
       price: 12990,
@@ -186,6 +192,7 @@ const seedQuotesById: Record<string, Quote> = {
         arrive: "2026-05-17T06:35:00",
       },
     },
+    owner: { name: "Noah Bennett", role: "Manager" },
     commissions: {
       tourOperator: "Kuoni",
       price: 10450,
@@ -339,9 +346,22 @@ export default function QuotePage() {
                         <div className="truncate text-base font-semibold" data-testid="text-itinerary-quote-title">
                           {quote.quoteTitle}
                         </div>
-                        <span className="text-sm font-semibold text-black/85" data-testid="text-itinerary-total">
-                          {currency.format(quote.commissions.price)}
-                        </span>
+                        <div className="flex items-center gap-2" data-testid="row-itinerary-total-owner">
+                          <span className="text-sm font-semibold text-black/85" data-testid="text-itinerary-total">
+                            {currency.format(quote.commissions.price)}
+                          </span>
+                          <span className="text-xs text-black/25" aria-hidden>
+                            •
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70" data-testid="pill-itinerary-owner">
+                            <span className="h-1.5 w-1.5 rounded-full bg-black/40" aria-hidden />
+                            <span data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
+                            <span className="text-black/35" aria-hidden>
+                              ·
+                            </span>
+                            <span className="text-black/55" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
+                          </span>
+                        </div>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
                         <span className="text-sm text-black/55" data-testid="text-itinerary-location">{quote.destination}</span>
