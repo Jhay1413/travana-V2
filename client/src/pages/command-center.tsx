@@ -32,6 +32,7 @@ import {
   MapPin,
   MessageSquare,
   Phone,
+  Plane,
   Plus,
   Search,
   Settings2,
@@ -313,6 +314,7 @@ function ShellNav({
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
               { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+              { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
             ],
           },
           {
@@ -852,6 +854,7 @@ function TopBar({
       users: "Users & Roles",
       audit: "Audit",
       settings: "Settings",
+      "tour-operators": "Tour Operators",
       "agent-settings": "Settings",
       team: "Team Pipeline",
       coverage: "Coverage",
@@ -2518,6 +2521,83 @@ export default function CommandCenterPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </Card>
+          </section>
+        );
+      }
+
+      if (active === "tour-operators") {
+        return (
+          <section>
+            <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold" data-testid="text-tour-operators-title">Tour Operators</div>
+                  <div className="text-xs text-muted-foreground">Manage your tour operator partnerships.</div>
+                </div>
+                <Button
+                  onClick={() => {
+                    const name = prompt("Enter operator name:");
+                    if (!name) return;
+                    const holidayType = prompt("Holiday type (e.g. Beach, Ski, Adventure):") || "";
+                    const commissionPercent = prompt("Commission % (e.g. 10):") || "10";
+                    const username = prompt("Login username:") || "";
+                    const password = prompt("Login password:") || "";
+                    const contact = prompt("Contact info:") || "";
+                    createTourOperatorMutation.mutate({ name, holidayType, commissionPercent, username, password, contact });
+                  }}
+                  className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                  data-testid="button-add-tour-operator"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Operator
+                </Button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-black/10 dark:border-white/10">
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Name</th>
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Holiday Type</th>
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Commission %</th>
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Username</th>
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Password</th>
+                      <th className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">Contact</th>
+                      <th className="py-3 px-2 text-right font-medium text-black/70 dark:text-white/70">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(tourOperators || []).map((op) => (
+                      <tr key={op.id} className="border-b border-black/5 dark:border-white/5" data-testid={`row-tour-operator-${op.id}`}>
+                        <td className="py-3 px-2 font-medium">{op.name}</td>
+                        <td className="py-3 px-2">{op.holidayType}</td>
+                        <td className="py-3 px-2">{op.commissionPercent}%</td>
+                        <td className="py-3 px-2 font-mono text-xs">{op.username || "—"}</td>
+                        <td className="py-3 px-2 font-mono text-xs">{op.password ? "••••••" : "—"}</td>
+                        <td className="py-3 px-2">{op.contact || "—"}</td>
+                        <td className="py-3 px-2 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteTourOperatorMutation.mutate(op.id)}
+                            className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                            data-testid={`button-delete-tour-operator-${op.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!tourOperators || tourOperators.length === 0) && (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-black/50 dark:text-white/50">
+                          No tour operators yet. Add your first operator above.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </Card>
           </section>
