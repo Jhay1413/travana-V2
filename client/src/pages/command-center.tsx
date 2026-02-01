@@ -442,7 +442,7 @@ function ShellNav({
 
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
-        <div className="flex items-center gap-3 px-3 pb-2">
+        <div className="flex items-center gap-3 px-3">
           <div
             className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
             data-testid="img-connect-mark"
@@ -459,8 +459,7 @@ function ShellNav({
             </div>
           </div>
         </div>
-
-        <Separator className="my-4 bg-black/10 dark:bg-white/10" data-testid="separator-connect" />
+        <Separator className="mt-2 mb-1 bg-black/10 dark:bg-white/10" data-testid="separator-connect" />
 
         <div className="space-y-1" data-testid="section-connect">
           {["whatsapp", "facebook", "instagram", "email", "internal-chat"].map((key) => {
