@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { useLocation } from "wouter";
 import {
   BadgeCheck,
   Calendar,
+  ChevronLeft,
   ChevronRight,
   Filter,
   Mail,
@@ -159,6 +161,8 @@ const seedClients: Client[] = [
 ];
 
 export default function ClientsPage() {
+  const [, navigate] = useLocation();
+
   const [q, setQ] = useState("");
   const [stage, setStage] = useState<"all" | Stage>("all");
   const [tier, setTier] = useState<"all" | ClientTier>("all");
@@ -221,9 +225,22 @@ export default function ClientsPage() {
     <div className="min-h-screen bg-white text-black">
       <div className="relative mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-sm font-semibold text-black/80 transition hover:bg-black/[0.03]"
+                data-testid="button-back-command-center"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Command Center
+              </button>
+            </div>
+
+            <div className="mt-4 inline-flex items-center gap-2">
               <div
                 className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03] ring-1 ring-black/[0.04]"
                 data-testid="icon-clients"
@@ -253,7 +270,7 @@ export default function ClientsPage() {
               Import
             </Button>
             <Button
-              className="rounded-2xl bg-white text-black hover:bg-white/90"
+              className="rounded-2xl bg-black text-white hover:bg-black/90"
               data-testid="button-new-client"
               onClick={() => {}}
             >
@@ -263,7 +280,7 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-5">
+        <div className="relative mt-6 grid gap-3 md:grid-cols-5">
           <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 md:col-span-3">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-2">
@@ -297,9 +314,7 @@ export default function ClientsPage() {
                       type="button"
                       className={
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
-                        (stage === s
-                          ? "bg-white text-black"
-                          : "text-black/70 hover:bg-black/[0.03]")
+                        (stage === s ? "bg-black text-white" : "text-black/70 hover:bg-black/[0.03]")
                       }
                       data-testid={`filter-stage-${s.toLowerCase()}`}
                       onClick={() => setStage(s as any)}
@@ -316,9 +331,7 @@ export default function ClientsPage() {
                       type="button"
                       className={
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
-                        (tier === t
-                          ? "bg-white text-black"
-                          : "text-black/70 hover:bg-black/[0.03]")
+                        (tier === t ? "bg-black text-white" : "text-black/70 hover:bg-black/[0.03]")
                       }
                       data-testid={`filter-tier-${t.toLowerCase()}`}
                       onClick={() => setTier(t as any)}
@@ -339,9 +352,7 @@ export default function ClientsPage() {
                       type="button"
                       className={
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
-                        (sort === o.key
-                          ? "bg-white text-black"
-                          : "text-black/70 hover:bg-black/[0.03]")
+                        (sort === o.key ? "bg-black text-white" : "text-black/70 hover:bg-black/[0.03]")
                       }
                       data-testid={`filter-sort-${o.key}`}
                       onClick={() => setSort(o.key)}
@@ -413,8 +424,8 @@ export default function ClientsPage() {
                           className={
                             "group w-full rounded-3xl border p-4 text-left transition active:scale-[0.99] " +
                             (isSelected
-                              ? "border-white/25 bg-black/[0.03]"
-                              : "border-black/10 bg-white/70 hover:bg-white/8")
+                              ? "border-black/15 bg-black/[0.03]"
+                              : "border-black/10 bg-white/70 hover:bg-black/[0.03]")
                           }
                           data-testid={`row-client-${c.id}`}
                           initial={{ opacity: 0, y: 10 }}
@@ -425,7 +436,7 @@ export default function ClientsPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-3">
                                 <div
-                                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70"
+                                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
                                   data-testid={`avatar-client-${c.id}`}
                                   aria-hidden
                                 >
@@ -472,7 +483,7 @@ export default function ClientsPage() {
                                 {c.tags.slice(0, 3).map((t, i) => (
                                   <span
                                     key={t + i}
-                                    className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70"
+                                    className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70"
                                     data-testid={`pill-client-tag-${c.id}-${i}`}
                                   >
                                     {t}
@@ -499,11 +510,11 @@ export default function ClientsPage() {
                     })}
 
                     {filtered.length === 0 ? (
-                      <div
-                        className="rounded-3xl border border-black/10 bg-white/70 p-8 text-center"
-                        data-testid="empty-client-results"
-                      >
-                        <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70" aria-hidden>
+                      <div className="rounded-3xl border border-black/10 bg-white/70 p-8 text-center" data-testid="empty-client-results">
+                        <div
+                          className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
+                          aria-hidden
+                        >
                           <Search className="h-5 w-5 text-black/70" />
                         </div>
                         <div className="mt-3 text-sm font-semibold" data-testid="text-empty-title">
@@ -525,7 +536,7 @@ export default function ClientsPage() {
                         title: "VIP & Repeat",
                         desc: "High LTV clients with concierge expectations.",
                         icon: Star,
-                        accent: "from-violet-500/20 via-white/5 to-white/0",
+                        accent: "from-violet-500/20 via-black/[0.03] to-transparent",
                         count: 3,
                       },
                       {
@@ -533,7 +544,7 @@ export default function ClientsPage() {
                         title: "Family Travel",
                         desc: "School-holiday led trips and multi-room bookings.",
                         icon: Users,
-                        accent: "from-amber-500/20 via-white/5 to-white/0",
+                        accent: "from-amber-500/20 via-black/[0.03] to-transparent",
                         count: 2,
                       },
                       {
@@ -541,7 +552,7 @@ export default function ClientsPage() {
                         title: "Corporate",
                         desc: "Short lead times, tight itineraries, high margin upgrades.",
                         icon: BadgeCheck,
-                        accent: "from-sky-500/20 via-white/5 to-white/0",
+                        accent: "from-sky-500/20 via-black/[0.03] to-transparent",
                         count: 1,
                       },
                       {
@@ -549,22 +560,22 @@ export default function ClientsPage() {
                         title: "New Leads",
                         desc: "Fast follow-up required to convert within 24 hours.",
                         icon: Sparkles,
-                        accent: "from-fuchsia-500/20 via-white/5 to-white/0",
+                        accent: "from-fuchsia-500/20 via-black/[0.03] to-transparent",
                         count: 1,
                       },
                     ] as const).map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        className="group relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 p-5 text-left transition hover:bg-white/8"
+                        className="group relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 p-5 text-left transition hover:bg-black/[0.03]"
                         data-testid={`card-segment-${s.id}`}
                         onClick={() => {}}
                       >
                         <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${s.accent}`} />
                         <div className="relative flex items-start justify-between gap-4">
                           <div className="space-y-2">
-                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70">
-                              <s.icon className="h-5 w-5 text-black/85" />
+                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]">
+                              <s.icon className="h-5 w-5 text-black/70" />
                             </div>
                             <div>
                               <div className="text-sm font-semibold" data-testid={`text-segment-title-${s.id}`}>
@@ -591,7 +602,7 @@ export default function ClientsPage() {
             </div>
           </Card>
 
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/[0.06] p-4 md:col-span-2">
+          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 md:col-span-2">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
                 <div className="text-sm font-semibold" data-testid="text-client-panel-title">
@@ -601,7 +612,10 @@ export default function ClientsPage() {
                   Select a client to view key details and actions.
                 </div>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/70" data-testid="badge-selected-client">
+              <div
+                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2 text-xs font-semibold text-black/70"
+                data-testid="badge-selected-client"
+              >
                 <UserRound className="h-4 w-4" />
                 {selected ? selected.id : "None"}
               </div>
@@ -648,7 +662,7 @@ export default function ClientsPage() {
                     </div>
 
                     <div className="mt-4 grid gap-2">
-                      <div className="rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs text-black/70">
+                      <div className="rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2 text-xs text-black/70">
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-black/55" data-testid="label-selected-nexttrip">
                             Next trip
@@ -671,7 +685,7 @@ export default function ClientsPage() {
                           onClick={() => {}}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-white/80">
+                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
                               <Phone className="h-4 w-4" />
                               Call
                             </span>
@@ -689,7 +703,7 @@ export default function ClientsPage() {
                           onClick={() => {}}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-white/80">
+                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
                               <Mail className="h-4 w-4" />
                               Email
                             </span>
@@ -709,7 +723,7 @@ export default function ClientsPage() {
                           onClick={() => {}}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-white/80">
+                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
                               <Calendar className="h-4 w-4" />
                               Add task
                             </span>
@@ -727,7 +741,7 @@ export default function ClientsPage() {
                           onClick={() => {}}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-white/80">
+                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
                               <BadgeCheck className="h-4 w-4" />
                               Add note
                             </span>
@@ -740,14 +754,14 @@ export default function ClientsPage() {
                       </div>
 
                       <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
-                        <div className="text-xs font-semibold text-white/80" data-testid="text-selected-tags-title">
+                        <div className="text-xs font-semibold text-black/80" data-testid="text-selected-tags-title">
                           Tags
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2" data-testid="list-selected-tags">
                           {selected.tags.map((t, i) => (
                             <span
                               key={t + i}
-                              className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70"
+                              className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70"
                               data-testid={`pill-selected-tag-${i}`}
                             >
                               {t}
@@ -798,7 +812,10 @@ export default function ClientsPage() {
                 </>
               ) : (
                 <div className="rounded-3xl border border-black/10 bg-white/70 p-10 text-center" data-testid="empty-client-panel">
-                  <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70" aria-hidden>
+                  <div
+                    className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
+                    aria-hidden
+                  >
                     <UserRound className="h-5 w-5 text-black/70" />
                   </div>
                   <div className="mt-3 text-sm font-semibold" data-testid="text-empty-panel-title">

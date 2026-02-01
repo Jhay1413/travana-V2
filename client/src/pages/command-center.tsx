@@ -51,6 +51,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
+import { useLocation } from "wouter";
 
 type Role = "Admin" | "Manager" | "Agent" | "Homeworker" | "Referer";
 type Stage = "Enquiry" | "Quote" | "Booked";
@@ -551,6 +552,7 @@ function TopBar({
   theme: "light" | "dark";
   onToggleTheme: () => void;
 }) {
+  const [, navigate] = useLocation();
   const title = useMemo(() => {
     const map: Record<string, string> = {
       overview: "Overview",
@@ -627,6 +629,15 @@ function TopBar({
             >
               <Filter className="mr-2 h-4 w-4" />
               Filters
+            </Button>
+            <Button
+              variant="outline"
+              className="h-10 rounded-2xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+              data-testid="button-go-clients"
+              onClick={() => navigate("/clients")}
+            >
+              <Users className="mr-2 h-4 w-4" />
+              Clients
             </Button>
             <Button
               className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
