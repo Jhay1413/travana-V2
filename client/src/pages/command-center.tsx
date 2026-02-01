@@ -85,7 +85,7 @@ type ActivityItem = {
 
 const currency = new Intl.NumberFormat(undefined, {
   style: "currency",
-  currency: "USD",
+  currency: "GBP",
   maximumFractionDigits: 0,
 });
 
