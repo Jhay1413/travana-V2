@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import CommandCenterPage from "@/pages/command-center";
 import ClientsPage from "@/pages/clients";
 import ClientPage from "@/pages/client";
+import QuotePage from "@/pages/quote";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/" component={CommandCenterPage} />
       <Route path="/clients" component={ClientsPage} />
       <Route path="/clients/:clientId" component={ClientPage} />
+      <Route path="/clients/:clientId/quotes/:quoteId" component={QuotePage} />
       <Route component={NotFound} />
     </Switch>
   );

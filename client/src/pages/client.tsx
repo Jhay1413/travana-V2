@@ -907,7 +907,7 @@ export default function ClientPage() {
                                   type="button"
                                   className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                                   data-testid={`card-quote-intro-${q.id}`}
-                                  onClick={() => {}}
+                                  onClick={() => window.open(`/clients/${clientId}/quotes/${q.id}`, "_self")}
                                 >
                                   <div className="flex items-start gap-3">
                                     <div
@@ -945,7 +945,7 @@ export default function ClientPage() {
                                           <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
                                             {currency.format(q.totalCost)}
                                           </div>
-                                          <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-black/60">
+                                          <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
                                             View
                                             <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                                           </div>
