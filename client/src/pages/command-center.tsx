@@ -1344,25 +1344,25 @@ export default function CommandCenterPage() {
                 <KpiCard
                   label="Today's Profit"
                   value={currency.format(totals.bookedValue)}
-                  delta="+12% WoW"
+                  delta="+4.1% DoD"
                   icon={<Ticket className="h-4 w-4" />}
                 />
                 <KpiCard
                   label="This Week"
                   value={currency.format(totals.openValue)}
-                  delta="7 active"
+                  delta="+2.3% WoW"
                   icon={<Sparkles className="h-4 w-4" />}
                 />
                 <KpiCard
                   label="This Month"
                   value={currency.format(totals.avgDeal)}
-                  delta="Premium mix"
+                  delta="+6.8% MoM"
                   icon={<Briefcase className="h-4 w-4" />}
                 />
                 <KpiCard
                   label="Average Deal"
                   value={currency.format(totals.avgDeal)}
-                  delta="Premium mix"
+                  delta="+3.0% vs last"
                   icon={<Briefcase className="h-4 w-4" />}
                 />
               </section>
