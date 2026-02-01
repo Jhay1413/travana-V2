@@ -41,6 +41,7 @@ import {
   User2,
   UserRound,
   Users,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -631,6 +632,139 @@ function ShellNav({
   );
 }
 
+const sampleNotifications = [
+  {
+    id: 1,
+    type: "booking",
+    title: "New Booking Confirmed",
+    message: "Sarah Johnson's Maldives trip has been confirmed for 15th March 2026",
+    time: "2 minutes ago",
+    read: false,
+  },
+  {
+    id: 2,
+    type: "quote",
+    title: "Quote Expiring Soon",
+    message: "Thompson family's Caribbean cruise quote expires in 24 hours",
+    time: "1 hour ago",
+    read: false,
+  },
+  {
+    id: 3,
+    type: "payment",
+    title: "Payment Received",
+    message: "£2,450 deposit received from Mr. Williams for Bali package",
+    time: "3 hours ago",
+    read: true,
+  },
+  {
+    id: 4,
+    type: "client",
+    title: "New Enquiry",
+    message: "Emma Richards submitted an enquiry for honeymoon destinations",
+    time: "Yesterday",
+    read: true,
+  },
+  {
+    id: 5,
+    type: "reminder",
+    title: "Follow-up Required",
+    message: "Call back scheduled with David Brown regarding safari options",
+    time: "Yesterday",
+    read: true,
+  },
+];
+
+function NotificationsPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="fixed left-0 top-0 z-50 h-full w-full max-w-md bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-2xl border-r border-black/10 dark:border-white/10"
+          >
+            <div className="flex h-full flex-col">
+              <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/5 dark:bg-white/10">
+                    <Bell className="h-5 w-5 text-black/70 dark:text-white/80" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-black dark:text-white">Notifications</h2>
+                    <p className="text-xs text-black/50 dark:text-white/50">
+                      {sampleNotifications.filter(n => !n.read).length} unread
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                  data-testid="button-close-notifications"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="space-y-3">
+                  {sampleNotifications.map((notification) => (
+                    <motion.div
+                      key={notification.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: notification.id * 0.05 }}
+                      className={`group relative rounded-2xl border p-4 transition cursor-pointer ${
+                        notification.read
+                          ? "border-black/5 bg-black/[0.02] hover:bg-black/5 dark:border-white/5 dark:bg-white/[0.02] dark:hover:bg-white/5"
+                          : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                      }`}
+                      data-testid={`notification-${notification.id}`}
+                    >
+                      {!notification.read && (
+                        <span className="absolute right-4 top-4 h-2 w-2 rounded-full bg-blue-500" />
+                      )}
+                      <h4 className={`text-sm font-semibold ${notification.read ? "text-black/60 dark:text-white/60" : "text-black dark:text-white"}`}>
+                        {notification.title}
+                      </h4>
+                      <p className={`mt-1 text-sm ${notification.read ? "text-black/40 dark:text-white/40" : "text-black/60 dark:text-white/60"}`}>
+                        {notification.message}
+                      </p>
+                      <span className="mt-2 block text-xs text-black/40 dark:text-white/40">
+                        {notification.time}
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="border-t border-black/10 dark:border-white/10 p-4">
+                <button
+                  className="w-full rounded-2xl border border-black/10 bg-black/5 px-4 py-3 text-sm font-medium text-black/70 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                  data-testid="button-mark-all-read"
+                >
+                  Mark all as read
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function TopBar({
   role,
   active,
@@ -652,6 +786,8 @@ function TopBar({
   userAvatar?: string | null;
   onLogout?: () => void;
 }) {
+  const [showNotifications, setShowNotifications] = useState(false);
+  
   const title = useMemo(() => {
     const map: Record<string, string> = {
       overview: "Overview",
@@ -737,12 +873,19 @@ function TopBar({
               Create
             </Button>
             <button
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+              onClick={() => setShowNotifications(true)}
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
               data-testid="button-notifications"
               aria-label="Notifications"
             >
               <Bell className="h-4 w-4" />
+              {sampleNotifications.filter(n => !n.read).length > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {sampleNotifications.filter(n => !n.read).length}
+                </span>
+              )}
             </button>
+            <NotificationsPanel isOpen={showNotifications} onClose={() => setShowNotifications(false)} />
 
             {userName && (
               <DropdownMenu>
