@@ -1387,11 +1387,13 @@ export default function CommandCenterPage() {
                             <div className="truncate text-sm font-semibold" data-testid={`text-social-post-title-${p.id}`}>
                               {p.title}
                             </div>
-                            <div className="mt-1 truncate text-xs text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
-                              {p.subtitle}
-                            </div>
-                            <div className="mt-1 text-xs text-black/35 dark:text-white/35" data-testid={`text-social-post-time-${p.id}`}>
-                              {p.time}
+                            <div className="mt-1 flex items-center gap-2 text-xs">
+                              <span className="truncate text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
+                                {p.subtitle}
+                              </span>
+                              <span className="text-black/35 dark:text-white/35" data-testid={`text-social-post-time-${p.id}`}>
+                                {p.time}
+                              </span>
                             </div>
                           </div>
                           <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-black/40 transition group-hover:translate-x-0.5 dark:text-white/45" />
