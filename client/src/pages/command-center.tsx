@@ -727,10 +727,12 @@ export default function CommandCenterPage() {
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-pipeline">
                     Pipeline
                   </TabsTrigger>
-                  <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-calendar">
-                    Calendar
+                  <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-social-posts">
+                    Social Posts
                   </TabsTrigger>
-                  <TabsTrigger value="news" className="rounded-xl" data-testid="tab-news">TheHub</TabsTrigger>
+                  <TabsTrigger value="news" className="rounded-xl" data-testid="tab-news">
+                    News
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -876,41 +878,111 @@ export default function CommandCenterPage() {
               </TabsContent>
 
               <TabsContent value="calendar" className="mt-0">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="rounded-3xl border border-black/10 bg-black/5 p-4 dark:border-white/10 dark:bg-white/5"
-                      data-testid={`card-calendar-${i}`}
+                <div className="space-y-3" data-testid="panel-social-posts">
+                  {([
+                    {
+                      id: "post-001",
+                      title: "Maldives Winter Escape — from £2,495pp",
+                      meta: "Quote #Q-1082 · 7 nights · BAA → MLE",
+                      audience: "Facebook",
+                      status: "Scheduled",
+                      time: "Today 18:00",
+                      copy:
+                        "Limited winter availability. Premium overwater villas + transfers included. Reply ‘MALDIVES’ for a tailored quote.",
+                    },
+                    {
+                      id: "post-002",
+                      title: "Rome & Amalfi — from £1,349pp",
+                      meta: "Quote #Q-1075 · 5 nights · LGW → FCO",
+                      audience: "Facebook",
+                      status: "Draft",
+                      time: "Needs approval",
+                      copy:
+                        "A classic split-stay: 2 nights Rome, 3 nights Amalfi. Add private transfers and a sunset cruise.",
+                    },
+                    {
+                      id: "post-003",
+                      title: "Dubai Half-Term — from £1,199pp",
+                      meta: "Quote #Q-1069 · 4 nights · MAN → DXB",
+                      audience: "Facebook",
+                      status: "Posted",
+                      time: "Yesterday",
+                      copy:
+                        "Family-ready luxury with pool access and late checkout options. Ask for our upgrade shortlist.",
+                    },
+                    {
+                      id: "post-004",
+                      title: "New York City Weekend — from £899pp",
+                      meta: "Quote #Q-1058 · 3 nights · LHR → JFK",
+                      audience: "Facebook",
+                      status: "Draft",
+                      time: "In review",
+                      copy:
+                        "A sharp city break with premium hotel options. Add Broadway tickets and airport lounge access.",
+                    },
+                  ] as const).map((p) => (
+                    <button
+                      key={p.id}
+                      className="group w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                      data-testid={`card-social-post-${p.id}`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold" data-testid={`text-calendar-title-${i}`}>
-                          {i % 2 === 0 ? "Client call" : "Quote review"}
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="truncate text-sm font-semibold"
+                              data-testid={`text-social-post-title-${p.id}`}
+                            >
+                              {p.title}
+                            </div>
+                            <span
+                              className="text-xs text-black/35 dark:text-white/35"
+                              data-testid={`text-social-post-time-${p.id}`}
+                            >
+                              {p.time}
+                            </span>
+                          </div>
+
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55 dark:text-white/55">
+                            <span data-testid={`text-social-post-meta-${p.id}`}>{p.meta}</span>
+                            <span className="text-black/25 dark:text-white/25">•</span>
+                            <span data-testid={`text-social-post-audience-${p.id}`}>{p.audience}</span>
+                          </div>
+
+                          <div
+                            className="mt-2 line-clamp-2 text-xs text-black/60 dark:text-white/60"
+                            data-testid={`text-social-post-copy-${p.id}`}
+                          >
+                            {p.copy}
+                          </div>
+
+                          <div className="mt-3 flex items-center gap-2">
+                            <span
+                              className={
+                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
+                                (p.status === "Posted"
+                                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                  : p.status === "Scheduled"
+                                    ? "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                                    : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300")
+                              }
+                              data-testid={`status-social-post-${p.id}`}
+                            >
+                              {p.status}
+                            </span>
+
+                            <span
+                              className="inline-flex items-center rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
+                              data-testid={`pill-social-post-origin-${p.id}`}
+                            >
+                              From quote
+                            </span>
+                          </div>
                         </div>
-                        <Badge
-                          variant="outline"
-                          className="rounded-full border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/80"
-                          data-testid={`status-calendar-${i}`}
-                        >
-                          {i % 2 === 0 ? "Today" : "Tomorrow"}
-                        </Badge>
+
+                        <ChevronRight className="mt-1 h-4 w-4 text-black/40 transition group-hover:translate-x-0.5 dark:text-white/45" />
                       </div>
-                      <div className="mt-2 text-xs text-black/55 dark:text-white/55" data-testid={`text-calendar-meta-${i}`}>
-                        {i % 2 === 0 ? "15 min · high intent lead" : "30 min · adjust inclusions + margin"}
-                      </div>
-                      <div className="mt-3 flex items-center justify-between">
-                        <div className="text-xs text-black/55 dark:text-white/55" data-testid={`text-calendar-time-${i}`}>
-                          {i % 2 === 0 ? "14:30" : "11:00"}
-                        </div>
-                        <button
-                          className="inline-flex items-center gap-1 text-xs text-black/70 transition hover:text-black dark:text-white/70 dark:hover:text-white"
-                          data-testid={`button-calendar-open-${i}`}
-                        >
-                          Open
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </TabsContent>
