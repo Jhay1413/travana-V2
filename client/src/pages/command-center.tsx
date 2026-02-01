@@ -48,6 +48,7 @@ import {
   Camera,
   Smartphone,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -2555,6 +2556,32 @@ export default function CommandCenterPage() {
       }
 
       if (active === "tour-operators") {
+        const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const lines = text.split("\n").filter(line => line.trim());
+            const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+            for (let i = 1; i < lines.length; i++) {
+              const values = lines[i].split(",").map(v => v.trim());
+              const row: Record<string, string> = {};
+              headers.forEach((h, idx) => { row[h] = values[idx] || ""; });
+              createTourOperatorMutation.mutate({
+                name: row.name || row["operator name"] || "",
+                holidayType: row.holidaytype || row["holiday type"] || row.type || "",
+                commissionPercent: row.commission || row.commissionpercent || row["commission %"] || "10",
+                username: row.username || row.user || "",
+                password: row.password || row.pass || "",
+                contact: row.contact || row.email || row.phone || "",
+              });
+            }
+          };
+          reader.readAsText(file);
+          e.target.value = "";
+        };
+
         return (
           <section>
             <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
@@ -2563,23 +2590,38 @@ export default function CommandCenterPage() {
                   <div className="text-sm font-semibold" data-testid="text-tour-operators-title">Tour Operators</div>
                   <div className="text-xs text-muted-foreground">Manage your tour operator partnerships.</div>
                 </div>
-                <Button
-                  onClick={() => {
-                    const name = prompt("Enter operator name:");
-                    if (!name) return;
-                    const holidayType = prompt("Holiday type (e.g. Beach, Ski, Adventure):") || "";
-                    const commissionPercent = prompt("Commission % (e.g. 10):") || "10";
-                    const username = prompt("Login username:") || "";
-                    const password = prompt("Login password:") || "";
-                    const contact = prompt("Contact info:") || "";
-                    createTourOperatorMutation.mutate({ name, holidayType, commissionPercent, username, password, contact });
-                  }}
-                  className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
-                  data-testid="button-add-tour-operator"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Operator
-                </Button>
+                <div className="flex gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".csv,.txt"
+                      className="hidden"
+                      onChange={handleCsvUpload}
+                      data-testid="input-csv-upload"
+                    />
+                    <span className="inline-flex items-center rounded-2xl border border-black/10 bg-black/5 px-4 py-2 text-sm font-medium text-black hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload CSV
+                    </span>
+                  </label>
+                  <Button
+                    onClick={() => {
+                      const name = prompt("Enter operator name:");
+                      if (!name) return;
+                      const holidayType = prompt("Holiday type (e.g. Beach, Ski, Adventure):") || "";
+                      const commissionPercent = prompt("Commission % (e.g. 10):") || "10";
+                      const username = prompt("Login username:") || "";
+                      const password = prompt("Login password:") || "";
+                      const contact = prompt("Contact info:") || "";
+                      createTourOperatorMutation.mutate({ name, holidayType, commissionPercent, username, password, contact });
+                    }}
+                    className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                    data-testid="button-add-tour-operator"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Operator
+                  </Button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
