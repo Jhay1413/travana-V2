@@ -880,8 +880,8 @@ export default function CommandCenterPage() {
               </TabsContent>
 
               <TabsContent value="calendar" className="mt-0">
-                <div className="space-y-3" data-testid="panel-social-posts">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="grid gap-3 md:grid-cols-2" data-testid="panel-social-posts">
+                  <div className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-social-filters">
                       <button
                         type="button"
