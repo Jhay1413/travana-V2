@@ -442,107 +442,51 @@ function ShellNav({
 
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
-        <div className="space-y-2">
-          <div className="px-1 text-[11px] font-semibold tracking-wide text-black/45 dark:text-white/45" data-testid="text-connect-title">
-            Connect
-          </div>
-          <div className="grid gap-2">
-            <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-              data-testid="button-connect-whatsapp"
-            >
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
-                  <MessageSquare className="h-4 w-4 text-black/70 dark:text-white/80" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold" data-testid="text-connect-whatsapp-title">WhatsApp</div>
-                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-whatsapp-sub">Fast client comms</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-            </button>
+        <div className="space-y-1" data-testid="section-connect">
+          {["whatsapp", "facebook", "instagram", "email", "internal-chat", "phone"].map((key) => {
+            const map: Record<string, { label: string; icon: React.ReactNode }> = {
+              whatsapp: { label: "WhatsApp", icon: <MessageSquare className="h-4 w-4" /> },
+              facebook: { label: "Facebook", icon: <Users className="h-4 w-4" /> },
+              instagram: { label: "Instagram", icon: <Sparkles className="h-4 w-4" /> },
+              email: { label: "Email", icon: <Mail className="h-4 w-4" /> },
+              "internal-chat": { label: "Internal chat", icon: <MessageSquare className="h-4 w-4" /> },
+              phone: { label: "Phone", icon: <Phone className="h-4 w-4" /> },
+            };
+            const item = map[key];
+            const isActive = active === `connect-${key}`;
 
-            <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-              data-testid="button-connect-facebook"
-            >
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
-                  <Users className="h-4 w-4 text-black/70 dark:text-white/80" />
+            return (
+              <button
+                key={key}
+                onClick={() => onActiveChange(`connect-${key}`)}
+                className={
+                  "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                  (isActive
+                    ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                    : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                }
+                data-testid={`nav-connect-${key}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={
+                      "inline-flex h-8 w-8 items-center justify-center rounded-xl border " +
+                      (isActive
+                        ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                        : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                    }
+                    aria-hidden
+                  >
+                    <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                  </span>
+                  <span className="text-sm font-medium" data-testid={`text-connect-label-${key}`}>{item.label}</span>
                 </div>
-                <div>
-                  <div className="text-sm font-semibold" data-testid="text-connect-facebook-title">Facebook</div>
-                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-facebook-sub">Messenger + Pages</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-            </button>
-
-            <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-              data-testid="button-connect-instagram"
-            >
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
-                  <Sparkles className="h-4 w-4 text-black/70 dark:text-white/80" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold" data-testid="text-connect-instagram-title">Instagram</div>
-                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-instagram-sub">DMs + story replies</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-            </button>
-
-            <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-              data-testid="button-connect-email"
-            >
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
-                  <Mail className="h-4 w-4 text-black/70 dark:text-white/80" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold" data-testid="text-connect-email-title">Email</div>
-                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-email-sub">Templates + tracking</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-            </button>
-
-            <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-              data-testid="button-connect-internal-chat"
-            >
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
-                  <MessageSquare className="h-4 w-4 text-black/70 dark:text-white/80" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold" data-testid="text-connect-internal-chat-title">Internal chat</div>
-                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-internal-chat-sub">Team handoffs + notes</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-            </button>
-
-            <button
-              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-              data-testid="button-connect-phone"
-            >
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
-                  <Phone className="h-4 w-4 text-black/70 dark:text-white/80" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold" data-testid="text-connect-phone-title">Phone</div>
-                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-phone-sub">Click-to-call log</div>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-            </button>
-          </div>
+                <ChevronRight
+                  className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                />
+              </button>
+            );
+          })}
         </div>
       </div>
     </aside>
