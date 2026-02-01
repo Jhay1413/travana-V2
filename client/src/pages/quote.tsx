@@ -326,14 +326,21 @@ export default function QuotePage() {
                           {currency.format(quote.commissions.price)}
                         </span>
                       </div>
-                      <div className="mt-1 text-sm text-black/55" data-testid="text-itinerary-location">
-                        {quote.destination}
+                      <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
+                        <span className="text-sm text-black/55" data-testid="text-itinerary-location">{quote.destination}</span>
+                        <div className="flex flex-wrap items-center gap-2" data-testid="list-itinerary-tags-inline">
+                          {"VIP, Family".split(", ").map((t) => (
+                            <span
+                              key={t}
+                              className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70"
+                              data-testid={`pill-itinerary-tag-${t}`}
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-
-                    <Badge className="w-fit rounded-full border-black/10 bg-white/70 text-black/70" data-testid="badge-package-type">
-                      {quote.packageType}
-                    </Badge>
                   </div>
 
                   <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
