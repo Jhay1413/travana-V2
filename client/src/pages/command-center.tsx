@@ -1411,12 +1411,6 @@ export default function CommandCenterPage() {
                               >
                                 {p.status}
                               </span>
-                              <span
-                                className="inline-flex items-center rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
-                                data-testid={`pill-social-post-origin-${p.id}`}
-                              >
-                                From quote
-                              </span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-black/55 dark:text-white/55">
                               <span data-testid={`text-social-post-quote-${p.id}`}>Quote #{p.quoteId}</span>
