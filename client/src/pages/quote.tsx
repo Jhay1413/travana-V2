@@ -294,16 +294,13 @@ export default function QuotePage() {
 
                 <div className="min-w-0" data-testid="section-itinerary-summary">
                   <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between" data-testid="row-itinerary-top">
-                    <div className="min-w-0">
-                      <div className="flex items-start gap-2" data-testid="row-itinerary-title">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3" data-testid="row-itinerary-title">
                         <div className="min-w-0" data-testid="col-itinerary-title-left">
                           <div className="truncate text-base font-semibold" data-testid="text-itinerary-quote-title">
                             {quote.quoteTitle}
                           </div>
                         </div>
-                      </div>
-
-                      <div className="mt-2 flex items-center justify-end" data-testid="row-itinerary-owner-far-right">
                         <span
                           className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
                           data-testid="pill-itinerary-owner"
