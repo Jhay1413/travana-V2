@@ -319,6 +319,7 @@ function ShellNav({
             label: "Agent Tools",
             icon: <Users className="h-4 w-4" />,
             items: [
+              { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
@@ -1083,12 +1084,312 @@ export default function CommandCenterPage() {
   }, [dashboardStats, allClients]);
 
   const content = useMemo(() => {
+    // Agent Overview - dashboard for agent users
+    const isAgentOverview = (role === "Agent" && active === "overview") || 
+                            (role === "Admin" && active === "agent-overview");
+    
+    if (isAgentOverview) {
+      return (
+        <section className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
+          <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <div className="text-sm font-medium" data-testid="text-overview-title">
+                  Overview
+                </div>
+                <div className="text-xs text-muted-foreground" data-testid="text-overview-subtitle">
+                  Your dashboard at a glance.
+                </div>
+              </div>
+
+              <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+                <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-overview">
+                  <TabsTrigger value="clients" className="rounded-xl" data-testid="tab-overview-clients">
+                    Clients
+                  </TabsTrigger>
+                  <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-overview-pipeline">
+                    Pipeline
+                  </TabsTrigger>
+                  <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-overview-social">
+                    Social Posts
+                  </TabsTrigger>
+                  <TabsTrigger value="news" className="rounded-xl" data-testid="tab-overview-news">
+                    News
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+            <Tabs value={tab}>
+              <TabsContent value="clients" className="mt-0">
+                <div className="grid gap-3">
+                  {clients.map((c, idx) => (
+                    <motion.button
+                      key={c.id}
+                      className="group relative w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                      data-testid={`card-overview-client-${c.id}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.28, delay: idx * 0.03 }}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                              aria-hidden
+                            >
+                              <UserRound className="h-4 w-4 text-black/70 dark:text-white/80" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className="truncate text-sm font-semibold" data-testid={`text-overview-client-name-${c.id}`}>
+                                  {c.name}
+                                </div>
+                                <span className="text-xs text-black/35 dark:text-white/35">
+                                  {c.id.slice(0, 8)}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className={`rounded-full ${tierPill(c.tier)}`}
+                                >
+                                  {c.tier}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className={`rounded-full ${stagePill(c.stage)}`}
+                                >
+                                  {c.stage}
+                                </Badge>
+                                <div className="inline-flex items-center gap-1 text-xs text-black/60 dark:text-white/60">
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  <span>{c.location}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 grid gap-1">
+                            <div className="text-xs text-black/45 dark:text-white/45">
+                              Next trip
+                            </div>
+                            <div className="truncate text-sm">
+                              {c.nextTrip}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <div className="text-sm font-semibold">
+                            {currency.format(c.value)}
+                          </div>
+                          <div className="text-xs text-black/45 dark:text-white/45">
+                            Last touch: {c.lastTouch}
+                          </div>
+                          <div className="mt-2 inline-flex items-center gap-1 text-xs text-black/65 dark:text-white/65">
+                            <span>Open</span>
+                            <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="pipeline" className="mt-0">
+                <div className="grid gap-3 md:grid-cols-3">
+                  {([
+                    { stage: "Enquiry" as const, hint: "New inbound" },
+                    { stage: "Quote" as const, hint: "In progress" },
+                    { stage: "Booked" as const, hint: "Confirmed" },
+                  ] as const).map((col) => {
+                    const items = allClients.filter((c) => c.stage === col.stage);
+                    const sum = items.reduce((s, i) => s + i.value, 0);
+                    return (
+                      <div key={col.stage} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <div className="text-sm font-semibold">
+                              {col.stage}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {col.hint} · {items.length} items
+                            </div>
+                          </div>
+                          <div className="text-xs text-black/60 dark:text-white/60">
+                            {currency.format(sum)}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {items.map((c) => (
+                            <div
+                              key={c.id}
+                              className="rounded-2xl border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/5"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="truncate text-sm font-medium">{c.name}</div>
+                                <div className="text-xs font-medium">{currency.format(c.value)}</div>
+                              </div>
+                              <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55">
+                                {c.nextTrip}
+                              </div>
+                            </div>
+                          ))}
+                          {items.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-black/10 p-3 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45">
+                              No items
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="calendar" className="mt-0">
+                <div className="grid gap-3">
+                  {[
+                    { id: 1, title: "Summer promotion", platform: "Instagram", time: "10:00", status: "scheduled" },
+                    { id: 2, title: "Maldives deals", platform: "Facebook", time: "14:00", status: "scheduled" },
+                    { id: 3, title: "Client testimonial", platform: "LinkedIn", time: "16:30", status: "draft" },
+                  ].map((post) => (
+                    <div
+                      key={post.id}
+                      className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/5"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-medium">{post.title}</div>
+                          <Badge variant="outline" className="rounded-full text-xs">
+                            {post.status}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-black/55 dark:text-white/55">
+                          {post.platform} · {post.time}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-black/40 dark:text-white/40" />
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="news" className="mt-0">
+                <div className="grid gap-3">
+                  {[
+                    { title: "Travel trends 2026", src: "Skift", time: "2h ago" },
+                    { title: "New BA routes to Asia", src: "TTG", time: "5h ago" },
+                    { title: "ABTA conference highlights", src: "Travel Weekly", time: "1d ago" },
+                  ].map((n, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/5"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{n.title}</div>
+                        <div className="text-xs text-black/55 dark:text-white/55">
+                          {n.src} · {n.time}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-black/40 dark:text-white/40" />
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </Card>
+
+          <div className="flex flex-col gap-4">
+            <Card className="glass ringed grain rounded-3xl p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs text-black/70 dark:text-white/70">Pipeline</div>
+                  <div className="title-serif text-2xl font-bold tabular-nums" data-testid="text-pipeline-total">
+                    {currency.format(totals.bookedValue + totals.openValue)}
+                  </div>
+                </div>
+                <CircleDollarSign className="h-6 w-6 text-black/40 dark:text-white/40" />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-black/55 dark:text-white/55">Booked</div>
+                  <div className="font-medium">{currency.format(totals.bookedValue)}</div>
+                </div>
+                <div className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+                  <div className="text-black/55 dark:text-white/55">Open</div>
+                  <div className="font-medium">{currency.format(totals.openValue)}</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="glass ringed grain rounded-3xl p-4">
+              <div className="space-y-1">
+                <div className="text-xs text-black/70 dark:text-white/70">Activity</div>
+                <div className="title-serif text-lg font-semibold">Recent</div>
+              </div>
+              <div className="mt-3 space-y-2">
+                {[
+                  { id: 1, action: "Quote sent", client: "Ava Harrington", meta: "2h ago" },
+                  { id: 2, action: "Booking confirmed", client: "James Whitmore", meta: "Yesterday" },
+                  { id: 3, action: "New enquiry", client: "Emma Richardson", meta: "2d ago" },
+                ].map((a) => (
+                  <button
+                    key={a.id}
+                    className="flex w-full items-start gap-3 rounded-2xl border border-black/10 bg-black/5 p-3 text-left hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                  >
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      <Activity className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-sm font-medium">{a.action}</div>
+                        <div className="shrink-0 text-xs text-black/45 dark:text-white/45">{a.meta}</div>
+                      </div>
+                      <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55">{a.client}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </Card>
+
+            <div className="rounded-3xl border border-black/10 bg-black/5 p-4 ringed dark:border-white/10 dark:bg-white/5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs text-black/70 dark:text-white/70">Assist</div>
+                  <div className="title-serif text-lg font-semibold">Next-best actions</div>
+                  <div className="text-xs text-black/55 dark:text-white/55">
+                    High intent leads and at-risk quotes detected.
+                  </div>
+                </div>
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                  <Sparkles className="h-5 w-5 text-black/70 dark:text-white/80" />
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2">
+                <div className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
+                  Refresh Noah's quote with alternative departure airport (+£320 margin).
+                </div>
+                <div className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
+                  Sofia's enquiry: propose two itineraries, one adventure-forward.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+    
     // Show Agent workspace for Agents, or for Admins when viewing agent sections
     const agentSections = ["clients", "enquiries", "quotes", "bookings"];
-    const showAgentContent = (role === "Agent" && ["overview", ...agentSections].includes(active)) || 
+    const showAgentContent = (role === "Agent" && agentSections.includes(active)) || 
                              (role === "Admin" && agentSections.includes(active));
-    
-    console.log("Content render - role:", role, "active:", active, "showAgentContent:", showAgentContent);
     
     if (showAgentContent) {
       return (
