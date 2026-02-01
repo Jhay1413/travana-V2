@@ -459,7 +459,7 @@ function ShellNav({
             </div>
           </div>
         </div>
-        <Separator className="mt-2 mb-1 bg-black/10 dark:bg-white/10" data-testid="separator-connect" />
+        <Separator className="mt-3 mb-1 bg-black/10 dark:bg-white/10" data-testid="separator-connect" />
 
         <div className="space-y-1" data-testid="section-connect">
           {["whatsapp", "facebook", "instagram", "email", "internal-chat"].map((key) => {
