@@ -313,8 +313,9 @@ function ShellNav({
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
-              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
-              { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
+              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: [
+                { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
+              ] },
             ],
           },
           {
@@ -454,39 +455,65 @@ function ShellNav({
                       >
                         {section.items.map((item) => {
                           const isActive = active === item.key;
+                          const hasChildren = item.children && item.children.length > 0;
+                          const childActive = hasChildren && item.children.some((c: { key: string }) => active === c.key);
                           return (
-                            <button
-                              key={item.key}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onActiveChange(item.key);
-                              }}
-                              className={
-                                "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
-                                (isActive
-                                  ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-                                  : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
-                              }
-                              data-testid={`nav-${item.key}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <span
-                                  className={
-                                    "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
-                                    (isActive
-                                      ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
-                                      : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
-                                  }
-                                  aria-hidden
-                                >
-                                  <span className="text-black/70 dark:text-white/80">{item.icon}</span>
-                                </span>
-                                <span className="text-sm font-medium">{item.label}</span>
-                              </div>
-                              <ChevronRight
-                                className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
-                              />
-                            </button>
+                            <div key={item.key}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onActiveChange(item.key);
+                                }}
+                                className={
+                                  "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                                  (isActive || childActive
+                                    ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                    : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                                }
+                                data-testid={`nav-${item.key}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span
+                                    className={
+                                      "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
+                                      (isActive || childActive
+                                        ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                        : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                                    }
+                                    aria-hidden
+                                  >
+                                    <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                                  </span>
+                                  <span className="text-sm font-medium">{item.label}</span>
+                                </div>
+                                <ChevronRight
+                                  className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                                />
+                              </button>
+                              {hasChildren && (isActive || childActive) && (
+                                <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
+                                  {item.children.map((child: { key: string; label: string; icon: React.ReactNode }) => (
+                                    <button
+                                      key={child.key}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onActiveChange(child.key);
+                                      }}
+                                      className={
+                                        "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
+                                        (active === child.key
+                                          ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                          : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                      }
+                                      data-testid={`nav-${child.key}`}
+                                    >
+                                      <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                      <span>{child.label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                       </motion.div>
