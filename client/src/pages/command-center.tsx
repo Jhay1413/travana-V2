@@ -362,20 +362,21 @@ function ShellNav({
                 className="glass ringed w-56 rounded-2xl border-black/10 bg-[hsl(var(--popover))] p-2 dark:border-white/10"
                 data-testid="menu-role"
               >
-              <DropdownMenuLabel className="text-xs text-black/70 dark:text-white/70">Access profile</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-black/10 dark:bg-white/10" />
-              {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
-                <DropdownMenuItem
-                  key={r}
-                  className="cursor-pointer rounded-xl text-sm text-black/85 focus:bg-black/5 focus:text-black dark:text-white/85 dark:focus:bg-white/10 dark:focus:text-white"
-                  onSelect={() => onRoleChange(r)}
-                  data-testid={`menuitem-role-${r.toLowerCase()}`}
-                >
-                  {r}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuLabel className="text-xs text-black/70 dark:text-white/70">Access profile</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-black/10 dark:bg-white/10" />
+                {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                  <DropdownMenuItem
+                    key={r}
+                    className="cursor-pointer rounded-xl text-sm text-black/85 focus:bg-black/5 focus:text-black dark:text-white/85 dark:focus:bg-white/10 dark:focus:text-white"
+                    onSelect={() => onRoleChange(r)}
+                    data-testid={`menuitem-role-${r.toLowerCase()}`}
+                  >
+                    {r}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
