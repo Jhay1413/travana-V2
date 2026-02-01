@@ -442,6 +442,24 @@ function ShellNav({
 
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
+        <div className="flex items-center gap-3 px-3 pb-2">
+          <div
+            className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+            data-testid="img-connect-mark"
+          >
+            <MessageSquare className="h-5 w-5 text-black/70 dark:text-white/85" />
+            <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
+          </div>
+          <div className="min-w-0">
+            <div className="title-serif truncate text-sm font-semibold" data-testid="text-connect-name">
+              Connect
+            </div>
+            <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-connect-sub">
+              Channels & conversations
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-1" data-testid="section-connect">
           {["whatsapp", "facebook", "instagram", "email", "internal-chat"].map((key) => {
             const map: Record<string, { label: string; icon: React.ReactNode }> = {
