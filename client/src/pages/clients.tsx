@@ -242,38 +242,6 @@ export default function ClientsPage() {
       <div className="relative min-h-[calc(100vh-56px)] w-full px-4 pb-6 md:px-6 md:pb-8">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
 
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2">
-              <div
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03] ring-1 ring-black/[0.04]"
-                data-testid="icon-clients"
-                aria-hidden
-              >
-                <Users className="h-5 w-5 text-black/70" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-clients-title">
-                  Clients
-                </h1>
-                <p className="text-sm text-black/60" data-testid="text-clients-subtitle">
-                  A premium directory with segments, quick actions, and pipeline context.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              className="rounded-2xl bg-black text-white hover:bg-black/90"
-              data-testid="button-new-client"
-              onClick={() => {}}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              New client
-            </Button>
-          </div>
-        </div>
 
         <div className="relative mt-6 grid gap-3 md:grid-cols-5">
           <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 md:col-span-3">
