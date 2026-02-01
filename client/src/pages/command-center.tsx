@@ -1307,6 +1307,7 @@ export default function CommandCenterPage() {
                       liveHref: "/command-center?quote=Q-1082",
                       audience: "Facebook",
                       status: "Scheduled",
+                      scheduledAt: "Today 18:00",
                       time: "Today 18:00",
                       copy:
                         "Limited winter availability. Premium overwater villas + transfers included. Reply ‘MALDIVES’ for a tailored quote.",
@@ -1326,6 +1327,7 @@ export default function CommandCenterPage() {
                       liveHref: "/command-center?quote=Q-1075",
                       audience: "Facebook",
                       status: "Draft",
+                      scheduledAt: "Tomorrow 10:30",
                       time: "Tomorrow 10:30",
                       copy:
                         "A classic split-stay: 2 nights Rome, 3 nights Amalfi. Add private transfers and a sunset cruise.",
@@ -1345,6 +1347,7 @@ export default function CommandCenterPage() {
                       liveHref: "/command-center?quote=Q-1069",
                       audience: "Facebook",
                       status: "Posted",
+                      scheduledAt: null,
                       time: "Yesterday",
                       copy:
                         "Family-ready luxury with pool access and late checkout options. Ask for our upgrade shortlist.",
@@ -1364,6 +1367,7 @@ export default function CommandCenterPage() {
                       liveHref: "/command-center?quote=Q-1058",
                       audience: "Facebook",
                       status: "Draft",
+                      scheduledAt: null,
                       time: "In review",
                       copy:
                         "A sharp city break with premium hotel options. Add Broadway tickets and airport lounge access.",
@@ -1409,7 +1413,7 @@ export default function CommandCenterPage() {
                                 }
                                 data-testid={`status-social-post-${p.id}`}
                               >
-                                {p.status}
+                                {p.status}{p.scheduledAt ? ` · ${p.scheduledAt}` : ""}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-black/55 dark:text-white/55">
