@@ -276,10 +276,16 @@ function ShellNav({
   role,
   active,
   onActiveChange,
+  actualRole,
+  rolePreview,
+  onRoleChange,
 }: {
   role: Role;
   active: string;
   onActiveChange: (k: string) => void;
+  actualRole: Role;
+  rolePreview: Role | null;
+  onRoleChange: (role: Role | null) => void;
 }) {
   const [, navigate] = useLocation();
   const nav = useMemo(() => {
@@ -390,14 +396,21 @@ function ShellNav({
             </div>
           </div>
 
-          <div
-            className="inline-flex items-center rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs font-medium text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/80"
-            data-testid="badge-role"
+          <select
+            value={rolePreview || actualRole}
+            onChange={(e) => {
+              const newRole = e.target.value as Role;
+              onRoleChange(newRole === actualRole ? null : newRole);
+            }}
+            className="rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
+            data-testid="select-role-nav"
           >
-            <span className="inline-flex h-6 items-center rounded-full bg-black/10 px-2 text-[11px] text-black/70 dark:bg-white/10 dark:text-white/80">
-              {role}
-            </span>
-          </div>
+            {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+              <option key={r} value={r} className="text-black bg-white">
+                {r}{r === actualRole ? " ✓" : ""}
+              </option>
+            ))}
+          </select>
         </div>
 
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
@@ -2302,7 +2315,14 @@ export default function CommandCenterPage() {
       <div className="app-shell px-2 py-2 md:px-3 md:py-3 lg:px-4 lg:py-4">
         <div className="w-full space-y-3">
           <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
-            <ShellNav role={role} active={active} onActiveChange={setActive} />
+            <ShellNav 
+              role={role} 
+              active={active} 
+              onActiveChange={setActive}
+              actualRole={actualRole}
+              rolePreview={rolePreview}
+              onRoleChange={setRolePreview}
+            />
 
             <div className="flex flex-col gap-3">
               <TopBar
