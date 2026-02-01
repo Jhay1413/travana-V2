@@ -277,6 +277,12 @@ function computePaxTotal(p: QuotePassenger) {
   return p.adults + p.children + p.infants;
 }
 
+function formatUKDate(value: string) {
+  const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value.trim());
+  if (!m) return value;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
 const seedQuote: Quote = {
   id: "Q-00038",
   packageType: "Package (Flight + Hotel)",
@@ -893,7 +899,7 @@ export default function ClientPage() {
                                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
                                       <span data-testid={`text-quote-destination-${q.id}`}>{q.destination}</span>
                                       <span className="text-black/25">•</span>
-                                      <span data-testid={`text-quote-traveldate-${q.id}`}>{q.travelDate}</span>
+                                      <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
                                       <span className="text-black/25">•</span>
                                       <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt}</span>
                                     </div>
