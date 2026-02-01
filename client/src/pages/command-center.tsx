@@ -1340,7 +1340,7 @@ export default function CommandCenterPage() {
                 onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
               />
 
-              <section className="grid gap-3 md:grid-cols-3">
+              <section className="grid gap-3 md:grid-cols-4">
                 <KpiCard
                   label="Today's Profit"
                   value={currency.format(totals.bookedValue)}
@@ -1355,6 +1355,12 @@ export default function CommandCenterPage() {
                 />
                 <KpiCard
                   label="This Month"
+                  value={currency.format(totals.avgDeal)}
+                  delta="Premium mix"
+                  icon={<Briefcase className="h-4 w-4" />}
+                />
+                <KpiCard
+                  label="Average Deal"
                   value={currency.format(totals.avgDeal)}
                   delta="Premium mix"
                   icon={<Briefcase className="h-4 w-4" />}
