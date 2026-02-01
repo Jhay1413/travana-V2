@@ -240,8 +240,6 @@ export default function ClientsPage() {
       onToggleTheme={() => {}}
     >
       <div className="relative min-h-[calc(100vh-56px)] w-full px-4 pb-6 md:px-6 md:pb-8">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
-
 
         <div className="relative mt-6 grid gap-3 md:grid-cols-5">
           <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 md:col-span-3">
