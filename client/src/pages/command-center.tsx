@@ -884,6 +884,7 @@ export default function CommandCenterPage() {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-social-filters">
                       <button
+                        type="button"
                         onClick={() => setSocialFilter("today")}
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
@@ -896,6 +897,7 @@ export default function CommandCenterPage() {
                         Today
                       </button>
                       <button
+                        type="button"
                         onClick={() => setSocialFilter("tomorrow")}
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
@@ -908,6 +910,7 @@ export default function CommandCenterPage() {
                         Tomorrow
                       </button>
                       <button
+                        type="button"
                         onClick={() => setSocialFilter("date")}
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
