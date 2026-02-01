@@ -299,37 +299,118 @@ export default function QuotePage() {
 
           <div className="grid gap-3 lg:grid-cols-3" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-2" data-testid="card-quote-itinerary">
-              <div className="flex items-center justify-between gap-3" data-testid="row-itinerary-header">
-                <div>
-                  <div className="text-sm font-semibold" data-testid="text-itinerary-title">
-                    Itinerary
-                  </div>
-                  <div className="mt-1 text-xs text-black/55" data-testid="text-itinerary-subtitle">
-                    Travel dates, accommodation and notes.
-                  </div>
+              <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
+                <div className="relative overflow-hidden rounded-3xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
+                  <img
+                    src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    data-testid="img-itinerary-hero-photo"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0" aria-hidden />
                 </div>
-                <Badge className="rounded-full border-black/10 bg-white/70 text-black/70" data-testid="badge-package-type">
-                  {quote.packageType}
-                </Badge>
-              </div>
 
-              <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-fields">
-                <KeyValue label="Accommodation" value={quote.accommodation.property} testid="kv-accommodation" />
-                <KeyValue label="Board" value={quote.accommodation.board} testid="kv-board" />
-                <KeyValue label="Room" value={quote.accommodation.roomType} testid="kv-room" />
-                <KeyValue label="Special notes" value={quote.accommodation.notes} testid="kv-accom-notes" />
-              </div>
-
-              <div className="mt-3 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-quote-notes">
-                <div className="text-sm font-semibold" data-testid="text-notes-title">
-                  Notes
-                </div>
-                <div className="mt-2 grid gap-2" data-testid="list-notes">
-                  {quote.notes.map((n, idx) => (
-                    <div key={idx} className="rounded-2xl border border-black/10 bg-white/60 p-3 text-xs text-black/70" data-testid={`note-quote-${idx}`}>
-                      {n}
+                <div className="min-w-0" data-testid="section-itinerary-summary">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between" data-testid="row-itinerary-top">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2" data-testid="row-itinerary-title">
+                        <div className="truncate text-base font-semibold" data-testid="text-itinerary-quote-title">
+                          {quote.quoteTitle}
+                        </div>
+                        <span className="text-sm font-semibold text-black/85" data-testid="text-itinerary-total">
+                          {currency.format(quote.commissions.price)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm text-black/55" data-testid="text-itinerary-location">
+                        {quote.destination}
+                      </div>
                     </div>
-                  ))}
+
+                    <Badge className="w-fit rounded-full border-black/10 bg-white/70 text-black/70" data-testid="badge-package-type">
+                      {quote.packageType}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
+                    <div className="grid gap-2" data-testid="col-itinerary-left">
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-operator-label">Tour Operator</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-travel-date-label">Travel Date</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-departure-airport">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-departure-airport-label">Departure Airport</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-departure-airport-value">{quote.flights.outbound.from}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-passengers-label">Passengers</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
+                          {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-duration">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-duration-label">Duration</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-duration-value">7 nights</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-created">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-created-label">Date Created</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-created-value">{formatUKDate(quote.createdAt)}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2" data-testid="col-itinerary-right">
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-hotel-label">Hotel</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-room-label">Room Type</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-board">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-board-label">Board Basis</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-expiry">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-expiry-label">Date Expiry</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-expiry-value">{formatUKDate(quote.returnDate)}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-transfer-label">Transfer type</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-transfer-value">Private Transfer</div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-source">
+                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-source-label">Lead Source</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-source-value">Shop</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-quote-notes">
+                    <div className="text-sm font-semibold" data-testid="text-notes-title">
+                      Notes
+                    </div>
+                    <div className="mt-2 grid gap-2" data-testid="list-notes">
+                      {quote.notes.map((n, idx) => (
+                        <div key={idx} className="rounded-2xl border border-black/10 bg-white/60 p-3 text-xs text-black/70" data-testid={`note-quote-${idx}`}>
+                          {n}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card>
