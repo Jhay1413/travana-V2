@@ -682,6 +682,17 @@ export default function CommandCenterPage() {
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
+  const formatShortDate = (iso: string) => {
+    const d = new Date(iso + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+  };
+
   const themeClass = theme === "dark" ? "dark" : "";
 
   const clients = useMemo(() => {
@@ -1060,10 +1071,10 @@ export default function CommandCenterPage() {
                                 <span className="text-black/45 dark:text-white/45">Board</span>: {p.board}
                               </div>
                               <div className="truncate" data-testid={`text-social-post-travel-date-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travelDate}
+                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {formatShortDate(p.travelDate)}
                               </div>
                               <div className="truncate" data-testid={`text-social-post-created-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Date created</span>: {p.createdAt}
+                                <span className="text-black/45 dark:text-white/45">Date created</span>: {formatShortDate(p.createdAt)}
                               </div>
                             </div>
 
