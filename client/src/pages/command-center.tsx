@@ -439,6 +439,111 @@ function ShellNav({
             <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
           </button>
         </div>
+
+        <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+        <div className="space-y-2">
+          <div className="px-1 text-[11px] font-semibold tracking-wide text-black/45 dark:text-white/45" data-testid="text-connect-title">
+            Connect
+          </div>
+          <div className="grid gap-2">
+            <button
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              data-testid="button-connect-whatsapp"
+            >
+              <div className="flex items-center gap-3">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                  <MessageSquare className="h-4 w-4 text-black/70 dark:text-white/80" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" data-testid="text-connect-whatsapp-title">WhatsApp</div>
+                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-whatsapp-sub">Fast client comms</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+            </button>
+
+            <button
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              data-testid="button-connect-facebook"
+            >
+              <div className="flex items-center gap-3">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                  <Users className="h-4 w-4 text-black/70 dark:text-white/80" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" data-testid="text-connect-facebook-title">Facebook</div>
+                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-facebook-sub">Messenger + Pages</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+            </button>
+
+            <button
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              data-testid="button-connect-instagram"
+            >
+              <div className="flex items-center gap-3">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                  <Sparkles className="h-4 w-4 text-black/70 dark:text-white/80" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" data-testid="text-connect-instagram-title">Instagram</div>
+                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-instagram-sub">DMs + story replies</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+            </button>
+
+            <button
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              data-testid="button-connect-email"
+            >
+              <div className="flex items-center gap-3">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                  <Mail className="h-4 w-4 text-black/70 dark:text-white/80" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" data-testid="text-connect-email-title">Email</div>
+                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-email-sub">Templates + tracking</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+            </button>
+
+            <button
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              data-testid="button-connect-internal-chat"
+            >
+              <div className="flex items-center gap-3">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                  <MessageSquare className="h-4 w-4 text-black/70 dark:text-white/80" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" data-testid="text-connect-internal-chat-title">Internal chat</div>
+                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-internal-chat-sub">Team handoffs + notes</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+            </button>
+
+            <button
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+              data-testid="button-connect-phone"
+            >
+              <div className="flex items-center gap-3">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                  <Phone className="h-4 w-4 text-black/70 dark:text-white/80" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" data-testid="text-connect-phone-title">Phone</div>
+                  <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-connect-phone-sub">Click-to-call log</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
   );
