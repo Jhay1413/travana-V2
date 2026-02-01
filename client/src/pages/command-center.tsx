@@ -1032,6 +1032,8 @@ export default function CommandCenterPage() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [rolePreview, setRolePreview] = useState<Role | null>(null);
   const [settingsTab, setSettingsTab] = useState<"general" | "tour-operators">("general");
+  const [tourOperatorSearch, setTourOperatorSearch] = useState("");
+  const [airportSearch, setAirportSearch] = useState("");
 
   const themeClass = theme === "dark" ? "dark" : "";
   const displayName = user?.firstName || user?.name || user?.email || "User";
@@ -2619,6 +2621,12 @@ export default function CommandCenterPage() {
           e.target.value = "";
         };
 
+        const filteredTourOperators = (tourOperators || []).filter((op) => {
+          const q = tourOperatorSearch.toLowerCase();
+          if (!q) return true;
+          return [op.name, op.holidayType, op.contact || ""].join(" ").toLowerCase().includes(q);
+        });
+
         return (
           <section>
             <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
@@ -2628,6 +2636,16 @@ export default function CommandCenterPage() {
                   <div className="text-xs text-muted-foreground">Manage your tour operator partnerships.</div>
                 </div>
                 <div className="flex gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
+                    <Input
+                      placeholder="Search operators..."
+                      value={tourOperatorSearch}
+                      onChange={(e) => setTourOperatorSearch(e.target.value)}
+                      className="w-48 pl-9 rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                      data-testid="input-search-tour-operators"
+                    />
+                  </div>
                   <label className="cursor-pointer">
                     <input
                       type="file"
@@ -2674,7 +2692,7 @@ export default function CommandCenterPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(tourOperators || []).map((op) => (
+                    {filteredTourOperators.map((op) => (
                       <tr key={op.id} className="border-b border-black/5 dark:border-white/5" data-testid={`row-tour-operator-${op.id}`}>
                         <td className="py-3 px-2 font-medium">{op.name}</td>
                         <td className="py-3 px-2">{op.holidayType}</td>
@@ -2695,10 +2713,10 @@ export default function CommandCenterPage() {
                         </td>
                       </tr>
                     ))}
-                    {(!tourOperators || tourOperators.length === 0) && (
+                    {filteredTourOperators.length === 0 && (
                       <tr>
                         <td colSpan={7} className="py-8 text-center text-black/50 dark:text-white/50">
-                          No tour operators yet. Add your first operator above.
+                          {tourOperatorSearch ? "No matching operators found." : "No tour operators yet. Add your first operator above."}
                         </td>
                       </tr>
                     )}
@@ -2734,6 +2752,12 @@ export default function CommandCenterPage() {
           e.target.value = "";
         };
 
+        const filteredAirports = (airportsList || []).filter((airport) => {
+          const q = airportSearch.toLowerCase();
+          if (!q) return true;
+          return [airport.name, airport.code, airport.country].join(" ").toLowerCase().includes(q);
+        });
+
         return (
           <section>
             <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
@@ -2743,6 +2767,16 @@ export default function CommandCenterPage() {
                   <div className="text-xs text-muted-foreground">Manage airports for quotes and bookings.</div>
                 </div>
                 <div className="flex gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
+                    <Input
+                      placeholder="Search airports..."
+                      value={airportSearch}
+                      onChange={(e) => setAirportSearch(e.target.value)}
+                      className="w-48 pl-9 rounded-2xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                      data-testid="input-search-airports"
+                    />
+                  </div>
                   <label className="cursor-pointer">
                     <input
                       type="file"
@@ -2783,7 +2817,7 @@ export default function CommandCenterPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(airportsList || []).map((airport) => (
+                    {filteredAirports.map((airport) => (
                       <tr key={airport.id} className="border-b border-black/5 dark:border-white/5" data-testid={`row-airport-${airport.id}`}>
                         <td className="py-3 px-2 font-medium">{airport.name}</td>
                         <td className="py-3 px-2 font-mono">{airport.code}</td>
@@ -2801,10 +2835,10 @@ export default function CommandCenterPage() {
                         </td>
                       </tr>
                     ))}
-                    {(!airportsList || airportsList.length === 0) && (
+                    {filteredAirports.length === 0 && (
                       <tr>
                         <td colSpan={4} className="py-8 text-center text-black/50 dark:text-white/50">
-                          No airports yet. Add your first airport above.
+                          {airportSearch ? "No matching airports found." : "No airports yet. Add your first airport above."}
                         </td>
                       </tr>
                     )}
