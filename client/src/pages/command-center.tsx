@@ -1281,6 +1281,7 @@ export default function CommandCenterPage() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.28, delay: idx * 0.03 }}
+                      onClick={() => navigate(`/clients/${c.id}`)}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
@@ -1584,6 +1585,7 @@ export default function CommandCenterPage() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.28, delay: idx * 0.03 }}
+                      onClick={() => navigate(`/clients/${c.id}`)}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
