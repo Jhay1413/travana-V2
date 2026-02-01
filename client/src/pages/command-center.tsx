@@ -1045,7 +1045,7 @@ export default function CommandCenterPage() {
 
   const content = useMemo(() => {
     // Show Agent workspace for Agents, or for Admins when viewing agent sections
-    const agentSections = ["clients", "enquiries", "quotes", "bookings", "agent-settings"];
+    const agentSections = ["clients", "enquiries", "quotes", "bookings"];
     const showAgentContent = (role === "Agent" && ["overview", ...agentSections].includes(active)) || 
                              (role === "Admin" && agentSections.includes(active));
     
