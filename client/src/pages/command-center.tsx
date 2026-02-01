@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboardStats, fetchClients } from "@/lib/api";
@@ -287,50 +287,76 @@ function ShellNav({
     ];
 
     if (role === "Admin") {
-      return [
-        { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-        { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
-        { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
-        { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
-        { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
-        { key: "divider", label: "Agent Tools", icon: null },
-        { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-        { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
-        { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
-        { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
-      ];
+      return {
+        grouped: true,
+        sections: [
+          {
+            id: "admin",
+            label: "Admin",
+            icon: <Shield className="h-4 w-4" />,
+            items: [
+              { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+              { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
+              { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
+              { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
+              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+            ],
+          },
+          {
+            id: "agent",
+            label: "Agent Tools",
+            icon: <Users className="h-4 w-4" />,
+            items: [
+              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+              { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
+              { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
+              { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+            ],
+          },
+        ],
+      };
     }
 
     if (role === "Manager") {
-      return [
+      return { grouped: false, items: [
         { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
         { key: "team", label: "Team Pipeline", icon: <BarChart3 className="h-4 w-4" /> },
         { key: "coverage", label: "Coverage", icon: <Compass className="h-4 w-4" /> },
         { key: "coaching", label: "Coaching", icon: <BadgeCheck className="h-4 w-4" /> },
         { key: "reports", label: "Reports", icon: <FileText className="h-4 w-4" /> },
-      ];
+      ]};
     }
 
     if (role === "Homeworker") {
-      return [
+      return { grouped: false, items: [
         { key: "overview", label: "Work Queue", icon: <ListChecks className="h-4 w-4" /> },
         { key: "assigned", label: "Assigned Clients", icon: <Users className="h-4 w-4" /> },
         { key: "callbacks", label: "Callbacks", icon: <Phone className="h-4 w-4" /> },
         { key: "messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
-      ];
+      ]};
     }
 
     if (role === "Referer") {
-      return [
+      return { grouped: false, items: [
         { key: "overview", label: "Affiliate Hub", icon: <Link2 className="h-4 w-4" /> },
         { key: "leads", label: "Leads", icon: <Users className="h-4 w-4" /> },
         { key: "commission", label: "Commission", icon: <CircleDollarSign className="h-4 w-4" /> },
         { key: "payouts", label: "Payouts", icon: <Banknote className="h-4 w-4" /> },
-      ];
+      ]};
     }
 
-    return base;
+    return { grouped: false, items: base };
   }, [role]);
+
+  const [expandedSections, setExpandedSections] = useState<string[]>(["admin", "agent"]);
+  
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => 
+      prev.includes(sectionId) 
+        ? prev.filter(id => id !== sectionId)
+        : [...prev, sectionId]
+    );
+  };
 
   return (
     <aside className="hidden lg:block">
@@ -365,16 +391,80 @@ function ShellNav({
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
         <nav className="space-y-1">
-          {nav.map((item) => {
-            if (item.key === "divider") {
+          {nav.grouped ? (
+            nav.sections.map((section) => {
+              const isExpanded = expandedSections.includes(section.id);
               return (
-                <div key={item.key} className="pt-4 pb-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40 px-3">
-                    {item.label}
-                  </div>
+                <div key={section.id} className="space-y-1">
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
+                    data-testid={`nav-section-${section.id}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                        <span className="text-black/70 dark:text-white/80">{section.icon}</span>
+                      </span>
+                      <span className="text-sm font-semibold">{section.label}</span>
+                    </div>
+                    <motion.div
+                      animate={{ rotate: isExpanded ? 90 : 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <ChevronRight className="h-4 w-4 text-black/35 dark:text-white/40" />
+                    </motion.div>
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden pl-4"
+                      >
+                        {section.items.map((item) => {
+                          const isActive = active === item.key;
+                          return (
+                            <button
+                              key={item.key}
+                              onClick={() => (item.key === "clients" ? navigate("/clients") : onActiveChange(item.key))}
+                              className={
+                                "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                                (isActive
+                                  ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                  : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                              }
+                              data-testid={`nav-${item.key}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className={
+                                    "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
+                                    (isActive
+                                      ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                      : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                                  }
+                                  aria-hidden
+                                >
+                                  <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                                </span>
+                                <span className="text-sm font-medium">{item.label}</span>
+                              </div>
+                              <ChevronRight
+                                className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                              />
+                            </button>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               );
-            }
+            })
+          ) : (
+            nav.items.map((item) => {
             const isActive = active === item.key;
             return (
               <button
@@ -407,7 +497,8 @@ function ShellNav({
                 />
               </button>
             );
-          })}
+          })
+          )}
         </nav>
 
         <Separator className="my-4 bg-black/10 dark:bg-white/10" />
