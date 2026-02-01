@@ -48,22 +48,22 @@ const currency = new Intl.NumberFormat("en-GB", {
 function tierPill(tier: ClientTier) {
   switch (tier) {
     case "Platinum":
-      return "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300";
+      return "border-violet-500/25 bg-violet-500/10 text-violet-700";
     case "Gold":
-      return "border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-300";
+      return "border-amber-500/25 bg-amber-500/10 text-amber-800";
     default:
-      return "border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70";
+      return "border-black/10 bg-black/[0.03] text-black/70";
   }
 }
 
 function stagePill(stage: Stage) {
   switch (stage) {
     case "Booked":
-      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300";
+      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-800";
     case "Quote":
-      return "border-sky-500/25 bg-sky-500/10 text-sky-800 dark:text-sky-300";
+      return "border-sky-500/25 bg-sky-500/10 text-sky-800";
     default:
-      return "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-800 dark:text-fuchsia-300";
+      return "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-800";
   }
 }
 
@@ -218,23 +218,24 @@ export default function ClientsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
+    <div className="min-h-screen bg-white text-black">
+      <div className="relative mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_30%_0%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(60%_50%_at_70%_10%,rgba(59,130,246,0.10),transparent_60%),radial-gradient(60%_50%_at_70%_80%,rgba(168,85,247,0.08),transparent_55%)]" />
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2">
               <div
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 ring-1 ring-white/10"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03] ring-1 ring-black/[0.04]"
                 data-testid="icon-clients"
                 aria-hidden
               >
-                <Users className="h-5 w-5 text-white/85" />
+                <Users className="h-5 w-5 text-black/70" />
               </div>
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-clients-title">
                   Clients
                 </h1>
-                <p className="text-sm text-white/60" data-testid="text-clients-subtitle">
+                <p className="text-sm text-black/60" data-testid="text-clients-subtitle">
                   A premium directory with segments, quick actions, and pipeline context.
                 </p>
               </div>
@@ -244,7 +245,7 @@ export default function ClientsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
-              className="rounded-2xl bg-white/10 text-white hover:bg-white/15"
+              className="rounded-2xl border border-black/10 bg-black/[0.03] text-black hover:bg-black/[0.05]"
               data-testid="button-import-clients"
               onClick={() => {}}
             >
@@ -263,16 +264,16 @@ export default function ClientsPage() {
         </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-5">
-          <Card className="glass ringed grain rounded-3xl border-white/10 bg-white/[0.06] p-4 md:col-span-3">
+          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 md:col-span-3">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/45" />
                   <Input
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Search name, ID, destination, tags…"
-                    className="h-10 rounded-2xl border-white/10 bg-white/5 pl-10 text-white placeholder:text-white/40"
+                    className="h-10 rounded-2xl border-black/10 bg-white/70 pl-10 text-black placeholder:text-black/40"
                     data-testid="input-client-search"
                   />
                 </div>
@@ -281,7 +282,7 @@ export default function ClientsPage() {
               <div className="flex flex-wrap items-center gap-2" data-testid="group-client-filters">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
                   data-testid="button-filter-toggle"
                   onClick={() => {}}
                 >
@@ -289,7 +290,7 @@ export default function ClientsPage() {
                   Filters
                 </button>
 
-                <div className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 p-1">
+                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white/70 p-1">
                   {(["all", "Enquiry", "Quote", "Booked"] as const).map((s) => (
                     <button
                       key={s}
@@ -298,7 +299,7 @@ export default function ClientsPage() {
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
                         (stage === s
                           ? "bg-white text-black"
-                          : "text-white/75 hover:bg-white/10")
+                          : "text-black/70 hover:bg-black/[0.03]")
                       }
                       data-testid={`filter-stage-${s.toLowerCase()}`}
                       onClick={() => setStage(s as any)}
@@ -308,7 +309,7 @@ export default function ClientsPage() {
                   ))}
                 </div>
 
-                <div className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 p-1">
+                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white/70 p-1">
                   {(["all", "Platinum", "Gold", "Standard"] as const).map((t) => (
                     <button
                       key={t}
@@ -317,7 +318,7 @@ export default function ClientsPage() {
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
                         (tier === t
                           ? "bg-white text-black"
-                          : "text-white/75 hover:bg-white/10")
+                          : "text-black/70 hover:bg-black/[0.03]")
                       }
                       data-testid={`filter-tier-${t.toLowerCase()}`}
                       onClick={() => setTier(t as any)}
@@ -327,7 +328,7 @@ export default function ClientsPage() {
                   ))}
                 </div>
 
-                <div className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 p-1">
+                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white/70 p-1">
                   {([
                     { key: "value", label: "Value" },
                     { key: "lastTouch", label: "Touch" },
@@ -340,7 +341,7 @@ export default function ClientsPage() {
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
                         (sort === o.key
                           ? "bg-white text-black"
-                          : "text-white/75 hover:bg-white/10")
+                          : "text-black/70 hover:bg-black/[0.03]")
                       }
                       data-testid={`filter-sort-${o.key}`}
                       onClick={() => setSort(o.key)}
@@ -353,36 +354,36 @@ export default function ClientsPage() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3" data-testid="grid-client-kpis">
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs font-medium text-white/55" data-testid="label-kpi-total-clients">
+              <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
+                <div className="text-xs font-medium text-black/55" data-testid="label-kpi-total-clients">
                   Total clients
                 </div>
                 <div className="mt-2 text-2xl font-semibold" data-testid="value-kpi-total-clients">
                   {totals.total}
                 </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs font-medium text-white/55" data-testid="label-kpi-booked">
+              <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
+                <div className="text-xs font-medium text-black/55" data-testid="label-kpi-booked">
                   Booked
                 </div>
                 <div className="mt-2 flex items-baseline justify-between gap-3">
                   <div className="text-2xl font-semibold" data-testid="value-kpi-booked-count">
                     {totals.bookedCount}
                   </div>
-                  <div className="text-xs font-semibold text-white/75" data-testid="value-kpi-booked-value">
+                  <div className="text-xs font-semibold text-black/70" data-testid="value-kpi-booked-value">
                     {currency.format(totals.bookedValue)}
                   </div>
                 </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs font-medium text-white/55" data-testid="label-kpi-pipeline">
+              <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
+                <div className="text-xs font-medium text-black/55" data-testid="label-kpi-pipeline">
                   Pipeline
                 </div>
                 <div className="mt-2 flex items-baseline justify-between gap-3">
                   <div className="text-2xl font-semibold" data-testid="value-kpi-pipeline-count">
                     {totals.pipelineCount}
                   </div>
-                  <div className="text-xs font-semibold text-white/75" data-testid="value-kpi-pipeline-value">
+                  <div className="text-xs font-semibold text-black/70" data-testid="value-kpi-pipeline-value">
                     {currency.format(totals.pipeValue)}
                   </div>
                 </div>
@@ -391,7 +392,7 @@ export default function ClientsPage() {
 
             <div className="mt-4">
               <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-                <TabsList className="rounded-2xl border border-white/10 bg-white/5" data-testid="tabs-clients">
+                <TabsList className="rounded-2xl border border-black/10 bg-white/70" data-testid="tabs-clients">
                   <TabsTrigger value="directory" className="rounded-xl" data-testid="tab-directory">
                     Directory
                   </TabsTrigger>
@@ -412,8 +413,8 @@ export default function ClientsPage() {
                           className={
                             "group w-full rounded-3xl border p-4 text-left transition active:scale-[0.99] " +
                             (isSelected
-                              ? "border-white/25 bg-white/10"
-                              : "border-white/10 bg-white/5 hover:bg-white/8")
+                              ? "border-white/25 bg-black/[0.03]"
+                              : "border-black/10 bg-white/70 hover:bg-white/8")
                           }
                           data-testid={`row-client-${c.id}`}
                           initial={{ opacity: 0, y: 10 }}
@@ -424,11 +425,11 @@ export default function ClientsPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-3">
                                 <div
-                                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5"
+                                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70"
                                   data-testid={`avatar-client-${c.id}`}
                                   aria-hidden
                                 >
-                                  <span className="text-xs font-semibold text-white/85">{shortInitials(c.name)}</span>
+                                  <span className="text-xs font-semibold text-black/85">{shortInitials(c.name)}</span>
                                 </div>
 
                                 <div className="min-w-0">
@@ -436,7 +437,7 @@ export default function ClientsPage() {
                                     <div className="truncate text-sm font-semibold" data-testid={`text-client-name-${c.id}`}>
                                       {c.name}
                                     </div>
-                                    <span className="text-xs text-white/40" data-testid={`text-client-id-${c.id}`}>
+                                    <span className="text-xs text-black/40" data-testid={`text-client-id-${c.id}`}>
                                       {c.id}
                                     </span>
                                     <Badge
@@ -454,12 +455,12 @@ export default function ClientsPage() {
                                       {c.stage}
                                     </Badge>
                                   </div>
-                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/60">
+                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
                                     <span className="inline-flex items-center gap-1" data-testid={`text-client-location-${c.id}`}>
                                       <MapPin className="h-3.5 w-3.5" />
                                       {c.location}
                                     </span>
-                                    <span className="text-white/25">•</span>
+                                    <span className="text-black/25">•</span>
                                     <span className="truncate" data-testid={`text-client-nexttrip-${c.id}`}>
                                       {c.nextTrip}
                                     </span>
@@ -471,7 +472,7 @@ export default function ClientsPage() {
                                 {c.tags.slice(0, 3).map((t, i) => (
                                   <span
                                     key={t + i}
-                                    className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/75"
+                                    className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70"
                                     data-testid={`pill-client-tag-${c.id}-${i}`}
                                   >
                                     {t}
@@ -481,13 +482,13 @@ export default function ClientsPage() {
                             </div>
 
                             <div className="flex shrink-0 flex-col items-end gap-1">
-                              <div className="text-sm font-semibold text-white/90" data-testid={`text-client-value-${c.id}`}>
+                              <div className="text-sm font-semibold text-black/90" data-testid={`text-client-value-${c.id}`}>
                                 {currency.format(c.value)}
                               </div>
-                              <div className="text-xs text-white/50" data-testid={`text-client-lasttouch-${c.id}`}>
+                              <div className="text-xs text-black/50" data-testid={`text-client-lasttouch-${c.id}`}>
                                 Last touch: {c.lastTouch}
                               </div>
-                              <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-white/70">
+                              <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-black/70">
                                 Open
                                 <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                               </div>
@@ -499,16 +500,16 @@ export default function ClientsPage() {
 
                     {filtered.length === 0 ? (
                       <div
-                        className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center"
+                        className="rounded-3xl border border-black/10 bg-white/70 p-8 text-center"
                         data-testid="empty-client-results"
                       >
-                        <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5" aria-hidden>
-                          <Search className="h-5 w-5 text-white/70" />
+                        <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70" aria-hidden>
+                          <Search className="h-5 w-5 text-black/70" />
                         </div>
                         <div className="mt-3 text-sm font-semibold" data-testid="text-empty-title">
                           No matches
                         </div>
-                        <div className="mt-1 text-xs text-white/55" data-testid="text-empty-subtitle">
+                        <div className="mt-1 text-xs text-black/55" data-testid="text-empty-subtitle">
                           Try a different query or clear filters.
                         </div>
                       </div>
@@ -555,30 +556,30 @@ export default function ClientsPage() {
                       <button
                         key={s.id}
                         type="button"
-                        className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-5 text-left transition hover:bg-white/8"
+                        className="group relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 p-5 text-left transition hover:bg-white/8"
                         data-testid={`card-segment-${s.id}`}
                         onClick={() => {}}
                       >
                         <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${s.accent}`} />
                         <div className="relative flex items-start justify-between gap-4">
                           <div className="space-y-2">
-                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
-                              <s.icon className="h-5 w-5 text-white/85" />
+                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70">
+                              <s.icon className="h-5 w-5 text-black/85" />
                             </div>
                             <div>
                               <div className="text-sm font-semibold" data-testid={`text-segment-title-${s.id}`}>
                                 {s.title}
                               </div>
-                              <div className="mt-1 text-xs text-white/55" data-testid={`text-segment-desc-${s.id}`}>
+                              <div className="mt-1 text-xs text-black/55" data-testid={`text-segment-desc-${s.id}`}>
                                 {s.desc}
                               </div>
                             </div>
                           </div>
-                          <div className="text-xs font-semibold text-white/75" data-testid={`text-segment-count-${s.id}`}>
+                          <div className="text-xs font-semibold text-black/70" data-testid={`text-segment-count-${s.id}`}>
                             {s.count} clients
                           </div>
                         </div>
-                        <div className="relative mt-4 inline-flex items-center gap-1 text-xs font-semibold text-white/70">
+                        <div className="relative mt-4 inline-flex items-center gap-1 text-xs font-semibold text-black/70">
                           View
                           <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                         </div>
@@ -590,17 +591,17 @@ export default function ClientsPage() {
             </div>
           </Card>
 
-          <Card className="glass ringed grain rounded-3xl border-white/10 bg-white/[0.06] p-4 md:col-span-2">
+          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/[0.06] p-4 md:col-span-2">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
                 <div className="text-sm font-semibold" data-testid="text-client-panel-title">
                   Client panel
                 </div>
-                <div className="text-xs text-white/55" data-testid="text-client-panel-subtitle">
+                <div className="text-xs text-black/55" data-testid="text-client-panel-subtitle">
                   Select a client to view key details and actions.
                 </div>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/75" data-testid="badge-selected-client">
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/70" data-testid="badge-selected-client">
                 <UserRound className="h-4 w-4" />
                 {selected ? selected.id : "None"}
               </div>
@@ -609,7 +610,7 @@ export default function ClientsPage() {
             <div className="mt-4 space-y-3" data-testid="panel-client-detail">
               {selected ? (
                 <>
-                  <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-lg font-semibold" data-testid="text-selected-name">
@@ -630,14 +631,14 @@ export default function ClientsPage() {
                           >
                             {selected.stage}
                           </Badge>
-                          <span className="inline-flex items-center gap-1 text-xs text-white/60" data-testid="text-selected-location">
+                          <span className="inline-flex items-center gap-1 text-xs text-black/60" data-testid="text-selected-location">
                             <MapPin className="h-3.5 w-3.5" />
                             {selected.location}
                           </span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs text-white/55" data-testid="label-selected-value">
+                        <div className="text-xs text-black/55" data-testid="label-selected-value">
                           Deal value
                         </div>
                         <div className="mt-1 text-xl font-semibold" data-testid="text-selected-value">
@@ -647,17 +648,17 @@ export default function ClientsPage() {
                     </div>
 
                     <div className="mt-4 grid gap-2">
-                      <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70">
+                      <div className="rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs text-black/70">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-white/55" data-testid="label-selected-nexttrip">
+                          <span className="text-black/55" data-testid="label-selected-nexttrip">
                             Next trip
                           </span>
-                          <span className="inline-flex items-center gap-2 text-white/70" data-testid="value-selected-lasttouch">
-                            <span className="text-white/40">Last touch</span>
+                          <span className="inline-flex items-center gap-2 text-black/70" data-testid="value-selected-lasttouch">
+                            <span className="text-black/40">Last touch</span>
                             {selected.lastTouch}
                           </span>
                         </div>
-                        <div className="mt-1 text-sm text-white/85" data-testid="text-selected-nexttrip">
+                        <div className="mt-1 text-sm text-black/85" data-testid="text-selected-nexttrip">
                           {selected.nextTrip}
                         </div>
                       </div>
@@ -665,7 +666,7 @@ export default function ClientsPage() {
                       <div className="grid gap-2 md:grid-cols-2">
                         <button
                           type="button"
-                          className="group rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10"
+                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
                           data-testid="button-action-call"
                           onClick={() => {}}
                         >
@@ -674,16 +675,16 @@ export default function ClientsPage() {
                               <Phone className="h-4 w-4" />
                               Call
                             </span>
-                            <ChevronRight className="h-4 w-4 text-white/45 transition group-hover:translate-x-0.5" />
+                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
                           </div>
-                          <div className="mt-1 truncate text-xs text-white/55" data-testid="text-selected-phone">
+                          <div className="mt-1 truncate text-xs text-black/55" data-testid="text-selected-phone">
                             {selected.phone}
                           </div>
                         </button>
 
                         <button
                           type="button"
-                          className="group rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10"
+                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
                           data-testid="button-action-email"
                           onClick={() => {}}
                         >
@@ -692,9 +693,9 @@ export default function ClientsPage() {
                               <Mail className="h-4 w-4" />
                               Email
                             </span>
-                            <ChevronRight className="h-4 w-4 text-white/45 transition group-hover:translate-x-0.5" />
+                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
                           </div>
-                          <div className="mt-1 truncate text-xs text-white/55" data-testid="text-selected-email">
+                          <div className="mt-1 truncate text-xs text-black/55" data-testid="text-selected-email">
                             {selected.email}
                           </div>
                         </button>
@@ -703,7 +704,7 @@ export default function ClientsPage() {
                       <div className="grid gap-2 md:grid-cols-2">
                         <button
                           type="button"
-                          className="group rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10"
+                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
                           data-testid="button-action-add-task"
                           onClick={() => {}}
                         >
@@ -712,16 +713,16 @@ export default function ClientsPage() {
                               <Calendar className="h-4 w-4" />
                               Add task
                             </span>
-                            <ChevronRight className="h-4 w-4 text-white/45 transition group-hover:translate-x-0.5" />
+                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
                           </div>
-                          <div className="mt-1 text-xs text-white/55" data-testid="text-action-task-hint">
+                          <div className="mt-1 text-xs text-black/55" data-testid="text-action-task-hint">
                             Follow up, reminders, deadlines
                           </div>
                         </button>
 
                         <button
                           type="button"
-                          className="group rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10"
+                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
                           data-testid="button-action-add-note"
                           onClick={() => {}}
                         >
@@ -730,15 +731,15 @@ export default function ClientsPage() {
                               <BadgeCheck className="h-4 w-4" />
                               Add note
                             </span>
-                            <ChevronRight className="h-4 w-4 text-white/45 transition group-hover:translate-x-0.5" />
+                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
                           </div>
-                          <div className="mt-1 text-xs text-white/55" data-testid="text-action-note-hint">
+                          <div className="mt-1 text-xs text-black/55" data-testid="text-action-note-hint">
                             Log preferences, requests, constraints
                           </div>
                         </button>
                       </div>
 
-                      <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
                         <div className="text-xs font-semibold text-white/80" data-testid="text-selected-tags-title">
                           Tags
                         </div>
@@ -746,7 +747,7 @@ export default function ClientsPage() {
                           {selected.tags.map((t, i) => (
                             <span
                               key={t + i}
-                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/75"
+                              className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70"
                               data-testid={`pill-selected-tag-${i}`}
                             >
                               {t}
@@ -757,7 +758,7 @@ export default function ClientsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
                     <div className="text-sm font-semibold" data-testid="text-timeline-title">
                       Recent timeline
                     </div>
@@ -781,13 +782,13 @@ export default function ClientsPage() {
                       ] as const).map((it) => (
                         <div
                           key={it.id}
-                          className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2"
+                          className="rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
                           data-testid={`row-timeline-${it.id}`}
                         >
-                          <div className="text-xs font-semibold text-white/85" data-testid={`text-timeline-title-${it.id}`}>
+                          <div className="text-xs font-semibold text-black/85" data-testid={`text-timeline-title-${it.id}`}>
                             {it.title}
                           </div>
-                          <div className="mt-1 text-[11px] text-white/55" data-testid={`text-timeline-meta-${it.id}`}>
+                          <div className="mt-1 text-[11px] text-black/55" data-testid={`text-timeline-meta-${it.id}`}>
                             {it.meta}
                           </div>
                         </div>
@@ -796,14 +797,14 @@ export default function ClientsPage() {
                   </div>
                 </>
               ) : (
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-10 text-center" data-testid="empty-client-panel">
-                  <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5" aria-hidden>
-                    <UserRound className="h-5 w-5 text-white/70" />
+                <div className="rounded-3xl border border-black/10 bg-white/70 p-10 text-center" data-testid="empty-client-panel">
+                  <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70" aria-hidden>
+                    <UserRound className="h-5 w-5 text-black/70" />
                   </div>
                   <div className="mt-3 text-sm font-semibold" data-testid="text-empty-panel-title">
                     No client selected
                   </div>
-                  <div className="mt-1 text-xs text-white/55" data-testid="text-empty-panel-subtitle">
+                  <div className="mt-1 text-xs text-black/55" data-testid="text-empty-panel-subtitle">
                     Choose a client from the directory to view details.
                   </div>
                 </div>

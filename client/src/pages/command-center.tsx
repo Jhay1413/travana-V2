@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useLocation } from "wouter";
 import {
   Activity,
   BadgeCheck,
@@ -273,7 +272,6 @@ function ShellNav({
   active: string;
   onActiveChange: (k: string) => void;
 }) {
-  const [, navigate] = useLocation();
   const nav = useMemo(() => {
     const base = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
@@ -382,11 +380,10 @@ function ShellNav({
         <nav className="space-y-1">
           {nav.map((item) => {
             const isActive = active === item.key;
-            const isClientsRoute = item.key === "clients";
             return (
               <button
                 key={item.key}
-                onClick={() => (isClientsRoute ? navigate("/clients") : onActiveChange(item.key))}
+                onClick={() => onActiveChange(item.key)}
                 className={
                   "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                   (isActive
@@ -684,7 +681,6 @@ export default function CommandCenterPage() {
   const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [, navigate] = useLocation();
 
   const themeClass = theme === "dark" ? "dark" : "";
 
