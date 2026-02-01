@@ -841,10 +841,9 @@ export default function ClientsPage() {
               )}
             </div>
           </Card>
-            </div>
-          </Card>
         </div>
       </div>
-    </CommandCenterShell>
+    </div>
+  </CommandCenterShell>
   );
 }
