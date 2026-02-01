@@ -335,9 +335,7 @@ function ShellNav({
               <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
             </div>
             <div className="min-w-0">
-              <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-name">
-                Apple Travel
-              </div>
+              <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-name">Travana</div>
               <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-brand-sub">
                 Command Center
               </div>
