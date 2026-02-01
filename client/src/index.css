@@ -145,10 +145,7 @@
   }
 
   .dark body {
-    background-image:
-      radial-gradient(1200px 800px at 18% 10%, hsl(204 100% 62% / 0.12), transparent 60%),
-      radial-gradient(900px 700px at 80% 18%, hsl(155 86% 57% / 0.10), transparent 60%),
-      radial-gradient(800px 500px at 50% 110%, hsl(270 90% 65% / 0.10), transparent 55%);
+    background-image: none;
   }
 }
 
