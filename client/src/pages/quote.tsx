@@ -343,6 +343,52 @@ export default function QuotePage() {
             </Card>
 
             <div className="grid gap-3" data-testid="col-quote-right">
+              <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-summary-right">
+                <div className="flex items-center justify-between" data-testid="row-quote-summary-header">
+                  <div>
+                    <div className="text-sm font-semibold" data-testid="text-quote-summary-title">
+                      Quote Summary
+                    </div>
+                    <div className="mt-1 text-xs text-black/55" data-testid="text-quote-summary-subtitle">
+                      Commission and charges.
+                    </div>
+                  </div>
+                  <FileText className="h-4 w-4 text-black/35" aria-hidden />
+                </div>
+
+                <div className="mt-3 grid gap-2" data-testid="list-quote-summary-lines">
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-commission">
+                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Commission</div>
+                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-commission-value">
+                      {currency.format(140.7)}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-discount">
+                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-discount-label">Discount</div>
+                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-discount-value">
+                      {currency.format(0)}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-service-charge">
+                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-service-charge-label">Service Charge</div>
+                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-service-charge-value">
+                      {currency.format(0)}
+                    </div>
+                  </div>
+
+                  <div className="my-1 h-px w-full bg-black/10" data-testid="separator-quote-summary" />
+
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-quote-summary-total-commission">
+                    <div className="text-xs font-semibold text-black/70" data-testid="text-quote-summary-total-commission-label">Total Commission</div>
+                    <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-commission-value">
+                      {currency.format(140.7)}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
               <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-passengers">
                 <div className="flex items-center justify-between" data-testid="row-passengers-header">
                   <div>
