@@ -831,6 +831,7 @@ function TopBar({
       users: "Users & Roles",
       audit: "Audit",
       settings: "Settings",
+      "agent-settings": "Settings",
       team: "Team Pipeline",
       coverage: "Coverage",
       coaching: "Coaching",
@@ -1044,7 +1045,7 @@ export default function CommandCenterPage() {
 
   const content = useMemo(() => {
     // Show Agent workspace for Agents, or for Admins when viewing agent sections
-    const agentSections = ["clients", "enquiries", "quotes", "bookings"];
+    const agentSections = ["clients", "enquiries", "quotes", "bookings", "agent-settings"];
     const showAgentContent = (role === "Agent" && ["overview", ...agentSections].includes(active)) || 
                              (role === "Admin" && agentSections.includes(active));
     
@@ -1653,7 +1654,7 @@ export default function CommandCenterPage() {
                   </div>
                   <div className="flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs dark:border-white/10 dark:bg-white/5">
                     <span className={theme === "light" ? "text-black font-medium" : "text-black/45 dark:text-white/45"}>Light</span>
-                    <Switch checked={theme === "dark"} onCheckedChange={() => setTheme(t => t === "dark" ? "light" : "dark")} />
+                    <Switch checked={theme === "dark"} onCheckedChange={() => setTheme(t => t === "dark" ? "light" : "dark")} data-testid="switch-theme" />
                     <span className={theme === "dark" ? "text-white font-medium" : "text-black/45 dark:text-white/45"}>Dark</span>
                   </div>
                 </div>
@@ -1665,9 +1666,9 @@ export default function CommandCenterPage() {
                   <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
                     <div className="flex items-center gap-3">
                       {user?.avatarUrl ? (
-                        <img src={user.avatarUrl} alt="" className="h-12 w-12 rounded-2xl" />
+                        <img src={user.avatarUrl} alt="" className="h-12 w-12 rounded-2xl" data-testid="img-avatar" />
                       ) : (
-                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-medium">
+                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-medium" data-testid="img-avatar-placeholder">
                           {displayName?.charAt(0).toUpperCase() || "U"}
                         </div>
                       )}
