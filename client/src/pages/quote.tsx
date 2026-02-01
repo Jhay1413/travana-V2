@@ -347,17 +347,17 @@ export default function QuotePage() {
                           {quote.quoteTitle}
                         </div>
 
-                        <div className="ml-auto flex items-center gap-2" data-testid="row-itinerary-total-owner">
+                        <div className="ml-auto flex min-w-0 items-center justify-end gap-2 text-right" data-testid="row-itinerary-total-owner">
                           <span className="text-sm font-semibold text-black/85" data-testid="text-itinerary-total">
                             {currency.format(quote.commissions.price)}
                           </span>
 
                           <span
-                            className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
+                            className="inline-flex max-w-[220px] items-center gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
                             data-testid="pill-itinerary-owner"
                           >
                             <span
-                              className="relative grid h-6 w-6 overflow-hidden rounded-full border border-black/10 bg-white/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
+                              className="relative grid h-6 w-6 shrink-0 overflow-hidden rounded-full border border-black/10 bg-white/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
                               data-testid="avatar-itinerary-owner"
                               aria-hidden
                             >
@@ -370,7 +370,7 @@ export default function QuotePage() {
                               <span className="pointer-events-none absolute inset-0 ring-1 ring-white/40" aria-hidden />
                             </span>
 
-                            <span className="flex min-w-0 flex-col leading-tight" data-testid="col-itinerary-owner">
+                            <span className="flex min-w-0 flex-col items-end leading-tight" data-testid="col-itinerary-owner">
                               <span className="truncate" data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
                               <span className="text-[10px] font-semibold text-black/50" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
                             </span>
