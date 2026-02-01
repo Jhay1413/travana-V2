@@ -976,12 +976,14 @@ export default function CommandCenterPage() {
   const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [rolePreview, setRolePreview] = useState<Role | null>(null);
 
   const themeClass = theme === "dark" ? "dark" : "";
   const displayName = user?.firstName || user?.name || user?.email || "User";
   
-  // Use the user's role from database, default to Agent
-  const role = (user?.role as Role) || "Agent";
+  // Use role preview if set, otherwise use the user's role from database
+  const actualRole = (user?.role as Role) || "Agent";
+  const role = rolePreview || actualRole;
 
   // Fetch dashboard stats from API
   const { data: dashboardStats } = useQuery({
@@ -1641,6 +1643,49 @@ export default function CommandCenterPage() {
 
             <div className="space-y-6">
               <div className="space-y-3">
+                <div className="text-sm font-semibold">Preview As</div>
+                <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      <UserRound className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">View as Role</div>
+                      <div className="text-xs text-black/55 dark:text-white/55">Preview the interface as different user types</div>
+                    </div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white min-w-[120px] justify-between"
+                        data-testid="dropdown-role-preview"
+                      >
+                        {rolePreview || actualRole}
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[140px]">
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Role</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                        <DropdownMenuItem
+                          key={r}
+                          onClick={() => setRolePreview(r === actualRole ? null : r)}
+                          className={role === r ? "bg-black/5 dark:bg-white/10" : ""}
+                          data-testid={`menu-role-${r.toLowerCase()}`}
+                        >
+                          {r}
+                          {r === actualRole && <span className="ml-auto text-xs text-muted-foreground">(actual)</span>}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
+              <div className="space-y-3">
                 <div className="text-sm font-semibold">Appearance</div>
                 <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
                   <div className="flex items-center gap-3">
@@ -1665,8 +1710,8 @@ export default function CommandCenterPage() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
                     <div className="flex items-center gap-3">
-                      {user?.avatarUrl ? (
-                        <img src={user.avatarUrl} alt="" className="h-12 w-12 rounded-2xl" data-testid="img-avatar" />
+                      {user?.avatar ? (
+                        <img src={user.avatar} alt="" className="h-12 w-12 rounded-2xl" data-testid="img-avatar" />
                       ) : (
                         <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-medium" data-testid="img-avatar-placeholder">
                           {displayName?.charAt(0).toUpperCase() || "U"}
@@ -2239,7 +2284,7 @@ export default function CommandCenterPage() {
         action="Design client record"
       />
     );
-  }, [active, clients, role, tab, theme, setTheme, user, displayName]);
+  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole]);
 
   return (
     <div className={themeClass}>
