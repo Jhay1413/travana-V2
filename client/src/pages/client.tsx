@@ -808,8 +808,8 @@ export default function ClientPage() {
                 </TabsContent>
 
                 <TabsContent value="quotes" className="mt-3">
-                  <div className="grid gap-3 lg:grid-cols-12" data-testid="layout-quotes">
-                    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-5" data-testid="card-quotes-list">
+                  <div className="grid gap-3" data-testid="layout-quotes">
+                    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quotes-list">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-sm font-semibold" data-testid="text-quotes-title">
@@ -924,37 +924,6 @@ export default function ClientPage() {
                       </div>
                     </Card>
 
-                    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4 lg:col-span-7" data-testid="card-quote-details">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold" data-testid="text-quote-details-title">
-                            Quote details
-                          </div>
-                          <div className="mt-1 text-xs text-black/55" data-testid="text-quote-details-subtitle">
-                            Select a quote from the list to view full travel, flights, and commissions.
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-black hover:bg-black/[0.03]"
-                          data-testid="button-quote-details-open"
-                          onClick={() => {}}
-                        >
-                          Open
-                          <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <div className="mt-4 rounded-3xl border border-black/10 bg-black/[0.03] p-4" data-testid="empty-quote-details">
-                        <div className="text-sm font-semibold" data-testid="text-empty-quote-title">
-                          No quote selected
-                        </div>
-                        <div className="mt-1 text-xs text-black/55" data-testid="text-empty-quote-subtitle">
-                          Pick a quote on the left to load the full breakdown.
-                        </div>
-                      </div>
-                    </Card>
                   </div>
                 </TabsContent>
 
