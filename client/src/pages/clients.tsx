@@ -265,15 +265,6 @@ export default function ClientsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="secondary"
-              className="rounded-2xl border border-black/10 bg-black/[0.03] text-black hover:bg-black/[0.05]"
-              data-testid="button-import-clients"
-              onClick={() => {}}
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Import
-            </Button>
-            <Button
               className="rounded-2xl bg-black text-white hover:bg-black/90"
               data-testid="button-new-client"
               onClick={() => {}}
@@ -294,9 +285,22 @@ export default function ClientsPage() {
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Search name, ID, destination, tags…"
-                    className="h-10 rounded-2xl border-black/10 bg-white/70 pl-10 text-black placeholder:text-black/40"
+                    className="h-10 rounded-2xl border-black/10 bg-white/70 pl-10 pr-28 text-black placeholder:text-black/40"
                     data-testid="input-client-search"
                   />
+
+                  <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-9 rounded-2xl border border-black/10 bg-black/[0.03] px-3 text-black hover:bg-black/[0.05]"
+                      data-testid="button-import-clients"
+                      onClick={() => {}}
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Import
+                    </Button>
+                  </div>
                 </div>
               </div>
 
