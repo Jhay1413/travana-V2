@@ -678,6 +678,8 @@ export default function CommandCenterPage() {
   const [active, setActive] = useState<string>("overview");
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"clients" | "pipeline" | "calendar" | "news">("clients");
+  const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
+  const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   const themeClass = theme === "dark" ? "dark" : "";
@@ -879,6 +881,60 @@ export default function CommandCenterPage() {
 
               <TabsContent value="calendar" className="mt-0">
                 <div className="space-y-3" data-testid="panel-social-posts">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-social-filters">
+                      <button
+                        onClick={() => setSocialFilter("today")}
+                        className={
+                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
+                          (socialFilter === "today"
+                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
+                        }
+                        data-testid="filter-social-today"
+                      >
+                        Today
+                      </button>
+                      <button
+                        onClick={() => setSocialFilter("tomorrow")}
+                        className={
+                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
+                          (socialFilter === "tomorrow"
+                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
+                        }
+                        data-testid="filter-social-tomorrow"
+                      >
+                        Tomorrow
+                      </button>
+                      <button
+                        onClick={() => setSocialFilter("date")}
+                        className={
+                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
+                          (socialFilter === "date"
+                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
+                        }
+                        data-testid="filter-social-date"
+                      >
+                        Date selection
+                      </button>
+                    </div>
+
+                    <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-social-date">
+                      <Input
+                        type="date"
+                        value={socialDate}
+                        onChange={(e) => setSocialDate(e.target.value)}
+                        className="h-9 w-[170px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+                        data-testid="input-social-date"
+                      />
+                      <span className="text-xs text-black/45 dark:text-white/45" data-testid="text-social-date-hint">
+                        Showing: {socialDate}
+                      </span>
+                    </div>
+                  </div>
+
                   {([
                     {
                       id: "post-001",
@@ -896,7 +952,7 @@ export default function CommandCenterPage() {
                       meta: "Quote #Q-1075 · 5 nights · LGW → FCO",
                       audience: "Facebook",
                       status: "Draft",
-                      time: "Needs approval",
+                      time: "Tomorrow 10:30",
                       copy:
                         "A classic split-stay: 2 nights Rome, 3 nights Amalfi. Add private transfers and a sunset cruise.",
                     },
@@ -920,12 +976,19 @@ export default function CommandCenterPage() {
                       copy:
                         "A sharp city break with premium hotel options. Add Broadway tickets and airport lounge access.",
                     },
-                  ] as const).map((p) => (
-                    <button
-                      key={p.id}
-                      className="group w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                      data-testid={`card-social-post-${p.id}`}
-                    >
+                  ] as const)
+                    .filter((p) => {
+                      if (socialFilter === "today") return p.time.toLowerCase().startsWith("today");
+                      if (socialFilter === "tomorrow") return p.time.toLowerCase().startsWith("tomorrow");
+                      if (socialFilter === "date") return true;
+                      return true;
+                    })
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        className="group w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                        data-testid={`card-social-post-${p.id}`}
+                      >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
