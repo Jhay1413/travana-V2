@@ -1029,7 +1029,7 @@ export default function CommandCenterPage() {
                         data-testid={`card-social-post-${p.id}`}
                       >
                       <div className="flex items-start gap-4">
-                        <div className="hidden sm:block shrink-0 pt-12">
+                        <div className="hidden sm:block shrink-0">
                           <div
                             className="relative h-28 w-40 overflow-hidden rounded-3xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
                             data-testid={`img-social-post-${p.id}`}
@@ -1046,9 +1046,9 @@ export default function CommandCenterPage() {
                           </div>
                         </div>
 
-                        <div className="min-w-0 flex-1 -ml-44">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-start gap-4 text-left">
-                            <div className="min-w-0">
+                            <div className="min-w-0 -ml-44">
                               <div className="flex items-center justify-start gap-2 text-left">
                                 <div
                                   className="truncate text-sm font-semibold text-left"
