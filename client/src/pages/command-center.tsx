@@ -1654,34 +1654,21 @@ export default function CommandCenterPage() {
                       <div className="text-xs text-black/55 dark:text-white/55">Preview the interface as different user types</div>
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white min-w-[120px] justify-between"
-                        data-testid="dropdown-role-preview"
-                      >
-                        {rolePreview || actualRole}
-                        <ChevronDown className="ml-2 h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[140px] z-50">
-                      <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Role</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
-                        <DropdownMenuItem
-                          key={r}
-                          onClick={() => setRolePreview(r === actualRole ? null : r)}
-                          className={role === r ? "bg-black/5 dark:bg-white/10" : ""}
-                          data-testid={`menu-role-${r.toLowerCase()}`}
-                        >
-                          {r}
-                          {r === actualRole && <span className="ml-auto text-xs text-muted-foreground">(actual)</span>}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <select
+                    value={rolePreview || actualRole}
+                    onChange={(e) => {
+                      const newRole = e.target.value as Role;
+                      setRolePreview(newRole === actualRole ? null : newRole);
+                    }}
+                    className="rounded-xl border border-black/10 bg-black/5 px-3 py-2 text-sm text-black dark:border-white/10 dark:bg-white/5 dark:text-white min-w-[130px] cursor-pointer"
+                    data-testid="select-role-preview"
+                  >
+                    {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                      <option key={r} value={r}>
+                        {r}{r === actualRole ? " (actual)" : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
