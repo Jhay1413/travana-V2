@@ -1088,6 +1088,8 @@ export default function CommandCenterPage() {
     const showAgentContent = (role === "Agent" && ["overview", ...agentSections].includes(active)) || 
                              (role === "Admin" && agentSections.includes(active));
     
+    console.log("Content render - role:", role, "active:", active, "showAgentContent:", showAgentContent);
+    
     if (showAgentContent) {
       return (
         <section className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
