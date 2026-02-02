@@ -276,7 +276,7 @@ export function CommandCenterShell({
                                       type="button"
                                       onClick={() => {
                                         if (item.key === "clients") navigate("/clients");
-                                        else navigate("/command-center");
+                                        else navigate("/");
                                       }}
                                       className={
                                         "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
@@ -310,7 +310,7 @@ export function CommandCenterShell({
                                           <button
                                             key={child.key}
                                             type="button"
-                                            onClick={() => navigate("/command-center")}
+                                            onClick={() => navigate("/")}
                                             className={
                                               "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
                                               (active === child.key
@@ -343,7 +343,7 @@ export function CommandCenterShell({
                         type="button"
                         onClick={() => {
                           if (item.key === "clients") navigate("/clients");
-                          else navigate("/command-center");
+                          else navigate("/");
                         }}
                         className={
                           "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
