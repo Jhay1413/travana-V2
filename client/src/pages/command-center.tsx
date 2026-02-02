@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -856,6 +856,7 @@ function TopBar({
   actualRole,
   rolePreview,
   onRoleChange,
+  clients,
 }: {
   role: Role;
   active: string;
@@ -869,8 +870,34 @@ function TopBar({
   actualRole: Role;
   rolePreview: Role | null;
   onRoleChange: (role: Role | null) => void;
+  clients?: Array<{ id: string; name: string; email: string; tier: string; stage: string; nextTrip?: string }>;
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [, navigate] = useLocation();
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const searchResults = useMemo(() => {
+    if (!query.trim() || !clients) return [];
+    const q = query.toLowerCase();
+    return clients
+      .filter(c => 
+        c.name.toLowerCase().includes(q) || 
+        c.email.toLowerCase().includes(q) ||
+        (c.nextTrip && c.nextTrip.toLowerCase().includes(q))
+      )
+      .slice(0, 5);
+  }, [query, clients]);
   
   const title = useMemo(() => {
     const map: Record<string, string> = {
@@ -907,15 +934,59 @@ function TopBar({
           <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
             {title}
           </h1>
-          <div className="relative hidden sm:block w-[320px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/50" />
+          <div className="relative hidden sm:block w-[320px]" ref={searchRef}>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/50 z-10" />
             <Input
               value={query}
-              onChange={(e) => onQuery(e.target.value)}
+              onChange={(e) => {
+                onQuery(e.target.value);
+                setShowSearchResults(true);
+              }}
+              onFocus={() => query.trim() && setShowSearchResults(true)}
               placeholder="Search clients, trips, destinations…"
               className="h-10 rounded-2xl border-black/10 bg-black/5 pl-10 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/45"
               data-testid="input-search"
             />
+            {showSearchResults && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-50 overflow-hidden">
+                {searchResults.map((client) => (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      navigate(`/client/${client.id}`);
+                      setShowSearchResults(false);
+                      onQuery("");
+                    }}
+                    className="w-full px-4 py-3 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors"
+                    data-testid={`search-result-${client.id}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-sm">{client.name}</div>
+                        <div className="text-xs text-black/50 dark:text-white/50">{client.email}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          client.tier === "Platinum" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" :
+                          client.tier === "Gold" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" :
+                          "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                        }`}>
+                          {client.tier}
+                        </span>
+                      </div>
+                    </div>
+                    {client.nextTrip && (
+                      <div className="text-xs text-black/40 dark:text-white/40 mt-1">{client.nextTrip}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            {showSearchResults && query.trim() && searchResults.length === 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-50 p-4 text-center text-sm text-black/50 dark:text-white/50">
+                No clients found matching "{query}"
+              </div>
+            )}
           </div>
         </div>
 
@@ -3444,6 +3515,7 @@ export default function CommandCenterPage() {
                 actualRole={actualRole}
                 rolePreview={rolePreview}
                 onRoleChange={setRolePreview}
+                clients={clients}
               />
 
               <section className="grid gap-3 md:grid-cols-4">
