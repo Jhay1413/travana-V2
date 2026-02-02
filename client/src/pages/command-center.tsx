@@ -920,13 +920,6 @@ function TopBar({
         </div>
 
         <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
-              <span data-testid="text-theme-label">Light</span>
-              <Switch data-testid="switch-theme" checked={theme === "dark"} onCheckedChange={onToggleTheme} />
-              <span className="text-black/45 dark:text-white/45" data-testid="text-theme-label-dark">
-                Dark
-              </span>
-            </div>
             <Button
               variant="outline"
               className="h-10 rounded-2xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
