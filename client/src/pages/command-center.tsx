@@ -953,7 +953,7 @@ function TopBar({
                   <button
                     key={client.id}
                     onClick={() => {
-                      navigate(`/client/${client.id}`);
+                      navigate(`/clients/${client.id}`);
                       setShowSearchResults(false);
                       onQuery("");
                     }}
