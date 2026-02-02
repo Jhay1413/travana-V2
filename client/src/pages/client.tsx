@@ -318,6 +318,15 @@ export default function ClientPage() {
     allocationType: "",
     allocationId: "",
   });
+  const [uploadedFiles, setUploadedFiles] = useState<{
+    id: string;
+    name: string;
+    type: string;
+    category: string;
+    allocationType: string;
+    allocationId: string;
+    updated: string;
+  }[]>([]);
   const [newQuote, setNewQuote] = useState({
     packageType: "",
     quoteTitle: "",
@@ -1084,6 +1093,28 @@ export default function ClientPage() {
                     </div>
 
                     <div className="mt-4 grid gap-3" data-testid="list-files">
+                      {uploadedFiles.map((f) => (
+                        <div
+                          key={f.id}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3"
+                          data-testid={`row-file-uploaded-${f.id}`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
+                                {f.name}
+                              </div>
+                              <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                {f.category}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-xs text-black/55" data-testid={`text-file-uploaded-meta-${f.id}`}>
+                              {f.type} · {f.allocationType !== "None" ? `${f.allocationType}` : "Client level"} · {f.updated}
+                            </div>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
+                        </div>
+                      ))}
                       {filteredFiles.map((f) => (
                         <div
                           key={f.id}
@@ -1101,7 +1132,7 @@ export default function ClientPage() {
                           <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
                         </div>
                       ))}
-                      {filteredFiles.length === 0 && (
+                      {filteredFiles.length === 0 && uploadedFiles.length === 0 && (
                         <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center">
                           <div className="text-sm text-black/55">No files uploaded yet.</div>
                         </div>
@@ -1910,6 +1941,21 @@ export default function ClientPage() {
                 className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
                 disabled={!uploadFile.file || !uploadFile.fileType}
                 onClick={() => {
+                  if (uploadFile.file) {
+                    const fileExt = uploadFile.file.name.split('.').pop()?.toUpperCase() || 'FILE';
+                    setUploadedFiles((prev) => [
+                      {
+                        id: `uploaded-${Date.now()}`,
+                        name: uploadFile.file!.name,
+                        type: fileExt,
+                        category: uploadFile.fileType,
+                        allocationType: uploadFile.allocationType || "None",
+                        allocationId: uploadFile.allocationId,
+                        updated: "Just now",
+                      },
+                      ...prev,
+                    ]);
+                  }
                   setShowUploadFileModal(false);
                   setUploadFile({ file: null, fileType: "", allocationType: "", allocationId: "" });
                 }}
