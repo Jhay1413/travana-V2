@@ -928,7 +928,7 @@ function TopBar({
   }, [active]);
 
   return (
-    <div className="glass ringed grain rounded-3xl p-4 md:p-5">
+    <div className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-[100]">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
