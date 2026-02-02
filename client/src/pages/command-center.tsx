@@ -934,7 +934,7 @@ function TopBar({
           <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
             {title}
           </h1>
-          <div className="relative hidden sm:block w-[320px]" ref={searchRef}>
+          <div className="relative hidden sm:block w-[320px] z-[9999]" ref={searchRef}>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/50 z-10" />
             <Input
               value={query}
