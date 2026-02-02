@@ -326,6 +326,7 @@ export default function ClientPage() {
     allocationType: string;
     allocationId: string;
     updated: string;
+    url: string;
   }[]>([]);
   const [newQuote, setNewQuote] = useState({
     packageType: "",
@@ -1094,9 +1095,11 @@ export default function ClientPage() {
 
                     <div className="mt-4 grid gap-3" data-testid="list-files">
                       {uploadedFiles.map((f) => (
-                        <div
+                        <button
                           key={f.id}
-                          className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3"
+                          type="button"
+                          onClick={() => window.open(f.url, '_blank')}
+                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                           data-testid={`row-file-uploaded-${f.id}`}
                         >
                           <div className="min-w-0 flex-1">
@@ -1113,7 +1116,7 @@ export default function ClientPage() {
                             </div>
                           </div>
                           <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
-                        </div>
+                        </button>
                       ))}
                       {filteredFiles.map((f) => (
                         <div
@@ -1943,6 +1946,7 @@ export default function ClientPage() {
                 onClick={() => {
                   if (uploadFile.file) {
                     const fileExt = uploadFile.file.name.split('.').pop()?.toUpperCase() || 'FILE';
+                    const fileUrl = URL.createObjectURL(uploadFile.file);
                     setUploadedFiles((prev) => [
                       {
                         id: `uploaded-${Date.now()}`,
@@ -1952,6 +1956,7 @@ export default function ClientPage() {
                         allocationType: uploadFile.allocationType || "None",
                         allocationId: uploadFile.allocationId,
                         updated: "Just now",
+                        url: fileUrl,
                       },
                       ...prev,
                     ]);
