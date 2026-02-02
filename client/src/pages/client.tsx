@@ -309,11 +309,13 @@ export default function ClientPage() {
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<{
     file: File | null;
+    title: string;
     fileType: string;
     allocationType: string;
     allocationId: string;
   }>({
     file: null,
+    title: "",
     fileType: "",
     allocationType: "",
     allocationId: "",
@@ -321,6 +323,7 @@ export default function ClientPage() {
   const [uploadedFiles, setUploadedFiles] = useState<{
     id: string;
     name: string;
+    title: string;
     type: string;
     category: string;
     allocationType: string;
@@ -1105,14 +1108,14 @@ export default function ClientPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <div className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
-                                {f.name}
+                                {f.title}
                               </div>
                               <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                                 {f.category}
                               </span>
                             </div>
                             <div className="mt-1 text-xs text-black/55" data-testid={`text-file-uploaded-meta-${f.id}`}>
-                              {f.type} · {f.allocationType !== "None" ? `${f.allocationType}` : "Client level"} · {f.updated}
+                              {f.type} · {f.name} · {f.allocationType !== "None" ? `${f.allocationType}` : "Client level"} · {f.updated}
                             </div>
                           </div>
                           <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
@@ -1830,6 +1833,17 @@ export default function ClientPage() {
             </div>
 
             <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Title</Label>
+              <Input
+                placeholder="e.g. Family Passport Scans"
+                value={uploadFile.title}
+                onChange={(e) => setUploadFile((prev) => ({ ...prev, title: e.target.value }))}
+                className="h-10 rounded-xl border-black/10 bg-white/70"
+                data-testid="input-upload-title"
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">File Type</Label>
               <Select
                 value={uploadFile.fileType}
@@ -1951,6 +1965,7 @@ export default function ClientPage() {
                       {
                         id: `uploaded-${Date.now()}`,
                         name: uploadFile.file!.name,
+                        title: uploadFile.title || uploadFile.file!.name,
                         type: fileExt,
                         category: uploadFile.fileType,
                         allocationType: uploadFile.allocationType || "None",
@@ -1962,7 +1977,7 @@ export default function ClientPage() {
                     ]);
                   }
                   setShowUploadFileModal(false);
-                  setUploadFile({ file: null, fileType: "", allocationType: "", allocationId: "" });
+                  setUploadFile({ file: null, title: "", fileType: "", allocationType: "", allocationId: "" });
                 }}
                 data-testid="button-upload-file"
               >
