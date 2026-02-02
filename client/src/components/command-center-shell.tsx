@@ -275,6 +275,7 @@ export function CommandCenterShell({
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (item.key === "clients") navigate("/clients");
+                                        else if (item.key === "overview" || item.key === "agent-overview") navigate("/command-center");
                                         else navigate("/command-center");
                                       }}
                                       className={
