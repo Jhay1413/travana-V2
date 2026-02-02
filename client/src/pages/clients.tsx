@@ -5,18 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import {
   BadgeCheck,
-  Calendar,
-  ChevronLeft,
   ChevronRight,
   Filter,
-  Mail,
   MapPin,
-  Phone,
-  Plus,
   Search,
   Sparkles,
   Star,
-  UserRound,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -116,14 +110,6 @@ export default function ClientsPage() {
   const [tier, setTier] = useState<"all" | ClientTier>("all");
   const [sort, setSort] = useState<"value" | "lastTouch" | "name">("value");
   const [tab, setTab] = useState<"directory" | "segments">("directory");
-  const [selectedId, setSelectedId] = useState<string>("");
-
-  // Update selectedId when clients are loaded
-  useMemo(() => {
-    if (clients.length > 0 && !selectedId) {
-      setSelectedId(clients[0].id);
-    }
-  }, [clients, selectedId]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -159,11 +145,6 @@ export default function ClientsPage() {
     return s;
   }, [q, stage, tier, sort]);
 
-  const selected = useMemo(
-    () => filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? null,
-    [filtered, selectedId],
-  );
-
   const totals = useMemo(() => {
     const booked = clients.filter((c) => c.stage === "Booked");
     const inPipe = clients.filter((c) => c.stage !== "Booked");
@@ -193,8 +174,8 @@ export default function ClientsPage() {
     >
       <div className="relative min-h-[calc(100vh-56px)] w-full px-4 pb-6 md:px-6 md:pb-8">
 
-        <div className="relative mt-6 grid gap-3 md:grid-cols-5">
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 md:col-span-3">
+        <div className="relative mt-6">
+          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -341,21 +322,12 @@ export default function ClientsPage() {
                 <TabsContent value="directory" className="mt-4">
                   <div className="grid gap-3" data-testid="list-client-results">
                     {filtered.map((c, idx) => {
-                      const isSelected = selected?.id === c.id;
                       return (
                         <motion.button
                           key={c.id}
                           type="button"
-                          onClick={() => {
-                            setSelectedId(c.id);
-                            navigate(`/clients/${c.id}`);
-                          }}
-                          className={
-                            "group w-full rounded-3xl border p-4 text-left transition active:scale-[0.99] " +
-                            (isSelected
-                              ? "border-black/15 bg-black/[0.03]"
-                              : "border-black/10 bg-white/70 hover:bg-black/[0.03]")
-                          }
+                          onClick={() => navigate(`/clients/${c.id}`)}
+                          className="group w-full rounded-3xl border border-black/10 bg-white/70 p-4 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                           data-testid={`row-client-${c.id}`}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -539,236 +511,6 @@ export default function ClientsPage() {
                   </div>
                 </TabsContent>
               </Tabs>
-            </div>
-          </Card>
-
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 md:col-span-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-sm font-semibold" data-testid="text-client-panel-title">
-                  Client panel
-                </div>
-                <div className="text-xs text-black/55" data-testid="text-client-panel-subtitle">
-                  Select a client to view key details and actions.
-                </div>
-              </div>
-              <div
-                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2 text-xs font-semibold text-black/70"
-                data-testid="badge-selected-client"
-              >
-                <UserRound className="h-4 w-4" />
-                {selected ? selected.id : "None"}
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3" data-testid="panel-client-detail">
-              {selected ? (
-                <>
-                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-lg font-semibold" data-testid="text-selected-name">
-                          {selected.name}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className={`rounded-full ${tierPill(selected.tier)}`}
-                            data-testid="pill-selected-tier"
-                          >
-                            {selected.tier}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={`rounded-full ${stagePill(selected.stage)}`}
-                            data-testid="status-selected-stage"
-                          >
-                            {selected.stage}
-                          </Badge>
-                          <span
-                            className="inline-flex items-center gap-1 text-xs text-black/60"
-                            data-testid="text-selected-location"
-                          >
-                            <MapPin className="h-3.5 w-3.5" />
-                            {selected.location}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-black/55" data-testid="label-selected-value">
-                          Deal value
-                        </div>
-                        <div className="mt-1 text-xl font-semibold" data-testid="text-selected-value">
-                          {currency.format(selected.value)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-2">
-                      <div className="rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2 text-xs text-black/70">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-black/55" data-testid="label-selected-nexttrip">
-                            Next trip
-                          </span>
-                          <span className="inline-flex items-center gap-2 text-black/70" data-testid="value-selected-lasttouch">
-                            <span className="text-black/40">Last touch</span>
-                            {selected.lastTouch}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-sm text-black/85" data-testid="text-selected-nexttrip">
-                          {selected.nextTrip}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2 md:grid-cols-2">
-                        <button
-                          type="button"
-                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                          data-testid="button-action-call"
-                          onClick={() => {}}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                              <Phone className="h-4 w-4" />
-                              Call
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                          </div>
-                          <div className="mt-1 truncate text-xs text-black/55" data-testid="text-selected-phone">
-                            {selected.phone}
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                          data-testid="button-action-email"
-                          onClick={() => {}}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                              <Mail className="h-4 w-4" />
-                              Email
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                          </div>
-                          <div className="mt-1 truncate text-xs text-black/55" data-testid="text-selected-email">
-                            {selected.email}
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="grid gap-2 md:grid-cols-2">
-                        <button
-                          type="button"
-                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                          data-testid="button-action-add-task"
-                          onClick={() => {}}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                              <Calendar className="h-4 w-4" />
-                              Add task
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                          </div>
-                          <div className="mt-1 text-xs text-black/55" data-testid="text-action-task-hint">
-                            Follow up, reminders, deadlines
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                          data-testid="button-action-add-note"
-                          onClick={() => {}}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                              <BadgeCheck className="h-4 w-4" />
-                              Add note
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                          </div>
-                          <div className="mt-1 text-xs text-black/55" data-testid="text-action-note-hint">
-                            Log preferences, requests, constraints
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
-                        <div className="text-xs font-semibold text-black/80" data-testid="text-selected-tags-title">
-                          Tags
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2" data-testid="list-selected-tags">
-                          {selected.tags.map((t, i) => (
-                            <span
-                              key={t + i}
-                              className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70"
-                              data-testid={`pill-selected-tag-${i}`}
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
-                    <div className="text-sm font-semibold" data-testid="text-timeline-title">
-                      Recent timeline
-                    </div>
-                    <div className="mt-3 space-y-2" data-testid="list-timeline">
-                      {([
-                        {
-                          id: "t1",
-                          title: "Quote revised and re-sent",
-                          meta: `Value updated to ${currency.format(selected.value)} · Sent via email`,
-                        },
-                        {
-                          id: "t2",
-                          title: "Preferences logged",
-                          meta: "No red-eye flights · Late checkout preferred",
-                        },
-                        {
-                          id: "t3",
-                          title: "Follow-up scheduled",
-                          meta: "Tomorrow 10:00 · Reminder set",
-                        },
-                      ] as const).map((it) => (
-                        <div
-                          key={it.id}
-                          className="rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
-                          data-testid={`row-timeline-${it.id}`}
-                        >
-                          <div className="text-xs font-semibold text-black/85" data-testid={`text-timeline-title-${it.id}`}>
-                            {it.title}
-                          </div>
-                          <div className="mt-1 text-[11px] text-black/55" data-testid={`text-timeline-meta-${it.id}`}>
-                            {it.meta}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-3xl border border-black/10 bg-white/70 p-10 text-center" data-testid="empty-client-panel">
-                  <div
-                    className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
-                    aria-hidden
-                  >
-                    <UserRound className="h-5 w-5 text-black/70" />
-                  </div>
-                  <div className="mt-3 text-sm font-semibold" data-testid="text-empty-panel-title">
-                    No client selected
-                  </div>
-                  <div className="mt-1 text-xs text-black/55" data-testid="text-empty-panel-subtitle">
-                    Choose a client from the directory to view details.
-                  </div>
-                </div>
-              )}
             </div>
           </Card>
         </div>
