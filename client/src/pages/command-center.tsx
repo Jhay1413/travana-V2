@@ -948,7 +948,7 @@ function TopBar({
               data-testid="input-search"
             />
             {showSearchResults && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-50 overflow-hidden">
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden">
                 {searchResults.map((client) => (
                   <button
                     key={client.id}
@@ -983,7 +983,7 @@ function TopBar({
               </div>
             )}
             {showSearchResults && query.trim() && searchResults.length === 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-50 p-4 text-center text-sm text-black/50 dark:text-white/50">
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] p-4 text-center text-sm text-black/50 dark:text-white/50">
                 No clients found matching "{query}"
               </div>
             )}
