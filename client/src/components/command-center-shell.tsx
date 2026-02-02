@@ -239,6 +239,7 @@ export function CommandCenterShell({
                     return (
                       <div key={section.id} className="space-y-1">
                         <button
+                          type="button"
                           onClick={() => toggleSection(section.id)}
                           className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
                           data-testid={`nav-section-${section.id}`}
@@ -272,10 +273,9 @@ export function CommandCenterShell({
                                 return (
                                   <div key={item.key}>
                                     <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
+                                      type="button"
+                                      onClick={() => {
                                         if (item.key === "clients") navigate("/clients");
-                                        else if (item.key === "overview" || item.key === "agent-overview") navigate("/command-center");
                                         else navigate("/command-center");
                                       }}
                                       className={
@@ -309,10 +309,8 @@ export function CommandCenterShell({
                                         {item.children!.map((child) => (
                                           <button
                                             key={child.key}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              navigate("/command-center");
-                                            }}
+                                            type="button"
+                                            onClick={() => navigate("/command-center")}
                                             className={
                                               "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
                                               (active === child.key
@@ -342,6 +340,7 @@ export function CommandCenterShell({
                     return (
                       <button
                         key={item.key}
+                        type="button"
                         onClick={() => {
                           if (item.key === "clients") navigate("/clients");
                           else navigate("/command-center");
