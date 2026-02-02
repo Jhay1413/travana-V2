@@ -302,14 +302,9 @@ export default function ClientPage() {
   const [role, setRole] = useState<Role>("Agent");
   const [active] = useState<string>("clients");
   const [q, setQ] = useState("");
-  const [tab, setTab] = useState<"overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "tags" | "social">(
+  const [tab, setTab] = useState<"overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "tags">(
     "overview",
   );
-  const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
-  const [socialDate, setSocialDate] = useState(() => {
-    const d = new Date();
-    return d.toISOString().split("T")[0];
-  });
   const [showNewQuoteModal, setShowNewQuoteModal] = useState(false);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<{
@@ -865,9 +860,6 @@ export default function ClientPage() {
                   <TabsTrigger value="tags" className="rounded-xl" data-testid="tab-tags">
                     Tags
                   </TabsTrigger>
-                  <TabsTrigger value="social" className="rounded-xl" data-testid="tab-social-posts">
-                    Social Posts
-                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="enquiries" className="mt-3">
@@ -1225,168 +1217,6 @@ export default function ClientPage() {
                         </span>
                       ))}
                     </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="social" className="mt-3">
-                  <div className="grid gap-3" data-testid="panel-social-posts">
-                    <div className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1" data-testid="group-social-filters">
-                        <button
-                          type="button"
-                          onClick={() => setSocialFilter("today")}
-                          className={
-                            "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                            (socialFilter === "today"
-                              ? "bg-black text-white"
-                              : "text-black/70 hover:bg-black/5")
-                          }
-                          data-testid="filter-social-today"
-                        >
-                          Today
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSocialFilter("tomorrow")}
-                          className={
-                            "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                            (socialFilter === "tomorrow"
-                              ? "bg-black text-white"
-                              : "text-black/70 hover:bg-black/5")
-                          }
-                          data-testid="filter-social-tomorrow"
-                        >
-                          Tomorrow
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSocialFilter("date")}
-                          className={
-                            "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                            (socialFilter === "date"
-                              ? "bg-black text-white"
-                              : "text-black/70 hover:bg-black/5")
-                          }
-                          data-testid="filter-social-date"
-                        >
-                          Date selection
-                        </button>
-                      </div>
-
-                      <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-social-date">
-                        <Input
-                          type="date"
-                          value={socialDate}
-                          onChange={(e) => setSocialDate(e.target.value)}
-                          className="h-9 w-[170px] rounded-2xl border-black/10 bg-black/5 text-black"
-                          data-testid="input-social-date"
-                        />
-                        <span className="text-xs text-black/45" data-testid="text-social-date-hint">
-                          Showing: {socialDate}
-                        </span>
-                      </div>
-                    </div>
-
-                    {([
-                      {
-                        id: "post-001",
-                        title: "Maldives Winter Escape — £2,495pp",
-                        subtitle: "Overwater villa + private transfers",
-                        imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                        hotel: "Soneva Jani",
-                        departing: "BAA",
-                        nights: 7,
-                        board: "Half Board",
-                        audience: "Facebook",
-                        status: "Scheduled",
-                        time: "Today 18:00",
-                        copy: "Limited winter availability. Premium overwater villas + transfers included. Reply 'MALDIVES' for a tailored quote.",
-                      },
-                      {
-                        id: "post-002",
-                        title: "Rome & Amalfi — £1,349pp",
-                        subtitle: "Split-stay with private transfers",
-                        imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                        hotel: "Hotel de la Ville + Il San Pietro",
-                        departing: "LGW",
-                        nights: 5,
-                        board: "B&B",
-                        audience: "Instagram",
-                        status: "Draft",
-                        time: "Tomorrow 10:30",
-                        copy: "A classic split-stay: 2 nights Rome, 3 nights Amalfi. Add private transfers and a sunset cruise.",
-                      },
-                    ] as const).map((post, idx) => (
-                      <motion.div
-                        key={post.id}
-                        className="overflow-hidden rounded-3xl border border-black/10 bg-white/80"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.2, delay: Math.min(idx * 0.04, 0.16) }}
-                        data-testid={`card-social-post-${post.id}`}
-                      >
-                        <div className="flex flex-col md:flex-row">
-                          <div className="relative h-48 w-full shrink-0 md:h-auto md:w-56">
-                            <img
-                              src={post.imageSrc}
-                              alt={post.title}
-                              className="h-full w-full object-cover"
-                            />
-                            <span className="absolute left-2 top-2 rounded-full border border-white/20 bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur">
-                              {post.audience}
-                            </span>
-                          </div>
-                          <div className="flex flex-1 flex-col gap-3 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-semibold">{post.title}</div>
-                                <div className="mt-0.5 text-xs text-black/55">{post.subtitle}</div>
-                              </div>
-                              <span
-                                className={
-                                  "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold " +
-                                  (post.status === "Scheduled"
-                                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
-                                    : "border-amber-500/25 bg-amber-500/10 text-amber-700")
-                                }
-                              >
-                                {post.status}
-                              </span>
-                            </div>
-
-                            <div className="flex flex-wrap gap-1.5 text-[11px] text-black/55">
-                              <span className="rounded-full border border-black/10 bg-black/5 px-2 py-0.5">{post.hotel}</span>
-                              <span className="rounded-full border border-black/10 bg-black/5 px-2 py-0.5">{post.departing}</span>
-                              <span className="rounded-full border border-black/10 bg-black/5 px-2 py-0.5">{post.nights} nights</span>
-                              <span className="rounded-full border border-black/10 bg-black/5 px-2 py-0.5">{post.board}</span>
-                            </div>
-
-                            <div className="line-clamp-2 text-xs text-black/65">{post.copy}</div>
-
-                            <div className="mt-auto flex items-center justify-between gap-3 pt-2">
-                              <div className="text-xs text-black/45">
-                                Scheduled: <span className="font-medium text-black/70">{post.time}</span>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  className="h-8 rounded-xl border border-black/10 bg-black/5 px-3 text-xs hover:bg-black/10"
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  className="h-8 rounded-xl bg-black px-3 text-xs text-white hover:bg-black/90"
-                                >
-                                  Preview
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
                   </div>
                 </TabsContent>
               </Tabs>
@@ -2118,7 +1948,7 @@ export default function ClientPage() {
                 className="rounded-2xl border-black/10 px-4"
                 onClick={() => {
                   setShowUploadFileModal(false);
-                  setUploadFile({ file: null, title: "", fileType: "", allocationType: "", allocationId: "" });
+                  setUploadFile({ file: null, fileType: "", allocationType: "", allocationId: "" });
                 }}
                 data-testid="button-cancel-upload"
               >
