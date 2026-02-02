@@ -306,6 +306,18 @@ export default function ClientPage() {
     "overview",
   );
   const [showNewQuoteModal, setShowNewQuoteModal] = useState(false);
+  const [showUploadFileModal, setShowUploadFileModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<{
+    file: File | null;
+    fileType: string;
+    allocationType: string;
+    allocationId: string;
+  }>({
+    file: null,
+    fileType: "",
+    allocationType: "",
+    allocationId: "",
+  });
   const [newQuote, setNewQuote] = useState({
     packageType: "",
     quoteTitle: "",
@@ -1050,25 +1062,52 @@ export default function ClientPage() {
                 </TabsContent>
 
                 <TabsContent value="files" className="mt-3">
-                  <div className="grid gap-3" data-testid="list-files">
-                    {filteredFiles.map((f) => (
-                      <div
-                        key={f.id}
-                        className="flex items-center justify-between gap-3 rounded-3xl border border-black/10 bg-white/70 p-4"
-                        data-testid={`row-file-wide-${f.id}`}
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold" data-testid={`text-file-wide-name-${f.id}`}>
-                            {f.name}
-                          </div>
-                          <div className="mt-1 text-xs text-black/55" data-testid={`text-file-wide-meta-${f.id}`}>
-                            {f.type} · Updated {f.updated}
-                          </div>
+                  <Card className="rounded-3xl border-black/10 bg-white/70 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold" data-testid="text-files-title">
+                          Files
                         </div>
-                        <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
+                        <div className="mt-1 text-xs text-black/55" data-testid="text-files-subtitle">
+                          Upload and manage client documents.
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                      <Button
+                        size="sm"
+                        className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
+                        data-testid="button-files-upload"
+                        onClick={() => setShowUploadFileModal(true)}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Upload File
+                      </Button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3" data-testid="list-files">
+                      {filteredFiles.map((f) => (
+                        <div
+                          key={f.id}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3"
+                          data-testid={`row-file-wide-${f.id}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold" data-testid={`text-file-wide-name-${f.id}`}>
+                              {f.name}
+                            </div>
+                            <div className="mt-1 text-xs text-black/55" data-testid={`text-file-wide-meta-${f.id}`}>
+                              {f.type} · Updated {f.updated}
+                            </div>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
+                        </div>
+                      ))}
+                      {filteredFiles.length === 0 && (
+                        <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center">
+                          <div className="text-sm text-black/55">No files uploaded yet.</div>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
                 </TabsContent>
 
                 <TabsContent value="tickets" className="mt-3">
@@ -1727,6 +1766,156 @@ export default function ClientPage() {
                 data-testid="button-save-quote"
               >
                 Create Quote
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showUploadFileModal} onOpenChange={setShowUploadFileModal}>
+        <DialogContent className="max-w-lg rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Upload File</DialogTitle>
+            <DialogDescription className="text-sm text-black/55">
+              Upload a document and categorise it for {client?.name || "this client"}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 grid gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Select File</Label>
+              <Input
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setUploadFile((prev) => ({ ...prev, file }));
+                }}
+                className="h-10 rounded-xl border-black/10 bg-white/70"
+                data-testid="input-upload-file"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">File Type</Label>
+              <Select
+                value={uploadFile.fileType}
+                onValueChange={(v) => setUploadFile((prev) => ({ ...prev, fileType: v }))}
+              >
+                <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-file-type">
+                  <SelectValue placeholder="Select file type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Passport">Passport</SelectItem>
+                  <SelectItem value="Tickets">Tickets</SelectItem>
+                  <SelectItem value="Quote">Quote</SelectItem>
+                  <SelectItem value="Invoice">Invoice</SelectItem>
+                  <SelectItem value="Itinerary">Itinerary</SelectItem>
+                  <SelectItem value="Insurance">Insurance</SelectItem>
+                  <SelectItem value="Visa">Visa</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Allocate To</Label>
+              <Select
+                value={uploadFile.allocationType}
+                onValueChange={(v) => setUploadFile((prev) => ({ ...prev, allocationType: v, allocationId: "" }))}
+              >
+                <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-allocation-type">
+                  <SelectValue placeholder="Select allocation..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Enquiry">Enquiry</SelectItem>
+                  <SelectItem value="Quote">Quote</SelectItem>
+                  <SelectItem value="Booking">Booking</SelectItem>
+                  <SelectItem value="None">None (Client level)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {uploadFile.allocationType === "Quote" && quotes.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Select Quote</Label>
+                <Select
+                  value={uploadFile.allocationId}
+                  onValueChange={(v) => setUploadFile((prev) => ({ ...prev, allocationId: v }))}
+                >
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-quote-allocation">
+                    <SelectValue placeholder="Select quote..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {quotes.map((q) => (
+                      <SelectItem key={q.id} value={q.id}>
+                        {q.quoteTitle || q.destination} - {q.status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {uploadFile.allocationType === "Enquiry" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Select Enquiry</Label>
+                <Select
+                  value={uploadFile.allocationId}
+                  onValueChange={(v) => setUploadFile((prev) => ({ ...prev, allocationId: v }))}
+                >
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-allocation">
+                    <SelectValue placeholder="Select enquiry..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="enquiry-1">Initial requirements</SelectItem>
+                    <SelectItem value="enquiry-2">Budget alignment</SelectItem>
+                    <SelectItem value="enquiry-3">Destination short-list</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {uploadFile.allocationType === "Booking" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Select Booking</Label>
+                <Select
+                  value={uploadFile.allocationId}
+                  onValueChange={(v) => setUploadFile((prev) => ({ ...prev, allocationId: v }))}
+                >
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-booking-allocation">
+                    <SelectValue placeholder="Select booking..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="booking-1">Hotel confirmation</SelectItem>
+                    <SelectItem value="booking-2">Transfers</SelectItem>
+                    <SelectItem value="booking-3">Activities</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="rounded-2xl border-black/10 px-4"
+                onClick={() => {
+                  setShowUploadFileModal(false);
+                  setUploadFile({ file: null, fileType: "", allocationType: "", allocationId: "" });
+                }}
+                data-testid="button-cancel-upload"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
+                disabled={!uploadFile.file || !uploadFile.fileType}
+                onClick={() => {
+                  setShowUploadFileModal(false);
+                  setUploadFile({ file: null, fileType: "", allocationType: "", allocationId: "" });
+                }}
+                data-testid="button-upload-file"
+              >
+                Upload
               </Button>
             </div>
           </div>
