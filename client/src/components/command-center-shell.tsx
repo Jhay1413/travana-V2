@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
   BadgeCheck,
@@ -16,10 +17,14 @@ import {
   Filter,
   Globe,
   LayoutGrid,
+  LifeBuoy,
   Link2,
   ListChecks,
+  Mail,
+  MapPin,
   MessageSquare,
   Phone,
+  Plane,
   Plus,
   Search,
   Settings2,
@@ -88,55 +93,101 @@ export function CommandCenterShell({
 }) {
   const [, navigate] = useLocation();
 
-  const nav = useMemo(() => {
-    const base = [
-      { key: "overview", label: "Overview", icon: LayoutGrid },
-      { key: "clients", label: "Clients", icon: Users },
-      { key: "enquiries", label: "Enquiries", icon: ClipboardList },
-      { key: "quotes", label: "Quotes", icon: Sparkles },
-      { key: "bookings", label: "Bookings", icon: Ticket },
+  type NavItem = { key: string; label: string; icon: React.ReactNode; children?: NavItem[] };
+  type NavSection = { id: string; label: string; icon: React.ReactNode; items: NavItem[] };
+  type NavStructure = { grouped: true; sections: NavSection[] } | { grouped: false; items: NavItem[] };
+
+  const nav: NavStructure = useMemo(() => {
+    const base: NavItem[] = [
+      { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+      { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
+      { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
+      { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
     if (role === "Admin") {
-      return [
-        { key: "overview", label: "Overview", icon: LayoutGrid },
-        { key: "org", label: "Organisation", icon: Building2 },
-        { key: "users", label: "Users & Roles", icon: Shield },
-        { key: "audit", label: "Audit", icon: Activity },
-        { key: "settings", label: "Settings", icon: Settings2 },
-      ];
+      return {
+        grouped: true,
+        sections: [
+          {
+            id: "admin",
+            label: "Admin",
+            icon: <Shield className="h-4 w-4" />,
+            items: [
+              { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+              { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
+              { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
+              { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
+              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: [
+                { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
+                { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
+              ] },
+            ],
+          },
+          {
+            id: "agent",
+            label: "Agent Tools",
+            icon: <Users className="h-4 w-4" />,
+            items: [
+              { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+              { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
+              { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
+              { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+            ],
+          },
+        ],
+      };
     }
 
     if (role === "Manager") {
-      return [
-        { key: "overview", label: "Overview", icon: LayoutGrid },
-        { key: "team", label: "Team Pipeline", icon: BarChart3 },
-        { key: "coverage", label: "Coverage", icon: Compass },
-        { key: "coaching", label: "Coaching", icon: BadgeCheck },
-        { key: "reports", label: "Reports", icon: Activity },
-      ];
+      return { grouped: false, items: [
+        { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+        { key: "team", label: "Team Pipeline", icon: <BarChart3 className="h-4 w-4" /> },
+        { key: "coverage", label: "Coverage", icon: <Compass className="h-4 w-4" /> },
+        { key: "coaching", label: "Coaching", icon: <BadgeCheck className="h-4 w-4" /> },
+        { key: "reports", label: "Reports", icon: <Activity className="h-4 w-4" /> },
+      ]};
     }
 
     if (role === "Homeworker") {
-      return [
-        { key: "overview", label: "Work Queue", icon: ListChecks },
-        { key: "assigned", label: "Assigned Clients", icon: Users },
-        { key: "callbacks", label: "Callbacks", icon: Phone },
-        { key: "messages", label: "Messages", icon: MessageSquare },
-      ];
+      return { grouped: false, items: [
+        { key: "overview", label: "Work Queue", icon: <ListChecks className="h-4 w-4" /> },
+        { key: "assigned", label: "Assigned Clients", icon: <Users className="h-4 w-4" /> },
+        { key: "callbacks", label: "Callbacks", icon: <Phone className="h-4 w-4" /> },
+        { key: "messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
+      ]};
     }
 
     if (role === "Referer") {
-      return [
-        { key: "overview", label: "Affiliate Hub", icon: Link2 },
-        { key: "leads", label: "Leads", icon: Users },
-        { key: "commission", label: "Commission", icon: CircleDollarSign },
-        { key: "payouts", label: "Payouts", icon: Banknote },
-      ];
+      return { grouped: false, items: [
+        { key: "overview", label: "Affiliate Hub", icon: <Link2 className="h-4 w-4" /> },
+        { key: "leads", label: "Leads", icon: <Users className="h-4 w-4" /> },
+        { key: "commission", label: "Commission", icon: <CircleDollarSign className="h-4 w-4" /> },
+        { key: "payouts", label: "Payouts", icon: <Banknote className="h-4 w-4" /> },
+      ]};
     }
 
-    return base;
+    return { grouped: false, items: base };
   }, [role]);
+
+  const [expandedSections, setExpandedSections] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem("admin-nav-expanded");
+    return saved ? JSON.parse(saved) : ["admin", "agent"];
+  });
+  
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => {
+      const next = prev.includes(sectionId) 
+        ? prev.filter(id => id !== sectionId)
+        : [...prev, sectionId];
+      sessionStorage.setItem("admin-nav-expanded", JSON.stringify(next));
+      return next;
+    });
+  };
 
   const RoleBadgeIcon = RoleIcon[role] ?? Sparkles;
 
@@ -156,91 +207,261 @@ export function CommandCenterShell({
                     <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold" data-testid="text-brand-title">
-                      Apple Travel
+                    <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-title">
+                      Travana
                     </div>
-                    <div className="text-xs text-black/45 dark:text-white/45" data-testid="text-brand-subtitle">
+                    <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-brand-subtitle">
                       Command Center
                     </div>
                   </div>
                 </div>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs font-semibold text-black/70 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/7"
-                      data-testid="button-role"
-                      type="button"
-                    >
-                      <RoleBadgeIcon className="h-4 w-4" />
-                      {rolePillLabel(role)}
-                      <ChevronDown className="h-4 w-4 opacity-60" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end">
-                    <DropdownMenuLabel>Role</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
-                      <DropdownMenuItem key={r} onSelect={() => onRoleChange(r)} data-testid={`menu-role-${r.toLowerCase()}`}>
-                        {r}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              <div className="mt-4 grid gap-2" data-testid="menu-primary">
-                {nav.map((item) => {
-                  const isActive = item.key === active;
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => {
-                        if (item.key === "clients") navigate("/clients");
-                        else navigate("/");
-                      }}
-                      className={
-                        "group flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left transition active:scale-[0.99] " +
-                        (isActive
-                          ? "border-black/15 bg-black/7 text-black dark:border-white/15 dark:bg-white/10 dark:text-white"
-                          : "border-black/10 bg-black/5 text-black/70 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/7")
-                      }
-                      data-testid={`link-nav-${item.key}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <span className="text-sm font-semibold">{item.label}</span>
-                      </div>
-                      <ChevronRight className={"h-4 w-4 opacity-40 transition " + (isActive ? "translate-x-0.5" : "group-hover:translate-x-0.5")} />
-                    </button>
-                  );
-                })}
+                <select
+                  value={role}
+                  onChange={(e) => onRoleChange(e.target.value as Role)}
+                  className="rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
+                  data-testid="select-role-nav"
+                >
+                  {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                    <option key={r} value={r} className="text-black bg-white">
+                      {r}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
-              <div className="grid gap-2" data-testid="menu-secondary">
-                {[
-                  { key: "whatsapp", label: "WhatsApp" },
-                  { key: "email", label: "Email" },
-                  { key: "phone", label: "Phone" },
-                  { key: "calendar", label: "Calendar" },
-                  { key: "tasks", label: "Tasks" },
-                  { key: "notes", label: "Notes" },
-                ].map((x) => (
-                  <div
-                    key={x.key}
-                    className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
-                    data-testid={`row-connect-${x.key}`}
-                  >
-                    <span>{x.label}</span>
-                    <span className="rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] dark:border-white/10 dark:bg-white/5">0</span>
+              <nav className="space-y-1">
+                {nav.grouped ? (
+                  nav.sections.map((section) => {
+                    const isExpanded = expandedSections.includes(section.id);
+                    return (
+                      <div key={section.id} className="space-y-1">
+                        <button
+                          onClick={() => toggleSection(section.id)}
+                          className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
+                          data-testid={`nav-section-${section.id}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                              <span className="text-black/70 dark:text-white/80">{section.icon}</span>
+                            </span>
+                            <span className="text-sm font-semibold">{section.label}</span>
+                          </div>
+                          <motion.div
+                            animate={{ rotate: isExpanded ? 90 : 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ChevronRight className="h-4 w-4 text-black/35 dark:text-white/40" />
+                          </motion.div>
+                        </button>
+                        <AnimatePresence initial={false}>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="overflow-hidden pl-4"
+                            >
+                              {section.items.map((item) => {
+                                const isActive = active === item.key;
+                                const hasChildren = item.children && item.children.length > 0;
+                                const childActive = hasChildren && item.children!.some((c) => active === c.key);
+                                return (
+                                  <div key={item.key}>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (item.key === "clients") navigate("/clients");
+                                        else navigate("/command-center");
+                                      }}
+                                      className={
+                                        "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                                        (isActive || childActive
+                                          ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                          : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                                      }
+                                      data-testid={`nav-${item.key}`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <span
+                                          className={
+                                            "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
+                                            (isActive || childActive
+                                              ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                              : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                                          }
+                                          aria-hidden
+                                        >
+                                          <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                                        </span>
+                                        <span className="text-sm font-medium">{item.label}</span>
+                                      </div>
+                                      <ChevronRight
+                                        className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                                      />
+                                    </button>
+                                    {hasChildren && (isActive || childActive) && (
+                                      <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
+                                        {item.children!.map((child) => (
+                                          <button
+                                            key={child.key}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              navigate("/command-center");
+                                            }}
+                                            className={
+                                              "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
+                                              (active === child.key
+                                                ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                                : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                            }
+                                            data-testid={`nav-${child.key}`}
+                                          >
+                                            <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                            <span>{child.label}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })
+                ) : (
+                  nav.items.map((item) => {
+                    const isActive = active === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        onClick={() => {
+                          if (item.key === "clients") navigate("/clients");
+                          else navigate("/command-center");
+                        }}
+                        className={
+                          "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                          (isActive
+                            ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                            : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                        }
+                        data-testid={`nav-${item.key}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={
+                              "inline-flex h-8 w-8 items-center justify-center rounded-xl border " +
+                              (isActive
+                                ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                            }
+                            aria-hidden
+                          >
+                            <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                          </span>
+                          <span className="text-sm font-medium">{item.label}</span>
+                        </div>
+                        <ChevronRight
+                          className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                        />
+                      </button>
+                    );
+                  })
+                )}
+              </nav>
+
+              <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+              <button
+                className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                data-testid="button-support"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                    <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
                   </div>
-                ))}
+                  <div>
+                    <div className="text-sm font-semibold" data-testid="text-support-title">TheHub</div>
+                    <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-support-sub">
+                      Profile, News & Training
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+              </button>
+
+              <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+              <div className="flex items-center gap-3 px-3">
+                <div
+                  className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                  data-testid="img-connect-mark"
+                >
+                  <MessageSquare className="h-5 w-5 text-black/70 dark:text-white/85" />
+                  <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="title-serif truncate text-sm font-semibold" data-testid="text-connect-name">
+                    Connect
+                  </div>
+                  <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-connect-sub">
+                    Channels & conversations
+                  </div>
+                </div>
+              </div>
+              <Separator className="mt-3 mb-1 bg-black/10 dark:bg-white/10" data-testid="separator-connect" />
+
+              <div className="space-y-1" data-testid="section-connect">
+                {["whatsapp", "facebook", "tickets", "instagram", "email", "internal-chat"].map((key) => {
+                  const map: Record<string, { label: string; icon: React.ReactNode }> = {
+                    whatsapp: { label: "WhatsApp", icon: <MessageSquare className="h-4 w-4" /> },
+                    facebook: { label: "Facebook", icon: <Users className="h-4 w-4" /> },
+                    tickets: { label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
+                    instagram: { label: "Instagram", icon: <Sparkles className="h-4 w-4" /> },
+                    email: { label: "Email", icon: <Mail className="h-4 w-4" /> },
+                    "internal-chat": { label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+                  };
+                  const item = map[key];
+                  const awaitingMap: Record<string, number> = {
+                    whatsapp: 43,
+                    facebook: 2,
+                    tickets: 6,
+                    instagram: 0,
+                    email: 9,
+                    "internal-chat": 4,
+                  };
+                  const awaiting = awaitingMap[key] ?? 0;
+
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => navigate("/command-center")}
+                      className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
+                      data-testid={`nav-connect-${key}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                          <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                        </span>
+                        <span className="text-sm font-medium">{item.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {awaiting > 0 && (
+                          <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                            {awaiting}
+                          </span>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-black/35 dark:text-white/40" />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </aside>
@@ -254,7 +475,7 @@ export function CommandCenterShell({
                     data-testid="status-command-center"
                   >
                     <Globe className="h-4 w-4" />
-                    Apple Travel · {role}
+                    Travana · {role}
                   </div>
                   <div className="flex items-baseline gap-3">
                     <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
@@ -281,18 +502,6 @@ export function CommandCenterShell({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
-                      <span data-testid="text-theme-label">Light</span>
-                      <Switch
-                        data-testid="switch-theme"
-                        checked={theme === "dark"}
-                        onCheckedChange={() => onToggleTheme?.()}
-                      />
-                      <span className="text-black/45 dark:text-white/45" data-testid="text-theme-label-dark">
-                        Dark
-                      </span>
-                    </div>
-
                     <Button
                       variant="outline"
                       className="h-10 rounded-2xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
