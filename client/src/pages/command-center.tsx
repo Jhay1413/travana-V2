@@ -899,8 +899,8 @@ function TopBar({
     const q = query.toLowerCase();
     return clients
       .filter(c => 
-        c.name.toLowerCase().includes(q) || 
-        c.email.toLowerCase().includes(q) ||
+        (c.name && c.name.toLowerCase().includes(q)) || 
+        (c.email && c.email.toLowerCase().includes(q)) ||
         (c.nextTrip && c.nextTrip.toLowerCase().includes(q))
       )
       .slice(0, 5);
