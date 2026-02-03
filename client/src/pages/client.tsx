@@ -29,7 +29,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchClient, fetchQuotes, fetchTicketsByClient, fetchUsers, createTicket, updateTicket, updateClient as apiUpdateClient, type Client as ApiClient, type Quote as ApiQuote, type Ticket as ApiTicket, type User as ApiUser } from "@/lib/api";
+import { fetchClient, fetchQuotes, fetchTicketsByClient, fetchUsers, createTicket, updateTicket, updateClient as apiUpdateClient, createQuote, type Client as ApiClient, type Quote as ApiQuote, type Ticket as ApiTicket, type User as ApiUser, type CreateQuoteData } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
@@ -443,6 +443,18 @@ export default function ClientPage() {
     },
     onError: () => {
       toast({ title: "Failed to update client", variant: "destructive" });
+    },
+  });
+
+  const createQuoteMutation = useMutation({
+    mutationFn: (data: CreateQuoteData) => createQuote(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      setShowNewQuoteModal(false);
+      toast({ title: "Quote created successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "Failed to create quote", variant: "destructive" });
     },
   });
 
@@ -1868,12 +1880,56 @@ export default function ClientPage() {
               </Button>
               <Button
                 className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
+                disabled={createQuoteMutation.isPending}
                 onClick={() => {
-                  setShowNewQuoteModal(false);
+                  if (!clientId) return;
+                  createQuoteMutation.mutate({
+                    clientId,
+                    status: "In Play",
+                    packageType: newQuote.packageType || undefined,
+                    quoteTitle: newQuote.quoteTitle || undefined,
+                    quoteLink: newQuote.quoteLink || undefined,
+                    travelDate: newQuote.travelDate || undefined,
+                    passengersAdults: newQuote.passengersAdults,
+                    passengersChildren: newQuote.passengersChildren,
+                    passengersInfants: newQuote.passengersInfants,
+                    childAges: newQuote.childAges,
+                    country: newQuote.country || undefined,
+                    destination: newQuote.destination || undefined,
+                    resort: newQuote.resort || undefined,
+                    accommodation: newQuote.accommodation || undefined,
+                    checkInDate: newQuote.checkInDate || undefined,
+                    checkInTime: newQuote.checkInTime || undefined,
+                    nights: newQuote.nights || undefined,
+                    boardBasis: newQuote.boardBasis || undefined,
+                    roomType: newQuote.roomType || undefined,
+                    transferType: newQuote.transferType || undefined,
+                    preBookedSeats: newQuote.preBookedSeats || undefined,
+                    flightMeals: newQuote.flightMeals || undefined,
+                    outboundDepartAirport: newQuote.outboundDepartAirport || undefined,
+                    outboundDepartDate: newQuote.outboundDepartDate || undefined,
+                    outboundDepartTime: newQuote.outboundDepartTime || undefined,
+                    outboundArriveAirport: newQuote.outboundArriveAirport || undefined,
+                    outboundArriveDate: newQuote.outboundArriveDate || undefined,
+                    outboundArriveTime: newQuote.outboundArriveTime || undefined,
+                    inboundDepartAirport: newQuote.inboundDepartAirport || undefined,
+                    inboundDepartDate: newQuote.inboundDepartDate || undefined,
+                    inboundDepartTime: newQuote.inboundDepartTime || undefined,
+                    inboundArriveAirport: newQuote.inboundArriveAirport || undefined,
+                    inboundArriveDate: newQuote.inboundArriveDate || undefined,
+                    inboundArriveTime: newQuote.inboundArriveTime || undefined,
+                    tourOperator: newQuote.tourOperator || undefined,
+                    sales: newQuote.sales || undefined,
+                    price: newQuote.price || undefined,
+                    commission: newQuote.commission || undefined,
+                    discount: newQuote.discount || undefined,
+                    serviceCharge: newQuote.serviceCharge || undefined,
+                    pricePerPerson: newQuote.pricePerPerson || undefined,
+                  });
                 }}
                 data-testid="button-save-quote"
               >
-                Create Quote
+                {createQuoteMutation.isPending ? "Creating..." : "Create Quote"}
               </Button>
             </div>
           </div>

@@ -202,6 +202,65 @@ export async function fetchQuoteFull(id: string): Promise<QuoteFull> {
   return res.json();
 }
 
+export interface CreateQuoteData {
+  clientId: string;
+  userId?: string;
+  status?: string;
+  packageType?: string;
+  quoteTitle?: string;
+  quoteLink?: string;
+  travelDate?: string;
+  returnDate?: string;
+  passengersAdults?: number;
+  passengersChildren?: number;
+  passengersInfants?: number;
+  childAges?: number[];
+  country?: string;
+  destination?: string;
+  resort?: string;
+  accommodation?: string;
+  checkInDate?: string;
+  checkInTime?: string;
+  nights?: number;
+  boardBasis?: string;
+  roomType?: string;
+  transferType?: string;
+  preBookedSeats?: string;
+  flightMeals?: string;
+  outboundDepartAirport?: string;
+  outboundDepartDate?: string;
+  outboundDepartTime?: string;
+  outboundArriveAirport?: string;
+  outboundArriveDate?: string;
+  outboundArriveTime?: string;
+  inboundDepartAirport?: string;
+  inboundDepartDate?: string;
+  inboundDepartTime?: string;
+  inboundArriveAirport?: string;
+  inboundArriveDate?: string;
+  inboundArriveTime?: string;
+  tourOperator?: string;
+  sales?: number;
+  price?: number;
+  commission?: number;
+  discount?: number;
+  serviceCharge?: number;
+  pricePerPerson?: number;
+}
+
+export async function createQuote(data: CreateQuoteData): Promise<Quote> {
+  const res = await fetch("/api/quotes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to create quote");
+  }
+  return res.json();
+}
+
 // Dashboard Stats
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   const res = await fetch("/api/dashboard/stats");
