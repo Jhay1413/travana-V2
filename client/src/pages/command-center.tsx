@@ -628,10 +628,17 @@ function ShellNav({
             };
             const awaiting = awaitingMap[key] ?? 0;
 
+            const handleConnectClick = () => {
+              if (key === "tickets") {
+                navigate("/tickets");
+              } else {
+                onActiveChange(`connect-${key}`);
+              }
+            };
             return (
               <button
                 key={key}
-                onClick={() => onActiveChange(`connect-${key}`)}
+                onClick={handleConnectClick}
                 className={
                   "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                   (isActive
