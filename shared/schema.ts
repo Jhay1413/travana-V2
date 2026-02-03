@@ -210,3 +210,33 @@ export const ticketAttachments = pgTable("ticket_attachments", {
 export const insertTicketAttachmentSchema = createInsertSchema(ticketAttachments).omit({ id: true, createdAt: true });
 export type InsertTicketAttachment = z.infer<typeof insertTicketAttachmentSchema>;
 export type TicketAttachment = typeof ticketAttachments.$inferSelect;
+
+// Ticket Replies table
+export const ticketReplies = pgTable("ticket_replies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: varchar("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertTicketReplySchema = createInsertSchema(ticketReplies).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertTicketReply = z.infer<typeof insertTicketReplySchema>;
+export type TicketReply = typeof ticketReplies.$inferSelect;
+
+// Notifications table
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // ticket_reply, ticket_assigned, ticket_updated, ticket_resolved
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  link: text("link"),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
