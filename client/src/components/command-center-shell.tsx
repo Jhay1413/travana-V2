@@ -468,10 +468,18 @@ export function CommandCenterShell({
                   };
                   const awaiting = awaitingMap[key] ?? 0;
 
+                  const connectRoutes: Record<string, string> = {
+                    whatsapp: "/",
+                    facebook: "/",
+                    tickets: "/tickets",
+                    instagram: "/",
+                    email: "/",
+                    "internal-chat": "/",
+                  };
                   return (
                     <button
                       key={key}
-                      onClick={() => navigate("/command-center")}
+                      onClick={() => navigate(connectRoutes[key] || "/")}
                       className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
                       data-testid={`nav-connect-${key}`}
                     >
