@@ -12,6 +12,7 @@ import {
   notes,
   tourOperators,
   airports,
+  tickets,
   type User,
   type InsertUser,
   type Client,
@@ -32,6 +33,8 @@ import {
   type InsertTourOperator,
   type Airport,
   type InsertAirport,
+  type Ticket,
+  type InsertTicket,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -115,6 +118,15 @@ export interface IStorage {
   createAirport(airport: InsertAirport): Promise<Airport>;
   updateAirport(id: string, airport: Partial<InsertAirport>): Promise<Airport | undefined>;
   deleteAirport(id: string): Promise<void>;
+
+  // Tickets
+  listTickets(): Promise<Ticket[]>;
+  listTicketsByClient(clientId: string): Promise<Ticket[]>;
+  listTicketsByUser(userId: string): Promise<Ticket[]>;
+  getTicket(id: string): Promise<Ticket | undefined>;
+  createTicket(ticket: InsertTicket): Promise<Ticket>;
+  updateTicket(id: string, ticket: Partial<InsertTicket>): Promise<Ticket | undefined>;
+  deleteTicket(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -363,6 +375,42 @@ export class DbStorage implements IStorage {
 
   async deleteAirport(id: string): Promise<void> {
     await db.delete(airports).where(eq(airports.id, id));
+  }
+
+  // Tickets
+  async listTickets(): Promise<Ticket[]> {
+    return db.select().from(tickets).orderBy(desc(tickets.createdAt));
+  }
+
+  async listTicketsByClient(clientId: string): Promise<Ticket[]> {
+    return db.select().from(tickets).where(eq(tickets.clientId, clientId)).orderBy(desc(tickets.createdAt));
+  }
+
+  async listTicketsByUser(userId: string): Promise<Ticket[]> {
+    return db.select().from(tickets).where(eq(tickets.userId, userId)).orderBy(desc(tickets.createdAt));
+  }
+
+  async getTicket(id: string): Promise<Ticket | undefined> {
+    const result = await db.select().from(tickets).where(eq(tickets.id, id));
+    return result[0];
+  }
+
+  async createTicket(ticket: InsertTicket): Promise<Ticket> {
+    const result = await db.insert(tickets).values(ticket).returning();
+    return result[0];
+  }
+
+  async updateTicket(id: string, ticket: Partial<InsertTicket>): Promise<Ticket | undefined> {
+    const result = await db
+      .update(tickets)
+      .set({ ...ticket, updatedAt: new Date() })
+      .where(eq(tickets.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteTicket(id: string): Promise<void> {
+    await db.delete(tickets).where(eq(tickets.id, id));
   }
 }
 

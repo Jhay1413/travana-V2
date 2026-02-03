@@ -176,3 +176,22 @@ export const airports = pgTable("airports", {
 export const insertAirportSchema = createInsertSchema(airports).omit({ id: true, createdAt: true });
 export type InsertAirport = z.infer<typeof insertAirportSchema>;
 export type Airport = typeof airports.$inferSelect;
+
+// Tickets table
+export const tickets = pgTable("tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  type: text("type").notNull(), // Admin, Build, Sales
+  status: text("status").notNull().default("Open"), // Open, In Progress, Resolved, Closed
+  priority: text("priority").notNull().default("Medium"), // Low, Medium, High, Urgent
+  subject: text("subject").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
+export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true });
+export type InsertTicket = z.infer<typeof insertTicketSchema>;
+export type Ticket = typeof tickets.$inferSelect;
