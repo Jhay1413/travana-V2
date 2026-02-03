@@ -93,6 +93,9 @@ type Client = {
   stage: Stage;
   value: number;
   lastTouch: string;
+  phone?: string | null;
+  email?: string | null;
+  clientType?: string | null;
 };
 
 type Lead = {
