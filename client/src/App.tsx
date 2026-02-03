@@ -10,6 +10,7 @@ import CommandCenterPage from "@/pages/command-center";
 import ClientsPage from "@/pages/clients";
 import ClientPage from "@/pages/client";
 import QuotePage from "@/pages/quote";
+import TicketsPage from "@/pages/tickets";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -30,6 +31,7 @@ function AuthenticatedRouter() {
       <Route path="/clients" component={ClientsPage} />
       <Route path="/clients/:clientId" component={ClientPage} />
       <Route path="/clients/:clientId/quotes/:quoteId" component={QuotePage} />
+      <Route path="/tickets" component={TicketsPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -191,3 +191,67 @@ export async function fetchAirports(): Promise<Airport[]> {
   if (!res.ok) throw new Error("Failed to fetch airports");
   return res.json();
 }
+
+// Tickets
+export interface Ticket {
+  id: string;
+  clientId: string;
+  userId: string;
+  type: string;
+  status: string;
+  priority: string;
+  subject: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  resolvedAt: string | null;
+}
+
+export async function fetchTickets(): Promise<Ticket[]> {
+  const res = await fetch("/api/tickets");
+  if (!res.ok) throw new Error("Failed to fetch tickets");
+  return res.json();
+}
+
+export async function fetchTicket(id: string): Promise<Ticket> {
+  const res = await fetch(`/api/tickets/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch ticket");
+  return res.json();
+}
+
+export async function fetchTicketsByClient(clientId: string): Promise<Ticket[]> {
+  const res = await fetch(`/api/clients/${clientId}/tickets`);
+  if (!res.ok) throw new Error("Failed to fetch client tickets");
+  return res.json();
+}
+
+export async function fetchTicketsByUser(userId: string): Promise<Ticket[]> {
+  const res = await fetch(`/api/users/${userId}/tickets`);
+  if (!res.ok) throw new Error("Failed to fetch user tickets");
+  return res.json();
+}
+
+export async function createTicket(ticket: Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt">): Promise<Ticket> {
+  const res = await fetch("/api/tickets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(ticket),
+  });
+  if (!res.ok) throw new Error("Failed to create ticket");
+  return res.json();
+}
+
+export async function updateTicket(id: string, ticket: Partial<Ticket>): Promise<Ticket> {
+  const res = await fetch(`/api/tickets/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(ticket),
+  });
+  if (!res.ok) throw new Error("Failed to update ticket");
+  return res.json();
+}
+
+export async function deleteTicket(id: string): Promise<void> {
+  const res = await fetch(`/api/tickets/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete ticket");
+}

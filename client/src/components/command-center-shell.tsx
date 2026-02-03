@@ -56,6 +56,7 @@ function getNavRoute(key: string): string {
   const routes: Record<string, string> = {
     overview: "/",
     clients: "/clients",
+    tickets: "/tickets",
     enquiries: "/",
     quotes: "/",
     bookings: "/",
@@ -128,6 +129,7 @@ export function CommandCenterShell({
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+      { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
       { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
@@ -160,6 +162,7 @@ export function CommandCenterShell({
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+              { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
               { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
