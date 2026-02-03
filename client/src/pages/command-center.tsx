@@ -1077,21 +1077,14 @@ function TopBar({
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium text-sm">{client.name}</div>
-                        <div className="text-xs text-black/50 dark:text-white/50">{client.email}</div>
+                        <div className="text-xs text-black/50 dark:text-white/50">{client.phone}</div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          client.tier === "Platinum" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" :
-                          client.tier === "Gold" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" :
-                          "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                        }`}>
-                          {client.tier}
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-[#3b82f6]/10 text-[#3b82f6] border border-[#3b82f6]/30">
+                          {client.clientType || "New Client"}
                         </span>
                       </div>
                     </div>
-                    {client.nextTrip && (
-                      <div className="text-xs text-black/40 dark:text-white/40 mt-1">{client.nextTrip}</div>
-                    )}
                   </button>
                 ))}
               </div>
