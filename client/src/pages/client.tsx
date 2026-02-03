@@ -874,9 +874,7 @@ export default function ClientPage() {
                 <div className="text-sm font-semibold" data-testid="text-client-right-title">
                   Client workspace
                 </div>
-                <div className="mt-1 text-xs text-black/55" data-testid="text-client-right-subtitle">
-                  Enquiries, quotes, booked items, files, tickets, and tags — all in one place.
-                </div>
+                <div className="mt-1 text-xs text-black/55" data-testid="text-client-right-subtitle">Knowing you client is the key to Rapport</div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -1293,7 +1291,6 @@ export default function ClientPage() {
           </Card>
         </div>
       </div>
-
       <Dialog open={showNewQuoteModal} onOpenChange={setShowNewQuoteModal}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
           <DialogHeader>
@@ -1877,7 +1874,6 @@ export default function ClientPage() {
           </div>
         </DialogContent>
       </Dialog>
-
       <Dialog open={showUploadFileModal} onOpenChange={setShowUploadFileModal}>
         <DialogContent className="max-w-lg rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
           <DialogHeader>
