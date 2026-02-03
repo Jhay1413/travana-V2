@@ -5,12 +5,21 @@ import { useQuery } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import {
   BadgeCheck,
+  Calendar,
   ChevronRight,
+  Clock,
   Filter,
+  Mail,
   MapPin,
+  MessageCircle,
+  Phone,
+  Plane,
+  Plus,
+  PoundSterling,
   Search,
   Sparkles,
   Star,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -47,22 +56,22 @@ const currency = new Intl.NumberFormat("en-GB", {
 function tierPill(tier: ClientTier) {
   switch (tier) {
     case "Platinum":
-      return "border-violet-500/25 bg-violet-500/10 text-violet-700";
+      return "border-violet-500/30 bg-violet-500/15 text-violet-700";
     case "Gold":
-      return "border-amber-500/25 bg-amber-500/10 text-amber-800";
+      return "border-amber-500/30 bg-amber-500/15 text-amber-700";
     default:
-      return "border-black/10 bg-black/[0.03] text-black/70";
+      return "border-black/10 bg-black/5 text-black/70";
   }
 }
 
 function stagePill(stage: Stage) {
   switch (stage) {
     case "Booked":
-      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-800";
+      return "border-emerald-500/30 bg-emerald-500/15 text-emerald-700";
     case "Quote":
-      return "border-sky-500/25 bg-sky-500/10 text-sky-800";
+      return "border-sky-500/30 bg-sky-500/15 text-sky-700";
     default:
-      return "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-800";
+      return "border-fuchsia-500/30 bg-fuchsia-500/15 text-fuchsia-700";
   }
 }
 
@@ -76,32 +85,78 @@ function shortInitials(name: string) {
   return (a + b).toUpperCase();
 }
 
+function tierGradient(tier: ClientTier) {
+  switch (tier) {
+    case "Platinum":
+      return "from-violet-500/10 via-transparent to-transparent";
+    case "Gold":
+      return "from-amber-500/10 via-transparent to-transparent";
+    default:
+      return "from-black/[0.02] via-transparent to-transparent";
+  }
+}
+
+function parseLastTouch(v: string): number {
+  if (!v) return 999;
+  const lower = v.toLowerCase().trim();
+  if (lower === "today") return 0;
+  if (lower === "yesterday") return 1;
+  const daysMatch = lower.match(/(\d+)\s*d/i);
+  if (daysMatch) return parseInt(daysMatch[1]!, 10) + 1;
+  const weeksMatch = lower.match(/(\d+)\s*week/i);
+  if (weeksMatch) return parseInt(weeksMatch[1]!, 10) * 7;
+  const monthsMatch = lower.match(/(\d+)\s*month/i);
+  if (monthsMatch) return parseInt(monthsMatch[1]!, 10) * 30;
+  return 99;
+}
+
+const segmentStyles = {
+  violet: {
+    card: "border-violet-500/20 bg-violet-50/50",
+    icon: "bg-violet-500/10",
+    iconColor: "text-violet-600",
+  },
+  amber: {
+    card: "border-amber-500/20 bg-amber-50/50",
+    icon: "bg-amber-500/10",
+    iconColor: "text-amber-600",
+  },
+  fuchsia: {
+    card: "border-fuchsia-500/20 bg-fuchsia-50/50",
+    icon: "bg-fuchsia-500/10",
+    iconColor: "text-fuchsia-600",
+  },
+  sky: {
+    card: "border-sky-500/20 bg-sky-50/50",
+    icon: "bg-sky-500/10",
+    iconColor: "text-sky-600",
+  },
+} as const;
+
 export default function ClientsPage() {
   const [, navigate] = useLocation();
   const [role, setRole] = useState<Role>("Agent");
   const [active] = useState<string>("clients");
 
-  // Fetch clients from API
   const { data: apiClients, isLoading } = useQuery({
     queryKey: ["/api/clients"],
     queryFn: fetchClients,
   });
 
-  // Transform API clients to display format
   const clients = useMemo((): ClientDisplay[] => {
     if (!apiClients) return [];
     return apiClients.map((c) => ({
       id: c.id,
-      name: c.name,
-      tier: c.tier as ClientTier,
-      stage: c.stage as Stage,
+      name: c.name || "Unknown",
+      tier: (c.tier as ClientTier) || "Standard",
+      stage: (c.stage as Stage) || "Enquiry",
       location: c.location || "",
       nextTrip: c.nextTrip || "",
-      value: parseFloat(c.value),
+      value: Number(c.value) || 0,
       lastTouch: c.lastTouch || "",
-      email: c.email,
-      phone: c.phone,
-      tags: c.tags,
+      email: c.email || "",
+      phone: c.phone || "",
+      tags: c.tags || [],
     }));
   }, [apiClients]);
 
@@ -109,7 +164,7 @@ export default function ClientsPage() {
   const [stage, setStage] = useState<"all" | Stage>("all");
   const [tier, setTier] = useState<"all" | ClientTier>("all");
   const [sort, setSort] = useState<"value" | "lastTouch" | "name">("value");
-  const [tab, setTab] = useState<"directory" | "segments">("directory");
+  const [tab, setTab] = useState<"directory" | "segments" | "recent">("directory");
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -121,6 +176,8 @@ export default function ClientsPage() {
         c.id.toLowerCase().includes(query) ||
         c.location.toLowerCase().includes(query) ||
         c.nextTrip.toLowerCase().includes(query) ||
+        c.email.toLowerCase().includes(query) ||
+        c.phone.includes(query) ||
         c.tags.some((t) => t.toLowerCase().includes(query));
 
       const matchesStage = stage === "all" ? true : c.stage === stage;
@@ -131,33 +188,39 @@ export default function ClientsPage() {
     const s = [...base].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
       if (sort === "lastTouch") {
-        const rank = (v: string) => {
-          if (v.toLowerCase() === "today") return 0;
-          const m = v.match(/(\d+)d/i);
-          if (m) return parseInt(m[1]!, 10);
-          return 99;
-        };
-        return rank(a.lastTouch) - rank(b.lastTouch);
+        return parseLastTouch(a.lastTouch) - parseLastTouch(b.lastTouch);
       }
       return b.value - a.value;
     });
 
     return s;
-  }, [q, stage, tier, sort]);
+  }, [q, stage, tier, sort, clients]);
 
   const totals = useMemo(() => {
     const booked = clients.filter((c) => c.stage === "Booked");
-    const inPipe = clients.filter((c) => c.stage !== "Booked");
+    const quotes = clients.filter((c) => c.stage === "Quote");
+    const enquiries = clients.filter((c) => c.stage === "Enquiry");
     const bookedValue = booked.reduce((s, i) => s + i.value, 0);
-    const pipeValue = inPipe.reduce((s, i) => s + i.value, 0);
+    const pipeValue = quotes.reduce((s, i) => s + i.value, 0) + enquiries.reduce((s, i) => s + i.value, 0);
+    const platinum = clients.filter((c) => c.tier === "Platinum").length;
+    const gold = clients.filter((c) => c.tier === "Gold").length;
     return {
       total: clients.length,
       bookedCount: booked.length,
-      pipelineCount: inPipe.length,
+      quotesCount: quotes.length,
+      enquiriesCount: enquiries.length,
       bookedValue,
       pipeValue,
       avg: Math.round((bookedValue + pipeValue) / Math.max(clients.length, 1)),
+      platinum,
+      gold,
     };
+  }, [clients]);
+
+  const recentClients = useMemo(() => {
+    return [...clients]
+      .sort((a, b) => parseLastTouch(a.lastTouch) - parseLastTouch(b.lastTouch))
+      .slice(0, 5);
   }, [clients]);
 
   return (
@@ -166,100 +229,159 @@ export default function ClientsPage() {
       onRoleChange={setRole}
       active={active}
       title="Clients"
-      subtitle="designed for high-signal selling"
+      subtitle="Your client directory"
       query={q}
       onQuery={setQ}
       theme="light"
       onToggleTheme={() => {}}
     >
       <div className="relative min-h-[calc(100vh-56px)] w-full px-4 pb-6 md:px-6 md:pb-8">
+        <div className="relative mt-6 space-y-4">
 
-        <div className="relative mt-6">
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/45" />
-                  <Input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder="Search name, ID, destination, tags…"
-                    className="h-10 rounded-2xl border-black/10 bg-white/70 pl-10 pr-28 text-black placeholder:text-black/40"
-                    data-testid="input-client-search"
-                  />
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-black" data-testid="heading-clients">
+                Clients
+              </h1>
+              <p className="mt-1 text-sm text-black/60" data-testid="subheading-clients">
+                Manage your client relationships and track their journey
+              </p>
+            </div>
+            <Button
+              className="h-11 gap-2 rounded-2xl bg-black px-5 text-white hover:bg-black/90"
+              data-testid="button-add-client"
+              onClick={() => {}}
+            >
+              <Plus className="h-4 w-4" />
+              Add Client
+            </Button>
+          </div>
 
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="h-9 rounded-2xl border border-black/10 bg-black/[0.03] px-3 text-black hover:bg-black/[0.05]"
-                      data-testid="button-import-clients"
-                      onClick={() => {}}
-                    >
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      Import
-                    </Button>
-                  </div>
+          <div className="grid gap-3 md:grid-cols-5" data-testid="grid-client-stats">
+            <Card className="rounded-2xl border-black/10 bg-white/80 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/5">
+                  <Users className="h-5 w-5 text-black/70" />
                 </div>
+                <div>
+                  <div className="text-2xl font-semibold" data-testid="stat-total-clients">{totals.total}</div>
+                  <div className="text-xs text-black/55">Total Clients</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="rounded-2xl border-emerald-500/20 bg-emerald-50/50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
+                  <BadgeCheck className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-emerald-700" data-testid="stat-booked">{totals.bookedCount}</div>
+                  <div className="text-xs text-emerald-600/70">Booked</div>
+                </div>
+              </div>
+              <div className="mt-2 text-xs font-medium text-emerald-600" data-testid="stat-booked-value">
+                {currency.format(totals.bookedValue)}
+              </div>
+            </Card>
+
+            <Card className="rounded-2xl border-sky-500/20 bg-sky-50/50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/10">
+                  <TrendingUp className="h-5 w-5 text-sky-600" />
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-sky-700" data-testid="stat-quotes">{totals.quotesCount}</div>
+                  <div className="text-xs text-sky-600/70">Quotes Sent</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="rounded-2xl border-fuchsia-500/20 bg-fuchsia-50/50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/10">
+                  <Sparkles className="h-5 w-5 text-fuchsia-600" />
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-fuchsia-700" data-testid="stat-enquiries">{totals.enquiriesCount}</div>
+                  <div className="text-xs text-fuchsia-600/70">New Enquiries</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="rounded-2xl border-violet-500/20 bg-violet-50/50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
+                  <Star className="h-5 w-5 text-violet-600" />
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-violet-700" data-testid="stat-vip">{totals.platinum}</div>
+                  <div className="text-xs text-violet-600/70">VIP Platinum</div>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <Card className="rounded-3xl border-black/10 bg-white/70 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="relative flex-1 max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/45" />
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search by name, email, phone, destination..."
+                  className="h-10 rounded-2xl border-black/10 bg-white pl-10 text-black placeholder:text-black/40"
+                  data-testid="input-client-search"
+                />
               </div>
 
               <div className="flex flex-wrap items-center gap-2" data-testid="group-client-filters">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-                  data-testid="button-filter-toggle"
-                  onClick={() => {}}
-                >
-                  <Filter className="h-4 w-4" />
-                  Filters
-                </button>
-
-                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white/70 p-1">
+                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white p-1">
                   {(["all", "Enquiry", "Quote", "Booked"] as const).map((s) => (
                     <button
                       key={s}
                       type="button"
                       className={
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
-                        (stage === s ? "bg-black text-white" : "text-black/70 hover:bg-black/[0.03]")
+                        (stage === s ? "bg-black text-white" : "text-black/70 hover:bg-black/5")
                       }
                       data-testid={`filter-stage-${s.toLowerCase()}`}
                       onClick={() => setStage(s as any)}
                     >
-                      {s}
+                      {s === "all" ? "All Stages" : s}
                     </button>
                   ))}
                 </div>
 
-                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white/70 p-1">
+                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white p-1">
                   {(["all", "Platinum", "Gold", "Standard"] as const).map((t) => (
                     <button
                       key={t}
                       type="button"
                       className={
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
-                        (tier === t ? "bg-black text-white" : "text-black/70 hover:bg-black/[0.03]")
+                        (tier === t ? "bg-black text-white" : "text-black/70 hover:bg-black/5")
                       }
                       data-testid={`filter-tier-${t.toLowerCase()}`}
                       onClick={() => setTier(t as any)}
                     >
-                      {t}
+                      {t === "all" ? "All Tiers" : t}
                     </button>
                   ))}
                 </div>
 
-                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white/70 p-1">
+                <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-white p-1">
                   {([
                     { key: "value", label: "Value" },
-                    { key: "lastTouch", label: "Touch" },
-                    { key: "name", label: "Name" },
+                    { key: "lastTouch", label: "Recent" },
+                    { key: "name", label: "A-Z" },
                   ] as const).map((o) => (
                     <button
                       key={o.key}
                       type="button"
                       className={
                         "rounded-xl px-3 py-1.5 text-[11px] font-semibold transition " +
-                        (sort === o.key ? "bg-black text-white" : "text-black/70 hover:bg-black/[0.03]")
+                        (sort === o.key ? "bg-black text-white" : "text-black/70 hover:bg-black/5")
                       }
                       data-testid={`filter-sort-${o.key}`}
                       onClick={() => setSort(o.key)}
@@ -270,249 +392,297 @@ export default function ClientsPage() {
                 </div>
               </div>
             </div>
+          </Card>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3" data-testid="grid-client-kpis">
-              <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
-                <div className="text-xs font-medium text-black/55" data-testid="label-kpi-total-clients">
-                  Total clients
-                </div>
-                <div className="mt-2 text-2xl font-semibold" data-testid="value-kpi-total-clients">
-                  {totals.total}
-                </div>
-              </div>
-              <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
-                <div className="text-xs font-medium text-black/55" data-testid="label-kpi-booked">
-                  Booked
-                </div>
-                <div className="mt-2 flex items-baseline justify-between gap-3">
-                  <div className="text-2xl font-semibold" data-testid="value-kpi-booked-count">
-                    {totals.bookedCount}
-                  </div>
-                  <div className="text-xs font-semibold text-black/70" data-testid="value-kpi-booked-value">
-                    {currency.format(totals.bookedValue)}
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-3xl border border-black/10 bg-white/70 p-4">
-                <div className="text-xs font-medium text-black/55" data-testid="label-kpi-pipeline">
-                  Pipeline
-                </div>
-                <div className="mt-2 flex items-baseline justify-between gap-3">
-                  <div className="text-2xl font-semibold" data-testid="value-kpi-pipeline-count">
-                    {totals.pipelineCount}
-                  </div>
-                  <div className="text-xs font-semibold text-black/70" data-testid="value-kpi-pipeline-value">
-                    {currency.format(totals.pipeValue)}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="space-y-4">
+            <TabsList className="rounded-2xl border border-black/10 bg-white/80 p-1" data-testid="tabs-clients">
+              <TabsTrigger value="directory" className="rounded-xl px-4" data-testid="tab-directory">
+                <Users className="mr-2 h-4 w-4" />
+                All Clients
+              </TabsTrigger>
+              <TabsTrigger value="recent" className="rounded-xl px-4" data-testid="tab-recent">
+                <Clock className="mr-2 h-4 w-4" />
+                Recent Activity
+              </TabsTrigger>
+              <TabsTrigger value="segments" className="rounded-xl px-4" data-testid="tab-segments">
+                <Filter className="mr-2 h-4 w-4" />
+                Segments
+              </TabsTrigger>
+            </TabsList>
 
-            <div className="mt-4">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-                <TabsList className="rounded-2xl border border-black/10 bg-white/70" data-testid="tabs-clients">
-                  <TabsTrigger value="directory" className="rounded-xl" data-testid="tab-directory">
-                    Directory
-                  </TabsTrigger>
-                  <TabsTrigger value="segments" className="rounded-xl" data-testid="tab-segments">
-                    Segments
-                  </TabsTrigger>
-                </TabsList>
+            <TabsContent value="directory" className="space-y-3">
+              {isLoading ? (
+                <Card className="rounded-3xl border-black/10 bg-white/70 p-8 text-center">
+                  <div className="animate-pulse text-black/50">Loading clients...</div>
+                </Card>
+              ) : filtered.length === 0 ? (
+                <Card className="rounded-3xl border-black/10 bg-white/70 p-8 text-center" data-testid="empty-client-results">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-black/5">
+                    <Search className="h-6 w-6 text-black/40" />
+                  </div>
+                  <div className="mt-4 text-sm font-semibold">No clients found</div>
+                  <div className="mt-1 text-xs text-black/55">Try adjusting your search or filters</div>
+                </Card>
+              ) : (
+                <div className="space-y-3" data-testid="list-client-results">
+                  {filtered.map((c, idx) => (
+                    <motion.div
+                      key={c.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
+                    >
+                      <Card
+                        className={`group relative overflow-hidden rounded-3xl border-black/10 bg-white p-5 transition hover:shadow-lg cursor-pointer`}
+                        data-testid={`card-client-${c.id}`}
+                        onClick={() => navigate(`/clients/${c.id}`)}
+                      >
+                        <div className={`absolute inset-0 bg-gradient-to-r ${tierGradient(c.tier)} pointer-events-none`} />
+                        
+                        <div className="relative flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                          <div className="flex items-start gap-4">
+                            <div
+                              className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border ${
+                                c.tier === "Platinum" ? "border-violet-300 bg-violet-100" :
+                                c.tier === "Gold" ? "border-amber-300 bg-amber-100" :
+                                "border-black/10 bg-black/5"
+                              }`}
+                              data-testid={`avatar-client-${c.id}`}
+                            >
+                              <span className={`text-lg font-bold ${
+                                c.tier === "Platinum" ? "text-violet-700" :
+                                c.tier === "Gold" ? "text-amber-700" :
+                                "text-black/70"
+                              }`}>
+                                {shortInitials(c.name)}
+                              </span>
+                            </div>
 
-                <TabsContent value="directory" className="mt-4">
-                  <div className="grid gap-3" data-testid="list-client-results">
-                    {filtered.map((c, idx) => {
-                      return (
-                        <motion.button
-                          key={c.id}
-                          type="button"
-                          onClick={() => navigate(`/clients/${c.id}`)}
-                          className="group w-full rounded-3xl border border-black/10 bg-white/70 p-4 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
-                          data-testid={`row-client-${c.id}`}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.24, delay: Math.min(idx * 0.02, 0.2) }}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
-                                  data-testid={`avatar-client-${c.id}`}
-                                  aria-hidden
-                                >
-                                  <span className="text-xs font-semibold text-black/85">
-                                    {shortInitials(c.name)}
-                                  </span>
-                                </div>
-
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div
-                                      className="truncate text-sm font-semibold"
-                                      data-testid={`text-client-name-${c.id}`}
-                                    >
-                                      {c.name}
-                                    </div>
-                                    <span className="text-xs text-black/40" data-testid={`text-client-id-${c.id}`}>
-                                      {c.id}
-                                    </span>
-                                    <Badge
-                                      variant="outline"
-                                      className={`rounded-full ${tierPill(c.tier)}`}
-                                      data-testid={`pill-client-tier-${c.id}`}
-                                    >
-                                      {c.tier}
-                                    </Badge>
-                                    <Badge
-                                      variant="outline"
-                                      className={`rounded-full ${stagePill(c.stage)}`}
-                                      data-testid={`status-client-stage-${c.id}`}
-                                    >
-                                      {c.stage}
-                                    </Badge>
-                                  </div>
-                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                    <span
-                                      className="inline-flex items-center gap-1"
-                                      data-testid={`text-client-location-${c.id}`}
-                                    >
-                                      <MapPin className="h-3.5 w-3.5" />
-                                      {c.location}
-                                    </span>
-                                    <span className="text-black/25">•</span>
-                                    <span className="truncate" data-testid={`text-client-nexttrip-${c.id}`}>
-                                      {c.nextTrip}
-                                    </span>
-                                  </div>
-                                </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-base font-semibold text-black" data-testid={`text-client-name-${c.id}`}>
+                                  {c.name}
+                                </h3>
+                                <Badge variant="outline" className={`rounded-full text-[10px] ${tierPill(c.tier)}`} data-testid={`badge-tier-${c.id}`}>
+                                  {c.tier}
+                                </Badge>
+                                <Badge variant="outline" className={`rounded-full text-[10px] ${stagePill(c.stage)}`} data-testid={`badge-stage-${c.id}`}>
+                                  {c.stage}
+                                </Badge>
                               </div>
 
+                              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-black/60">
+                                <span className="inline-flex items-center gap-1" data-testid={`text-location-${c.id}`}>
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  {c.location}
+                                </span>
+                                <a
+                                  href={`mailto:${c.email}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1 hover:text-black transition"
+                                  data-testid={`link-email-${c.id}`}
+                                >
+                                  <Mail className="h-3.5 w-3.5" />
+                                  {c.email}
+                                </a>
+                                <a
+                                  href={`tel:${c.phone}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1 hover:text-black transition"
+                                  data-testid={`link-phone-${c.id}`}
+                                >
+                                  <Phone className="h-3.5 w-3.5" />
+                                  {c.phone}
+                                </a>
+                              </div>
+
+                              {c.nextTrip && (
+                                <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-black/5 px-3 py-1.5">
+                                  <Plane className="h-3.5 w-3.5 text-black/50" />
+                                  <span className="text-xs font-medium text-black/70" data-testid={`text-trip-${c.id}`}>
+                                    {c.nextTrip}
+                                  </span>
+                                </div>
+                              )}
+
                               <div className="mt-3 flex flex-wrap items-center gap-2">
-                                {c.tags.slice(0, 3).map((t, i) => (
+                                {c.tags.map((t, i) => (
                                   <span
                                     key={t + i}
-                                    className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70"
-                                    data-testid={`pill-client-tag-${c.id}-${i}`}
+                                    className="rounded-full border border-black/10 bg-black/[0.03] px-2.5 py-0.5 text-[10px] font-semibold text-black/60"
+                                    data-testid={`tag-${c.id}-${i}`}
                                   >
                                     {t}
                                   </span>
                                 ))}
                               </div>
                             </div>
+                          </div>
 
-                            <div className="flex shrink-0 flex-col items-end gap-1">
-                              <div className="text-sm font-semibold text-black/90" data-testid={`text-client-value-${c.id}`}>
+                          <div className="flex flex-col items-end gap-3 md:min-w-[140px]">
+                            <div className="text-right">
+                              <div className="text-lg font-semibold text-black" data-testid={`text-value-${c.id}`}>
                                 {currency.format(c.value)}
                               </div>
-                              <div className="text-xs text-black/50" data-testid={`text-client-lasttouch-${c.id}`}>
-                                Last touch: {c.lastTouch}
-                              </div>
-                              <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-black/70">
-                                Open
-                                <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                              <div className="flex items-center gap-1 text-xs text-black/50" data-testid={`text-lasttouch-${c.id}`}>
+                                <Clock className="h-3 w-3" />
+                                {c.lastTouch}
                               </div>
                             </div>
-                          </div>
-                        </motion.button>
-                      );
-                    })}
 
-                    {filtered.length === 0 ? (
-                      <div
-                        className="rounded-3xl border border-black/10 bg-white/70 p-8 text-center"
-                        data-testid="empty-client-results"
-                      >
-                        <div
-                          className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
-                          aria-hidden
-                        >
-                          <Search className="h-5 w-5 text-black/70" />
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <a
+                                href={`tel:${c.phone}`}
+                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-white text-black/60 transition hover:bg-black hover:text-white"
+                                title="Call"
+                                data-testid={`action-call-${c.id}`}
+                              >
+                                <Phone className="h-4 w-4" />
+                              </a>
+                              <a
+                                href={`mailto:${c.email}`}
+                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-white text-black/60 transition hover:bg-black hover:text-white"
+                                title="Email"
+                                data-testid={`action-email-${c.id}`}
+                              >
+                                <Mail className="h-4 w-4" />
+                              </a>
+                              <a
+                                href={`https://wa.me/${c.phone.replace(/\D/g, "")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-50 text-emerald-600 transition hover:bg-emerald-500 hover:text-white"
+                                title="WhatsApp"
+                                data-testid={`action-whatsapp-${c.id}`}
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                              </a>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 text-xs font-semibold text-black/70 transition group-hover:text-black"
+                              onClick={(e) => { e.stopPropagation(); navigate(`/clients/${c.id}`); }}
+                              data-testid={`link-view-${c.id}`}
+                            >
+                              View Details
+                              <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="mt-3 text-sm font-semibold" data-testid="text-empty-title">
-                          No matches
+                      </Card>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="recent" className="space-y-3">
+              <Card className="rounded-3xl border-black/10 bg-white/70 p-5">
+                <h3 className="text-sm font-semibold text-black mb-4">Recent Client Activity</h3>
+                <div className="space-y-3">
+                  {recentClients.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => navigate(`/clients/${c.id}`)}
+                      className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-white p-4 text-left transition hover:bg-black/[0.02]"
+                      data-testid={`recent-client-${c.id}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/5">
+                          <span className="text-xs font-semibold text-black/70">{shortInitials(c.name)}</span>
                         </div>
-                        <div className="mt-1 text-xs text-black/55" data-testid="text-empty-subtitle">
-                          Try a different query or clear filters.
+                        <div>
+                          <div className="text-sm font-medium">{c.name}</div>
+                          <div className="text-xs text-black/50">{c.lastTouch} · {c.stage}</div>
                         </div>
                       </div>
-                    ) : null}
-                  </div>
-                </TabsContent>
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className={`rounded-full text-[10px] ${stagePill(c.stage)}`}>
+                          {c.stage}
+                        </Badge>
+                        <ChevronRight className="h-4 w-4 text-black/40" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            </TabsContent>
 
-                <TabsContent value="segments" className="mt-4">
-                  <div className="grid gap-3 md:grid-cols-2" data-testid="grid-client-segments">
-                    {([
-                      {
-                        id: "seg-vip",
-                        title: "VIP & Repeat",
-                        desc: "High LTV clients with concierge expectations.",
-                        icon: Star,
-                        accent: "from-violet-500/20 via-black/[0.03] to-transparent",
-                        count: 3,
-                      },
-                      {
-                        id: "seg-family",
-                        title: "Family Travel",
-                        desc: "School-holiday led trips and multi-room bookings.",
-                        icon: Users,
-                        accent: "from-amber-500/20 via-black/[0.03] to-transparent",
-                        count: 2,
-                      },
-                      {
-                        id: "seg-corporate",
-                        title: "Corporate",
-                        desc: "Short lead times, tight itineraries, high margin upgrades.",
-                        icon: BadgeCheck,
-                        accent: "from-sky-500/20 via-black/[0.03] to-transparent",
-                        count: 1,
-                      },
-                      {
-                        id: "seg-new",
-                        title: "New Leads",
-                        desc: "Fast follow-up required to convert within 24 hours.",
-                        icon: Sparkles,
-                        accent: "from-fuchsia-500/20 via-black/[0.03] to-transparent",
-                        count: 1,
-                      },
-                    ] as const).map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        className="group relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 p-5 text-left transition hover:bg-black/[0.03]"
-                        data-testid={`card-segment-${s.id}`}
-                        onClick={() => {}}
-                      >
-                        <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${s.accent}`} />
-                        <div className="relative flex items-start justify-between gap-4">
-                          <div className="space-y-2">
-                            <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]">
-                              <s.icon className="h-5 w-5 text-black/70" />
-                            </div>
-                            <div>
-                              <div className="text-sm font-semibold" data-testid={`text-segment-title-${s.id}`}>
-                                {s.title}
-                              </div>
-                              <div className="mt-1 text-xs text-black/55" data-testid={`text-segment-desc-${s.id}`}>
-                                {s.desc}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-xs font-semibold text-black/70" data-testid={`text-segment-count-${s.id}`}>
-                            {s.count} clients
-                          </div>
+            <TabsContent value="segments" className="grid gap-3 md:grid-cols-2">
+              {([
+                {
+                  id: "vip",
+                  title: "VIP Platinum",
+                  desc: "High-value clients expecting premium service",
+                  icon: Star,
+                  color: "violet" as const,
+                  count: totals.platinum,
+                },
+                {
+                  id: "gold",
+                  title: "Gold Members",
+                  desc: "Loyal repeat customers with consistent bookings",
+                  icon: BadgeCheck,
+                  color: "amber" as const,
+                  count: totals.gold,
+                },
+                {
+                  id: "hot-leads",
+                  title: "Hot Leads",
+                  desc: "Enquiries needing follow-up within 24 hours",
+                  icon: Sparkles,
+                  color: "fuchsia" as const,
+                  count: totals.enquiriesCount,
+                },
+                {
+                  id: "pending-quotes",
+                  title: "Pending Quotes",
+                  desc: "Quotes sent awaiting client response",
+                  icon: TrendingUp,
+                  color: "sky" as const,
+                  count: totals.quotesCount,
+                },
+              ]).map((seg) => {
+                const styles = segmentStyles[seg.color];
+                return (
+                  <Card
+                    key={seg.id}
+                    className={`group cursor-pointer rounded-3xl ${styles.card} p-5 transition hover:shadow-md`}
+                    data-testid={`segment-${seg.id}`}
+                    onClick={() => {
+                      if (seg.id === "vip") setTier("Platinum");
+                      else if (seg.id === "gold") setTier("Gold");
+                      else if (seg.id === "hot-leads") { setStage("Enquiry"); setTier("all"); }
+                      else if (seg.id === "pending-quotes") { setStage("Quote"); setTier("all"); }
+                      setTab("directory");
+                    }}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-3">
+                        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${styles.icon}`}>
+                          <seg.icon className={`h-6 w-6 ${styles.iconColor}`} />
                         </div>
-                        <div className="relative mt-4 inline-flex items-center gap-1 text-xs font-semibold text-black/70">
-                          View
-                          <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                        <div>
+                          <h4 className="font-semibold text-black">{seg.title}</h4>
+                          <p className="mt-1 text-xs text-black/55">{seg.desc}</p>
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </Card>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-black">{seg.count}</div>
+                        <div className="text-xs text-black/50">clients</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-black/60 group-hover:text-black">
+                      View segment
+                      <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                    </div>
+                  </Card>
+                );
+              })}
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </CommandCenterShell>
