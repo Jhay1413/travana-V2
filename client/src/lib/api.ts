@@ -305,6 +305,7 @@ export interface TicketReply {
   id: string;
   ticketId: string;
   userId: string;
+  parentReplyId: string | null;
   content: string;
   createdAt: string;
   updatedAt: string | null;
@@ -316,11 +317,11 @@ export async function fetchReplies(ticketId: string): Promise<TicketReply[]> {
   return res.json();
 }
 
-export async function createReply(ticketId: string, userId: string, content: string): Promise<TicketReply> {
+export async function createReply(ticketId: string, userId: string, content: string, parentReplyId?: string): Promise<TicketReply> {
   const res = await fetch(`/api/tickets/${ticketId}/replies`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, content }),
+    body: JSON.stringify({ userId, content, parentReplyId: parentReplyId || null }),
   });
   if (!res.ok) throw new Error("Failed to create reply");
   return res.json();
