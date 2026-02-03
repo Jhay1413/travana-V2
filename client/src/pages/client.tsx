@@ -555,7 +555,7 @@ export default function ClientPage() {
                   <div className="flex items-baseline gap-3" data-testid="text-client-name">
                     <span className="text-lg font-semibold">{client ? client.name : "Client"}</span>
                     {client?.phone && (
-                      <span className="text-sm text-black/60 font-bold" data-testid="text-client-phone-header">
+                      <span className="text-sm font-bold text-[#000000c4]" data-testid="text-client-phone-header">
                         {client.phone}
                       </span>
                     )}
