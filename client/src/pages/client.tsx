@@ -587,14 +587,6 @@ export default function ClientPage() {
               {client ? (
                 <div className="mt-4 grid gap-2" data-testid="grid-client-kpis">
                   <div className="rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2">
-                    <div className="text-[11px] font-semibold text-black/55" data-testid="label-client-deal-value">
-                      Deal value
-                    </div>
-                    <div className="mt-0.5 text-sm font-semibold" data-testid="value-client-deal-value">
-                      {currency.format(client.value)}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2">
                     <div className="text-[11px] font-semibold text-black/55" data-testid="label-client-next-trip">
                       Next trip
                     </div>
