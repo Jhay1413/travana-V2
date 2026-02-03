@@ -299,6 +299,7 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
   const [editContent, setEditContent] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<TicketReply | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -315,10 +316,12 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
   });
 
   const createMutation = useMutation({
-    mutationFn: (content: string) => createReply(ticketId, currentUser?.id || "", content),
+    mutationFn: ({ content, parentReplyId }: { content: string; parentReplyId?: string }) => 
+      createReply(ticketId, currentUser?.id || "", content, parentReplyId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
       setReplyContent("");
+      setReplyingTo(null);
       toast({ title: "Reply added" });
     },
     onError: () => {
@@ -405,7 +408,7 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
       
       // Then create reply if there's content
       if (replyContent.trim() && replyContent !== "<p></p>") {
-        createMutation.mutate(replyContent);
+        createMutation.mutate({ content: replyContent, parentReplyId: replyingTo?.id });
       } else if (pendingFiles.length > 0) {
         // Just uploaded files, refresh attachments
         queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
@@ -451,84 +454,125 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
             <p className="text-sm text-black/40">No replies yet</p>
           </div>
         ) : (
-          replies.map((reply) => (
-            <div
-              key={reply.id}
-              className="p-4 rounded-xl border border-black/10 bg-white/60"
-              data-testid={`reply-${reply.id}`}
-            >
-              {editingReply?.id === reply.id ? (
-                <div className="space-y-3">
-                  <RichTextEditor
-                    content={editContent}
-                    onChange={setEditContent}
-                    placeholder="Edit your reply..."
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingReply(null)}
-                      data-testid="button-cancel-edit-reply"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveEdit}
-                      disabled={updateMutation.isPending}
-                      data-testid="button-save-edit-reply"
-                    >
-                      {updateMutation.isPending ? "Saving..." : "Save"}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-black/10 flex items-center justify-center text-xs font-medium">
-                        {getUserName(reply.userId).charAt(0)}
-                      </div>
-                      <span className="text-sm font-medium">{getUserName(reply.userId)}</span>
-                      <span className="text-xs text-black/40">{formatDateTime(reply.createdAt)}</span>
+          (() => {
+            const topLevelReplies = replies.filter(r => !r.parentReplyId);
+            const childReplies = replies.filter(r => r.parentReplyId);
+            const getChildReplies = (parentId: string) => childReplies.filter(r => r.parentReplyId === parentId);
+            
+            const renderReply = (reply: TicketReply, isNested = false) => (
+              <div
+                key={reply.id}
+                className={`p-4 rounded-xl border border-black/10 bg-white/60 ${isNested ? 'ml-6 border-l-2 border-l-blue-200' : ''}`}
+                data-testid={`reply-${reply.id}`}
+              >
+                {editingReply?.id === reply.id ? (
+                  <div className="space-y-3">
+                    <RichTextEditor
+                      content={editContent}
+                      onChange={setEditContent}
+                      placeholder="Edit your reply..."
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingReply(null)}
+                        data-testid="button-cancel-edit-reply"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveEdit}
+                        disabled={updateMutation.isPending}
+                        data-testid="button-save-edit-reply"
+                      >
+                        {updateMutation.isPending ? "Saving..." : "Save"}
+                      </Button>
                     </div>
-                    {currentUser?.id === reply.userId && (
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-black/10 flex items-center justify-center text-xs font-medium">
+                          {getUserName(reply.userId).charAt(0)}
+                        </div>
+                        <span className="text-sm font-medium">{getUserName(reply.userId)}</span>
+                        <span className="text-xs text-black/40">{formatDateTime(reply.createdAt)}</span>
+                      </div>
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => handleEdit(reply)}
-                          data-testid={`button-edit-reply-${reply.id}`}
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setReplyingTo(reply)}
+                          data-testid={`button-reply-to-${reply.id}`}
                         >
-                          <Edit2 className="h-3.5 w-3.5" />
+                          <MessageCircle className="h-3 w-3 mr-1" />
+                          Reply
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-red-600"
-                          onClick={() => deleteMutation.mutate(reply.id)}
-                          data-testid={`button-delete-reply-${reply.id}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {currentUser?.id === reply.userId && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleEdit(reply)}
+                              data-testid={`button-edit-reply-${reply.id}`}
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-600"
+                              onClick={() => deleteMutation.mutate(reply.id)}
+                              data-testid={`button-delete-reply-${reply.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <RichTextDisplay content={reply.content} />
-                </>
-              )}
-            </div>
-          ))
+                    </div>
+                    <RichTextDisplay content={reply.content} />
+                  </>
+                )}
+              </div>
+            );
+            
+            return topLevelReplies.map((reply) => (
+              <div key={reply.id} className="space-y-2">
+                {renderReply(reply)}
+                {getChildReplies(reply.id).map((childReply) => renderReply(childReply, true))}
+              </div>
+            ));
+          })()
         )}
       </div>
 
       <div className="space-y-2">
+        {replyingTo && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+            <MessageCircle className="h-3.5 w-3.5 text-blue-600" />
+            <span className="text-blue-800">
+              Replying to <strong>{getUserName(replyingTo.userId)}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              className="ml-auto text-blue-600 hover:text-blue-800"
+              data-testid="button-cancel-reply-to"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         <RichTextEditor
           content={replyContent}
           onChange={setReplyContent}
-          placeholder="Write a reply..."
+          placeholder={replyingTo ? `Reply to ${getUserName(replyingTo.userId)}...` : "Write a reply..."}
         />
         
         {pendingFiles.length > 0 && (
