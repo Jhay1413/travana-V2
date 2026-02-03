@@ -216,6 +216,7 @@ export const ticketReplies = pgTable("ticket_replies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticketId: varchar("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id),
+  parentReplyId: varchar("parent_reply_id"),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
