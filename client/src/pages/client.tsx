@@ -566,13 +566,6 @@ export default function ClientPage() {
                       >
                         {client.tier}
                       </Badge>
-                      <Badge
-                        variant="outline"
-                        className={`rounded-full ${stagePill(client.stage)}`}
-                        data-testid="status-client-stage"
-                      >
-                        {client.stage}
-                      </Badge>
                     </div>
                   ) : null}
                 </div>
