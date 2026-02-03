@@ -159,7 +159,7 @@ export default function ClientsPage() {
               onClick={() => setStage(s)}
               className={`group relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
                 stage === s
-                  ? "bg-black text-white dark:bg-white dark:text-black"
+                  ? "bg-[#3b82f6] text-white"
                   : "bg-white/60 text-black/70 hover:bg-white dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20 border border-black/10 dark:border-white/10"
               }`}
               data-testid={`tab-stage-${s}`}
@@ -198,14 +198,14 @@ export default function ClientsPage() {
             <div className="flex items-center rounded-full border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 p-1">
               <button
                 onClick={() => setView("grid")}
-                className={`rounded-full p-1.5 transition ${view === "grid" ? "bg-black text-white dark:bg-white dark:text-black" : "text-black/40 hover:text-black/60 dark:text-white/40 dark:hover:text-white/60"}`}
+                className={`rounded-full p-1.5 transition ${view === "grid" ? "bg-[#3b82f6] text-white" : "text-black/40 hover:text-black/60 dark:text-white/40 dark:hover:text-white/60"}`}
                 data-testid="button-view-grid"
               >
                 <Grid3X3 className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setView("list")}
-                className={`rounded-full p-1.5 transition ${view === "list" ? "bg-black text-white dark:bg-white dark:text-black" : "text-black/40 hover:text-black/60 dark:text-white/40 dark:hover:text-white/60"}`}
+                className={`rounded-full p-1.5 transition ${view === "list" ? "bg-[#3b82f6] text-white" : "text-black/40 hover:text-black/60 dark:text-white/40 dark:hover:text-white/60"}`}
                 data-testid="button-view-list"
               >
                 <List className="h-4 w-4" />
@@ -225,7 +225,7 @@ export default function ClientsPage() {
             </select>
             <Button
               size="sm"
-              className="gap-2 rounded-full bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+              className="gap-2 rounded-full bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
               data-testid="button-add-client"
             >
               <Plus className="h-4 w-4" />
@@ -254,7 +254,7 @@ export default function ClientsPage() {
                         className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
                           tier === t
                             ? t === "all"
-                              ? "bg-black text-white dark:bg-white dark:text-black"
+                              ? "bg-[#3b82f6] text-white"
                               : `${tierColors[t].light} ${tierColors[t].text} ${tierColors[t].border} border`
                             : "bg-black/5 text-black/50 hover:bg-black/10 dark:bg-white/5 dark:text-white/50 dark:hover:bg-white/10"
                         }`}

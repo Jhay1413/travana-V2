@@ -995,7 +995,7 @@ function TopBar({
                   No clients found matching "{query}"
                 </p>
                 <Button
-                  className="w-full h-9 rounded-xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                  className="w-full h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                   onClick={() => {
                     setShowSearchResults(false);
                     navigate("/clients?new=true&name=" + encodeURIComponent(query));
@@ -1022,7 +1022,7 @@ function TopBar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                  className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                   data-testid="button-primary-action"
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -1121,7 +1121,7 @@ function EmptyState({ title, desc, action }: { title: string; desc: string; acti
         </div>
         <div className="pt-2">
           <Button
-            className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+            className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
             data-testid="button-empty-action"
           >
             <Bolt className="mr-2 h-4 w-4" />
@@ -1524,7 +1524,7 @@ export default function CommandCenterPage() {
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
                           (socialFilter === "today"
-                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            ? "bg-[#3b82f6] text-white"
                             : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
                         }
                         data-testid="filter-overview-social-today"
@@ -1537,7 +1537,7 @@ export default function CommandCenterPage() {
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
                           (socialFilter === "tomorrow"
-                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            ? "bg-[#3b82f6] text-white"
                             : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
                         }
                         data-testid="filter-overview-social-tomorrow"
@@ -1550,7 +1550,7 @@ export default function CommandCenterPage() {
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
                           (socialFilter === "date"
-                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            ? "bg-[#3b82f6] text-white"
                             : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
                         }
                         data-testid="filter-overview-social-date"
@@ -2057,7 +2057,7 @@ export default function CommandCenterPage() {
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
                           (socialFilter === "today"
-                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            ? "bg-[#3b82f6] text-white"
                             : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
                         }
                         data-testid="filter-social-today"
@@ -2070,7 +2070,7 @@ export default function CommandCenterPage() {
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
                           (socialFilter === "tomorrow"
-                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            ? "bg-[#3b82f6] text-white"
                             : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
                         }
                         data-testid="filter-social-tomorrow"
@@ -2083,7 +2083,7 @@ export default function CommandCenterPage() {
                         className={
                           "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
                           (socialFilter === "date"
-                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            ? "bg-[#3b82f6] text-white"
                             : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
                         }
                         data-testid="filter-social-date"
@@ -2616,7 +2616,7 @@ export default function CommandCenterPage() {
 
               <div className="flex justify-end pt-2">
                 <Button
-                  className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                  className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                   data-testid="button-save-settings"
                 >
                   Save Changes
@@ -2703,7 +2703,7 @@ export default function CommandCenterPage() {
                 </div>
               </div>
               <Button
-                className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                 data-testid="button-share-link"
               >
                 <Link2 className="mr-2 h-4 w-4" />
@@ -2786,7 +2786,7 @@ export default function CommandCenterPage() {
                   </div>
                 </div>
                 <Button
-                  className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                  className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                   data-testid="button-invite-user"
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -3007,7 +3007,7 @@ export default function CommandCenterPage() {
                       const contact = prompt("Contact info:") || "";
                       createTourOperatorMutation.mutate({ name, holidayType, commissionPercent, username, password, contact });
                     }}
-                    className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                    className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                     data-testid="button-add-tour-operator"
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -3142,7 +3142,7 @@ export default function CommandCenterPage() {
                       const country = prompt("Country:") || "";
                       createAirportMutation.mutate({ name, code, country });
                     }}
-                    className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                    className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                     data-testid="button-add-airport"
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -3202,7 +3202,7 @@ export default function CommandCenterPage() {
                 onClick={() => setSettingsTab("general")}
                 className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
                   settingsTab === "general"
-                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    ? "bg-[#3b82f6] text-white"
                     : "bg-black/5 text-black/70 hover:bg-black/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
                 }`}
                 data-testid="tab-settings-general"
@@ -3213,7 +3213,7 @@ export default function CommandCenterPage() {
                 onClick={() => setSettingsTab("tour-operators")}
                 className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
                   settingsTab === "tour-operators"
-                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    ? "bg-[#3b82f6] text-white"
                     : "bg-black/5 text-black/70 hover:bg-black/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
                 }`}
                 data-testid="tab-settings-tour-operators"
@@ -3240,7 +3240,7 @@ export default function CommandCenterPage() {
                       const contact = prompt("Contact info:") || "";
                       createTourOperatorMutation.mutate({ name, holidayType, commissionPercent, username, password, contact });
                     }}
-                    className="rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                    className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                     data-testid="button-add-tour-operator"
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -3415,7 +3415,7 @@ export default function CommandCenterPage() {
 
                 <div className="pt-2">
                   <Button 
-                    className="w-full rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                    className="w-full rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                     data-testid="button-save-org-settings"
                   >
                     Save Changes

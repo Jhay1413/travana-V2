@@ -545,7 +545,7 @@ export function CommandCenterShell({
                     </Button>
 
                     <Button
-                      className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                      className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                       data-testid="button-primary-action"
                     >
                       <Plus className="mr-2 h-4 w-4" />

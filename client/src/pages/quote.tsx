@@ -253,7 +253,7 @@ export default function QuotePage() {
               <Copy className="mr-2 h-4 w-4" />
               Copy
             </Button>
-            <Button size="sm" className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90" data-testid="button-export-quote" onClick={() => {}}>
+            <Button size="sm" className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90" data-testid="button-export-quote" onClick={() => {}}>
               <FileText className="mr-2 h-4 w-4" />
               Export
             </Button>
@@ -508,7 +508,7 @@ export default function QuotePage() {
                   />
                   <Button
                     size="sm"
-                    className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
+                    className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90"
                     data-testid="button-add-tag"
                     onClick={() => {}}
                   >

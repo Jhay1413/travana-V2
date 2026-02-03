@@ -538,7 +538,7 @@ export default function ClientPage() {
                 Back
               </button>
               <Button
-                className="rounded-2xl bg-black text-white hover:bg-black/90"
+                className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                 data-testid="button-client-new-task"
                 onClick={() => {}}
               >
@@ -678,7 +678,7 @@ export default function ClientPage() {
                             className={
                               "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
                               (client?.stage === s
-                                ? "border-black/15 bg-black text-white"
+                                ? "border-[#3b82f6]/30 bg-[#3b82f6] text-white"
                                 : "border-black/10 bg-black/[0.03] text-black/70")
                             }
                             data-testid={`pill-client-stage-${s.toLowerCase()}`}

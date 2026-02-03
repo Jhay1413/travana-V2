@@ -235,7 +235,7 @@ export default function TicketsPage() {
               resetForm();
               setShowCreateDialog(true);
             }}
-            className="rounded-2xl gap-2 bg-black text-white hover:bg-black/80"
+            className="rounded-2xl gap-2 bg-[#3b82f6] text-white hover:bg-[#3b82f6]/80"
             data-testid="button-create-ticket"
           >
             <Plus className="h-4 w-4" />
