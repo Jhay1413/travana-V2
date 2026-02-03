@@ -293,3 +293,84 @@ export async function deleteAttachment(id: string): Promise<void> {
 export function getAttachmentUrl(id: string): string {
   return `/api/attachments/${id}/download`;
 }
+
+// Ticket Replies
+export interface TicketReply {
+  id: string;
+  ticketId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export async function fetchReplies(ticketId: string): Promise<TicketReply[]> {
+  const res = await fetch(`/api/tickets/${ticketId}/replies`);
+  if (!res.ok) throw new Error("Failed to fetch replies");
+  return res.json();
+}
+
+export async function createReply(ticketId: string, userId: string, content: string): Promise<TicketReply> {
+  const res = await fetch(`/api/tickets/${ticketId}/replies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, content }),
+  });
+  if (!res.ok) throw new Error("Failed to create reply");
+  return res.json();
+}
+
+export async function updateReply(id: string, content: string): Promise<TicketReply> {
+  const res = await fetch(`/api/replies/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) throw new Error("Failed to update reply");
+  return res.json();
+}
+
+export async function deleteReply(id: string): Promise<void> {
+  const res = await fetch(`/api/replies/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete reply");
+}
+
+// Notifications
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  link: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export async function fetchNotifications(userId: string): Promise<Notification[]> {
+  const res = await fetch(`/api/notifications?userId=${userId}`);
+  if (!res.ok) throw new Error("Failed to fetch notifications");
+  return res.json();
+}
+
+export async function fetchUnreadNotifications(userId: string): Promise<Notification[]> {
+  const res = await fetch(`/api/notifications/unread?userId=${userId}`);
+  if (!res.ok) throw new Error("Failed to fetch unread notifications");
+  return res.json();
+}
+
+export async function markNotificationRead(id: string): Promise<Notification> {
+  const res = await fetch(`/api/notifications/${id}/read`, { method: "PUT" });
+  if (!res.ok) throw new Error("Failed to mark notification as read");
+  return res.json();
+}
+
+export async function markAllNotificationsRead(userId: string): Promise<void> {
+  const res = await fetch(`/api/notifications/read-all?userId=${userId}`, { method: "PUT" });
+  if (!res.ok) throw new Error("Failed to mark all notifications as read");
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+  const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete notification");
+}
