@@ -554,6 +554,13 @@ export default function ClientPage() {
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Badge
                         variant="outline"
+                        className="rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#3b82f6]"
+                        data-testid="pill-client-type"
+                      >
+                        {client.clientType || "New Client"}
+                      </Badge>
+                      <Badge
+                        variant="outline"
                         className={`rounded-full ${tierPill(client.tier)}`}
                         data-testid="pill-client-tier"
                       >
