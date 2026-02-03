@@ -555,10 +555,14 @@ export default function ClientPage() {
                   <div className="flex items-baseline gap-3" data-testid="text-client-name">
                     <span className="text-lg font-semibold">{client ? client.name : "Client"}</span>
                     {client?.phone && (
-                      <span className="inline-flex items-center gap-1 text-sm font-bold text-[#000000c4]" data-testid="text-client-phone-header">
+                      <a
+                        href={`tel:${client.phone.replace(/\s/g, '')}`}
+                        className="inline-flex items-center gap-1 text-sm font-bold text-[#000000c4] hover:text-[#3b82f6] transition-colors"
+                        data-testid="text-client-phone-header"
+                      >
                         <Phone className="h-3.5 w-3.5" />
                         {client.phone}
-                      </span>
+                      </a>
                     )}
                   </div>
                   {client ? (
