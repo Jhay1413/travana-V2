@@ -1006,13 +1006,40 @@ function TopBar({
               <Filter className="mr-2 h-4 w-4" />
               Filters
             </Button>
-            <Button
-              className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
-              data-testid="button-primary-action"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Create
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  className="h-10 rounded-2xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                  data-testid="button-primary-action"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-new-client">
+                  <UserRound className="mr-2 h-4 w-4" />
+                  New Client
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-enquiry">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enquiry
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-quote">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Quote
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-booking">
+                  <Ticket className="mr-2 h-4 w-4" />
+                  Booking
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-task">
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  Task
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               onClick={() => setShowNotifications(true)}
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
