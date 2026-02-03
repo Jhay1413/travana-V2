@@ -1616,6 +1616,9 @@ export default function CommandCenterPage() {
       nextTrip: c.nextTrip || "",
       value: parseFloat(c.value),
       lastTouch: c.lastTouch || "",
+      phone: c.phone || "",
+      email: c.email || "",
+      clientType: c.clientType || "New Client",
     }));
   }, [apiClients]);
 
