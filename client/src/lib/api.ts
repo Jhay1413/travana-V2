@@ -255,3 +255,41 @@ export async function deleteTicket(id: string): Promise<void> {
   const res = await fetch(`/api/tickets/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete ticket");
 }
+
+// Ticket Attachments
+export interface TicketAttachment {
+  id: string;
+  ticketId: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
+
+export async function fetchAttachments(ticketId: string): Promise<TicketAttachment[]> {
+  const res = await fetch(`/api/tickets/${ticketId}/attachments`);
+  if (!res.ok) throw new Error("Failed to fetch attachments");
+  return res.json();
+}
+
+export async function uploadAttachment(ticketId: string, file: File): Promise<TicketAttachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error("Failed to upload file");
+  return res.json();
+}
+
+export async function deleteAttachment(id: string): Promise<void> {
+  const res = await fetch(`/api/attachments/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete attachment");
+}
+
+export function getAttachmentUrl(id: string): string {
+  return `/api/attachments/${id}/download`;
+}

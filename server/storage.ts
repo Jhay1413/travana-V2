@@ -13,6 +13,7 @@ import {
   tourOperators,
   airports,
   tickets,
+  ticketAttachments,
   type User,
   type InsertUser,
   type Client,
@@ -35,6 +36,8 @@ import {
   type InsertAirport,
   type Ticket,
   type InsertTicket,
+  type TicketAttachment,
+  type InsertTicketAttachment,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -127,6 +130,12 @@ export interface IStorage {
   createTicket(ticket: InsertTicket): Promise<Ticket>;
   updateTicket(id: string, ticket: Partial<InsertTicket>): Promise<Ticket | undefined>;
   deleteTicket(id: string): Promise<void>;
+
+  // Ticket Attachments
+  listAttachmentsByTicket(ticketId: string): Promise<TicketAttachment[]>;
+  getAttachment(id: string): Promise<TicketAttachment | undefined>;
+  createAttachment(attachment: InsertTicketAttachment): Promise<TicketAttachment>;
+  deleteAttachment(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -411,6 +420,25 @@ export class DbStorage implements IStorage {
 
   async deleteTicket(id: string): Promise<void> {
     await db.delete(tickets).where(eq(tickets.id, id));
+  }
+
+  // Ticket Attachments
+  async listAttachmentsByTicket(ticketId: string): Promise<TicketAttachment[]> {
+    return db.select().from(ticketAttachments).where(eq(ticketAttachments.ticketId, ticketId)).orderBy(desc(ticketAttachments.createdAt));
+  }
+
+  async getAttachment(id: string): Promise<TicketAttachment | undefined> {
+    const result = await db.select().from(ticketAttachments).where(eq(ticketAttachments.id, id));
+    return result[0];
+  }
+
+  async createAttachment(attachment: InsertTicketAttachment): Promise<TicketAttachment> {
+    const result = await db.insert(ticketAttachments).values(attachment).returning();
+    return result[0];
+  }
+
+  async deleteAttachment(id: string): Promise<void> {
+    await db.delete(ticketAttachments).where(eq(ticketAttachments.id, id));
   }
 }
 

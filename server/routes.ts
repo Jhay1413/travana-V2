@@ -1,5 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import {
@@ -15,6 +18,38 @@ import {
   insertAirportSchema,
   insertTicketSchema,
 } from "@shared/schema";
+
+// Configure multer for file uploads
+const uploadDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const fileStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `${uniqueSuffix}${ext}`);
+  },
+});
+
+const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only images (JPEG, PNG, GIF, WebP) and PDF files are allowed"));
+  }
+};
+
+const upload = multer({
+  storage: fileStorage,
+  fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+});
 
 // Helper to extract string parameter
 function getParam(param: string | string[]): string {
@@ -572,6 +607,87 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete ticket" });
+    }
+  });
+
+  // ============ Ticket Attachments ============
+  app.get("/api/tickets/:ticketId/attachments", async (req: Request, res: Response) => {
+    try {
+      const attachments = await storage.listAttachmentsByTicket(getParam(req.params.ticketId));
+      res.json(attachments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch attachments" });
+    }
+  });
+
+  app.post("/api/tickets/:ticketId/attachments", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const ticketId = getParam(req.params.ticketId);
+      const file = req.file;
+      
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const ticket = await storage.getTicket(ticketId);
+      if (!ticket) {
+        fs.unlinkSync(file.path);
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      const attachment = await storage.createAttachment({
+        ticketId,
+        filename: file.filename,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+      });
+
+      res.status(201).json(attachment);
+    } catch (error) {
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({ error: "Failed to upload file" });
+    }
+  });
+
+  app.get("/api/attachments/:id/download", async (req: Request, res: Response) => {
+    try {
+      const attachment = await storage.getAttachment(getParam(req.params.id));
+      if (!attachment) {
+        return res.status(404).json({ error: "Attachment not found" });
+      }
+
+      const filePath = path.join(uploadDir, attachment.filename);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      res.setHeader("Content-Type", attachment.mimeType);
+      res.setHeader("Content-Disposition", `inline; filename="${attachment.originalName}"`);
+      res.sendFile(filePath);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to download file" });
+    }
+  });
+
+  app.delete("/api/attachments/:id", async (req: Request, res: Response) => {
+    try {
+      const attachment = await storage.getAttachment(getParam(req.params.id));
+      if (!attachment) {
+        return res.status(404).json({ error: "Attachment not found" });
+      }
+
+      const filePath = path.join(uploadDir, attachment.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+
+      await storage.deleteAttachment(attachment.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete attachment" });
     }
   });
 

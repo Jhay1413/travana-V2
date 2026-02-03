@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -7,10 +7,15 @@ import {
   AlertCircle,
   Calendar,
   ChevronRight,
+  FileImage,
+  FileText,
   Filter,
   LifeBuoy,
+  Paperclip,
   Plus,
   Search,
+  Trash2,
+  Upload,
   User,
   Users,
   X,
@@ -24,8 +29,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { fetchTickets, fetchClients, fetchUsers, createTicket, updateTicket, deleteTicket, type Ticket, type Client, type User as ApiUser } from "@/lib/api";
+import { 
+  fetchTickets, 
+  fetchClients, 
+  fetchUsers, 
+  createTicket, 
+  updateTicket, 
+  deleteTicket, 
+  fetchAttachments,
+  uploadAttachment,
+  deleteAttachment,
+  getAttachmentUrl,
+  type Ticket, 
+  type Client, 
+  type User as ApiUser,
+  type TicketAttachment,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function isImageType(mimeType: string): boolean {
+  return mimeType.startsWith("image/");
+}
 
 const TICKET_TYPES = ["Admin", "Build", "Sales"] as const;
 const TICKET_STATUSES = ["Open", "In Progress", "Resolved", "Closed"] as const;
@@ -81,6 +111,155 @@ function priorityPill(priority: string) {
     default:
       return "border-black/10 bg-black/[0.03] text-black/70";
   }
+}
+
+function TicketAttachmentsSection({ ticketId }: { ticketId: string }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: attachments, isLoading } = useQuery({
+    queryKey: ["attachments", ticketId],
+    queryFn: () => fetchAttachments(ticketId),
+    enabled: !!ticketId,
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => uploadAttachment(ticketId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
+      toast({ title: "File uploaded successfully" });
+      setUploading(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to upload file", variant: "destructive" });
+      setUploading(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteAttachment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
+      toast({ title: "File deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete file", variant: "destructive" });
+    },
+  });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    if (!allowedTypes.includes(file.type)) {
+      toast({ title: "Only images and PDF files are allowed", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File size must be less than 10MB", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    uploadMutation.mutate(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  if (!ticketId) return null;
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-center justify-between">
+        <Label>Attachments</Label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,.pdf"
+          onChange={handleFileSelect}
+          className="hidden"
+          data-testid="input-file-upload"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="h-8 rounded-xl gap-1.5"
+          data-testid="button-upload-file"
+        >
+          {uploading ? (
+            <>
+              <Spinner className="h-3 w-3" />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <Upload className="h-3.5 w-3.5" />
+              Upload File
+            </>
+          )}
+        </Button>
+      </div>
+      
+      <div className="text-xs text-black/50 mb-1">
+        Images (JPEG, PNG, GIF, WebP) and PDF files up to 10MB
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-4">
+          <Spinner className="h-5 w-5" />
+        </div>
+      ) : !attachments?.length ? (
+        <div className="rounded-xl border border-dashed border-black/20 bg-black/[0.02] p-4 text-center">
+          <Paperclip className="h-6 w-6 mx-auto text-black/30 mb-2" />
+          <p className="text-sm text-black/50">No files attached yet</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {attachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className="flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-white/70 p-2.5"
+              data-testid={`attachment-${attachment.id}`}
+            >
+              <a
+                href={getAttachmentUrl(attachment.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-70 transition-opacity"
+              >
+                {isImageType(attachment.mimeType) ? (
+                  <FileImage className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                ) : (
+                  <FileText className="h-5 w-5 text-red-500 flex-shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">{attachment.originalName}</div>
+                  <div className="text-xs text-black/50">{formatFileSize(attachment.size)}</div>
+                </div>
+              </a>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => deleteMutation.mutate(attachment.id)}
+                disabled={deleteMutation.isPending}
+                className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                data-testid={`button-delete-attachment-${attachment.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TicketsPage() {
@@ -565,10 +744,10 @@ export default function TicketsPage() {
       </Dialog>
 
       <Dialog open={!!editingTicket} onOpenChange={() => setEditingTicket(null)}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Ticket</DialogTitle>
-            <DialogDescription>Update ticket details</DialogDescription>
+            <DialogDescription>Update ticket details and manage attachments</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -645,6 +824,8 @@ export default function TicketsPage() {
                 data-testid="edit-input-description"
               />
             </div>
+            
+            <TicketAttachmentsSection ticketId={editingTicket?.id || ""} />
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
