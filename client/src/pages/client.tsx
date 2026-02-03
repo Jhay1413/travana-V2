@@ -469,7 +469,6 @@ export default function ClientPage() {
         onRoleChange={setRole}
         active={active}
         title="Client"
-        subtitle="Loading..."
         query={q}
         onQuery={setQ}
         theme="light"
@@ -489,7 +488,6 @@ export default function ClientPage() {
         onRoleChange={setRole}
         active={active}
         title="Client"
-        subtitle="Not found"
         query={q}
         onQuery={setQ}
         theme="light"
@@ -518,7 +516,6 @@ export default function ClientPage() {
       onRoleChange={setRole}
       active={active}
       title={client.name}
-      subtitle={`${client.id} · ${client.location}`}
       query={q}
       onQuery={setQ}
       theme="light"
