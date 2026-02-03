@@ -466,19 +466,12 @@ export function CommandCenterShell({
                   };
                   const awaiting = awaitingMap[key] ?? 0;
 
-                  const connectRoutes: Record<string, string> = {
-                    whatsapp: "/",
-                    facebook: "/",
-                    tickets: "/tickets",
-                    instagram: "/",
-                    email: "/",
-                    "internal-chat": "/",
-                  };
-                  const isConnectActive = active === key || (key === "tickets" && active === "tickets");
+                  const connectRoute = key === "tickets" ? "/tickets" : "/";
+                  const isConnectActive = active === "tickets" && key === "tickets";
                   return (
-                    <button
+                    <Link
                       key={key}
-                      onClick={() => navigate(connectRoutes[key] || "/")}
+                      href={connectRoute}
                       className={
                         "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                         (isConnectActive
@@ -506,7 +499,7 @@ export function CommandCenterShell({
                         )}
                         <ChevronRight className="h-4 w-4 text-black/35 dark:text-white/40" />
                       </div>
-                    </button>
+                    </Link>
                   );
                 })}
               </div>
