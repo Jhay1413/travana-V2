@@ -29,7 +29,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchClient, fetchQuotes, type Client as ApiClient, type Quote as ApiQuote } from "@/lib/api";
+import { fetchClient, fetchQuotes, fetchTicketsByClient, fetchUsers, createTicket, updateTicket, type Client as ApiClient, type Quote as ApiQuote, type Ticket as ApiTicket, type User as ApiUser } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 
@@ -51,10 +52,14 @@ type Client = {
 
 type TicketItem = {
   id: string;
-  title: string;
-  status: "Open" | "Pending" | "Resolved";
-  updated: string;
-  channel: "Email" | "Call" | "WhatsApp";
+  subject: string;
+  type: string;
+  status: string;
+  priority: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  userId: string;
 };
 
 type FileItem = {
@@ -108,31 +113,59 @@ function transformClientData(apiData: ApiClient): Client {
   };
 }
 
-function ticketsFor(clientId: string): TicketItem[] {
-  const base: TicketItem[] = [
-    {
-      id: `${clientId}-T1`,
-      title: "Flight options confirmation",
-      status: "Pending",
-      updated: "Today",
-      channel: "Email",
-    },
-    {
-      id: `${clientId}-T2`,
-      title: "Hotel upgrade request",
-      status: "Open",
-      updated: "2d",
-      channel: "WhatsApp",
-    },
-    {
-      id: `${clientId}-T3`,
-      title: "Insurance policy query",
-      status: "Resolved",
-      updated: "1w",
-      channel: "Call",
-    },
-  ];
-  return base;
+function transformTicket(ticket: ApiTicket): TicketItem {
+  return {
+    id: ticket.id,
+    subject: ticket.subject,
+    type: ticket.type,
+    status: ticket.status,
+    priority: ticket.priority,
+    description: ticket.description,
+    createdAt: ticket.createdAt,
+    updatedAt: ticket.updatedAt,
+    userId: ticket.userId,
+  };
+}
+
+function formatTicketDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function ticketStatusPill(status: string) {
+  switch (status) {
+    case "Open":
+      return "border-red-500/25 bg-red-500/10 text-red-700";
+    case "In Progress":
+      return "border-amber-500/25 bg-amber-500/10 text-amber-700";
+    case "Resolved":
+      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
+    case "Closed":
+      return "border-black/10 bg-black/[0.03] text-black/70";
+    default:
+      return "border-black/10 bg-black/[0.03] text-black/70";
+  }
+}
+
+function ticketTypePill(type: string) {
+  switch (type) {
+    case "Admin":
+      return "border-violet-500/25 bg-violet-500/10 text-violet-700";
+    case "Build":
+      return "border-sky-500/25 bg-sky-500/10 text-sky-700";
+    case "Sales":
+      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
+    default:
+      return "border-black/10 bg-black/[0.03] text-black/70";
+  }
 }
 
 function filesFor(clientId: string): FileItem[] {
@@ -389,6 +422,17 @@ export default function ClientPage() {
     enabled: !!clientId,
   });
 
+  const { data: ticketsData, isLoading: isLoadingTickets } = useQuery({
+    queryKey: ["tickets", "client", clientId],
+    queryFn: () => fetchTicketsByClient(clientId),
+    enabled: !!clientId,
+  });
+
+  const { data: usersData } = useQuery({
+    queryKey: ["users"],
+    queryFn: fetchUsers,
+  });
+
   const client = useMemo(() => {
     if (!clientData) return null;
     return transformClientData(clientData);
@@ -396,14 +440,19 @@ export default function ClientPage() {
 
   const quotes = useMemo(() => quotesData || [], [quotesData]);
 
-  const tickets = useMemo(() => (client ? ticketsFor(client.id) : []), [client]);
+  const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
   const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
+
+  const getUserName = (userId: string) => {
+    const user = usersData?.find((u) => u.id === userId);
+    return user?.name || "Unassigned";
+  };
 
   const filteredTickets = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return tickets;
     return tickets.filter((t) =>
-      `${t.id} ${t.title} ${t.status} ${t.updated} ${t.channel}`.toLowerCase().includes(query),
+      `${t.id} ${t.subject} ${t.status} ${t.type} ${t.priority}`.toLowerCase().includes(query),
     );
   }, [q, tickets]);
 
@@ -769,37 +818,38 @@ export default function ClientPage() {
 
                 <TabsContent value="tickets" className="mt-3">
                   <div className="space-y-2" data-testid="panel-client-tickets">
-                    {filteredTickets.map((t) => (
-                      <div
-                        key={t.id}
-                        className="rounded-2xl border border-black/10 bg-white/70 p-3"
-                        data-testid={`card-ticket-${t.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-xs font-semibold" data-testid={`text-ticket-title-${t.id}`}>
-                              {t.title}
-                            </div>
-                            <div className="mt-1 text-[11px] text-black/55" data-testid={`text-ticket-meta-${t.id}`}>
-                              {t.id} · {t.channel} · Updated {t.updated}
+                    {filteredTickets.length === 0 ? (
+                      <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center">
+                        <div className="text-sm text-black/55">No tickets for this client.</div>
+                      </div>
+                    ) : (
+                      filteredTickets.map((t) => (
+                        <div
+                          key={t.id}
+                          className="rounded-2xl border border-black/10 bg-white/70 p-3"
+                          data-testid={`card-ticket-${t.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${ticketTypePill(t.type)}`}>
+                                  {t.type}
+                                </span>
+                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${ticketStatusPill(t.status)}`}>
+                                  {t.status}
+                                </span>
+                              </div>
+                              <div className="text-xs font-semibold" data-testid={`text-ticket-title-${t.id}`}>
+                                {t.subject}
+                              </div>
+                              <div className="mt-1 text-[11px] text-black/55" data-testid={`text-ticket-meta-${t.id}`}>
+                                {getUserName(t.userId)} · {formatTicketDate(t.createdAt)}
+                              </div>
                             </div>
                           </div>
-                          <span
-                            className={
-                              "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
-                              (t.status === "Resolved"
-                                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-800"
-                                : t.status === "Pending"
-                                  ? "border-amber-500/25 bg-amber-500/10 text-amber-800"
-                                  : "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-800")
-                            }
-                            data-testid={`status-ticket-${t.id}`}
-                          >
-                            {t.status}
-                          </span>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>
@@ -1149,37 +1199,45 @@ export default function ClientPage() {
 
                 <TabsContent value="tickets" className="mt-3">
                   <div className="grid gap-3" data-testid="list-tickets">
-                    {filteredTickets.map((t) => (
-                      <div
-                        key={t.id}
-                        className="rounded-3xl border border-black/10 bg-white/70 p-4"
-                        data-testid={`card-ticket-wide-${t.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold" data-testid={`text-ticket-wide-title-${t.id}`}>
-                              {t.title}
-                            </div>
-                            <div className="mt-1 text-xs text-black/55" data-testid={`text-ticket-wide-meta-${t.id}`}>
-                              {t.id} · {t.channel} · Updated {t.updated}
+                    {filteredTickets.length === 0 ? (
+                      <div className="rounded-3xl border border-black/10 bg-white/60 p-6 text-center">
+                        <div className="text-sm text-black/55">No tickets for this client.</div>
+                        <p className="text-xs text-black/40 mt-1">Create a ticket from the Tickets page.</p>
+                      </div>
+                    ) : (
+                      filteredTickets.map((t) => (
+                        <div
+                          key={t.id}
+                          className="rounded-3xl border border-black/10 bg-white/70 p-4"
+                          data-testid={`card-ticket-wide-${t.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${ticketTypePill(t.type)}`}>
+                                  {t.type}
+                                </span>
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${ticketStatusPill(t.status)}`}>
+                                  {t.status}
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-medium text-black/60">
+                                  {t.priority}
+                                </span>
+                              </div>
+                              <div className="text-sm font-semibold truncate" data-testid={`text-ticket-wide-title-${t.id}`}>
+                                {t.subject}
+                              </div>
+                              {t.description && (
+                                <div className="mt-1 text-xs text-black/60 line-clamp-2">{t.description}</div>
+                              )}
+                              <div className="mt-2 text-xs text-black/50" data-testid={`text-ticket-wide-meta-${t.id}`}>
+                                Assigned to {getUserName(t.userId)} · {formatTicketDate(t.createdAt)}
+                              </div>
                             </div>
                           </div>
-                          <span
-                            className={
-                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
-                              (t.status === "Resolved"
-                                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-800"
-                                : t.status === "Pending"
-                                  ? "border-amber-500/25 bg-amber-500/10 text-amber-800"
-                                  : "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-800")
-                            }
-                            data-testid={`status-ticket-wide-${t.id}`}
-                          >
-                            {t.status}
-                          </span>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </TabsContent>
 
