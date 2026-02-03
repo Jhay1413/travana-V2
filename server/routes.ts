@@ -17,6 +17,8 @@ import {
   insertTourOperatorSchema,
   insertAirportSchema,
   insertTicketSchema,
+  insertTicketReplySchema,
+  insertNotificationSchema,
 } from "@shared/schema";
 
 // Configure multer for file uploads
@@ -688,6 +690,134 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete attachment" });
+    }
+  });
+
+  // ============ Ticket Replies ============
+  app.get("/api/tickets/:ticketId/replies", async (req: Request, res: Response) => {
+    try {
+      const replies = await storage.listRepliesByTicket(getParam(req.params.ticketId));
+      res.json(replies);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch replies" });
+    }
+  });
+
+  app.post("/api/tickets/:ticketId/replies", async (req: Request, res: Response) => {
+    try {
+      const ticketId = getParam(req.params.ticketId);
+      const ticket = await storage.getTicket(ticketId);
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      const parsed = insertTicketReplySchema.safeParse({ ...req.body, ticketId });
+      if (parsed.success) {
+        const reply = await storage.createReply(parsed.data);
+        
+        if (ticket.userId !== req.body.userId) {
+          await storage.createNotification({
+            userId: ticket.userId,
+            type: "ticket_reply",
+            title: "New reply on your ticket",
+            message: `Someone replied to "${ticket.subject}"`,
+            link: `/tickets?id=${ticketId}`,
+            read: false,
+          });
+        }
+        
+        res.status(201).json(reply);
+      } else {
+        res.status(400).json({ error: "Invalid reply data" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create reply" });
+    }
+  });
+
+  app.put("/api/replies/:id", async (req: Request, res: Response) => {
+    try {
+      const { content } = req.body;
+      if (!content) {
+        return res.status(400).json({ error: "Content is required" });
+      }
+      const reply = await storage.updateReply(getParam(req.params.id), content);
+      if (!reply) {
+        return res.status(404).json({ error: "Reply not found" });
+      }
+      res.json(reply);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update reply" });
+    }
+  });
+
+  app.delete("/api/replies/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteReply(getParam(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete reply" });
+    }
+  });
+
+  // ============ Notifications ============
+  app.get("/api/notifications", async (req: Request, res: Response) => {
+    try {
+      const userId = getParam(req.query.userId);
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      const notifications = await storage.listNotificationsByUser(userId);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.get("/api/notifications/unread", async (req: Request, res: Response) => {
+    try {
+      const userId = getParam(req.query.userId);
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      const notifications = await storage.listUnreadNotificationsByUser(userId);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch unread notifications" });
+    }
+  });
+
+  app.put("/api/notifications/:id/read", async (req: Request, res: Response) => {
+    try {
+      const notification = await storage.markNotificationRead(getParam(req.params.id));
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      res.json(notification);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  app.put("/api/notifications/read-all", async (req: Request, res: Response) => {
+    try {
+      const userId = getParam(req.query.userId);
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      await storage.markAllNotificationsRead(userId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark all notifications as read" });
+    }
+  });
+
+  app.delete("/api/notifications/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteNotification(getParam(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete notification" });
     }
   });
 
