@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchDashboardStats, fetchClients, fetchTourOperators, fetchAirports, type TourOperator, type Airport } from "@/lib/api";
+import { fetchDashboardStats, fetchClients, fetchTourOperators, fetchAirports, createClient, type TourOperator, type Airport, type CreateClientData } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Activity,
@@ -65,6 +65,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 type Role = "Admin" | "Manager" | "Agent" | "Homeworker" | "Referer";
 type Stage = "Enquiry" | "Quote" | "Booked";
@@ -881,8 +896,64 @@ function TopBar({
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [showNewClientDialog, setShowNewClientDialog] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({
+    clientType: "New Client",
+    title: "",
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: "",
+    houseNumber: "",
+    street: "",
+    city: "",
+    country: "",
+    postcode: "",
+  });
   const [, navigate] = useLocation();
   const searchRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const createClientMutation = useMutation({
+    mutationFn: createClient,
+    onSuccess: (newClient) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      setShowNewClientDialog(false);
+      setNewClientForm({
+        clientType: "New Client",
+        title: "",
+        firstName: "",
+        lastName: "",
+        phone: "",
+        email: "",
+        houseNumber: "",
+        street: "",
+        city: "",
+        country: "",
+        postcode: "",
+      });
+      navigate(`/clients/${newClient.id}`);
+    },
+  });
+
+  const handleCreateClient = () => {
+    if (!newClientForm.firstName || !newClientForm.lastName || !newClientForm.phone) {
+      return;
+    }
+    createClientMutation.mutate({
+      clientType: newClientForm.clientType,
+      title: newClientForm.title || undefined,
+      firstName: newClientForm.firstName,
+      lastName: newClientForm.lastName,
+      phone: newClientForm.phone,
+      email: newClientForm.email || undefined,
+      houseNumber: newClientForm.houseNumber || undefined,
+      street: newClientForm.street || undefined,
+      city: newClientForm.city || undefined,
+      country: newClientForm.country || undefined,
+      postcode: newClientForm.postcode || undefined,
+    });
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1023,7 +1094,11 @@ function TopBar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-new-client">
+                <DropdownMenuItem 
+                  className="cursor-pointer" 
+                  data-testid="menu-item-new-client"
+                  onClick={() => setShowNewClientDialog(true)}
+                >
                   <UserRound className="mr-2 h-4 w-4" />
                   New Client
                 </DropdownMenuItem>
@@ -1059,6 +1134,179 @@ function TopBar({
               )}
             </button>
             <NotificationsPanel isOpen={showNotifications} onClose={() => setShowNotifications(false)} />
+
+            <Dialog open={showNewClientDialog} onOpenChange={setShowNewClientDialog}>
+              <DialogContent className="sm:max-w-[500px] rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle>New Client</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="clientType">Client Type</Label>
+                    <Select
+                      value={newClientForm.clientType}
+                      onValueChange={(value) => setNewClientForm({ ...newClientForm, clientType: value })}
+                    >
+                      <SelectTrigger id="clientType" className="rounded-xl" data-testid="select-client-type">
+                        <SelectValue placeholder="Select client type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Time Waster">Time Waster</SelectItem>
+                        <SelectItem value="New Client">New Client</SelectItem>
+                        <SelectItem value="Repeat Client">Repeat Client</SelectItem>
+                        <SelectItem value="VIP Client">VIP Client</SelectItem>
+                        <SelectItem value="Family Member">Family Member</SelectItem>
+                        <SelectItem value="Banned">Banned</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="title">Title</Label>
+                    <Select
+                      value={newClientForm.title}
+                      onValueChange={(value) => setNewClientForm({ ...newClientForm, title: value })}
+                    >
+                      <SelectTrigger id="title" className="rounded-xl" data-testid="select-title">
+                        <SelectValue placeholder="Select title" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Mr.">Mr.</SelectItem>
+                        <SelectItem value="Mrs">Mrs</SelectItem>
+                        <SelectItem value="Ms">Ms</SelectItem>
+                        <SelectItem value="Miss">Miss</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="firstName">First Name *</Label>
+                      <Input
+                        id="firstName"
+                        value={newClientForm.firstName}
+                        onChange={(e) => setNewClientForm({ ...newClientForm, firstName: e.target.value })}
+                        className="rounded-xl"
+                        data-testid="input-first-name"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="lastName">Last Name *</Label>
+                      <Input
+                        id="lastName"
+                        value={newClientForm.lastName}
+                        onChange={(e) => setNewClientForm({ ...newClientForm, lastName: e.target.value })}
+                        className="rounded-xl"
+                        data-testid="input-last-name"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="phone">Phone Number *</Label>
+                    <Input
+                      id="phone"
+                      value={newClientForm.phone}
+                      onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
+                      className="rounded-xl"
+                      data-testid="input-phone"
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email (optional)</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={newClientForm.email}
+                      onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })}
+                      className="rounded-xl"
+                      data-testid="input-email"
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="grid gap-2">
+                    <Label className="text-muted-foreground">Address (optional)</Label>
+                    <div className="grid gap-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="houseNumber" className="text-xs">House Number</Label>
+                          <Input
+                            id="houseNumber"
+                            value={newClientForm.houseNumber}
+                            onChange={(e) => setNewClientForm({ ...newClientForm, houseNumber: e.target.value })}
+                            className="rounded-xl"
+                            data-testid="input-house-number"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="street" className="text-xs">Street</Label>
+                          <Input
+                            id="street"
+                            value={newClientForm.street}
+                            onChange={(e) => setNewClientForm({ ...newClientForm, street: e.target.value })}
+                            className="rounded-xl"
+                            data-testid="input-street"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="city" className="text-xs">City</Label>
+                          <Input
+                            id="city"
+                            value={newClientForm.city}
+                            onChange={(e) => setNewClientForm({ ...newClientForm, city: e.target.value })}
+                            className="rounded-xl"
+                            data-testid="input-city"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="country" className="text-xs">Country</Label>
+                          <Input
+                            id="country"
+                            value={newClientForm.country}
+                            onChange={(e) => setNewClientForm({ ...newClientForm, country: e.target.value })}
+                            className="rounded-xl"
+                            data-testid="input-country"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="postcode" className="text-xs">Postcode</Label>
+                        <Input
+                          id="postcode"
+                          value={newClientForm.postcode}
+                          onChange={(e) => setNewClientForm({ ...newClientForm, postcode: e.target.value })}
+                          className="rounded-xl w-1/2"
+                          data-testid="input-postcode"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowNewClientDialog(false)}
+                    className="rounded-xl"
+                    data-testid="button-cancel-client"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreateClient}
+                    disabled={!newClientForm.firstName || !newClientForm.lastName || !newClientForm.phone || createClientMutation.isPending}
+                    className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                    data-testid="button-save-client"
+                  >
+                    {createClientMutation.isPending ? "Creating..." : "Create Client"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             {userName && (
               <DropdownMenu>

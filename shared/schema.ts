@@ -36,12 +36,21 @@ export type User = typeof users.$inferSelect;
 // Clients table
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientType: text("client_type").notNull().default("New Client"), // Time Waster, New Client, Repeat Client, VIP Client, Family Member, Banned
+  title: text("title"), // Mr., Mrs, Ms, Miss
+  firstName: text("first_name"),
+  lastName: text("last_name"),
   name: text("name").notNull(),
-  email: text("email").notNull(),
+  email: text("email"),
   phone: text("phone").notNull(),
   tier: text("tier").notNull().default("Standard"), // Platinum, Gold, Standard
   stage: text("stage").notNull().default("Enquiry"), // Enquiry, Quote, Booked
   location: text("location"),
+  houseNumber: text("house_number"),
+  street: text("street"),
+  city: text("city"),
+  country: text("country"),
+  postcode: text("postcode"),
   nextTrip: text("next_trip"),
   value: decimal("value", { precision: 10, scale: 2 }).notNull().default("0"),
   lastTouch: text("last_touch"),
