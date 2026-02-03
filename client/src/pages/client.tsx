@@ -563,6 +563,11 @@ export default function ClientPage() {
                   <div className="text-lg font-semibold" data-testid="text-client-name">
                     {client ? client.name : "Client"}
                   </div>
+                  {client?.phone && (
+                    <div className="text-sm text-black/60" data-testid="text-client-phone-header">
+                      {client.phone}
+                    </div>
+                  )}
                   {client ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Select
