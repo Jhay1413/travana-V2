@@ -1136,7 +1136,7 @@ function TopBar({
             <NotificationsPanel isOpen={showNotifications} onClose={() => setShowNotifications(false)} />
 
             <Dialog open={showNewClientDialog} onOpenChange={setShowNewClientDialog}>
-              <DialogContent className="sm:max-w-[500px] rounded-2xl">
+              <DialogContent className="sm:max-w-[500px] rounded-2xl z-[300]">
                 <DialogHeader>
                   <DialogTitle>New Client</DialogTitle>
                 </DialogHeader>
