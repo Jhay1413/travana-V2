@@ -13,6 +13,7 @@ import {
   insertNoteSchema,
   insertTourOperatorSchema,
   insertAirportSchema,
+  insertTicketSchema,
 } from "@shared/schema";
 
 // Helper to extract string parameter
@@ -500,6 +501,77 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete airport" });
+    }
+  });
+
+  // ============ Tickets ============
+  app.get("/api/tickets", async (req: Request, res: Response) => {
+    try {
+      const tickets = await storage.listTickets();
+      res.json(tickets);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tickets" });
+    }
+  });
+
+  app.get("/api/tickets/:id", async (req: Request, res: Response) => {
+    try {
+      const ticket = await storage.getTicket(getParam(req.params.id));
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+      res.json(ticket);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch ticket" });
+    }
+  });
+
+  app.get("/api/clients/:clientId/tickets", async (req: Request, res: Response) => {
+    try {
+      const tickets = await storage.listTicketsByClient(getParam(req.params.clientId));
+      res.json(tickets);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch client tickets" });
+    }
+  });
+
+  app.get("/api/users/:userId/tickets", async (req: Request, res: Response) => {
+    try {
+      const tickets = await storage.listTicketsByUser(getParam(req.params.userId));
+      res.json(tickets);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch user tickets" });
+    }
+  });
+
+  app.post("/api/tickets", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertTicketSchema.parse(req.body);
+      const ticket = await storage.createTicket(parsed);
+      res.status(201).json(ticket);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid ticket data" });
+    }
+  });
+
+  app.patch("/api/tickets/:id", async (req: Request, res: Response) => {
+    try {
+      const ticket = await storage.updateTicket(getParam(req.params.id), req.body);
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+      res.json(ticket);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid ticket data" });
+    }
+  });
+
+  app.delete("/api/tickets/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteTicket(getParam(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete ticket" });
     }
   });
 
