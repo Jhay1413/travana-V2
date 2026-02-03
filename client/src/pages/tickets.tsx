@@ -1,25 +1,16 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
-import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
 import {
-  AlertCircle,
   Calendar,
   ChevronRight,
-  Edit2,
-  FileImage,
-  FileText,
   Filter,
   LifeBuoy,
-  MessageCircle,
   Paperclip,
   Plus,
   Search,
-  Send,
-  Trash2,
-  Upload,
   User,
   Users,
   X,
@@ -37,35 +28,10 @@ import {
   fetchTickets, 
   fetchClients, 
   fetchUsers, 
-  fetchCurrentUser,
   createTicket, 
-  updateTicket, 
-  deleteTicket, 
-  fetchAttachments,
-  uploadAttachment,
-  deleteAttachment,
-  getAttachmentUrl,
-  fetchReplies,
-  createReply,
-  updateReply,
-  deleteReply,
   type Ticket, 
-  type Client, 
-  type User as ApiUser,
-  type TicketAttachment,
-  type TicketReply,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
-function isImageType(mimeType: string): boolean {
-  return mimeType.startsWith("image/");
-}
 
 const TICKET_TYPES = ["Admin", "Build", "Sales"] as const;
 const TICKET_STATUSES = ["Open", "In Progress", "Resolved", "Closed"] as const;
@@ -123,361 +89,6 @@ function priorityPill(priority: string) {
   }
 }
 
-function TicketAttachmentsSection({ ticketId }: { ticketId: string }) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  const { data: attachments, isLoading } = useQuery({
-    queryKey: ["attachments", ticketId],
-    queryFn: () => fetchAttachments(ticketId),
-    enabled: !!ticketId,
-  });
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadAttachment(ticketId, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
-      toast({ title: "File uploaded successfully" });
-      setUploading(false);
-    },
-    onError: () => {
-      toast({ title: "Failed to upload file", variant: "destructive" });
-      setUploading(false);
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteAttachment,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
-      toast({ title: "File deleted successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to delete file", variant: "destructive" });
-    },
-  });
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
-    if (!allowedTypes.includes(file.type)) {
-      toast({ title: "Only images and PDF files are allowed", variant: "destructive" });
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: "File size must be less than 10MB", variant: "destructive" });
-      return;
-    }
-
-    setUploading(true);
-    uploadMutation.mutate(file);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  if (!ticketId) return null;
-
-  return (
-    <div className="grid gap-2">
-      <div className="flex items-center justify-between">
-        <Label>Attachments</Label>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,.pdf"
-          onChange={handleFileSelect}
-          className="hidden"
-          data-testid="input-file-upload"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="h-8 rounded-xl gap-1.5"
-          data-testid="button-upload-file"
-        >
-          {uploading ? (
-            <>
-              <Spinner className="h-3 w-3" />
-              Uploading...
-            </>
-          ) : (
-            <>
-              <Upload className="h-3.5 w-3.5" />
-              Upload File
-            </>
-          )}
-        </Button>
-      </div>
-      
-      <div className="text-xs text-black/50 mb-1">
-        Images (JPEG, PNG, GIF, WebP) and PDF files up to 10MB
-      </div>
-
-      {isLoading ? (
-        <div className="flex justify-center py-4">
-          <Spinner className="h-5 w-5" />
-        </div>
-      ) : !attachments?.length ? (
-        <div className="rounded-xl border border-dashed border-black/20 bg-black/[0.02] p-4 text-center">
-          <Paperclip className="h-6 w-6 mx-auto text-black/30 mb-2" />
-          <p className="text-sm text-black/50">No files attached yet</p>
-        </div>
-      ) : (
-        <div className="space-y-2 max-h-48 overflow-y-auto">
-          {attachments.map((attachment) => (
-            <div
-              key={attachment.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-white/70 p-2.5"
-              data-testid={`attachment-${attachment.id}`}
-            >
-              <a
-                href={getAttachmentUrl(attachment.id)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-70 transition-opacity"
-              >
-                {isImageType(attachment.mimeType) ? (
-                  <FileImage className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                ) : (
-                  <FileText className="h-5 w-5 text-red-500 flex-shrink-0" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium truncate">{attachment.originalName}</div>
-                  <div className="text-xs text-black/50">{formatFileSize(attachment.size)}</div>
-                </div>
-              </a>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => deleteMutation.mutate(attachment.id)}
-                disabled={deleteMutation.isPending}
-                className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                data-testid={`button-delete-attachment-${attachment.id}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: ApiUser[] }) {
-  const [replyContent, setReplyContent] = useState("");
-  const [editingReply, setEditingReply] = useState<TicketReply | null>(null);
-  const [editContent, setEditContent] = useState("");
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  const { data: currentUser } = useQuery({
-    queryKey: ["currentUser"],
-    queryFn: fetchCurrentUser,
-  });
-
-  const { data: replies = [], isLoading } = useQuery({
-    queryKey: ["replies", ticketId],
-    queryFn: () => fetchReplies(ticketId),
-    enabled: !!ticketId,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (content: string) => createReply(ticketId, currentUser?.id || "", content),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
-      setReplyContent("");
-      toast({ title: "Reply added" });
-    },
-    onError: () => {
-      toast({ title: "Failed to add reply", variant: "destructive" });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, content }: { id: string; content: string }) => updateReply(id, content),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
-      setEditingReply(null);
-      toast({ title: "Reply updated" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update reply", variant: "destructive" });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteReply,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
-      toast({ title: "Reply deleted" });
-    },
-    onError: () => {
-      toast({ title: "Failed to delete reply", variant: "destructive" });
-    },
-  });
-
-  const getUserName = (userId: string) => {
-    const user = users.find((u) => u.id === userId);
-    return user?.name || "Unknown";
-  };
-
-  const handleSubmit = () => {
-    if (!replyContent.trim() || replyContent === "<p></p>") return;
-    if (!currentUser?.id) {
-      toast({ title: "Please wait while loading user data", variant: "destructive" });
-      return;
-    }
-    createMutation.mutate(replyContent);
-  };
-
-  const handleEdit = (reply: TicketReply) => {
-    setEditingReply(reply);
-    setEditContent(reply.content);
-  };
-
-  const handleSaveEdit = () => {
-    if (!editingReply || !editContent.trim()) return;
-    updateMutation.mutate({ id: editingReply.id, content: editContent });
-  };
-
-  if (!ticketId) return null;
-
-  return (
-    <div className="grid gap-3">
-      <div className="flex items-center gap-2">
-        <MessageCircle className="h-4 w-4 text-black/50" />
-        <Label>Replies ({replies.length})</Label>
-      </div>
-
-      <div className="max-h-64 overflow-y-auto space-y-3">
-        {isLoading ? (
-          <div className="flex justify-center py-4">
-            <Spinner className="h-5 w-5" />
-          </div>
-        ) : replies.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-black/15 bg-black/[0.02] p-4 text-center">
-            <MessageCircle className="h-6 w-6 mx-auto text-black/30 mb-2" />
-            <p className="text-sm text-black/50">No replies yet</p>
-          </div>
-        ) : (
-          replies.map((reply) => (
-            <div
-              key={reply.id}
-              className="rounded-xl border border-black/10 bg-white/70 p-3"
-              data-testid={`reply-${reply.id}`}
-            >
-              {editingReply?.id === reply.id ? (
-                <div className="space-y-2">
-                  <RichTextEditor
-                    content={editContent}
-                    onChange={setEditContent}
-                    placeholder="Edit your reply..."
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingReply(null)}
-                      className="h-8"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveEdit}
-                      disabled={updateMutation.isPending}
-                      className="h-8"
-                    >
-                      {updateMutation.isPending ? "Saving..." : "Save"}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
-                        {getUserName(reply.userId).charAt(0)}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">{getUserName(reply.userId)}</div>
-                        <div className="text-xs text-black/50">
-                          {new Date(reply.createdAt).toLocaleDateString("en-GB", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                    {currentUser?.id === reply.userId && (
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(reply)}
-                          className="h-7 w-7 p-0"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteMutation.mutate(reply.id)}
-                          className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <RichTextDisplay content={reply.content} className="text-sm" />
-                </>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <RichTextEditor
-          content={replyContent}
-          onChange={setReplyContent}
-          placeholder="Write a reply..."
-        />
-        <div className="flex justify-end">
-          <Button
-            onClick={handleSubmit}
-            disabled={createMutation.isPending || !replyContent.trim() || replyContent === "<p></p>"}
-            className="gap-2"
-            data-testid="button-send-reply"
-          >
-            {createMutation.isPending ? (
-              "Sending..."
-            ) : (
-              <>
-                <Send className="h-4 w-4" />
-                Send Reply
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function TicketsPage() {
   const [role, setRole] = useState<Role>("Agent");
   const [query, setQuery] = useState("");
@@ -486,7 +97,6 @@ export default function TicketsPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [formData, setFormData] = useState({
     clientId: "",
     userId: "",
@@ -528,31 +138,6 @@ export default function TicketsPage() {
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Ticket> }) => updateTicket(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tickets"] });
-      setEditingTicket(null);
-      resetForm();
-      toast({ title: "Ticket updated successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update ticket", variant: "destructive" });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteTicket,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tickets"] });
-      setEditingTicket(null);
-      toast({ title: "Ticket deleted successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to delete ticket", variant: "destructive" });
-    },
-  });
-
   const resetForm = () => {
     setFormData({
       clientId: "",
@@ -579,38 +164,6 @@ export default function TicketsPage() {
       subject: formData.subject,
       description: formData.description || null,
     });
-  };
-
-  const handleUpdate = () => {
-    if (!editingTicket) return;
-    updateMutation.mutate({
-      id: editingTicket.id,
-      data: {
-        type: formData.type,
-        status: formData.status,
-        priority: formData.priority,
-        subject: formData.subject,
-        description: formData.description || null,
-      },
-    });
-  };
-
-  const handleDelete = () => {
-    if (!editingTicket) return;
-    deleteMutation.mutate(editingTicket.id);
-  };
-
-  const openEditDialog = (ticket: Ticket) => {
-    setFormData({
-      clientId: ticket.clientId,
-      userId: ticket.userId,
-      type: ticket.type,
-      status: ticket.status,
-      priority: ticket.priority,
-      subject: ticket.subject,
-      description: ticket.description || "",
-    });
-    setEditingTicket(ticket);
   };
 
   const filteredTickets = tickets?.filter((ticket) => {
@@ -785,13 +338,12 @@ export default function TicketsPage() {
         ) : (
           <div className="grid gap-3">
             {filteredTickets.map((ticket) => (
+              <Link key={ticket.id} href={`/tickets/${ticket.id}`}>
               <motion.div
-                key={ticket.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 whileHover={{ scale: 1.005 }}
                 className="cursor-pointer"
-                onClick={() => openEditDialog(ticket)}
                 data-testid={`card-ticket-${ticket.id}`}
               >
                 <Card className="glass ringed grain rounded-2xl p-4 hover:shadow-lg transition-shadow">
@@ -833,6 +385,7 @@ export default function TicketsPage() {
                   </div>
                 </Card>
               </motion.div>
+              </Link>
             ))}
           </div>
         )}
@@ -963,115 +516,6 @@ export default function TicketsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editingTicket} onOpenChange={() => setEditingTicket(null)}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Ticket</DialogTitle>
-            <DialogDescription>Update ticket details and manage attachments</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Customer</Label>
-              <div className="text-sm text-black/70 bg-black/5 px-3 py-2 rounded-lg">
-                {editingTicket && getClientName(editingTicket.clientId)}
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="grid gap-2">
-                <Label>Type</Label>
-                <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
-                  <SelectTrigger data-testid="edit-select-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TICKET_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>Status</Label>
-                <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v })}>
-                  <SelectTrigger data-testid="edit-select-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TICKET_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>Priority</Label>
-                <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
-                  <SelectTrigger data-testid="edit-select-priority">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TICKET_PRIORITIES.map((priority) => (
-                      <SelectItem key={priority} value={priority}>
-                        {priority}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-subject">Subject *</Label>
-              <Input
-                id="edit-subject"
-                value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                placeholder="Brief summary of the issue"
-                data-testid="edit-input-subject"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Detailed description of the ticket"
-                rows={4}
-                data-testid="edit-input-description"
-              />
-            </div>
-            
-            <TicketAttachmentsSection ticketId={editingTicket?.id || ""} />
-            
-            <TicketRepliesSection ticketId={editingTicket?.id || ""} users={users || []} />
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              className="mr-auto"
-              data-testid="button-delete-ticket"
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
-            </Button>
-            <Button variant="outline" onClick={() => setEditingTicket(null)} data-testid="button-cancel-edit">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpdate}
-              disabled={updateMutation.isPending}
-              data-testid="button-submit-update"
-            >
-              {updateMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </CommandCenterShell>
   );
 }

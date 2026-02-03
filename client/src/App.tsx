@@ -11,6 +11,7 @@ import ClientsPage from "@/pages/clients";
 import ClientPage from "@/pages/client";
 import QuotePage from "@/pages/quote";
 import TicketsPage from "@/pages/tickets";
+import TicketPage from "@/pages/ticket";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -32,6 +33,7 @@ function AuthenticatedRouter() {
       <Route path="/clients/:clientId" component={ClientPage} />
       <Route path="/clients/:clientId/quotes/:quoteId" component={QuotePage} />
       <Route path="/tickets" component={TicketsPage} />
+      <Route path="/tickets/:ticketId" component={TicketPage} />
       <Route component={NotFound} />
     </Switch>
   );
