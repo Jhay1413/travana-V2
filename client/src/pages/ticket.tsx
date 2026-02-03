@@ -27,6 +27,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   fetchTickets, 
   fetchClients, 
@@ -126,7 +127,7 @@ function priorityPill(priority: string) {
   }
 }
 
-function TicketAttachmentsSection({ ticketId }: { ticketId: string }) {
+function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
@@ -135,7 +136,7 @@ function TicketAttachmentsSection({ ticketId }: { ticketId: string }) {
   const { data: attachments, isLoading } = useQuery({
     queryKey: ["attachments", ticketId],
     queryFn: () => fetchAttachments(ticketId),
-    enabled: !!ticketId,
+    enabled: !!ticketId && open,
   });
 
   const deleteMutation = useMutation({
@@ -186,101 +187,109 @@ function TicketAttachmentsSection({ ticketId }: { ticketId: string }) {
   };
 
   return (
-    <Card className="glass ringed grain rounded-2xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium flex items-center gap-2">
-          <Paperclip className="h-4 w-4" />
-          Attachments
-        </h3>
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,.pdf"
-            multiple
-            onChange={handleFileChange}
-            className="hidden"
-            data-testid="input-file-upload"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="gap-2 rounded-xl"
-            data-testid="button-upload-attachment"
-          >
-            {uploading ? (
-              <>
-                <Spinner className="h-4 w-4" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4" />
-                Upload Files
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-      <p className="text-xs text-black/50 mb-4">Only images and PDFs allowed, max 10MB each</p>
-      
-      {isLoading ? (
-        <div className="flex justify-center py-4">
-          <Spinner />
-        </div>
-      ) : !attachments?.length ? (
-        <div className="text-center py-6 border border-dashed border-black/10 rounded-xl bg-black/[0.02]">
-          <Paperclip className="h-8 w-8 mx-auto text-black/20 mb-2" />
-          <p className="text-sm text-black/40">No attachments yet</p>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {attachments.map((attachment) => (
-            <div
-              key={attachment.id}
-              className="flex items-center gap-3 p-3 rounded-xl border border-black/10 bg-white/50"
-              data-testid={`attachment-${attachment.id}`}
-            >
-              {isImageType(attachment.mimeType) ? (
-                <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-black/5">
-                  <img
-                    src={getAttachmentUrl(attachment.id)}
-                    alt={attachment.filename}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-red-50 flex-shrink-0">
-                  <FileText className="h-6 w-6 text-red-600" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <a
-                  href={getAttachmentUrl(attachment.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-medium text-black/80 hover:text-black truncate block"
-                >
-                  {attachment.filename}
-                </a>
-                <p className="text-xs text-black/40">{formatFileSize(attachment.size)}</p>
-              </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[550px] max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Paperclip className="h-5 w-5" />
+            Attachments
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-black/50">Images and PDFs, max 10MB each</p>
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+                data-testid="input-file-upload"
+              />
               <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => deleteMutation.mutate(attachment.id)}
-                className="h-8 w-8 text-black/40 hover:text-red-600"
-                data-testid={`button-delete-attachment-${attachment.id}`}
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="gap-2 rounded-xl"
+                data-testid="button-upload-attachment"
               >
-                <Trash2 className="h-4 w-4" />
+                {uploading ? (
+                  <>
+                    <Spinner className="h-4 w-4" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Upload Files
+                  </>
+                )}
               </Button>
             </div>
-          ))}
+          </div>
+          
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Spinner />
+            </div>
+          ) : !attachments?.length ? (
+            <div className="text-center py-8 border border-dashed border-black/10 rounded-xl bg-black/[0.02]">
+              <Paperclip className="h-10 w-10 mx-auto text-black/20 mb-2" />
+              <p className="text-sm text-black/40">No attachments yet</p>
+              <p className="text-xs text-black/30 mt-1">Upload images or PDFs to attach to this ticket</p>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {attachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-black/10 bg-white/50"
+                  data-testid={`attachment-${attachment.id}`}
+                >
+                  {isImageType(attachment.mimeType) ? (
+                    <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-black/5">
+                      <img
+                        src={getAttachmentUrl(attachment.id)}
+                        alt={attachment.filename}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg flex items-center justify-center bg-red-50 flex-shrink-0">
+                      <FileText className="h-7 w-7 text-red-600" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <a
+                      href={getAttachmentUrl(attachment.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-black/80 hover:text-black truncate block"
+                    >
+                      {attachment.filename}
+                    </a>
+                    <p className="text-xs text-black/40">{formatFileSize(attachment.size)}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deleteMutation.mutate(attachment.id)}
+                    className="h-8 w-8 text-black/40 hover:text-red-600"
+                    data-testid={`button-delete-attachment-${attachment.id}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-    </Card>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -489,6 +498,7 @@ export default function TicketPage() {
   const [, navigate] = useLocation();
   const [role, setRole] = useState<Role>("Agent");
   const [isEditing, setIsEditing] = useState(false);
+  const [showAttachments, setShowAttachments] = useState(false);
   const [formData, setFormData] = useState({
     type: "",
     status: "",
@@ -644,6 +654,15 @@ export default function TicketPage() {
           <div className="flex items-center gap-2">
             {!isEditing ? (
               <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAttachments(true)}
+                  className="gap-2 rounded-2xl"
+                  data-testid="button-attachments"
+                >
+                  <Paperclip className="h-4 w-4" />
+                  Attachments
+                </Button>
                 <Button
                   variant="outline"
                   onClick={handleStartEdit}
@@ -820,10 +839,14 @@ export default function TicketPage() {
           </div>
         </Card>
 
-        <TicketAttachmentsSection ticketId={ticketId} />
-
         <TicketRepliesSection ticketId={ticketId} users={users || []} />
       </motion.div>
+
+      <AttachmentsDialog 
+        ticketId={ticketId} 
+        open={showAttachments} 
+        onOpenChange={setShowAttachments} 
+      />
     </CommandCenterShell>
   );
 }
