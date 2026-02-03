@@ -297,6 +297,9 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
   const [replyContent, setReplyContent] = useState("");
   const [editingReply, setEditingReply] = useState<TicketReply | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -351,13 +354,70 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
     return user?.name || "Unknown";
   };
 
-  const handleSubmit = () => {
-    if (!replyContent.trim() || replyContent === "<p></p>") return;
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    const validFiles: File[] = [];
+    
+    for (const file of Array.from(files)) {
+      if (!allowedTypes.includes(file.type)) {
+        toast({ 
+          title: `${file.name} is not allowed. Only images and PDFs are accepted.`,
+          variant: "destructive" 
+        });
+        continue;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast({ 
+          title: `${file.name} is too large. Maximum size is 10MB.`,
+          variant: "destructive" 
+        });
+        continue;
+      }
+      validFiles.push(file);
+    }
+    
+    setPendingFiles(prev => [...prev, ...validFiles]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async () => {
+    if ((!replyContent.trim() || replyContent === "<p></p>") && pendingFiles.length === 0) return;
     if (!currentUser?.id) {
       toast({ title: "Please wait while loading user data", variant: "destructive" });
       return;
     }
-    createMutation.mutate(replyContent);
+    
+    setUploading(true);
+    try {
+      // Upload attachments first
+      for (const file of pendingFiles) {
+        await uploadAttachment(ticketId, file);
+      }
+      
+      // Then create reply if there's content
+      if (replyContent.trim() && replyContent !== "<p></p>") {
+        createMutation.mutate(replyContent);
+      } else if (pendingFiles.length > 0) {
+        // Just uploaded files, refresh attachments
+        queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
+        toast({ title: "Attachments uploaded" });
+      }
+      
+      setPendingFiles([]);
+    } catch {
+      toast({ title: "Failed to upload attachments", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleEdit = (reply: TicketReply) => {
@@ -470,14 +530,56 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
           onChange={setReplyContent}
           placeholder="Write a reply..."
         />
-        <div className="flex justify-end">
+        
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 p-2 bg-black/5 rounded-lg">
+            {pendingFiles.map((file, index) => (
+              <div key={index} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1 text-sm">
+                <Paperclip className="h-3 w-3 text-black/50" />
+                <span className="max-w-[150px] truncate">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removePendingFile(index)}
+                  className="text-black/40 hover:text-red-500"
+                  data-testid={`button-remove-file-${index}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        <div className="flex justify-between items-center">
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+              data-testid="input-reply-attachment"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              className="gap-2"
+              data-testid="button-attach-file"
+            >
+              <Paperclip className="h-4 w-4" />
+              Attach
+            </Button>
+          </div>
           <Button
             onClick={handleSubmit}
-            disabled={createMutation.isPending || !replyContent.trim() || replyContent === "<p></p>"}
+            disabled={uploading || createMutation.isPending || ((!replyContent.trim() || replyContent === "<p></p>") && pendingFiles.length === 0)}
             className="gap-2"
             data-testid="button-send-reply"
           >
-            {createMutation.isPending ? (
+            {uploading || createMutation.isPending ? (
               "Sending..."
             ) : (
               <>
