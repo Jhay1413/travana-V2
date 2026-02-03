@@ -971,7 +971,7 @@ export default function ClientPage() {
                         </Button>
                       </div>
 
-                      <div className="mt-4" data-testid="section-quotes-groups">
+                      <div className="mt-4 space-y-2" data-testid="section-quotes-groups">
                         {[
                           {
                             id: "in-play",
