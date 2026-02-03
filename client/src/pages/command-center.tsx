@@ -990,8 +990,21 @@ function TopBar({
               </div>
             )}
             {showSearchResults && query.trim() && searchResults.length === 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] p-4 text-center text-sm text-black/50 dark:text-white/50">
-                No clients found matching "{query}"
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] p-4">
+                <p className="text-center text-sm text-black/50 dark:text-white/50 mb-3">
+                  No clients found matching "{query}"
+                </p>
+                <Button
+                  className="w-full h-9 rounded-xl bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                  onClick={() => {
+                    setShowSearchResults(false);
+                    navigate("/clients?new=true&name=" + encodeURIComponent(query));
+                  }}
+                  data-testid="button-add-client-from-search"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Client "{query}"
+                </Button>
               </div>
             )}
           </div>
