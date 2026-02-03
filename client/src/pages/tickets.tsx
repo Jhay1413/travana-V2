@@ -727,6 +727,10 @@ export default function TicketsPage() {
                 data-testid="input-description"
               />
             </div>
+            <div className="rounded-xl border border-dashed border-black/20 bg-black/[0.02] p-3 text-center">
+              <Paperclip className="h-5 w-5 mx-auto text-black/30 mb-1" />
+              <p className="text-xs text-black/50">File attachments can be added after creating the ticket</p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)} data-testid="button-cancel">
