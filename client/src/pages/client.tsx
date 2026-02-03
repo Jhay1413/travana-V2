@@ -881,7 +881,7 @@ export default function ClientPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   size="sm"
-                  className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90"
+                  className="h-9 rounded-2xl bg-[#ff2f00e6] px-3 text-white hover:bg-[#ff2f00e6]/90"
                   data-testid="button-client-new-task"
                   onClick={() => {}}
                 >
