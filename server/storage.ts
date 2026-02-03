@@ -14,6 +14,8 @@ import {
   airports,
   tickets,
   ticketAttachments,
+  ticketReplies,
+  notifications,
   type User,
   type InsertUser,
   type Client,
@@ -38,6 +40,10 @@ import {
   type InsertTicket,
   type TicketAttachment,
   type InsertTicketAttachment,
+  type TicketReply,
+  type InsertTicketReply,
+  type Notification,
+  type InsertNotification,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -136,6 +142,22 @@ export interface IStorage {
   getAttachment(id: string): Promise<TicketAttachment | undefined>;
   createAttachment(attachment: InsertTicketAttachment): Promise<TicketAttachment>;
   deleteAttachment(id: string): Promise<void>;
+
+  // Ticket Replies
+  listRepliesByTicket(ticketId: string): Promise<TicketReply[]>;
+  getReply(id: string): Promise<TicketReply | undefined>;
+  createReply(reply: InsertTicketReply): Promise<TicketReply>;
+  updateReply(id: string, content: string): Promise<TicketReply | undefined>;
+  deleteReply(id: string): Promise<void>;
+
+  // Notifications
+  listNotificationsByUser(userId: string): Promise<Notification[]>;
+  listUnreadNotificationsByUser(userId: string): Promise<Notification[]>;
+  getNotification(id: string): Promise<Notification | undefined>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationRead(id: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+  deleteNotification(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -439,6 +461,66 @@ export class DbStorage implements IStorage {
 
   async deleteAttachment(id: string): Promise<void> {
     await db.delete(ticketAttachments).where(eq(ticketAttachments.id, id));
+  }
+
+  // Ticket Replies
+  async listRepliesByTicket(ticketId: string): Promise<TicketReply[]> {
+    return db.select().from(ticketReplies).where(eq(ticketReplies.ticketId, ticketId)).orderBy(ticketReplies.createdAt);
+  }
+
+  async getReply(id: string): Promise<TicketReply | undefined> {
+    const result = await db.select().from(ticketReplies).where(eq(ticketReplies.id, id));
+    return result[0];
+  }
+
+  async createReply(reply: InsertTicketReply): Promise<TicketReply> {
+    const result = await db.insert(ticketReplies).values(reply).returning();
+    return result[0];
+  }
+
+  async updateReply(id: string, content: string): Promise<TicketReply | undefined> {
+    const result = await db
+      .update(ticketReplies)
+      .set({ content, updatedAt: new Date() })
+      .where(eq(ticketReplies.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteReply(id: string): Promise<void> {
+    await db.delete(ticketReplies).where(eq(ticketReplies.id, id));
+  }
+
+  // Notifications
+  async listNotificationsByUser(userId: string): Promise<Notification[]> {
+    return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+  }
+
+  async listUnreadNotificationsByUser(userId: string): Promise<Notification[]> {
+    return db.select().from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.read, false))).orderBy(desc(notifications.createdAt));
+  }
+
+  async getNotification(id: string): Promise<Notification | undefined> {
+    const result = await db.select().from(notifications).where(eq(notifications.id, id));
+    return result[0];
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const result = await db.insert(notifications).values(notification).returning();
+    return result[0];
+  }
+
+  async markNotificationRead(id: string): Promise<Notification | undefined> {
+    const result = await db.update(notifications).set({ read: true }).where(eq(notifications.id, id)).returning();
+    return result[0];
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications).set({ read: true }).where(eq(notifications.userId, userId));
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    await db.delete(notifications).where(eq(notifications.id, id));
   }
 }
 
