@@ -3767,9 +3767,9 @@ export default function CommandCenterPage() {
                   icon={<Briefcase className="h-4 w-4" />}
                 />
                 <KpiCard
-                  label="Average Deal"
-                  value={currency.format(totals.avgDeal)}
-                  delta="+3.0% vs last"
+                  label="Monthly Target"
+                  value={currency.format(totals.bookedValue)}
+                  delta={totals.bookedValue >= 15000 ? "Target reached!" : `${currency.format(15000 - totals.bookedValue)} to go`}
                   icon={<Briefcase className="h-4 w-4" />}
                 />
               </section>
