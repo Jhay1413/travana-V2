@@ -29,7 +29,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchClient, fetchQuotes, fetchTicketsByClient, fetchUsers, createTicket, updateTicket, type Client as ApiClient, type Quote as ApiQuote, type Ticket as ApiTicket, type User as ApiUser } from "@/lib/api";
+import { fetchClient, fetchQuotes, fetchTicketsByClient, fetchUsers, createTicket, updateTicket, updateClient as apiUpdateClient, type Client as ApiClient, type Quote as ApiQuote, type Ticket as ApiTicket, type User as ApiUser } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
@@ -331,6 +331,7 @@ const seedQuote: Quote = {
 export default function ClientPage() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/clients/:clientId");
+  const { toast } = useToast();
 
   const [role, setRole] = useState<Role>("Agent");
   const [active] = useState<string>("clients");
@@ -431,6 +432,18 @@ export default function ClientPage() {
   const { data: usersData } = useQuery({
     queryKey: ["users"],
     queryFn: fetchUsers,
+  });
+
+  const updateClientMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<ApiClient> }) => apiUpdateClient(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      toast({ title: "Client updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update client", variant: "destructive" });
+    },
   });
 
   const client = useMemo(() => {
@@ -552,13 +565,29 @@ export default function ClientPage() {
                   </div>
                   {client ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className="rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#3b82f6]"
-                        data-testid="pill-client-type"
+                      <Select
+                        value={clientData?.clientType || "New Client"}
+                        onValueChange={(value) => {
+                          if (clientId) {
+                            updateClientMutation.mutate({ id: clientId, data: { clientType: value } });
+                          }
+                        }}
                       >
-                        {client.clientType || "New Client"}
-                      </Badge>
+                        <SelectTrigger
+                          className="h-auto w-auto rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 px-2.5 py-0.5 text-xs font-semibold text-[#3b82f6] hover:bg-[#3b82f6]/20"
+                          data-testid="select-client-type"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-[400]">
+                          <SelectItem value="New Client">New Client</SelectItem>
+                          <SelectItem value="Repeat Client">Repeat Client</SelectItem>
+                          <SelectItem value="VIP Client">VIP Client</SelectItem>
+                          <SelectItem value="Family Member">Family Member</SelectItem>
+                          <SelectItem value="Time Waster">Time Waster</SelectItem>
+                          <SelectItem value="Banned">Banned</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Badge
                         variant="outline"
                         className={`rounded-full ${tierPill(client.tier)}`}

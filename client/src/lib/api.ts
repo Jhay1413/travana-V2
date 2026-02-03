@@ -165,6 +165,19 @@ export async function fetchClient(id: string): Promise<Client> {
   return res.json();
 }
 
+export async function updateClient(id: string, data: Partial<Client>): Promise<Client> {
+  const res = await fetch(`/api/clients/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.message || "Failed to update client");
+  }
+  return res.json();
+}
+
 // Quotes
 export async function fetchQuotes(filters?: { status?: string; clientId?: string }): Promise<Quote[]> {
   const params = new URLSearchParams();
