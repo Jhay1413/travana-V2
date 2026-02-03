@@ -560,14 +560,14 @@ export default function ClientPage() {
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-lg font-semibold" data-testid="text-client-name">
-                    {client ? client.name : "Client"}
+                  <div className="flex items-baseline gap-3" data-testid="text-client-name">
+                    <span className="text-lg font-semibold">{client ? client.name : "Client"}</span>
+                    {client?.phone && (
+                      <span className="text-sm text-black/60" data-testid="text-client-phone-header">
+                        {client.phone}
+                      </span>
+                    )}
                   </div>
-                  {client?.phone && (
-                    <div className="text-sm text-black/60" data-testid="text-client-phone-header">
-                      {client.phone}
-                    </div>
-                  )}
                   {client ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Select
