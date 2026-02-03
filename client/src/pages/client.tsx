@@ -547,14 +547,6 @@ export default function ClientPage() {
                 <ChevronLeft className="h-4 w-4" />
                 Back
               </button>
-              <Button
-                className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-                data-testid="button-client-new-task"
-                onClick={() => {}}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                Add task
-              </Button>
             </div>
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">
@@ -889,13 +881,12 @@ export default function ClientPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   size="sm"
-                  variant="secondary"
-                  className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-black hover:bg-black/[0.03]"
-                  data-testid="button-client-filter"
+                  className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90"
+                  data-testid="button-client-new-task"
                   onClick={() => {}}
                 >
-                  <Filter className="mr-2 h-4 w-4" />
-                  Filter
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Add task
                 </Button>
                 <Button
                   size="sm"
