@@ -137,7 +137,6 @@ export function CommandCenterShell({
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-      { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
       { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
@@ -170,7 +169,6 @@ export function CommandCenterShell({
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-              { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
               { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
@@ -476,15 +474,26 @@ export function CommandCenterShell({
                     email: "/",
                     "internal-chat": "/",
                   };
+                  const isConnectActive = active === key || (key === "tickets" && active === "tickets");
                   return (
                     <button
                       key={key}
                       onClick={() => navigate(connectRoutes[key] || "/")}
-                      className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
+                      className={
+                        "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                        (isConnectActive
+                          ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                          : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                      }
                       data-testid={`nav-connect-${key}`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                        <span className={
+                          "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
+                          (isConnectActive
+                            ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                            : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                        } aria-hidden>
                           <span className="text-black/70 dark:text-white/80">{item.icon}</span>
                         </span>
                         <span className="text-sm font-medium">{item.label}</span>
