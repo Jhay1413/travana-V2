@@ -300,6 +300,16 @@ export default function QuotePage() {
                           <div className="truncate text-base font-semibold" data-testid="text-itinerary-quote-title">
                             {quote.quoteTitle}
                           </div>
+                          <div className="mt-1 flex items-center gap-2 text-xs text-black/60" data-testid="text-itinerary-quote-summary">
+                            <span>{(() => {
+                              const start = new Date(quote.travelDate);
+                              const end = new Date(quote.returnDate);
+                              const nights = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                              return `${nights} nights`;
+                            })()}</span>
+                            <span className="text-black/25">•</span>
+                            <span>{currency.format(1785)}pp</span>
+                          </div>
                         </div>
                         <span
                           className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
