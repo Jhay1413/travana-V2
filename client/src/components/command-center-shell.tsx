@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
@@ -51,6 +51,33 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 export type Role = "Admin" | "Manager" | "Agent" | "Homeworker" | "Referer";
+
+function getNavRoute(key: string): string {
+  const routes: Record<string, string> = {
+    overview: "/",
+    clients: "/clients",
+    enquiries: "/",
+    quotes: "/",
+    bookings: "/",
+    "agent-settings": "/",
+    "agent-overview": "/",
+    org: "/",
+    users: "/",
+    audit: "/",
+    settings: "/",
+    team: "/",
+    coverage: "/",
+    coaching: "/",
+    reports: "/",
+    assigned: "/",
+    callbacks: "/",
+    messages: "/",
+    leads: "/",
+    commission: "/",
+    payouts: "/",
+  };
+  return routes[key] || "/";
+}
 
 const RoleIcon = {
   Admin: Shield,
@@ -272,12 +299,8 @@ export function CommandCenterShell({
                                 const childActive = hasChildren && item.children!.some((c) => active === c.key);
                                 return (
                                   <div key={item.key}>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (item.key === "clients") navigate("/clients");
-                                        else navigate("/");
-                                      }}
+                                    <Link
+                                      href={getNavRoute(item.key)}
                                       className={
                                         "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                                         (isActive || childActive
@@ -303,7 +326,7 @@ export function CommandCenterShell({
                                       <ChevronRight
                                         className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
                                       />
-                                    </button>
+                                    </Link>
                                     {hasChildren && (isActive || childActive) && (
                                       <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
                                         {item.children!.map((child) => (
@@ -338,13 +361,9 @@ export function CommandCenterShell({
                   nav.items.map((item) => {
                     const isActive = active === item.key;
                     return (
-                      <button
+                      <Link
                         key={item.key}
-                        type="button"
-                        onClick={() => {
-                          if (item.key === "clients") navigate("/clients");
-                          else navigate("/");
-                        }}
+                        href={getNavRoute(item.key)}
                         className={
                           "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                           (isActive
@@ -370,7 +389,7 @@ export function CommandCenterShell({
                         <ChevronRight
                           className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
                         />
-                      </button>
+                      </Link>
                     );
                   })
                 )}
