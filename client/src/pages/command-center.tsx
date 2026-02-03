@@ -930,12 +930,11 @@ function TopBar({
         const result = data.result;
         setNewClientForm({
           ...newClientForm,
-          street: result.thoroughfare || result.admin_ward || "",
-          city: result.admin_district || result.region || "",
+          city: result.admin_district || result.primary_care_trust || result.admin_county || "",
           country: result.country || "United Kingdom",
           postcode: result.postcode || postcodeSearch.trim(),
         });
-        setPostcodeError("");
+        setPostcodeError("Postcode found! Please enter house number and street manually.");
       } else {
         setPostcodeError("Postcode not found. Please enter address manually.");
       }
@@ -1300,7 +1299,7 @@ function TopBar({
                           </Button>
                         </div>
                         {postcodeError && (
-                          <p className="text-xs text-red-500">{postcodeError}</p>
+                          <p className={`text-xs ${postcodeError.includes("found!") ? "text-green-600" : "text-red-500"}`}>{postcodeError}</p>
                         )}
                       </div>
 
