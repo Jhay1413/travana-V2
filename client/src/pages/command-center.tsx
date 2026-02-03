@@ -910,6 +910,41 @@ function TopBar({
     country: "",
     postcode: "",
   });
+  const [postcodeSearch, setPostcodeSearch] = useState("");
+  const [postcodeLoading, setPostcodeLoading] = useState(false);
+  const [postcodeError, setPostcodeError] = useState("");
+  const [addressResults, setAddressResults] = useState<Array<{ line1: string; line2: string; city: string; postcode: string }>>([]);
+  const [showAddressResults, setShowAddressResults] = useState(false);
+
+  const lookupPostcode = async () => {
+    if (!postcodeSearch.trim()) return;
+    setPostcodeLoading(true);
+    setPostcodeError("");
+    setAddressResults([]);
+    
+    try {
+      const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcodeSearch.trim())}`);
+      const data = await response.json();
+      
+      if (data.status === 200 && data.result) {
+        const result = data.result;
+        setNewClientForm({
+          ...newClientForm,
+          street: result.thoroughfare || result.admin_ward || "",
+          city: result.admin_district || result.region || "",
+          country: result.country || "United Kingdom",
+          postcode: result.postcode || postcodeSearch.trim(),
+        });
+        setPostcodeError("");
+      } else {
+        setPostcodeError("Postcode not found. Please enter address manually.");
+      }
+    } catch (error) {
+      setPostcodeError("Failed to lookup postcode. Please enter address manually.");
+    } finally {
+      setPostcodeLoading(false);
+    }
+  };
   const [, navigate] = useLocation();
   const searchRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -932,6 +967,8 @@ function TopBar({
         country: "",
         postcode: "",
       });
+      setPostcodeSearch("");
+      setPostcodeError("");
       navigate(`/clients/${newClient.id}`);
     },
   });
@@ -1230,6 +1267,43 @@ function TopBar({
                   <div className="grid gap-2">
                     <Label className="text-muted-foreground">Address (optional)</Label>
                     <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="postcodeSearch" className="text-xs">Postcode Search</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="postcodeSearch"
+                            value={postcodeSearch}
+                            onChange={(e) => setPostcodeSearch(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), lookupPostcode())}
+                            placeholder="Enter postcode (e.g. SW1A 1AA)"
+                            className="rounded-xl flex-1"
+                            data-testid="input-postcode-search"
+                          />
+                          <Button
+                            type="button"
+                            onClick={lookupPostcode}
+                            disabled={postcodeLoading || !postcodeSearch.trim()}
+                            className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                            data-testid="button-lookup-postcode"
+                          >
+                            {postcodeLoading ? (
+                              <span className="flex items-center gap-2">
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                Looking up...
+                              </span>
+                            ) : (
+                              <>
+                                <Search className="mr-2 h-4 w-4" />
+                                Find
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        {postcodeError && (
+                          <p className="text-xs text-red-500">{postcodeError}</p>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label htmlFor="houseNumber" className="text-xs">House Number</Label>
