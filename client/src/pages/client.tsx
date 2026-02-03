@@ -29,7 +29,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchClient, fetchQuotes, fetchTicketsByClient, fetchUsers, createTicket, updateTicket, updateClient as apiUpdateClient, createQuote, type Client as ApiClient, type Quote as ApiQuote, type Ticket as ApiTicket, type User as ApiUser, type CreateQuoteData } from "@/lib/api";
+import { fetchClient, fetchQuotes, fetchTicketsByClient, fetchUsers, createTicket, updateTicket, updateClient as apiUpdateClient, createQuote, fetchCurrentUser, type Client as ApiClient, type Quote as ApiQuote, type Ticket as ApiTicket, type User as ApiUser, type CreateQuoteData } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
@@ -406,6 +406,7 @@ export default function ClientPage() {
     discount: 0,
     serviceCharge: 0,
     pricePerPerson: 0,
+    returnDate: "",
   });
   const queryClient = useQueryClient();
 
@@ -432,6 +433,11 @@ export default function ClientPage() {
   const { data: usersData } = useQuery({
     queryKey: ["users"],
     queryFn: fetchUsers,
+  });
+
+  const { data: currentUser } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: fetchCurrentUser,
   });
 
   const updateClientMutation = useMutation({
@@ -1882,20 +1888,34 @@ export default function ClientPage() {
                 className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
                 disabled={createQuoteMutation.isPending}
                 onClick={() => {
-                  if (!clientId) return;
+                  if (!clientId || !currentUser?.id) {
+                    toast({ title: "Please wait, loading user info...", variant: "destructive" });
+                    return;
+                  }
+                  if (!newQuote.packageType || !newQuote.quoteTitle || !newQuote.destination || !newQuote.travelDate) {
+                    toast({ title: "Please fill in Package Type, Quote Title, Destination and Travel Date", variant: "destructive" });
+                    return;
+                  }
+                  const travelDateObj = new Date(newQuote.travelDate);
+                  const returnDateObj = new Date(travelDateObj);
+                  returnDateObj.setDate(returnDateObj.getDate() + (newQuote.nights || 7));
+                  const returnDate = newQuote.returnDate || returnDateObj.toISOString().split('T')[0];
+                  
                   createQuoteMutation.mutate({
                     clientId,
+                    userId: currentUser.id,
                     status: "In Play",
-                    packageType: newQuote.packageType || undefined,
-                    quoteTitle: newQuote.quoteTitle || undefined,
+                    packageType: newQuote.packageType,
+                    quoteTitle: newQuote.quoteTitle,
                     quoteLink: newQuote.quoteLink || undefined,
-                    travelDate: newQuote.travelDate || undefined,
+                    destination: newQuote.destination,
+                    travelDate: newQuote.travelDate,
+                    returnDate: returnDate,
                     passengersAdults: newQuote.passengersAdults,
                     passengersChildren: newQuote.passengersChildren,
                     passengersInfants: newQuote.passengersInfants,
                     childAges: newQuote.childAges,
                     country: newQuote.country || undefined,
-                    destination: newQuote.destination || undefined,
                     resort: newQuote.resort || undefined,
                     accommodation: newQuote.accommodation || undefined,
                     checkInDate: newQuote.checkInDate || undefined,
