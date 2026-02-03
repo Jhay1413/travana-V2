@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   BadgeCheck,
@@ -33,6 +34,8 @@ import {
   Ticket,
   Users,
 } from "lucide-react";
+import { NotificationsDropdown } from "./notifications-dropdown";
+import { fetchCurrentUser } from "@/lib/api";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -120,6 +123,11 @@ export function CommandCenterShell({
   onToggleTheme?: () => void;
 }) {
   const [, navigate] = useLocation();
+
+  const { data: currentUser } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: fetchCurrentUser,
+  });
 
   type NavItem = { key: string; label: string; icon: React.ReactNode; children?: NavItem[] };
   type NavSection = { id: string; label: string; icon: React.ReactNode; items: NavItem[] };
@@ -534,14 +542,9 @@ export function CommandCenterShell({
                       Create
                     </Button>
 
-                    <button
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-                      data-testid="button-notifications"
-                      aria-label="Notifications"
-                      type="button"
-                    >
-                      <Bell className="h-4 w-4" />
-                    </button>
+                    {currentUser && (
+                      <NotificationsDropdown userId={currentUser.id} />
+                    )}
                   </div>
                 </div>
               </div>

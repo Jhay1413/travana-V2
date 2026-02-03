@@ -8,6 +8,12 @@ export interface User {
   avatar: string | null;
 }
 
+export async function fetchCurrentUser(): Promise<User | null> {
+  const res = await fetch("/api/auth/user");
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export interface Client {
   id: string;
   name: string;

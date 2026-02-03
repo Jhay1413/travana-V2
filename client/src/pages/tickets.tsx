@@ -3,17 +3,21 @@ import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
 import {
   AlertCircle,
   Calendar,
   ChevronRight,
+  Edit2,
   FileImage,
   FileText,
   Filter,
   LifeBuoy,
+  MessageCircle,
   Paperclip,
   Plus,
   Search,
+  Send,
   Trash2,
   Upload,
   User,
@@ -33,6 +37,7 @@ import {
   fetchTickets, 
   fetchClients, 
   fetchUsers, 
+  fetchCurrentUser,
   createTicket, 
   updateTicket, 
   deleteTicket, 
@@ -40,10 +45,15 @@ import {
   uploadAttachment,
   deleteAttachment,
   getAttachmentUrl,
+  fetchReplies,
+  createReply,
+  updateReply,
+  deleteReply,
   type Ticket, 
   type Client, 
   type User as ApiUser,
   type TicketAttachment,
+  type TicketReply,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -258,6 +268,212 @@ function TicketAttachmentsSection({ ticketId }: { ticketId: string }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: ApiUser[] }) {
+  const [replyContent, setReplyContent] = useState("");
+  const [editingReply, setEditingReply] = useState<TicketReply | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: currentUser } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: fetchCurrentUser,
+  });
+
+  const { data: replies = [], isLoading } = useQuery({
+    queryKey: ["replies", ticketId],
+    queryFn: () => fetchReplies(ticketId),
+    enabled: !!ticketId,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (content: string) => createReply(ticketId, currentUser?.id || "", content),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
+      setReplyContent("");
+      toast({ title: "Reply added" });
+    },
+    onError: () => {
+      toast({ title: "Failed to add reply", variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, content }: { id: string; content: string }) => updateReply(id, content),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
+      setEditingReply(null);
+      toast({ title: "Reply updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update reply", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteReply,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
+      toast({ title: "Reply deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete reply", variant: "destructive" });
+    },
+  });
+
+  const getUserName = (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    return user?.name || "Unknown";
+  };
+
+  const handleSubmit = () => {
+    if (!replyContent.trim() || replyContent === "<p></p>") return;
+    if (!currentUser?.id) {
+      toast({ title: "Please wait while loading user data", variant: "destructive" });
+      return;
+    }
+    createMutation.mutate(replyContent);
+  };
+
+  const handleEdit = (reply: TicketReply) => {
+    setEditingReply(reply);
+    setEditContent(reply.content);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingReply || !editContent.trim()) return;
+    updateMutation.mutate({ id: editingReply.id, content: editContent });
+  };
+
+  if (!ticketId) return null;
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center gap-2">
+        <MessageCircle className="h-4 w-4 text-black/50" />
+        <Label>Replies ({replies.length})</Label>
+      </div>
+
+      <div className="max-h-64 overflow-y-auto space-y-3">
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <Spinner className="h-5 w-5" />
+          </div>
+        ) : replies.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-black/15 bg-black/[0.02] p-4 text-center">
+            <MessageCircle className="h-6 w-6 mx-auto text-black/30 mb-2" />
+            <p className="text-sm text-black/50">No replies yet</p>
+          </div>
+        ) : (
+          replies.map((reply) => (
+            <div
+              key={reply.id}
+              className="rounded-xl border border-black/10 bg-white/70 p-3"
+              data-testid={`reply-${reply.id}`}
+            >
+              {editingReply?.id === reply.id ? (
+                <div className="space-y-2">
+                  <RichTextEditor
+                    content={editContent}
+                    onChange={setEditContent}
+                    placeholder="Edit your reply..."
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingReply(null)}
+                      className="h-8"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveEdit}
+                      disabled={updateMutation.isPending}
+                      className="h-8"
+                    >
+                      {updateMutation.isPending ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
+                        {getUserName(reply.userId).charAt(0)}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">{getUserName(reply.userId)}</div>
+                        <div className="text-xs text-black/50">
+                          {new Date(reply.createdAt).toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    {currentUser?.id === reply.userId && (
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(reply)}
+                          className="h-7 w-7 p-0"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteMutation.mutate(reply.id)}
+                          className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <RichTextDisplay content={reply.content} className="text-sm" />
+                </>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <RichTextEditor
+          content={replyContent}
+          onChange={setReplyContent}
+          placeholder="Write a reply..."
+        />
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSubmit}
+            disabled={createMutation.isPending || !replyContent.trim() || replyContent === "<p></p>"}
+            className="gap-2"
+            data-testid="button-send-reply"
+          >
+            {createMutation.isPending ? (
+              "Sending..."
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Send Reply
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -830,6 +1046,8 @@ export default function TicketsPage() {
             </div>
             
             <TicketAttachmentsSection ticketId={editingTicket?.id || ""} />
+            
+            <TicketRepliesSection ticketId={editingTicket?.id || ""} users={users || []} />
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button

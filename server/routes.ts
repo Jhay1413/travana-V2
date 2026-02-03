@@ -763,7 +763,7 @@ export async function registerRoutes(
   // ============ Notifications ============
   app.get("/api/notifications", async (req: Request, res: Response) => {
     try {
-      const userId = getParam(req.query.userId);
+      const userId = req.query.userId as string | undefined;
       if (!userId) {
         return res.status(400).json({ error: "userId is required" });
       }
@@ -776,7 +776,7 @@ export async function registerRoutes(
 
   app.get("/api/notifications/unread", async (req: Request, res: Response) => {
     try {
-      const userId = getParam(req.query.userId);
+      const userId = req.query.userId as string | undefined;
       if (!userId) {
         return res.status(400).json({ error: "userId is required" });
       }
@@ -801,7 +801,7 @@ export async function registerRoutes(
 
   app.put("/api/notifications/read-all", async (req: Request, res: Response) => {
     try {
-      const userId = getParam(req.query.userId);
+      const userId = req.query.userId as string | undefined;
       if (!userId) {
         return res.status(400).json({ error: "userId is required" });
       }
