@@ -144,7 +144,6 @@ export default function ClientsPage() {
       onRoleChange={setRole}
       active="clients"
       title="Clients"
-      subtitle={`${clients.length} total clients`}
       query={q}
       onQuery={setQ}
       theme={theme}
