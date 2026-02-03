@@ -550,9 +550,6 @@ export default function ClientPage() {
                   <div className="text-lg font-semibold" data-testid="text-client-name">
                     {client ? client.name : "Client"}
                   </div>
-                  <div className="mt-1 text-xs text-black/55" data-testid="text-client-meta">
-                    {client ? `${client.id} · ${client.location}` : "No client selected"}
-                  </div>
                   {client ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Badge
