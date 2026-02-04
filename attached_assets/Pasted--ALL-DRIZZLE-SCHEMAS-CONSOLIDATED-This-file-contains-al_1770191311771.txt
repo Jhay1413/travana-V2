@@ -1,0 +1,2980 @@
+/**
+* ALL DRIZZLE SCHEMAS - CONSOLIDATED
+* This file contains all the database schemas consolidated into a single file
+* Generated from individual schema files in the schema directory
+*/
+
+import { relations, sql } from 'drizzle-orm';
+import {
+boolean,
+date,
+decimal,
+index,
+integer,
+jsonb,
+numeric,
+pgEnum,
+pgTable,
+primaryKey,
+text,
+timestamp,
+unique,
+uniqueIndex,
+uuid,
+varchar,
+} from 'drizzle-orm/pg-core';
+
+// ===================================
+// ENUMS
+// ===================================
+
+export const bookingStatus = pgEnum('booking_status', ['BOOKED', 'LOST']);
+export const chatRoleEnum = pgEnum('chat_role', ['admin', 'member']);
+export const messageTypeEnum = pgEnum('message_type', ['text', 'image', 'file', 'system']);
+export const chatRoomTypeEnum = pgEnum('chat_room_type', ['direct', 'group']);
+export const enquiryStatusEnum = pgEnum('enquiry_status', ['ACTIVE', 'LOST', 'INACTIVE', 'EXPIRED', 'NEW_LEAD']);
+export const budgetTypeEnum = pgEnum('budget_type', ['PER_PERSON', 'PACKAGE']);
+export const todoStatus = pgEnum('todo_status', ['PENDING', 'DONE']);
+export const quoteStatusEnum = pgEnum('quote_status', [
+'NEW_LEAD',
+'QUOTE_IN_PROGRESS',
+'QUOTE_CALL',
+'QUOTE_READY',
+'AWAITING_DECISION',
+'REQUOTE',
+'WON',
+'ARCHIVED',
+'LOST',
+'INACTIVE',
+'EXPIRED',
+]);
+export const referralStatusEnum = pgEnum('referral_status', ['PENDING', 'APPROVED', 'REJECTED']);
+export const releasedStatusEnum = pgEnum('released_status', ['PENDING', 'RELEASED', 'REJECTED']);
+export const leadSourceEnum = pgEnum('lead_source', ['SHOP', 'FACEBOOK', 'WHATSAPP', 'INSTAGRAM', 'PHONE_ENQUIRY']);
+export const transactionStatusEnum = pgEnum('transaction_status', ['on_quote', 'on_enquiry', 'on_booking']);
+export const accountStatusEnum = pgEnum('account_status', ['pending', 'approved', 'rejected']);
+export const owner_type_enum = pgEnum('owner_type_enum', ['package_holiday', 'hot_tub_break', 'cruise']);
+
+// ===================================
+// AUTH SCHEMA
+// ===================================
+
+export const user = pgTable('user', {
+id: text('id').primaryKey(),
+name: text('name').notNull(),
+email: text('email').notNull().unique(),
+emailVerified: boolean('email_verified').default(false).notNull(),
+image: text('image'),
+createdAt: timestamp('created_at').defaultNow().notNull(),
+updatedAt: timestamp('updated_at')
+    **.defaultNow()**
+
+    **.$onUpdate(() => new Date())**
+
+    **.notNull(),**
+
+role: text('role').notNull(),
+banned: boolean('banned').default(false),
+banReason: text('ban_reason'),
+banExpires: timestamp('ban_expires'),
+firstName: text('first_name').notNull(),
+lastName: text('last_name').notNull(),
+phoneNumber: text('phone_number').notNull(),
+orgName: text('org_name'),
+percentageCommission: integer('percentage_commission'),
+});
+
+export const session = pgTable('session', {
+id: text('id').primaryKey(),
+expiresAt: timestamp('expires_at').notNull(),
+token: text('token').notNull().unique(),
+createdAt: timestamp('created_at').defaultNow().notNull(),
+updatedAt: timestamp('updated_at')
+    **.$onUpdate(() => new Date())**
+
+    **.notNull(),**
+
+ipAddress: text('ip_address'),
+userAgent: text('user_agent'),
+userId: text('user_id')
+    **.notNull()**
+
+    **.references(() => user.id, { onDelete: 'cascade' }),**
+
+impersonatedBy: text('impersonated_by'),
+activeOrganizationId: text('active_organization_id'),
+});
+
+export const account = pgTable('account', {
+id: text('id').primaryKey(),
+accountId: text('account_id').notNull(),
+providerId: text('provider_id').notNull(),
+userId: text('user_id')
+    **.notNull()**
+
+    **.references(() => user.id, { onDelete: 'cascade' }),**
+
+accessToken: text('access_token'),
+refreshToken: text('refresh_token'),
+idToken: text('id_token'),
+accessTokenExpiresAt: timestamp('access_token_expires_at'),
+refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+scope: text('scope'),
+password: text('password'),
+createdAt: timestamp('created_at').defaultNow().notNull(),
+updatedAt: timestamp('updated_at')
+    **.$onUpdate(() => new Date())**
+
+    **.notNull(),**
+
+});
+
+export const verification = pgTable('verification', {
+id: text('id').primaryKey(),
+identifier: text('identifier').notNull(),
+value: text('value').notNull(),
+expiresAt: timestamp('expires_at').notNull(),
+createdAt: timestamp('created_at').defaultNow().notNull(),
+updatedAt: timestamp('updated_at')
+    **.defaultNow()**
+
+    **.$onUpdate(() => new Date())**
+
+    **.notNull(),**
+
+});
+
+export const organization = pgTable('organization', {
+id: text('id').primaryKey(),
+name: text('name').notNull(),
+slug: text('slug').unique(),
+logo: text('logo'),
+createdAt: timestamp('created_at').notNull(),
+metadata: text('metadata'),
+});
+
+export const member = pgTable('member', {
+id: text('id').primaryKey(),
+organizationId: text('organization_id')
+    **.notNull()**
+
+    **.references(() => organization.id, { onDelete: 'cascade' }),**
+
+userId: text('user_id')
+    **.notNull()**
+
+    **.references(() => user.id, { onDelete: 'cascade' }),**
+
+role: text('role').default('member').notNull(),
+createdAt: timestamp('created_at').notNull(),
+});
+
+export const invitation = pgTable('invitation', {
+id: text('id').primaryKey(),
+organizationId: text('organization_id')
+    **.notNull()**
+
+    **.references(() => organization.id, { onDelete: 'cascade' }),**
+
+email: text('email').notNull(),
+role: text('role'),
+status: text('status').default('pending').notNull(),
+expiresAt: timestamp('expires_at').notNull(),
+inviterId: text('inviter_id')
+    **.notNull()**
+
+    **.references(() => user.id, { onDelete: 'cascade' }),**
+
+});
+
+// ===================================
+// USER SCHEMA
+// ===================================
+
+export const usersTable = pgTable('user_table', {
+id: uuid('id')
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+role: varchar({ enum: ['agent', 'manager', 'home_worker', 'affiliate'] }),
+firstName: varchar(),
+lastName: varchar(),
+email: varchar(),
+phoneNumber: varchar(),
+accountId: varchar().unique(),
+});
+
+export const account_request = pgTable('account_request', {
+id: uuid('id')
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+email: varchar().notNull(),
+phoneNumber: varchar(),
+firstName: varchar().notNull(),
+lastName: varchar().notNull(),
+role: varchar().notNull(),
+orgName: varchar(),
+status: accountStatusEnum().default('pending'),
+createdAt: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
+updatedAt: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
+});
+
+// ===================================
+// CLIENT SCHEMA
+// ===================================
+
+export const clientTable = pgTable('client_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+title: varchar(),
+firstName: varchar().notNull(),
+surename: varchar().notNull(),
+DOB: date({ mode: 'string' }),
+phoneNumber: varchar().notNull(),
+email: varchar(),
+emailIsAllowed: boolean(),
+VMB: varchar(),
+VMBfirstAccess: varchar(),
+whatsAppVerified: boolean().notNull().default(false),
+mailAllowed: boolean().default(false),
+houseNumber: varchar(),
+city: varchar(),
+street: varchar(),
+country: varchar(),
+post_code: varchar(),
+avatarUrl: varchar(),
+badge: varchar(),
+createdAt: timestamp().notNull().defaultNow(),
+referrerId: text().references(() => user.id, { onDelete: 'set null' }),
+});
+
+// ===================================
+// CLIENT FILE SCHEMA
+// ===================================
+
+export const clientFileTable = pgTable('client_file_table', {
+id: uuid().defaultRandom().primaryKey(),
+fileTitle: varchar(),
+filename: varchar(),
+fileUrl: varchar(),
+fileType: varchar(),
+clientId: uuid().references(() => clientTable.id, { onDelete: 'cascade' }),
+createdAt: timestamp().notNull().defaultNow(),
+});
+
+// ===================================
+// TRANSACTIONS SCHEMA
+// ===================================
+
+export const transaction = pgTable('transaction', {
+id: uuid('id')
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+status: transactionStatusEnum(),
+is_active: boolean().default(true),
+client_id: uuid().references(() => clientTable.id),
+holiday_type_id: uuid().references(() => package_type.id),
+created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+agent_id: uuid().references(() => usersTable.id),
+lead_source: leadSourceEnum().default('SHOP'),
+user_id: text()
+    **.references(() => user.id)**
+
+    **.notNull(),**
+
+});
+
+export const accomodation_type = pgTable('accomodation_type', {
+id: uuid('id')
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+type: varchar(),
+});
+
+export const board_basis = pgTable('board_basis', {
+id: uuid('id')
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+type: varchar().notNull(),
+});
+
+export const country = pgTable('country_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+country_name: varchar().notNull(),
+country_code: varchar(),
+});
+
+export const destination = pgTable('destination_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+name: varchar().notNull(),
+type: varchar(),
+country_id: uuid().references(() => country.id),
+});
+
+export const resorts = pgTable('resorts_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+name: varchar().notNull(),
+destination_id: uuid().references(() => destination.id),
+});
+
+export const accomodation_list = pgTable('accomodation_list_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+type_id: uuid().references(() => accomodation_type.id),
+name: varchar().notNull(),
+resorts_id: uuid().references(() => resorts.id),
+description: varchar(),
+});
+
+export const tour_operator = pgTable('tour_operator_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+name: varchar(),
+});
+
+export const package_type = pgTable('package_type_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+name: varchar().notNull(),
+});
+
+export const tour_package_commission = pgTable(
+'tour_package_commission_table',
+{
+    **package\_type\_id: uuid().references(() => package\_type.id),**
+
+    **tour\_operator\_id: uuid().references(() => tour\_operator.id),**
+
+    **percentage\_commission: decimal({ precision: 5, scale: 2 }),**
+
+},
+(table) => [primaryKey({ name: 'id', columns: [table.package_type_id, table.tour_operator_id] })]
+);
+
+export const park = pgTable('park_table', {
+id: uuid().defaultRandom().primaryKey(),
+name: varchar(),
+image_1: varchar(),
+image_2: varchar(),
+location: varchar(),
+city: varchar(),
+county: varchar(),
+code: varchar(),
+description: varchar(),
+});
+
+export const cottages = pgTable('cottages_table', {
+id: uuid().defaultRandom().primaryKey(),
+cottage_name: varchar(),
+location: varchar(),
+cottage_code: varchar(),
+bedrooms: integer(),
+bathrooms: integer(),
+sleeps: integer(),
+pets: integer(),
+image_1: varchar(),
+image_2: varchar(),
+details_url: varchar(),
+});
+
+export const lodges = pgTable(
+'lodges_table',
+{
+    **id: uuid().defaultRandom().primaryKey(),**
+
+    **park\_id: uuid().references(() => park.id),**
+
+    **lodge\_name: varchar(),**
+
+    **lodge\_code: varchar(),**
+
+    **image: varchar(),**
+
+    **adults: integer(),**
+
+    **children: integer(),**
+
+    **bedrooms: integer(),**
+
+    **bathrooms: integer(),**
+
+    **pets: integer(),**
+
+    **sleeps: integer(),**
+
+    **infants: integer(),**
+
+},
+(table) => ({
+    **emailIdx: index('lodge\_code\_idx').on(table.lodge\_code),**
+
+})
+);
+
+export const cruise_extra_item = pgTable('cruise_extra_item_table', {
+id: uuid().defaultRandom().primaryKey(),
+name: varchar(),
+});
+
+export const deletion_codes = pgTable('deletion_codes', {
+id: uuid().defaultRandom().primaryKey(),
+is_used: boolean().default(false),
+code: varchar(),
+created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+});
+
+export const room_type = pgTable('room_type', {
+id: uuid().defaultRandom().primaryKey(),
+name: varchar(),
+});
+
+export const deal_images = pgTable(
+'deal_images',
+{
+    **id: uuid().defaultRandom().primaryKey(),**
+
+    **image\_url: varchar(),**
+
+    **s3Key: varchar(),**
+
+    **owner\_type: owner\_type\_enum(),**
+
+    **owner\_id: text().notNull(),**
+
+    **isPrimary: boolean().default(false),**
+
+},
+(table) => ({
+    **unique\_key: unique().on(table.owner\_id, table.image\_url),**
+
+})
+);
+
+export const forwardsReport = pgTable(
+'forwards_report',
+{
+    **id: uuid().defaultRandom().primaryKey(),**
+
+    **month: integer().notNull(),**
+
+    **monthName: varchar().notNull(),**
+
+    **year: integer().notNull(),**
+
+    **target: numeric({ precision: 10, scale: 2 }).notNull(),**
+
+    **company\_commission: numeric({ precision: 10, scale: 2 }).notNull(),**
+
+    **agent\_commission: numeric({ precision: 10, scale: 2 }).notNull(),**
+
+    **created\_at: timestamp({ mode: 'string' }).notNull().defaultNow(),**
+
+    **adjustment: numeric({ precision: 10, scale: 2 }).default('0.00'),**
+
+    **deal\_ids: text()**
+
+      **.array()**
+
+      **.notNull()**
+
+      **.default(sql`ARRAY\[]::text\[]`),**
+
+    **historical\_ids: text()**
+
+      **.array()**
+
+      **.notNull()**
+
+      **.default(sql`ARRAY\[]::text\[]`),**
+
+},
+(table) => [unique('year_month_idx').on(table.year, table.month), index('year_month_index').on(table.year, table.month)]
+);
+
+// ===================================
+// FLIGHTS SCHEMA
+// ===================================
+
+export const airport = pgTable('airport_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+airport_code: varchar().notNull(),
+airport_name: varchar().notNull(),
+country_id: uuid().references(() => country.id),
+});
+
+export const flights = pgTable('flights_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+flight_id: varchar(),
+flight_number: varchar(),
+flight_route: varchar(),
+departure_date: date({ mode: 'string' }),
+departure_time: varchar(),
+arrival_date: date({ mode: 'string' }),
+arrival_time: varchar(),
+departure_airport_id: uuid().references(() => airport.id),
+destination_airport_id: uuid().references(() => airport.id),
+});
+
+// ===================================
+// CRUISE SCHEMA
+// ===================================
+
+export const cruise_line = pgTable('cruise_line_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+name: varchar(),
+});
+
+export const cruise_ship = pgTable('ship_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+name: varchar(),
+cruise_line_id: uuid().references(() => cruise_line.id, { onDelete: 'cascade' }),
+});
+
+export const cruise_itenary = pgTable('cruise_itenary_table', {
+id: uuid().defaultRandom().primaryKey(),
+ship_id: uuid().references(() => cruise_ship.id, { onDelete: 'cascade' }),
+itenary: varchar(),
+departure_port: varchar().notNull(),
+date: date().notNull(),
+});
+
+export const cruise_voyage = pgTable('cruise_voyage_table', {
+id: uuid().defaultRandom().primaryKey(),
+itinerary_id: uuid().references(() => cruise_itenary.id, { onDelete: 'cascade' }),
+day_number: numeric(),
+description: varchar(),
+});
+
+export const cruise_destination = pgTable('cruise_destination_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+name: varchar(),
+});
+
+export const port = pgTable('port_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+cruise_destination_id: uuid().references(() => cruise_destination.id),
+name: varchar(),
+});
+
+// ===================================
+// ENQUIRY SCHEMA
+// ===================================
+
+export const enquiry_table = pgTable('enquiry_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+holiday_type_id: uuid()
+    **.references(() => package\_type.id)**
+
+    **.notNull(),**
+
+transaction_id: uuid()
+    **.references(() => transaction.id, { onDelete: 'cascade' })**
+
+    **.unique()**
+
+    **.notNull(),**
+
+accomodation_type_id: uuid().references(() => accomodation_type.id),
+travel_date: date({ mode: 'string' }),
+adults: integer(),
+children: integer(),
+flexibility_date: varchar(),
+email: varchar(),
+infants: integer(),
+cabin_type: varchar(),
+title: varchar(),
+flexible_date: varchar(),
+weekend_lodge: varchar(),
+accom_min_star_rating: varchar(),
+no_of_nights: integer(),
+budget: numeric(),
+max_budget: numeric().default('0.00'),
+budget_type: budgetTypeEnum().default('PACKAGE'),
+no_of_guests: integer(),
+no_of_pets: integer(),
+pre_cruise_stay: integer(),
+post_cruise_stay: integer(),
+status: enquiryStatusEnum().default('NEW_LEAD'),
+date_created: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
+date_expiry: timestamp({ precision: 0, withTimezone: true }),
+is_future_deal: boolean().default(false),
+future_deal_date: date({ mode: 'string' }),
+is_expired: boolean().default(false),
+is_active: boolean().default(true),
+deletion_code: varchar(),
+deleted_by: uuid().references(() => usersTable.id),
+deleted_at: timestamp({ precision: 0, withTimezone: true }),
+});
+
+export const enquiry_departure_port = pgTable('enquiry_departure_port', {
+port_id: uuid().references(() => port.id),
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const enquiry_departure_airport = pgTable('enquiry_departure_airport', {
+airport_id: uuid().references(() => airport.id),
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const enquiry_cruise_destination = pgTable('enquiry_cruise_destination', {
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+cruise_destination_id: uuid().references(() => cruise_destination.id),
+});
+
+export const enquiry_board_basis = pgTable('enquiry_board_basis', {
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+board_basis_id: uuid().references(() => board_basis.id),
+});
+
+export const enquiry_destination = pgTable('enquiry_destination', {
+destination_id: uuid().references(() => destination.id),
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const enquiry_cruise_line = pgTable('enquiry_cruise_line', {
+cruise_line_id: uuid().references(() => cruise_line.id),
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const enquiry_resorts = pgTable('enquiry_resorts', {
+resorts_id: uuid().references(() => resorts.id),
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const enquiry_accomodation = pgTable('enquiry_accomodation', {
+accomodation_id: uuid().references(() => accomodation_list.id),
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const enquiry_passenger = pgTable('enquiry_passenger', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+enquiry_id: uuid().references(() => enquiry_table.id, {
+    **onDelete: 'cascade',**
+
+}),
+type: varchar(),
+age: integer(),
+});
+
+// ===================================
+// QUOTE SCHEMA
+// ===================================
+
+export const quote = pgTable('quote_table', {
+id: uuid().defaultRandom().primaryKey(),
+transaction_id: uuid()
+    **.references(() => transaction.id, {**
+
+      **onDelete: 'cascade',**
+
+    **})**
+
+    **.notNull(),**
+
+deal_id: varchar(),
+holiday_type_id: uuid()
+    **.references(() => package\_type.id)**
+
+    **.notNull(),**
+
+sales_price: numeric('sales_price', { precision: 10, scale: 2 }),
+package_commission: numeric('package_commission', { precision: 10, scale: 2 }),
+travel_date: date().notNull(),
+discounts: numeric('discounts', { precision: 10, scale: 2 }),
+service_charge: numeric('service_charge', { precision: 10, scale: 2 }),
+num_of_nights: integer().default(0).notNull(),
+is_expired: boolean().default(false),
+pets: integer().default(0).notNull(),
+cottage_id: uuid().references(() => cottages.id),
+lodge_id: uuid().references(() => lodges.id),
+quote_type: varchar().notNull(),
+deal_type: varchar(),
+pre_booked_seats: varchar(),
+flight_meals: boolean().default(false),
+infant: integer(),
+child: integer(),
+adult: integer(),
+title: varchar(),
+price_per_person: numeric('price_per_person', { precision: 10, scale: 2 }).default('0.00').notNull(),
+lodge_type: varchar(),
+transfer_type: varchar('transfer_type').default('none').notNull(),
+quote_status: quoteStatusEnum(),
+main_tour_operator_id: uuid().references(() => tour_operator.id),
+date_created: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
+date_expiry: timestamp({ precision: 0, withTimezone: true }),
+is_future_deal: boolean().default(false),
+future_deal_date: date({ mode: 'string' }),
+is_active: boolean().default(true),
+deletion_code: varchar(),
+deleted_by: uuid().references(() => usersTable.id),
+deleted_by_v2: text().references(() => user.id),
+deleted_at: timestamp({ precision: 0, withTimezone: true }),
+quote_ref: varchar(),
+isQuoteCopy: boolean().default(false),
+isFreeQuote: boolean().default(false),
+});
+
+export const passengers = pgTable('passengers', {
+id: uuid().defaultRandom().primaryKey(),
+type: varchar(),
+age: integer().default(0).notNull(),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+lounge_pass_id: uuid().references(() => quote_lounge_pass.id, {
+    **onDelete: 'cascade',**
+
+}),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const quote_accomodation = pgTable('quote_accomodation', {
+id: uuid().defaultRandom().primaryKey(),
+booking_ref: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+no_of_nights: integer().default(0).notNull(),
+room_type: varchar(),
+board_basis_id: uuid().references(() => board_basis.id),
+check_in_date_time: timestamp({ precision: 6, withTimezone: true }),
+stay_type: varchar(),
+is_primary: boolean().default(false),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+accomodation_id: uuid().references(() => accomodation_list.id),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const quote_transfers = pgTable('quote_transfers', {
+id: uuid().defaultRandom().primaryKey(),
+booking_ref: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+pick_up_location: varchar(),
+drop_off_location: varchar(),
+pick_up_time: timestamp(),
+drop_off_time: timestamp(),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+note: varchar(),
+});
+
+export const quote_car_hire = pgTable('quote_car_hire', {
+id: uuid().defaultRandom().primaryKey(),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+booking_ref: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+pick_up_location: varchar(),
+drop_off_location: varchar(),
+pick_up_time: timestamp(),
+drop_off_time: timestamp(),
+no_of_days: integer().default(0).notNull(),
+driver_age: integer().default(0).notNull(),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+});
+
+export const quote_attraction_ticket = pgTable('quote_attraction_ticket', {
+id: uuid().defaultRandom().primaryKey(),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+booking_ref: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+ticket_type: varchar(),
+date_of_visit: timestamp(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+number_of_tickets: integer().default(0).notNull(),
+is_included_in_package: boolean(),
+});
+
+export const quote_lounge_pass = pgTable('quote_lounge_pass', {
+id: uuid().defaultRandom().primaryKey(),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+booking_ref: varchar(),
+terminal: varchar(),
+airport_id: uuid().references(() => airport.id),
+date_of_usage: timestamp(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+is_included_in_package: boolean(),
+note: varchar(),
+});
+
+export const quote_airport_parking = pgTable('quote_airport_parking', {
+id: uuid().defaultRandom().primaryKey(),
+booking_ref: varchar(),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+airport_id: uuid().references(() => airport.id),
+parking_type: varchar(),
+parking_date: timestamp(),
+car_make: varchar(),
+car_model: varchar(),
+colour: varchar(),
+car_reg_number: varchar(),
+duration: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+});
+
+export const quote_flights = pgTable('quote_flights', {
+id: uuid().defaultRandom().primaryKey(),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+flight_number: varchar(),
+flight_ref: varchar(),
+departing_airport_id: uuid().references(() => airport.id),
+arrival_airport_id: uuid().references(() => airport.id),
+tour_operator_id: uuid().references(() => tour_operator.id),
+flight_type: varchar(),
+departure_date_time: timestamp(),
+arrival_date_time: timestamp(),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+});
+
+export const quote_cruise = pgTable('quote_cruise', {
+id: uuid().defaultRandom().primaryKey(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+cruise_line: varchar(),
+ship: varchar(),
+cruise_date: date(),
+cabin_type: varchar(),
+cruise_name: varchar(),
+pre_cruise_stay: integer().notNull(),
+post_cruise_stay: integer().notNull(),
+quote_id: uuid().references(() => quote.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const quote_cruise_itinerary = pgTable('quote_cruise_itinerary', {
+id: uuid().defaultRandom().primaryKey(),
+quote_cruise_id: uuid().references(() => quote_cruise.id, {
+    **onDelete: 'cascade',**
+
+}),
+day_number: integer(),
+description: varchar(),
+});
+
+export const quote_cruise_item_extra = pgTable('quote_cruise_item_extra', {
+id: uuid().defaultRandom().primaryKey(),
+cruise_extra_id: uuid().references(() => cruise_extra_item.id),
+quote_cruise_id: uuid().references(() => quote_cruise.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const travelDeal = pgTable('travel_deal', {
+id: uuid().defaultRandom().primaryKey(),
+title: varchar().notNull(),
+subtitle: varchar(),
+post: text().notNull(),
+resortSummary: varchar(),
+hashtags: text()
+    **.array()**
+
+    **.notNull()**
+
+    **.default(sql`ARRAY\[]::text\[]`),**
+
+travelDate: date({ mode: 'string' }),
+nights: integer().notNull(),
+boardBasis: varchar(),
+departureAirport: varchar(),
+postSchedule: timestamp({ precision: 0, withTimezone: true }),
+onlySocialsId: varchar(),
+luggageTransfers: varchar(),
+price: numeric('price', { precision: 10, scale: 2 }),
+quote_id: uuid()
+    **.references(() => quote.id, {**
+
+      **onDelete: 'cascade',**
+
+    **})**
+
+    **.notNull(),**
+
+created_at: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
+});
+
+// ===================================
+// BOOKING SCHEMA
+// ===================================
+
+export const booking = pgTable('booking_table', {
+id: uuid().defaultRandom().primaryKey(),
+transaction_id: uuid()
+    **.references(() => transaction.id, { onDelete: 'cascade' })**
+
+    **.unique()**
+
+    **.notNull(),**
+
+deal_type: varchar(),
+pre_booked_seats: varchar(),
+flight_meals: boolean().default(false),
+holiday_type_id: uuid()
+    **.references(() => package\_type.id)**
+
+    **.notNull(),**
+
+hays_ref: varchar().notNull(),
+supplier_ref: varchar().notNull(),
+is_active: boolean().default(true),
+sales_price: numeric('sales_price', { precision: 10, scale: 2 }),
+package_commission: numeric('package_commission', { precision: 10, scale: 2 }),
+travel_date: date().notNull(),
+title: varchar(),
+discounts: numeric('discounts', { precision: 10, scale: 2 }),
+service_charge: numeric('service_charge', { precision: 10, scale: 2 }),
+num_of_nights: integer().notNull().default(0),
+pets: integer().notNull().default(0),
+cottage_id: uuid().references(() => cottages.id),
+lodge_id: uuid().references(() => lodges.id),
+lodge_type: varchar(),
+transfer_type: varchar(),
+infant: integer().notNull().default(0),
+child: integer().notNull().default(0),
+adult: integer().notNull().default(0),
+booking_status: bookingStatus(),
+main_tour_operator_id: uuid().references(() => tour_operator.id),
+date_created: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
+deletion_code: varchar(),
+deleted_by: uuid().references(() => usersTable.id),
+deleted_by_user: text().references(() => user.id),
+deleted_at: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
+});
+
+export const booking_cruise = pgTable('booking_cruise', {
+id: uuid().defaultRandom().primaryKey(),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+tour_operator_id: uuid().references(() => tour_operator.id),
+cruise_line: varchar(),
+ship: varchar(),
+cruise_date: date(),
+cabin_type: varchar(),
+cruise_name: varchar(),
+pre_cruise_stay: integer(),
+post_cruise_stay: integer(),
+});
+
+export const booking_cruise_itinerary = pgTable('booking_cruise_itinerary', {
+id: uuid().defaultRandom().primaryKey(),
+booking_cruise_id: uuid().references(() => booking_cruise.id, {
+    **onDelete: 'cascade',**
+
+}),
+day_number: integer(),
+description: varchar(),
+});
+
+export const booking_cruise_item_extra = pgTable('booking_cruise_item_extra', {
+id: uuid().defaultRandom().primaryKey(),
+cruise_extra_id: uuid().references(() => cruise_extra_item.id),
+booking_cruise_id: uuid().references(() => booking_cruise.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const booking_accomodation = pgTable('booking_accomodation', {
+id: uuid().defaultRandom().primaryKey(),
+booking_ref: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+no_of_nights: integer().notNull().default(0),
+room_type: varchar(),
+board_basis_id: uuid().references(() => board_basis.id),
+check_in_date_time: timestamp(),
+stay_type: varchar(),
+is_primary: boolean().default(false),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+accomodation_id: uuid().references(() => accomodation_list.id),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+});
+
+export const booking_transfers = pgTable('booking_transfers', {
+id: uuid().defaultRandom().primaryKey(),
+booking_ref: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+pick_up_location: varchar(),
+drop_off_location: varchar(),
+pick_up_time: timestamp(),
+drop_off_time: timestamp(),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+note: varchar(),
+});
+
+export const booking_car_hire = pgTable('booking_car_hire', {
+id: uuid().defaultRandom().primaryKey(),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+booking_ref: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+pick_up_location: varchar(),
+drop_off_location: varchar(),
+pick_up_time: timestamp(),
+drop_off_time: timestamp(),
+no_of_days: integer(),
+driver_age: integer(),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+});
+
+export const booking_attraction_ticket = pgTable('booking_attraction_ticket', {
+id: uuid().defaultRandom().primaryKey(),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+booking_ref: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+ticket_type: varchar(),
+date_of_visit: timestamp(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+number_of_tickets: integer(),
+is_included_in_package: boolean(),
+});
+
+export const booking_lounge_pass = pgTable('booking_lounge_pass', {
+id: uuid().defaultRandom().primaryKey(),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+booking_ref: varchar(),
+terminal: varchar(),
+airport_id: uuid().references(() => airport.id),
+date_of_usage: timestamp(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+is_included_in_package: boolean(),
+note: varchar(),
+});
+
+export const booking_airport_parking = pgTable('booking_airport_parking', {
+id: uuid().defaultRandom().primaryKey(),
+booking_ref: varchar(),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+airport_id: uuid().references(() => airport.id),
+parking_type: varchar(),
+parking_date: timestamp(),
+car_make: varchar(),
+car_model: varchar(),
+colour: varchar(),
+car_reg_number: varchar(),
+duration: varchar(),
+tour_operator_id: uuid().references(() => tour_operator.id),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+});
+
+export const booking_flights = pgTable('booking_flights', {
+id: uuid().defaultRandom().primaryKey(),
+booking_id: uuid().references(() => booking.id, {
+    **onDelete: 'cascade',**
+
+}),
+flight_number: varchar(),
+flight_ref: varchar(),
+departing_airport_id: uuid().references(() => airport.id),
+arrival_airport_id: uuid().references(() => airport.id),
+tour_operator_id: uuid().references(() => tour_operator.id),
+flight_type: varchar(),
+departure_date_time: timestamp(),
+arrival_date_time: timestamp(),
+is_included_in_package: boolean(),
+cost: numeric('cost', { precision: 10, scale: 2 }),
+commission: numeric('commission', { precision: 10, scale: 2 }),
+});
+
+// ===================================
+// NOTE & TODO SCHEMA
+// ===================================
+
+export const notes = pgTable('notes_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+description: varchar(),
+content: text('content'),
+agent_id: uuid().references(() => usersTable.id),
+user_id: text().references(() => user.id),
+createdAt: timestamp('timestamp2', { mode: 'string' })
+    **.notNull()**
+
+    **.default(sql`now()`),**
+
+parent_id: varchar(),
+transaction_id: uuid().references(() => transaction.id, { onDelete: 'cascade' }),
+});
+
+export const todos = pgTable('todo_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+note: varchar(),
+user_id: text().references(() => user.id),
+agent_id: uuid().references(() => usersTable.id, { onDelete: 'cascade' }),
+status: todoStatus().default('PENDING'),
+createdAt: timestamp({ mode: 'string' })
+    **.notNull()**
+
+    **.default(sql`now()`),**
+
+});
+
+// ===================================
+// NOTIFICATION SCHEMA
+// ===================================
+
+export const notification_token = pgTable('notification_token', {
+id: uuid().defaultRandom().primaryKey(),
+token: varchar().unique(),
+user_id: uuid().references(() => usersTable.id, { onDelete: 'cascade' }),
+user_id_v2: text().references(() => user.id, { onDelete: 'cascade' }),
+created_at: timestamp().defaultNow(),
+updated_at: timestamp().defaultNow(),
+});
+
+export const notification = pgTable('notification', {
+id: uuid().defaultRandom().primaryKey(),
+type: varchar(),
+user_id: uuid().references(() => usersTable.id, { onDelete: 'cascade' }),
+user_id_v2: text().references(() => user.id, { onDelete: 'cascade' }),
+client_id: uuid().references(() => clientTable.id, { onDelete: 'cascade' }),
+message: varchar(),
+hoursDue: integer().default(0),
+date_created: timestamp().defaultNow(),
+is_read: boolean().default(false),
+date_read: timestamp(),
+reference_id: varchar(),
+due_date: timestamp(),
+date_updated: timestamp().defaultNow(),
+});
+
+// ===================================
+// TASK SCHEMA
+// ===================================
+
+export const task = pgTable('task_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+agent_id: uuid().references(() => usersTable.id, { onDelete: 'set null' }),
+user_id: text().references(() => user.id, { onDelete: 'set null' }),
+client_id: uuid().references(() => clientTable.id, { onDelete: 'set null' }),
+assigned_by_id: uuid().references(() => usersTable.id, { onDelete: 'set null' }),
+assigned_by_id_v2: text().references(() => user.id, { onDelete: 'set null' }),
+transaction_id: uuid().references(() => transaction.id, { onDelete: 'cascade' }),
+deal_id: varchar(),
+transaction_type: varchar(),
+title: varchar(),
+type: varchar().default('task'),
+task: varchar(),
+due_date: timestamp(),
+number: varchar(),
+priority: varchar(),
+status: varchar(),
+created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+});
+
+export const taskSnooze = pgTable('task_snooze_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+task_id: uuid()
+    **.references(() => task.id, { onDelete: 'cascade' })**
+
+    **.notNull(),**
+
+user_id: text()
+    **.references(() => user.id, { onDelete: 'cascade' })**
+
+    **.notNull(),**
+
+snooze_until: timestamp().notNull(),
+snooze_duration_minutes: varchar(),
+created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+});
+
+// ===================================
+// TICKET SCHEMA
+// ===================================
+
+export const ticket = pgTable('ticket', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+ticket_id: varchar('ticket_id', { length: 7 }).unique(),
+due_date: timestamp(),
+ticket_type: varchar('ticket_type', { length: 20 }),
+category: varchar(),
+deal_id: varchar(),
+transaction_type: varchar(),
+subject: varchar(),
+status: varchar(),
+priority: varchar(),
+description: varchar(),
+client_id: uuid().references(() => clientTable.id),
+agent_id: uuid().references(() => usersTable.id),
+user_id: text().references(() => user.id),
+completed_by: text().references(() => user.id),
+created_by: uuid().references(() => usersTable.id),
+created_by_user: text().references(() => user.id),
+created_at: timestamp().defaultNow(),
+updated_at: timestamp().defaultNow(),
+});
+
+export const ticket_file = pgTable('ticket_file', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+ticket_id: uuid().references(() => ticket.id, { onDelete: 'cascade' }),
+file_name: varchar(),
+file_path: varchar(),
+file_size: varchar(),
+file_type: varchar(),
+created_at: timestamp().defaultNow(),
+updated_at: timestamp().defaultNow(),
+});
+
+export const ticket_reply = pgTable('ticket_reply', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+ticket_id: uuid().references(() => ticket.id, { onDelete: 'cascade' }),
+reply: varchar(),
+agent_id: uuid().references(() => usersTable.id),
+user_id: text().references(() => user.id),
+created_at: timestamp().defaultNow(),
+updated_at: timestamp().defaultNow(),
+});
+
+export const ticket_reply_file = pgTable('ticket_reply_file', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+ticket_reply_id: uuid().references(() => ticket_reply.id, { onDelete: 'cascade' }),
+file_name: varchar(),
+file_path: varchar(),
+file_size: varchar(),
+file_type: varchar(),
+created_at: timestamp().defaultNow(),
+updated_at: timestamp().defaultNow(),
+});
+
+export const ticketSnooze = pgTable('ticket_snooze_table', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+ticket_id: uuid()
+    **.references(() => ticket.id, { onDelete: 'cascade' })**
+
+    **.notNull(),**
+
+user_id: text()
+    **.references(() => user.id, { onDelete: 'cascade' })**
+
+    **.notNull(),**
+
+snooze_until: timestamp().notNull(),
+snooze_duration_minutes: varchar(),
+created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+});
+
+// ===================================
+// AGENT TARGET SCHEMA
+// ===================================
+
+export const agentTargetTable = pgTable('agent_target_table', {
+id: uuid().defaultRandom().primaryKey(),
+agent_id: uuid().references(() => usersTable.id, { onDelete: 'cascade' }),
+user_id: text().references(() => user.id),
+year: integer(),
+month: integer(),
+target_amount: numeric({ precision: 10, scale: 2 }),
+description: varchar(),
+is_active: boolean().default(true),
+created_at: timestamp({ mode: 'string' }).defaultNow(),
+updated_at: timestamp({ mode: 'string' }).defaultNow(),
+});
+
+// ===================================
+// CHAT SCHEMA
+// ===================================
+
+export const chatRoom = pgTable('chat_rooms', {
+id: uuid().defaultRandom().primaryKey(),
+name: varchar('name'),
+type: varchar('type').default('direct'),
+isActive: boolean('is_active').default(true),
+createdAt: timestamp('created_at').defaultNow(),
+updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const chatParticipant = pgTable('chat_participants', {
+id: uuid().defaultRandom().primaryKey(),
+roomId: uuid('room_id').references(() => chatRoom.id, { onDelete: 'cascade' }),
+userId: uuid('user_id').references(() => usersTable.id, { onDelete: 'cascade' }),
+participantId: text('participant_id').references(() => user.id, { onDelete: 'cascade' }),
+role: varchar('role').default('member'),
+joinedAt: timestamp('joined_at').defaultNow(),
+isOnline: boolean('is_online').default(false),
+lastSeen: timestamp('last_seen'),
+});
+
+export const chatMessage = pgTable('chat_messages', {
+id: uuid().defaultRandom().primaryKey(),
+roomId: uuid().references(() => chatRoom.id, { onDelete: 'cascade' }),
+senderId: uuid().references(() => usersTable.id, { onDelete: 'cascade' }),
+sender_id: text('sender_id').references(() => user.id, { onDelete: 'cascade' }),
+content: varchar(),
+messageType: varchar('message_type').default('text'),
+isRead: boolean('is_read').default(false),
+timestamp: timestamp('timestamp').defaultNow(),
+attachments: jsonb('attachments').$type<
+    **Array<{**
+
+      **id: string;**
+
+      **name: string;**
+
+      **url: string;**
+
+      **type: 'image' | 'document' | 'video' | 'audio';**
+
+      **size?: number;**
+
+    **}>**
+
+>(),
+});
+
+export const chatMessageRead = pgTable(
+'chat_message_reads',
+{
+    **id: uuid().defaultRandom().primaryKey(),**
+
+    **messageId: uuid('message\_id').references(() => chatMessage.id, { onDelete: 'cascade' }),**
+
+    **userId: uuid('user\_id').references(() => usersTable.id, { onDelete: 'cascade' }),**
+
+    **user\_id\_v2: text('user\_id\_v2').references(() => user.id, { onDelete: 'cascade' }),**
+
+    **readAt: timestamp('read\_at').defaultNow(),**
+
+},
+(table) => ({
+    **uniqueReadRecord: uniqueIndex('unique\_message\_user\_v2\_idx').on(table.messageId, table.user\_id\_v2),**
+
+})
+);
+
+// ===================================
+// REFERRAL SCHEMA
+// ===================================
+
+export const referralRequest = pgTable('referral_request', {
+id: uuid().defaultRandom().primaryKey(),
+referrerId: text().references(() => user.id, { onDelete: 'cascade' }),
+referredStatus: referralStatusEnum().default('PENDING'),
+notes: varchar(),
+createdAt: timestamp().defaultNow(),
+updatedAt: timestamp().defaultNow(),
+clientId: uuid().references(() => clientTable.id, { onDelete: 'cascade' }),
+});
+
+export const referral = pgTable('referral', {
+id: uuid().defaultRandom().primaryKey(),
+referrerId: text().references(() => user.id, { onDelete: 'set null' }),
+transactionId: uuid().references(() => transaction.id, { onDelete: 'cascade' }),
+referralStatus: releasedStatusEnum().default('PENDING'),
+potentialCommission: numeric(),
+commission: numeric(),
+createdAt: timestamp().defaultNow(),
+updatedAt: timestamp().defaultNow(),
+});
+
+// ===================================
+// HISTORICAL SCHEMA
+// ===================================
+
+export const historicalBooking = pgTable('historical_booking', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+client_id: uuid().references(() => clientTable.id),
+booking_ref: varchar(),
+booking_date: date({ mode: 'string' }),
+departure_date: date({ mode: 'string' }),
+return_date: date({ mode: 'string' }),
+gross_price: numeric(),
+net_price: numeric(),
+gross_before_discount: numeric(),
+profit: numeric(),
+total_payment: numeric(),
+destination_country: varchar(),
+product_type: varchar(),
+duration: numeric(),
+passegners: numeric(),
+adults: numeric(),
+children: numeric(),
+infants: numeric(),
+seniors: numeric(),
+cancelled: boolean(),
+cancelled_date: date({ mode: 'string' }),
+main_supplier: varchar(),
+});
+
+// ===================================
+// HEADLINES SCHEMA
+// ===================================
+
+export const headlinesTable = pgTable('headlines', {
+id: uuid()
+    **.default(sql`gen\_random\_uuid()`)**
+
+    **.primaryKey(),**
+
+title: varchar(),
+message: varchar(),
+link: varchar(),
+post_type: varchar(),
+expiry_date: timestamp({ mode: 'string' }),
+created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+updated_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+});
+
+// ===================================
+// RELATIONS
+// ===================================
+
+export const userRelation = relations(user, ({ many }) => ({
+referrals: many(referralRequest),
+referralsMade: many(referral),
+clients: many(clientTable),
+deletedByQuotes: many(quote, { relationName: 'deleted_by_user_v2' }),
+transaction: many(transaction),
+notes: many(notes),
+assigned_task: many(task, { relationName: 'user_assigned' }),
+assigned_by_task: many(task, { relationName: 'assigned_by_user' }),
+notification_token: many(notification_token),
+notification: many(notification),
+agentTargets: many(agentTargetTable),
+deleted_bookings: many(booking),
+assigned_tickets: many(ticket, { relationName: 'assigned_user' }),
+completed_tickets: many(ticket, { relationName: 'completed_by_user' }),
+created_tickets: many(ticket, { relationName: 'created_by_user' }),
+reply_tickets: many(ticket_reply, { relationName: 'reply_user' }),
+todos: many(todos),
+chatParticipant: many(chatParticipant),
+chatMessage: many(chatMessage),
+chatMessageRead: many(chatMessageRead),
+}));
+
+export const agent_relation = relations(usersTable, ({ one, many }) => ({
+transaction: many(transaction),
+notes: many(notes),
+assigned_task: many(task, { relationName: 'agent_assigned' }),
+task_assigned: many(task, { relationName: 'assigned_by' }),
+notification_token: many(notification_token),
+notification: many(notification),
+agentTargets: many(agentTargetTable),
+deleted_bookings: many(booking),
+assigned_tickets: many(ticket, { relationName: 'assigned_agent' }),
+created_tickets: many(ticket, { relationName: 'created_by' }),
+reply_tickets: many(ticket_reply, { relationName: 'reply_agent' }),
+}));
+
+export const client_relations = relations(clientTable, ({ one, many }) => ({
+transaction: many(transaction),
+task: many(task),
+notification: many(notification),
+clientFile: many(clientFileTable),
+ticket: many(ticket),
+historicalBooking: many(historicalBooking),
+referralRequest: many(referralRequest),
+referrer: one(user, {
+    **fields: \[clientTable.referrerId],**
+
+    **references: \[user.id],**
+
+}),
+}));
+
+export const clientFile_relations = relations(clientFileTable, ({ one }) => ({
+client: one(clientTable, {
+    **fields: \[clientFileTable.clientId],**
+
+    **references: \[clientTable.id],**
+
+}),
+}));
+
+export const transactionRelation = relations(transaction, ({ one, many }) => ({
+user: one(user, {
+    **fields: \[transaction.user\_id],**
+
+    **references: \[user.id],**
+
+}),
+agent: one(usersTable, {
+    **fields: \[transaction.agent\_id],**
+
+    **references: \[usersTable.id],**
+
+}),
+booking: one(booking, {
+    **fields: \[transaction.id],**
+
+    **references: \[booking.transaction\_id],**
+
+}),
+enquiry: one(enquiry_table, {
+    **fields: \[transaction.id],**
+
+    **references: \[enquiry\_table.transaction\_id],**
+
+}),
+quote: many(quote),
+holiday_type: one(package_type, {
+    **fields: \[transaction.holiday\_type\_id],**
+
+    **references: \[package\_type.id],**
+
+}),
+client: one(clientTable, {
+    **fields: \[transaction.client\_id],**
+
+    **references: \[clientTable.id],**
+
+}),
+referrals: many(referral),
+tasks: many(task),
+notes: many(notes),
+}));
+
+export const accomodation_type_relation = relations(accomodation_type, ({ one, many }) => ({
+accomodation_list: many(accomodation_list),
+}));
+
+export const board_basis_relation = relations(board_basis, ({ one, many }) => ({
+enquiry_board_basis: many(enquiry_board_basis),
+quote_accomodation: many(quote_accomodation),
+booking_accomodation: many(booking_accomodation),
+}));
+
+export const country_relation = relations(country, ({ one, many }) => ({
+destination: many(destination),
+airport: many(airport),
+}));
+
+export const destination_relation = relations(destination, ({ one, many }) => ({
+enquiry_destination: many(enquiry_destination),
+country: one(country, {
+    **fields: \[destination.country\_id],**
+
+    **references: \[country.id],**
+
+}),
+}));
+
+export const resortsRelations = relations(resorts, ({ one, many }) => ({
+destination: one(destination, {
+    **fields: \[resorts.destination\_id],**
+
+    **references: \[destination.id],**
+
+}),
+accomodation: many(accomodation_list),
+enquiry_resorts: many(enquiry_resorts),
+}));
+
+export const accomodation_list_relations = relations(accomodation_list, ({ one, many }) => ({
+type: one(accomodation_type, {
+    **fields: \[accomodation\_list.type\_id],**
+
+    **references: \[accomodation\_type.id],**
+
+}),
+resorts: one(resorts, {
+    **fields: \[accomodation\_list.resorts\_id],**
+
+    **references: \[resorts.id],**
+
+}),
+enquiry_accodation: many(enquiry_accomodation),
+quote_accomodation: many(quote_accomodation),
+booking_accomodation: many(booking_accomodation),
+}));
+
+export const tour_operator_relation = relations(tour_operator, ({ one, many }) => ({
+quote: many(quote),
+booking: many(booking),
+tour_package_commission: many(tour_package_commission),
+quote_flights: many(quote_flights),
+quote_accomodation: many(quote_accomodation),
+quote_transfers: many(quote_transfers),
+quote_car_hire: many(quote_car_hire),
+quote_attraction_tickets: many(quote_attraction_ticket),
+quote_lounge_pass: many(quote_lounge_pass),
+quote_airport_parking: many(quote_airport_parking),
+quote_cruise: many(quote_cruise),
+booking_flights: many(booking_flights),
+booking_accomodation: many(booking_accomodation),
+booking_transfers: many(booking_transfers),
+booking_car_hire: many(booking_car_hire),
+booking_attraction_tickets: many(booking_attraction_ticket),
+booking_lounge_pass: many(booking_lounge_pass),
+booking_airport_parking: many(booking_airport_parking),
+booking_cruise: many(booking_cruise),
+}));
+
+export const package_type_relation = relations(package_type, ({ one, many }) => ({
+tour_package_commission: many(tour_package_commission),
+transaction: many(transaction),
+quote: many(quote),
+enquiry: many(enquiry_table),
+booking: many(booking),
+}));
+
+export const tour_package_commission_relation = relations(tour_package_commission, ({ one, many }) => ({
+package_type: one(package_type, {
+    **fields: \[tour\_package\_commission.package\_type\_id],**
+
+    **references: \[package\_type.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[tour\_package\_commission.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const park_relation = relations(park, ({ one, many }) => ({
+lodge: many(lodges),
+}));
+
+export const cottage_relation = relations(cottages, ({ one, many }) => ({
+quote_cottage: many(quote),
+booking_cottage: many(booking),
+}));
+
+export const lodge_relation = relations(lodges, ({ one, many }) => ({
+park: one(park, {
+    **fields: \[lodges.park\_id],**
+
+    **references: \[park.id],**
+
+}),
+quote_lodge: many(quote),
+booking_lodge: many(booking),
+}));
+
+export const cruise_extra_item_relation = relations(cruise_extra_item, ({ one, many }) => ({
+quote: many(quote_cruise_item_extra),
+booking: many(booking_cruise_item_extra),
+}));
+
+export const airport_relations = relations(airport, ({ one, many }) => ({
+enquiry_departure_airport: many(enquiry_departure_airport),
+departure_flight: many(flights, { relationName: 'departure_airport_relation' }),
+destination_flight: many(flights, { relationName: 'destination_airport_relation' }),
+country: one(country, {
+    **fields: \[airport.country\_id],**
+
+    **references: \[country.id],**
+
+}),
+quote_lounge_pass: many(quote_lounge_pass),
+quote_parking: many(quote_airport_parking),
+quote_flights_departure_airport: many(quote_flights, { relationName: 'departing_airport_relation' }),
+quote_flights_arrival_airport: many(quote_flights, { relationName: 'arrival_airport_relation' }),
+booking_lounge_pass: many(booking_lounge_pass),
+booking_parking: many(booking_airport_parking),
+booking_flights_departure_airport: many(booking_flights, { relationName: 'departing_airport_relation' }),
+booking_flights_arrival_airport: many(booking_flights, { relationName: 'arrival_airport_relation' }),
+}));
+
+export const flight_relations = relations(flights, ({ one, many }) => ({
+departure_aiport: one(airport, {
+    **fields: \[flights.departure\_airport\_id],**
+
+    **references: \[airport.id],**
+
+    **relationName: 'departure\_airport\_relation',**
+
+}),
+destination_aiport: one(airport, {
+    **fields: \[flights.destination\_airport\_id],**
+
+    **references: \[airport.id],**
+
+    **relationName: 'destination\_airport\_relation',**
+
+}),
+}));
+
+export const cruise_line_relation = relations(cruise_line, ({ one, many }) => ({
+cruise_ship: many(cruise_ship),
+enquiry_cruise_line: many(enquiry_cruise_line),
+}));
+
+export const cruise_ship_relation = relations(cruise_ship, ({ one, many }) => ({
+cruise_line: one(cruise_line, {
+    **fields: \[cruise\_ship.cruise\_line\_id],**
+
+    **references: \[cruise\_line.id],**
+
+}),
+itenary: many(cruise_itenary),
+}));
+
+export const cruise_itenerary_relation = relations(cruise_itenary, ({ one, many }) => ({
+cruise_ship: one(cruise_ship, {
+    **fields: \[cruise\_itenary.ship\_id],**
+
+    **references: \[cruise\_ship.id],**
+
+}),
+cruise_voyage: many(cruise_voyage),
+}));
+
+export const cruise_voyage_relation = relations(cruise_voyage, ({ one, many }) => ({
+cruise_itenary: one(cruise_itenary, {
+    **fields: \[cruise\_voyage.itinerary\_id],**
+
+    **references: \[cruise\_itenary.id],**
+
+}),
+}));
+
+export const cruise_destination_relation = relations(cruise_destination, ({ one, many }) => ({
+port: many(port),
+enquiry_cruise_destination: many(enquiry_cruise_destination),
+}));
+
+export const port_relation = relations(port, ({ one, many }) => ({
+cruise_destination: one(cruise_destination, {
+    **fields: \[port.cruise\_destination\_id],**
+
+    **references: \[cruise\_destination.id],**
+
+}),
+}));
+
+export const enquiry_relations = relations(enquiry_table, ({ one, many }) => ({
+transaction: one(transaction, {
+    **fields: \[enquiry\_table.transaction\_id],**
+
+    **references: \[transaction.id],**
+
+}),
+holiday_type: one(package_type, {
+    **fields: \[enquiry\_table.holiday\_type\_id],**
+
+    **references: \[package\_type.id],**
+
+}),
+accomodation_type: one(accomodation_type, {
+    **fields: \[enquiry\_table.accomodation\_type\_id],**
+
+    **references: \[accomodation\_type.id],**
+
+}),
+cruise_line: many(enquiry_cruise_line),
+board_basis: many(enquiry_board_basis),
+departure_port: many(enquiry_departure_port),
+enquiry_cruise_destination: many(enquiry_cruise_destination),
+destination: many(enquiry_destination),
+resortss: many(enquiry_resorts),
+accomodation: many(enquiry_accomodation),
+departure_airport: many(enquiry_departure_airport),
+passengers: many(enquiry_passenger),
+}));
+
+export const enquiry_departure_port_relations = relations(enquiry_departure_port, ({ one, many }) => ({
+port: one(port, {
+    **fields: \[enquiry\_departure\_port.port\_id],**
+
+    **references: \[port.id],**
+
+}),
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_departure\_port.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+}));
+
+export const enquiry_departure_airport_relations = relations(enquiry_departure_airport, ({ one, many }) => ({
+airport: one(airport, {
+    **fields: \[enquiry\_departure\_airport.airport\_id],**
+
+    **references: \[airport.id],**
+
+}),
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_departure\_airport.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+}));
+
+export const enquiry_cruise_destinationRelations = relations(enquiry_cruise_destination, ({ one, many }) => ({
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_cruise\_destination.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+cruise_destination: one(cruise_destination, {
+    **fields: \[enquiry\_cruise\_destination.cruise\_destination\_id],**
+
+    **references: \[cruise\_destination.id],**
+
+}),
+}));
+
+export const enquiry_board_basis_relation = relations(enquiry_board_basis, ({ one, many }) => ({
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_board\_basis.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+board_basis: one(board_basis, {
+    **fields: \[enquiry\_board\_basis.board\_basis\_id],**
+
+    **references: \[board\_basis.id],**
+
+}),
+}));
+
+export const enquiry_destination_relations = relations(enquiry_destination, ({ one, many }) => ({
+destination: one(destination, {
+    **fields: \[enquiry\_destination.destination\_id],**
+
+    **references: \[destination.id],**
+
+}),
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_destination.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+}));
+
+export const enquiry_cruise_line_relations = relations(enquiry_cruise_line, ({ one, many }) => ({
+cruise_line: one(cruise_line, {
+    **fields: \[enquiry\_cruise\_line.cruise\_line\_id],**
+
+    **references: \[cruise\_line.id],**
+
+}),
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_cruise\_line.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+}));
+
+export const enquiry_resorts_relations = relations(enquiry_resorts, ({ one, many }) => ({
+resorts: one(resorts, {
+    **fields: \[enquiry\_resorts.resorts\_id],**
+
+    **references: \[resorts.id],**
+
+}),
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_resorts.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+}));
+
+export const enquiry_accomodation_relations = relations(enquiry_accomodation, ({ one, many }) => ({
+accomodation: one(accomodation_list, {
+    **fields: \[enquiry\_accomodation.accomodation\_id],**
+
+    **references: \[accomodation\_list.id],**
+
+}),
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_accomodation.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+}));
+
+export const enquiry_passenger_relations = relations(enquiry_passenger, ({ one, many }) => ({
+enquiry: one(enquiry_table, {
+    **fields: \[enquiry\_passenger.enquiry\_id],**
+
+    **references: \[enquiry\_table.id],**
+
+}),
+}));
+
+export const quote_relation = relations(quote, ({ one, many }) => ({
+deleted_by_user_v2: one(user, {
+    **fields: \[quote.deleted\_by\_v2],**
+
+    **references: \[user.id],**
+
+    **relationName: 'deleted\_by\_user\_v2',**
+
+}),
+quote_cruise: one(quote_cruise, {
+    **fields: \[quote.id],**
+
+    **references: \[quote\_cruise.quote\_id],**
+
+}),
+holiday_type: one(package_type, {
+    **fields: \[quote.holiday\_type\_id],**
+
+    **references: \[package\_type.id],**
+
+}),
+transaction: one(transaction, {
+    **fields: \[quote.transaction\_id],**
+
+    **references: \[transaction.id],**
+
+}),
+lodge: one(lodges, {
+    **fields: \[quote.lodge\_id],**
+
+    **references: \[lodges.id],**
+
+}),
+cottage: one(cottages, {
+    **fields: \[quote.cottage\_id],**
+
+    **references: \[cottages.id],**
+
+}),
+main_tour_operator: one(tour_operator, {
+    **fields: \[quote.main\_tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+travel_deal: one(travelDeal, {
+    **fields: \[quote.id],**
+
+    **references: \[travelDeal.quote\_id],**
+
+}),
+passengers: many(passengers),
+accomodation: many(quote_accomodation),
+transfers: many(quote_transfers),
+car_hire: many(quote_car_hire),
+attraction_tickets: many(quote_attraction_ticket),
+lounge_pass: many(quote_lounge_pass),
+airport_parking: many(quote_airport_parking),
+flights: many(quote_flights),
+}));
+
+export const passengers_relation = relations(passengers, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[passengers.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+booking: one(booking, {
+    **fields: \[passengers.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+lounge_pass: one(quote_lounge_pass, {
+    **fields: \[passengers.lounge\_pass\_id],**
+
+    **references: \[quote\_lounge\_pass.id],**
+
+}),
+}));
+
+export const quote_accomodation_relation = relations(quote_accomodation, ({ one, many }) => ({
+board_basis: one(board_basis, {
+    **fields: \[quote\_accomodation.board\_basis\_id],**
+
+    **references: \[board\_basis.id],**
+
+}),
+accomodation: one(accomodation_list, {
+    **fields: \[quote\_accomodation.accomodation\_id],**
+
+    **references: \[accomodation\_list.id],**
+
+}),
+quote: one(quote, {
+    **fields: \[quote\_accomodation.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[quote\_accomodation.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const quote_transfers_relation = relations(quote_transfers, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[quote\_transfers.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[quote\_transfers.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const quote_car_hire_relation = relations(quote_car_hire, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[quote\_car\_hire.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[quote\_car\_hire.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const quote_attraction_ticket_relation = relations(quote_attraction_ticket, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[quote\_attraction\_ticket.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[quote\_attraction\_ticket.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const quote_lounge_pass_relation = relations(quote_lounge_pass, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[quote\_lounge\_pass.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+airport: one(airport, {
+    **fields: \[quote\_lounge\_pass.airport\_id],**
+
+    **references: \[airport.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[quote\_lounge\_pass.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+passengers: many(passengers),
+}));
+
+export const quote_airport_parking_relation = relations(quote_airport_parking, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[quote\_airport\_parking.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[quote\_airport\_parking.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+airport: one(airport, {
+    **fields: \[quote\_airport\_parking.airport\_id],**
+
+    **references: \[airport.id],**
+
+}),
+}));
+
+export const quote_flights_relation = relations(quote_flights, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[quote\_flights.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[quote\_flights.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+departing_airport: one(airport, {
+    **fields: \[quote\_flights.departing\_airport\_id],**
+
+    **references: \[airport.id],**
+
+    **relationName: 'departing\_airport\_relation',**
+
+}),
+arrival_airport: one(airport, {
+    **fields: \[quote\_flights.arrival\_airport\_id],**
+
+    **references: \[airport.id],**
+
+    **relationName: 'arrival\_airport\_relation',**
+
+}),
+}));
+
+export const quote_cruise_relation = relations(quote_cruise, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[quote\_cruise.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+cruise_extra: many(quote_cruise_item_extra),
+cruise_itinerary: many(quote_cruise_itinerary),
+tour_operator: one(tour_operator, {
+    **fields: \[quote\_cruise.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const quote_cruise_itinerary_relation = relations(quote_cruise_itinerary, ({ one, many }) => ({
+quote_cruise: one(quote_cruise, {
+    **fields: \[quote\_cruise\_itinerary.quote\_cruise\_id],**
+
+    **references: \[quote\_cruise.id],**
+
+}),
+}));
+
+export const quote_cruise_item_extra_relation = relations(quote_cruise_item_extra, ({ one, many }) => ({
+cruise_extra: one(cruise_extra_item, {
+    **fields: \[quote\_cruise\_item\_extra.cruise\_extra\_id],**
+
+    **references: \[cruise\_extra\_item.id],**
+
+}),
+quote_cruise: one(quote_cruise, {
+    **fields: \[quote\_cruise\_item\_extra.quote\_cruise\_id],**
+
+    **references: \[quote\_cruise.id],**
+
+}),
+}));
+
+export const travelDeal_relation = relations(travelDeal, ({ one, many }) => ({
+quote: one(quote, {
+    **fields: \[travelDeal.quote\_id],**
+
+    **references: \[quote.id],**
+
+}),
+}));
+
+export const booking_relation = relations(booking, ({ one, many }) => ({
+passengers: many(passengers),
+booking_cruise: one(booking_cruise, {
+    **fields: \[booking.id],**
+
+    **references: \[booking\_cruise.booking\_id],**
+
+}),
+transaction: one(transaction, {
+    **fields: \[booking.transaction\_id],**
+
+    **references: \[transaction.id],**
+
+}),
+cottage: one(cottages, {
+    **fields: \[booking.cottage\_id],**
+
+    **references: \[cottages.id],**
+
+}),
+lodge: one(lodges, {
+    **fields: \[booking.lodge\_id],**
+
+    **references: \[lodges.id],**
+
+}),
+deleted_by: one(usersTable, {
+    **fields: \[booking.deleted\_by],**
+
+    **references: \[usersTable.id],**
+
+}),
+deleted_by_user: one(user, {
+    **fields: \[booking.deleted\_by\_user],**
+
+    **references: \[user.id],**
+
+}),
+main_tour_operator: one(tour_operator, {
+    **fields: \[booking.main\_tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+accomodation: many(booking_accomodation),
+transfers: many(booking_transfers),
+car_hire: many(booking_car_hire),
+attraction_tickets: many(booking_attraction_ticket),
+lounge_pass: many(booking_lounge_pass),
+airport_parking: many(booking_airport_parking),
+flights: many(booking_flights),
+holiday_type: one(package_type, {
+    **fields: \[booking.holiday\_type\_id],**
+
+    **references: \[package\_type.id],**
+
+}),
+}));
+
+export const booking_cruise_relation = relations(booking_cruise, ({ one, many }) => ({
+booking: one(booking, {
+    **fields: \[booking\_cruise.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[booking\_cruise.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+cruise_extra: many(booking_cruise_item_extra),
+cruise_itinerary: many(booking_cruise_itinerary),
+}));
+
+export const booking_cruise_itinerary_relation = relations(booking_cruise_itinerary, ({ one, many }) => ({
+booking_cruise: one(booking_cruise, {
+    **fields: \[booking\_cruise\_itinerary.booking\_cruise\_id],**
+
+    **references: \[booking\_cruise.id],**
+
+}),
+}));
+
+export const booking_cruise_item_extra_relation = relations(booking_cruise_item_extra, ({ one, many }) => ({
+cruise_extra: one(cruise_extra_item, {
+    **fields: \[booking\_cruise\_item\_extra.cruise\_extra\_id],**
+
+    **references: \[cruise\_extra\_item.id],**
+
+}),
+booking_cruise: one(booking_cruise, {
+    **fields: \[booking\_cruise\_item\_extra.booking\_cruise\_id],**
+
+    **references: \[booking\_cruise.id],**
+
+}),
+}));
+
+export const booking_accomodation_relation = relations(booking_accomodation, ({ one, many }) => ({
+board_basis: one(board_basis, {
+    **fields: \[booking\_accomodation.board\_basis\_id],**
+
+    **references: \[board\_basis.id],**
+
+}),
+accomodation: one(accomodation_list, {
+    **fields: \[booking\_accomodation.accomodation\_id],**
+
+    **references: \[accomodation\_list.id],**
+
+}),
+booking: one(booking, {
+    **fields: \[booking\_accomodation.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[booking\_accomodation.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const booking_transfers_relation = relations(booking_transfers, ({ one, many }) => ({
+booking: one(booking, {
+    **fields: \[booking\_transfers.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[booking\_transfers.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const booking_car_hire_relation = relations(booking_car_hire, ({ one, many }) => ({
+booking: one(booking, {
+    **fields: \[booking\_car\_hire.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[booking\_car\_hire.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const booking_attraction_ticket_relation = relations(booking_attraction_ticket, ({ one, many }) => ({
+booking: one(booking, {
+    **fields: \[booking\_attraction\_ticket.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[booking\_attraction\_ticket.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const booking_lounge_pass_relation = relations(booking_lounge_pass, ({ one, many }) => ({
+booking: one(booking, {
+    **fields: \[booking\_lounge\_pass.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+airport: one(airport, {
+    **fields: \[booking\_lounge\_pass.airport\_id],**
+
+    **references: \[airport.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[booking\_lounge\_pass.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+}));
+
+export const booking_airport_parking_relation = relations(booking_airport_parking, ({ one, many }) => ({
+booking: one(booking, {
+    **fields: \[booking\_airport\_parking.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[booking\_airport\_parking.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+airport: one(airport, {
+    **fields: \[booking\_airport\_parking.airport\_id],**
+
+    **references: \[airport.id],**
+
+}),
+}));
+
+export const booking_flights_relation = relations(booking_flights, ({ one, many }) => ({
+booking: one(booking, {
+    **fields: \[booking\_flights.booking\_id],**
+
+    **references: \[booking.id],**
+
+}),
+tour_operator: one(tour_operator, {
+    **fields: \[booking\_flights.tour\_operator\_id],**
+
+    **references: \[tour\_operator.id],**
+
+}),
+departing_airport: one(airport, {
+    **fields: \[booking\_flights.departing\_airport\_id],**
+
+    **references: \[airport.id],**
+
+    **relationName: 'departing\_airport\_relation',**
+
+}),
+arrival_airport: one(airport, {
+    **fields: \[booking\_flights.arrival\_airport\_id],**
+
+    **references: \[airport.id],**
+
+    **relationName: 'arrival\_airport\_relation',**
+
+}),
+}));
+
+export const notes_relation = relations(notes, ({ one }) => ({
+user: one(user, {
+    **fields: \[notes.user\_id],**
+
+    **references: \[user.id],**
+
+}),
+agent: one(usersTable, {
+    **fields: \[notes.agent\_id],**
+
+    **references: \[usersTable.id],**
+
+}),
+transaction: one(transaction, {
+    **fields: \[notes.transaction\_id],**
+
+    **references: \[transaction.id],**
+
+}),
+}));
+
+export const todos_relation = relations(todos, ({ one, many }) => ({
+user: one(user, {
+    **fields: \[todos.user\_id],**
+
+    **references: \[user.id],**
+
+}),
+agent: one(usersTable, {
+    **fields: \[todos.agent\_id],**
+
+    **references: \[usersTable.id],**
+
+}),
+}));
+
+export const notification_token_relations = relations(notification_token, ({ one }) => ({
+owner: one(user, {
+    **fields: \[notification\_token.user\_id\_v2],**
+
+    **references: \[user.id],**
+
+}),
+user: one(usersTable, {
+    **fields: \[notification\_token.user\_id],**
+
+    **references: \[usersTable.id],**
+
+}),
+}));
+
+export const notification_relations = relations(notification, ({ one }) => ({
+owner: one(user, {
+    **fields: \[notification.user\_id\_v2],**
+
+    **references: \[user.id],**
+
+}),
+user: one(usersTable, {
+    **fields: \[notification.user\_id],**
+
+    **references: \[usersTable.id],**
+
+}),
+client: one(clientTable, {
+    **fields: \[notification.client\_id],**
+
+    **references: \[clientTable.id],**
+
+}),
+}));
+
+export const taskRelation = relations(task, ({ one, many }) => ({
+assigned_by_user: one(user, {
+    **fields: \[task.assigned\_by\_id\_v2],**
+
+    **references: \[user.id],**
+
+    **relationName: 'assigned\_by\_user',**
+
+}),
+user: one(user, {
+    **fields: \[task.user\_id],**
+
+    **references: \[user.id],**
+
+    **relationName: 'user\_assigned',**
+
+}),
+transaction: one(transaction, {
+    **fields: \[task.transaction\_id],**
+
+    **references: \[transaction.id],**
+
+}),
+agent: one(usersTable, {
+    **fields: \[task.agent\_id],**
+
+    **references: \[usersTable.id],**
+
+    **relationName: 'agent\_assigned',**
+
+}),
+client: one(clientTable, {
+    **fields: \[task.client\_id],**
+
+    **references: \[clientTable.id],**
+
+}),
+assignedBy: one(usersTable, {
+    **fields: \[task.assigned\_by\_id],**
+
+    **references: \[usersTable.id],**
+
+    **relationName: 'assigned\_by',**
+
+}),
+}));
+
+export const taskSnoozeRelation = relations(taskSnooze, ({ one }) => ({
+task: one(task, {
+    **fields: \[taskSnooze.task\_id],**
+
+    **references: \[task.id],**
+
+}),
+user: one(user, {
+    **fields: \[taskSnooze.user\_id],**
+
+    **references: \[user.id],**
+
+}),
+}));
+
+export const ticketRelation = relations(ticket, ({ one, many }) => ({
+client: one(clientTable, {
+    **fields: \[ticket.client\_id],**
+
+    **references: \[clientTable.id],**
+
+}),
+user: one(user, {
+    **fields: \[ticket.user\_id],**
+
+    **references: \[user.id],**
+
+    **relationName: 'assigned\_user',**
+
+}),
+agent: one(usersTable, {
+    **fields: \[ticket.agent\_id],**
+
+    **references: \[usersTable.id],**
+
+    **relationName: 'assigned\_agent',**
+
+}),
+replies: many(ticket_reply),
+files: many(ticket_file),
+completed_by_user: one(user, {
+    **fields: \[ticket.completed\_by],**
+
+    **references: \[user.id],**
+
+    **relationName: 'completed\_by\_user',**
+
+}),
+created_by_user: one(user, {
+    **fields: \[ticket.created\_by\_user],**
+
+    **references: \[user.id],**
+
+    **relationName: 'created\_by\_user',**
+
+}),
+created_by: one(usersTable, {
+    **fields: \[ticket.created\_by],**
+
+    **references: \[usersTable.id],**
+
+    **relationName: 'created\_by',**
+
+}),
+}));
+
+export const ticket_file_relation = relations(ticket_file, ({ one }) => ({
+ticket: one(ticket, {
+    **fields: \[ticket\_file.ticket\_id],**
+
+    **references: \[ticket.id],**
+
+}),
+}));
+
+export const ticketReplyRelation = relations(ticket_reply, ({ one, many }) => ({
+ticket: one(ticket, {
+    **fields: \[ticket\_reply.ticket\_id],**
+
+    **references: \[ticket.id],**
+
+}),
+user: one(user, {
+    **fields: \[ticket\_reply.user\_id],**
+
+    **references: \[user.id],**
+
+    **relationName: 'reply\_user',**
+
+}),
+agent: one(usersTable, {
+    **fields: \[ticket\_reply.agent\_id],**
+
+    **references: \[usersTable.id],**
+
+    **relationName: 'reply\_agent',**
+
+}),
+files: many(ticket_reply_file),
+}));
+
+export const ticket_reply_file_relation = relations(ticket_reply_file, ({ one }) => ({
+ticket_reply: one(ticket_reply, {
+    **fields: \[ticket\_reply\_file.ticket\_reply\_id],**
+
+    **references: \[ticket\_reply.id],**
+
+}),
+}));
+
+export const ticketSnoozeRelation = relations(ticketSnooze, ({ one }) => ({
+ticket: one(ticket, {
+    **fields: \[ticketSnooze.ticket\_id],**
+
+    **references: \[ticket.id],**
+
+}),
+user: one(user, {
+    **fields: \[ticketSnooze.user\_id],**
+
+    **references: \[user.id],**
+
+}),
+}));
+
+export const agentTargetRelation = relations(agentTargetTable, ({ one }) => ({
+agent: one(usersTable, {
+    **fields: \[agentTargetTable.agent\_id],**
+
+    **references: \[usersTable.id],**
+
+}),
+user: one(user, {
+    **fields: \[agentTargetTable.user\_id],**
+
+    **references: \[user.id],**
+
+}),
+}));
+
+export const chatRoomRelations = relations(chatRoom, ({ many }) => ({
+participants: many(chatParticipant),
+messages: many(chatMessage),
+}));
+
+export const chatParticipantRelations = relations(chatParticipant, ({ one }) => ({
+room: one(chatRoom, {
+    **fields: \[chatParticipant.roomId],**
+
+    **references: \[chatRoom.id],**
+
+}),
+user_v2: one(user, {
+    **fields: \[chatParticipant.participantId],**
+
+    **references: \[user.id],**
+
+}),
+user: one(usersTable, {
+    **fields: \[chatParticipant.userId],**
+
+    **references: \[usersTable.id],**
+
+}),
+}));
+
+export const chatMessageRelations = relations(chatMessage, ({ one, many }) => ({
+room: one(chatRoom, {
+    **fields: \[chatMessage.roomId],**
+
+    **references: \[chatRoom.id],**
+
+}),
+sender_v2: one(user, {
+    **fields: \[chatMessage.sender\_id],**
+
+    **references: \[user.id],**
+
+}),
+sender: one(usersTable, {
+    **fields: \[chatMessage.senderId],**
+
+    **references: \[usersTable.id],**
+
+}),
+reads: many(chatMessageRead),
+}));
+
+export const chatMessageReadRelations = relations(chatMessageRead, ({ one }) => ({
+message: one(chatMessage, {
+    **fields: \[chatMessageRead.messageId],**
+
+    **references: \[chatMessage.id],**
+
+}),
+user: one(usersTable, {
+    **fields: \[chatMessageRead.userId],**
+
+    **references: \[usersTable.id],**
+
+}),
+user_v2: one(user, {
+    **fields: \[chatMessageRead.user\_id\_v2],**
+
+    **references: \[user.id],**
+
+}),
+}));
+
+export const referralRequestRelation = relations(referralRequest, ({ one }) => ({
+referrer: one(user, {
+    **fields: \[referralRequest.referrerId],**
+
+    **references: \[user.id],**
+
+}),
+client: one(clientTable, {
+    **fields: \[referralRequest.clientId],**
+
+    **references: \[clientTable.id],**
+
+}),
+}));
+
+export const referralRelation = relations(referral, ({ one }) => ({
+referrer: one(user, {
+    **fields: \[referral.referrerId],**
+
+    **references: \[user.id],**
+
+}),
+transaction: one(transaction, {
+    **fields: \[referral.transactionId],**
+
+    **references: \[transaction.id],**
+
+}),
+}));
+
+export const historicalBookingRelation = relations(historicalBooking, ({ one }) => ({
+client: one(clientTable, {
+    **fields: \[historicalBooking.client\_id],**
+
+    **references: \[clientTable.id],**
+
+}),
+}));
