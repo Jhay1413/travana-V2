@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -17,6 +17,7 @@ import {
   Filter,
   Globe,
   LayoutGrid,
+  Lightbulb,
   LifeBuoy,
   Link2,
   ListChecks,
@@ -32,6 +33,7 @@ import {
   Sparkles,
   Ticket,
   Users,
+  X,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
 import { useCurrentUser, useNeonClients } from "@/hooks/queries";
@@ -96,6 +98,144 @@ function rolePillLabel(role: Role) {
   if (role === "Homeworker") return "Homeworker";
   if (role === "Referer") return "Referer";
   return "Agent";
+}
+
+const DID_YOU_KNOW_TIPS = [
+  {
+    title: "CSV Import",
+    body: "You can bulk-import clients from a CSV file. Head to the Clients page and click the import button to get started.",
+  },
+  {
+    title: "JSON Quote Upload",
+    body: "Speed up quote creation by uploading a JSON file — fields like flights, accommodation, and pricing fill in automatically.",
+  },
+  {
+    title: "Lead Source Tracking",
+    body: "Track where your enquiries come from. Set a Lead Source on every quote to see which channels drive the most bookings.",
+  },
+  {
+    title: "Quick Client Search",
+    body: "Use the search bar at the top to instantly find any client by name, phone number, or email.",
+  },
+  {
+    title: "Role Switching",
+    body: "Switch between Admin, Manager, Agent, Homeworker, and Referer views using the role selector in the sidebar.",
+  },
+  {
+    title: "Commission Breakdown",
+    body: "Open any quote and switch to the Costings tab to see a full financial breakdown including net-to-agency figures.",
+  },
+  {
+    title: "Quote Images",
+    body: "Attach destination photos to your quotes to give clients a visual preview of their holiday.",
+  },
+  {
+    title: "Ticket System",
+    body: "Use the Tickets section under Connect to manage customer support requests and internal tasks.",
+  },
+  {
+    title: "Client Stages",
+    body: "Track client progress from New Lead through to Booked using client stage labels on the Clients page.",
+  },
+  {
+    title: "Keyboard Navigation",
+    body: "Press the search bar shortcut to quickly jump to client lookup without reaching for the mouse.",
+  },
+];
+
+const STORAGE_KEY = "dyk-dismissed";
+const COOLDOWN_KEY = "dyk-last-shown";
+const COOLDOWN_MS = 4 * 60 * 60 * 1000;
+
+function DidYouKnowPopup() {
+  const [tip, setTip] = useState<typeof DID_YOU_KNOW_TIPS[number] | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const lastShown = localStorage.getItem(COOLDOWN_KEY);
+    if (lastShown && Date.now() - parseInt(lastShown, 10) < COOLDOWN_MS) return;
+
+    const dismissed: number[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const unseen = DID_YOU_KNOW_TIPS.map((t, i) => ({ ...t, idx: i })).filter(
+      (t) => !dismissed.includes(t.idx)
+    );
+
+    let pick: typeof DID_YOU_KNOW_TIPS[number] & { idx: number };
+    if (unseen.length === 0) {
+      localStorage.setItem(STORAGE_KEY, "[]");
+      const fresh = DID_YOU_KNOW_TIPS.map((t, i) => ({ ...t, idx: i }));
+      pick = fresh[Math.floor(Math.random() * fresh.length)];
+    } else {
+      pick = unseen[Math.floor(Math.random() * unseen.length)];
+    }
+
+    const timer = setTimeout(() => {
+      setTip(pick);
+      setVisible(true);
+      localStorage.setItem(COOLDOWN_KEY, String(Date.now()));
+      const d: number[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      if (!d.includes(pick.idx)) {
+        d.push(pick.idx);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const dismiss = useCallback(() => setVisible(false), []);
+
+  if (!tip) return null;
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          className="fixed bottom-5 right-5 z-[10000] w-[340px] rounded-2xl border border-amber-200/60 bg-amber-50/95 p-4 shadow-xl backdrop-blur-xl dark:border-amber-500/30 dark:bg-amber-950/90"
+          data-testid="popup-did-you-know"
+        >
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-200/60 dark:bg-amber-500/20">
+              <Lightbulb className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-600/80 dark:text-amber-400/80" data-testid="text-dyk-label">
+                  Did you know?
+                </span>
+                <button
+                  type="button"
+                  onClick={dismiss}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-amber-500/60 transition hover:bg-amber-200/50 hover:text-amber-700 dark:hover:bg-amber-500/20 dark:hover:text-amber-300"
+                  data-testid="button-dyk-dismiss"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="mt-1 text-sm font-semibold text-amber-900 dark:text-amber-100" data-testid="text-dyk-title">
+                {tip.title}
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-amber-800/75 dark:text-amber-200/70" data-testid="text-dyk-body">
+                {tip.body}
+              </p>
+              <button
+                type="button"
+                onClick={dismiss}
+                className="mt-2.5 text-[11px] font-semibold text-amber-600 transition hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
+                data-testid="button-dyk-got-it"
+              >
+                Got it, thanks!
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 }
 
 export function CommandCenterShell({
@@ -643,6 +783,7 @@ export function CommandCenterShell({
           </div>
         </div>
       </div>
+      <DidYouKnowPopup />
     </div>
   );
 }
