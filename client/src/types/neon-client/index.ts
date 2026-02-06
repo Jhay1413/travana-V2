@@ -49,3 +49,11 @@ export interface ImportResult {
   imported: number;
   errors: Array<{ row: number; id: string; error: string }>;
 }
+
+export interface PaginatedNeonClients {
+  clients: NeonClient[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}

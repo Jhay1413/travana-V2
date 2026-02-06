@@ -4,9 +4,13 @@ import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 
 export const neonClientController = {
-  listNeonClients: asyncHandler(async (_req: Request, res: Response) => {
-    const clients = await neonClientService.listNeonClients();
-    return successResponse(res, clients, "Neon clients retrieved successfully");
+  listNeonClients: asyncHandler(async (req: Request, res: Response) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const search = (req.query.search as string) || undefined;
+
+    const result = await neonClientService.listNeonClientsPaginated(page, limit, search);
+    return successResponse(res, result, "Neon clients retrieved successfully");
   }),
 
   getNeonClientById: asyncHandler(async (req: Request, res: Response) => {

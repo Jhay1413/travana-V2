@@ -1465,7 +1465,8 @@ export default function CommandCenterPage() {
   const role = rolePreview || actualRole;
 
   const { data: dashboardStats } = useDashboardStats();
-  const { data: apiNeonClients } = useNeonClients();
+  const [clientsPage, setClientsPage] = useState(1);
+  const { data: paginatedNeonClients } = useNeonClients({ page: clientsPage, limit: 10, search: query.trim() || undefined });
   const { data: apiUsers } = useUsers();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
@@ -1478,8 +1479,9 @@ export default function CommandCenterPage() {
   const deleteAirportMutation = useDeleteAirport();
 
   const allClients = useMemo(() => {
-    if (!apiNeonClients || apiNeonClients.length === 0) return [] as Array<{ id: string; name: string; tier: "Platinum" | "Gold" | "Standard"; stage: Stage; location: string; nextTrip: string; value: number; lastTouch: string; phone: string; email: string; clientType: string }>;
-    return apiNeonClients.map((c) => ({
+    const neonClients = paginatedNeonClients?.clients;
+    if (!neonClients || neonClients.length === 0) return [] as Array<{ id: string; name: string; tier: "Platinum" | "Gold" | "Standard"; stage: Stage; location: string; nextTrip: string; value: number; lastTouch: string; phone: string; email: string; clientType: string }>;
+    return neonClients.map((c) => ({
       id: c.id,
       name: [c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown",
       tier: "Standard" as "Platinum" | "Gold" | "Standard",
@@ -1492,15 +1494,11 @@ export default function CommandCenterPage() {
       email: c.email || "",
       clientType: "New Client",
     }));
-  }, [apiNeonClients]);
+  }, [paginatedNeonClients]);
 
-  const clients = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return allClients;
-    return allClients.filter((c) =>
-      [c.name, c.id, c.location, c.nextTrip, c.stage, c.tier].join(" ").toLowerCase().includes(q),
-    );
-  }, [query, allClients]);
+  const clients = allClients;
+  const clientsTotalPages = paginatedNeonClients?.totalPages ?? 1;
+  const clientsTotal = paginatedNeonClients?.total ?? 0;
 
   const totals = useMemo(() => {
     if (dashboardStats) {
@@ -1644,6 +1642,60 @@ export default function CommandCenterPage() {
                     </motion.button>
                   ))}
                 </div>
+                {clientsTotalPages > 1 && (
+                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-4 py-3" data-testid="pagination-overview-clients">
+                    <div className="text-xs text-black/50 dark:text-white/50">
+                      Page {clientsPage} of {clientsTotalPages} ({clientsTotal} clients)
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={clientsPage <= 1}
+                        onClick={() => setClientsPage(clientsPage - 1)}
+                        className="rounded-xl px-3 py-1.5 text-xs font-semibold transition text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                        data-testid="button-overview-prev-page"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: Math.min(clientsTotalPages, 5) }, (_, i) => {
+                        let pageNum: number;
+                        if (clientsTotalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (clientsPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (clientsPage >= clientsTotalPages - 2) {
+                          pageNum = clientsTotalPages - 4 + i;
+                        } else {
+                          pageNum = clientsPage - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            type="button"
+                            onClick={() => setClientsPage(pageNum)}
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition ${
+                              clientsPage === pageNum
+                                ? "bg-[#3b82f6] text-white"
+                                : "text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10"
+                            }`}
+                            data-testid={`button-overview-page-${pageNum}`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        disabled={clientsPage >= clientsTotalPages}
+                        onClick={() => setClientsPage(clientsPage + 1)}
+                        className="rounded-xl px-3 py-1.5 text-xs font-semibold transition text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                        data-testid="button-overview-next-page"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-0">
@@ -2191,6 +2243,60 @@ export default function CommandCenterPage() {
                     </motion.button>
                   ))}
                 </div>
+                {clientsTotalPages > 1 && (
+                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-4 py-3" data-testid="pagination-workspace-clients">
+                    <div className="text-xs text-black/50 dark:text-white/50">
+                      Page {clientsPage} of {clientsTotalPages} ({clientsTotal} clients)
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={clientsPage <= 1}
+                        onClick={() => setClientsPage(clientsPage - 1)}
+                        className="rounded-xl px-3 py-1.5 text-xs font-semibold transition text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                        data-testid="button-workspace-prev-page"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: Math.min(clientsTotalPages, 5) }, (_, i) => {
+                        let pageNum: number;
+                        if (clientsTotalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (clientsPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (clientsPage >= clientsTotalPages - 2) {
+                          pageNum = clientsTotalPages - 4 + i;
+                        } else {
+                          pageNum = clientsPage - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            type="button"
+                            onClick={() => setClientsPage(pageNum)}
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition ${
+                              clientsPage === pageNum
+                                ? "bg-[#3b82f6] text-white"
+                                : "text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10"
+                            }`}
+                            data-testid={`button-workspace-page-${pageNum}`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        disabled={clientsPage >= clientsTotalPages}
+                        onClick={() => setClientsPage(clientsPage + 1)}
+                        className="rounded-xl px-3 py-1.5 text-xs font-semibold transition text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                        data-testid="button-workspace-next-page"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-0">

@@ -7,6 +7,16 @@ export const neonClientService = {
     return await neonClientRepository.findAll();
   },
 
+  async listNeonClientsPaginated(page: number, limit: number, search?: string): Promise<{ clients: NeonClient[]; total: number; page: number; limit: number; totalPages: number }> {
+    const result = await neonClientRepository.findPaginated(page, limit, search);
+    return {
+      ...result,
+      page,
+      limit,
+      totalPages: Math.ceil(result.total / limit),
+    };
+  },
+
   async getNeonClientById(id: string): Promise<NeonClient> {
     const client = await neonClientRepository.findById(id);
     if (!client) {

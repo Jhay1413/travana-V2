@@ -1,6 +1,6 @@
 import { db } from "../config/database";
 import { clientTable, type NeonClient, type InsertClientTable } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, count, or, ilike } from "drizzle-orm";
 
 export type NeonClientWithId = InsertClientTable & { id: string };
 
@@ -36,6 +36,33 @@ export const neonClientRepository = {
 
   async findAll(): Promise<NeonClient[]> {
     return await db.select().from(clientTable).orderBy(desc(clientTable.createdAt));
+  },
+
+  async findPaginated(page: number, limit: number, search?: string): Promise<{ clients: NeonClient[]; total: number }> {
+    const offset = (page - 1) * limit;
+
+    const whereClause = search
+      ? or(
+          ilike(clientTable.firstName, `%${search}%`),
+          ilike(clientTable.surename, `%${search}%`),
+          ilike(clientTable.email, `%${search}%`),
+          ilike(clientTable.phoneNumber, `%${search}%`),
+          ilike(clientTable.city, `%${search}%`),
+          ilike(clientTable.country, `%${search}%`),
+        )
+      : undefined;
+
+    const [clients, totalResult] = await Promise.all([
+      db.select().from(clientTable)
+        .where(whereClause)
+        .orderBy(desc(clientTable.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(clientTable)
+        .where(whereClause),
+    ]);
+
+    return { clients, total: totalResult[0]?.total ?? 0 };
   },
 
   async create(client: InsertClientTable): Promise<NeonClient> {

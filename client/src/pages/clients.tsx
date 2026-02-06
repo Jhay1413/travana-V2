@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import {
+  ChevronLeft,
   ChevronRight,
   Filter,
   Grid3X3,
@@ -85,6 +86,8 @@ export default function ClientsPage() {
   const [role, setRole] = useState<Role>("Agent");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [q, setQ] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
+  const [page, setPage] = useState(1);
   const [stage, setStage] = useState<"all" | Stage>("all");
   const [tier, setTier] = useState<"all" | ClientTier>("all");
   const [sort, setSort] = useState<"value" | "lastTouch" | "name">("value");
@@ -92,11 +95,26 @@ export default function ClientsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showImport, setShowImport] = useState(false);
 
-  const { data: apiNeonClients, isLoading } = useNeonClients();
+  const searchTimeoutRef = useMemo(() => ({ current: null as ReturnType<typeof setTimeout> | null }), []);
+
+  const handleSearch = (val: string) => {
+    setQ(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchDebounced(val);
+      setPage(1);
+    }, 300);
+  };
+
+  const { data: paginatedData, isLoading } = useNeonClients({
+    page,
+    limit: 10,
+    search: searchDebounced || undefined,
+  });
 
   const clients = useMemo((): ClientDisplay[] => {
-    if (!apiNeonClients) return [];
-    return apiNeonClients.map((c) => ({
+    if (!paginatedData?.clients) return [];
+    return paginatedData.clients.map((c) => ({
       id: c.id,
       name: [c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown",
       tier: "Standard" as ClientTier,
@@ -109,31 +127,28 @@ export default function ClientsPage() {
       phone: c.phoneNumber || "",
       tags: [],
     }));
-  }, [apiNeonClients]);
+  }, [paginatedData]);
+
+  const totalClients = paginatedData?.total ?? 0;
+  const totalPages = paginatedData?.totalPages ?? 1;
 
   const filtered = useMemo(() => {
-    const base = clients.filter((c) => {
-      const matchesQuery = q === "" || c.name.toLowerCase().includes(q.toLowerCase()) || c.email.toLowerCase().includes(q.toLowerCase()) || c.phone.toLowerCase().includes(q.toLowerCase());
-      const matchesStage = stage === "all" || c.stage === stage;
-      const matchesTier = tier === "all" || c.tier === tier;
-      return matchesQuery && matchesStage && matchesTier;
-    });
-    return [...base].sort((a, b) => {
+    return [...clients].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
       if (sort === "lastTouch") return parseLastTouch(a.lastTouch) - parseLastTouch(b.lastTouch);
       return b.value - a.value;
     });
-  }, [q, stage, tier, sort, clients]);
+  }, [sort, clients]);
 
   const counts = useMemo(() => ({
-    all: clients.length,
+    all: totalClients,
     Enquiry: clients.filter((c) => c.stage === "Enquiry").length,
     Quote: clients.filter((c) => c.stage === "Quote").length,
     Booked: clients.filter((c) => c.stage === "Booked").length,
     Platinum: clients.filter((c) => c.tier === "Platinum").length,
     Gold: clients.filter((c) => c.tier === "Gold").length,
     Standard: clients.filter((c) => c.tier === "Standard").length,
-  }), [clients]);
+  }), [clients, totalClients]);
 
   const activeFilters = (stage !== "all" ? 1 : 0) + (tier !== "all" ? 1 : 0);
 
@@ -144,7 +159,7 @@ export default function ClientsPage() {
       active="clients"
       title="Clients"
       query={q}
-      onQuery={setQ}
+      onQuery={handleSearch}
       theme={theme}
       onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
     >
@@ -504,10 +519,64 @@ export default function ClientsPage() {
           </div>
         )}
         
-        {/* Results Count */}
-        {filtered.length > 0 && (
-          <div className="text-center text-sm text-black/50 dark:text-white/50">
-            Showing {filtered.length} of {clients.length} clients
+        {/* Pagination Controls */}
+        {totalPages > 0 && (
+          <div className="flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-sm px-4 py-3" data-testid="pagination-controls">
+            <div className="text-sm text-black/50 dark:text-white/50">
+              Showing {((page - 1) * 10) + 1}–{Math.min(page * 10, totalClients)} of {totalClients} clients
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 rounded-full"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+                data-testid="button-prev-page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 7) {
+                    pageNum = i + 1;
+                  } else if (page <= 4) {
+                    pageNum = i + 1;
+                  } else if (page >= totalPages - 3) {
+                    pageNum = totalPages - 6 + i;
+                  } else {
+                    pageNum = page - 3 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setPage(pageNum)}
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition ${
+                        page === pageNum
+                          ? "bg-[#3b82f6] text-white"
+                          : "text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10"
+                      }`}
+                      data-testid={`button-page-${pageNum}`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 rounded-full"
+                disabled={page >= totalPages}
+                onClick={() => setPage(page + 1)}
+                data-testid="button-next-page"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>

@@ -127,20 +127,13 @@ export function CommandCenterShell({
 
   const { data: currentUser } = useCurrentUser();
 
-  const { data: neonClients = [] } = useNeonClients();
+  const { data: searchData } = useNeonClients(
+    query?.trim() ? { page: 1, limit: 8, search: query.trim() } : undefined
+  );
 
   const searchResults = useMemo(() => {
-    if (!query?.trim()) return [];
-    const q = query.toLowerCase();
-    return neonClients
-      .filter((c: any) => {
-        const fullName = [c.firstName, c.surename].filter(Boolean).join(" ").toLowerCase();
-        return fullName.includes(q) ||
-          c.email?.toLowerCase().includes(q) ||
-          c.phoneNumber?.toLowerCase().includes(q) ||
-          c.city?.toLowerCase().includes(q) ||
-          c.country?.toLowerCase().includes(q);
-      })
+    if (!query?.trim() || !searchData?.clients) return [];
+    return searchData.clients
       .slice(0, 8)
       .map((c: any) => ({
         id: c.id,
@@ -150,7 +143,7 @@ export function CommandCenterShell({
         location: [c.city, c.country].filter(Boolean).join(", "),
         clientType: "Client",
       }));
-  }, [query, neonClients]);
+  }, [query, searchData]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

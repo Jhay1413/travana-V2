@@ -1,9 +1,9 @@
 import axiosClient from "../client/axios-client";
-import type { NeonClient, NeonClientImportRow, ImportResult } from "@/types/neon-client";
+import type { NeonClient, NeonClientImportRow, ImportResult, PaginatedNeonClients } from "@/types/neon-client";
 
 export const neonClientApi = {
-  getAll: async (): Promise<NeonClient[]> => {
-    const { data } = await axiosClient.get<NeonClient[]>("/api/neon-clients");
+  getAll: async (params?: { page?: number; limit?: number; search?: string }): Promise<PaginatedNeonClients> => {
+    const { data } = await axiosClient.get<PaginatedNeonClients>("/api/neon-clients", { params });
     return data;
   },
 
