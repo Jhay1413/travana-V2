@@ -657,3 +657,974 @@ HTTP Request
 ```
 
 **No shortcuts. No skipping layers. This ensures maintainability, testability, and separation of concerns.**
+
+
+
+
+# Frontend Architecture Agent Rules
+
+## Project Overview
+Build a React frontend application using **React + TanStack Router + TypeScript + Axios + TanStack Query** with strict architectural patterns, organized API layer, and protected routes.
+
+---
+
+## Core Technology Stack
+
+- **Framework**: React 18+
+- **Language**: TypeScript
+- **Routing**: TanStack Router (file-based routing)
+- **HTTP Client**: Axios
+- **Data Fetching**: TanStack Query (React Query)
+- **State Management**: TanStack Query + React Context (for auth)
+- **Package Manager**: npm or pnpm
+
+---
+
+## Enforced Architecture Pattern
+
+**STRICT RULES**:
+1. **ALL API requests** must be in the `api/` folder
+2. **ALL data fetching** must use TanStack Query hooks
+3. **ALL routes** must be protected with authentication checks
+4. **Custom hooks** for all queries and mutations
+5. **No direct Axios calls** in components - always use hooks
+
+---
+
+## Project Structure
+
+```
+src/
+├── api/                          # ALL API requests go here
+│   ├── client/
+│   │   ├── axios-client.ts       # Axios instance configuration
+│   │   └── interceptors.ts       # Request/response interceptors
+│   ├── endpoints/
+│   │   ├── auth.api.ts           # Auth-related API calls
+│   │   ├── user.api.ts           # User-related API calls
+│   │   └── product.api.ts        # Product-related API calls
+│   └── index.ts                  # Export all API functions
+├── hooks/                        # Custom hooks (TanStack Query)
+│   ├── queries/
+│   │   ├── use-user.ts           # User query hooks
+│   │   ├── use-products.ts       # Product query hooks
+│   │   └── index.ts
+│   ├── mutations/
+│   │   ├── use-auth.ts           # Auth mutation hooks
+│   │   ├── use-user-mutations.ts
+│   │   └── index.ts
+│   └── use-auth-state.ts         # Auth state hook
+├── routes/                       # TanStack Router routes
+│   ├── __root.tsx                # Root route
+│   ├── _authenticated.tsx        # Protected route layout
+│   ├── _authenticated/
+│   │   ├── dashboard.tsx         # Protected: /dashboard
+│   │   ├── profile.tsx           # Protected: /profile
+│   │   └── users/
+│   │       ├── index.tsx         # Protected: /users
+│   │       └── $id.tsx           # Protected: /users/:id
+│   ├── _public.tsx               # Public route layout
+│   ├── _public/
+│   │   ├── login.tsx             # Public: /login
+│   │   └── register.tsx          # Public: /register
+│   └── index.tsx                 # Home route
+├── components/
+│   ├── ui/                       # Reusable UI components
+│   │   ├── button.tsx
+│   │   ├── input.tsx
+│   │   └── card.tsx
+│   ├── layouts/
+│   │   ├── authenticated-layout.tsx
+│   │   └── public-layout.tsx
+│   └── features/                 # Feature-specific components
+│       ├── auth/
+│       │   ├── login-form.tsx
+│       │   └── register-form.tsx
+│       └── users/
+│           ├── user-list.tsx
+│           └── user-card.tsx
+├── lib/                          # Configuration & utilities
+│   ├── query-client.ts           # TanStack Query client setup
+│   ├── router.ts                 # TanStack Router setup
+│   └── constants.ts              # App constants
+├── contexts/
+│   └── auth-context.tsx          # Auth context provider
+├── types/                        # TypeScript types (organized by domain)
+│   ├── api/
+│   │   ├── request.types.ts
+│   │   ├── response.types.ts
+│   │   └── index.ts
+│   ├── auth/
+│   │   ├── auth.types.ts
+│   │   └── index.ts
+│   ├── user/
+│   │   ├── user.types.ts
+│   │   └── index.ts
+│   └── common/
+│       ├── pagination.types.ts
+│       └── index.ts
+├── utils/
+│   ├── storage.ts                # LocalStorage helpers
+│   ├── validators.ts             # Validation helpers
+│   └── formatters.ts             # Data formatters
+├── App.tsx
+├── main.tsx
+└── vite-env.d.ts
+```
+
+---
+
+## Layer-by-Layer Implementation Guide
+
+### 1. API Layer (`api/`)
+
+**CRITICAL RULE**: ALL API requests MUST be defined in the `api/` folder
+
+#### Axios Client Setup
+
+```typescript
+// api/client/axios-client.ts
+import axios, { AxiosInstance } from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+
+export const apiClient: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+export default apiClient;
+```
+
+#### Interceptors
+
+```typescript
+// api/client/interceptors.ts
+import { apiClient } from './axios-client';
+import { getToken, clearAuth } from '@/utils/storage';
+
+// Request interceptor - Add auth token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor - Handle errors
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Unauthorized - clear auth and redirect
+      clearAuth();
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+#### API Endpoint Functions
+
+```typescript
+// api/endpoints/auth.api.ts
+import { apiClient } from '../client/axios-client';
+import type { 
+  LoginRequest, 
+  LoginResponse, 
+  RegisterRequest, 
+  RegisterResponse 
+} from '@/types/auth';
+
+export const authApi = {
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await apiClient.post<LoginResponse>('/auth/login', data);
+    return response.data;
+  },
+
+  register: async (data: RegisterRequest): Promise<RegisterResponse> => {
+    const response = await apiClient.post<RegisterResponse>('/auth/register', data);
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await apiClient.post('/auth/logout');
+  },
+
+  getCurrentUser: async () => {
+    const response = await apiClient.get('/auth/me');
+    return response.data;
+  },
+};
+
+// api/endpoints/user.api.ts
+import { apiClient } from '../client/axios-client';
+import type { User, UpdateUserRequest } from '@/types/user';
+
+export const userApi = {
+  getUsers: async () => {
+    const response = await apiClient.get<User[]>('/users');
+    return response.data;
+  },
+
+  getUserById: async (id: string) => {
+    const response = await apiClient.get<User>(`/users/${id}`);
+    return response.data;
+  },
+
+  updateUser: async (id: string, data: UpdateUserRequest) => {
+    const response = await apiClient.put<User>(`/users/${id}`, data);
+    return response.data;
+  },
+
+  deleteUser: async (id: string) => {
+    await apiClient.delete(`/users/${id}`);
+  },
+};
+
+// api/index.ts
+export * from './endpoints/auth.api';
+export * from './endpoints/user.api';
+```
+
+---
+
+### 2. TanStack Query Hooks (`hooks/`)
+
+**CRITICAL RULE**: ALL data fetching MUST use TanStack Query hooks
+
+#### Query Hooks
+
+```typescript
+// hooks/queries/use-user.ts
+import { useQuery, UseQueryResult } from '@tanstack/react-query';
+import { userApi } from '@/api';
+import type { User } from '@/types/user';
+
+// Query Keys
+export const userKeys = {
+  all: ['users'] as const,
+  lists: () => [...userKeys.all, 'list'] as const,
+  list: (filters: string) => [...userKeys.lists(), { filters }] as const,
+  details: () => [...userKeys.all, 'detail'] as const,
+  detail: (id: string) => [...userKeys.details(), id] as const,
+};
+
+// Get all users
+export const useUsers = (): UseQueryResult<User[], Error> => {
+  return useQuery({
+    queryKey: userKeys.lists(),
+    queryFn: userApi.getUsers,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+// Get user by ID
+export const useUser = (id: string): UseQueryResult<User, Error> => {
+  return useQuery({
+    queryKey: userKeys.detail(id),
+    queryFn: () => userApi.getUserById(id),
+    enabled: !!id, // Only run if ID exists
+  });
+};
+
+// Get current authenticated user
+export const useCurrentUser = () => {
+  return useQuery({
+    queryKey: ['auth', 'currentUser'],
+    queryFn: () => authApi.getCurrentUser(),
+    retry: false,
+  });
+};
+```
+
+#### Mutation Hooks
+
+```typescript
+// hooks/mutations/use-auth.ts
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { authApi } from '@/api';
+import { setToken, clearAuth } from '@/utils/storage';
+import type { LoginRequest, RegisterRequest } from '@/types/auth';
+
+export const useLogin = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: LoginRequest) => authApi.login(data),
+    onSuccess: (response) => {
+      setToken(response.token);
+      queryClient.invalidateQueries({ queryKey: ['auth'] });
+      navigate({ to: '/dashboard' });
+    },
+    onError: (error: any) => {
+      console.error('Login failed:', error);
+    },
+  });
+};
+
+export const useRegister = () => {
+  const navigate = useNavigate();
+
+  return useMutation({
+    mutationFn: (data: RegisterRequest) => authApi.register(data),
+    onSuccess: (response) => {
+      setToken(response.token);
+      navigate({ to: '/dashboard' });
+    },
+  });
+};
+
+export const useLogout = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: authApi.logout,
+    onSuccess: () => {
+      clearAuth();
+      queryClient.clear();
+      navigate({ to: '/login' });
+    },
+  });
+};
+
+// hooks/mutations/use-user-mutations.ts
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { userApi } from '@/api';
+import { userKeys } from '@/hooks/queries/use-user';
+import type { UpdateUserRequest } from '@/types/user';
+
+export const useUpdateUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateUserRequest }) =>
+      userApi.updateUser(id, data),
+    onSuccess: (_, variables) => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
+  });
+};
+
+export const useDeleteUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => userApi.deleteUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
+  });
+};
+```
+
+---
+
+### 3. TanStack Router with Protected Routes (`routes/`)
+
+**CRITICAL RULE**: ALL authenticated routes MUST use route protection
+
+#### Root Route
+
+```typescript
+// routes/__root.tsx
+import { createRootRoute, Outlet } from '@tanstack/react-router';
+import { TanStackRouterDevtools } from '@tanstack/router-devtools';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+
+export const Route = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      <TanStackRouterDevtools />
+      <ReactQueryDevtools />
+    </>
+  ),
+});
+```
+
+#### Protected Route Layout
+
+```typescript
+// routes/_authenticated.tsx
+import { 
+  createFileRoute, 
+  Outlet, 
+  redirect 
+} from '@tanstack/react-router';
+import { AuthenticatedLayout } from '@/components/layouts/authenticated-layout';
+import { getToken } from '@/utils/storage';
+
+// This layout wraps all protected routes
+export const Route = createFileRoute('/_authenticated')({
+  // Before load - check authentication
+  beforeLoad: async ({ location }) => {
+    const token = getToken();
+
+    if (!token) {
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      });
+    }
+  },
+  component: AuthenticatedLayoutComponent,
+});
+
+function AuthenticatedLayoutComponent() {
+  return (
+    <AuthenticatedLayout>
+      <Outlet />
+    </AuthenticatedLayout>
+  );
+}
+```
+
+#### Protected Routes
+
+```typescript
+// routes/_authenticated/dashboard.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { useCurrentUser } from '@/hooks/queries/use-user';
+
+export const Route = createFileRoute('/_authenticated/dashboard')({
+  component: DashboardPage,
+});
+
+function DashboardPage() {
+  const { data: user, isLoading } = useCurrentUser();
+
+  if (isLoading) return <div>Loading...</div>;
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <p>Welcome, {user?.firstName}!</p>
+    </div>
+  );
+}
+
+// routes/_authenticated/users/index.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { useUsers } from '@/hooks/queries/use-user';
+import { UserList } from '@/components/features/users/user-list';
+
+export const Route = createFileRoute('/_authenticated/users/')({
+  component: UsersPage,
+});
+
+function UsersPage() {
+  const { data: users, isLoading, error } = useUsers();
+
+  if (isLoading) return <div>Loading users...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <div>
+      <h1>Users</h1>
+      <UserList users={users || []} />
+    </div>
+  );
+}
+
+// routes/_authenticated/users/$id.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { useUser } from '@/hooks/queries/use-user';
+
+export const Route = createFileRoute('/_authenticated/users/$id')({
+  component: UserDetailPage,
+});
+
+function UserDetailPage() {
+  const { id } = Route.useParams();
+  const { data: user, isLoading } = useUser(id);
+
+  if (isLoading) return <div>Loading user...</div>;
+  if (!user) return <div>User not found</div>;
+
+  return (
+    <div>
+      <h1>{user.firstName} {user.lastName}</h1>
+      <p>{user.email}</p>
+    </div>
+  );
+}
+```
+
+#### Public Routes
+
+```typescript
+// routes/_public.tsx
+import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { PublicLayout } from '@/components/layouts/public-layout';
+import { getToken } from '@/utils/storage';
+
+export const Route = createFileRoute('/_public')({
+  // Redirect to dashboard if already authenticated
+  beforeLoad: async () => {
+    const token = getToken();
+    if (token) {
+      throw redirect({ to: '/dashboard' });
+    }
+  },
+  component: () => (
+    <PublicLayout>
+      <Outlet />
+    </PublicLayout>
+  ),
+});
+
+// routes/_public/login.tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { LoginForm } from '@/components/features/auth/login-form';
+
+export const Route = createFileRoute('/_public/login')({
+  component: LoginPage,
+});
+
+function LoginPage() {
+  return (
+    <div>
+      <h1>Login</h1>
+      <LoginForm />
+    </div>
+  );
+}
+```
+
+---
+
+### 4. Components Using Hooks
+
+**RULE**: Components should ONLY use hooks, never direct API calls
+
+```typescript
+// components/features/auth/login-form.tsx
+import { useState } from 'react';
+import { useLogin } from '@/hooks/mutations/use-auth';
+import type { LoginRequest } from '@/types/auth';
+
+export const LoginForm = () => {
+  const [formData, setFormData] = useState<LoginRequest>({
+    email: '',
+    password: '',
+  });
+
+  const loginMutation = useLogin();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loginMutation.mutate(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="email"
+        value={formData.email}
+        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+        placeholder="Email"
+        required
+      />
+      <input
+        type="password"
+        value={formData.password}
+        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+        placeholder="Password"
+        required
+      />
+      <button type="submit" disabled={loginMutation.isPending}>
+        {loginMutation.isPending ? 'Logging in...' : 'Login'}
+      </button>
+      {loginMutation.isError && (
+        <p>Error: {loginMutation.error.message}</p>
+      )}
+    </form>
+  );
+};
+
+// components/features/users/user-list.tsx
+import { useDeleteUser } from '@/hooks/mutations/use-user-mutations';
+import type { User } from '@/types/user';
+
+interface UserListProps {
+  users: User[];
+}
+
+export const UserList = ({ users }: UserListProps) => {
+  const deleteMutation = useDeleteUser();
+
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure?')) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  return (
+    <div>
+      {users.map((user) => (
+        <div key={user.id}>
+          <h3>{user.firstName} {user.lastName}</h3>
+          <p>{user.email}</p>
+          <button onClick={() => handleDelete(user.id)}>Delete</button>
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+---
+
+### 5. Configuration Files
+
+#### TanStack Query Client
+
+```typescript
+// lib/query-client.ts
+import { QueryClient } from '@tanstack/react-query';
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000, // 1 minute
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
+```
+
+#### Router Setup
+
+```typescript
+// lib/router.ts
+import { createRouter } from '@tanstack/react-router';
+import { routeTree } from './routeTree.gen';
+
+export const router = createRouter({ 
+  routeTree,
+  defaultPreload: 'intent',
+});
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router;
+  }
+}
+```
+
+---
+
+### 6. Utility Functions
+
+```typescript
+// utils/storage.ts
+const TOKEN_KEY = 'auth_token';
+const USER_KEY = 'user_data';
+
+export const setToken = (token: string): void => {
+  localStorage.setItem(TOKEN_KEY, token);
+};
+
+export const getToken = (): string | null => {
+  return localStorage.getItem(TOKEN_KEY);
+};
+
+export const setUser = (user: any): void => {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+};
+
+export const getUser = (): any | null => {
+  const user = localStorage.getItem(USER_KEY);
+  return user ? JSON.parse(user) : null;
+};
+
+export const clearAuth = (): void => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+};
+```
+
+---
+
+### 7. Types Organization
+
+**CRITICAL RULE**: Always organize types in folders by domain
+
+```typescript
+// types/auth/auth.types.ts
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: User;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface RegisterResponse {
+  token: string;
+  user: User;
+}
+
+// types/auth/index.ts
+export * from './auth.types';
+
+// types/user/user.types.ts
+export interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateUserRequest {
+  firstName?: string;
+  lastName?: string;
+}
+
+// types/user/index.ts
+export * from './user.types';
+
+// types/api/response.types.ts
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+}
+
+export interface ApiError {
+  success: false;
+  message: string;
+  errors?: Record<string, string[]>;
+}
+```
+
+---
+
+### 8. Main App Setup
+
+```typescript
+// main.tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { RouterProvider } from '@tanstack/react-router';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { router } from './lib/router';
+import { queryClient } from './lib/query-client';
+import './api/client/interceptors'; // Initialize interceptors
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  </React.StrictMode>
+);
+```
+
+---
+
+## Critical Rules Summary
+
+### ✅ DO:
+
+1. **API Organization**:
+   - ✅ ALL API requests in `api/` folder
+   - ✅ Use Axios client with interceptors
+   - ✅ One file per resource (auth.api.ts, user.api.ts)
+
+2. **Data Fetching**:
+   - ✅ ALL data fetching through TanStack Query hooks
+   - ✅ Use `useQuery` for GET requests
+   - ✅ Use `useMutation` for POST/PUT/DELETE
+   - ✅ Define query keys for cache management
+
+3. **Route Protection**:
+   - ✅ ALL authenticated routes under `_authenticated/`
+   - ✅ Check auth in `beforeLoad`
+   - ✅ Redirect to login if not authenticated
+   - ✅ Redirect to dashboard if already authenticated (on login page)
+
+4. **Component Patterns**:
+   - ✅ Components use hooks only
+   - ✅ No direct Axios calls in components
+   - ✅ Handle loading and error states
+
+5. **Type Safety**:
+   - ✅ Organize types in folders by domain
+   - ✅ Type all API requests and responses
+   - ✅ Export types through index files
+
+### ❌ DON'T:
+
+- ❌ Make API calls outside the `api/` folder
+- ❌ Use Axios directly in components
+- ❌ Skip TanStack Query hooks
+- ❌ Create unprotected routes for authenticated content
+- ❌ Use `any` type
+- ❌ Skip error handling
+- ❌ Forget to invalidate queries after mutations
+- ❌ Store sensitive data unencrypted
+
+---
+
+## File Naming Conventions
+
+- API files: `*.api.ts`
+- Query hooks: `use-*.ts` (e.g., `use-user.ts`)
+- Mutation hooks: `use-*-mutations.ts`
+- Components: `kebab-case.tsx`
+- Types: `*.types.ts`
+- Routes: Follow TanStack Router conventions
+
+---
+
+## Essential Dependencies
+
+```json
+{
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@tanstack/react-router": "^1.58.0",
+    "@tanstack/react-query": "^5.59.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@tanstack/router-devtools": "^1.58.0",
+    "@tanstack/react-query-devtools": "^5.59.0",
+    "@tanstack/router-vite-plugin": "^1.58.4",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}
+```
+
+---
+
+## Vite Configuration
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { TanStackRouterVite } from '@tanstack/router-vite-plugin';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    TanStackRouterVite(), // Generates route tree
+  ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+});
+```
+
+---
+
+## Environment Variables
+
+```env
+# .env
+VITE_API_BASE_URL=http://localhost:3000/api
+```
+
+---
+
+## Quick Start Checklist
+
+1. ✅ Install dependencies (React, TanStack Router, TanStack Query, Axios)
+2. ✅ Setup Vite with path aliases
+3. ✅ Create folder structure as specified
+4. ✅ Setup Axios client with interceptors in `api/client/`
+5. ✅ Define API endpoints in `api/endpoints/`
+6. ✅ Create TanStack Query client in `lib/`
+7. ✅ Create custom hooks in `hooks/queries/` and `hooks/mutations/`
+8. ✅ Setup protected route layout `_authenticated.tsx`
+9. ✅ Setup public route layout `_public.tsx`
+10. ✅ Create routes with proper protection
+11. ✅ Build components that use hooks
+12. ✅ Add authentication utilities
+13. ✅ Test the auth flow and route protection
+
+---
+
+## Architecture Flow
+
+```
+Component
+  ↓
+Custom Hook (useQuery/useMutation)
+  ↓
+API Function (api/endpoints/)
+  ↓
+Axios Client (with interceptors)
+  ↓
+Backend API
+```
+
+---
+
+## Route Protection Flow
+
+```
+User navigates to /dashboard
+  ↓
+TanStack Router checks beforeLoad
+  ↓
+Is token in localStorage?
+  ├─ YES → Render protected route
+  └─ NO → Redirect to /login
+```
+
+---
+
+## Remember
+
+- **Every API call goes through the `api/` folder**
+- **Every data fetch uses TanStack Query hooks**
+- **Every authenticated route is protected with `beforeLoad`**
+- **Components never call APIs directly - always use hooks**
+- **Types are organized in folders by domain**
+
+This ensures maintainability, type safety, proper caching, and secure authentication!
