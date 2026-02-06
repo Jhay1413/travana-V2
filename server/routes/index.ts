@@ -15,6 +15,7 @@ import ticketReplyRoutes from "./ticketReply.routes";
 import notificationRoutes from "./notification.routes";
 import neonClientRoutes from "./neonClient.routes";
 import dashboardRoutes from "./dashboard.routes";
+import enquiryRoutes from "./enquiry.routes";
 
 const router = Router();
 
@@ -34,5 +35,6 @@ router.use("/replies", ticketReplyRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/neon-clients", neonClientRoutes);
 router.use("/dashboard", dashboardRoutes);
+router.use("/enquiries", enquiryRoutes);
 
 export default router;

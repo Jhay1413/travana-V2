@@ -10,3 +10,4 @@ export { useUpdateUser, useDeleteUser } from "./use-user-mutations";
 export { useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator } from "./use-tour-operator-mutations";
 export { useCreateAirport, useDeleteAirport } from "./use-airport-mutations";
 export { useCreateNote, useUpdateNote, useDeleteNote } from "./use-note-mutations";
+export { useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "./use-enquiry-mutations";

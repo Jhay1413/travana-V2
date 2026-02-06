@@ -155,6 +155,36 @@ export const insertQuoteImageSchema = createInsertSchema(quoteImages).omit({ id:
 export type InsertQuoteImage = z.infer<typeof insertQuoteImageSchema>;
 export type QuoteImage = typeof quoteImages.$inferSelect;
 
+// Enquiries table
+export const enquiries = pgTable("enquiries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  enquiryTitle: text("enquiry_title").notNull(),
+  holidayType: text("holiday_type").notNull(),
+  country: text("country"),
+  destination: text("destination"),
+  resort: text("resort"),
+  departureAirport: text("departure_airport"),
+  travelDate: text("travel_date"),
+  flexibility: text("flexibility"),
+  passengersAdults: integer("passengers_adults").notNull().default(2),
+  passengersChildren: integer("passengers_children").notNull().default(0),
+  passengersInfants: integer("passengers_infants").notNull().default(0),
+  nights: integer("nights"),
+  starRating: text("star_rating"),
+  boardBasis: text("board_basis"),
+  budget: decimal("budget", { precision: 10, scale: 2 }),
+  budgetType: text("budget_type").default("Per Person"),
+  status: text("status").notNull().default("Open"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEnquirySchema = createInsertSchema(enquiries).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEnquiry = z.infer<typeof insertEnquirySchema>;
+export type Enquiry = typeof enquiries.$inferSelect;
+
 // Notes table
 export const notes = pgTable("notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

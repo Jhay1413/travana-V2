@@ -32,15 +32,17 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useNeonClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
-import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket } from "@/hooks/mutations";
+import { useNeonClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser, useEnquiries } from "@/hooks/queries";
+import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "@/hooks/mutations";
 import type { Client as ApiClient } from "@/types/client";
 import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
 import type { CreateQuoteData } from "@/types/quote";
+import type { Enquiry, CreateEnquiryData } from "@/types/enquiry";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { quoteImageApi } from "@/api";
+import { EnquiryWizard } from "@/components/enquiry-wizard";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 
@@ -462,6 +464,8 @@ export default function ClientPage() {
 
   const { data: ticketsData, isLoading: isLoadingTickets } = useTicketsByClient(clientId);
 
+  const { data: enquiriesData, isLoading: isLoadingEnquiries } = useEnquiries({ clientId });
+
   const { data: usersData } = useUsers();
 
   const { data: currentUser } = useCurrentUser();
@@ -561,12 +565,62 @@ export default function ClientPage() {
     },
   };
 
+  const [showEnquiryWizard, setShowEnquiryWizard] = useState(false);
+  const [editingEnquiry, setEditingEnquiry] = useState<Enquiry | null>(null);
+  const createEnquiryMutation = useCreateEnquiry();
+  const updateEnquiryMutation = useUpdateEnquiry();
+  const deleteEnquiryMutation = useDeleteEnquiry();
+
+  const handleEnquirySubmit = (data: Partial<CreateEnquiryData>) => {
+    if (editingEnquiry) {
+      updateEnquiryMutation.mutate(
+        { id: editingEnquiry.id, data },
+        {
+          onSuccess: () => {
+            setShowEnquiryWizard(false);
+            setEditingEnquiry(null);
+            toast({ title: "Enquiry updated successfully" });
+          },
+          onError: () => {
+            toast({ title: "Failed to update enquiry", variant: "destructive" });
+          },
+        }
+      );
+    } else {
+      createEnquiryMutation.mutate(
+        { ...data, clientId, userId: currentUser?.id || "" } as CreateEnquiryData,
+        {
+          onSuccess: () => {
+            setShowEnquiryWizard(false);
+            toast({ title: "Enquiry created successfully" });
+          },
+          onError: () => {
+            toast({ title: "Failed to create enquiry", variant: "destructive" });
+          },
+        }
+      );
+    }
+  };
+
+  const handleDeleteEnquiry = (id: string) => {
+    deleteEnquiryMutation.mutate(id, {
+      onSuccess: () => {
+        toast({ title: "Enquiry deleted" });
+      },
+      onError: () => {
+        toast({ title: "Failed to delete enquiry", variant: "destructive" });
+      },
+    });
+  };
+
   const client = useMemo(() => {
     if (!clientData) return null;
     return transformNeonClientData(clientData);
   }, [clientData]);
 
   const quotes = useMemo(() => quotesData || [], [quotesData]);
+
+  const enquiries = useMemo(() => enquiriesData || [], [enquiriesData]);
 
   const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
   const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
@@ -887,7 +941,7 @@ export default function ClientPage() {
                             <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
                           </div>
                           <div className="mt-1 text-[11px] text-black/55" data-testid="text-client-enquiries-hint">
-                            New leads and requirements captured
+                            {enquiries.length} enquir{enquiries.length === 1 ? "y" : "ies"} captured
                           </div>
                         </button>
 
@@ -1048,28 +1102,80 @@ export default function ClientPage() {
 
                 <TabsContent value="enquiries" className="mt-3">
                   <div className="grid gap-3" data-testid="list-enquiries">
-                    {["Initial requirements", "Budget alignment", "Destination short-list"].map((title, idx) => (
-                      <motion.div
-                        key={title}
-                        className="rounded-3xl border border-black/10 bg-white/70 p-4"
-                        data-testid={`card-enquiry-${idx}`}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.18) }}
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold">Enquiries</div>
+                      <Button
+                        size="sm"
+                        className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
+                        data-testid="button-new-enquiry"
+                        onClick={() => {
+                          setEditingEnquiry(null);
+                          setShowEnquiryWizard(true);
+                        }}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold" data-testid={`text-enquiry-title-${idx}`}>
-                              {title}
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        New Enquiry
+                      </Button>
+                    </div>
+                    {isLoadingEnquiries ? (
+                      <div className="flex justify-center py-8"><Spinner /></div>
+                    ) : enquiries.length === 0 ? (
+                      <div className="rounded-3xl border border-dashed border-black/10 bg-white/40 p-8 text-center text-sm text-black/50" data-testid="empty-enquiries">
+                        No enquiries yet. Create one to get started.
+                      </div>
+                    ) : (
+                      enquiries.map((enq: Enquiry, idx: number) => (
+                        <motion.div
+                          key={enq.id}
+                          className="rounded-3xl border border-black/10 bg-white/70 p-4"
+                          data-testid={`card-enquiry-${idx}`}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.18) }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-semibold" data-testid={`text-enquiry-title-${idx}`}>
+                                {enq.enquiryTitle}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid={`text-enquiry-meta-${idx}`}>
+                                <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70">
+                                  {enq.holidayType}
+                                </span>
+                                {enq.destination && <span>{enq.destination}</span>}
+                                {enq.travelDate && <span>· {new Date(enq.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                                <span>· {enq.passengersAdults}A{enq.passengersChildren > 0 ? ` ${enq.passengersChildren}C` : ""}{enq.passengersInfants > 0 ? ` ${enq.passengersInfants}I` : ""}</span>
+                                {enq.nights && <span>· {enq.nights}N</span>}
+                                {enq.budget && <span>· £{parseFloat(enq.budget).toLocaleString()} {enq.budgetType?.toLowerCase()}</span>}
+                              </div>
                             </div>
-                            <div className="mt-1 text-xs text-black/55" data-testid={`text-enquiry-meta-${idx}`}>
-                              Captured {idx === 0 ? "Today" : idx === 1 ? "2d" : "6d"} · Assigned to you
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-black/[0.05] hover:text-black/70"
+                                data-testid={`button-edit-enquiry-${idx}`}
+                                onClick={() => {
+                                  setEditingEnquiry(enq);
+                                  setShowEnquiryWizard(true);
+                                }}
+                                title="Edit enquiry"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-red-50 hover:text-red-500"
+                                data-testid={`button-delete-enquiry-${idx}`}
+                                onClick={() => handleDeleteEnquiry(enq.id)}
+                                title="Delete enquiry"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      ))
+                    )}
                   </div>
                 </TabsContent>
 
@@ -2578,6 +2684,17 @@ export default function ClientPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <EnquiryWizard
+        open={showEnquiryWizard}
+        onOpenChange={(open) => {
+          setShowEnquiryWizard(open);
+          if (!open) setEditingEnquiry(null);
+        }}
+        enquiry={editingEnquiry}
+        onSubmit={handleEnquirySubmit}
+        isSaving={createEnquiryMutation.isPending || updateEnquiryMutation.isPending}
+      />
     </CommandCenterShell>
   );
 }
