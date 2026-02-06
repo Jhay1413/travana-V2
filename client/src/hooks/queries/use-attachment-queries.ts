@@ -14,3 +14,7 @@ export function useAttachments(ticketId: string, options?: { enabled?: boolean }
     enabled: !!ticketId && (options?.enabled ?? true),
   });
 }
+
+export function getAttachmentDownloadUrl(id: string): string {
+  return `/api/attachments/${id}/download`;
+}

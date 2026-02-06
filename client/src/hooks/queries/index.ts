@@ -3,7 +3,7 @@ export { useClients, useClient, clientKeys } from "./use-client-queries";
 export { useQuotes, useQuote, useQuoteFull, quoteKeys } from "./use-quote-queries";
 export { useUsers, userKeys } from "./use-user-queries";
 export { useTickets, useTicket, useTicketsByClient, useTicketsByUser, ticketKeys } from "./use-ticket-queries";
-export { useAttachments, attachmentKeys } from "./use-attachment-queries";
+export { useAttachments, attachmentKeys, getAttachmentDownloadUrl } from "./use-attachment-queries";
 export { useReplies, replyKeys } from "./use-reply-queries";
 export { useNotifications, useUnreadNotifications, notificationKeys } from "./use-notification-queries";
 export { useDashboardStats, dashboardKeys } from "./use-dashboard-queries";

@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useParams, useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
 import {
@@ -28,9 +27,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { attachmentApi } from "@/api";
-import { useTickets, useClients, useUsers, useCurrentUser, useAttachments, useReplies, attachmentKeys } from "@/hooks/queries";
-import { useUpdateTicket, useDeleteTicket, useDeleteAttachment, useCreateReply, useUpdateReply, useDeleteReply } from "@/hooks/mutations";
+import { useTickets, useClients, useUsers, useCurrentUser, useAttachments, useReplies, getAttachmentDownloadUrl } from "@/hooks/queries";
+import { useUpdateTicket, useDeleteTicket, useUploadAttachment, useDeleteAttachment, useCreateReply, useUpdateReply, useDeleteReply } from "@/hooks/mutations";
 import type { Ticket } from "@/types/ticket";
 import type { TicketAttachment } from "@/types/attachment";
 import type { TicketReply } from "@/types/reply";
@@ -118,11 +116,11 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const { data: attachments, isLoading } = useAttachments(ticketId, { enabled: open });
 
   const deleteMutation = useDeleteAttachment(ticketId);
+  const uploadMutation = useUploadAttachment();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -146,9 +144,8 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
           });
           continue;
         }
-        await attachmentApi.upload(ticketId, file);
+        await uploadMutation.mutateAsync({ ticketId, file });
       }
-      queryClient.invalidateQueries({ queryKey: attachmentKeys.byTicket(ticketId) });
       toast({ title: "Files uploaded successfully" });
     } catch {
       toast({ title: "Failed to upload files", variant: "destructive" });
@@ -227,7 +224,7 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
                   {isImageType(attachment.mimeType) ? (
                     <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-black/5">
                       <img
-                        src={attachmentApi.getDownloadUrl(attachment.id)}
+                        src={getAttachmentDownloadUrl(attachment.id)}
                         alt={attachment.filename}
                         className="w-full h-full object-cover"
                       />
@@ -239,7 +236,7 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
                   )}
                   <div className="flex-1 min-w-0">
                     <a
-                      href={attachmentApi.getDownloadUrl(attachment.id)}
+                      href={getAttachmentDownloadUrl(attachment.id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm font-medium text-black/80 hover:text-black truncate block"
@@ -276,7 +273,7 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
   const [replyingTo, setReplyingTo] = useState<TicketReply | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const uploadAttachmentMutation = useUploadAttachment();
 
   const { data: currentUser } = useCurrentUser();
 
@@ -385,15 +382,13 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
     setUploading(true);
     try {
       for (const file of pendingFiles) {
-        await attachmentApi.upload(ticketId, file);
+        await uploadAttachmentMutation.mutateAsync({ ticketId, file });
       }
       
       // Then create reply if there's content
       if (replyContent.trim() && replyContent !== "<p></p>") {
         createMutation.mutate({ content: replyContent, parentReplyId: replyingTo?.id });
       } else if (pendingFiles.length > 0) {
-        // Just uploaded files, refresh attachments
-        queryClient.invalidateQueries({ queryKey: attachmentKeys.byTicket(ticketId) });
         toast({ title: "Attachments uploaded" });
       }
       

@@ -14,15 +14,34 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: React 18 with TypeScript
 - **Routing**: Wouter (lightweight React router)
 - **State Management**: TanStack React Query for server state
+- **HTTP Client**: Axios with interceptors for session auth and response unwrapping
 - **Styling**: Tailwind CSS v4 with shadcn/ui component library (New York style)
 - **Animations**: Framer Motion for UI transitions
 - **Build Tool**: Vite with custom plugins for Replit integration
 
-The frontend follows a page-based structure with shared components. Key pages include:
+The frontend follows an AGENTS.md-compliant architecture with strict separation of concerns:
+
+#### API Layer (`client/src/api/`)
+- `client/axios-client.ts` - Axios instance with `withCredentials: true` for session-based auth
+- `client/interceptors.ts` - Response interceptor unwraps `{ success, data }` envelope; 401 interceptor redirects to login
+- `endpoints/*.api.ts` - Domain-specific API endpoint functions (auth, client, quote, ticket, attachment, reply, etc.)
+- `index.ts` - Barrel export of all API modules
+
+#### Custom Hooks (`client/src/hooks/`)
+- `queries/*.ts` - TanStack Query hooks with query key factories for data fetching (e.g., `useClients`, `useTickets`, `useAttachments`)
+- `mutations/*.ts` - Mutation hooks with automatic query invalidation (e.g., `useCreateClient`, `useUpdateTicket`)
+- Components ONLY use hooks for data access, never direct API calls
+
+#### Type System (`client/src/types/`)
+- Domain-organized folders: `client/`, `quote/`, `ticket/`, `attachment/`, `reply/`, `user/`, `auth/`, `dashboard/`, `tour-operator/`, `airport/`, `notification/`, `api/`
+- Each folder has an `index.ts` barrel export
+
+Key pages include:
 - Landing page (unauthenticated users)
 - Command Center (dashboard)
 - Clients list and detail views
 - Quote management
+- Ticket management
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
@@ -73,6 +92,7 @@ Schema includes tables for:
 - `express`: HTTP server framework
 - `passport` / `openid-client`: Authentication handling
 - `@tanstack/react-query`: Async state management
+- `axios`: HTTP client for frontend API layer
 - `@radix-ui/*`: Headless UI primitives for shadcn components
 - `framer-motion`: Animation library
 - `zod`: Runtime schema validation
