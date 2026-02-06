@@ -240,13 +240,11 @@ export default function QuotePage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-base font-semibold" data-testid="text-quote-title">
-                  {quote.quoteTitle}
+                  {quote.quoteTitle} <span className="text-sm font-medium text-black/50">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                 </div>
                 <StatusPill status={quote.status} />
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
-                <span data-testid="text-quote-meta-id">{quote.id}</span>
-                <span className="text-black/25">•</span>
                 <span data-testid="text-quote-meta-destination">{quote.destination}</span>
                 <span className="text-black/25">•</span>
                 <span data-testid="text-quote-meta-dates">
