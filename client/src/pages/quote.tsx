@@ -688,61 +688,59 @@ export default function QuotePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-1.5 md:grid-cols-2" data-testid="grid-itinerary-specs">
-                    <div className="grid gap-1.5" data-testid="col-itinerary-left">
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-operator">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-operator-label">Tour Operator</div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
+                    <div className="grid gap-2" data-testid="col-itinerary-left">
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
                       </div>
 
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-travel-date">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-travel-date-label">Travel Date</div>
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
                       </div>
 
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-departure-airport">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-departure-airport-label">Departure Airport</div>
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-departure-airport">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-departure-airport-label">Departure Airport</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-departure-airport-value">{quote.flights.outbound.from}</div>
                       </div>
 
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-passengers">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-passengers-label">Passengers</div>
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
                           {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children (${[12, 7].join(", ")})` : ""}
                         </div>
                       </div>
-
-
                     </div>
 
-                    <div className="grid gap-1.5" data-testid="col-itinerary-right">
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-hotel">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-hotel-label">Hotel</div>
+                    <div className="grid gap-2" data-testid="col-itinerary-right">
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-hotel-label">Hotel</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
                       </div>
 
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-price-pp">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-price-pp-label">Price per person</div>
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-price-pp">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-price-pp-label">Price per person</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-price-pp-value">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</div>
                       </div>
 
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-room">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-room-label">Room Type</div>
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-room-label">Room Type</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
                       </div>
 
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-board">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-board-label">Board Basis</div>
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-board">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-board-label">Board Basis</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
                       </div>
 
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-transfer">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-transfer-label">Transfer type</div>
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-transfer-label">Transfer type</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-transfer-value">Private Transfer</div>
                       </div>
 
-                      <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-source">
-                        <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-source-label">Lead Source</div>
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-source">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-source-label">Lead Source</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-source-value">Shop</div>
                       </div>
                     </div>
