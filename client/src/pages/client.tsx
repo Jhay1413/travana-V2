@@ -1967,7 +1967,7 @@ export default function ClientPage() {
               </Button>
               <Button
                 className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
-                disabled={createQuoteMutation.isPending}
+                disabled={createQuoteMutationHook.isPending}
                 onClick={() => {
                   if (!clientId || !currentUser?.id) {
                     toast({ title: "Please wait, loading user info...", variant: "destructive" });

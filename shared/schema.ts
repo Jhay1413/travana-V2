@@ -66,7 +66,7 @@ export type Client = typeof clients.$inferSelect;
 // Quotes table
 export const quotes = pgTable("quotes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id), // owner
   status: text("status").notNull().default("In Play"), // In Play, Won, Lost
   packageType: text("package_type").notNull(),
@@ -189,7 +189,7 @@ export type Airport = typeof airports.$inferSelect;
 // Tickets table
 export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id),
   type: text("type").notNull(), // Admin, Build, Sales
   status: text("status").notNull().default("Open"), // Open, In Progress, Resolved, Closed
