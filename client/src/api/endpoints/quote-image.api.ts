@@ -30,4 +30,8 @@ export const quoteImageApi = {
   deleteImage: async (id: string): Promise<void> => {
     await axiosClient.delete(`/api/quote-images/${id}`);
   },
+
+  setPrimary: async (id: string, quoteId: string): Promise<void> => {
+    await axiosClient.patch(`/api/quote-images/${id}/primary`, { quoteId });
+  },
 };

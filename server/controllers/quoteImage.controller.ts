@@ -55,4 +55,14 @@ export const quoteImageController = {
     await quoteImageService.deleteQuoteImage(id);
     res.status(204).send();
   }),
+
+  setPrimary: asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const { quoteId } = req.body;
+    if (!quoteId) {
+      throw new AppError("quoteId is required", 400);
+    }
+    await quoteImageService.setPrimary(id, quoteId);
+    return successResponse(res, null, "Primary image updated successfully");
+  }),
 };

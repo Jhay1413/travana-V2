@@ -14,4 +14,8 @@ export const quoteImageService = {
   async deleteQuoteImage(id: string): Promise<void> {
     await quoteImageRepository.remove(id);
   },
+
+  async setPrimary(id: string, quoteId: string): Promise<void> {
+    await quoteImageRepository.setPrimary(id, quoteId);
+  },
 };

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, Plane, Tag, X } from "lucide-react";
+import { ChevronLeft, Copy, FileText, Plane, Star, Tag, X } from "lucide-react";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useQuoteFull } from "@/hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { quoteImageApi } from "@/api";
+import { useToast } from "@/hooks/use-toast";
 import type { QuoteFull } from "@/types/quote";
 
 const currency = new Intl.NumberFormat("en-GB", {
@@ -165,6 +168,22 @@ export default function QuotePage() {
   const quoteId = params?.quoteId ?? "";
 
   const { data: quoteData, isLoading, error } = useQuoteFull(quoteId);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const images = useMemo(() => quoteData?.images || [], [quoteData]);
+  const primaryImage = useMemo(() => images.find((img) => img.isPrimary) || images[0], [images]);
+  const galleryImages = useMemo(() => images.filter((img) => img.id !== primaryImage?.id), [images, primaryImage]);
+
+  const handleSetPrimary = async (imageId: string) => {
+    try {
+      await quoteImageApi.setPrimary(imageId, quoteId);
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      toast({ title: "Main image updated" });
+    } catch {
+      toast({ title: "Failed to update main image", variant: "destructive" });
+    }
+  };
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
@@ -263,29 +282,46 @@ export default function QuotePage() {
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
                 <div className="grid gap-3" data-testid="col-itinerary-media">
                   <div className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
-                    <img
-                      src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
-                      data-testid="img-itinerary-hero-photo"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0" aria-hidden />
+                    {primaryImage ? (
+                      <>
+                        <img
+                          src={primaryImage.url}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                          data-testid="img-itinerary-hero-photo"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0" aria-hidden />
+                        <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white" data-testid="badge-main-image">
+                          <Star className="h-3 w-3 fill-current" /> Main
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-black/40" data-testid="placeholder-no-hero">
+                        No images
+                      </div>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2" data-testid="grid-itinerary-gallery">
-                    {["/attached_assets/Hotel_1_1769959304412.jpg", "/attached_assets/Hotel_2_1769959304413.jpg", "/attached_assets/Hotel_3_1769959304414.jpg", "/attached_assets/Hotel_4_1769959304414.jpg"].map((src, idx) => (
-                      <button
-                        key={src}
-                        type="button"
-                        className="group relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
-                        data-testid={`button-gallery-image-${idx}`}
-                        onClick={() => {}}
-                      >
-                        <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100" aria-hidden />
-                      </button>
-                    ))}
-                  </div>
+                  {galleryImages.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2" data-testid="grid-itinerary-gallery">
+                      {galleryImages.map((img, idx) => (
+                        <button
+                          key={img.id}
+                          type="button"
+                          className="group relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
+                          data-testid={`button-gallery-image-${idx}`}
+                          onClick={() => handleSetPrimary(img.id)}
+                          title="Click to set as main image"
+                        >
+                          <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100" aria-hidden />
+                          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/50 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100" data-testid={`label-set-main-${idx}`}>
+                            <Star className="h-3 w-3" /> Set as main
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="min-w-0" data-testid="section-itinerary-summary">

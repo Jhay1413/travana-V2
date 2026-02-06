@@ -43,6 +43,7 @@ router.get("/file/:filename", (req, res) => {
 });
 router.post("/", validate(createQuoteImageValidator), quoteImageController.createQuoteImage);
 router.post("/upload/:quoteId", upload.array("images", 10), quoteImageController.uploadImages);
+router.patch("/:id/primary", quoteImageController.setPrimary);
 router.delete("/:id", quoteImageController.deleteQuoteImage);
 
 export default router;

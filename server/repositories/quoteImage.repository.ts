@@ -15,4 +15,11 @@ export const quoteImageRepository = {
   async remove(id: string): Promise<void> {
     await db.delete(quoteImages).where(eq(quoteImages.id, id));
   },
+
+  async setPrimary(id: string, quoteId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.update(quoteImages).set({ isPrimary: false }).where(eq(quoteImages.quoteId, quoteId));
+      await tx.update(quoteImages).set({ isPrimary: true }).where(eq(quoteImages.id, id));
+    });
+  },
 };
