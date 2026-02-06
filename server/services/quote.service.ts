@@ -200,36 +200,30 @@ export const quoteService = {
       }
     }
 
-    if (price) {
-      const priceNum = parseFloat(price) || 0;
-      const commissionPercent = parseFloat(commission) || 0;
+    const hasCommissionData = price !== undefined || commission !== undefined || tourOperator !== undefined || sales !== undefined || discount !== undefined || serviceCharge !== undefined || pricePerPerson !== undefined;
+    if (hasCommissionData) {
+      const existing = await commissionRepository.findByQuoteId(id);
+      const priceNum = parseFloat(price ?? existing?.price ?? "0") || 0;
+      const commissionPercent = parseFloat(commission ?? existing?.commissionPercent ?? "0") || 0;
       const commissionValue = priceNum * (commissionPercent / 100);
-      const agentSplitPercent = parseFloat(sales) || 50;
+      const agentSplitPercent = parseFloat(sales ?? existing?.agentSplitPercent ?? "50") || 50;
       const agentSplitValue = commissionValue * (agentSplitPercent / 100);
       const netToAgency = commissionValue - agentSplitValue;
 
-      const existing = await commissionRepository.findByQuoteId(id);
+      const commData = {
+        tourOperator: tourOperator ?? existing?.tourOperator ?? "Unknown",
+        price: priceNum.toFixed(2),
+        commissionPercent: commissionPercent.toFixed(2),
+        commissionValue: commissionValue.toFixed(2),
+        agentSplitPercent: agentSplitPercent.toFixed(2),
+        agentSplitValue: agentSplitValue.toFixed(2),
+        netToAgency: netToAgency.toFixed(2),
+      };
+
       if (existing) {
-        await commissionRepository.update(existing.id, {
-          tourOperator: tourOperator || existing.tourOperator,
-          price: priceNum.toFixed(2),
-          commissionPercent: commissionPercent.toFixed(2),
-          commissionValue: commissionValue.toFixed(2),
-          agentSplitPercent: agentSplitPercent.toFixed(2),
-          agentSplitValue: agentSplitValue.toFixed(2),
-          netToAgency: netToAgency.toFixed(2),
-        });
+        await commissionRepository.update(existing.id, commData);
       } else {
-        await commissionRepository.create({
-          quoteId: id,
-          tourOperator: tourOperator || "Unknown",
-          price: priceNum.toFixed(2),
-          commissionPercent: commissionPercent.toFixed(2),
-          commissionValue: commissionValue.toFixed(2),
-          agentSplitPercent: agentSplitPercent.toFixed(2),
-          agentSplitValue: agentSplitValue.toFixed(2),
-          netToAgency: netToAgency.toFixed(2),
-        });
+        await commissionRepository.create({ quoteId: id, ...commData });
       }
     }
 
