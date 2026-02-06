@@ -18,6 +18,7 @@ import {
   insertAirportSchema,
   insertTicketSchema,
   insertTicketReplySchema,
+  insertClientTableSchema,
   insertNotificationSchema,
 } from "@shared/schema";
 
@@ -818,6 +819,72 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete notification" });
+    }
+  });
+
+  // ========== Neon Client Table Routes ==========
+
+  app.get("/api/neon-clients", async (req: Request, res: Response) => {
+    try {
+      const clients = await storage.listNeonClients();
+      res.json(clients);
+    } catch (error) {
+      console.error("Failed to list neon clients:", error);
+      res.status(500).json({ error: "Failed to list neon clients" });
+    }
+  });
+
+  app.get("/api/neon-clients/:id", async (req: Request, res: Response) => {
+    try {
+      const client = await storage.getNeonClient(getParam(req.params.id));
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      res.json(client);
+    } catch (error) {
+      console.error("Failed to get neon client:", error);
+      res.status(500).json({ error: "Failed to get neon client" });
+    }
+  });
+
+  app.post("/api/neon-clients", async (req: Request, res: Response) => {
+    try {
+      const clientData = insertClientTableSchema.parse(req.body);
+      const client = await storage.createNeonClient(clientData);
+      res.status(201).json(client);
+    } catch (error: any) {
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: "Invalid client data", details: error.errors });
+      }
+      console.error("Failed to create neon client:", error);
+      res.status(500).json({ error: "Failed to create neon client" });
+    }
+  });
+
+  app.patch("/api/neon-clients/:id", async (req: Request, res: Response) => {
+    try {
+      const clientData = insertClientTableSchema.partial().parse(req.body);
+      const client = await storage.updateNeonClient(getParam(req.params.id), clientData);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      res.json(client);
+    } catch (error: any) {
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: "Invalid client data", details: error.errors });
+      }
+      console.error("Failed to update neon client:", error);
+      res.status(500).json({ error: "Failed to update neon client" });
+    }
+  });
+
+  app.delete("/api/neon-clients/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteNeonClient(getParam(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      console.error("Failed to delete neon client:", error);
+      res.status(500).json({ error: "Failed to delete neon client" });
     }
   });
 

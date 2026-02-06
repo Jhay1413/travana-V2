@@ -44,10 +44,13 @@ import {
   type InsertTicketReply,
   type Notification,
   type InsertNotification,
+  clientTable,
+  type NeonClient,
+  type InsertClientTable,
 } from "@shared/schema";
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL,
 });
 
 export const db = drizzle(pool);
@@ -158,6 +161,13 @@ export interface IStorage {
   markNotificationRead(id: string): Promise<Notification | undefined>;
   markAllNotificationsRead(userId: string): Promise<void>;
   deleteNotification(id: string): Promise<void>;
+
+  // Neon Clients
+  getNeonClient(id: string): Promise<NeonClient | undefined>;
+  listNeonClients(): Promise<NeonClient[]>;
+  createNeonClient(client: InsertClientTable): Promise<NeonClient>;
+  updateNeonClient(id: string, client: Partial<InsertClientTable>): Promise<NeonClient | undefined>;
+  deleteNeonClient(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -521,6 +531,30 @@ export class DbStorage implements IStorage {
 
   async deleteNotification(id: string): Promise<void> {
     await db.delete(notifications).where(eq(notifications.id, id));
+  }
+
+  // Neon Clients
+  async getNeonClient(id: string): Promise<NeonClient | undefined> {
+    const result = await db.select().from(clientTable).where(eq(clientTable.id, id)).limit(1);
+    return result[0];
+  }
+
+  async listNeonClients(): Promise<NeonClient[]> {
+    return await db.select().from(clientTable).orderBy(desc(clientTable.createdAt));
+  }
+
+  async createNeonClient(client: InsertClientTable): Promise<NeonClient> {
+    const result = await db.insert(clientTable).values(client).returning();
+    return result[0];
+  }
+
+  async updateNeonClient(id: string, client: Partial<InsertClientTable>): Promise<NeonClient | undefined> {
+    const result = await db.update(clientTable).set(client).where(eq(clientTable.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteNeonClient(id: string): Promise<void> {
+    await db.delete(clientTable).where(eq(clientTable.id, id));
   }
 }
 

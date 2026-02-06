@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, boolean, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, timestamp, boolean, index, jsonb, uuid, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -250,3 +250,32 @@ export const notifications = pgTable("notifications", {
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+// Neon Client Table (from external Neon database)
+export const clientTable = pgTable("client_table", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  title: varchar(),
+  firstName: varchar().notNull(),
+  surename: varchar().notNull(),
+  DOB: date({ mode: "string" }),
+  phoneNumber: varchar().notNull(),
+  email: varchar(),
+  emailIsAllowed: boolean(),
+  VMB: varchar(),
+  VMBfirstAccess: varchar(),
+  whatsAppVerified: boolean().notNull().default(false),
+  mailAllowed: boolean().default(false),
+  houseNumber: varchar(),
+  city: varchar(),
+  street: varchar(),
+  country: varchar(),
+  post_code: varchar(),
+  avatarUrl: varchar(),
+  badge: varchar(),
+  createdAt: timestamp().notNull().defaultNow(),
+  referrerId: text(),
+});
+
+export const insertClientTableSchema = createInsertSchema(clientTable).omit({ id: true, createdAt: true });
+export type InsertClientTable = z.infer<typeof insertClientTableSchema>;
+export type NeonClient = typeof clientTable.$inferSelect;

@@ -43,3 +43,8 @@ waitForPort = 5000
 stack = "MOCKUP_JS"
 mockupState = "FULLSTACK"
 integrations = ["javascript_log_in_with_replit:2.0.0"]
+
+[userenv]
+
+[userenv.shared]
+NEON_DATABASE_URL = "postgresql://neondb_owner:npg_B0ALKiSoDRc7@ep-dark-moon-abt6m6qo-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
