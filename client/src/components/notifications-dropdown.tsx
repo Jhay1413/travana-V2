@@ -1,16 +1,11 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, CheckCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
-import { 
-  fetchNotifications, 
-  markNotificationRead, 
-  markAllNotificationsRead,
-  deleteNotification,
-  type Notification 
-} from "@/lib/api";
+import { useNotifications } from "@/hooks/queries";
+import { useMarkNotificationRead, useMarkAllNotificationsRead, useDeleteNotification } from "@/hooks/mutations";
+import type { Notification } from "@/types/notification";
 import { useLocation } from "wouter";
 
 interface NotificationsDropdownProps {
@@ -35,37 +30,14 @@ function formatTimeAgo(dateString: string): string {
 export function NotificationsDropdown({ userId }: NotificationsDropdownProps) {
   const [open, setOpen] = useState(false);
   const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
 
-  const { data: notifications = [], isLoading } = useQuery({
-    queryKey: ["notifications", userId],
-    queryFn: () => fetchNotifications(userId),
-    enabled: !!userId,
-    refetchInterval: 30000,
-  });
+  const { data: notifications = [], isLoading } = useNotifications(userId);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const markReadMutation = useMutation({
-    mutationFn: markNotificationRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
-    },
-  });
-
-  const markAllReadMutation = useMutation({
-    mutationFn: () => markAllNotificationsRead(userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteNotification,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
-    },
-  });
+  const markReadMutation = useMarkNotificationRead(userId);
+  const markAllReadMutation = useMarkAllNotificationsRead(userId);
+  const deleteMutation = useDeleteNotification(userId);
 
   const handleNotificationClick = (notification: Notification) => {
     if (!notification.read) {

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import {
   Calendar,
@@ -24,13 +23,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  fetchTickets, 
-  fetchClients, 
-  fetchUsers, 
-  createTicket, 
-  type Ticket, 
-} from "@/lib/api";
+import { useTickets, useClients, useUsers } from "@/hooks/queries";
+import { useCreateTicket } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 
 const TICKET_TYPES = ["Admin", "Build", "Sales"] as const;
@@ -108,35 +102,14 @@ export default function TicketsPage() {
   });
 
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  const { data: tickets, isLoading: ticketsLoading } = useQuery({
-    queryKey: ["tickets"],
-    queryFn: fetchTickets,
-  });
+  const { data: tickets, isLoading: ticketsLoading } = useTickets();
 
-  const { data: clients } = useQuery({
-    queryKey: ["clients"],
-    queryFn: fetchClients,
-  });
+  const { data: clients } = useClients();
 
-  const { data: users } = useQuery({
-    queryKey: ["users"],
-    queryFn: fetchUsers,
-  });
+  const { data: users } = useUsers();
 
-  const createMutation = useMutation({
-    mutationFn: createTicket,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tickets"] });
-      setShowCreateDialog(false);
-      resetForm();
-      toast({ title: "Ticket created successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to create ticket", variant: "destructive" });
-    },
-  });
+  const createTicketMutation = useCreateTicket();
 
   const resetForm = () => {
     setFormData({
@@ -155,7 +128,7 @@ export default function TicketsPage() {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
     }
-    createMutation.mutate({
+    createTicketMutation.mutate({
       clientId: formData.clientId,
       userId: formData.userId,
       type: formData.type,
@@ -163,6 +136,15 @@ export default function TicketsPage() {
       priority: formData.priority,
       subject: formData.subject,
       description: formData.description || null,
+    }, {
+      onSuccess: () => {
+        setShowCreateDialog(false);
+        resetForm();
+        toast({ title: "Ticket created successfully" });
+      },
+      onError: () => {
+        toast({ title: "Failed to create ticket", variant: "destructive" });
+      },
     });
   };
 
@@ -507,10 +489,10 @@ export default function TicketsPage() {
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={createMutation.isPending}
+              disabled={createTicketMutation.isPending}
               data-testid="button-submit-create"
             >
-              {createMutation.isPending ? "Creating..." : "Create Ticket"}
+              {createTicketMutation.isPending ? "Creating..." : "Create Ticket"}
             </Button>
           </DialogFooter>
         </DialogContent>

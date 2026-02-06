@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation, useRoute } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import {
   BadgeCheck,
@@ -29,7 +28,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchClient, fetchQuotes, fetchTicketsByClient, fetchUsers, createTicket, updateTicket, updateClient as apiUpdateClient, createQuote, fetchCurrentUser, type Client as ApiClient, type Quote as ApiQuote, type Ticket as ApiTicket, type User as ApiUser, type CreateQuoteData } from "@/lib/api";
+import { useClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
+import { useUpdateClient, useCreateQuote, useCreateTicket, useUpdateTicket } from "@/hooks/mutations";
+import type { Client as ApiClient } from "@/types/client";
+import type { Ticket as ApiTicket } from "@/types/ticket";
+import type { CreateQuoteData } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
@@ -408,61 +411,46 @@ export default function ClientPage() {
     pricePerPerson: 0,
     returnDate: "",
   });
-  const queryClient = useQueryClient();
-
   const clientId = params?.clientId ?? "";
 
-  const { data: clientData, isLoading: isLoadingClient } = useQuery({
-    queryKey: ["client", clientId],
-    queryFn: () => fetchClient(clientId),
-    enabled: !!clientId,
-  });
+  const { data: clientData, isLoading: isLoadingClient } = useClient(clientId);
 
-  const { data: quotesData, isLoading: isLoadingQuotes } = useQuery({
-    queryKey: ["quotes", "client", clientId],
-    queryFn: () => fetchQuotes({ clientId }),
-    enabled: !!clientId,
-  });
+  const { data: quotesData, isLoading: isLoadingQuotes } = useQuotes({ clientId });
 
-  const { data: ticketsData, isLoading: isLoadingTickets } = useQuery({
-    queryKey: ["tickets", "client", clientId],
-    queryFn: () => fetchTicketsByClient(clientId),
-    enabled: !!clientId,
-  });
+  const { data: ticketsData, isLoading: isLoadingTickets } = useTicketsByClient(clientId);
 
-  const { data: usersData } = useQuery({
-    queryKey: ["users"],
-    queryFn: fetchUsers,
-  });
+  const { data: usersData } = useUsers();
 
-  const { data: currentUser } = useQuery({
-    queryKey: ["currentUser"],
-    queryFn: fetchCurrentUser,
-  });
+  const { data: currentUser } = useCurrentUser();
 
-  const updateClientMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<ApiClient> }) => apiUpdateClient(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      toast({ title: "Client updated" });
+  const updateClientMutationHook = useUpdateClient();
+  const updateClientMutation = {
+    mutate: (args: { id: string; data: Partial<ApiClient> }) => {
+      updateClientMutationHook.mutate(args, {
+        onSuccess: () => {
+          toast({ title: "Client updated" });
+        },
+        onError: () => {
+          toast({ title: "Failed to update client", variant: "destructive" });
+        },
+      });
     },
-    onError: () => {
-      toast({ title: "Failed to update client", variant: "destructive" });
-    },
-  });
+  };
 
-  const createQuoteMutation = useMutation({
-    mutationFn: (data: CreateQuoteData) => createQuote(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["quotes"] });
-      setShowNewQuoteModal(false);
-      toast({ title: "Quote created successfully" });
+  const createQuoteMutationHook = useCreateQuote();
+  const createQuoteMutation = {
+    mutate: (data: CreateQuoteData) => {
+      createQuoteMutationHook.mutate(data, {
+        onSuccess: () => {
+          setShowNewQuoteModal(false);
+          toast({ title: "Quote created successfully" });
+        },
+        onError: (error: Error) => {
+          toast({ title: error.message || "Failed to create quote", variant: "destructive" });
+        },
+      });
     },
-    onError: (error: Error) => {
-      toast({ title: error.message || "Failed to create quote", variant: "destructive" });
-    },
-  });
+  };
 
   const client = useMemo(() => {
     if (!clientData) return null;

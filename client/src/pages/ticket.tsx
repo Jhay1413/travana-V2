@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useParams, useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
 import {
@@ -28,26 +28,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { 
-  fetchTickets, 
-  fetchClients, 
-  fetchUsers, 
-  fetchCurrentUser,
-  updateTicket, 
-  deleteTicket, 
-  fetchAttachments,
-  uploadAttachment,
-  deleteAttachment,
-  getAttachmentUrl,
-  fetchReplies,
-  createReply,
-  updateReply,
-  deleteReply,
-  type Ticket, 
-  type TicketAttachment,
-  type TicketReply,
-  type User as ApiUser,
-} from "@/lib/api";
+import { attachmentApi } from "@/api";
+import { useTickets, useClients, useUsers, useCurrentUser, useAttachments, useReplies, attachmentKeys } from "@/hooks/queries";
+import { useUpdateTicket, useDeleteTicket, useDeleteAttachment, useCreateReply, useUpdateReply, useDeleteReply } from "@/hooks/mutations";
+import type { Ticket } from "@/types/ticket";
+import type { TicketAttachment } from "@/types/attachment";
+import type { TicketReply } from "@/types/reply";
+import type { User as ApiUser } from "@/types/user";
 import { useToast } from "@/hooks/use-toast";
 
 function formatFileSize(bytes: number): string {
@@ -133,22 +120,9 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: attachments, isLoading } = useQuery({
-    queryKey: ["attachments", ticketId],
-    queryFn: () => fetchAttachments(ticketId),
-    enabled: !!ticketId && open,
-  });
+  const { data: attachments, isLoading } = useAttachments(ticketId, { enabled: open });
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteAttachment,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
-      toast({ title: "Attachment deleted" });
-    },
-    onError: () => {
-      toast({ title: "Failed to delete attachment", variant: "destructive" });
-    },
-  });
+  const deleteMutation = useDeleteAttachment(ticketId);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -172,9 +146,9 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
           });
           continue;
         }
-        await uploadAttachment(ticketId, file);
+        await attachmentApi.upload(ticketId, file);
       }
-      queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
+      queryClient.invalidateQueries({ queryKey: attachmentKeys.byTicket(ticketId) });
       toast({ title: "Files uploaded successfully" });
     } catch {
       toast({ title: "Failed to upload files", variant: "destructive" });
@@ -253,7 +227,7 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
                   {isImageType(attachment.mimeType) ? (
                     <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-black/5">
                       <img
-                        src={getAttachmentUrl(attachment.id)}
+                        src={attachmentApi.getDownloadUrl(attachment.id)}
                         alt={attachment.filename}
                         className="w-full h-full object-cover"
                       />
@@ -265,7 +239,7 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
                   )}
                   <div className="flex-1 min-w-0">
                     <a
-                      href={getAttachmentUrl(attachment.id)}
+                      href={attachmentApi.getDownloadUrl(attachment.id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm font-medium text-black/80 hover:text-black truncate block"
@@ -304,53 +278,62 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: currentUser } = useQuery({
-    queryKey: ["currentUser"],
-    queryFn: fetchCurrentUser,
-  });
+  const { data: currentUser } = useCurrentUser();
 
-  const { data: replies, isLoading } = useQuery({
-    queryKey: ["replies", ticketId],
-    queryFn: () => fetchReplies(ticketId),
-    enabled: !!ticketId,
-  });
+  const { data: replies, isLoading } = useReplies(ticketId);
 
-  const createMutation = useMutation({
-    mutationFn: ({ content, parentReplyId }: { content: string; parentReplyId?: string }) => 
-      createReply(ticketId, currentUser?.id || "", content, parentReplyId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
-      setReplyContent("");
-      setReplyingTo(null);
-      toast({ title: "Reply added" });
+  const createReplyMutation = useCreateReply(ticketId);
+  const createMutation = {
+    mutate: ({ content, parentReplyId }: { content: string; parentReplyId?: string }) => {
+      createReplyMutation.mutate(
+        { userId: currentUser?.id || "", content, parentReplyId },
+        {
+          onSuccess: () => {
+            setReplyContent("");
+            setReplyingTo(null);
+            toast({ title: "Reply added" });
+          },
+          onError: () => {
+            toast({ title: "Failed to add reply", variant: "destructive" });
+          },
+        },
+      );
     },
-    onError: () => {
-      toast({ title: "Failed to add reply", variant: "destructive" });
-    },
-  });
+    isPending: createReplyMutation.isPending,
+  };
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, content }: { id: string; content: string }) => updateReply(id, content),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
-      setEditingReply(null);
-      toast({ title: "Reply updated" });
+  const updateReplyMutation = useUpdateReply(ticketId);
+  const updateMutation = {
+    mutate: ({ id, content }: { id: string; content: string }) => {
+      updateReplyMutation.mutate(
+        { id, content },
+        {
+          onSuccess: () => {
+            setEditingReply(null);
+            toast({ title: "Reply updated" });
+          },
+          onError: () => {
+            toast({ title: "Failed to update reply", variant: "destructive" });
+          },
+        },
+      );
     },
-    onError: () => {
-      toast({ title: "Failed to update reply", variant: "destructive" });
-    },
-  });
+    isPending: updateReplyMutation.isPending,
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteReply,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["replies", ticketId] });
-      toast({ title: "Reply deleted" });
+  const deleteReplyMutation = useDeleteReply(ticketId);
+  const deleteMutation = {
+    mutate: (id: string) => {
+      deleteReplyMutation.mutate(id, {
+        onSuccess: () => {
+          toast({ title: "Reply deleted" });
+        },
+        onError: () => {
+          toast({ title: "Failed to delete reply", variant: "destructive" });
+        },
+      });
     },
-    onError: () => {
-      toast({ title: "Failed to delete reply", variant: "destructive" });
-    },
-  });
+  };
 
   const getUserName = (userId: string) => {
     const user = users.find((u) => u.id === userId);
@@ -401,9 +384,8 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
     
     setUploading(true);
     try {
-      // Upload attachments first
       for (const file of pendingFiles) {
-        await uploadAttachment(ticketId, file);
+        await attachmentApi.upload(ticketId, file);
       }
       
       // Then create reply if there's content
@@ -411,7 +393,7 @@ function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: Ap
         createMutation.mutate({ content: replyContent, parentReplyId: replyingTo?.id });
       } else if (pendingFiles.length > 0) {
         // Just uploaded files, refresh attachments
-        queryClient.invalidateQueries({ queryKey: ["attachments", ticketId] });
+        queryClient.invalidateQueries({ queryKey: attachmentKeys.byTicket(ticketId) });
         toast({ title: "Attachments uploaded" });
       }
       
@@ -654,48 +636,49 @@ export default function TicketPage() {
   });
 
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  const { data: tickets, isLoading: ticketsLoading } = useQuery({
-    queryKey: ["tickets"],
-    queryFn: fetchTickets,
-  });
+  const { data: tickets, isLoading: ticketsLoading } = useTickets();
 
-  const { data: clients } = useQuery({
-    queryKey: ["clients"],
-    queryFn: fetchClients,
-  });
+  const { data: clients } = useClients();
 
-  const { data: users } = useQuery({
-    queryKey: ["users"],
-    queryFn: fetchUsers,
-  });
+  const { data: users } = useUsers();
 
   const ticket = tickets?.find((t) => t.id === ticketId);
 
-  const updateMutation = useMutation({
-    mutationFn: (data: Partial<Ticket>) => updateTicket(ticketId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tickets"] });
-      setIsEditing(false);
-      toast({ title: "Ticket updated successfully" });
+  const updateTicketMutation = useUpdateTicket();
+  const updateMutation = {
+    mutate: (data: Partial<Ticket>) => {
+      updateTicketMutation.mutate(
+        { id: ticketId, data },
+        {
+          onSuccess: () => {
+            setIsEditing(false);
+            toast({ title: "Ticket updated successfully" });
+          },
+          onError: () => {
+            toast({ title: "Failed to update ticket", variant: "destructive" });
+          },
+        },
+      );
     },
-    onError: () => {
-      toast({ title: "Failed to update ticket", variant: "destructive" });
-    },
-  });
+    isPending: updateTicketMutation.isPending,
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteTicket,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tickets"] });
-      toast({ title: "Ticket deleted successfully" });
-      navigate("/tickets");
+  const deleteTicketMutation = useDeleteTicket();
+  const deleteMutation = {
+    mutate: (id: string) => {
+      deleteTicketMutation.mutate(id, {
+        onSuccess: () => {
+          toast({ title: "Ticket deleted successfully" });
+          navigate("/tickets");
+        },
+        onError: () => {
+          toast({ title: "Failed to delete ticket", variant: "destructive" });
+        },
+      });
     },
-    onError: () => {
-      toast({ title: "Failed to delete ticket", variant: "destructive" });
-    },
-  });
+    isPending: deleteTicketMutation.isPending,
+  };
 
   const handleStartEdit = () => {
     if (!ticket) return;

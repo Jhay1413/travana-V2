@@ -1,7 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   BadgeCheck,
@@ -35,7 +34,7 @@ import {
   Users,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
-import { fetchCurrentUser, fetchClients } from "@/lib/api";
+import { useCurrentUser, useClients } from "@/hooks/queries";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -126,15 +125,9 @@ export function CommandCenterShell({
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const { data: currentUser } = useQuery({
-    queryKey: ["currentUser"],
-    queryFn: fetchCurrentUser,
-  });
+  const { data: currentUser } = useCurrentUser();
 
-  const { data: clients = [] } = useQuery({
-    queryKey: ["/api/clients"],
-    queryFn: fetchClients,
-  });
+  const { data: clients = [] } = useClients();
 
   const searchResults = useMemo(() => {
     if (!query?.trim()) return [];

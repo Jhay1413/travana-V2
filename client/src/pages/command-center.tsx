@@ -1,9 +1,12 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchDashboardStats, fetchClients, fetchTourOperators, fetchAirports, createClient, type TourOperator, type Airport, type CreateClientData } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
+import { useDashboardStats, useClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
+import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport } from "@/hooks/mutations";
+import type { TourOperator } from "@/types/tour-operator";
+import type { Airport } from "@/types/airport";
+import type { CreateClientData } from "@/types/client";
 import {
   Activity,
   BadgeCheck,
@@ -949,31 +952,7 @@ function TopBar({
   };
   const [, navigate] = useLocation();
   const searchRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
-
-  const createClientMutation = useMutation({
-    mutationFn: createClient,
-    onSuccess: (newClient) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      setShowNewClientDialog(false);
-      setNewClientForm({
-        clientType: "New Client",
-        title: "",
-        firstName: "",
-        lastName: "",
-        phone: "",
-        email: "",
-        houseNumber: "",
-        street: "",
-        city: "",
-        country: "",
-        postcode: "",
-      });
-      setPostcodeSearch("");
-      setPostcodeError("");
-      navigate(`/clients/${newClient.id}`);
-    },
-  });
+  const createClientMutation = useCreateClient();
 
   const handleCreateClient = () => {
     if (!newClientForm.firstName || !newClientForm.lastName || !newClientForm.phone) {
@@ -991,6 +970,26 @@ function TopBar({
       city: newClientForm.city || undefined,
       country: newClientForm.country || undefined,
       postcode: newClientForm.postcode || undefined,
+    }, {
+      onSuccess: (newClient) => {
+        setShowNewClientDialog(false);
+        setNewClientForm({
+          clientType: "New Client",
+          title: "",
+          firstName: "",
+          lastName: "",
+          phone: "",
+          email: "",
+          houseNumber: "",
+          street: "",
+          city: "",
+          country: "",
+          postcode: "",
+        });
+        setPostcodeSearch("");
+        setPostcodeError("");
+        navigate(`/clients/${newClient.id}`);
+      },
     });
   };
 
@@ -1463,146 +1462,18 @@ export default function CommandCenterPage() {
   const actualRole = (user?.role as Role) || "Agent";
   const role = rolePreview || actualRole;
 
-  // Fetch dashboard stats from API
-  const { data: dashboardStats } = useQuery({
-    queryKey: ["/api/dashboard/stats"],
-    queryFn: fetchDashboardStats,
-  });
-
-  // Fetch clients from API
-  const { data: apiClients } = useQuery({
-    queryKey: ["/api/clients"],
-    queryFn: fetchClients,
-  });
-
-  // Fetch users for admin panel
-  const queryClient = useQueryClient();
-  const { data: apiUsers } = useQuery({
-    queryKey: ["/api/users"],
-    queryFn: async () => {
-      const res = await fetch("/api/users", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch users");
-      return res.json();
-    },
-  });
-
-  // Mutation to update user role
-  const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ role }),
-      });
-      if (!res.ok) throw new Error("Failed to update user");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-    },
-  });
-
-  // Mutation to delete user
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to delete user");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-    },
-  });
-
-  // Fetch tour operators
-  const { data: tourOperators } = useQuery({
-    queryKey: ["/api/tour-operators"],
-    queryFn: fetchTourOperators,
-  });
-
-  // Tour Operator mutations
-  const createTourOperatorMutation = useMutation({
-    mutationFn: async (op: Omit<TourOperator, "id" | "createdAt" | "updatedAt">) => {
-      const res = await fetch("/api/tour-operators", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(op),
-      });
-      if (!res.ok) throw new Error("Failed to create tour operator");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tour-operators"] });
-    },
-  });
-
-  const updateTourOperatorMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: string } & Partial<TourOperator>) => {
-      const res = await fetch(`/api/tour-operators/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to update tour operator");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tour-operators"] });
-    },
-  });
-
-  const deleteTourOperatorMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/tour-operators/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to delete tour operator");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tour-operators"] });
-    },
-  });
-
-  // Fetch airports
-  const { data: airportsList } = useQuery({
-    queryKey: ["/api/airports"],
-    queryFn: fetchAirports,
-  });
-
-  const createAirportMutation = useMutation({
-    mutationFn: async (airport: Omit<Airport, "id" | "createdAt">) => {
-      const res = await fetch("/api/airports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(airport),
-      });
-      if (!res.ok) throw new Error("Failed to create airport");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/airports"] });
-    },
-  });
-
-  const deleteAirportMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/airports/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to delete airport");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/airports"] });
-    },
-  });
+  const { data: dashboardStats } = useDashboardStats();
+  const { data: apiClients } = useClients();
+  const { data: apiUsers } = useUsers();
+  const updateUserMutation = useUpdateUser();
+  const deleteUserMutation = useDeleteUser();
+  const { data: tourOperators } = useTourOperators();
+  const createTourOperatorMutation = useCreateTourOperator();
+  const updateTourOperatorMutation = useUpdateTourOperator();
+  const deleteTourOperatorMutation = useDeleteTourOperator();
+  const { data: airportsList } = useAirports();
+  const createAirportMutation = useCreateAirport();
+  const deleteAirportMutation = useDeleteAirport();
 
   // Transform API clients to display format
   const allClients = useMemo(() => {
@@ -3135,7 +3006,7 @@ export default function CommandCenterPage() {
                     <div className="flex items-center gap-2">
                       <select
                         value={u.role}
-                        onChange={(e) => updateUserMutation.mutate({ userId: u.id, role: e.target.value })}
+                        onChange={(e) => updateUserMutation.mutate({ id: u.id, data: { role: e.target.value } })}
                         className="rounded-xl border border-black/10 bg-black/5 px-2 py-1 text-xs font-medium text-black dark:border-white/10 dark:bg-white/5 dark:text-white cursor-pointer"
                         data-testid={`select-user-role-${u.id}`}
                         disabled={u.id === user?.id}

@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import {
   ChevronRight,
@@ -21,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { fetchClients } from "@/lib/api";
+import { useClients } from "@/hooks/queries";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 type ClientTier = "Platinum" | "Gold" | "Standard";
@@ -90,10 +89,7 @@ export default function ClientsPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: apiClients, isLoading } = useQuery({
-    queryKey: ["/api/clients"],
-    queryFn: fetchClients,
-  });
+  const { data: apiClients, isLoading } = useClients();
 
   const clients = useMemo((): ClientDisplay[] => {
     if (!apiClients) return [];

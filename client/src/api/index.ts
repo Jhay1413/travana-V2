@@ -1,0 +1,11 @@
+export { authApi } from "./endpoints/auth.api";
+export { clientApi } from "./endpoints/client.api";
+export { quoteApi } from "./endpoints/quote.api";
+export { dashboardApi } from "./endpoints/dashboard.api";
+export { userApi } from "./endpoints/user.api";
+export { tourOperatorApi } from "./endpoints/tour-operator.api";
+export { airportApi } from "./endpoints/airport.api";
+export { ticketApi } from "./endpoints/ticket.api";
+export { attachmentApi } from "./endpoints/attachment.api";
+export { replyApi } from "./endpoints/reply.api";
+export { notificationApi } from "./endpoints/notification.api";

@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, Copy, FileText, Plane, Tag, X } from "lucide-react";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { fetchQuoteFull, type QuoteFull } from "@/lib/api";
+import { useQuoteFull } from "@/hooks/queries";
+import type { QuoteFull } from "@/types/quote";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -164,11 +164,7 @@ export default function QuotePage() {
   const clientId = params?.clientId ?? "";
   const quoteId = params?.quoteId ?? "";
 
-  const { data: quoteData, isLoading, error } = useQuery({
-    queryKey: ["quote", quoteId],
-    queryFn: () => fetchQuoteFull(quoteId),
-    enabled: !!quoteId,
-  });
+  const { data: quoteData, isLoading, error } = useQuoteFull(quoteId);
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
