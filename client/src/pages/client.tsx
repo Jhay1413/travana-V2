@@ -28,9 +28,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
+import { useNeonClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
 import { useUpdateClient, useCreateQuote, useCreateTicket, useUpdateTicket } from "@/hooks/mutations";
 import type { Client as ApiClient } from "@/types/client";
+import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
 import type { CreateQuoteData } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
@@ -113,6 +114,22 @@ function transformClientData(apiData: ApiClient): Client {
     email: apiData.email,
     phone: apiData.phone,
     tags: apiData.tags,
+  };
+}
+
+function transformNeonClientData(apiData: NeonClient): Client {
+  return {
+    id: apiData.id,
+    name: [apiData.firstName, apiData.surename].filter(Boolean).join(" ") || "Unknown",
+    tier: "Standard" as ClientTier,
+    stage: "Enquiry" as Stage,
+    location: [apiData.city, apiData.country].filter(Boolean).join(", "),
+    nextTrip: "",
+    value: 0,
+    lastTouch: "",
+    email: apiData.email || "",
+    phone: apiData.phoneNumber || "",
+    tags: apiData.badge ? [apiData.badge] : [],
   };
 }
 
@@ -413,7 +430,7 @@ export default function ClientPage() {
   });
   const clientId = params?.clientId ?? "";
 
-  const { data: clientData, isLoading: isLoadingClient } = useClient(clientId);
+  const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
 
   const { data: quotesData, isLoading: isLoadingQuotes } = useQuotes({ clientId });
 
@@ -454,7 +471,7 @@ export default function ClientPage() {
 
   const client = useMemo(() => {
     if (!clientData) return null;
-    return transformClientData(clientData);
+    return transformNeonClientData(clientData);
   }, [clientData]);
 
   const quotes = useMemo(() => quotesData || [], [quotesData]);
@@ -574,7 +591,7 @@ export default function ClientPage() {
                   {client ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Select
-                        value={clientData?.clientType || "New Client"}
+                        value={clientData?.badge || "New Client"}
                         onValueChange={(value) => {
                           if (clientId) {
                             updateClientMutation.mutate({ id: clientId, data: { clientType: value } });
