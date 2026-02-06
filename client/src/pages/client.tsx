@@ -19,6 +19,7 @@ import {
   Sparkles,
   Ticket,
   ImagePlus,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -1289,14 +1290,16 @@ export default function ClientPage() {
 
                     <div className="mt-4 grid gap-3" data-testid="list-files">
                       {uploadedFiles.map((f) => (
-                        <button
+                        <div
                           key={f.id}
-                          type="button"
-                          onClick={() => window.open(f.url, '_blank')}
-                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
+                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
                           data-testid={`row-file-uploaded-${f.id}`}
                         >
-                          <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => window.open(f.url, '_blank')}
+                            className="min-w-0 flex-1 text-left"
+                          >
                             <div className="flex items-center gap-2">
                               <div className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
                                 {f.title}
@@ -1308,9 +1311,21 @@ export default function ClientPage() {
                             <div className="mt-1 text-xs text-black/55" data-testid={`text-file-uploaded-meta-${f.id}`}>
                               {f.type} · {f.name} · {f.allocationType !== "None" ? `${f.allocationType}` : "Client level"} · {f.updated}
                             </div>
+                          </button>
+                          <div className="flex items-center gap-2">
+                            {role === "Admin" && (
+                              <button
+                                type="button"
+                                onClick={() => setUploadedFiles((prev) => prev.filter((file) => file.id !== f.id))}
+                                className="rounded-xl border border-red-500/20 bg-red-500/10 p-1.5 text-red-600 transition hover:bg-red-500/20"
+                                data-testid={`button-delete-file-${f.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
                           </div>
-                          <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
-                        </button>
+                        </div>
                       ))}
                       {filteredFiles.map((f) => (
                         <div
@@ -1326,7 +1341,19 @@ export default function ClientPage() {
                               {f.type} · Updated {f.updated}
                             </div>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
+                          <div className="flex items-center gap-2">
+                            {role === "Admin" && (
+                              <button
+                                type="button"
+                                onClick={() => {}}
+                                className="rounded-xl border border-red-500/20 bg-red-500/10 p-1.5 text-red-600 transition hover:bg-red-500/20"
+                                data-testid={`button-delete-file-wide-${f.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
+                          </div>
                         </div>
                       ))}
                       {filteredFiles.length === 0 && uploadedFiles.length === 0 && (
