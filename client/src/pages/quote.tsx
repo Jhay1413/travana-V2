@@ -506,14 +506,6 @@ function QuoteNotesSection({ quoteId }: { quoteId: string }) {
         </span>
       </div>
 
-      <div className="mt-3">
-        <NoteEditor
-          placeholder="Add a note…"
-          onSubmit={handleCreate}
-          isLoading={createMutation.isPending}
-        />
-      </div>
-
       <div className="mt-3 space-y-2" data-testid="list-notes">
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
@@ -521,7 +513,7 @@ function QuoteNotesSection({ quoteId }: { quoteId: string }) {
           </div>
         ) : topLevelNotes.length === 0 ? (
           <div className="py-6 text-center text-xs text-black/40" data-testid="text-notes-empty">
-            No notes yet. Add one above.
+            No notes yet. Add one below.
           </div>
         ) : (
           <AnimatePresence>
@@ -536,6 +528,14 @@ function QuoteNotesSection({ quoteId }: { quoteId: string }) {
             ))}
           </AnimatePresence>
         )}
+      </div>
+
+      <div className="mt-3">
+        <NoteEditor
+          placeholder="Add a note…"
+          onSubmit={handleCreate}
+          isLoading={createMutation.isPending}
+        />
       </div>
     </div>
   );
