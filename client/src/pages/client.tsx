@@ -22,21 +22,12 @@ import {
   Trash2,
   UserRound,
   X,
-  MoreHorizontal,
-  Copy,
-  BookOpen,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -1175,110 +1166,69 @@ export default function ClientPage() {
 
                             <div className="grid gap-2" data-testid={`list-quotes-${group.id}`}>
                               {group.rows.map((q) => (
-                                <div
+                                <button
                                   key={q.id}
-                                  className="group relative w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03]"
+                                  type="button"
+                                  className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                                   data-testid={`card-quote-intro-${q.id}`}
+                                  onClick={() => window.open(`/clients/${clientId}/quotes/${q.id}`, "_self")}
                                 >
-                                  <button
-                                    type="button"
-                                    className="w-full text-left active:scale-[0.99]"
-                                    onClick={() => window.open(`/clients/${clientId}/quotes/${q.id}`, "_self")}
-                                  >
-                                    <div className="flex items-start gap-3">
-                                      <div
-                                        className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
-                                        data-testid={`img-quote-${q.id}`}
-                                        aria-hidden
-                                      >
-                                        {q.imageUrl ? (
-                                          <img
-                                            src={q.imageUrl}
-                                            alt=""
-                                            className="absolute inset-0 h-full w-full object-cover"
-                                            data-testid={`img-quote-photo-${q.id}`}
-                                          />
-                                        ) : (
-                                          <div className="flex h-full w-full items-center justify-center text-black/20">
-                                            <ImagePlus className="h-6 w-6" />
-                                          </div>
-                                        )}
-                                      </div>
+                                  <div className="flex items-start gap-3">
+                                    <div
+                                      className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
+                                      data-testid={`img-quote-${q.id}`}
+                                      aria-hidden
+                                    >
+                                      {q.imageUrl ? (
+                                        <img
+                                          src={q.imageUrl}
+                                          alt=""
+                                          className="absolute inset-0 h-full w-full object-cover"
+                                          data-testid={`img-quote-photo-${q.id}`}
+                                        />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-black/20">
+                                          <ImagePlus className="h-6 w-6" />
+                                        </div>
+                                      )}
+                                    </div>
 
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div className="min-w-0">
-                                            <div className="truncate text-sm font-semibold" data-testid={`text-quote-title-${q.id}`}>
-                                              {q.title}
-                                            </div>
-                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                              <span data-testid={`text-quote-destination-${q.id}`}>{q.destination}</span>
-                                              <span className="text-black/25">•</span>
-                                              <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
-                                              <span className="text-black/25">•</span>
-                                              <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt}</span>
-                                            </div>
-                                            <div className="mt-1 text-xs text-black/60" data-testid={`text-quote-operator-${q.id}`}>
-                                              Tour operator: <span className="font-semibold text-black/80">{q.tourOperator}</span>
-                                            </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="truncate text-sm font-semibold" data-testid={`text-quote-title-${q.id}`}>
+                                            {q.title}
                                           </div>
+                                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
+                                            <span data-testid={`text-quote-destination-${q.id}`}>{q.destination}</span>
+                                            <span className="text-black/25">•</span>
+                                            <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
+                                            <span className="text-black/25">•</span>
+                                            <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt}</span>
+                                          </div>
+                                          <div className="mt-1 text-xs text-black/60" data-testid={`text-quote-operator-${q.id}`}>
+                                            Tour operator: <span className="font-semibold text-black/80">{q.tourOperator}</span>
+                                          </div>
+                                        </div>
 
-                                          <div className="shrink-0 text-right">
-                                            <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
-                                              {currency.format(q.totalCost)}
+                                        <div className="shrink-0 text-right">
+                                          <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
+                                            {currency.format(q.totalCost)}
+                                          </div>
+                                          {q.pricePerPerson > 0 && (
+                                            <div className="text-[11px] text-black/55" data-testid={`text-quote-pp-${q.id}`}>
+                                              {currency.format(q.pricePerPerson)} pp
                                             </div>
-                                            {q.pricePerPerson > 0 && (
-                                              <div className="text-[11px] text-black/55" data-testid={`text-quote-pp-${q.id}`}>
-                                                {currency.format(q.pricePerPerson)} pp
-                                              </div>
-                                            )}
+                                          )}
+                                          <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
+                                            View
+                                            <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                                           </div>
                                         </div>
                                       </div>
                                     </div>
-                                  </button>
-
-                                  <div className="absolute right-3 top-3">
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <button
-                                          type="button"
-                                          className="rounded-xl border border-black/10 bg-white/80 p-1.5 text-black/50 transition hover:bg-black/[0.06] hover:text-black/80"
-                                          onClick={(e) => e.stopPropagation()}
-                                          data-testid={`button-quote-menu-${q.id}`}
-                                        >
-                                          <MoreHorizontal className="h-4 w-4" />
-                                        </button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="rounded-xl border-black/10 bg-white/95 backdrop-blur-xl">
-                                        <DropdownMenuItem
-                                          className="gap-2 rounded-lg px-3 py-2 text-xs font-medium cursor-pointer"
-                                          onClick={() => window.open(`/clients/${clientId}/quotes/${q.id}`, "_self")}
-                                          data-testid={`menu-edit-quote-${q.id}`}
-                                        >
-                                          <Pencil className="h-3.5 w-3.5" />
-                                          Edit
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          className="gap-2 rounded-lg px-3 py-2 text-xs font-medium cursor-pointer"
-                                          onClick={() => toast({ title: "Convert to Booking coming soon" })}
-                                          data-testid={`menu-convert-quote-${q.id}`}
-                                        >
-                                          <BookOpen className="h-3.5 w-3.5" />
-                                          Convert to Booking
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          className="gap-2 rounded-lg px-3 py-2 text-xs font-medium cursor-pointer"
-                                          onClick={() => toast({ title: "Duplicate Quote coming soon" })}
-                                          data-testid={`menu-duplicate-quote-${q.id}`}
-                                        >
-                                          <Copy className="h-3.5 w-3.5" />
-                                          Duplicate Quote
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
                                   </div>
-                                </div>
+                                </button>
                               ))}
 
                               {group.rows.length === 0 ? (
