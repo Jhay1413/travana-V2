@@ -1127,16 +1127,22 @@ export default function ClientPage() {
                       enquiries.map((enq: Enquiry, idx: number) => (
                         <motion.div
                           key={enq.id}
-                          className="rounded-3xl border border-black/10 bg-white/70 p-4"
+                          className="group cursor-pointer rounded-3xl border border-black/10 bg-white/70 p-4 transition hover:bg-black/[0.02] active:scale-[0.99]"
                           data-testid={`card-enquiry-${idx}`}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.18) }}
+                          onClick={() => window.open(`/clients/${clientId}/enquiries/${enq.id}`, "_self")}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="text-sm font-semibold" data-testid={`text-enquiry-title-${idx}`}>
-                                {enq.enquiryTitle}
+                              <div className="flex items-center gap-2">
+                                <div className="text-sm font-semibold" data-testid={`text-enquiry-title-${idx}`}>
+                                  {enq.enquiryTitle}
+                                </div>
+                                {enq.status === "Converted" && (
+                                  <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Converted</span>
+                                )}
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid={`text-enquiry-meta-${idx}`}>
                                 <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70">
@@ -1154,7 +1160,8 @@ export default function ClientPage() {
                                 type="button"
                                 className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-black/[0.05] hover:text-black/70"
                                 data-testid={`button-edit-enquiry-${idx}`}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setEditingEnquiry(enq);
                                   setShowEnquiryWizard(true);
                                 }}
@@ -1166,11 +1173,15 @@ export default function ClientPage() {
                                 type="button"
                                 className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-red-50 hover:text-red-500"
                                 data-testid={`button-delete-enquiry-${idx}`}
-                                onClick={() => handleDeleteEnquiry(enq.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteEnquiry(enq.id);
+                                }}
                                 title="Delete enquiry"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
+                              <ChevronRight className="ml-1 h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
                             </div>
                           </div>
                         </motion.div>

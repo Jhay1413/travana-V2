@@ -185,6 +185,21 @@ export const insertEnquirySchema = createInsertSchema(enquiries).omit({ id: true
 export type InsertEnquiry = z.infer<typeof insertEnquirySchema>;
 export type Enquiry = typeof enquiries.$inferSelect;
 
+// Enquiry Notes table
+export const enquiryNotes = pgTable("enquiry_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  enquiryId: varchar("enquiry_id").notNull(),
+  parentId: varchar("parent_id"),
+  content: text("content").notNull(),
+  authorName: text("author_name").notNull().default("Agent"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertEnquiryNoteSchema = createInsertSchema(enquiryNotes).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEnquiryNote = z.infer<typeof insertEnquiryNoteSchema>;
+export type EnquiryNote = typeof enquiryNotes.$inferSelect;
+
 // Notes table
 export const notes = pgTable("notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

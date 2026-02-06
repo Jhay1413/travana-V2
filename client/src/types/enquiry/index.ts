@@ -42,6 +42,7 @@ export interface CreateEnquiryData {
   boardBasis?: string;
   budget?: string;
   budgetType?: string;
+  status?: string;
 }
 
 export interface EnquiryFilters {

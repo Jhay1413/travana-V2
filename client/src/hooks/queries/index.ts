@@ -12,3 +12,4 @@ export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries"
 export { useAirports, airportKeys } from "./use-airport-queries";
 export { useNotes, noteKeys } from "./use-note-queries";
 export { useEnquiries, useEnquiry, enquiryKeys } from "./use-enquiry-queries";
+export { useEnquiryNotes, enquiryNoteKeys } from "./use-enquiry-note-queries";
