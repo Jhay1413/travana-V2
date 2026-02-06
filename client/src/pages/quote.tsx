@@ -418,7 +418,7 @@ export default function QuotePage() {
 
                       <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-price-pp">
                         <div className="text-xs font-semibold text-black/60" data-testid="text-itinerary-price-pp-label">Price per person</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-price-pp-value">{currency.format(1785)}pp</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-price-pp-value">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</div>
                       </div>
 
                       <div className="flex min-h-8 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-1" data-testid="row-itinerary-room">
@@ -474,33 +474,33 @@ export default function QuotePage() {
                 </div>
 
                 <div className="mt-3 grid gap-2" data-testid="list-quote-summary-lines">
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-total-price">
+                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">Total Price</div>
+                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-total-price-value">
+                      {currency.format(quote.commissions.price)}
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-commission">
-                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Commission</div>
+                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Commission ({quote.commissions.commissionPercent}%)</div>
                     <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-commission-value">
-                      {currency.format(140.7)}
+                      {currency.format(quote.commissions.commissionValue)}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-discount">
-                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-discount-label">Discount</div>
-                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-discount-value">
-                      {currency.format(0)}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-service-charge">
-                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-service-charge-label">Service Charge</div>
-                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-service-charge-value">
-                      {currency.format(0)}
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-agent-split">
+                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-agent-split-label">Agent Split ({quote.commissions.agentSplitPercent}%)</div>
+                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-agent-split-value">
+                      {currency.format(quote.commissions.agentSplitValue)}
                     </div>
                   </div>
 
                   <div className="my-1 h-px w-full bg-black/10" data-testid="separator-quote-summary" />
 
                   <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-quote-summary-total-commission">
-                    <div className="text-xs font-semibold text-black/70" data-testid="text-quote-summary-total-commission-label">Total Commission</div>
+                    <div className="text-xs font-semibold text-black/70" data-testid="text-quote-summary-total-commission-label">Net to Agency</div>
                     <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-commission-value">
-                      {currency.format(140.7)}
+                      {currency.format(quote.commissions.netToAgency)}
                     </div>
                   </div>
                 </div>
