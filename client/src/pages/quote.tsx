@@ -193,7 +193,7 @@ export default function QuotePage() {
 
   if (isLoading) {
     return (
-      <CommandCenterShell role={role} title="Quote" subtitle="Loading..." theme="light" onRoleChange={() => {}}>
+      <CommandCenterShell role={role} title="Quote" theme="light" onRoleChange={() => {}}>
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-quote">
           <Spinner className="h-8 w-8" />
         </div>
@@ -203,7 +203,7 @@ export default function QuotePage() {
 
   if (error || !quote) {
     return (
-      <CommandCenterShell role={role} title="Quote" subtitle="Error" theme="light" onRoleChange={() => {}}>
+      <CommandCenterShell role={role} title="Quote" theme="light" onRoleChange={() => {}}>
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-quote">
           <div className="text-center">
             <p className="text-sm text-black/70">Failed to load quote</p>
@@ -222,7 +222,7 @@ export default function QuotePage() {
   }
 
   return (
-    <CommandCenterShell role={role} title="Quote" subtitle={`Client ${clientId} · Quote ${quote.id}`} theme="light" onRoleChange={() => {}}>
+    <CommandCenterShell role={role} title="Quote" theme="light" onRoleChange={() => {}}>
       <div className="px-5 pb-8 pt-5" data-testid="page-quote">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
           <div className="flex items-start gap-3">
