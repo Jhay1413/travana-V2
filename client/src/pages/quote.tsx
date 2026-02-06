@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, Plane, Star, Tag, X } from "lucide-react";
+import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X } from "lucide-react";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { Badge } from "@/components/ui/badge";
@@ -171,6 +171,18 @@ export default function QuotePage() {
   const { data: quoteData, isLoading, error } = useQuoteFull(quoteId);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
+  const ellipsisRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ellipsisRef.current && !ellipsisRef.current.contains(e.target as Node)) {
+        setShowEllipsisMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const images = useMemo(() => quoteData?.images || [], [quoteData]);
   const primaryImage = useMemo(() => images.find((img) => img.isPrimary) || images[0], [images]);
@@ -339,32 +351,68 @@ export default function QuotePage() {
                               return `${nights} nights`;
                             })()}</span>
                             <span className="text-black/25">•</span>
-                            <span>{currency.format(1785)}pp</span>
+                            <span>{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                           </div>
                         </div>
-                        <span
-                          className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
-                          data-testid="pill-itinerary-owner"
-                        >
+                        <div className="flex items-center gap-2">
                           <span
-                            className="relative grid h-6 w-6 shrink-0 overflow-hidden rounded-full border border-black/10 bg-white/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
-                            data-testid="avatar-itinerary-owner"
-                            aria-hidden
+                            className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
+                            data-testid="pill-itinerary-owner"
                           >
-                            <img
-                              src="/attached_assets/Avatar3_1769960371403.png"
-                              alt=""
-                              className="h-full w-full object-cover"
-                              data-testid="img-itinerary-owner-avatar"
-                            />
-                            <span className="pointer-events-none absolute inset-0 ring-1 ring-white/40" aria-hidden />
+                            <span
+                              className="relative grid h-6 w-6 shrink-0 overflow-hidden rounded-full border border-black/10 bg-white/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
+                              data-testid="avatar-itinerary-owner"
+                              aria-hidden
+                            >
+                              <img
+                                src="/attached_assets/Avatar3_1769960371403.png"
+                                alt=""
+                                className="h-full w-full object-cover"
+                                data-testid="img-itinerary-owner-avatar"
+                              />
+                              <span className="pointer-events-none absolute inset-0 ring-1 ring-white/40" aria-hidden />
+                            </span>
+
+                            <span className="flex flex-col items-end leading-tight" data-testid="col-itinerary-owner">
+                              <span className="whitespace-nowrap" data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
+                              <span className="whitespace-nowrap text-[10px] font-semibold text-black/50" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
+                            </span>
                           </span>
 
-                          <span className="flex flex-col items-end leading-tight" data-testid="col-itinerary-owner">
-                            <span className="whitespace-nowrap" data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
-                            <span className="whitespace-nowrap text-[10px] font-semibold text-black/50" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
-                          </span>
-                        </span>
+                          <div className="relative" ref={ellipsisRef}>
+                            <button
+                              type="button"
+                              onClick={() => setShowEllipsisMenu((v) => !v)}
+                              className="grid h-8 w-8 place-items-center rounded-full border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
+                              data-testid="button-quote-ellipsis"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {showEllipsisMenu && (
+                              <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-quote-ellipsis">
+                                {[
+                                  { label: "Edit Quote", icon: Pencil, id: "edit" },
+                                  { label: "Convert Quote", icon: RefreshCw, id: "convert" },
+                                  { label: "Duplicate Quote", icon: Copy, id: "duplicate" },
+                                ].map((item) => (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                    data-testid={`button-quote-${item.id}`}
+                                    onClick={() => {
+                                      setShowEllipsisMenu(false);
+                                      toast({ title: `${item.label} — coming soon` });
+                                    }}
+                                  >
+                                    <item.icon className="h-3.5 w-3.5" />
+                                    {item.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
                         <span className="text-sm text-black/55" data-testid="text-itinerary-location">{quote.destination}</span>
