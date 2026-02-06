@@ -269,7 +269,7 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
   timelineItems.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 
   return (
-    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-6" data-testid="card-quote-summary-timeline">
+    <div data-testid="card-quote-summary-timeline">
       <div className="mb-4">
         <div className="text-sm font-semibold" data-testid="text-timeline-title">Travel Summary</div>
         <div className="mt-1 text-xs text-black/55" data-testid="text-timeline-subtitle">
@@ -288,7 +288,7 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
           No travel details added yet. Edit the quote to add flight and accommodation details.
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -535,17 +535,6 @@ export default function QuotePage() {
         </div>
 
         <div className="mt-4" data-testid="layout-quote-body">
-          <Tabs defaultValue="summary" className="w-full">
-            <TabsList className="mb-4 rounded-2xl border border-black/10 bg-white/70 p-1">
-              <TabsTrigger value="summary" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-summary">Quote Summary</TabsTrigger>
-              <TabsTrigger value="costings" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-costings">Quote Costings</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="summary" className="mt-0">
-              <QuoteSummaryTimeline quote={quote} />
-            </TabsContent>
-
-            <TabsContent value="costings" className="mt-0">
           <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
@@ -771,49 +760,62 @@ export default function QuotePage() {
 
             <div className="grid gap-3" data-testid="col-quote-right">
               <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-summary-right">
-                <div className="flex items-center justify-between" data-testid="row-quote-summary-header">
-                  <div>
-                    <div className="text-sm font-semibold" data-testid="text-quote-summary-title">
-                      Quote Summary
-                    </div>
-                    <div className="mt-1 text-xs text-black/55" data-testid="text-quote-summary-subtitle">
-                      Commission and charges.
-                    </div>
-                  </div>
-                  <FileText className="h-4 w-4 text-black/35" aria-hidden />
-                </div>
+                <Tabs defaultValue="summary" className="w-full">
+                  <TabsList className="mb-3 w-full rounded-2xl border border-black/10 bg-white/70 p-1">
+                    <TabsTrigger value="summary" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-summary">Quote Summary</TabsTrigger>
+                    <TabsTrigger value="costings" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-costings">Quote Costings</TabsTrigger>
+                  </TabsList>
 
-                <div className="mt-3 grid gap-2" data-testid="list-quote-summary-lines">
-                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-total-price">
-                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">Total Price</div>
-                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-total-price-value">
-                      {currency.format(quote.commissions.price)}
-                    </div>
-                  </div>
+                  <TabsContent value="summary" className="mt-0">
+                    <QuoteSummaryTimeline quote={quote} />
+                  </TabsContent>
 
-                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-commission">
-                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Commission ({quote.commissions.commissionPercent}%)</div>
-                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-commission-value">
-                      {currency.format(quote.commissions.commissionValue)}
+                  <TabsContent value="costings" className="mt-0">
+                    <div className="flex items-center justify-between" data-testid="row-quote-summary-header">
+                      <div>
+                        <div className="text-sm font-semibold" data-testid="text-quote-summary-title">
+                          Financial Summary
+                        </div>
+                        <div className="mt-1 text-xs text-black/55" data-testid="text-quote-summary-subtitle">
+                          Commission and charges.
+                        </div>
+                      </div>
+                      <FileText className="h-4 w-4 text-black/35" aria-hidden />
                     </div>
-                  </div>
 
-                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-agent-split">
-                    <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-agent-split-label">Agent Split ({quote.commissions.agentSplitPercent}%)</div>
-                    <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-agent-split-value">
-                      {currency.format(quote.commissions.agentSplitValue)}
+                    <div className="mt-3 grid gap-2" data-testid="list-quote-summary-lines">
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-total-price">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">Total Price</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-total-price-value">
+                          {currency.format(quote.commissions.price)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-commission">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Commission ({quote.commissions.commissionPercent}%)</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-commission-value">
+                          {currency.format(quote.commissions.commissionValue)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-agent-split">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-agent-split-label">Agent Split ({quote.commissions.agentSplitPercent}%)</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-agent-split-value">
+                          {currency.format(quote.commissions.agentSplitValue)}
+                        </div>
+                      </div>
+
+                      <div className="my-1 h-px w-full bg-black/10" data-testid="separator-quote-summary" />
+
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-quote-summary-total-commission">
+                        <div className="text-xs font-semibold text-black/70" data-testid="text-quote-summary-total-commission-label">Net to Agency</div>
+                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-commission-value">
+                          {currency.format(quote.commissions.netToAgency)}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="my-1 h-px w-full bg-black/10" data-testid="separator-quote-summary" />
-
-                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-quote-summary-total-commission">
-                    <div className="text-xs font-semibold text-black/70" data-testid="text-quote-summary-total-commission-label">Net to Agency</div>
-                    <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-commission-value">
-                      {currency.format(quote.commissions.netToAgency)}
-                    </div>
-                  </div>
-                </div>
+                  </TabsContent>
+                </Tabs>
               </Card>
 
               <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-tags">
@@ -909,8 +911,6 @@ export default function QuotePage() {
               </Card>
             </div>
           </div>
-            </TabsContent>
-          </Tabs>
         </div>
       </div>
       {quote && (
