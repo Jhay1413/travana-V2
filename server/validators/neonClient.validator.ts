@@ -11,3 +11,13 @@ export const updateNeonClientValidator = z.object({
   }),
   body: insertClientTableSchema.partial(),
 });
+
+const importClientRowSchema = insertClientTableSchema.extend({
+  id: z.string().uuid(),
+});
+
+export const importNeonClientsValidator = z.object({
+  body: z.object({
+    clients: z.array(importClientRowSchema).min(1, "At least one client is required"),
+  }),
+});

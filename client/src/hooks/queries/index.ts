@@ -1,5 +1,6 @@
 export { useCurrentUser, authKeys } from "./use-auth-queries";
 export { useClients, useClient, clientKeys } from "./use-client-queries";
+export { useNeonClients, useNeonClient, neonClientKeys } from "./use-neon-client-queries";
 export { useQuotes, useQuote, useQuoteFull, quoteKeys } from "./use-quote-queries";
 export { useUsers, userKeys } from "./use-user-queries";
 export { useTickets, useTicket, useTicketsByClient, useTicketsByUser, ticketKeys } from "./use-ticket-queries";

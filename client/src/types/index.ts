@@ -2,6 +2,7 @@ export * from "./api";
 export * from "./auth";
 export * from "./user";
 export * from "./client";
+export * from "./neon-client";
 export * from "./quote";
 export * from "./ticket";
 export * from "./attachment";

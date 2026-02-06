@@ -1,5 +1,6 @@
 export { authApi } from "./endpoints/auth.api";
 export { clientApi } from "./endpoints/client.api";
+export { neonClientApi } from "./endpoints/neon-client.api";
 export { quoteApi } from "./endpoints/quote.api";
 export { dashboardApi } from "./endpoints/dashboard.api";
 export { userApi } from "./endpoints/user.api";

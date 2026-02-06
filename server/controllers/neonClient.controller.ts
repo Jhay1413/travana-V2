@@ -31,4 +31,10 @@ export const neonClientController = {
     await neonClientService.deleteNeonClient(id);
     res.status(204).send();
   }),
+
+  importNeonClients: asyncHandler(async (req: Request, res: Response) => {
+    const { clients } = req.body;
+    const result = await neonClientService.bulkImportClients(clients);
+    return successResponse(res, result, `Import complete: ${result.imported} clients imported`);
+  }),
 };

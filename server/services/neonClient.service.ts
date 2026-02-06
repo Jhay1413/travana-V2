@@ -1,4 +1,4 @@
-import { neonClientRepository } from "../repositories/neonClient.repository";
+import { neonClientRepository, type NeonClientWithId } from "../repositories/neonClient.repository";
 import { AppError } from "../utils/error-handler";
 import type { NeonClient, InsertClientTable } from "../types/neonClient";
 
@@ -30,5 +30,12 @@ export const neonClientService = {
 
   async deleteNeonClient(id: string): Promise<void> {
     await neonClientRepository.remove(id);
+  },
+
+  async bulkImportClients(clients: NeonClientWithId[]) {
+    if (!clients.length) {
+      throw new AppError("No clients to import", 400);
+    }
+    return await neonClientRepository.bulkUpsert(clients);
   },
 };

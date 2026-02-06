@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import CsvImportDialog from "@/components/csv-import-dialog";
 import {
   ChevronRight,
   Filter,
@@ -15,6 +16,7 @@ import {
   Plus,
   Search,
   Star,
+  Upload,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -88,6 +90,7 @@ export default function ClientsPage() {
   const [sort, setSort] = useState<"value" | "lastTouch" | "name">("value");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const { data: apiClients, isLoading } = useClients();
 
@@ -218,6 +221,16 @@ export default function ClientsPage() {
               <option value="lastTouch">Recently Active</option>
               <option value="name">A-Z</option>
             </select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 rounded-full"
+              onClick={() => setShowImport(true)}
+              data-testid="button-import-clients"
+            >
+              <Upload className="h-4 w-4" />
+              Import CSV
+            </Button>
             <Button
               size="sm"
               className="gap-2 rounded-full bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
@@ -476,6 +489,8 @@ export default function ClientsPage() {
           </div>
         )}
       </div>
+
+      <CsvImportDialog open={showImport} onClose={() => setShowImport(false)} />
     </CommandCenterShell>
   );
 }
