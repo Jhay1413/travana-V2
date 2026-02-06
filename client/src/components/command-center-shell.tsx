@@ -34,7 +34,7 @@ import {
   Users,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
-import { useCurrentUser, useClients } from "@/hooks/queries";
+import { useCurrentUser, useNeonClients } from "@/hooks/queries";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -127,19 +127,30 @@ export function CommandCenterShell({
 
   const { data: currentUser } = useCurrentUser();
 
-  const { data: clients = [] } = useClients();
+  const { data: neonClients = [] } = useNeonClients();
 
   const searchResults = useMemo(() => {
     if (!query?.trim()) return [];
     const q = query.toLowerCase();
-    return clients
-      .filter((c: any) =>
-        c.name?.toLowerCase().includes(q) ||
-        c.email?.toLowerCase().includes(q) ||
-        c.location?.toLowerCase().includes(q)
-      )
-      .slice(0, 5);
-  }, [query, clients]);
+    return neonClients
+      .filter((c: any) => {
+        const fullName = [c.firstName, c.surename].filter(Boolean).join(" ").toLowerCase();
+        return fullName.includes(q) ||
+          c.email?.toLowerCase().includes(q) ||
+          c.phoneNumber?.toLowerCase().includes(q) ||
+          c.city?.toLowerCase().includes(q) ||
+          c.country?.toLowerCase().includes(q);
+      })
+      .slice(0, 8)
+      .map((c: any) => ({
+        id: c.id,
+        name: [c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown",
+        phone: c.phoneNumber || "",
+        email: c.email || "",
+        location: [c.city, c.country].filter(Boolean).join(", "),
+        clientType: "Client",
+      }));
+  }, [query, neonClients]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

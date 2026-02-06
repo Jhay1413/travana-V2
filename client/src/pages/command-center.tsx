@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useDashboardStats, useClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
+import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport } from "@/hooks/mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import type { TourOperator } from "@/types/tour-operator";
@@ -899,7 +899,7 @@ function TopBar({
   actualRole: Role;
   rolePreview: Role | null;
   onRoleChange: (role: Role | null) => void;
-  clients?: Array<{ id: string; name: string; email: string; tier: string; stage: string; nextTrip?: string }>;
+  clients?: Array<{ id: string; name: string; email: string; tier: string; stage: string; nextTrip?: string; phone?: string; clientType?: string }>;
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -1011,9 +1011,9 @@ function TopBar({
       .filter(c => 
         (c.name && c.name.toLowerCase().includes(q)) || 
         (c.email && c.email.toLowerCase().includes(q)) ||
-        (c.nextTrip && c.nextTrip.toLowerCase().includes(q))
+        (c.phone && c.phone.toLowerCase().includes(q))
       )
-      .slice(0, 5);
+      .slice(0, 8);
   }, [query, clients]);
   
   const title = useMemo(() => {
@@ -1465,7 +1465,7 @@ export default function CommandCenterPage() {
   const role = rolePreview || actualRole;
 
   const { data: dashboardStats } = useDashboardStats();
-  const { data: apiClients } = useClients();
+  const { data: apiNeonClients } = useNeonClients();
   const { data: apiUsers } = useUsers();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
@@ -1477,23 +1477,22 @@ export default function CommandCenterPage() {
   const createAirportMutation = useCreateAirport();
   const deleteAirportMutation = useDeleteAirport();
 
-  // Transform API clients to display format
   const allClients = useMemo(() => {
-    if (!apiClients) return seedClients;
-    return apiClients.map((c) => ({
+    if (!apiNeonClients || apiNeonClients.length === 0) return [] as Array<{ id: string; name: string; tier: "Platinum" | "Gold" | "Standard"; stage: Stage; location: string; nextTrip: string; value: number; lastTouch: string; phone: string; email: string; clientType: string }>;
+    return apiNeonClients.map((c) => ({
       id: c.id,
-      name: c.name,
-      tier: c.tier as "Platinum" | "Gold" | "Standard",
-      stage: c.stage as Stage,
-      location: c.location || "",
-      nextTrip: c.nextTrip || "",
-      value: parseFloat(c.value),
-      lastTouch: c.lastTouch || "",
-      phone: c.phone || "",
+      name: [c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown",
+      tier: "Standard" as "Platinum" | "Gold" | "Standard",
+      stage: "Enquiry" as Stage,
+      location: [c.city, c.country].filter(Boolean).join(", "),
+      nextTrip: "",
+      value: 0,
+      lastTouch: "",
+      phone: c.phoneNumber || "",
       email: c.email || "",
-      clientType: c.clientType || "New Client",
+      clientType: "New Client",
     }));
-  }, [apiClients]);
+  }, [apiNeonClients]);
 
   const clients = useMemo(() => {
     const q = query.trim().toLowerCase();

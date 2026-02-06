@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useClients } from "@/hooks/queries";
+import { useNeonClients } from "@/hooks/queries";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 type ClientTier = "Platinum" | "Gold" | "Standard";
@@ -92,28 +92,28 @@ export default function ClientsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showImport, setShowImport] = useState(false);
 
-  const { data: apiClients, isLoading } = useClients();
+  const { data: apiNeonClients, isLoading } = useNeonClients();
 
   const clients = useMemo((): ClientDisplay[] => {
-    if (!apiClients) return [];
-    return apiClients.map((c) => ({
+    if (!apiNeonClients) return [];
+    return apiNeonClients.map((c) => ({
       id: c.id,
-      name: c.name || "Unknown",
-      tier: (c.tier as ClientTier) || "Standard",
-      stage: (c.stage as Stage) || "Enquiry",
-      location: c.location || "",
-      nextTrip: c.nextTrip || "",
-      value: Number(c.value) || 0,
-      lastTouch: c.lastTouch || "",
+      name: [c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown",
+      tier: "Standard" as ClientTier,
+      stage: "Enquiry" as Stage,
+      location: [c.city, c.country].filter(Boolean).join(", "),
+      nextTrip: "",
+      value: 0,
+      lastTouch: "",
       email: c.email || "",
-      phone: c.phone || "",
-      tags: c.tags || [],
+      phone: c.phoneNumber || "",
+      tags: [],
     }));
-  }, [apiClients]);
+  }, [apiNeonClients]);
 
   const filtered = useMemo(() => {
     const base = clients.filter((c) => {
-      const matchesQuery = q === "" || c.name.toLowerCase().includes(q.toLowerCase()) || c.email.toLowerCase().includes(q.toLowerCase());
+      const matchesQuery = q === "" || c.name.toLowerCase().includes(q.toLowerCase()) || c.email.toLowerCase().includes(q.toLowerCase()) || c.phone.toLowerCase().includes(q.toLowerCase());
       const matchesStage = stage === "all" || c.stage === stage;
       const matchesTier = tier === "all" || c.tier === tier;
       return matchesQuery && matchesStage && matchesTier;
