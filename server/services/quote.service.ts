@@ -12,27 +12,29 @@ import type { Quote, InsertQuote, QuoteFullDetails } from "../types/quote";
 export const quoteService = {
   async listQuotes() {
     const quotes = await quoteRepository.findAll();
-    return await this._attachImages(quotes);
+    return await this._attachImagesAndCommissions(quotes);
   },
 
   async listQuotesByClient(clientId: string) {
     const quotes = await quoteRepository.findByClientId(clientId);
-    return await this._attachImages(quotes);
+    return await this._attachImagesAndCommissions(quotes);
   },
 
   async listQuotesByStatus(status: string) {
     const quotes = await quoteRepository.findByStatus(status);
-    return await this._attachImages(quotes);
+    return await this._attachImagesAndCommissions(quotes);
   },
 
-  async _attachImages(quotes: Quote[]) {
+  async _attachImagesAndCommissions(quotes: Quote[]) {
     if (quotes.length === 0) return quotes;
-    const allImages = await Promise.all(
-      quotes.map((q) => quoteImageRepository.findByQuoteId(q.id))
-    );
+    const [allImages, allCommissions] = await Promise.all([
+      Promise.all(quotes.map((q) => quoteImageRepository.findByQuoteId(q.id))),
+      Promise.all(quotes.map((q) => commissionRepository.findByQuoteId(q.id))),
+    ]);
     return quotes.map((q, i) => ({
       ...q,
       images: allImages[i] || [],
+      commission: allCommissions[i] || null,
     }));
   },
 

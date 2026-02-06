@@ -1101,48 +1101,51 @@ export default function ClientPage() {
                             id: "in-play",
                             title: "In Play",
                             rows: quotes
-                              .filter((q) => q.status === "In Play")
-                              .map((q) => ({
+                              .filter((q: any) => q.status === "In Play")
+                              .map((q: any) => ({
                                 id: q.id,
                                 title: q.quoteTitle || `${q.destination} Trip`,
                                 destination: q.destination,
                                 travelDate: q.travelDate,
                                 createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
                                 tourOperator: q.packageType || "—",
-                                totalCost: 0,
-                                imageUrl: q.images?.find((img) => img.isPrimary)?.url || q.images?.[0]?.url || null,
+                                totalCost: parseFloat(q.commission?.price || "0"),
+                                pricePerPerson: q.passengersAdults > 0 ? parseFloat(q.commission?.price || "0") / (q.passengersAdults + q.passengersChildren) : 0,
+                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url || null,
                               })),
                           },
                           {
                             id: "won",
                             title: "Won",
                             rows: quotes
-                              .filter((q) => q.status === "Won")
-                              .map((q) => ({
+                              .filter((q: any) => q.status === "Won")
+                              .map((q: any) => ({
                                 id: q.id,
                                 title: q.quoteTitle || `${q.destination} Trip`,
                                 destination: q.destination,
                                 travelDate: q.travelDate,
                                 createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
                                 tourOperator: q.packageType || "—",
-                                totalCost: 0,
-                                imageUrl: q.images?.find((img) => img.isPrimary)?.url || q.images?.[0]?.url || null,
+                                totalCost: parseFloat(q.commission?.price || "0"),
+                                pricePerPerson: q.passengersAdults > 0 ? parseFloat(q.commission?.price || "0") / (q.passengersAdults + q.passengersChildren) : 0,
+                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url || null,
                               })),
                           },
                           {
                             id: "lost",
                             title: "Lost",
                             rows: quotes
-                              .filter((q) => q.status === "Lost")
-                              .map((q) => ({
+                              .filter((q: any) => q.status === "Lost")
+                              .map((q: any) => ({
                                 id: q.id,
                                 title: q.quoteTitle || `${q.destination} Trip`,
                                 destination: q.destination,
                                 travelDate: q.travelDate,
                                 createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
                                 tourOperator: q.packageType || "—",
-                                totalCost: 0,
-                                imageUrl: q.images?.find((img) => img.isPrimary)?.url || q.images?.[0]?.url || null,
+                                totalCost: parseFloat(q.commission?.price || "0"),
+                                pricePerPerson: q.passengersAdults > 0 ? parseFloat(q.commission?.price || "0") / (q.passengersAdults + q.passengersChildren) : 0,
+                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url || null,
                               })),
                           },
                         ].map((group) => (
@@ -1212,6 +1215,11 @@ export default function ClientPage() {
                                           <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
                                             {currency.format(q.totalCost)}
                                           </div>
+                                          {q.pricePerPerson > 0 && (
+                                            <div className="text-[11px] text-black/55" data-testid={`text-quote-pp-${q.id}`}>
+                                              {currency.format(q.pricePerPerson)} pp
+                                            </div>
+                                          )}
                                           <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
                                             View
                                             <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
