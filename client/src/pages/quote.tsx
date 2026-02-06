@@ -177,7 +177,7 @@ function NoteEditor({
       attributes: {
         class: cn(
           "prose prose-sm max-w-none outline-none",
-          compact ? "min-h-[60px] p-2" : "min-h-[80px] p-3"
+          compact ? "min-h-[36px] p-1.5" : "min-h-[44px] p-2"
         ),
       },
     },
@@ -198,49 +198,49 @@ function NoteEditor({
   if (!editor) return null;
 
   return (
-    <div className={cn("rounded-2xl border border-black/10 bg-white/80 overflow-hidden", compact && "rounded-xl")}>
-      <div className="flex items-center gap-0.5 border-b border-black/5 bg-black/[0.02] px-2 py-1.5">
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn("h-7 w-7 p-0", editor.isActive("bold") && "bg-black/10")} data-testid="note-toolbar-bold">
-          <Bold className="h-3.5 w-3.5" />
+    <div className={cn("rounded-xl border border-black/10 bg-white/80 overflow-hidden", compact && "rounded-lg")}>
+      <div className="flex items-center gap-0.5 border-b border-black/5 bg-black/[0.02] px-1.5 py-1">
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn("h-6 w-6 p-0", editor.isActive("bold") && "bg-black/10")} data-testid="note-toolbar-bold">
+          <Bold className="h-3 w-3" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn("h-7 w-7 p-0", editor.isActive("italic") && "bg-black/10")} data-testid="note-toolbar-italic">
-          <Italic className="h-3.5 w-3.5" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn("h-6 w-6 p-0", editor.isActive("italic") && "bg-black/10")} data-testid="note-toolbar-italic">
+          <Italic className="h-3 w-3" />
         </Button>
-        <div className="mx-0.5 h-4 w-px bg-black/10" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn("h-7 w-7 p-0", editor.isActive("bulletList") && "bg-black/10")} data-testid="note-toolbar-ul">
-          <List className="h-3.5 w-3.5" />
+        <div className="mx-0.5 h-3 w-px bg-black/10" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn("h-6 w-6 p-0", editor.isActive("bulletList") && "bg-black/10")} data-testid="note-toolbar-ul">
+          <List className="h-3 w-3" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn("h-7 w-7 p-0", editor.isActive("orderedList") && "bg-black/10")} data-testid="note-toolbar-ol">
-          <ListOrdered className="h-3.5 w-3.5" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn("h-6 w-6 p-0", editor.isActive("orderedList") && "bg-black/10")} data-testid="note-toolbar-ol">
+          <ListOrdered className="h-3 w-3" />
         </Button>
-        <div className="mx-0.5 h-4 w-px bg-black/10" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => { const url = window.prompt("Enter URL:"); if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run(); }} className={cn("h-7 w-7 p-0", editor.isActive("link") && "bg-black/10")} data-testid="note-toolbar-link">
-          <LinkIcon className="h-3.5 w-3.5" />
+        <div className="mx-0.5 h-3 w-px bg-black/10" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => { const url = window.prompt("Enter URL:"); if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run(); }} className={cn("h-6 w-6 p-0", editor.isActive("link") && "bg-black/10")} data-testid="note-toolbar-link">
+          <LinkIcon className="h-3 w-3" />
         </Button>
-        <div className="mx-0.5 h-4 w-px bg-black/10" />
+        <div className="mx-0.5 h-3 w-px bg-black/10" />
         <div className="relative">
-          <Button type="button" variant="ghost" size="sm" onClick={() => setShowEmoji(!showEmoji)} className="h-7 w-7 p-0" data-testid="note-toolbar-emoji">
-            <SmilePlus className="h-3.5 w-3.5" />
+          <Button type="button" variant="ghost" size="sm" onClick={() => setShowEmoji(!showEmoji)} className="h-6 w-6 p-0" data-testid="note-toolbar-emoji">
+            <SmilePlus className="h-3 w-3" />
           </Button>
           {showEmoji && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />}
         </div>
         <div className="flex-1" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="h-7 w-7 p-0" data-testid="note-toolbar-undo">
-          <Undo className="h-3.5 w-3.5" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="h-6 w-6 p-0" data-testid="note-toolbar-undo">
+          <Undo className="h-3 w-3" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="h-7 w-7 p-0" data-testid="note-toolbar-redo">
-          <Redo className="h-3.5 w-3.5" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="h-6 w-6 p-0" data-testid="note-toolbar-redo">
+          <Redo className="h-3 w-3" />
         </Button>
       </div>
-      <EditorContent editor={editor} className="[&_.ProseMirror]:outline-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-black/35 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none" />
-      <div className="flex items-center justify-end gap-2 border-t border-black/5 bg-black/[0.01] px-2 py-1.5">
+      <EditorContent editor={editor} className="[&_.ProseMirror]:outline-none [&_.ProseMirror]:text-xs [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-black/35 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none" />
+      <div className="flex items-center justify-end gap-1.5 border-t border-black/5 bg-black/[0.01] px-1.5 py-1">
         {onCancel && (
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="h-7 rounded-lg px-2 text-xs" data-testid="note-btn-cancel">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="h-6 rounded-md px-2 text-[10px]" data-testid="note-btn-cancel">
             Cancel
           </Button>
         )}
-        <Button type="button" size="sm" onClick={handleSubmit} disabled={isLoading} className="h-7 rounded-lg bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90" data-testid="note-btn-submit">
-          {isLoading ? <Spinner className="h-3 w-3" /> : <Send className="mr-1 h-3 w-3" />}
+        <Button type="button" size="sm" onClick={handleSubmit} disabled={isLoading} className="h-6 rounded-md bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90" data-testid="note-btn-submit">
+          {isLoading ? <Spinner className="h-2.5 w-2.5" /> : <Send className="mr-1 h-2.5 w-2.5" />}
           {submitLabel || "Post"}
         </Button>
       </div>
@@ -317,35 +317,35 @@ function NoteCard({
       className="group"
       data-testid={`note-card-${note.id}`}
     >
-      <div className="rounded-2xl border border-black/10 bg-white/60 p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[10px] font-bold text-[#3b82f6]" data-testid={`note-avatar-${note.id}`}>
+      <div className="rounded-xl border border-black/10 bg-white/60 p-2">
+        <div className="flex items-start justify-between gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]" data-testid={`note-avatar-${note.id}`}>
               {(note.authorName || "A").charAt(0).toUpperCase()}
             </div>
             <div>
-              <span className="text-xs font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.authorName || "Agent"}</span>
-              <span className="ml-2 text-[10px] text-black/40" data-testid={`note-time-${note.id}`}>
+              <span className="text-[11px] font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.authorName || "Agent"}</span>
+              <span className="ml-1.5 text-[9px] text-black/40" data-testid={`note-time-${note.id}`}>
                 {formatRelativeTime(note.createdAt)}
                 {note.updatedAt && <span className="ml-1 italic">(edited)</span>}
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
-            <button type="button" onClick={() => setIsReplying(!isReplying)} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Reply" data-testid={`note-btn-reply-${note.id}`}>
-              <Reply className="h-3 w-3" />
+          <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+            <button type="button" onClick={() => setIsReplying(!isReplying)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Reply" data-testid={`note-btn-reply-${note.id}`}>
+              <Reply className="h-2.5 w-2.5" />
             </button>
-            <button type="button" onClick={() => setIsEditing(!isEditing)} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Edit" data-testid={`note-btn-edit-${note.id}`}>
-              <Pencil className="h-3 w-3" />
+            <button type="button" onClick={() => setIsEditing(!isEditing)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Edit" data-testid={`note-btn-edit-${note.id}`}>
+              <Pencil className="h-2.5 w-2.5" />
             </button>
-            <button type="button" onClick={handleDelete} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-black/40 transition hover:bg-rose-50 hover:text-rose-500" title="Delete" data-testid={`note-btn-delete-${note.id}`}>
-              <Trash2 className="h-3 w-3" />
+            <button type="button" onClick={handleDelete} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-rose-50 hover:text-rose-500" title="Delete" data-testid={`note-btn-delete-${note.id}`}>
+              <Trash2 className="h-2.5 w-2.5" />
             </button>
           </div>
         </div>
 
         {isEditing ? (
-          <div className="mt-2">
+          <div className="mt-1.5">
             <NoteEditor
               initialContent={note.content}
               onSubmit={handleEdit}
@@ -357,21 +357,21 @@ function NoteCard({
           </div>
         ) : (
           <div
-            className="mt-2 prose prose-sm max-w-none text-xs text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-4 [&_ol]:pl-4"
+            className="mt-1 prose prose-sm max-w-none text-[11px] leading-relaxed text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3"
             dangerouslySetInnerHTML={{ __html: note.content }}
             data-testid={`note-content-${note.id}`}
           />
         )}
 
         {replies.length > 0 && (
-          <div className="mt-2">
+          <div className="mt-1.5">
             <button
               type="button"
               onClick={() => setShowReplies(!showReplies)}
-              className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#3b82f6] transition hover:text-[#3b82f6]/80"
+              className="inline-flex items-center gap-1 text-[9px] font-semibold text-[#3b82f6] transition hover:text-[#3b82f6]/80"
               data-testid={`note-toggle-replies-${note.id}`}
             >
-              <MessageSquare className="h-3 w-3" />
+              <MessageSquare className="h-2.5 w-2.5" />
               {showReplies ? "Hide" : "Show"} {replies.length} {replies.length === 1 ? "reply" : "replies"}
             </button>
 
@@ -382,7 +382,7 @@ function NoteCard({
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="mt-2 space-y-2 overflow-hidden border-l-2 border-[#3b82f6]/20 pl-3"
+                  className="mt-1.5 space-y-1 overflow-hidden border-l-2 border-[#3b82f6]/20 pl-2"
                 >
                   {replies.map((reply) => (
                     <ReplyCard key={reply.id} reply={reply} quoteId={quoteId} />
@@ -394,7 +394,7 @@ function NoteCard({
         )}
 
         {isReplying && (
-          <div className="mt-2">
+          <div className="mt-1.5">
             <NoteEditor
               placeholder="Write a reply..."
               onSubmit={handleReply}
@@ -496,17 +496,17 @@ function QuoteNotesSection({ quoteId }: { quoteId: string }) {
   };
 
   return (
-    <div className="mt-3 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-quote-notes">
+    <div className="mt-3 rounded-2xl border border-black/10 bg-white/70 p-3" data-testid="card-quote-notes">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold" data-testid="text-notes-title">
+        <div className="text-xs font-semibold" data-testid="text-notes-title">
           Notes
         </div>
-        <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold text-black/50" data-testid="text-notes-count">
+        <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[9px] font-semibold text-black/50" data-testid="text-notes-count">
           {topLevelNotes.length}
         </span>
       </div>
 
-      <div className="mt-3 space-y-2" data-testid="list-notes">
+      <div className="mt-2 space-y-1.5" data-testid="list-notes">
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
             <Spinner className="h-5 w-5" />
@@ -530,7 +530,7 @@ function QuoteNotesSection({ quoteId }: { quoteId: string }) {
         )}
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2">
         <NoteEditor
           placeholder="Add a note…"
           onSubmit={handleCreate}
