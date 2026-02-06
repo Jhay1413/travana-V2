@@ -860,6 +860,80 @@ function EditQuoteDialog({
                 />
               </div>
               <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">JSON Upload</Label>
+                <Input
+                  type="file"
+                  accept=".json"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const content = ev.target?.result as string || "";
+                        const toIsoDate = (d: string | undefined): string => {
+                          if (!d) return "";
+                          const match = d.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+                          if (match) {
+                            const [, day, month, year] = match;
+                            return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+                          }
+                          return d;
+                        };
+                        try {
+                          const data = JSON.parse(content);
+                          setForm((prev: any) => ({
+                            ...prev,
+                            packageType: data.packageType || data.package_type || prev.packageType,
+                            quoteTitle: data.quoteTitle || data.quote_title || data.title || prev.quoteTitle,
+                            quoteLink: data.quoteLink || data.quote_link || data.link || prev.quoteLink,
+                            travelDate: toIsoDate(data.travelDate || data.travel_date || data.departureDate) || prev.travelDate,
+                            passengersAdults: data.passengers?.adults || data.adults || data.passengersAdults || prev.passengersAdults,
+                            passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
+                            passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
+                            childAges: data.childAges || data.child_ages || data.passengers?.childAges || prev.childAges,
+                            country: data.country || prev.country,
+                            destination: data.destination || prev.destination,
+                            resort: data.resort || prev.resort,
+                            accommodation: data.accommodation || data.hotel || data.property || prev.accommodation,
+                            checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
+                            checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
+                            nights: data.nights || data.duration || prev.nights,
+                            boardBasis: data.boardBasis || data.board_basis || data.board || prev.boardBasis,
+                            roomType: data.roomType || data.room_type || data.room || prev.roomType,
+                            transferType: data.transferType || data.transfer_type || data.transfers || prev.transferType,
+                            preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
+                            flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
+                            outboundDepartAirport: data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || prev.outboundDepartAirport,
+                            outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
+                            outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
+                            outboundArriveAirport: data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || prev.outboundArriveAirport,
+                            outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
+                            outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
+                            inboundDepartAirport: data.flights?.inbound?.departAirport || data.inbound?.from || prev.inboundDepartAirport,
+                            inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
+                            inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
+                            inboundArriveAirport: data.flights?.inbound?.arriveAirport || data.inbound?.to || prev.inboundArriveAirport,
+                            inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
+                            inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
+                            tourOperator: data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || prev.tourOperator,
+                            sales: data.commissions?.sales || data.sales || prev.sales,
+                            price: data.commissions?.price || data.price || data.total || prev.price,
+                            commission: data.commissions?.commission || data.commission || prev.commission,
+                            discount: data.commissions?.discount || data.discount || prev.discount,
+                            serviceCharge: data.commissions?.serviceCharge || data.serviceCharge || data.service_charge || prev.serviceCharge,
+                            pricePerPerson: data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp || prev.pricePerPerson,
+                          }));
+                        } catch {
+                        }
+                      };
+                      reader.readAsText(file);
+                    }
+                  }}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-json-upload"
+                />
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Status</Label>
                 <Select value={form.status} onValueChange={(v) => set("status", v)}>
                   <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-status">
