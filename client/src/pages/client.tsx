@@ -1214,7 +1214,7 @@ export default function ClientPage() {
                                         <div className="shrink-0 text-right">
                                           <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
                                             {q.pricePerPerson > 0 && (
-                                              <span data-testid={`text-quote-pp-${q.id}`}>{currency.format(q.pricePerPerson)} pp / </span>
+                                              <span data-testid={`text-quote-pp-${q.id}`} className="font-normal">{currency.format(q.pricePerPerson)} pp / </span>
                                             )}
                                             {currency.format(q.totalCost)}
                                           </div>
@@ -2387,7 +2387,6 @@ export default function ClientPage() {
           </div>
         </DialogContent>
       </Dialog>
-
       <Dialog open={showEditClient} onOpenChange={setShowEditClient}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto rounded-3xl" data-testid="dialog-edit-client">
           <DialogHeader>
