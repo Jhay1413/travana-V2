@@ -1204,10 +1204,11 @@ export default function QuotePage() {
                     </div>
                   </div>
 
-                  <QuoteNotesSection quoteId={quoteId} />
                 </div>
               </div>
             </Card>
+
+            <QuoteNotesSection quoteId={quoteId} />
 
             <div className="grid gap-3" data-testid="col-quote-right">
               <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-summary-right">
