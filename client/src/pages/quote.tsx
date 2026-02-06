@@ -119,28 +119,28 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
       type: "outbound",
       sortKey,
       content: (
-        <div className="flex gap-4" data-testid="timeline-outbound">
+        <div className="flex gap-2.5" data-testid="timeline-outbound">
           <div className="flex flex-col items-center">
-            <div className="grid h-10 w-10 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-600">
-              <Plane className="h-5 w-5" />
+            <div className="grid h-7 w-7 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-600">
+              <Plane className="h-3.5 w-3.5" />
             </div>
-            <div className="mt-2 h-full w-px bg-black/10" />
+            <div className="mt-1 h-full w-px bg-black/10" />
           </div>
-          <div className="flex-1 pb-6">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Outbound Flight</div>
-            <div className="mt-1 text-sm font-semibold">{quote.flights.outbound.from} → {quote.flights.outbound.to}</div>
-            <div className="mt-2 grid gap-1.5">
-              <div className="flex items-center gap-2 text-xs text-black/60">
-                <Calendar className="h-3.5 w-3.5 shrink-0" />
+          <div className="flex-1 pb-4">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">Outbound Flight</div>
+            <div className="mt-0.5 text-xs font-semibold">{quote.flights.outbound.from} → {quote.flights.outbound.to}</div>
+            <div className="mt-1 grid gap-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                <Calendar className="h-3 w-3 shrink-0" />
                 <span>{formatTimelineDate(quote.flights.outbound.departDate)}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-black/60">
-                <Clock className="h-3.5 w-3.5 shrink-0" />
+              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                <Clock className="h-3 w-3 shrink-0" />
                 <span>Depart {formatTime24(quote.flights.outbound.departTime)}{quote.flights.outbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.outbound.arriveTime)}` : ""}</span>
               </div>
               {(quote.flights.outbound.carrier || quote.flights.outbound.flightNo) && (
-                <div className="flex items-center gap-2 text-xs text-black/60">
-                  <Plane className="h-3.5 w-3.5 shrink-0" />
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Plane className="h-3 w-3 shrink-0" />
                   <span>{[quote.flights.outbound.carrier, quote.flights.outbound.flightNo].filter(Boolean).join(" ")}</span>
                 </div>
               )}
@@ -159,38 +159,38 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
       type: "hotel",
       sortKey,
       content: (
-        <div className="flex gap-4" data-testid="timeline-hotel">
+        <div className="flex gap-2.5" data-testid="timeline-hotel">
           <div className="flex flex-col items-center">
-            <div className="grid h-10 w-10 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
-              <Hotel className="h-5 w-5" />
+            <div className="grid h-7 w-7 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
+              <Hotel className="h-3.5 w-3.5" />
             </div>
-            <div className="mt-2 h-full w-px bg-black/10" />
+            <div className="mt-1 h-full w-px bg-black/10" />
           </div>
-          <div className="flex-1 pb-6">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Hotel Check-in</div>
-            <div className="mt-1 text-sm font-semibold">{quote.accommodation.property}</div>
-            <div className="mt-2 grid gap-1.5">
-              <div className="flex items-center gap-2 text-xs text-black/60">
-                <Calendar className="h-3.5 w-3.5 shrink-0" />
+          <div className="flex-1 pb-4">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Hotel Check-in</div>
+            <div className="mt-0.5 text-xs font-semibold">{quote.accommodation.property}</div>
+            <div className="mt-1 grid gap-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                <Calendar className="h-3 w-3 shrink-0" />
                 <span>{formatTimelineDate(checkIn)}</span>
                 {checkInTime && <span>at {formatTime24(checkInTime)}</span>}
               </div>
-              <div className="flex items-center gap-2 text-xs text-black/60">
-                <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                <MapPin className="h-3 w-3 shrink-0" />
                 <span>{[quote.resort, quote.country].filter(Boolean).join(", ") || quote.destination}</span>
               </div>
               {quote.nights > 0 && (
-                <div className="flex items-center gap-2 text-xs text-black/60">
-                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Clock className="h-3 w-3 shrink-0" />
                   <span>{quote.nights} nights</span>
                 </div>
               )}
-              <div className="mt-1 flex flex-wrap gap-2">
+              <div className="mt-0.5 flex flex-wrap gap-1.5">
                 {quote.accommodation.roomType && (
-                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70">{quote.accommodation.roomType}</span>
+                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{quote.accommodation.roomType}</span>
                 )}
                 {quote.accommodation.board && (
-                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70">{quote.accommodation.board}</span>
+                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{quote.accommodation.board}</span>
                 )}
               </div>
             </div>
@@ -207,19 +207,19 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
       type: "transfer",
       sortKey,
       content: (
-        <div className="flex gap-4" data-testid="timeline-transfer">
+        <div className="flex gap-2.5" data-testid="timeline-transfer">
           <div className="flex flex-col items-center">
-            <div className="grid h-10 w-10 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
-              <Bus className="h-5 w-5" />
+            <div className="grid h-7 w-7 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
+              <Bus className="h-3.5 w-3.5" />
             </div>
-            <div className="mt-2 h-full w-px bg-black/10" />
+            <div className="mt-1 h-full w-px bg-black/10" />
           </div>
-          <div className="flex-1 pb-6">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">Transfer</div>
-            <div className="mt-1 text-sm font-semibold">{quote.transferType}</div>
-            <div className="mt-2 grid gap-1.5">
-              <div className="flex items-center gap-2 text-xs text-black/60">
-                <MapPin className="h-3.5 w-3.5 shrink-0" />
+          <div className="flex-1 pb-4">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Transfer</div>
+            <div className="mt-0.5 text-xs font-semibold">{quote.transferType}</div>
+            <div className="mt-1 grid gap-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                <MapPin className="h-3 w-3 shrink-0" />
                 <span>{quote.flights.outbound.to || "Airport"} → {quote.accommodation.property || quote.destination}</span>
               </div>
             </div>
@@ -239,29 +239,29 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
       type: "inbound",
       sortKey,
       content: (
-        <div className="flex gap-4" data-testid="timeline-inbound">
+        <div className="flex gap-2.5" data-testid="timeline-inbound">
           <div className="flex flex-col items-center">
-            <div className="grid h-10 w-10 place-items-center rounded-full border border-purple-200 bg-purple-50 text-purple-600">
-              <Plane className="h-5 w-5 rotate-180" />
+            <div className="grid h-7 w-7 place-items-center rounded-full border border-purple-200 bg-purple-50 text-purple-600">
+              <Plane className="h-3.5 w-3.5 rotate-180" />
             </div>
           </div>
           <div className="flex-1 pb-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-purple-600">Inbound Flight</div>
-            <div className="mt-1 text-sm font-semibold">{ibFrom} → {ibTo}</div>
-            <div className="mt-2 grid gap-1.5">
-              <div className="flex items-center gap-2 text-xs text-black/60">
-                <Calendar className="h-3.5 w-3.5 shrink-0" />
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-600">Inbound Flight</div>
+            <div className="mt-0.5 text-xs font-semibold">{ibFrom} → {ibTo}</div>
+            <div className="mt-1 grid gap-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                <Calendar className="h-3 w-3 shrink-0" />
                 <span>{formatTimelineDate(ibDate)}</span>
               </div>
               {quote.flights.inbound.departTime && (
-                <div className="flex items-center gap-2 text-xs text-black/60">
-                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Clock className="h-3 w-3 shrink-0" />
                   <span>Depart {formatTime24(quote.flights.inbound.departTime)}{quote.flights.inbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.inbound.arriveTime)}` : ""}</span>
                 </div>
               )}
               {(quote.flights.inbound.carrier || quote.flights.inbound.flightNo) && (
-                <div className="flex items-center gap-2 text-xs text-black/60">
-                  <Plane className="h-3.5 w-3.5 shrink-0" />
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Plane className="h-3 w-3 shrink-0" />
                   <span>{[quote.flights.inbound.carrier, quote.flights.inbound.flightNo].filter(Boolean).join(" ")}</span>
                 </div>
               )}
@@ -276,9 +276,9 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
 
   return (
     <div data-testid="card-quote-summary-timeline">
-      <div className="mb-4">
-        <div className="text-sm font-semibold" data-testid="text-timeline-title">Travel Summary</div>
-        <div className="mt-1 text-xs text-black/55" data-testid="text-timeline-subtitle">
+      <div className="mb-3">
+        <div className="text-xs font-semibold" data-testid="text-timeline-title">Travel Summary</div>
+        <div className="mt-0.5 text-[11px] text-black/55" data-testid="text-timeline-subtitle">
           {formatTimelineDate(quote.travelDate)} — {formatTimelineDate(quote.returnDate)} · {quote.destination}
         </div>
       </div>
