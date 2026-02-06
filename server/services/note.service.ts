@@ -1,10 +1,16 @@
 import { noteRepository } from "../repositories/note.repository";
 import { AppError } from "../utils/error-handler";
-import type { Note, InsertNote } from "../types/note";
+import type { Note, InsertNote } from "@shared/schema";
 
 export const noteService = {
   async listByQuoteId(quoteId: string): Promise<Note[]> {
     return await noteRepository.findByQuoteId(quoteId);
+  },
+
+  async getNote(id: string): Promise<Note> {
+    const note = await noteRepository.findById(id);
+    if (!note) throw new AppError("Note not found", 404);
+    return note;
   },
 
   async createNote(data: InsertNote): Promise<Note> {

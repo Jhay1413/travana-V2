@@ -159,11 +159,14 @@ export type QuoteImage = typeof quoteImages.$inferSelect;
 export const notes = pgTable("notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   quoteId: varchar("quote_id").notNull().references(() => quotes.id, { onDelete: "cascade" }),
+  parentId: varchar("parent_id"),
   content: text("content").notNull(),
+  authorName: text("author_name").notNull().default("Agent"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at"),
 });
 
-export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, createdAt: true });
+export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
 
