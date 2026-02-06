@@ -740,6 +740,11 @@ export default function QuotePage() {
                         <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-nights-label">Number of Nights</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-nights-value">{quote.nights}</div>
                       </div>
+
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{quote.leadSource || "—"}</div>
+                      </div>
                     </div>
                   </div>
 
