@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useParams, useLocation } from "wouter";
-import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import { CommandCenterShell } from "@/components/command-center-shell";
+import { useRole } from "@/hooks/use-role";
 import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
 import {
   ArrowLeft,
@@ -619,7 +620,7 @@ export default function TicketPage() {
   const params = useParams();
   const ticketId = params.ticketId as string;
   const [, navigate] = useLocation();
-  const [role, setRole] = useState<Role>("Agent");
+  const { role, setRole } = useRole();
   const [isEditing, setIsEditing] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [formData, setFormData] = useState({

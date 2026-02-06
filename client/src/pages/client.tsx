@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation, useRoute } from "wouter";
-import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import { CommandCenterShell } from "@/components/command-center-shell";
+import { useRole } from "@/hooks/use-role";
 import {
   BadgeCheck,
   Calendar,
@@ -358,7 +359,7 @@ export default function ClientPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [role, setRole] = useState<Role>("Agent");
+  const { role, setRole } = useRole();
   const [active] = useState<string>("clients");
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<"overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "tags">(

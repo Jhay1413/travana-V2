@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { ChevronLeft, Copy, FileText, Plane, Star, Tag, X } from "lucide-react";
-import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import { CommandCenterShell } from "@/components/command-center-shell";
+import { useRole } from "@/hooks/use-role";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -163,7 +164,7 @@ export default function QuotePage() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/clients/:clientId/quotes/:quoteId");
 
-  const role = (new URLSearchParams(window.location.search).get("role") as Role) ?? "Agent";
+  const { role } = useRole();
   const clientId = params?.clientId ?? "";
   const quoteId = params?.quoteId ?? "";
 

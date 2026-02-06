@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport } from "@/hooks/mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
@@ -1451,7 +1452,11 @@ export default function CommandCenterPage() {
   const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [rolePreview, setRolePreview] = useState<Role | null>(null);
+  const { role, setRole: setRoleFromHook, actualRole } = useRole();
+  const rolePreview = role !== actualRole ? role : null;
+  const setRolePreview = (r: Role | null) => {
+    setRoleFromHook(r || actualRole);
+  };
   const [settingsTab, setSettingsTab] = useState<"general" | "tour-operators">("general");
   const [tourOperatorSearch, setTourOperatorSearch] = useState("");
   const [airportSearch, setAirportSearch] = useState("");
@@ -1459,10 +1464,6 @@ export default function CommandCenterPage() {
 
   const themeClass = theme === "dark" ? "dark" : "";
   const displayName = user?.firstName || user?.name || user?.email || "User";
-  
-  // Use role preview if set, otherwise use the user's role from database
-  const actualRole = (user?.role as Role) || "Agent";
-  const role = rolePreview || actualRole;
 
   const { data: dashboardStats } = useDashboardStats();
   const [clientsPage, setClientsPage] = useState(1);

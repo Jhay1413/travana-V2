@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
-import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import { CommandCenterShell } from "@/components/command-center-shell";
+import { useRole } from "@/hooks/use-role";
 import {
   Calendar,
   ChevronRight,
@@ -84,7 +85,7 @@ function priorityPill(priority: string) {
 }
 
 export default function TicketsPage() {
-  const [role, setRole] = useState<Role>("Agent");
+  const { role, setRole } = useRole();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");

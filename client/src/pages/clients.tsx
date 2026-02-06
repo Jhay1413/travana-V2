@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import { CommandCenterShell } from "@/components/command-center-shell";
+import { useRole } from "@/hooks/use-role";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import {
   ChevronLeft,
@@ -83,7 +84,7 @@ const stageColors = {
 
 export default function ClientsPage() {
   const [, navigate] = useLocation();
-  const [role, setRole] = useState<Role>("Agent");
+  const { role, setRole } = useRole();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [q, setQ] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
