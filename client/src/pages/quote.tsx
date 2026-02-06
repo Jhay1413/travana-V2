@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X } from "lucide-react";
+import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +97,199 @@ function splitIsoDateTime(iso: string): { date: string; time: string } {
   const hh = String(d.getHours()).padStart(2, "0");
   const min = String(d.getMinutes()).padStart(2, "0");
   return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
+}
+
+function formatTimelineDate(dateStr: string) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+}
+
+function formatTime24(timeStr: string) {
+  if (!timeStr) return "";
+  return timeStr.slice(0, 5);
+}
+
+function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
+  const timelineItems: { type: string; sortKey: string; content: React.ReactNode }[] = [];
+
+  if (quote.flights.outbound.from) {
+    const sortKey = quote.flights.outbound.departDate + "T" + (quote.flights.outbound.departTime || "00:00");
+    timelineItems.push({
+      type: "outbound",
+      sortKey,
+      content: (
+        <div className="flex gap-4" data-testid="timeline-outbound">
+          <div className="flex flex-col items-center">
+            <div className="grid h-10 w-10 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-600">
+              <Plane className="h-5 w-5" />
+            </div>
+            <div className="mt-2 h-full w-px bg-black/10" />
+          </div>
+          <div className="flex-1 pb-6">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Outbound Flight</div>
+            <div className="mt-1 text-sm font-semibold">{quote.flights.outbound.from} → {quote.flights.outbound.to}</div>
+            <div className="mt-2 grid gap-1.5">
+              <div className="flex items-center gap-2 text-xs text-black/60">
+                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                <span>{formatTimelineDate(quote.flights.outbound.departDate)}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-black/60">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                <span>Depart {formatTime24(quote.flights.outbound.departTime)}{quote.flights.outbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.outbound.arriveTime)}` : ""}</span>
+              </div>
+              {(quote.flights.outbound.carrier || quote.flights.outbound.flightNo) && (
+                <div className="flex items-center gap-2 text-xs text-black/60">
+                  <Plane className="h-3.5 w-3.5 shrink-0" />
+                  <span>{[quote.flights.outbound.carrier, quote.flights.outbound.flightNo].filter(Boolean).join(" ")}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  if (quote.accommodation.property) {
+    const checkIn = quote.checkInDate || quote.travelDate;
+    const checkInTime = quote.checkInTime || "14:00";
+    const sortKey = checkIn + "T" + checkInTime;
+    timelineItems.push({
+      type: "hotel",
+      sortKey,
+      content: (
+        <div className="flex gap-4" data-testid="timeline-hotel">
+          <div className="flex flex-col items-center">
+            <div className="grid h-10 w-10 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
+              <Hotel className="h-5 w-5" />
+            </div>
+            <div className="mt-2 h-full w-px bg-black/10" />
+          </div>
+          <div className="flex-1 pb-6">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Hotel Check-in</div>
+            <div className="mt-1 text-sm font-semibold">{quote.accommodation.property}</div>
+            <div className="mt-2 grid gap-1.5">
+              <div className="flex items-center gap-2 text-xs text-black/60">
+                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                <span>{formatTimelineDate(checkIn)}</span>
+                {checkInTime && <span>at {formatTime24(checkInTime)}</span>}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-black/60">
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <span>{[quote.resort, quote.country].filter(Boolean).join(", ") || quote.destination}</span>
+              </div>
+              {quote.nights > 0 && (
+                <div className="flex items-center gap-2 text-xs text-black/60">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  <span>{quote.nights} nights</span>
+                </div>
+              )}
+              <div className="mt-1 flex flex-wrap gap-2">
+                {quote.accommodation.roomType && (
+                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70">{quote.accommodation.roomType}</span>
+                )}
+                {quote.accommodation.board && (
+                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70">{quote.accommodation.board}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  if (quote.transferType) {
+    const transferDate = quote.checkInDate || quote.travelDate;
+    const sortKey = transferDate + "T" + (quote.flights.outbound.arriveTime || "12:00");
+    timelineItems.push({
+      type: "transfer",
+      sortKey,
+      content: (
+        <div className="flex gap-4" data-testid="timeline-transfer">
+          <div className="flex flex-col items-center">
+            <div className="grid h-10 w-10 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
+              <Bus className="h-5 w-5" />
+            </div>
+            <div className="mt-2 h-full w-px bg-black/10" />
+          </div>
+          <div className="flex-1 pb-6">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">Transfer</div>
+            <div className="mt-1 text-sm font-semibold">{quote.transferType}</div>
+            <div className="mt-2 grid gap-1.5">
+              <div className="flex items-center gap-2 text-xs text-black/60">
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <span>{quote.flights.outbound.to || "Airport"} → {quote.accommodation.property || quote.destination}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  if (quote.flights.inbound.from) {
+    const sortKey = quote.flights.inbound.departDate + "T" + (quote.flights.inbound.departTime || "23:59");
+    timelineItems.push({
+      type: "inbound",
+      sortKey,
+      content: (
+        <div className="flex gap-4" data-testid="timeline-inbound">
+          <div className="flex flex-col items-center">
+            <div className="grid h-10 w-10 place-items-center rounded-full border border-purple-200 bg-purple-50 text-purple-600">
+              <Plane className="h-5 w-5 rotate-180" />
+            </div>
+          </div>
+          <div className="flex-1 pb-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-purple-600">Inbound Flight</div>
+            <div className="mt-1 text-sm font-semibold">{quote.flights.inbound.from} → {quote.flights.inbound.to}</div>
+            <div className="mt-2 grid gap-1.5">
+              <div className="flex items-center gap-2 text-xs text-black/60">
+                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                <span>{formatTimelineDate(quote.flights.inbound.departDate)}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-black/60">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                <span>Depart {formatTime24(quote.flights.inbound.departTime)}{quote.flights.inbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.inbound.arriveTime)}` : ""}</span>
+              </div>
+              {(quote.flights.inbound.carrier || quote.flights.inbound.flightNo) && (
+                <div className="flex items-center gap-2 text-xs text-black/60">
+                  <Plane className="h-3.5 w-3.5 shrink-0" />
+                  <span>{[quote.flights.inbound.carrier, quote.flights.inbound.flightNo].filter(Boolean).join(" ")}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  timelineItems.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+  return (
+    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-6" data-testid="card-quote-summary-timeline">
+      <div className="mb-4">
+        <div className="text-sm font-semibold" data-testid="text-timeline-title">Travel Summary</div>
+        <div className="mt-1 text-xs text-black/55" data-testid="text-timeline-subtitle">
+          {formatTimelineDate(quote.travelDate)} — {formatTimelineDate(quote.returnDate)} · {quote.destination}
+        </div>
+      </div>
+
+      {timelineItems.length > 0 ? (
+        <div data-testid="list-timeline-items">
+          {timelineItems.map((item, idx) => (
+            <div key={idx}>{item.content}</div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center text-sm text-black/55" data-testid="empty-timeline">
+          No travel details added yet. Edit the quote to add flight and accommodation details.
+        </div>
+      )}
+    </Card>
+  );
 }
 
 function transformQuoteData(apiData: QuoteFull): Quote {
@@ -340,8 +534,18 @@ export default function QuotePage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3" data-testid="layout-quote-body">
+        <div className="mt-4" data-testid="layout-quote-body">
+          <Tabs defaultValue="summary" className="w-full">
+            <TabsList className="mb-4 rounded-2xl border border-black/10 bg-white/70 p-1">
+              <TabsTrigger value="summary" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-summary">Quote Summary</TabsTrigger>
+              <TabsTrigger value="costings" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-costings">Quote Costings</TabsTrigger>
+            </TabsList>
 
+            <TabsContent value="summary" className="mt-0">
+              <QuoteSummaryTimeline quote={quote} />
+            </TabsContent>
+
+            <TabsContent value="costings" className="mt-0">
           <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
@@ -705,6 +909,8 @@ export default function QuotePage() {
               </Card>
             </div>
           </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
       {quote && (
