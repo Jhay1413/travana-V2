@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useDashboardStats, useClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport } from "@/hooks/mutations";
+import CsvImportDialog from "@/components/csv-import-dialog";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
 import type { CreateClientData } from "@/types/client";
@@ -1454,6 +1455,7 @@ export default function CommandCenterPage() {
   const [settingsTab, setSettingsTab] = useState<"general" | "tour-operators">("general");
   const [tourOperatorSearch, setTourOperatorSearch] = useState("");
   const [airportSearch, setAirportSearch] = useState("");
+  const [showImport, setShowImport] = useState(false);
 
   const themeClass = theme === "dark" ? "dark" : "";
   const displayName = user?.firstName || user?.name || user?.email || "User";
@@ -2094,6 +2096,22 @@ export default function CommandCenterPage() {
             <Tabs value={tab}>
               <TabsContent value="clients" className="mt-0">
                 <div className="grid gap-3">
+                  <button
+                    onClick={() => setShowImport(true)}
+                    className="flex w-full items-center justify-between rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-left transition hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                    data-testid="button-import-csv"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-800/40">
+                        <Upload className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-blue-900 dark:text-blue-100">Import Clients from CSV</div>
+                        <div className="text-xs text-blue-600 dark:text-blue-400">Bulk import or update client records</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-blue-400" />
+                  </button>
                   {clients.map((c, idx) => (
                     <motion.button
                       key={c.id}
@@ -4044,6 +4062,8 @@ export default function CommandCenterPage() {
           </div>
         </div>
       </div>
+
+      <CsvImportDialog open={showImport} onClose={() => setShowImport(false)} />
     </div>
   );
 }
