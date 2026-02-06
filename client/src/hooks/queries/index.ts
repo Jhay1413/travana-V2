@@ -10,3 +10,4 @@ export { useNotifications, useUnreadNotifications, notificationKeys } from "./us
 export { useDashboardStats, dashboardKeys } from "./use-dashboard-queries";
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";
 export { useAirports, airportKeys } from "./use-airport-queries";
+export { useNotes, noteKeys } from "./use-note-queries";

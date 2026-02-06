@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar } from "lucide-react";
+import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -12,12 +12,20 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuoteFull } from "@/hooks/queries";
-import { useUpdateQuote } from "@/hooks/mutations";
+import { useQuoteFull, useNotes } from "@/hooks/queries";
+import { useUpdateQuote, useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations";
+import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { quoteImageApi } from "@/api";
 import { useToast } from "@/hooks/use-toast";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+import TiptapLink from "@tiptap/extension-link";
+import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 import type { QuoteFull } from "@/types/quote";
+import type { Note } from "@shared/schema";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -84,6 +92,454 @@ type Quote = {
   };
   notes: string[];
 };
+
+const EMOJI_CATEGORIES = [
+  { label: "Smileys", emojis: ["😀","😂","🥹","😊","😍","🤩","😎","🤔","😢","😤","🥳","😴","🤗","😇","🙃","😏","🤭","😬","🫡","👋"] },
+  { label: "Travel", emojis: ["✈️","🏖️","🏝️","🌍","🗺️","🧳","🚗","🚢","🏨","🌅","🌴","⛱️","🎡","🗼","🏔️","🌊","☀️","🌙","⭐","🎒"] },
+  { label: "Gestures", emojis: ["👍","👎","👏","🙌","🤝","✌️","🤞","💪","👊","✋","🫶","❤️","🔥","💯","⚡","🎉","🎊","✅","❌","⭕"] },
+  { label: "Objects", emojis: ["📞","📧","💼","📋","📝","📌","📎","🔗","💰","💳","🎫","🛎️","🔑","📅","⏰","🎁","📱","💻","🖨️","📊"] },
+];
+
+function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) => void; onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} className="absolute bottom-full left-0 z-50 mb-2 w-[280px] rounded-2xl border border-black/10 bg-white/95 shadow-xl backdrop-blur-xl" data-testid="emoji-picker">
+      <div className="flex gap-1 border-b border-black/10 px-2 pt-2">
+        {EMOJI_CATEGORIES.map((cat, i) => (
+          <button
+            key={cat.label}
+            type="button"
+            onClick={() => setActiveTab(i)}
+            className={cn(
+              "rounded-lg px-2 py-1 text-[10px] font-semibold transition",
+              activeTab === i ? "bg-black/10 text-black" : "text-black/50 hover:text-black/70"
+            )}
+            data-testid={`emoji-tab-${cat.label}`}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-10 gap-0.5 p-2">
+        {EMOJI_CATEGORIES[activeTab].emojis.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => { onSelect(emoji); onClose(); }}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-base transition hover:bg-black/5"
+            data-testid={`emoji-${emoji}`}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NoteEditor({
+  initialContent,
+  placeholder,
+  onSubmit,
+  onCancel,
+  submitLabel,
+  isLoading,
+  compact,
+}: {
+  initialContent?: string;
+  placeholder?: string;
+  onSubmit: (html: string) => void;
+  onCancel?: () => void;
+  submitLabel?: string;
+  isLoading?: boolean;
+  compact?: boolean;
+}) {
+  const [showEmoji, setShowEmoji] = useState(false);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({ placeholder: placeholder || "Write a note..." }),
+      TiptapLink.configure({ openOnClick: false }),
+    ],
+    content: initialContent || "",
+    editorProps: {
+      attributes: {
+        class: cn(
+          "prose prose-sm max-w-none outline-none",
+          compact ? "min-h-[60px] p-2" : "min-h-[80px] p-3"
+        ),
+      },
+    },
+  });
+
+  const handleSubmit = useCallback(() => {
+    if (!editor) return;
+    const html = editor.getHTML();
+    if (!html || html === "<p></p>") return;
+    onSubmit(html);
+    editor.commands.clearContent();
+  }, [editor, onSubmit]);
+
+  const insertEmoji = useCallback((emoji: string) => {
+    editor?.chain().focus().insertContent(emoji).run();
+  }, [editor]);
+
+  if (!editor) return null;
+
+  return (
+    <div className={cn("rounded-2xl border border-black/10 bg-white/80 overflow-hidden", compact && "rounded-xl")}>
+      <div className="flex items-center gap-0.5 border-b border-black/5 bg-black/[0.02] px-2 py-1.5">
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn("h-7 w-7 p-0", editor.isActive("bold") && "bg-black/10")} data-testid="note-toolbar-bold">
+          <Bold className="h-3.5 w-3.5" />
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn("h-7 w-7 p-0", editor.isActive("italic") && "bg-black/10")} data-testid="note-toolbar-italic">
+          <Italic className="h-3.5 w-3.5" />
+        </Button>
+        <div className="mx-0.5 h-4 w-px bg-black/10" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn("h-7 w-7 p-0", editor.isActive("bulletList") && "bg-black/10")} data-testid="note-toolbar-ul">
+          <List className="h-3.5 w-3.5" />
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn("h-7 w-7 p-0", editor.isActive("orderedList") && "bg-black/10")} data-testid="note-toolbar-ol">
+          <ListOrdered className="h-3.5 w-3.5" />
+        </Button>
+        <div className="mx-0.5 h-4 w-px bg-black/10" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => { const url = window.prompt("Enter URL:"); if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run(); }} className={cn("h-7 w-7 p-0", editor.isActive("link") && "bg-black/10")} data-testid="note-toolbar-link">
+          <LinkIcon className="h-3.5 w-3.5" />
+        </Button>
+        <div className="mx-0.5 h-4 w-px bg-black/10" />
+        <div className="relative">
+          <Button type="button" variant="ghost" size="sm" onClick={() => setShowEmoji(!showEmoji)} className="h-7 w-7 p-0" data-testid="note-toolbar-emoji">
+            <SmilePlus className="h-3.5 w-3.5" />
+          </Button>
+          {showEmoji && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />}
+        </div>
+        <div className="flex-1" />
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="h-7 w-7 p-0" data-testid="note-toolbar-undo">
+          <Undo className="h-3.5 w-3.5" />
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="h-7 w-7 p-0" data-testid="note-toolbar-redo">
+          <Redo className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <EditorContent editor={editor} className="[&_.ProseMirror]:outline-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-black/35 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none" />
+      <div className="flex items-center justify-end gap-2 border-t border-black/5 bg-black/[0.01] px-2 py-1.5">
+        {onCancel && (
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="h-7 rounded-lg px-2 text-xs" data-testid="note-btn-cancel">
+            Cancel
+          </Button>
+        )}
+        <Button type="button" size="sm" onClick={handleSubmit} disabled={isLoading} className="h-7 rounded-lg bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90" data-testid="note-btn-submit">
+          {isLoading ? <Spinner className="h-3 w-3" /> : <Send className="mr-1 h-3 w-3" />}
+          {submitLabel || "Post"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function formatRelativeTime(date: string | Date) {
+  const now = new Date();
+  const d = new Date(date);
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHrs = Math.floor(diffMins / 60);
+  if (diffHrs < 24) return `${diffHrs}h ago`;
+  const diffDays = Math.floor(diffHrs / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function NoteCard({
+  note,
+  replies,
+  quoteId,
+  currentUserName,
+}: {
+  note: Note;
+  replies: Note[];
+  quoteId: string;
+  currentUserName: string;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isReplying, setIsReplying] = useState(false);
+  const [showReplies, setShowReplies] = useState(true);
+  const { toast } = useToast();
+  const updateMutation = useUpdateNote(quoteId);
+  const deleteMutation = useDeleteNote(quoteId);
+  const createMutation = useCreateNote(quoteId);
+
+  const handleEdit = (html: string) => {
+    updateMutation.mutate(
+      { id: note.id, content: html },
+      {
+        onSuccess: () => { setIsEditing(false); toast({ title: "Note updated" }); },
+        onError: () => toast({ title: "Failed to update note", variant: "destructive" }),
+      }
+    );
+  };
+
+  const handleDelete = () => {
+    deleteMutation.mutate(note.id, {
+      onSuccess: () => toast({ title: "Note deleted" }),
+      onError: () => toast({ title: "Failed to delete note", variant: "destructive" }),
+    });
+  };
+
+  const handleReply = (html: string) => {
+    createMutation.mutate(
+      { quoteId, content: html, authorName: currentUserName, parentId: note.id },
+      {
+        onSuccess: () => { setIsReplying(false); toast({ title: "Reply added" }); },
+        onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
+      }
+    );
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.2 }}
+      className="group"
+      data-testid={`note-card-${note.id}`}
+    >
+      <div className="rounded-2xl border border-black/10 bg-white/60 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[10px] font-bold text-[#3b82f6]" data-testid={`note-avatar-${note.id}`}>
+              {(note.authorName || "A").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.authorName || "Agent"}</span>
+              <span className="ml-2 text-[10px] text-black/40" data-testid={`note-time-${note.id}`}>
+                {formatRelativeTime(note.createdAt)}
+                {note.updatedAt && <span className="ml-1 italic">(edited)</span>}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+            <button type="button" onClick={() => setIsReplying(!isReplying)} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Reply" data-testid={`note-btn-reply-${note.id}`}>
+              <Reply className="h-3 w-3" />
+            </button>
+            <button type="button" onClick={() => setIsEditing(!isEditing)} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Edit" data-testid={`note-btn-edit-${note.id}`}>
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button type="button" onClick={handleDelete} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-black/40 transition hover:bg-rose-50 hover:text-rose-500" title="Delete" data-testid={`note-btn-delete-${note.id}`}>
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+
+        {isEditing ? (
+          <div className="mt-2">
+            <NoteEditor
+              initialContent={note.content}
+              onSubmit={handleEdit}
+              onCancel={() => setIsEditing(false)}
+              submitLabel="Save"
+              isLoading={updateMutation.isPending}
+              compact
+            />
+          </div>
+        ) : (
+          <div
+            className="mt-2 prose prose-sm max-w-none text-xs text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-4 [&_ol]:pl-4"
+            dangerouslySetInnerHTML={{ __html: note.content }}
+            data-testid={`note-content-${note.id}`}
+          />
+        )}
+
+        {replies.length > 0 && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => setShowReplies(!showReplies)}
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#3b82f6] transition hover:text-[#3b82f6]/80"
+              data-testid={`note-toggle-replies-${note.id}`}
+            >
+              <MessageSquare className="h-3 w-3" />
+              {showReplies ? "Hide" : "Show"} {replies.length} {replies.length === 1 ? "reply" : "replies"}
+            </button>
+
+            <AnimatePresence>
+              {showReplies && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="mt-2 space-y-2 overflow-hidden border-l-2 border-[#3b82f6]/20 pl-3"
+                >
+                  {replies.map((reply) => (
+                    <ReplyCard key={reply.id} reply={reply} quoteId={quoteId} />
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {isReplying && (
+          <div className="mt-2">
+            <NoteEditor
+              placeholder="Write a reply..."
+              onSubmit={handleReply}
+              onCancel={() => setIsReplying(false)}
+              submitLabel="Reply"
+              isLoading={createMutation.isPending}
+              compact
+            />
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function ReplyCard({ reply, quoteId }: { reply: Note; quoteId: string }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const { toast } = useToast();
+  const updateMutation = useUpdateNote(quoteId);
+  const deleteMutation = useDeleteNote(quoteId);
+
+  const handleEdit = (html: string) => {
+    updateMutation.mutate(
+      { id: reply.id, content: html },
+      {
+        onSuccess: () => { setIsEditing(false); toast({ title: "Reply updated" }); },
+        onError: () => toast({ title: "Failed to update reply", variant: "destructive" }),
+      }
+    );
+  };
+
+  return (
+    <div className="group/reply rounded-xl border border-black/5 bg-white/50 p-2" data-testid={`reply-card-${reply.id}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-[8px] font-bold text-emerald-600">
+            {(reply.authorName || "A").charAt(0).toUpperCase()}
+          </div>
+          <span className="text-[10px] font-semibold text-black/70">{reply.authorName || "Agent"}</span>
+          <span className="text-[9px] text-black/35">
+            {formatRelativeTime(reply.createdAt)}
+            {reply.updatedAt && <span className="ml-1 italic">(edited)</span>}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5 opacity-0 transition group-hover/reply:opacity-100">
+          <button type="button" onClick={() => setIsEditing(!isEditing)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/35 hover:bg-black/5 hover:text-black/60" data-testid={`reply-btn-edit-${reply.id}`}>
+            <Pencil className="h-2.5 w-2.5" />
+          </button>
+          <button type="button" onClick={() => deleteMutation.mutate(reply.id)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/35 hover:bg-rose-50 hover:text-rose-500" data-testid={`reply-btn-delete-${reply.id}`}>
+            <Trash2 className="h-2.5 w-2.5" />
+          </button>
+        </div>
+      </div>
+      {isEditing ? (
+        <div className="mt-1.5">
+          <NoteEditor initialContent={reply.content} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact />
+        </div>
+      ) : (
+        <div className="mt-1 prose prose-sm max-w-none text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content }} data-testid={`reply-content-${reply.id}`} />
+      )}
+    </div>
+  );
+}
+
+function QuoteNotesSection({ quoteId }: { quoteId: string }) {
+  const { data: notesData, isLoading } = useNotes(quoteId);
+  const { data: currentUser } = useCurrentUser();
+  const createMutation = useCreateNote(quoteId);
+  const { toast } = useToast();
+
+  const authorName = currentUser?.name || currentUser?.username || "Agent";
+
+  const topLevelNotes = useMemo(() => {
+    if (!notesData) return [];
+    return notesData.filter((n) => !n.parentId);
+  }, [notesData]);
+
+  const repliesByParent = useMemo(() => {
+    if (!notesData) return new Map<string, Note[]>();
+    const map = new Map<string, Note[]>();
+    notesData
+      .filter((n) => n.parentId)
+      .forEach((n) => {
+        const existing = map.get(n.parentId!) || [];
+        existing.push(n);
+        map.set(n.parentId!, existing);
+      });
+    return map;
+  }, [notesData]);
+
+  const handleCreate = (html: string) => {
+    createMutation.mutate(
+      { quoteId, content: html, authorName },
+      {
+        onSuccess: () => toast({ title: "Note added" }),
+        onError: () => toast({ title: "Failed to add note", variant: "destructive" }),
+      }
+    );
+  };
+
+  return (
+    <div className="mt-3 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-quote-notes">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold" data-testid="text-notes-title">
+          Notes
+        </div>
+        <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold text-black/50" data-testid="text-notes-count">
+          {topLevelNotes.length}
+        </span>
+      </div>
+
+      <div className="mt-3">
+        <NoteEditor
+          placeholder="Add a note…"
+          onSubmit={handleCreate}
+          isLoading={createMutation.isPending}
+        />
+      </div>
+
+      <div className="mt-3 space-y-2" data-testid="list-notes">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Spinner className="h-5 w-5" />
+          </div>
+        ) : topLevelNotes.length === 0 ? (
+          <div className="py-6 text-center text-xs text-black/40" data-testid="text-notes-empty">
+            No notes yet. Add one above.
+          </div>
+        ) : (
+          <AnimatePresence>
+            {topLevelNotes.map((note) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                replies={repliesByParent.get(note.id) || []}
+                quoteId={quoteId}
+                currentUserName={authorName}
+              />
+            ))}
+          </AnimatePresence>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function splitIsoDateTime(iso: string): { date: string; time: string } {
   if (!iso) return { date: "", time: "" };
@@ -748,18 +1204,7 @@ export default function QuotePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-quote-notes">
-                    <div className="text-sm font-semibold" data-testid="text-notes-title">
-                      Notes
-                    </div>
-                    <div className="mt-2 grid gap-2" data-testid="list-notes">
-                      {quote.notes.map((n, idx) => (
-                        <div key={idx} className="rounded-2xl border border-black/10 bg-white/60 p-3 text-xs text-black/70" data-testid={`note-quote-${idx}`}>
-                          {n}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <QuoteNotesSection quoteId={quoteId} />
                 </div>
               </div>
             </Card>
