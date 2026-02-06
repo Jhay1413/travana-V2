@@ -1054,6 +1054,18 @@ export default function QuotePage() {
                           <div className="truncate text-base font-semibold" data-testid="text-itinerary-quote-title">
                             {quote.quoteTitle}
                           </div>
+                          {quote.quoteLink && quote.quoteLink !== "#" && (
+                            <a
+                              href={quote.quoteLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#3b82f6] transition hover:text-[#3b82f6]/80"
+                              data-testid="link-quote-link"
+                            >
+                              <LinkIcon className="h-3 w-3" />
+                              View Quote Link
+                            </a>
+                          )}
                           <div className="mt-1 flex items-center gap-2 text-xs text-black/60" data-testid="text-itinerary-quote-summary">
                             <span>{(() => {
                               const start = new Date(quote.travelDate);
