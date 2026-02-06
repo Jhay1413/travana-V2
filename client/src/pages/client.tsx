@@ -11,6 +11,7 @@ import {
   Filter,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   Plane,
   Search,
@@ -29,7 +30,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNeonClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
-import { useUpdateClient, useCreateQuote, useCreateTicket, useUpdateTicket } from "@/hooks/mutations";
+import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket } from "@/hooks/mutations";
 import type { Client as ApiClient } from "@/types/client";
 import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
@@ -359,6 +360,21 @@ export default function ClientPage() {
   const [tab, setTab] = useState<"overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "tags">(
     "overview",
   );
+  const [showEditClient, setShowEditClient] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    firstName: "",
+    surename: "",
+    phoneNumber: "",
+    email: "",
+    DOB: "",
+    houseNumber: "",
+    street: "",
+    city: "",
+    country: "",
+    post_code: "",
+    badge: "",
+  });
   const [showNewQuoteModal, setShowNewQuoteModal] = useState(false);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<{
@@ -452,6 +468,57 @@ export default function ClientPage() {
         },
       });
     },
+  };
+
+  const updateNeonClientMutation = useUpdateNeonClient();
+
+  const openEditDialog = () => {
+    if (clientData) {
+      setEditForm({
+        title: clientData.title || "",
+        firstName: clientData.firstName || "",
+        surename: clientData.surename || "",
+        phoneNumber: clientData.phoneNumber || "",
+        email: clientData.email || "",
+        DOB: clientData.DOB || "",
+        houseNumber: clientData.houseNumber || "",
+        street: clientData.street || "",
+        city: clientData.city || "",
+        country: clientData.country || "",
+        post_code: clientData.post_code || "",
+        badge: clientData.badge || "",
+      });
+      setShowEditClient(true);
+    }
+  };
+
+  const handleSaveClient = () => {
+    const updates: Record<string, any> = {};
+    if (editForm.title) updates.title = editForm.title;
+    if (editForm.firstName) updates.firstName = editForm.firstName;
+    if (editForm.surename) updates.surename = editForm.surename;
+    updates.phoneNumber = editForm.phoneNumber;
+    updates.email = editForm.email || null;
+    updates.DOB = editForm.DOB || null;
+    updates.houseNumber = editForm.houseNumber || null;
+    updates.street = editForm.street || null;
+    updates.city = editForm.city || null;
+    updates.country = editForm.country || null;
+    updates.post_code = editForm.post_code || null;
+    updates.badge = editForm.badge || null;
+
+    updateNeonClientMutation.mutate(
+      { id: clientId, data: updates },
+      {
+        onSuccess: () => {
+          setShowEditClient(false);
+          toast({ title: "Client updated successfully" });
+        },
+        onError: () => {
+          toast({ title: "Failed to update client", variant: "destructive" });
+        },
+      }
+    );
   };
 
   const createQuoteMutationHook = useCreateQuote();
@@ -569,6 +636,15 @@ export default function ClientPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
                 Back
+              </button>
+              <button
+                type="button"
+                onClick={openEditDialog}
+                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+                data-testid="button-edit-client"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit
               </button>
             </div>
 
@@ -2133,6 +2209,178 @@ export default function ClientPage() {
                 data-testid="button-upload-file"
               >
                 Upload
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditClient} onOpenChange={setShowEditClient}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto rounded-3xl" data-testid="dialog-edit-client">
+          <DialogHeader>
+            <DialogTitle>Edit Client</DialogTitle>
+            <DialogDescription>Update client information below.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-title">Title</Label>
+                <Select
+                  value={editForm.title}
+                  onValueChange={(v) => setEditForm({ ...editForm, title: v })}
+                >
+                  <SelectTrigger id="edit-title" data-testid="select-edit-title">
+                    <SelectValue placeholder="Select title" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[500]">
+                    <SelectItem value="Mr">Mr</SelectItem>
+                    <SelectItem value="Mrs">Mrs</SelectItem>
+                    <SelectItem value="Miss">Miss</SelectItem>
+                    <SelectItem value="Ms">Ms</SelectItem>
+                    <SelectItem value="Dr">Dr</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-badge">Badge</Label>
+                <Select
+                  value={editForm.badge || "none"}
+                  onValueChange={(v) => setEditForm({ ...editForm, badge: v === "none" ? "" : v })}
+                >
+                  <SelectTrigger id="edit-badge" data-testid="select-edit-badge">
+                    <SelectValue placeholder="Select badge" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[500]">
+                    <SelectItem value="none">No Badge</SelectItem>
+                    <SelectItem value="New Client">New Client</SelectItem>
+                    <SelectItem value="Repeat Client">Repeat Client</SelectItem>
+                    <SelectItem value="VIP Client">VIP Client</SelectItem>
+                    <SelectItem value="Family Member">Family Member</SelectItem>
+                    <SelectItem value="Time Waster">Time Waster</SelectItem>
+                    <SelectItem value="Banned">Banned</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-firstName">First Name</Label>
+                <Input
+                  id="edit-firstName"
+                  value={editForm.firstName}
+                  onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                  data-testid="input-edit-firstName"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-surename">Surname</Label>
+                <Input
+                  id="edit-surename"
+                  value={editForm.surename}
+                  onChange={(e) => setEditForm({ ...editForm, surename: e.target.value })}
+                  data-testid="input-edit-surename"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-phone">Phone Number</Label>
+                <Input
+                  id="edit-phone"
+                  value={editForm.phoneNumber}
+                  onChange={(e) => setEditForm({ ...editForm, phoneNumber: e.target.value })}
+                  data-testid="input-edit-phone"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  data-testid="input-edit-email"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-dob">Date of Birth</Label>
+              <Input
+                id="edit-dob"
+                type="date"
+                value={editForm.DOB}
+                onChange={(e) => setEditForm({ ...editForm, DOB: e.target.value })}
+                data-testid="input-edit-dob"
+              />
+            </div>
+            <div className="border-t border-black/10 pt-3">
+              <div className="text-xs font-semibold text-black/60 mb-2">Address</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-houseNumber">House Number</Label>
+                  <Input
+                    id="edit-houseNumber"
+                    value={editForm.houseNumber}
+                    onChange={(e) => setEditForm({ ...editForm, houseNumber: e.target.value })}
+                    data-testid="input-edit-houseNumber"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-street">Street</Label>
+                  <Input
+                    id="edit-street"
+                    value={editForm.street}
+                    onChange={(e) => setEditForm({ ...editForm, street: e.target.value })}
+                    data-testid="input-edit-street"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3 mt-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-city">City</Label>
+                  <Input
+                    id="edit-city"
+                    value={editForm.city}
+                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                    data-testid="input-edit-city"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-country">Country</Label>
+                  <Input
+                    id="edit-country"
+                    value={editForm.country}
+                    onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
+                    data-testid="input-edit-country"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-postcode">Postcode</Label>
+                  <Input
+                    id="edit-postcode"
+                    value={editForm.post_code}
+                    onChange={(e) => setEditForm({ ...editForm, post_code: e.target.value })}
+                    data-testid="input-edit-postcode"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="rounded-2xl"
+                onClick={() => setShowEditClient(false)}
+                data-testid="button-edit-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#2563eb]"
+                onClick={handleSaveClient}
+                disabled={updateNeonClientMutation.isPending}
+                data-testid="button-edit-save"
+              >
+                {updateNeonClientMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </div>

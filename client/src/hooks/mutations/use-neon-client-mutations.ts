@@ -1,7 +1,19 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { neonClientApi } from "@/api";
 import { neonClientKeys } from "@/hooks/queries";
-import type { NeonClientImportRow } from "@/types/neon-client";
+import type { NeonClient, NeonClientImportRow } from "@/types/neon-client";
+
+export function useUpdateNeonClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<NeonClient> }) =>
+      neonClientApi.updateClient(id, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: neonClientKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: neonClientKeys.all });
+    },
+  });
+}
 
 export function useImportNeonClients() {
   const queryClient = useQueryClient();
