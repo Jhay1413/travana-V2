@@ -229,8 +229,12 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
     });
   }
 
-  if (quote.flights.inbound.from) {
-    const sortKey = quote.flights.inbound.departDate + "T" + (quote.flights.inbound.departTime || "23:59");
+  const hasInbound = quote.flights.inbound.from || quote.flights.inbound.to || quote.flights.inbound.departDate || quote.returnDate;
+  if (hasInbound) {
+    const ibDate = quote.flights.inbound.departDate || quote.returnDate;
+    const sortKey = ibDate + "T" + (quote.flights.inbound.departTime || "23:59");
+    const ibFrom = quote.flights.inbound.from || quote.flights.outbound.to || "";
+    const ibTo = quote.flights.inbound.to || quote.flights.outbound.from || "";
     timelineItems.push({
       type: "inbound",
       sortKey,
@@ -243,16 +247,18 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
           </div>
           <div className="flex-1 pb-2">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-purple-600">Inbound Flight</div>
-            <div className="mt-1 text-sm font-semibold">{quote.flights.inbound.from} → {quote.flights.inbound.to}</div>
+            <div className="mt-1 text-sm font-semibold">{ibFrom} → {ibTo}</div>
             <div className="mt-2 grid gap-1.5">
               <div className="flex items-center gap-2 text-xs text-black/60">
                 <Calendar className="h-3.5 w-3.5 shrink-0" />
-                <span>{formatTimelineDate(quote.flights.inbound.departDate)}</span>
+                <span>{formatTimelineDate(ibDate)}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-black/60">
-                <Clock className="h-3.5 w-3.5 shrink-0" />
-                <span>Depart {formatTime24(quote.flights.inbound.departTime)}{quote.flights.inbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.inbound.arriveTime)}` : ""}</span>
-              </div>
+              {quote.flights.inbound.departTime && (
+                <div className="flex items-center gap-2 text-xs text-black/60">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  <span>Depart {formatTime24(quote.flights.inbound.departTime)}{quote.flights.inbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.inbound.arriveTime)}` : ""}</span>
+                </div>
+              )}
               {(quote.flights.inbound.carrier || quote.flights.inbound.flightNo) && (
                 <div className="flex items-center gap-2 text-xs text-black/60">
                   <Plane className="h-3.5 w-3.5 shrink-0" />
