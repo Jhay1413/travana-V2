@@ -1,8 +1,32 @@
 import { db } from "../config/database";
 import { clientTable, type NeonClient, type InsertClientTable } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 export type NeonClientWithId = InsertClientTable & { id: string };
+
+const BATCH_SIZE = 100;
+
+const upsertSet = {
+  title: sql`excluded."title"`,
+  firstName: sql`excluded."firstName"`,
+  surename: sql`excluded."surename"`,
+  DOB: sql`excluded."DOB"`,
+  phoneNumber: sql`excluded."phoneNumber"`,
+  email: sql`excluded."email"`,
+  emailIsAllowed: sql`excluded."emailIsAllowed"`,
+  VMB: sql`excluded."VMB"`,
+  VMBfirstAccess: sql`excluded."VMBfirstAccess"`,
+  whatsAppVerified: sql`excluded."whatsAppVerified"`,
+  mailAllowed: sql`excluded."mailAllowed"`,
+  houseNumber: sql`excluded."houseNumber"`,
+  city: sql`excluded."city"`,
+  street: sql`excluded."street"`,
+  country: sql`excluded."country"`,
+  post_code: sql`excluded."post_code"`,
+  avatarUrl: sql`excluded."avatarUrl"`,
+  badge: sql`excluded."badge"`,
+  referrerId: sql`excluded."referrerId"`,
+};
 
 export const neonClientRepository = {
   async findById(id: string): Promise<NeonClient | undefined> {
@@ -32,39 +56,37 @@ export const neonClientRepository = {
     const errors: Array<{ row: number; id: string; error: string }> = [];
     let imported = 0;
 
-    for (let i = 0; i < clients.length; i++) {
-      const client = clients[i]!;
+    for (let batchStart = 0; batchStart < clients.length; batchStart += BATCH_SIZE) {
+      const batch = clients.slice(batchStart, batchStart + BATCH_SIZE);
       try {
         await db
           .insert(clientTable)
-          .values(client)
+          .values(batch)
           .onConflictDoUpdate({
             target: clientTable.id,
-            set: {
-              title: client.title,
-              firstName: client.firstName,
-              surename: client.surename,
-              DOB: client.DOB,
-              phoneNumber: client.phoneNumber,
-              email: client.email,
-              emailIsAllowed: client.emailIsAllowed,
-              VMB: client.VMB,
-              VMBfirstAccess: client.VMBfirstAccess,
-              whatsAppVerified: client.whatsAppVerified,
-              mailAllowed: client.mailAllowed,
-              houseNumber: client.houseNumber,
-              city: client.city,
-              street: client.street,
-              country: client.country,
-              post_code: client.post_code,
-              avatarUrl: client.avatarUrl,
-              badge: client.badge,
-              referrerId: client.referrerId,
-            },
+            set: upsertSet,
           });
-        imported++;
-      } catch (err: any) {
-        errors.push({ row: i + 1, id: client.id, error: err.message || "Unknown error" });
+        imported += batch.length;
+      } catch {
+        for (let i = 0; i < batch.length; i++) {
+          const client = batch[i]!;
+          try {
+            await db
+              .insert(clientTable)
+              .values(client)
+              .onConflictDoUpdate({
+                target: clientTable.id,
+                set: upsertSet,
+              });
+            imported++;
+          } catch (rowErr: any) {
+            errors.push({
+              row: batchStart + i + 1,
+              id: client.id,
+              error: rowErr.message || "Unknown error",
+            });
+          }
+        }
       }
     }
 

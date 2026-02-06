@@ -458,8 +458,18 @@ export default function CsvImportDialog({ open, onClose }: CsvImportDialogProps)
                 <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
                 <p className="mt-4 text-sm font-medium text-black dark:text-white">Importing clients...</p>
                 <p className="mt-1 text-xs text-black/40 dark:text-white/40">
-                  Processing {validClients.length} records
+                  Processing {validClients.length} records in batches
                 </p>
+                <div className="mt-4 w-48">
+                  <div className="h-1.5 w-full rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-blue-500"
+                      initial={{ width: "5%" }}
+                      animate={{ width: "90%" }}
+                      transition={{ duration: Math.max(3, validClients.length / 200), ease: "easeOut" }}
+                    />
+                  </div>
+                </div>
               </motion.div>
             )}
 
