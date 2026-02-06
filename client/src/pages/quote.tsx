@@ -1025,20 +1025,20 @@ export default function QuotePage() {
                   </div>
 
                   {galleryImages.length > 0 && (
-                    <div className="grid grid-cols-2 gap-2" data-testid="grid-itinerary-gallery">
+                    <div className="grid grid-cols-3 gap-1.5" data-testid="grid-itinerary-gallery">
                       {galleryImages.map((img, idx) => (
                         <button
                           key={img.id}
                           type="button"
-                          className="group relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
+                          className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
                           data-testid={`button-gallery-image-${idx}`}
                           onClick={() => handleSetPrimary(img.id)}
                           title="Click to set as main image"
                         >
                           <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100" aria-hidden />
-                          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/50 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100" data-testid={`label-set-main-${idx}`}>
-                            <Star className="h-3 w-3" /> Set as main
+                          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 bg-black/50 py-0.5 text-[8px] font-semibold text-white opacity-0 transition group-hover:opacity-100" data-testid={`label-set-main-${idx}`}>
+                            <Star className="h-2.5 w-2.5" /> Set as main
                           </div>
                         </button>
                       ))}
