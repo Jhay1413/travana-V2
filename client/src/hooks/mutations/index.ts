@@ -1,7 +1,7 @@
 export { useLogout } from "./use-auth-mutations";
 export { useCreateClient, useUpdateClient } from "./use-client-mutations";
 export { useUpdateNeonClient, useImportNeonClients } from "./use-neon-client-mutations";
-export { useCreateQuote } from "./use-quote-mutations";
+export { useCreateQuote, useUpdateQuote } from "./use-quote-mutations";
 export { useCreateTicket, useUpdateTicket, useDeleteTicket } from "./use-ticket-mutations";
 export { useUploadAttachment, useDeleteAttachment } from "./use-attachment-mutations";
 export { useCreateReply, useUpdateReply, useDeleteReply } from "./use-reply-mutations";

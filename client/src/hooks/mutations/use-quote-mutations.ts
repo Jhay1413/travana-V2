@@ -12,3 +12,13 @@ export function useCreateQuote() {
     },
   });
 }
+
+export function useUpdateQuote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) => quoteApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+    },
+  });
+}

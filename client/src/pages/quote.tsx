@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuoteFull } from "@/hooks/queries";
+import { useUpdateQuote } from "@/hooks/mutations";
 import { useQueryClient } from "@tanstack/react-query";
 import { quoteImageApi } from "@/api";
 import { useToast } from "@/hooks/use-toast";
@@ -172,7 +176,9 @@ export default function QuotePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
+  const updateQuoteMutation = useUpdateQuote();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -402,7 +408,11 @@ export default function QuotePage() {
                                     data-testid={`button-quote-${item.id}`}
                                     onClick={() => {
                                       setShowEllipsisMenu(false);
-                                      toast({ title: `${item.label} — coming soon` });
+                                      if (item.id === "edit") {
+                                        setShowEditModal(true);
+                                      } else {
+                                        toast({ title: `${item.label} — coming soon` });
+                                      }
                                     }}
                                   >
                                     <item.icon className="h-3.5 w-3.5" />
@@ -649,6 +659,414 @@ export default function QuotePage() {
           </div>
         </div>
       </div>
+      {quote && (
+        <EditQuoteDialog
+          open={showEditModal}
+          onOpenChange={setShowEditModal}
+          quote={quote}
+          quoteData={quoteData!}
+          onSave={(updates) => {
+            updateQuoteMutation.mutate(
+              { id: quoteId, data: updates },
+              {
+                onSuccess: () => {
+                  setShowEditModal(false);
+                  queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                  toast({ title: "Quote updated successfully" });
+                },
+                onError: () => {
+                  toast({ title: "Failed to update quote", variant: "destructive" });
+                },
+              }
+            );
+          }}
+          isSaving={updateQuoteMutation.isPending}
+        />
+      )}
     </CommandCenterShell>
   );
+}
+
+function EditQuoteDialog({
+  open,
+  onOpenChange,
+  quote,
+  quoteData,
+  onSave,
+  isSaving,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  quote: Quote;
+  quoteData: QuoteFull;
+  onSave: (data: Record<string, any>) => void;
+  isSaving: boolean;
+}) {
+  const [form, setForm] = useState(() => buildEditForm(quote, quoteData));
+
+  useEffect(() => {
+    if (open) setForm(buildEditForm(quote, quoteData));
+  }, [open, quote, quoteData]);
+
+  const set = (key: string, val: any) => setForm((prev: any) => ({ ...prev, [key]: val }));
+
+  const handleSave = () => {
+    const updates: Record<string, any> = {};
+    if (form.quoteTitle !== quote.quoteTitle) updates.quoteTitle = form.quoteTitle;
+    if (form.status !== quote.status) updates.status = form.status;
+    if (form.packageType !== quote.packageType) updates.packageType = form.packageType;
+    if (form.destination !== quote.destination) updates.destination = form.destination;
+    if (form.travelDate !== quote.travelDate) updates.travelDate = form.travelDate;
+    if (form.returnDate !== quote.returnDate) updates.returnDate = form.returnDate;
+    if (form.passengersAdults !== quote.passengers.adults) updates.passengersAdults = form.passengersAdults;
+    if (form.passengersChildren !== quote.passengers.children) updates.passengersChildren = form.passengersChildren;
+    if (form.accommodationProperty !== quote.accommodation.property) updates.accommodationProperty = form.accommodationProperty;
+    if (form.accommodationBoard !== quote.accommodation.board) updates.accommodationBoard = form.accommodationBoard;
+    if (form.accommodationRoomType !== quote.accommodation.roomType) updates.accommodationRoomType = form.accommodationRoomType;
+    if (form.outboundFrom !== quote.flights.outbound.from) updates.outboundFromAirport = form.outboundFrom;
+    if (form.outboundTo !== quote.flights.outbound.to) updates.outboundToAirport = form.outboundTo;
+    if (form.outboundCarrier !== quote.flights.outbound.carrier) updates.outboundCarrier = form.outboundCarrier;
+    if (form.outboundFlightNo !== quote.flights.outbound.flightNo) updates.outboundFlightNo = form.outboundFlightNo;
+    if (form.outboundDepart !== quote.flights.outbound.depart) updates.outboundDepart = form.outboundDepart;
+    if (form.outboundArrive !== quote.flights.outbound.arrive) updates.outboundArrive = form.outboundArrive;
+    if (form.inboundFrom !== quote.flights.inbound.from) updates.inboundFromAirport = form.inboundFrom;
+    if (form.inboundTo !== quote.flights.inbound.to) updates.inboundToAirport = form.inboundTo;
+    if (form.inboundCarrier !== quote.flights.inbound.carrier) updates.inboundCarrier = form.inboundCarrier;
+    if (form.inboundFlightNo !== quote.flights.inbound.flightNo) updates.inboundFlightNo = form.inboundFlightNo;
+    if (form.inboundDepart !== quote.flights.inbound.depart) updates.inboundDepart = form.inboundDepart;
+    if (form.inboundArrive !== quote.flights.inbound.arrive) updates.inboundArrive = form.inboundArrive;
+    if (form.tourOperator !== quote.commissions.tourOperator) updates.tourOperator = form.tourOperator;
+    if (form.price !== String(quote.commissions.price)) updates.price = form.price;
+    if (form.commissionPercent !== String(quote.commissions.commissionPercent)) updates.commission = form.commissionPercent;
+    if (form.agentSplitPercent !== String(quote.commissions.agentSplitPercent)) updates.sales = form.agentSplitPercent;
+    onSave(updates);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">Edit Quote</DialogTitle>
+          <DialogDescription className="text-sm text-black/55">
+            Update quote details, accommodation, flights, and pricing.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-4 grid gap-6">
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+            <div className="mb-3 text-sm font-semibold">Package Details</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Quote Title</Label>
+                <Input
+                  value={form.quoteTitle}
+                  onChange={(e) => set("quoteTitle", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-quote-title"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Status</Label>
+                <Select value={form.status} onValueChange={(v) => set("status", v)}>
+                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="In Play">In Play</SelectItem>
+                    <SelectItem value="Won">Won</SelectItem>
+                    <SelectItem value="Lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Package Type</Label>
+                <Select value={form.packageType} onValueChange={(v) => set("packageType", v)}>
+                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-package-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Package (Flight + Hotel)">Package (Flight + Hotel)</SelectItem>
+                    <SelectItem value="Flight Only">Flight Only</SelectItem>
+                    <SelectItem value="Hotel Only">Hotel Only</SelectItem>
+                    <SelectItem value="Cruise">Cruise</SelectItem>
+                    <SelectItem value="Tour">Tour</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Destination</Label>
+                <Input
+                  value={form.destination}
+                  onChange={(e) => set("destination", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-destination"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+            <div className="mb-3 text-sm font-semibold">Travel Details</div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Travel Date</Label>
+                <Input
+                  type="date"
+                  value={form.travelDate}
+                  onChange={(e) => set("travelDate", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-travel-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Return Date</Label>
+                <Input
+                  type="date"
+                  value={form.returnDate}
+                  onChange={(e) => set("returnDate", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-return-date"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Adults</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.passengersAdults}
+                    onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 0)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-adults"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Children</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.passengersChildren}
+                    onChange={(e) => set("passengersChildren", parseInt(e.target.value) || 0)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-children"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+            <div className="mb-3 text-sm font-semibold">Accommodation</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Hotel / Property</Label>
+                <Input
+                  value={form.accommodationProperty}
+                  onChange={(e) => set("accommodationProperty", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-hotel"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Room Type</Label>
+                <Input
+                  value={form.accommodationRoomType}
+                  onChange={(e) => set("accommodationRoomType", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-room-type"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Board Basis</Label>
+                <Input
+                  value={form.accommodationBoard}
+                  onChange={(e) => set("accommodationBoard", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-board"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Plane className="h-4 w-4" />
+              Flights
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-black/45">Outbound</div>
+                <div className="grid gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">From</Label>
+                      <Input value={form.outboundFrom} onChange={(e) => set("outboundFrom", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-from" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">To</Label>
+                      <Input value={form.outboundTo} onChange={(e) => set("outboundTo", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-to" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">Carrier</Label>
+                      <Input value={form.outboundCarrier} onChange={(e) => set("outboundCarrier", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-carrier" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">Flight No</Label>
+                      <Input value={form.outboundFlightNo} onChange={(e) => set("outboundFlightNo", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-flightno" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">Depart</Label>
+                      <Input value={form.outboundDepart} onChange={(e) => set("outboundDepart", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-depart" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">Arrive</Label>
+                      <Input value={form.outboundArrive} onChange={(e) => set("outboundArrive", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-arrive" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-black/45">Inbound</div>
+                <div className="grid gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">From</Label>
+                      <Input value={form.inboundFrom} onChange={(e) => set("inboundFrom", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-from" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">To</Label>
+                      <Input value={form.inboundTo} onChange={(e) => set("inboundTo", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-to" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">Carrier</Label>
+                      <Input value={form.inboundCarrier} onChange={(e) => set("inboundCarrier", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-carrier" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">Flight No</Label>
+                      <Input value={form.inboundFlightNo} onChange={(e) => set("inboundFlightNo", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-flightno" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">Depart</Label>
+                      <Input value={form.inboundDepart} onChange={(e) => set("inboundDepart", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-depart" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium text-black/60">Arrive</Label>
+                      <Input value={form.inboundArrive} onChange={(e) => set("inboundArrive", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-arrive" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+            <div className="mb-3 text-sm font-semibold">Pricing &amp; Commission</div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Tour Operator</Label>
+                <Input
+                  value={form.tourOperator}
+                  onChange={(e) => set("tourOperator", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-tour-operator"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Total Price (GBP)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.price}
+                  onChange={(e) => set("price", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-price"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Commission %</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.commissionPercent}
+                  onChange={(e) => set("commissionPercent", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-commission-percent"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Agent Split %</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.agentSplitPercent}
+                  onChange={(e) => set("agentSplitPercent", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-agent-split"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              className="h-9 rounded-2xl border-black/10 px-4"
+              onClick={() => onOpenChange(false)}
+              data-testid="edit-button-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              className="h-9 rounded-2xl bg-black px-4 text-white hover:bg-black/90"
+              onClick={handleSave}
+              disabled={isSaving}
+              data-testid="edit-button-save"
+            >
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function buildEditForm(quote: Quote, quoteData: QuoteFull) {
+  return {
+    quoteTitle: quote.quoteTitle,
+    status: quote.status,
+    packageType: quote.packageType,
+    destination: quote.destination,
+    travelDate: quote.travelDate,
+    returnDate: quote.returnDate,
+    passengersAdults: quote.passengers.adults,
+    passengersChildren: quote.passengers.children,
+    accommodationProperty: quote.accommodation.property,
+    accommodationBoard: quote.accommodation.board,
+    accommodationRoomType: quote.accommodation.roomType,
+    outboundFrom: quote.flights.outbound.from,
+    outboundTo: quote.flights.outbound.to,
+    outboundCarrier: quote.flights.outbound.carrier,
+    outboundFlightNo: quote.flights.outbound.flightNo,
+    outboundDepart: quote.flights.outbound.depart,
+    outboundArrive: quote.flights.outbound.arrive,
+    inboundFrom: quote.flights.inbound.from,
+    inboundTo: quote.flights.inbound.to,
+    inboundCarrier: quote.flights.inbound.carrier,
+    inboundFlightNo: quote.flights.inbound.flightNo,
+    inboundDepart: quote.flights.inbound.depart,
+    inboundArrive: quote.flights.inbound.arrive,
+    tourOperator: quote.commissions.tourOperator,
+    price: String(quote.commissions.price),
+    commissionPercent: String(quote.commissions.commissionPercent),
+    agentSplitPercent: String(quote.commissions.agentSplitPercent),
+  };
 }

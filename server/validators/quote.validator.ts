@@ -9,5 +9,5 @@ export const updateQuoteValidator = z.object({
   params: z.object({
     id: z.string(),
   }),
-  body: insertQuoteSchema.partial(),
+  body: insertQuoteSchema.partial().passthrough(),
 });

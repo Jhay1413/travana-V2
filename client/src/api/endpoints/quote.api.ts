@@ -25,4 +25,9 @@ export const quoteApi = {
     const { data } = await axiosClient.post<Quote>("/api/quotes", quoteData);
     return data;
   },
+
+  update: async (id: string, quoteData: Partial<CreateQuoteData> & Record<string, any>): Promise<Quote> => {
+    const { data } = await axiosClient.patch<Quote>(`/api/quotes/${id}`, quoteData);
+    return data;
+  },
 };

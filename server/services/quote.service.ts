@@ -103,10 +103,84 @@ export const quoteService = {
   },
 
   async updateQuote(id: string, data: any): Promise<Quote> {
-    const { tourOperator, sales, price, commission, discount, serviceCharge, pricePerPerson, ...quoteData } = data;
-    const quote = await quoteRepository.update(id, quoteData);
+    const {
+      tourOperator, sales, price, commission, discount, serviceCharge, pricePerPerson,
+      accommodationProperty, accommodationBoard, accommodationRoomType, accommodationNotes,
+      outboundFromAirport, outboundToAirport, outboundCarrier, outboundFlightNo, outboundDepart, outboundArrive,
+      inboundFromAirport, inboundToAirport, inboundCarrier, inboundFlightNo, inboundDepart, inboundArrive,
+      ...quoteData
+    } = data;
+
+    let quote: Quote | undefined;
+    if (Object.keys(quoteData).length > 0) {
+      quote = await quoteRepository.update(id, quoteData);
+    } else {
+      quote = await quoteRepository.findById(id);
+    }
     if (!quote) {
       throw new AppError("Quote not found", 404);
+    }
+
+    const existingAccommodation = await accommodationRepository.findByQuoteId(id);
+    if (accommodationProperty !== undefined || accommodationBoard !== undefined || accommodationRoomType !== undefined) {
+      const accData: any = {};
+      if (accommodationProperty !== undefined) accData.property = accommodationProperty;
+      if (accommodationBoard !== undefined) accData.board = accommodationBoard;
+      if (accommodationRoomType !== undefined) accData.roomType = accommodationRoomType;
+      if (accommodationNotes !== undefined) accData.notes = accommodationNotes;
+      if (existingAccommodation) {
+        await accommodationRepository.update(existingAccommodation.id, accData);
+      } else {
+        await accommodationRepository.create({
+          quoteId: id,
+          property: accommodationProperty || "",
+          board: accommodationBoard || "",
+          roomType: accommodationRoomType || "",
+          notes: accommodationNotes || "",
+        });
+      }
+    }
+
+    const existingFlights = await flightRepository.findByQuoteId(id);
+    const outbound = existingFlights.find(f => f.direction === "outbound");
+    const inbound = existingFlights.find(f => f.direction === "inbound");
+    if (outboundFromAirport !== undefined || outboundToAirport !== undefined || outboundCarrier !== undefined) {
+      const flData: any = {};
+      if (outboundFromAirport !== undefined) flData.fromAirport = outboundFromAirport;
+      if (outboundToAirport !== undefined) flData.toAirport = outboundToAirport;
+      if (outboundCarrier !== undefined) flData.carrier = outboundCarrier;
+      if (outboundFlightNo !== undefined) flData.flightNo = outboundFlightNo;
+      if (outboundDepart !== undefined) flData.depart = outboundDepart;
+      if (outboundArrive !== undefined) flData.arrive = outboundArrive;
+      if (outbound) {
+        await flightRepository.update(outbound.id, flData);
+      } else {
+        await flightRepository.create({
+          quoteId: id, direction: "outbound",
+          fromAirport: outboundFromAirport || "", toAirport: outboundToAirport || "",
+          carrier: outboundCarrier || "", flightNo: outboundFlightNo || "",
+          depart: outboundDepart || "", arrive: outboundArrive || "",
+        });
+      }
+    }
+    if (inboundFromAirport !== undefined || inboundToAirport !== undefined || inboundCarrier !== undefined) {
+      const flData: any = {};
+      if (inboundFromAirport !== undefined) flData.fromAirport = inboundFromAirport;
+      if (inboundToAirport !== undefined) flData.toAirport = inboundToAirport;
+      if (inboundCarrier !== undefined) flData.carrier = inboundCarrier;
+      if (inboundFlightNo !== undefined) flData.flightNo = inboundFlightNo;
+      if (inboundDepart !== undefined) flData.depart = inboundDepart;
+      if (inboundArrive !== undefined) flData.arrive = inboundArrive;
+      if (inbound) {
+        await flightRepository.update(inbound.id, flData);
+      } else {
+        await flightRepository.create({
+          quoteId: id, direction: "inbound",
+          fromAirport: inboundFromAirport || "", toAirport: inboundToAirport || "",
+          carrier: inboundCarrier || "", flightNo: inboundFlightNo || "",
+          depart: inboundDepart || "", arrive: inboundArrive || "",
+        });
+      }
     }
 
     if (price) {
