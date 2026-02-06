@@ -8,6 +8,17 @@ export interface User {
   avatar: string | null;
 }
 
+async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: "Request failed" }));
+    throw new Error(error.message || "Request failed");
+  }
+  if (res.status === 204) return undefined as T;
+  const json = await res.json();
+  return json.data !== undefined ? json.data : json;
+}
+
 export async function fetchCurrentUser(): Promise<User | null> {
   const res = await fetch("/api/auth/user");
   if (!res.ok) return null;
@@ -54,7 +65,7 @@ export interface CreateClientData {
 }
 
 export async function createClient(data: CreateClientData): Promise<Client> {
-  const res = await fetch("/api/clients", {
+  return apiRequest<Client>("/api/clients", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -62,11 +73,6 @@ export async function createClient(data: CreateClientData): Promise<Client> {
       name: `${data.firstName} ${data.lastName}`.trim(),
     }),
   });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.message || "Failed to create client");
-  }
-  return res.json();
 }
 
 export interface Quote {
@@ -154,28 +160,19 @@ export interface DashboardStats {
 
 // Clients
 export async function fetchClients(): Promise<Client[]> {
-  const res = await fetch("/api/clients");
-  if (!res.ok) throw new Error("Failed to fetch clients");
-  return res.json();
+  return apiRequest<Client[]>("/api/clients");
 }
 
 export async function fetchClient(id: string): Promise<Client> {
-  const res = await fetch(`/api/clients/${id}`);
-  if (!res.ok) throw new Error("Failed to fetch client");
-  return res.json();
+  return apiRequest<Client>(`/api/clients/${id}`);
 }
 
 export async function updateClient(id: string, data: Partial<Client>): Promise<Client> {
-  const res = await fetch(`/api/clients/${id}`, {
+  return apiRequest<Client>(`/api/clients/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.message || "Failed to update client");
-  }
-  return res.json();
 }
 
 // Quotes
@@ -185,21 +182,15 @@ export async function fetchQuotes(filters?: { status?: string; clientId?: string
   if (filters?.clientId) params.append("clientId", filters.clientId);
   
   const url = `/api/quotes${params.toString() ? `?${params.toString()}` : ""}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch quotes");
-  return res.json();
+  return apiRequest<Quote[]>(url);
 }
 
 export async function fetchQuote(id: string): Promise<Quote> {
-  const res = await fetch(`/api/quotes/${id}`);
-  if (!res.ok) throw new Error("Failed to fetch quote");
-  return res.json();
+  return apiRequest<Quote>(`/api/quotes/${id}`);
 }
 
 export async function fetchQuoteFull(id: string): Promise<QuoteFull> {
-  const res = await fetch(`/api/quotes/${id}/full`);
-  if (!res.ok) throw new Error("Failed to fetch quote details");
-  return res.json();
+  return apiRequest<QuoteFull>(`/api/quotes/${id}/full`);
 }
 
 export interface CreateQuoteData {
@@ -249,30 +240,21 @@ export interface CreateQuoteData {
 }
 
 export async function createQuote(data: CreateQuoteData): Promise<Quote> {
-  const res = await fetch("/api/quotes", {
+  return apiRequest<Quote>("/api/quotes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || "Failed to create quote");
-  }
-  return res.json();
 }
 
 // Dashboard Stats
 export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const res = await fetch("/api/dashboard/stats");
-  if (!res.ok) throw new Error("Failed to fetch dashboard stats");
-  return res.json();
+  return apiRequest<DashboardStats>("/api/dashboard/stats");
 }
 
 // Users
 export async function fetchUsers(): Promise<User[]> {
-  const res = await fetch("/api/users");
-  if (!res.ok) throw new Error("Failed to fetch users");
-  return res.json();
+  return apiRequest<User[]>("/api/users");
 }
 
 // Tour Operators
@@ -289,9 +271,7 @@ export interface TourOperator {
 }
 
 export async function fetchTourOperators(): Promise<TourOperator[]> {
-  const res = await fetch("/api/tour-operators");
-  if (!res.ok) throw new Error("Failed to fetch tour operators");
-  return res.json();
+  return apiRequest<TourOperator[]>("/api/tour-operators");
 }
 
 // Airports
@@ -304,9 +284,7 @@ export interface Airport {
 }
 
 export async function fetchAirports(): Promise<Airport[]> {
-  const res = await fetch("/api/airports");
-  if (!res.ok) throw new Error("Failed to fetch airports");
-  return res.json();
+  return apiRequest<Airport[]>("/api/airports");
 }
 
 // Tickets
@@ -325,52 +303,39 @@ export interface Ticket {
 }
 
 export async function fetchTickets(): Promise<Ticket[]> {
-  const res = await fetch("/api/tickets");
-  if (!res.ok) throw new Error("Failed to fetch tickets");
-  return res.json();
+  return apiRequest<Ticket[]>("/api/tickets");
 }
 
 export async function fetchTicket(id: string): Promise<Ticket> {
-  const res = await fetch(`/api/tickets/${id}`);
-  if (!res.ok) throw new Error("Failed to fetch ticket");
-  return res.json();
+  return apiRequest<Ticket>(`/api/tickets/${id}`);
 }
 
 export async function fetchTicketsByClient(clientId: string): Promise<Ticket[]> {
-  const res = await fetch(`/api/clients/${clientId}/tickets`);
-  if (!res.ok) throw new Error("Failed to fetch client tickets");
-  return res.json();
+  return apiRequest<Ticket[]>(`/api/tickets/client/${clientId}`);
 }
 
 export async function fetchTicketsByUser(userId: string): Promise<Ticket[]> {
-  const res = await fetch(`/api/users/${userId}/tickets`);
-  if (!res.ok) throw new Error("Failed to fetch user tickets");
-  return res.json();
+  return apiRequest<Ticket[]>(`/api/tickets/user/${userId}`);
 }
 
 export async function createTicket(ticket: Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt">): Promise<Ticket> {
-  const res = await fetch("/api/tickets", {
+  return apiRequest<Ticket>("/api/tickets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(ticket),
   });
-  if (!res.ok) throw new Error("Failed to create ticket");
-  return res.json();
 }
 
 export async function updateTicket(id: string, ticket: Partial<Ticket>): Promise<Ticket> {
-  const res = await fetch(`/api/tickets/${id}`, {
+  return apiRequest<Ticket>(`/api/tickets/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(ticket),
   });
-  if (!res.ok) throw new Error("Failed to update ticket");
-  return res.json();
 }
 
 export async function deleteTicket(id: string): Promise<void> {
-  const res = await fetch(`/api/tickets/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete ticket");
+  return apiRequest<void>(`/api/tickets/${id}`, { method: "DELETE" });
 }
 
 // Ticket Attachments
@@ -385,26 +350,21 @@ export interface TicketAttachment {
 }
 
 export async function fetchAttachments(ticketId: string): Promise<TicketAttachment[]> {
-  const res = await fetch(`/api/tickets/${ticketId}/attachments`);
-  if (!res.ok) throw new Error("Failed to fetch attachments");
-  return res.json();
+  return apiRequest<TicketAttachment[]>(`/api/attachments/ticket/${ticketId}`);
 }
 
 export async function uploadAttachment(ticketId: string, file: File): Promise<TicketAttachment> {
   const formData = new FormData();
   formData.append("file", file);
   
-  const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
+  return apiRequest<TicketAttachment>(`/api/attachments/ticket/${ticketId}`, {
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error("Failed to upload file");
-  return res.json();
 }
 
 export async function deleteAttachment(id: string): Promise<void> {
-  const res = await fetch(`/api/attachments/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete attachment");
+  return apiRequest<void>(`/api/attachments/${id}`, { method: "DELETE" });
 }
 
 export function getAttachmentUrl(id: string): string {
@@ -423,34 +383,27 @@ export interface TicketReply {
 }
 
 export async function fetchReplies(ticketId: string): Promise<TicketReply[]> {
-  const res = await fetch(`/api/tickets/${ticketId}/replies`);
-  if (!res.ok) throw new Error("Failed to fetch replies");
-  return res.json();
+  return apiRequest<TicketReply[]>(`/api/replies/ticket/${ticketId}`);
 }
 
 export async function createReply(ticketId: string, userId: string, content: string, parentReplyId?: string): Promise<TicketReply> {
-  const res = await fetch(`/api/tickets/${ticketId}/replies`, {
+  return apiRequest<TicketReply>(`/api/replies/ticket/${ticketId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userId, content, parentReplyId: parentReplyId || null }),
   });
-  if (!res.ok) throw new Error("Failed to create reply");
-  return res.json();
 }
 
 export async function updateReply(id: string, content: string): Promise<TicketReply> {
-  const res = await fetch(`/api/replies/${id}`, {
+  return apiRequest<TicketReply>(`/api/replies/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content }),
   });
-  if (!res.ok) throw new Error("Failed to update reply");
-  return res.json();
 }
 
 export async function deleteReply(id: string): Promise<void> {
-  const res = await fetch(`/api/replies/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete reply");
+  return apiRequest<void>(`/api/replies/${id}`, { method: "DELETE" });
 }
 
 // Notifications
@@ -466,29 +419,21 @@ export interface Notification {
 }
 
 export async function fetchNotifications(userId: string): Promise<Notification[]> {
-  const res = await fetch(`/api/notifications?userId=${userId}`);
-  if (!res.ok) throw new Error("Failed to fetch notifications");
-  return res.json();
+  return apiRequest<Notification[]>(`/api/notifications?userId=${userId}`);
 }
 
 export async function fetchUnreadNotifications(userId: string): Promise<Notification[]> {
-  const res = await fetch(`/api/notifications/unread?userId=${userId}`);
-  if (!res.ok) throw new Error("Failed to fetch unread notifications");
-  return res.json();
+  return apiRequest<Notification[]>(`/api/notifications/unread?userId=${userId}`);
 }
 
 export async function markNotificationRead(id: string): Promise<Notification> {
-  const res = await fetch(`/api/notifications/${id}/read`, { method: "PUT" });
-  if (!res.ok) throw new Error("Failed to mark notification as read");
-  return res.json();
+  return apiRequest<Notification>(`/api/notifications/${id}/read`, { method: "PUT" });
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
-  const res = await fetch(`/api/notifications/read-all?userId=${userId}`, { method: "PUT" });
-  if (!res.ok) throw new Error("Failed to mark all notifications as read");
+  return apiRequest<void>(`/api/notifications/read-all?userId=${userId}`, { method: "PUT" });
 }
 
 export async function deleteNotification(id: string): Promise<void> {
-  const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete notification");
+  return apiRequest<void>(`/api/notifications/${id}`, { method: "DELETE" });
 }

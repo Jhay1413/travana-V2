@@ -1,5 +1,5 @@
 import { users, type User, type UpsertUser } from "@shared/schema";
-import { db } from "../../storage";
+import { db } from "../../config/database";
 import { eq } from "drizzle-orm";
 
 // Interface for auth storage operations

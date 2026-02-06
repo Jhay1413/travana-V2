@@ -1,0 +1,8 @@
+import { dashboardRepository } from "../repositories/dashboard.repository";
+import type { DashboardStats } from "../types/dashboard";
+
+export const dashboardService = {
+  async getStats(): Promise<DashboardStats> {
+    return await dashboardRepository.getStats();
+  },
+};
