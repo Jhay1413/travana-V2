@@ -792,45 +792,6 @@ export default function ClientPage() {
                 </div>
               ) : null}
 
-              {client ? (
-                <div className="mt-4 grid gap-2 md:grid-cols-2" data-testid="grid-client-actions">
-                  <button
-                    type="button"
-                    className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                    data-testid="button-client-call"
-                    onClick={() => {}}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                        <Phone className="h-4 w-4" />
-                        Call
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                    </div>
-                    <div className="mt-1 truncate text-xs text-black/55" data-testid="text-client-phone">
-                      {client.phone}
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                    data-testid="button-client-email"
-                    onClick={() => {}}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                        <Mail className="h-4 w-4" />
-                        Email
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                    </div>
-                    <div className="mt-1 truncate text-xs text-black/55" data-testid="text-client-email">
-                      {client.email}
-                    </div>
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <div className="mt-3 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-sections">
