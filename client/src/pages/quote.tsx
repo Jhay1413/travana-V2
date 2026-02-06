@@ -1002,7 +1002,7 @@ export default function QuotePage() {
           <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
-                <div className="grid gap-3" data-testid="col-itinerary-media">
+                <div className="grid content-start gap-1.5" data-testid="col-itinerary-media">
                   <div className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
                     {primaryImage ? (
                       <>
