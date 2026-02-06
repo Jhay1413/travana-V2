@@ -149,6 +149,28 @@ export default function ClientsPage() {
       onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
     >
       <div className="space-y-6">
+        {/* Import CSV Banner */}
+        <div className="flex items-center justify-between rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4" data-testid="banner-csv-import">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-800/40">
+              <Upload className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Import clients from CSV</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">Upload a CSV file to bulk import or update clients</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="gap-2 rounded-full bg-blue-600 text-white hover:bg-blue-700"
+            onClick={() => setShowImport(true)}
+            data-testid="button-import-csv-banner"
+          >
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </Button>
+        </div>
+
         {/* Pipeline Stage Tabs */}
         <div className="flex flex-wrap items-center gap-2" data-testid="pipeline-tabs">
           {(["all", "Enquiry", "Quote", "Booked"] as const).map((s) => (
