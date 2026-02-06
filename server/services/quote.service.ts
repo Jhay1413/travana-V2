@@ -106,8 +106,12 @@ export const quoteService = {
     const {
       tourOperator, sales, price, commission, discount, serviceCharge, pricePerPerson,
       accommodationProperty, accommodationBoard, accommodationRoomType, accommodationNotes,
+      accommodation: accommodationField,
+      boardBasis, roomType,
       outboundFromAirport, outboundToAirport, outboundCarrier, outboundFlightNo, outboundDepart, outboundArrive,
+      outboundDepartAirport, outboundDepartDate, outboundDepartTime, outboundArriveAirport, outboundArriveDate, outboundArriveTime,
       inboundFromAirport, inboundToAirport, inboundCarrier, inboundFlightNo, inboundDepart, inboundArrive,
+      inboundDepartAirport, inboundDepartDate, inboundDepartTime, inboundArriveAirport, inboundArriveDate, inboundArriveTime,
       ...quoteData
     } = data;
 
@@ -121,64 +125,77 @@ export const quoteService = {
       throw new AppError("Quote not found", 404);
     }
 
+    const resolvedAccProperty = accommodationProperty ?? accommodationField;
+    const resolvedBoard = accommodationBoard ?? boardBasis;
+    const resolvedRoomType = accommodationRoomType ?? roomType;
+
     const existingAccommodation = await accommodationRepository.findByQuoteId(id);
-    if (accommodationProperty !== undefined || accommodationBoard !== undefined || accommodationRoomType !== undefined) {
+    if (resolvedAccProperty !== undefined || resolvedBoard !== undefined || resolvedRoomType !== undefined) {
       const accData: any = {};
-      if (accommodationProperty !== undefined) accData.property = accommodationProperty;
-      if (accommodationBoard !== undefined) accData.board = accommodationBoard;
-      if (accommodationRoomType !== undefined) accData.roomType = accommodationRoomType;
+      if (resolvedAccProperty !== undefined) accData.property = resolvedAccProperty;
+      if (resolvedBoard !== undefined) accData.board = resolvedBoard;
+      if (resolvedRoomType !== undefined) accData.roomType = resolvedRoomType;
       if (accommodationNotes !== undefined) accData.notes = accommodationNotes;
       if (existingAccommodation) {
         await accommodationRepository.update(existingAccommodation.id, accData);
       } else {
         await accommodationRepository.create({
           quoteId: id,
-          property: accommodationProperty || "",
-          board: accommodationBoard || "",
-          roomType: accommodationRoomType || "",
+          property: resolvedAccProperty || "",
+          board: resolvedBoard || "",
+          roomType: resolvedRoomType || "",
           notes: accommodationNotes || "",
         });
       }
     }
 
+    const resolvedOutFrom = outboundFromAirport ?? outboundDepartAirport;
+    const resolvedOutTo = outboundToAirport ?? outboundArriveAirport;
+    const resolvedOutDepart = outboundDepart ?? (outboundDepartDate ? new Date(`${outboundDepartDate}T${outboundDepartTime || "00:00"}`) : undefined);
+    const resolvedOutArrive = outboundArrive ?? (outboundArriveDate ? new Date(`${outboundArriveDate}T${outboundArriveTime || "00:00"}`) : undefined);
+    const resolvedInFrom = inboundFromAirport ?? inboundDepartAirport;
+    const resolvedInTo = inboundToAirport ?? inboundArriveAirport;
+    const resolvedInDepart = inboundDepart ?? (inboundDepartDate ? new Date(`${inboundDepartDate}T${inboundDepartTime || "00:00"}`) : undefined);
+    const resolvedInArrive = inboundArrive ?? (inboundArriveDate ? new Date(`${inboundArriveDate}T${inboundArriveTime || "00:00"}`) : undefined);
+
     const existingFlights = await flightRepository.findByQuoteId(id);
     const outbound = existingFlights.find(f => f.direction === "outbound");
     const inbound = existingFlights.find(f => f.direction === "inbound");
-    if (outboundFromAirport !== undefined || outboundToAirport !== undefined || outboundCarrier !== undefined) {
+    if (resolvedOutFrom !== undefined || resolvedOutTo !== undefined || outboundCarrier !== undefined || resolvedOutDepart !== undefined) {
       const flData: any = {};
-      if (outboundFromAirport !== undefined) flData.fromAirport = outboundFromAirport;
-      if (outboundToAirport !== undefined) flData.toAirport = outboundToAirport;
+      if (resolvedOutFrom !== undefined) flData.fromAirport = resolvedOutFrom;
+      if (resolvedOutTo !== undefined) flData.toAirport = resolvedOutTo;
       if (outboundCarrier !== undefined) flData.carrier = outboundCarrier;
       if (outboundFlightNo !== undefined) flData.flightNo = outboundFlightNo;
-      if (outboundDepart !== undefined) flData.depart = outboundDepart;
-      if (outboundArrive !== undefined) flData.arrive = outboundArrive;
+      if (resolvedOutDepart !== undefined) flData.depart = resolvedOutDepart;
+      if (resolvedOutArrive !== undefined) flData.arrive = resolvedOutArrive;
       if (outbound) {
         await flightRepository.update(outbound.id, flData);
       } else {
         await flightRepository.create({
           quoteId: id, direction: "outbound",
-          fromAirport: outboundFromAirport || "", toAirport: outboundToAirport || "",
+          fromAirport: resolvedOutFrom || "", toAirport: resolvedOutTo || "",
           carrier: outboundCarrier || "", flightNo: outboundFlightNo || "",
-          depart: outboundDepart || "", arrive: outboundArrive || "",
+          depart: resolvedOutDepart || new Date(), arrive: resolvedOutArrive || new Date(),
         });
       }
     }
-    if (inboundFromAirport !== undefined || inboundToAirport !== undefined || inboundCarrier !== undefined) {
+    if (resolvedInFrom !== undefined || resolvedInTo !== undefined || inboundCarrier !== undefined || resolvedInDepart !== undefined) {
       const flData: any = {};
-      if (inboundFromAirport !== undefined) flData.fromAirport = inboundFromAirport;
-      if (inboundToAirport !== undefined) flData.toAirport = inboundToAirport;
+      if (resolvedInFrom !== undefined) flData.fromAirport = resolvedInFrom;
+      if (resolvedInTo !== undefined) flData.toAirport = resolvedInTo;
       if (inboundCarrier !== undefined) flData.carrier = inboundCarrier;
       if (inboundFlightNo !== undefined) flData.flightNo = inboundFlightNo;
-      if (inboundDepart !== undefined) flData.depart = inboundDepart;
-      if (inboundArrive !== undefined) flData.arrive = inboundArrive;
+      if (resolvedInDepart !== undefined) flData.depart = resolvedInDepart;
+      if (resolvedInArrive !== undefined) flData.arrive = resolvedInArrive;
       if (inbound) {
         await flightRepository.update(inbound.id, flData);
       } else {
         await flightRepository.create({
           quoteId: id, direction: "inbound",
-          fromAirport: inboundFromAirport || "", toAirport: inboundToAirport || "",
+          fromAirport: resolvedInFrom || "", toAirport: resolvedInTo || "",
           carrier: inboundCarrier || "", flightNo: inboundFlightNo || "",
-          depart: inboundDepart || "", arrive: inboundArrive || "",
+          depart: resolvedInDepart || new Date(), arrive: resolvedInArrive || new Date(),
         });
       }
     }

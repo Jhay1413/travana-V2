@@ -38,10 +38,20 @@ type Quote = {
   status: "In Play" | "Won" | "Lost";
   packageType: string;
   quoteTitle: string;
+  quoteLink: string;
   travelDate: string;
   returnDate: string;
   destination: string;
+  country: string;
+  resort: string;
   createdAt: string;
+  passengersInfants: number;
+  checkInDate: string;
+  checkInTime: string;
+  nights: number;
+  transferType: string;
+  preBookedSeats: string;
+  flightMeals: string;
   passengers: {
     adults: number;
     children: number;
@@ -54,8 +64,8 @@ type Quote = {
     notes: string;
   };
   flights: {
-    outbound: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string };
-    inbound: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string };
+    outbound: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string };
+    inbound: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string };
   };
   owner: {
     name: string;
@@ -73,19 +83,49 @@ type Quote = {
   notes: string[];
 };
 
+function splitIsoDateTime(iso: string): { date: string; time: string } {
+  if (!iso) return { date: "", time: "" };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    const parts = iso.split("T");
+    return { date: parts[0] || "", time: (parts[1] || "").slice(0, 5) };
+  }
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
+}
+
 function transformQuoteData(apiData: QuoteFull): Quote {
   const outboundFlight = apiData.flights.find(f => f.direction === "outbound");
   const inboundFlight = apiData.flights.find(f => f.direction === "inbound");
-  
+
+  const obDepart = splitIsoDateTime(outboundFlight?.depart || "");
+  const obArrive = splitIsoDateTime(outboundFlight?.arrive || "");
+  const ibDepart = splitIsoDateTime(inboundFlight?.depart || "");
+  const ibArrive = splitIsoDateTime(inboundFlight?.arrive || "");
+
   return {
     id: apiData.id,
     status: apiData.status as "In Play" | "Won" | "Lost",
     packageType: apiData.packageType,
     quoteTitle: apiData.quoteTitle,
+    quoteLink: apiData.quoteLink || "",
     travelDate: apiData.travelDate,
     returnDate: apiData.returnDate,
     destination: apiData.destination,
+    country: apiData.country || "",
+    resort: apiData.resort || "",
     createdAt: apiData.createdAt,
+    passengersInfants: apiData.passengersInfants,
+    checkInDate: apiData.checkInDate || "",
+    checkInTime: apiData.checkInTime || "",
+    nights: apiData.nights || 0,
+    transferType: apiData.transferType || "",
+    preBookedSeats: apiData.preBookedSeats || "",
+    flightMeals: apiData.flightMeals || "",
     passengers: {
       adults: apiData.passengersAdults,
       children: apiData.passengersChildren,
@@ -105,6 +145,10 @@ function transformQuoteData(apiData: QuoteFull): Quote {
         flightNo: outboundFlight?.flightNo || "",
         depart: outboundFlight?.depart || "",
         arrive: outboundFlight?.arrive || "",
+        departDate: obDepart.date,
+        departTime: obDepart.time,
+        arriveDate: obArrive.date,
+        arriveTime: obArrive.time,
       },
       inbound: {
         from: inboundFlight?.fromAirport || "",
@@ -113,6 +157,10 @@ function transformQuoteData(apiData: QuoteFull): Quote {
         flightNo: inboundFlight?.flightNo || "",
         depart: inboundFlight?.depart || "",
         arrive: inboundFlight?.arrive || "",
+        departDate: ibDepart.date,
+        departTime: ibDepart.time,
+        arriveDate: ibArrive.date,
+        arriveTime: ibArrive.time,
       },
     },
     owner: {
@@ -711,34 +759,54 @@ function EditQuoteDialog({
   const set = (key: string, val: any) => setForm((prev: any) => ({ ...prev, [key]: val }));
 
   const handleSave = () => {
-    const updates: Record<string, any> = {};
-    if (form.quoteTitle !== quote.quoteTitle) updates.quoteTitle = form.quoteTitle;
-    if (form.status !== quote.status) updates.status = form.status;
-    if (form.packageType !== quote.packageType) updates.packageType = form.packageType;
-    if (form.destination !== quote.destination) updates.destination = form.destination;
-    if (form.travelDate !== quote.travelDate) updates.travelDate = form.travelDate;
-    if (form.returnDate !== quote.returnDate) updates.returnDate = form.returnDate;
-    if (form.passengersAdults !== quote.passengers.adults) updates.passengersAdults = form.passengersAdults;
-    if (form.passengersChildren !== quote.passengers.children) updates.passengersChildren = form.passengersChildren;
-    if (form.accommodationProperty !== quote.accommodation.property) updates.accommodationProperty = form.accommodationProperty;
-    if (form.accommodationBoard !== quote.accommodation.board) updates.accommodationBoard = form.accommodationBoard;
-    if (form.accommodationRoomType !== quote.accommodation.roomType) updates.accommodationRoomType = form.accommodationRoomType;
-    if (form.outboundFrom !== quote.flights.outbound.from) updates.outboundFromAirport = form.outboundFrom;
-    if (form.outboundTo !== quote.flights.outbound.to) updates.outboundToAirport = form.outboundTo;
-    if (form.outboundCarrier !== quote.flights.outbound.carrier) updates.outboundCarrier = form.outboundCarrier;
-    if (form.outboundFlightNo !== quote.flights.outbound.flightNo) updates.outboundFlightNo = form.outboundFlightNo;
-    if (form.outboundDepart !== quote.flights.outbound.depart) updates.outboundDepart = form.outboundDepart;
-    if (form.outboundArrive !== quote.flights.outbound.arrive) updates.outboundArrive = form.outboundArrive;
-    if (form.inboundFrom !== quote.flights.inbound.from) updates.inboundFromAirport = form.inboundFrom;
-    if (form.inboundTo !== quote.flights.inbound.to) updates.inboundToAirport = form.inboundTo;
-    if (form.inboundCarrier !== quote.flights.inbound.carrier) updates.inboundCarrier = form.inboundCarrier;
-    if (form.inboundFlightNo !== quote.flights.inbound.flightNo) updates.inboundFlightNo = form.inboundFlightNo;
-    if (form.inboundDepart !== quote.flights.inbound.depart) updates.inboundDepart = form.inboundDepart;
-    if (form.inboundArrive !== quote.flights.inbound.arrive) updates.inboundArrive = form.inboundArrive;
-    if (form.tourOperator !== quote.commissions.tourOperator) updates.tourOperator = form.tourOperator;
-    if (form.price !== String(quote.commissions.price)) updates.price = form.price;
-    if (form.commissionPercent !== String(quote.commissions.commissionPercent)) updates.commission = form.commissionPercent;
-    if (form.agentSplitPercent !== String(quote.commissions.agentSplitPercent)) updates.sales = form.agentSplitPercent;
+    const travelDateObj = new Date(form.travelDate);
+    const returnDateObj = new Date(travelDateObj);
+    returnDateObj.setDate(returnDateObj.getDate() + (form.nights || 7));
+    const returnDate = returnDateObj.toISOString().split("T")[0];
+
+    const updates: Record<string, any> = {
+      packageType: form.packageType,
+      quoteTitle: form.quoteTitle,
+      quoteLink: form.quoteLink,
+      status: form.status,
+      destination: form.destination,
+      country: form.country,
+      resort: form.resort,
+      travelDate: form.travelDate,
+      returnDate: returnDate,
+      passengersAdults: form.passengersAdults,
+      passengersChildren: form.passengersChildren,
+      passengersInfants: form.passengersInfants,
+      childAges: form.childAges,
+      checkInDate: form.checkInDate,
+      checkInTime: form.checkInTime,
+      nights: form.nights,
+      transferType: form.transferType,
+      preBookedSeats: form.preBookedSeats,
+      flightMeals: form.flightMeals,
+      accommodation: form.accommodation,
+      boardBasis: form.boardBasis,
+      roomType: form.roomType,
+      outboundDepartAirport: form.outboundDepartAirport,
+      outboundDepartDate: form.outboundDepartDate,
+      outboundDepartTime: form.outboundDepartTime,
+      outboundArriveAirport: form.outboundArriveAirport,
+      outboundArriveDate: form.outboundArriveDate,
+      outboundArriveTime: form.outboundArriveTime,
+      inboundDepartAirport: form.inboundDepartAirport,
+      inboundDepartDate: form.inboundDepartDate,
+      inboundDepartTime: form.inboundDepartTime,
+      inboundArriveAirport: form.inboundArriveAirport,
+      inboundArriveDate: form.inboundArriveDate,
+      inboundArriveTime: form.inboundArriveTime,
+      tourOperator: form.tourOperator,
+      sales: form.sales,
+      price: form.price,
+      commission: form.commission,
+      discount: form.discount,
+      serviceCharge: form.serviceCharge,
+      pricePerPerson: form.pricePerPerson,
+    };
     onSave(updates);
   };
 
@@ -757,12 +825,38 @@ function EditQuoteDialog({
             <div className="mb-3 text-sm font-semibold">Package Details</div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Package Type</Label>
+                <Select value={form.packageType} onValueChange={(v) => set("packageType", v)}>
+                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-package-type">
+                    <SelectValue placeholder="Select type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Package (Flight + Hotel)">Package (Flight + Hotel)</SelectItem>
+                    <SelectItem value="Flight Only">Flight Only</SelectItem>
+                    <SelectItem value="Hotel Only">Hotel Only</SelectItem>
+                    <SelectItem value="Cruise">Cruise</SelectItem>
+                    <SelectItem value="Tour">Tour</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Quote Title</Label>
                 <Input
+                  placeholder="e.g. Maldives — Overwater Villa, 9 nights"
                   value={form.quoteTitle}
                   onChange={(e) => set("quoteTitle", e.target.value)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
                   data-testid="edit-input-quote-title"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Quote Link</Label>
+                <Input
+                  placeholder="https://..."
+                  value={form.quoteLink}
+                  onChange={(e) => set("quoteLink", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-quote-link"
                 />
               </div>
               <div className="space-y-1.5">
@@ -777,30 +871,6 @@ function EditQuoteDialog({
                     <SelectItem value="Lost">Lost</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Package Type</Label>
-                <Select value={form.packageType} onValueChange={(v) => set("packageType", v)}>
-                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-package-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Package (Flight + Hotel)">Package (Flight + Hotel)</SelectItem>
-                    <SelectItem value="Flight Only">Flight Only</SelectItem>
-                    <SelectItem value="Hotel Only">Hotel Only</SelectItem>
-                    <SelectItem value="Cruise">Cruise</SelectItem>
-                    <SelectItem value="Tour">Tour</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Destination</Label>
-                <Input
-                  value={form.destination}
-                  onChange={(e) => set("destination", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-destination"
-                />
               </div>
             </div>
           </div>
@@ -819,70 +889,202 @@ function EditQuoteDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Return Date</Label>
+                <Label className="text-xs font-medium text-black/60">Adults</Label>
                 <Input
-                  type="date"
-                  value={form.returnDate}
-                  onChange={(e) => set("returnDate", e.target.value)}
+                  type="number"
+                  min={1}
+                  value={form.passengersAdults}
+                  onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-return-date"
+                  data-testid="edit-input-adults"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Adults</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={form.passengersAdults}
-                    onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 0)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-adults"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Children</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.passengersChildren}
-                    onChange={(e) => set("passengersChildren", parseInt(e.target.value) || 0)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-children"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Children</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.passengersChildren}
+                  onChange={(e) => {
+                    const count = parseInt(e.target.value) || 0;
+                    set("passengersChildren", count);
+                    set("childAges", Array(count).fill(0));
+                  }}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-children"
+                />
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Infants</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.passengersInfants}
+                  onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-infants"
+                />
+              </div>
+              {form.passengersChildren > 0 && (
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {form.childAges.map((age: number, idx: number) => (
+                      <Input
+                        key={idx}
+                        type="number"
+                        min={0}
+                        max={17}
+                        value={age}
+                        onChange={(e) => {
+                          const ages = [...form.childAges];
+                          ages[idx] = parseInt(e.target.value) || 0;
+                          set("childAges", ages);
+                        }}
+                        className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
+                        data-testid={`edit-input-child-age-${idx}`}
+                        placeholder={`Child ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-            <div className="mb-3 text-sm font-semibold">Accommodation</div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="mb-3 text-sm font-semibold">Destination & Accommodation</div>
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Hotel / Property</Label>
+                <Label className="text-xs font-medium text-black/60">Country</Label>
                 <Input
-                  value={form.accommodationProperty}
-                  onChange={(e) => set("accommodationProperty", e.target.value)}
+                  placeholder="e.g. United Kingdom"
+                  value={form.country}
+                  onChange={(e) => set("country", e.target.value)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-hotel"
+                  data-testid="edit-input-country"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Destination</Label>
+                <Input
+                  placeholder="e.g. Maldives"
+                  value={form.destination}
+                  onChange={(e) => set("destination", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-destination"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Resort</Label>
+                <Input
+                  placeholder="e.g. North Malé Atoll"
+                  value={form.resort}
+                  onChange={(e) => set("resort", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-resort"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Accommodation</Label>
+                <Input
+                  placeholder="e.g. Azure Overwater Resort"
+                  value={form.accommodation}
+                  onChange={(e) => set("accommodation", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-accommodation"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
+                <Input
+                  type="date"
+                  value={form.checkInDate}
+                  onChange={(e) => set("checkInDate", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-checkin-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Check-in Time</Label>
+                <Input
+                  type="time"
+                  value={form.checkInTime}
+                  onChange={(e) => set("checkInTime", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-checkin-time"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.nights}
+                  onChange={(e) => set("nights", parseInt(e.target.value) || 1)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-nights"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Board Basis</Label>
+                <Select value={form.boardBasis} onValueChange={(v) => set("boardBasis", v)}>
+                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-board-basis">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Room Only">Room Only</SelectItem>
+                    <SelectItem value="Bed & Breakfast">Bed & Breakfast</SelectItem>
+                    <SelectItem value="Half Board">Half Board</SelectItem>
+                    <SelectItem value="Full Board">Full Board</SelectItem>
+                    <SelectItem value="All Inclusive">All Inclusive</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Room Type</Label>
                 <Input
-                  value={form.accommodationRoomType}
-                  onChange={(e) => set("accommodationRoomType", e.target.value)}
+                  placeholder="e.g. Overwater Villa"
+                  value={form.roomType}
+                  onChange={(e) => set("roomType", e.target.value)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
                   data-testid="edit-input-room-type"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Board Basis</Label>
+                <Label className="text-xs font-medium text-black/60">Transfer Type</Label>
+                <Select value={form.transferType} onValueChange={(v) => set("transferType", v)}>
+                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-transfer-type">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Private Transfer">Private Transfer</SelectItem>
+                    <SelectItem value="Shared Transfer">Shared Transfer</SelectItem>
+                    <SelectItem value="Seaplane">Seaplane</SelectItem>
+                    <SelectItem value="Speedboat">Speedboat</SelectItem>
+                    <SelectItem value="Self-drive">Self-drive</SelectItem>
+                    <SelectItem value="None">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Pre-booked Seats</Label>
                 <Input
-                  value={form.accommodationBoard}
-                  onChange={(e) => set("accommodationBoard", e.target.value)}
+                  placeholder="e.g. Extra legroom (row 12)"
+                  value={form.preBookedSeats}
+                  onChange={(e) => set("preBookedSeats", e.target.value)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-board"
+                  data-testid="edit-input-prebooked-seats"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Flight Meals</Label>
+                <Input
+                  placeholder="e.g. Standard + child meal"
+                  value={form.flightMeals}
+                  onChange={(e) => set("flightMeals", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-flight-meals"
                 />
               </div>
             </div>
@@ -891,88 +1093,148 @@ function EditQuoteDialog({
           <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
               <Plane className="h-4 w-4" />
-              Flights
+              Flights — Outbound
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-black/45">Outbound</div>
-                <div className="grid gap-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">From</Label>
-                      <Input value={form.outboundFrom} onChange={(e) => set("outboundFrom", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-from" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">To</Label>
-                      <Input value={form.outboundTo} onChange={(e) => set("outboundTo", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-to" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">Carrier</Label>
-                      <Input value={form.outboundCarrier} onChange={(e) => set("outboundCarrier", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-carrier" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">Flight No</Label>
-                      <Input value={form.outboundFlightNo} onChange={(e) => set("outboundFlightNo", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-flightno" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">Depart</Label>
-                      <Input value={form.outboundDepart} onChange={(e) => set("outboundDepart", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-depart" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">Arrive</Label>
-                      <Input value={form.outboundArrive} onChange={(e) => set("outboundArrive", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-outbound-arrive" />
-                    </div>
-                  </div>
-                </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                <Input
+                  placeholder="e.g. LHR"
+                  value={form.outboundDepartAirport}
+                  onChange={(e) => set("outboundDepartAirport", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-outbound-depart-airport"
+                />
               </div>
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-black/45">Inbound</div>
-                <div className="grid gap-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">From</Label>
-                      <Input value={form.inboundFrom} onChange={(e) => set("inboundFrom", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-from" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">To</Label>
-                      <Input value={form.inboundTo} onChange={(e) => set("inboundTo", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-to" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">Carrier</Label>
-                      <Input value={form.inboundCarrier} onChange={(e) => set("inboundCarrier", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-carrier" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">Flight No</Label>
-                      <Input value={form.inboundFlightNo} onChange={(e) => set("inboundFlightNo", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-flightno" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">Depart</Label>
-                      <Input value={form.inboundDepart} onChange={(e) => set("inboundDepart", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-depart" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-medium text-black/60">Arrive</Label>
-                      <Input value={form.inboundArrive} onChange={(e) => set("inboundArrive", e.target.value)} className="h-8 rounded-lg border-black/10 bg-white/70 text-xs" data-testid="edit-input-inbound-arrive" />
-                    </div>
-                  </div>
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                <Input
+                  type="date"
+                  value={form.outboundDepartDate}
+                  onChange={(e) => set("outboundDepartDate", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-outbound-depart-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                <Input
+                  type="time"
+                  value={form.outboundDepartTime}
+                  onChange={(e) => set("outboundDepartTime", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-outbound-depart-time"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                <Input
+                  placeholder="e.g. MLE"
+                  value={form.outboundArriveAirport}
+                  onChange={(e) => set("outboundArriveAirport", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-outbound-arrive-airport"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                <Input
+                  type="date"
+                  value={form.outboundArriveDate}
+                  onChange={(e) => set("outboundArriveDate", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-outbound-arrive-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                <Input
+                  type="time"
+                  value={form.outboundArriveTime}
+                  onChange={(e) => set("outboundArriveTime", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-outbound-arrive-time"
+                />
               </div>
             </div>
           </div>
 
           <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-            <div className="mb-3 text-sm font-semibold">Pricing &amp; Commission</div>
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Plane className="h-4 w-4 rotate-180" />
+              Flights — Inbound
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                <Input
+                  placeholder="e.g. MLE"
+                  value={form.inboundDepartAirport}
+                  onChange={(e) => set("inboundDepartAirport", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-inbound-depart-airport"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                <Input
+                  type="date"
+                  value={form.inboundDepartDate}
+                  onChange={(e) => set("inboundDepartDate", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-inbound-depart-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                <Input
+                  type="time"
+                  value={form.inboundDepartTime}
+                  onChange={(e) => set("inboundDepartTime", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-inbound-depart-time"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                <Input
+                  placeholder="e.g. LHR"
+                  value={form.inboundArriveAirport}
+                  onChange={(e) => set("inboundArriveAirport", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-inbound-arrive-airport"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                <Input
+                  type="date"
+                  value={form.inboundArriveDate}
+                  onChange={(e) => set("inboundArriveDate", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-inbound-arrive-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                <Input
+                  type="time"
+                  value={form.inboundArriveTime}
+                  onChange={(e) => set("inboundArriveTime", e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-inbound-arrive-time"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+            <div className="mb-3 text-sm font-semibold">Package Commissions</div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Tour Operator</Label>
                 <Input
+                  placeholder="e.g. Luxury Escapes UK"
                   value={form.tourOperator}
                   onChange={(e) => set("tourOperator", e.target.value)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
@@ -980,36 +1242,69 @@ function EditQuoteDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Total Price (GBP)</Label>
+                <Label className="text-xs font-medium text-black/60">Sales (£)</Label>
                 <Input
                   type="number"
-                  step="0.01"
+                  min={0}
+                  value={form.sales}
+                  onChange={(e) => set("sales", parseFloat(e.target.value) || 0)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-sales"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Price (£)</Label>
+                <Input
+                  type="number"
+                  min={0}
                   value={form.price}
-                  onChange={(e) => set("price", e.target.value)}
+                  onChange={(e) => set("price", parseFloat(e.target.value) || 0)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
                   data-testid="edit-input-price"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Commission %</Label>
+                <Label className="text-xs font-medium text-black/60">Commission (£)</Label>
                 <Input
                   type="number"
-                  step="0.01"
-                  value={form.commissionPercent}
-                  onChange={(e) => set("commissionPercent", e.target.value)}
+                  min={0}
+                  value={form.commission}
+                  onChange={(e) => set("commission", parseFloat(e.target.value) || 0)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-commission-percent"
+                  data-testid="edit-input-commission"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Agent Split %</Label>
+                <Label className="text-xs font-medium text-black/60">Discount (£)</Label>
                 <Input
                   type="number"
-                  step="0.01"
-                  value={form.agentSplitPercent}
-                  onChange={(e) => set("agentSplitPercent", e.target.value)}
+                  min={0}
+                  value={form.discount}
+                  onChange={(e) => set("discount", parseFloat(e.target.value) || 0)}
                   className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-agent-split"
+                  data-testid="edit-input-discount"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Service Charge (£)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.serviceCharge}
+                  onChange={(e) => set("serviceCharge", parseFloat(e.target.value) || 0)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-service-charge"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Price per Person (£)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.pricePerPerson}
+                  onChange={(e) => set("pricePerPerson", parseFloat(e.target.value) || 0)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="edit-input-price-per-person"
                 />
               </div>
             </div>
@@ -1041,32 +1336,45 @@ function EditQuoteDialog({
 
 function buildEditForm(quote: Quote, quoteData: QuoteFull) {
   return {
-    quoteTitle: quote.quoteTitle,
-    status: quote.status,
     packageType: quote.packageType,
-    destination: quote.destination,
+    quoteTitle: quote.quoteTitle,
+    quoteLink: quote.quoteLink,
+    status: quote.status,
     travelDate: quote.travelDate,
-    returnDate: quote.returnDate,
     passengersAdults: quote.passengers.adults,
     passengersChildren: quote.passengers.children,
-    accommodationProperty: quote.accommodation.property,
-    accommodationBoard: quote.accommodation.board,
-    accommodationRoomType: quote.accommodation.roomType,
-    outboundFrom: quote.flights.outbound.from,
-    outboundTo: quote.flights.outbound.to,
-    outboundCarrier: quote.flights.outbound.carrier,
-    outboundFlightNo: quote.flights.outbound.flightNo,
-    outboundDepart: quote.flights.outbound.depart,
-    outboundArrive: quote.flights.outbound.arrive,
-    inboundFrom: quote.flights.inbound.from,
-    inboundTo: quote.flights.inbound.to,
-    inboundCarrier: quote.flights.inbound.carrier,
-    inboundFlightNo: quote.flights.inbound.flightNo,
-    inboundDepart: quote.flights.inbound.depart,
-    inboundArrive: quote.flights.inbound.arrive,
+    passengersInfants: quote.passengersInfants,
+    childAges: [...quote.passengers.childAges],
+    country: quote.country,
+    destination: quote.destination,
+    resort: quote.resort,
+    accommodation: quote.accommodation.property,
+    checkInDate: quote.checkInDate,
+    checkInTime: quote.checkInTime,
+    nights: quote.nights,
+    boardBasis: quote.accommodation.board,
+    roomType: quote.accommodation.roomType,
+    transferType: quote.transferType,
+    preBookedSeats: quote.preBookedSeats,
+    flightMeals: quote.flightMeals,
+    outboundDepartAirport: quote.flights.outbound.from,
+    outboundDepartDate: quote.flights.outbound.departDate,
+    outboundDepartTime: quote.flights.outbound.departTime,
+    outboundArriveAirport: quote.flights.outbound.to,
+    outboundArriveDate: quote.flights.outbound.arriveDate,
+    outboundArriveTime: quote.flights.outbound.arriveTime,
+    inboundDepartAirport: quote.flights.inbound.from,
+    inboundDepartDate: quote.flights.inbound.departDate,
+    inboundDepartTime: quote.flights.inbound.departTime,
+    inboundArriveAirport: quote.flights.inbound.to,
+    inboundArriveDate: quote.flights.inbound.arriveDate,
+    inboundArriveTime: quote.flights.inbound.arriveTime,
     tourOperator: quote.commissions.tourOperator,
-    price: String(quote.commissions.price),
-    commissionPercent: String(quote.commissions.commissionPercent),
-    agentSplitPercent: String(quote.commissions.agentSplitPercent),
+    sales: quote.commissions.agentSplitValue || 0,
+    price: quote.commissions.price,
+    commission: quote.commissions.commissionValue || 0,
+    discount: 0,
+    serviceCharge: 0,
+    pricePerPerson: quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1),
   };
 }

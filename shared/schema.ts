@@ -71,12 +71,22 @@ export const quotes = pgTable("quotes", {
   status: text("status").notNull().default("In Play"), // In Play, Won, Lost
   packageType: text("package_type").notNull(),
   quoteTitle: text("quote_title").notNull(),
+  quoteLink: text("quote_link"),
   destination: text("destination").notNull(),
+  country: text("country"),
+  resort: text("resort"),
   travelDate: text("travel_date").notNull(),
   returnDate: text("return_date").notNull(),
   passengersAdults: integer("passengers_adults").notNull().default(2),
   passengersChildren: integer("passengers_children").notNull().default(0),
+  passengersInfants: integer("passengers_infants").notNull().default(0),
   childAges: integer("child_ages").array().notNull().default(sql`'{}'::integer[]`),
+  checkInDate: text("check_in_date"),
+  checkInTime: text("check_in_time"),
+  nights: integer("nights"),
+  transferType: text("transfer_type"),
+  preBookedSeats: text("pre_booked_seats"),
+  flightMeals: text("flight_meals"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

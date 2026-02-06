@@ -8,12 +8,22 @@ export interface Quote {
   status: string;
   packageType: string;
   quoteTitle: string;
+  quoteLink: string | null;
   destination: string;
+  country: string | null;
+  resort: string | null;
   travelDate: string;
   returnDate: string;
   passengersAdults: number;
   passengersChildren: number;
+  passengersInfants: number;
   childAges: number[];
+  checkInDate: string | null;
+  checkInTime: string | null;
+  nights: number | null;
+  transferType: string | null;
+  preBookedSeats: string | null;
+  flightMeals: string | null;
   createdAt: string;
   images?: QuoteImage[];
 }
