@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation, useRoute } from "wouter";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
@@ -17,6 +17,7 @@ import {
   Search,
   Sparkles,
   Ticket,
+  ImagePlus,
   UserRound,
   X,
 } from "lucide-react";
@@ -36,6 +37,8 @@ import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
 import type { CreateQuoteData } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { quoteImageApi } from "@/api";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 
@@ -353,6 +356,7 @@ export default function ClientPage() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/clients/:clientId");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [role, setRole] = useState<Role>("Agent");
   const [active] = useState<string>("clients");
@@ -444,6 +448,9 @@ export default function ClientPage() {
     pricePerPerson: 0,
     returnDate: "",
   });
+  const [quoteImageFiles, setQuoteImageFiles] = useState<File[]>([]);
+  const [quoteImageUrls, setQuoteImageUrls] = useState<string[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const clientId = params?.clientId ?? "";
 
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
@@ -523,9 +530,24 @@ export default function ClientPage() {
 
   const createQuoteMutationHook = useCreateQuote();
   const createQuoteMutation = {
-    mutate: (data: CreateQuoteData) => {
+    mutate: async (data: CreateQuoteData) => {
       createQuoteMutationHook.mutate(data, {
-        onSuccess: () => {
+        onSuccess: async (createdQuote) => {
+          try {
+            if (quoteImageFiles.length > 0) {
+              await quoteImageApi.uploadImages(createdQuote.id, quoteImageFiles);
+            }
+            for (const url of quoteImageUrls) {
+              await quoteImageApi.createFromUrl(createdQuote.id, url);
+            }
+          } catch {
+            toast({ title: "Quote created but some images failed to upload", variant: "destructive" });
+          }
+          if (quoteImageFiles.length > 0 || quoteImageUrls.length > 0) {
+            queryClient.invalidateQueries({ queryKey: ["quotes"] });
+          }
+          setQuoteImageFiles([]);
+          setQuoteImageUrls([]);
           setShowNewQuoteModal(false);
           toast({ title: "Quote created successfully" });
         },
@@ -1090,6 +1112,7 @@ export default function ClientPage() {
                                 createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
                                 tourOperator: q.packageType || "—",
                                 totalCost: 0,
+                                imageUrl: q.images?.find((img) => img.isPrimary)?.url || q.images?.[0]?.url || null,
                               })),
                           },
                           {
@@ -1105,6 +1128,7 @@ export default function ClientPage() {
                                 createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
                                 tourOperator: q.packageType || "—",
                                 totalCost: 0,
+                                imageUrl: q.images?.find((img) => img.isPrimary)?.url || q.images?.[0]?.url || null,
                               })),
                           },
                           {
@@ -1120,6 +1144,7 @@ export default function ClientPage() {
                                 createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
                                 tourOperator: q.packageType || "—",
                                 totalCost: 0,
+                                imageUrl: q.images?.find((img) => img.isPrimary)?.url || q.images?.[0]?.url || null,
                               })),
                           },
                         ].map((group) => (
@@ -1153,12 +1178,18 @@ export default function ClientPage() {
                                       data-testid={`img-quote-${q.id}`}
                                       aria-hidden
                                     >
-                                      <img
-                                        src="/attached_assets/Luxury-Coco-Beach-Resort.jpg"
-                                        alt=""
-                                        className="absolute inset-0 h-full w-full object-cover"
-                                        data-testid={`img-quote-photo-${q.id}`}
-                                      />
+                                      {q.imageUrl ? (
+                                        <img
+                                          src={q.imageUrl}
+                                          alt=""
+                                          className="absolute inset-0 h-full w-full object-cover"
+                                          data-testid={`img-quote-photo-${q.id}`}
+                                        />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-black/20">
+                                          <ImagePlus className="h-6 w-6" />
+                                        </div>
+                                      )}
                                     </div>
 
                                     <div className="min-w-0 flex-1">
@@ -1508,6 +1539,30 @@ export default function ClientPage() {
                               serviceCharge: data.commissions?.serviceCharge || data.serviceCharge || data.service_charge || prev.serviceCharge,
                               pricePerPerson: data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp || prev.pricePerPerson,
                             }));
+                            const extractedImages: string[] = [];
+                            const imageFields = [
+                              data.images, data.image, data.photos, data.photo,
+                              data.imageUrl, data.image_url, data.imageUrls, data.image_urls,
+                              data.thumbnails, data.thumbnail, data.gallery,
+                              data.accommodation?.image, data.accommodation?.imageUrl,
+                              data.hotel?.image, data.hotel?.imageUrl,
+                            ];
+                            for (const field of imageFields) {
+                              if (typeof field === "string" && field.startsWith("http")) {
+                                extractedImages.push(field);
+                              } else if (Array.isArray(field)) {
+                                for (const item of field) {
+                                  if (typeof item === "string" && item.startsWith("http")) {
+                                    extractedImages.push(item);
+                                  } else if (item?.url && typeof item.url === "string") {
+                                    extractedImages.push(item.url);
+                                  }
+                                }
+                              }
+                            }
+                            if (extractedImages.length > 0) {
+                              setQuoteImageUrls((prev) => [...prev, ...extractedImages.filter((u) => !prev.includes(u))]);
+                            }
                           } catch {
                             setNewQuote((prev) => ({ ...prev, jsonPayload: content }));
                           }
@@ -1519,6 +1574,94 @@ export default function ClientPage() {
                     data-testid="input-json-upload"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <ImagePlus className="h-4 w-4" />
+                Quote Images
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Upload Images</Label>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length > 0) {
+                        setQuoteImageFiles((prev) => [...prev, ...files]);
+                      }
+                      if (imageInputRef.current) imageInputRef.current.value = "";
+                    }}
+                    className="hidden"
+                    data-testid="input-quote-images"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 w-full rounded-xl border-black/10 bg-white/70 text-sm"
+                    onClick={() => imageInputRef.current?.click()}
+                    data-testid="button-add-images"
+                  >
+                    <ImagePlus className="mr-2 h-4 w-4" />
+                    Add images
+                  </Button>
+                </div>
+
+                {(quoteImageFiles.length > 0 || quoteImageUrls.length > 0) && (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                    {quoteImageFiles.map((file, idx) => (
+                      <div key={`file-${idx}`} className="group relative overflow-hidden rounded-xl border border-black/10">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={file.name}
+                          className="h-20 w-full object-cover"
+                          data-testid={`img-quote-preview-file-${idx}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuoteImageFiles((prev) => prev.filter((_, i) => i !== idx))}
+                          className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                          data-testid={`button-remove-image-file-${idx}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white truncate">
+                          {file.name}
+                        </div>
+                      </div>
+                    ))}
+                    {quoteImageUrls.map((url, idx) => (
+                      <div key={`url-${idx}`} className="group relative overflow-hidden rounded-xl border border-black/10">
+                        <img
+                          src={url}
+                          alt={`Image ${idx + 1}`}
+                          className="h-20 w-full object-cover"
+                          data-testid={`img-quote-preview-url-${idx}`}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "";
+                            (e.target as HTMLImageElement).alt = "Failed to load";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuoteImageUrls((prev) => prev.filter((_, i) => i !== idx))}
+                          className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                          data-testid={`button-remove-image-url-${idx}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white">
+                          From JSON
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2030,7 +2173,7 @@ export default function ClientPage() {
                 }}
                 data-testid="button-save-quote"
               >
-                {createQuoteMutation.isPending ? "Creating..." : "Create Quote"}
+                {createQuoteMutationHook.isPending ? "Creating..." : "Create Quote"}
               </Button>
             </div>
           </div>

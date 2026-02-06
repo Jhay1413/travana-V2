@@ -10,3 +10,4 @@ export { ticketApi } from "./endpoints/ticket.api";
 export { attachmentApi } from "./endpoints/attachment.api";
 export { replyApi } from "./endpoints/reply.api";
 export { notificationApi } from "./endpoints/notification.api";
+export { quoteImageApi } from "./endpoints/quote-image.api";

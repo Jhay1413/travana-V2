@@ -15,6 +15,7 @@ export interface Quote {
   passengersChildren: number;
   childAges: number[];
   createdAt: string;
+  images?: QuoteImage[];
 }
 
 export interface Accommodation {

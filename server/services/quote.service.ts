@@ -10,16 +10,30 @@ import { AppError } from "../utils/error-handler";
 import type { Quote, InsertQuote, QuoteFullDetails } from "../types/quote";
 
 export const quoteService = {
-  async listQuotes(): Promise<Quote[]> {
-    return await quoteRepository.findAll();
+  async listQuotes() {
+    const quotes = await quoteRepository.findAll();
+    return await this._attachImages(quotes);
   },
 
-  async listQuotesByClient(clientId: string): Promise<Quote[]> {
-    return await quoteRepository.findByClientId(clientId);
+  async listQuotesByClient(clientId: string) {
+    const quotes = await quoteRepository.findByClientId(clientId);
+    return await this._attachImages(quotes);
   },
 
-  async listQuotesByStatus(status: string): Promise<Quote[]> {
-    return await quoteRepository.findByStatus(status);
+  async listQuotesByStatus(status: string) {
+    const quotes = await quoteRepository.findByStatus(status);
+    return await this._attachImages(quotes);
+  },
+
+  async _attachImages(quotes: Quote[]) {
+    if (quotes.length === 0) return quotes;
+    const allImages = await Promise.all(
+      quotes.map((q) => quoteImageRepository.findByQuoteId(q.id))
+    );
+    return quotes.map((q, i) => ({
+      ...q,
+      images: allImages[i] || [],
+    }));
   },
 
   async getQuoteById(id: string): Promise<Quote> {
