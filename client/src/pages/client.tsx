@@ -1213,13 +1213,11 @@ export default function ClientPage() {
 
                                         <div className="shrink-0 text-right">
                                           <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
+                                            {q.pricePerPerson > 0 && (
+                                              <span data-testid={`text-quote-pp-${q.id}`}>{currency.format(q.pricePerPerson)} pp / </span>
+                                            )}
                                             {currency.format(q.totalCost)}
                                           </div>
-                                          {q.pricePerPerson > 0 && (
-                                            <div className="text-[11px] text-black/55" data-testid={`text-quote-pp-${q.id}`}>
-                                              {currency.format(q.pricePerPerson)} pp
-                                            </div>
-                                          )}
                                           <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
                                             View
                                             <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
