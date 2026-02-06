@@ -646,6 +646,41 @@ export default function ClientPage() {
       onQuery={setQ}
       theme="light"
       onToggleTheme={() => {}}
+      headerExtra={
+        <Select
+          value={clientData?.badge || "New Client"}
+          onValueChange={(value) => {
+            if (clientId) {
+              updateNeonClientMutation.mutate(
+                { id: clientId, data: { badge: value } },
+                {
+                  onSuccess: () => {
+                    toast({ title: "Client type updated" });
+                  },
+                  onError: () => {
+                    toast({ title: "Failed to update client type", variant: "destructive" });
+                  },
+                }
+              );
+            }
+          }}
+        >
+          <SelectTrigger
+            className="h-auto w-auto rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 px-3 py-1 text-xs font-semibold text-[#3b82f6] hover:bg-[#3b82f6]/20"
+            data-testid="select-client-type-header"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-[400]">
+            <SelectItem value="New Client">New Client</SelectItem>
+            <SelectItem value="Repeat Client">Repeat Client</SelectItem>
+            <SelectItem value="VIP Client">VIP Client</SelectItem>
+            <SelectItem value="Family Member">Family Member</SelectItem>
+            <SelectItem value="Time Waster">Time Waster</SelectItem>
+            <SelectItem value="Banned">Banned</SelectItem>
+          </SelectContent>
+        </Select>
+      }
     >
       <div className="relative min-h-[calc(100vh-56px)] w-full px-4 pb-6 md:px-6 md:pb-8">
         <div className="relative mt-6 grid gap-3 lg:grid-cols-12" data-testid="layout-client-page">

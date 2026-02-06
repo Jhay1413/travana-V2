@@ -109,6 +109,7 @@ export function CommandCenterShell({
   onRoleChange,
   theme = "light",
   onToggleTheme,
+  headerExtra,
 }: {
   children: React.ReactNode;
   active?: string;
@@ -120,6 +121,7 @@ export function CommandCenterShell({
   onRoleChange: (r: Role) => void;
   theme?: "light" | "dark";
   onToggleTheme?: () => void;
+  headerExtra?: React.ReactNode;
 }) {
   const [, navigate] = useLocation();
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -536,7 +538,7 @@ export function CommandCenterShell({
             <Card className="glass ringed grain rounded-3xl p-4 md:p-5" data-testid="topbar-command-center">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
-                  <div className="flex items-baseline gap-3">
+                  <div className="flex items-center gap-3">
                     <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
                       {title}
                     </h1>
@@ -545,6 +547,7 @@ export function CommandCenterShell({
                         {subtitle}
                       </span>
                     ) : null}
+                    {headerExtra}
                   </div>
                 </div>
 
