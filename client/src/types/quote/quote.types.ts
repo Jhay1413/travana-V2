@@ -24,6 +24,7 @@ export interface Quote {
   transferType: string | null;
   preBookedSeats: string | null;
   flightMeals: string | null;
+  leadSource: string | null;
   createdAt: string;
   images?: QuoteImage[];
 }
@@ -110,6 +111,7 @@ export interface CreateQuoteData {
   transferType?: string;
   preBookedSeats?: string;
   flightMeals?: string;
+  leadSource?: string;
   outboundDepartAirport?: string;
   outboundDepartDate?: string;
   outboundDepartTime?: string;

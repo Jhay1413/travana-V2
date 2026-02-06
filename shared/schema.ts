@@ -87,6 +87,7 @@ export const quotes = pgTable("quotes", {
   transferType: text("transfer_type"),
   preBookedSeats: text("pre_booked_seats"),
   flightMeals: text("flight_meals"),
+  leadSource: text("lead_source"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

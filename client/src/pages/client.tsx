@@ -429,6 +429,7 @@ export default function ClientPage() {
     transferType: "",
     preBookedSeats: "",
     flightMeals: "",
+    leadSource: "",
     outboundDepartAirport: "",
     outboundDepartDate: "",
     outboundDepartTime: "",
@@ -1508,6 +1509,21 @@ export default function ClientPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Lead Source</Label>
+                  <Select value={newQuote.leadSource} onValueChange={(v) => setNewQuote({ ...newQuote, leadSource: v })}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-lead-source">
+                      <SelectValue placeholder="Select source..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Shop">Shop</SelectItem>
+                      <SelectItem value="Facebook">Facebook</SelectItem>
+                      <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                      <SelectItem value="Instagram">Instagram</SelectItem>
+                      <SelectItem value="Phone Enquiry">Phone Enquiry</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">JSON Upload</Label>
                   <Input
                     type="file"
@@ -2183,6 +2199,7 @@ export default function ClientPage() {
                     transferType: newQuote.transferType || undefined,
                     preBookedSeats: newQuote.preBookedSeats || undefined,
                     flightMeals: newQuote.flightMeals || undefined,
+                    leadSource: newQuote.leadSource || undefined,
                     outboundDepartAirport: newQuote.outboundDepartAirport || undefined,
                     outboundDepartDate: newQuote.outboundDepartDate || undefined,
                     outboundDepartTime: newQuote.outboundDepartTime || undefined,

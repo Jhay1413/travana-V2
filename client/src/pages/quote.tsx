@@ -53,6 +53,7 @@ type Quote = {
   transferType: string;
   preBookedSeats: string;
   flightMeals: string;
+  leadSource: string;
   passengers: {
     adults: number;
     children: number;
@@ -326,6 +327,7 @@ function transformQuoteData(apiData: QuoteFull): Quote {
     transferType: apiData.transferType || "",
     preBookedSeats: apiData.preBookedSeats || "",
     flightMeals: apiData.flightMeals || "",
+    leadSource: apiData.leadSource || "",
     passengers: {
       adults: apiData.passengersAdults,
       children: apiData.passengersChildren,
@@ -950,6 +952,7 @@ function EditQuoteDialog({
       transferType: form.transferType,
       preBookedSeats: form.preBookedSeats,
       flightMeals: form.flightMeals,
+      leadSource: form.leadSource,
       accommodation: form.accommodation,
       boardBasis: form.boardBasis,
       roomType: form.roomType,
@@ -1024,6 +1027,21 @@ function EditQuoteDialog({
                   className="h-9 rounded-xl border-black/10 bg-white/70"
                   data-testid="edit-input-quote-link"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Lead Source</Label>
+                <Select value={form.leadSource} onValueChange={(v) => set("leadSource", v)}>
+                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-lead-source">
+                    <SelectValue placeholder="Select source..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Shop">Shop</SelectItem>
+                    <SelectItem value="Facebook">Facebook</SelectItem>
+                    <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                    <SelectItem value="Instagram">Instagram</SelectItem>
+                    <SelectItem value="Phone Enquiry">Phone Enquiry</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">JSON Upload</Label>
@@ -1597,6 +1615,7 @@ function buildEditForm(quote: Quote, quoteData: QuoteFull) {
     transferType: quote.transferType,
     preBookedSeats: quote.preBookedSeats,
     flightMeals: quote.flightMeals,
+    leadSource: quote.leadSource,
     outboundDepartAirport: quote.flights.outbound.from,
     outboundDepartDate: quote.flights.outbound.departDate,
     outboundDepartTime: quote.flights.outbound.departTime,
