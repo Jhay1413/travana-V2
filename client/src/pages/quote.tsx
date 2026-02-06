@@ -874,45 +874,6 @@ export default function QuotePage() {
                 </div>
               </Card>
 
-              <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-flights">
-                <div className="flex items-center justify-between" data-testid="row-flights-header">
-                  <div>
-                    <div className="text-sm font-semibold" data-testid="text-flights-title">
-                      Flights
-                    </div>
-                    <div className="mt-1 text-xs text-black/55" data-testid="text-flights-subtitle">
-                      Outbound and inbound.
-                    </div>
-                  </div>
-                  <Plane className="h-4 w-4 text-black/35" aria-hidden />
-                </div>
-
-                <div className="mt-3 grid gap-2" data-testid="list-flights">
-                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-flight-outbound">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-black/45" data-testid="text-flight-outbound-label">
-                      Outbound
-                    </div>
-                    <div className="mt-1 text-sm font-semibold" data-testid="text-flight-outbound-route">
-                      {quote.flights.outbound.from} → {quote.flights.outbound.to}
-                    </div>
-                    <div className="mt-1 text-xs text-black/60" data-testid="text-flight-outbound-meta">
-                      {quote.flights.outbound.carrier} {quote.flights.outbound.flightNo} · {formatUKDate(quote.flights.outbound.depart)}
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-flight-inbound">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-black/45" data-testid="text-flight-inbound-label">
-                      Inbound
-                    </div>
-                    <div className="mt-1 text-sm font-semibold" data-testid="text-flight-inbound-route">
-                      {quote.flights.inbound.from} → {quote.flights.inbound.to}
-                    </div>
-                    <div className="mt-1 text-xs text-black/60" data-testid="text-flight-inbound-meta">
-                      {quote.flights.inbound.carrier} {quote.flights.inbound.flightNo} · {formatUKDate(quote.flights.inbound.depart)}
-                    </div>
-                  </div>
-                </div>
-              </Card>
             </div>
           </div>
         </div>
