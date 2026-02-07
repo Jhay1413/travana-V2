@@ -134,6 +134,8 @@ export interface CreateQuoteData {
   discount?: number;
   serviceCharge?: number;
   pricePerPerson?: number;
+  haysReference?: string;
+  tourReference?: string;
 }
 
 export interface QuoteFilters {

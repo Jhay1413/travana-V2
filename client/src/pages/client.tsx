@@ -24,6 +24,7 @@ import {
   X,
   Pin,
   PinOff,
+  Plus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -388,6 +389,7 @@ export default function ClientPage() {
     badge: "",
   });
   const [showNewQuoteModal, setShowNewQuoteModal] = useState(false);
+  const [newQuoteIsBooking, setNewQuoteIsBooking] = useState(false);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<{
     file: File | null;
@@ -413,7 +415,7 @@ export default function ClientPage() {
     updated: string;
     url: string;
   }[]>([]);
-  const [newQuote, setNewQuote] = useState({
+  const newQuoteDefaults = {
     packageType: "",
     quoteTitle: "",
     quoteLink: "",
@@ -456,7 +458,10 @@ export default function ClientPage() {
     serviceCharge: 0,
     pricePerPerson: 0,
     returnDate: "",
-  });
+    haysReference: "",
+    tourReference: "",
+  };
+  const [newQuote, setNewQuote] = useState(newQuoteDefaults);
   const [quoteImageFiles, setQuoteImageFiles] = useState<File[]>([]);
   const [quoteImageUrls, setQuoteImageUrls] = useState<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -566,8 +571,14 @@ export default function ClientPage() {
           }
           setQuoteImageFiles([]);
           setQuoteImageUrls([]);
+          const wasBooking = newQuoteIsBooking;
           setShowNewQuoteModal(false);
-          toast({ title: "Quote created successfully" });
+          setNewQuoteIsBooking(false);
+          setNewQuote(newQuoteDefaults);
+          toast({ title: wasBooking ? "Booking created successfully" : "Quote created successfully" });
+          if (wasBooking) {
+            window.open(`/clients/${clientId}/bookings/${createdQuote.id}`, "_self");
+          }
         },
         onError: (error: Error) => {
           toast({ title: error.message || "Failed to create quote", variant: "destructive" });
@@ -1439,13 +1450,24 @@ export default function ClientPage() {
                             Confirmed bookings for this client.
                           </div>
                         </div>
-                        <Ticket className="h-4 w-4 text-black/35" aria-hidden />
+                        <Button
+                          size="sm"
+                          className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
+                          data-testid="button-add-booking"
+                          onClick={() => {
+                            setNewQuoteIsBooking(true);
+                            setShowNewQuoteModal(true);
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Booking
+                        </Button>
                       </div>
 
                       <div className="mt-4 grid gap-2" data-testid="section-bookings">
                         {quotes.filter((q: any) => q.status === "Booked").length === 0 ? (
                           <div className="rounded-3xl border border-dashed border-black/10 bg-white/40 p-8 text-center text-sm text-black/50" data-testid="empty-bookings">
-                            No bookings yet. Convert a quote to create a booking.
+                            No bookings yet. Add a booking or convert a quote.
                           </div>
                         ) : (
                           quotes
@@ -1733,12 +1755,12 @@ export default function ClientPage() {
           </Card>
         </div>
       </div>
-      <Dialog open={showNewQuoteModal} onOpenChange={setShowNewQuoteModal}>
+      <Dialog open={showNewQuoteModal} onOpenChange={(open) => { setShowNewQuoteModal(open); if (!open) { setNewQuoteIsBooking(false); setNewQuote(newQuoteDefaults); setQuoteImageFiles([]); setQuoteImageUrls([]); } }}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">New Quote</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">{newQuoteIsBooking ? "New Booking" : "New Quote"}</DialogTitle>
             <DialogDescription className="text-sm text-black/55">
-              Create a new quote for {client?.name || "this client"}.
+              {newQuoteIsBooking ? "Create a new booking" : "Create a new quote"} for {client?.name || "this client"}.
             </DialogDescription>
           </DialogHeader>
 
@@ -1796,6 +1818,30 @@ export default function ClientPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {newQuoteIsBooking && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">HAYS Reference</Label>
+                      <Input
+                        placeholder="e.g. HAYS-12345"
+                        value={newQuote.haysReference}
+                        onChange={(e) => setNewQuote({ ...newQuote, haysReference: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-booking-hays-ref"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Tour Reference</Label>
+                      <Input
+                        placeholder="e.g. TOUR-67890"
+                        value={newQuote.tourReference}
+                        onChange={(e) => setNewQuote({ ...newQuote, tourReference: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-booking-tour-ref"
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">JSON Upload</Label>
                   <Input
@@ -2450,7 +2496,7 @@ export default function ClientPage() {
                   createQuoteMutation.mutate({
                     clientId,
                     userId: currentUser.id,
-                    status: "In Play",
+                    status: newQuoteIsBooking ? "Booked" : "In Play",
                     packageType: newQuote.packageType,
                     quoteTitle: newQuote.quoteTitle,
                     quoteLink: newQuote.quoteLink || undefined,
@@ -2492,11 +2538,15 @@ export default function ClientPage() {
                     discount: newQuote.discount || undefined,
                     serviceCharge: newQuote.serviceCharge || undefined,
                     pricePerPerson: newQuote.pricePerPerson || undefined,
+                    ...(newQuoteIsBooking ? {
+                      haysReference: newQuote.haysReference || undefined,
+                      tourReference: newQuote.tourReference || undefined,
+                    } : {}),
                   });
                 }}
                 data-testid="button-save-quote"
               >
-                {createQuoteMutationHook.isPending ? "Creating..." : "Create Quote"}
+                {createQuoteMutationHook.isPending ? "Creating..." : newQuoteIsBooking ? "Create Booking" : "Create Quote"}
               </Button>
             </div>
           </div>

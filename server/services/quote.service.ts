@@ -78,6 +78,9 @@ export const quoteService = {
 
   async createQuote(data: any): Promise<Quote> {
     const { tourOperator, sales, price, commission, discount, serviceCharge, pricePerPerson, ...quoteData } = data;
+    if (quoteData.status === "Booked" && !quoteData.bookedAt) {
+      quoteData.bookedAt = new Date();
+    }
     const quote = await quoteRepository.create(quoteData);
 
     if (price) {
