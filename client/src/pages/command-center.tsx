@@ -1538,6 +1538,7 @@ export default function CommandCenterPage() {
   const toggleFavoriteMutation = useToggleFavorite();
   const [clientsPage, setClientsPage] = useState(1);
   const { data: paginatedNeonClients } = useNeonClients({ page: clientsPage, limit: 10, search: query.trim() || undefined });
+  const { data: allNeonClientsData } = useNeonClients({ page: 1, limit: 500 });
   const { data: apiUsers } = useUsers();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
@@ -1609,16 +1610,34 @@ export default function CommandCenterPage() {
     return stages;
   }, [quotesData]);
 
-  const pipelineClientNames = useMemo(() => {
+  const allClientNames = useMemo(() => {
     const map = new Map<string, string>();
-    if (paginatedNeonClients?.clients) {
-      for (const c of paginatedNeonClients.clients) {
-        const title = c.title && c.title !== "NULL" ? c.title : "";
-        map.set(c.id, [title, c.firstName, c.surename].filter(Boolean).join(" "));
+    const sources = [paginatedNeonClients?.clients, allNeonClientsData?.clients];
+    for (const list of sources) {
+      if (list) {
+        for (const c of list) {
+          if (!map.has(c.id)) {
+            const title = c.title && c.title !== "NULL" ? c.title : "";
+            map.set(c.id, [title, c.firstName, c.surename].filter(Boolean).join(" "));
+          }
+        }
       }
     }
     return map;
-  }, [paginatedNeonClients]);
+  }, [paginatedNeonClients, allNeonClientsData]);
+  const pipelineClientNames = allClientNames;
+
+  const pinnedClientNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (quotesData) {
+      for (const q of quotesData as any[]) {
+        if (q.clientId && allClientNames.has(q.clientId)) {
+          map.set(q.id, allClientNames.get(q.clientId)!);
+        }
+      }
+    }
+    return map;
+  }, [quotesData, allClientNames]);
 
   const getQuoteProfit = (q: any): number => {
     if (q.commission) {
@@ -2230,7 +2249,11 @@ export default function CommandCenterPage() {
                       const icon = fav.itemType === "client" ? <UserRound className="h-3.5 w-3.5" /> : fav.itemType === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : fav.itemType === "note" ? <StickyNote className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />;
                       const noteQuoteId = fav.itemType === "note" && fav.subtitle?.startsWith("quoteId:") ? fav.subtitle.split("|")[0].replace("quoteId:", "") : null;
                       const href = fav.itemType === "client" ? `/clients/${fav.itemId}` : fav.itemType === "quote" ? `/clients/_/quotes/${fav.itemId}` : fav.itemType === "enquiry" ? `/clients/_/enquiries/${fav.itemId}` : noteQuoteId ? `/clients/_/quotes/${noteQuoteId}` : "#";
-                      const displaySubtitle = fav.itemType === "note" && fav.subtitle?.includes("|") ? fav.subtitle.split("|").slice(1).join("|") : fav.subtitle;
+                      const resolvedClientName = (fav.itemType === "quote" || fav.itemType === "note") ? pinnedClientNameMap.get(fav.itemType === "note" ? (noteQuoteId || "") : fav.itemId) : null;
+                      let displaySubtitle = fav.itemType === "note" && fav.subtitle?.includes("|") ? fav.subtitle.split("|").slice(1).join("|") : fav.subtitle;
+                      if (fav.itemType !== "client" && resolvedClientName && !displaySubtitle?.includes(resolvedClientName)) {
+                        displaySubtitle = resolvedClientName + (displaySubtitle ? " · " + displaySubtitle : "");
+                      }
                       return (
                         <motion.div
                           key={fav.id}

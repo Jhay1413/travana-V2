@@ -33,7 +33,7 @@ import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useEnquiry } from "@/hooks/queries";
+import { useEnquiry, useClient } from "@/hooks/queries";
 import { useEnquiryNotes, enquiryNoteKeys } from "@/hooks/queries/use-enquiry-note-queries";
 import { useCreateEnquiryNote, useUpdateEnquiryNote, useDeleteEnquiryNote } from "@/hooks/mutations/use-enquiry-note-mutations";
 import { useCreateQuote, useUpdateEnquiry } from "@/hooks/mutations";
@@ -339,6 +339,7 @@ export default function EnquiryPage() {
   const { role, setRole } = useRole();
 
   const { data: enquiry, isLoading } = useEnquiry(enquiryId);
+  const { data: clientData } = useClient(clientId);
   const { data: currentUser } = useCurrentUser();
   const createQuoteMutation = useCreateQuote();
   const updateEnquiryMutation = useUpdateEnquiry();
@@ -463,7 +464,7 @@ export default function EnquiryPage() {
                 type="button"
                 onClick={() =>
                   toggleFavoriteMutation.mutate(
-                    { itemType: "enquiry", itemId: enquiryId, label: enquiry.enquiryTitle, subtitle: enquiry.destination || enquiry.holidayType || "" },
+                    { itemType: "enquiry", itemId: enquiryId, label: enquiry.enquiryTitle, subtitle: `${clientData?.name || ""}${enquiry.destination ? " · " + enquiry.destination : enquiry.holidayType ? " · " + enquiry.holidayType : ""}` },
                     { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                   )
                 }

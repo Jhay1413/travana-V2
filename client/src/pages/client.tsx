@@ -1203,7 +1203,7 @@ export default function ClientPage() {
                                 data-testid={`button-pin-enquiry-${idx}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.enquiryTitle, subtitle: enq.destination || enq.holidayType || "" });
+                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.enquiryTitle, subtitle: `${client?.name || ""}${enq.destination ? " · " + enq.destination : enq.holidayType ? " · " + enq.holidayType : ""}` });
                                 }}
                                 title={userFavorites?.some((f: any) => f.itemType === "enquiry" && f.itemId === enq.id) ? "Unpin" : "Pin to dashboard"}
                               >
@@ -1401,7 +1401,7 @@ export default function ClientPage() {
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 e.preventDefault();
-                                                toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title, subtitle: q.destination || "" });
+                                                toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title, subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
                                               }}
                                               title={userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
                                             >
@@ -1549,7 +1549,7 @@ export default function ClientPage() {
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             e.preventDefault();
-                                            toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.quoteTitle || q.destination, subtitle: q.destination || "" });
+                                            toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.quoteTitle || q.destination, subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
                                           }}
                                           title={userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
                                         >

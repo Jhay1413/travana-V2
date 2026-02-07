@@ -12,7 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuoteFull, useNotes, useTasks } from "@/hooks/queries";
+import { useQuoteFull, useNotes, useTasks, useClient } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
@@ -1127,6 +1127,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const quoteId = params?.quoteId ?? "";
 
   const { data: quoteData, isLoading, error } = useQuoteFull(quoteId);
+  const { data: clientData } = useClient(clientId);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
@@ -1241,7 +1242,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               type="button"
               onClick={() =>
                 toggleFavoriteMutation.mutate(
-                  { itemType: "quote", itemId: quoteId, label: quote.quoteTitle, subtitle: quote.destination || "" },
+                  { itemType: "quote", itemId: quoteId, label: quote.quoteTitle, subtitle: `${clientData?.name || ""}${quote.destination ? " · " + quote.destination : ""}` },
                   { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                 )
               }
