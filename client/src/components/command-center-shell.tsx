@@ -321,9 +321,8 @@ export function CommandCenterShell({
   const nav: NavStructure = useMemo(() => {
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" />, children: [
-        { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
-      ] },
+      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+      { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
       { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
@@ -369,9 +368,8 @@ export function CommandCenterShell({
             icon: <Users className="h-4 w-4" />,
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" />, children: [
-                { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
-              ] },
+              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+              { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
               { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
