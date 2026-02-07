@@ -1,6 +1,8 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import axios from "@/api/client/axios-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
@@ -1538,6 +1540,22 @@ export default function CommandCenterPage() {
   const { data: airportsList } = useAirports();
   const createAirportMutation = useCreateAirport();
   const deleteAirportMutation = useDeleteAirport();
+  const { data: countriesData } = useQuery({
+    queryKey: ["admin", "data", "country"],
+    queryFn: async () => {
+      const res = await axios.get("/api/admin/data/country");
+      return res.data as { rows: Array<{ id: string; country_name: string; country_code?: string }> };
+    },
+  });
+  const countryMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (countriesData?.rows) {
+      for (const c of countriesData.rows) {
+        map[c.id] = c.country_name;
+      }
+    }
+    return map;
+  }, [countriesData]);
 
   const allClients = useMemo(() => {
     const neonClients = paginatedNeonClients?.clients;
@@ -3547,10 +3565,11 @@ export default function CommandCenterPage() {
         const filteredAirports = (airportsList || []).filter((airport) => {
           const q = airportSearch.trim().toLowerCase();
           if (!q) return true;
+          const countryName = countryMap[airport.country_id] || airport.country_id;
           return (
             airport.airport_name.toLowerCase().includes(q) ||
             airport.airport_code.toLowerCase().includes(q) ||
-            airport.country_id.toLowerCase().includes(q)
+            countryName.toLowerCase().includes(q)
           );
         });
 
@@ -3620,7 +3639,7 @@ export default function CommandCenterPage() {
                       <tr key={airport.id} className="border-b border-black/5 dark:border-white/5" data-testid={`row-airport-${airport.id}`}>
                         <td className="py-3 px-2 font-medium">{airport.airport_name}</td>
                         <td className="py-3 px-2 font-mono">{airport.airport_code}</td>
-                        <td className="py-3 px-2">{airport.country_id}</td>
+                        <td className="py-3 px-2">{countryMap[airport.country_id] || airport.country_id}</td>
                         <td className="py-3 px-2 text-right">
                           <Button
                             variant="ghost"
@@ -4209,7 +4228,7 @@ export default function CommandCenterPage() {
         action="Design client record"
       />
     );
-  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole, airportSearch, tourOperatorSearch, airportsList, tourOperators]);
+  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole, airportSearch, tourOperatorSearch, airportsList, tourOperators, countryMap]);
 
   return (
     <div className={themeClass}>
