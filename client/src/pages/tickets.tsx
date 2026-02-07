@@ -6,11 +6,14 @@ import { useRole } from "@/hooks/use-role";
 import {
   Calendar,
   ChevronRight,
+  FileText,
   Filter,
+  Image,
   LifeBuoy,
   Paperclip,
   Plus,
   Search,
+  Upload,
   User,
   Users,
   X,
@@ -27,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTickets, useNeonClients, useUsers } from "@/hooks/queries";
 import { useCreateTicket } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import { attachmentApi } from "@/api";
 
 const TICKET_TYPES = ["Admin", "Build", "Sales"] as const;
 const TICKET_STATUSES = ["Open", "In Progress", "Resolved", "Closed"] as const;
@@ -95,6 +99,9 @@ export default function TicketsPage() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState({
     clientId: "",
@@ -139,6 +146,45 @@ export default function TicketsPage() {
     setCustomerSearch("");
     setSelectedCustomerName("");
     setShowCustomerDropdown(false);
+    setPendingFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    const maxSize = 10 * 1024 * 1024;
+    const newFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (!allowed.includes(f.type)) {
+        toast({ title: `${f.name}: Only images and PDFs are allowed`, variant: "destructive" });
+        continue;
+      }
+      if (f.size > maxSize) {
+        toast({ title: `${f.name}: File too large (max 10MB)`, variant: "destructive" });
+        continue;
+      }
+      newFiles.push(f);
+    }
+    setPendingFiles((prev) => [...prev, ...newFiles]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type.startsWith("image/")) return <Image className="h-4 w-4 text-blue-500" />;
+    return <FileText className="h-4 w-4 text-red-500" />;
   };
 
   const handleCreate = () => {
@@ -146,6 +192,7 @@ export default function TicketsPage() {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
     }
+    setIsUploading(true);
     createTicketMutation.mutate({
       clientId: formData.clientId,
       userId: formData.userId,
@@ -155,13 +202,34 @@ export default function TicketsPage() {
       subject: formData.subject,
       description: formData.description || null,
     }, {
-      onSuccess: () => {
+      onSuccess: async (data: any) => {
+        const ticketId = data?.id;
+        if (ticketId && pendingFiles.length > 0) {
+          let uploaded = 0;
+          let failed = 0;
+          for (const file of pendingFiles) {
+            try {
+              await attachmentApi.upload(ticketId, file);
+              uploaded++;
+            } catch {
+              failed++;
+            }
+          }
+          if (failed > 0) {
+            toast({ title: `Ticket created. ${uploaded} file(s) uploaded, ${failed} failed.`, variant: "destructive" });
+          } else {
+            toast({ title: `Ticket created with ${uploaded} attachment(s)` });
+          }
+        } else {
+          toast({ title: "Ticket created successfully" });
+        }
         setShowCreateDialog(false);
         resetForm();
-        toast({ title: "Ticket created successfully" });
+        setIsUploading(false);
       },
       onError: () => {
         toast({ title: "Failed to create ticket", variant: "destructive" });
+        setIsUploading(false);
       },
     });
   };
@@ -528,9 +596,50 @@ export default function TicketsPage() {
                 data-testid="input-description"
               />
             </div>
-            <div className="rounded-xl border border-dashed border-black/20 bg-black/[0.02] p-3 text-center">
-              <Paperclip className="h-5 w-5 mx-auto text-black/30 mb-1" />
-              <p className="text-xs text-black/50">File attachments can be added after creating the ticket</p>
+            <div className="grid gap-2">
+              <Label>Attachments</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                onChange={handleFileSelect}
+                className="hidden"
+                data-testid="input-file-attachment"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-xl border-2 border-dashed border-black/20 bg-black/[0.02] p-4 text-center hover:border-black/40 hover:bg-black/[0.04] transition-colors cursor-pointer"
+                data-testid="button-add-attachment"
+              >
+                <Upload className="h-5 w-5 mx-auto text-black/40 mb-1" />
+                <p className="text-sm text-black/60 font-medium">Click to attach files</p>
+                <p className="text-xs text-black/40 mt-0.5">Images (JPG, PNG, GIF, WebP) and PDF - max 10MB each</p>
+              </button>
+              {pendingFiles.length > 0 && (
+                <div className="space-y-1.5 mt-1">
+                  {pendingFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex items-center gap-2 rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2"
+                      data-testid={`attachment-file-${index}`}
+                    >
+                      {getFileIcon(file.type)}
+                      <span className="text-sm text-black/70 flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-black/40">{formatFileSize(file.size)}</span>
+                      <button
+                        type="button"
+                        onClick={() => removePendingFile(index)}
+                        className="text-black/30 hover:text-red-500 transition-colors"
+                        data-testid={`button-remove-file-${index}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -539,10 +648,10 @@ export default function TicketsPage() {
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={createTicketMutation.isPending}
+              disabled={createTicketMutation.isPending || isUploading}
               data-testid="button-submit-create"
             >
-              {createTicketMutation.isPending ? "Creating..." : "Create Ticket"}
+              {isUploading ? "Uploading files..." : createTicketMutation.isPending ? "Creating..." : "Create Ticket"}
             </Button>
           </DialogFooter>
         </DialogContent>
