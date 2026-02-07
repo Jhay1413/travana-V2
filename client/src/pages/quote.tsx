@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare } from "lucide-react";
+import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare, Pin, PinOff } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -18,6 +18,8 @@ import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { quoteImageApi } from "@/api";
 import { useToast } from "@/hooks/use-toast";
+import { useFavorites } from "@/hooks/queries/use-favorite-queries";
+import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -280,6 +282,12 @@ function NoteCard({
   const updateMutation = useUpdateNote(quoteId);
   const deleteMutation = useDeleteNote(quoteId);
   const createMutation = useCreateNote(quoteId);
+  const { data: userFavorites } = useFavorites();
+  const toggleFavoriteMutation = useToggleFavorite();
+  const isNotePinned = useMemo(() => {
+    if (!userFavorites) return false;
+    return userFavorites.some((f: any) => f.itemType === "note" && f.itemId === note.id);
+  }, [userFavorites, note.id]);
 
   const handleEdit = (html: string) => {
     updateMutation.mutate(
@@ -332,6 +340,18 @@ function NoteCard({
             </div>
           </div>
           <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={() => toggleFavoriteMutation.mutate(
+                { itemType: "note", itemId: note.id, label: `Note by ${note.authorName || "Agent"}`, subtitle: `quoteId:${quoteId}|${note.content.replace(/<[^>]*>/g, "").slice(0, 40)}` },
+                { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+              )}
+              className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${isNotePinned ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/5 hover:text-black/70"}`}
+              title={isNotePinned ? "Unpin" : "Pin to dashboard"}
+              data-testid={`note-btn-pin-${note.id}`}
+            >
+              <Pin className="h-2.5 w-2.5" />
+            </button>
             <button type="button" onClick={() => setIsReplying(!isReplying)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Reply" data-testid={`note-btn-reply-${note.id}`}>
               <Reply className="h-2.5 w-2.5" />
             </button>
@@ -881,6 +901,8 @@ export default function QuotePage() {
   const { data: quoteData, isLoading, error } = useQuoteFull(quoteId);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: userFavorites } = useFavorites();
+  const toggleFavoriteMutation = useToggleFavorite();
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
@@ -981,6 +1003,20 @@ export default function QuotePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2" data-testid="row-quote-actions">
+            <button
+              type="button"
+              onClick={() =>
+                toggleFavoriteMutation.mutate(
+                  { itemType: "quote", itemId: quoteId, label: quote.quoteTitle, subtitle: quote.destination || "" },
+                  { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                )
+              }
+              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === quoteId) ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
+              data-testid="button-pin-quote"
+            >
+              {userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+              {userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === quoteId) ? "Unpin" : "Pin"}
+            </button>
             <Button
               size="sm"
               variant="outline"

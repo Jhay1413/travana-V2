@@ -1185,6 +1185,19 @@ export default function ClientPage() {
                               </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-1">
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: any) => f.itemType === "enquiry" && f.itemId === enq.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
+                                data-testid={`button-pin-enquiry-${idx}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.enquiryTitle, subtitle: enq.destination || enq.holidayType || "" });
+                                }}
+                                title={userFavorites?.some((f: any) => f.itemType === "enquiry" && f.itemId === enq.id) ? "Unpin" : "Pin to dashboard"}
+                              >
+                                <Pin className="h-3.5 w-3.5" />
+                              </span>
                               <button
                                 type="button"
                                 className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-black/[0.05] hover:text-black/70"
@@ -1368,9 +1381,25 @@ export default function ClientPage() {
                                         </div>
                                         <div className="flex items-end justify-between gap-3">
                                           <div></div>
-                                          <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
-                                            View
-                                            <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                                          <div className="flex items-center gap-1">
+                                            <span
+                                              role="button"
+                                              tabIndex={0}
+                                              className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
+                                              data-testid={`button-pin-quote-${q.id}`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title, subtitle: q.destination || "" });
+                                              }}
+                                              title={userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
+                                            >
+                                              <Pin className="h-3.5 w-3.5" />
+                                            </span>
+                                            <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
+                                              View
+                                              <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                                            </div>
                                           </div>
                                         </div>
                                       </div>

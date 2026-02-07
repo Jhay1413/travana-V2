@@ -59,6 +59,7 @@ import {
   Pin,
   PinOff,
   Star,
+  StickyNote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -2073,8 +2074,10 @@ export default function CommandCenterPage() {
                 {userFavorites && userFavorites.length > 0 ? (
                   <div className="space-y-1.5">
                     {userFavorites.map((fav: any) => {
-                      const icon = fav.itemType === "client" ? <UserRound className="h-3.5 w-3.5" /> : fav.itemType === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />;
-                      const href = fav.itemType === "client" ? `/clients/${fav.itemId}` : fav.itemType === "quote" ? `/clients/_/quotes/${fav.itemId}` : `/clients/_/enquiries/${fav.itemId}`;
+                      const icon = fav.itemType === "client" ? <UserRound className="h-3.5 w-3.5" /> : fav.itemType === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : fav.itemType === "note" ? <StickyNote className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />;
+                      const noteQuoteId = fav.itemType === "note" && fav.subtitle?.startsWith("quoteId:") ? fav.subtitle.split("|")[0].replace("quoteId:", "") : null;
+                      const href = fav.itemType === "client" ? `/clients/${fav.itemId}` : fav.itemType === "quote" ? `/clients/_/quotes/${fav.itemId}` : fav.itemType === "enquiry" ? `/clients/_/enquiries/${fav.itemId}` : noteQuoteId ? `/clients/_/quotes/${noteQuoteId}` : "#";
+                      const displaySubtitle = fav.itemType === "note" && fav.subtitle?.includes("|") ? fav.subtitle.split("|").slice(1).join("|") : fav.subtitle;
                       return (
                         <motion.div
                           key={fav.id}
@@ -2094,7 +2097,7 @@ export default function CommandCenterPage() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-xs font-semibold">{fav.label}</div>
-                              {fav.subtitle && <div className="truncate text-[10px] text-black/50 dark:text-white/50">{fav.subtitle}</div>}
+                              {displaySubtitle && <div className="truncate text-[10px] text-black/50 dark:text-white/50">{displaySubtitle}</div>}
                             </div>
                           </button>
                           <button

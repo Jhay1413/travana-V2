@@ -25,6 +25,8 @@ import {
   Undo,
   Users,
   Wallet,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -37,6 +39,8 @@ import { useCreateEnquiryNote, useUpdateEnquiryNote, useDeleteEnquiryNote } from
 import { useCreateQuote, useUpdateEnquiry } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
+import { useFavorites } from "@/hooks/queries/use-favorite-queries";
+import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -339,6 +343,12 @@ export default function EnquiryPage() {
   const createQuoteMutation = useCreateQuote();
   const updateEnquiryMutation = useUpdateEnquiry();
   const { toast } = useToast();
+  const { data: userFavorites } = useFavorites();
+  const toggleFavoriteMutation = useToggleFavorite();
+  const isEnquiryPinned = useMemo(() => {
+    if (!userFavorites || !enquiryId) return false;
+    return userFavorites.some((f: any) => f.itemType === "enquiry" && f.itemId === enquiryId);
+  }, [userFavorites, enquiryId]);
 
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
@@ -449,6 +459,20 @@ export default function EnquiryPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  toggleFavoriteMutation.mutate(
+                    { itemType: "enquiry", itemId: enquiryId, label: enquiry.enquiryTitle, subtitle: enquiry.destination || enquiry.holidayType || "" },
+                    { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                  )
+                }
+                className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isEnquiryPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
+                data-testid="button-pin-enquiry"
+              >
+                {isEnquiryPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                {isEnquiryPinned ? "Unpin" : "Pin"}
+              </button>
               <Button size="sm" variant="outline" className="h-9 rounded-2xl border-black/10 px-3" onClick={() => setShowEditWizard(true)} data-testid="button-edit-enquiry">
                 <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
               </Button>
