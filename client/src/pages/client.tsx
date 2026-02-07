@@ -22,6 +22,8 @@ import {
   Trash2,
   UserRound,
   X,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNeonClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser, useEnquiries } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "@/hooks/mutations";
+import { useFavorites } from "@/hooks/queries/use-favorite-queries";
+import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { Client as ApiClient } from "@/types/client";
 import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
@@ -470,6 +474,13 @@ export default function ClientPage() {
 
   const { data: currentUser } = useCurrentUser();
 
+  const { data: userFavorites } = useFavorites();
+  const toggleFavoriteMutation = useToggleFavorite();
+  const isClientPinned = useMemo(() => {
+    if (!userFavorites || !clientId) return false;
+    return userFavorites.some((f: any) => f.itemType === "client" && f.itemId === clientId);
+  }, [userFavorites, clientId]);
+
   const updateClientMutationHook = useUpdateClient();
   const updateClientMutation = {
     mutate: (args: { id: string; data: Partial<ApiClient> }) => {
@@ -751,15 +762,33 @@ export default function ClientPage() {
                 <ChevronLeft className="h-4 w-4" />
                 Back
               </button>
-              <button
-                type="button"
-                onClick={openEditDialog}
-                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-                data-testid="button-edit-client"
-              >
-                <Pencil className="h-4 w-4" />
-                Edit
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const clientName = client?.name || "Client";
+                    const subtitle = client?.phone || client?.email || "";
+                    toggleFavoriteMutation.mutate(
+                      { itemType: "client", itemId: clientId, label: clientName, subtitle },
+                      { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                    );
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isClientPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
+                  data-testid="button-pin-client"
+                >
+                  {isClientPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                  {isClientPinned ? "Unpin" : "Pin"}
+                </button>
+                <button
+                  type="button"
+                  onClick={openEditDialog}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+                  data-testid="button-edit-client"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">

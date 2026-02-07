@@ -76,6 +76,9 @@ Schema includes tables for:
 - `commissions` - Commission tracking
 - `quote_images` - Image attachments for quotes
 - `notes` - General notes system
+- `enquiries` - Travel enquiry records
+- `enquiry_notes` - Notes on enquiries
+- `favorites` - Pinned/favorited items per user (clients, quotes, enquiries)
 
 ### Development vs Production
 - **Development**: Vite dev server with HMR, served through Express middleware

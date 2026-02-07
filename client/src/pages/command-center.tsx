@@ -5,6 +5,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport } from "@/hooks/mutations";
+import { useFavorites } from "@/hooks/queries/use-favorite-queries";
+import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
@@ -54,6 +56,9 @@ import {
   Smartphone,
   Trash2,
   Upload,
+  Pin,
+  PinOff,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1466,6 +1471,9 @@ export default function CommandCenterPage() {
   const displayName = user?.firstName || user?.name || user?.email || "User";
 
   const { data: dashboardStats } = useDashboardStats();
+  const { data: userFavorites } = useFavorites();
+  const removeFavoriteMutation = useRemoveFavorite();
+  const toggleFavoriteMutation = useToggleFavorite();
   const [clientsPage, setClientsPage] = useState(1);
   const { data: paginatedNeonClients } = useNeonClients({ page: clientsPage, limit: 10, search: query.trim() || undefined });
   const { data: apiUsers } = useUsers();
@@ -1634,9 +1642,28 @@ export default function CommandCenterPage() {
                           <div className="text-xs text-black/45 dark:text-white/45">
                             Last touch: {c.lastTouch}
                           </div>
-                          <div className="mt-2 inline-flex items-center gap-1 text-xs text-black/65 dark:text-white/65">
-                            <span>Open</span>
-                            <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                          <div className="mt-2 flex items-center gap-2">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className={`grid h-6 w-6 cursor-pointer place-items-center rounded-full transition ${
+                                userFavorites?.some((f: any) => f.itemType === "client" && f.itemId === c.id)
+                                  ? "text-amber-600 hover:bg-amber-500/10"
+                                  : "text-black/30 hover:bg-black/[0.06] hover:text-black/60 dark:text-white/30 dark:hover:bg-white/10"
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavoriteMutation.mutate({ itemType: "client", itemId: c.id, label: c.name, subtitle: c.phone || c.email || "" });
+                              }}
+                              title={userFavorites?.some((f: any) => f.itemType === "client" && f.itemId === c.id) ? "Unpin" : "Pin to dashboard"}
+                              data-testid={`button-pin-overview-client-${c.id}`}
+                            >
+                              <Pin className="h-3 w-3" />
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-xs text-black/65 dark:text-white/65">
+                              Open
+                              <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -2027,6 +2054,61 @@ export default function CommandCenterPage() {
           </Card>
 
           <div className="flex flex-col gap-4">
+            {userFavorites && userFavorites.length > 0 && (
+              <Card className="glass ringed grain rounded-3xl p-4" data-testid="card-pinned-section">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/10">
+                      <Star className="h-3.5 w-3.5 text-amber-600" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-black/80 dark:text-white/80">Pinned</div>
+                      <div className="text-[10px] text-black/45 dark:text-white/45">{userFavorites.length} item{userFavorites.length !== 1 ? "s" : ""}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {userFavorites.map((fav: any) => {
+                    const icon = fav.itemType === "client" ? <UserRound className="h-3.5 w-3.5" /> : fav.itemType === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />;
+                    const href = fav.itemType === "client" ? `/clients/${fav.itemId}` : fav.itemType === "quote" ? `/clients/_/quotes/${fav.itemId}` : `/clients/_/enquiries/${fav.itemId}`;
+                    return (
+                      <motion.div
+                        key={fav.id}
+                        className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        data-testid={`card-pinned-${fav.id}`}
+                      >
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                          onClick={() => navigate(fav.itemType === "client" ? `/clients/${fav.itemId}` : href)}
+                          data-testid={`link-pinned-${fav.id}`}
+                        >
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-white/60 text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
+                            {icon}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-xs font-semibold">{fav.label}</div>
+                            {fav.subtitle && <div className="truncate text-[10px] text-black/50 dark:text-white/50">{fav.subtitle}</div>}
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-black/30 opacity-0 transition hover:bg-black/[0.06] hover:text-black/60 group-hover:opacity-100 dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white/60"
+                          onClick={() => removeFavoriteMutation.mutate(fav.id)}
+                          title="Unpin"
+                          data-testid={`button-unpin-${fav.id}`}
+                        >
+                          <PinOff className="h-3 w-3" />
+                        </button>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
             <Card className="glass ringed grain rounded-3xl p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-1">
