@@ -9,7 +9,7 @@ export const airportRepository = {
   },
 
   async findAll(): Promise<Airport[]> {
-    return await db.select().from(airports).orderBy(airports.name);
+    return await db.select().from(airports).orderBy(airports.airport_name);
   },
 
   async create(airport: InsertAirport): Promise<Airport> {

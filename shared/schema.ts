@@ -235,9 +235,9 @@ export type TourOperator = typeof tourOperators.$inferSelect;
 // Airports table
 export const airports = pgTable("airports", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  code: text("code").notNull(),
-  country: text("country").notNull(),
+  airport_name: text("airport_name").notNull(),
+  airport_code: text("airport_code").notNull(),
+  country_id: text("country_id").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

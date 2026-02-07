@@ -3527,15 +3527,16 @@ export default function CommandCenterPage() {
           reader.onload = (event) => {
             const text = event.target?.result as string;
             const lines = text.split("\n").filter(line => line.trim());
-            const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+            const stripQuotes = (s: string) => s.trim().replace(/^["']|["']$/g, "");
+            const headers = lines[0].split(",").map(h => stripQuotes(h).toLowerCase());
             for (let i = 1; i < lines.length; i++) {
-              const values = lines[i].split(",").map(v => v.trim());
+              const values = lines[i].split(",").map(v => stripQuotes(v));
               const row: Record<string, string> = {};
               headers.forEach((h, idx) => { row[h] = values[idx] || ""; });
               createAirportMutation.mutate({
-                name: row.name || row["airport name"] || "",
-                code: row.code || row["airport code"] || row.iata || "",
-                country: row.country || "",
+                airport_name: row.airport_name || row["airport_name"] || row.name || row["airport name"] || "",
+                airport_code: row.airport_code || row["airport_code"] || row.code || row["airport code"] || row.iata || "",
+                country_id: row.country_id || row["country_id"] || row.country || "",
               });
             }
           };
@@ -3547,9 +3548,9 @@ export default function CommandCenterPage() {
           const q = airportSearch.trim().toLowerCase();
           if (!q) return true;
           return (
-            airport.name.toLowerCase().includes(q) ||
-            airport.code.toLowerCase().includes(q) ||
-            airport.country.toLowerCase().includes(q)
+            airport.airport_name.toLowerCase().includes(q) ||
+            airport.airport_code.toLowerCase().includes(q) ||
+            airport.country_id.toLowerCase().includes(q)
           );
         });
 
@@ -3590,11 +3591,11 @@ export default function CommandCenterPage() {
                   </label>
                   <Button
                     onClick={() => {
-                      const name = prompt("Enter airport name:");
-                      if (!name) return;
-                      const code = prompt("Airport code (e.g. LHR, JFK):") || "";
-                      const country = prompt("Country:") || "";
-                      createAirportMutation.mutate({ name, code, country });
+                      const airport_name = prompt("Enter airport name:");
+                      if (!airport_name) return;
+                      const airport_code = prompt("Airport code (e.g. LHR, JFK):") || "";
+                      const country_id = prompt("Country ID:") || "";
+                      createAirportMutation.mutate({ airport_name, airport_code, country_id });
                     }}
                     className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                     data-testid="button-add-airport"
@@ -3617,9 +3618,9 @@ export default function CommandCenterPage() {
                   <tbody>
                     {filteredAirports.map((airport) => (
                       <tr key={airport.id} className="border-b border-black/5 dark:border-white/5" data-testid={`row-airport-${airport.id}`}>
-                        <td className="py-3 px-2 font-medium">{airport.name}</td>
-                        <td className="py-3 px-2 font-mono">{airport.code}</td>
-                        <td className="py-3 px-2">{airport.country}</td>
+                        <td className="py-3 px-2 font-medium">{airport.airport_name}</td>
+                        <td className="py-3 px-2 font-mono">{airport.airport_code}</td>
+                        <td className="py-3 px-2">{airport.country_id}</td>
                         <td className="py-3 px-2 text-right">
                           <Button
                             variant="ghost"
