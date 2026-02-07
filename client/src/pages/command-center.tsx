@@ -1543,7 +1543,7 @@ export default function CommandCenterPage() {
   const { data: countriesData } = useQuery({
     queryKey: ["admin", "data", "country"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/country");
+      const res = await axios.get("/api/admin/data/country?limit=200");
       return res.data as { rows: Array<{ id: string; country_name: string; country_code?: string }> };
     },
   });

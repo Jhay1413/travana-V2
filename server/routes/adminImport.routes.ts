@@ -102,8 +102,40 @@ router.get(
       return res.status(400).json({ success: false, message: `Unknown table: ${tableName}` });
     }
 
-    const rows = await db.select().from(table);
-    return successResponse(res, { rows, total: rows.length }, `${tableName} data retrieved`);
+    const config = tableConfig[tableName];
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+    const search = ((req.query.search as string) || "").trim();
+    const offset = (page - 1) * limit;
+
+    let whereClause;
+    if (search && config?.searchFields?.length) {
+      const conditions = config.searchFields.map((field: string) =>
+        ilike(table[field], `%${search}%`)
+      );
+      whereClause = conditions.length === 1 ? conditions[0] : or(...conditions);
+    }
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(table)
+      .where(whereClause);
+    const total = Number(countResult.count);
+
+    const rows = await db
+      .select()
+      .from(table)
+      .where(whereClause)
+      .limit(limit)
+      .offset(offset);
+
+    return successResponse(res, {
+      rows,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    }, `${tableName} data retrieved`);
   })
 );
 

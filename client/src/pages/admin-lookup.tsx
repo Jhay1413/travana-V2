@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
@@ -16,6 +16,10 @@ import {
   Download,
   Loader2,
   X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import axios from "@/api/client/axios-client";
 
@@ -168,6 +172,8 @@ function coerceValues(row: Record<string, string>): Record<string, any> {
   return out;
 }
 
+const PAGE_SIZE = 50;
+
 export default function AdminLookupPage() {
   const params = useParams<{ tableSlug: string }>();
   const tableSlug = params.tableSlug || "";
@@ -175,19 +181,44 @@ export default function AdminLookupPage() {
   const [role, setRole] = useState<Role>("Admin");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<Record<string, any>[] | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const prevSlug = useRef(tableSlug);
+  useEffect(() => {
+    if (prevSlug.current !== tableSlug) {
+      setSearch("");
+      setDebouncedSearch("");
+      setPage(1);
+      setPreview(null);
+      setFileName(null);
+      prevSlug.current = tableSlug;
+    }
+  }, [tableSlug]);
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["admin", "data", def?.apiKey],
+    queryKey: ["admin", "data", def?.apiKey, page, debouncedSearch],
     queryFn: async () => {
-      const res = await axios.get(`/api/admin/data/${def!.apiKey}`);
-      return res.data as { rows: Record<string, any>[]; total: number };
+      const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      const res = await axios.get(`/api/admin/data/${def!.apiKey}?${params}`);
+      return res.data as { rows: Record<string, any>[]; total: number; page: number; limit: number; totalPages: number };
     },
     enabled: !!def,
+    placeholderData: (prev) => prev,
   });
 
   const hasCountryRef = def?.displayColumns.includes("country_id");
@@ -197,41 +228,41 @@ export default function AdminLookupPage() {
   const hasParkRef = def?.displayColumns.includes("park_id");
 
   const { data: countriesLookup } = useQuery({
-    queryKey: ["admin", "data", "country"],
+    queryKey: ["admin", "lookup", "country"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/country");
+      const res = await axios.get("/api/admin/data/country?limit=200");
       return res.data as { rows: Array<{ id: string; country_name: string }> };
     },
     enabled: !!hasCountryRef,
   });
   const { data: destLookup } = useQuery({
-    queryKey: ["admin", "data", "destination"],
+    queryKey: ["admin", "lookup", "destination"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/destination");
+      const res = await axios.get("/api/admin/data/destination?limit=200");
       return res.data as { rows: Array<{ id: string; name: string }> };
     },
     enabled: !!hasDestRef,
   });
   const { data: resortLookup } = useQuery({
-    queryKey: ["admin", "data", "resorts"],
+    queryKey: ["admin", "lookup", "resorts"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/resorts");
+      const res = await axios.get("/api/admin/data/resorts?limit=200");
       return res.data as { rows: Array<{ id: string; name: string }> };
     },
     enabled: !!hasResortRef,
   });
   const { data: accomTypeLookup } = useQuery({
-    queryKey: ["admin", "data", "accomodation_type"],
+    queryKey: ["admin", "lookup", "accomodation_type"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/accomodation_type");
+      const res = await axios.get("/api/admin/data/accomodation_type?limit=200");
       return res.data as { rows: Array<{ id: string; type: string }> };
     },
     enabled: !!hasTypeRef,
   });
   const { data: parkLookup } = useQuery({
-    queryKey: ["admin", "data", "park"],
+    queryKey: ["admin", "lookup", "park"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/park");
+      const res = await axios.get("/api/admin/data/park?limit=200");
       return res.data as { rows: Array<{ id: string; name: string }> };
     },
     enabled: !!hasParkRef,
@@ -367,13 +398,9 @@ export default function AdminLookupPage() {
   }
 
   const rows = data?.rows || [];
-  const filtered = search.trim()
-    ? rows.filter((r) =>
-        def.displayColumns.some((col) =>
-          resolveValue(col, r[col]).toLowerCase().includes(search.toLowerCase())
-        )
-      )
-    : rows;
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const currentPage = data?.page ?? 1;
 
   return (
     <CommandCenterShell
@@ -391,7 +418,10 @@ export default function AdminLookupPage() {
             <div className="space-y-1">
               <div className="text-sm font-semibold" data-testid={`text-${tableSlug}-title`}>{def.label}</div>
               <div className="text-xs text-muted-foreground" data-testid={`text-${tableSlug}-count`}>
-                {search ? `Showing ${filtered.length} of ${rows.length}` : `${rows.length} records`}
+                {debouncedSearch
+                  ? `${total} result${total !== 1 ? "s" : ""} found`
+                  : `${total} record${total !== 1 ? "s" : ""}`}
+                {totalPages > 1 && ` · Page ${currentPage} of ${totalPages}`}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -438,12 +468,12 @@ export default function AdminLookupPage() {
                 <Plus className="mr-2 h-4 w-4" />
                 Add
               </Button>
-              {rows.length > 0 && (
+              {total > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    if (window.confirm(`Clear all ${rows.length} rows from ${def.label}?`)) {
+                    if (window.confirm(`Clear all ${total} rows from ${def.label}?`)) {
                       clearMutation.mutate();
                     }
                   }}
@@ -524,7 +554,7 @@ export default function AdminLookupPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row, idx) => (
+                  {rows.map((row, idx) => (
                     <tr key={row.id ?? idx} className="border-b border-black/5 dark:border-white/5" data-testid={`row-${tableSlug}-${row.id ?? idx}`}>
                       {def.displayColumns.map((col) => (
                         <td key={col} className="py-3 px-2 max-w-[200px] truncate">
@@ -546,15 +576,89 @@ export default function AdminLookupPage() {
                       </td>
                     </tr>
                   ))}
-                  {filtered.length === 0 && (
+                  {rows.length === 0 && (
                     <tr>
                       <td colSpan={def.displayColumns.length + 1} className="py-8 text-center text-black/50 dark:text-white/50">
-                        {search ? "No matching records found." : `No ${def.label.toLowerCase()} yet. Add records above or upload a CSV.`}
+                        {debouncedSearch ? "No matching records found." : `No ${def.label.toLowerCase()} yet. Add records above or upload a CSV.`}
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-black/5 dark:border-white/5 pt-3 mt-3">
+              <div className="text-xs text-muted-foreground">
+                Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, total)} of {total}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(1)}
+                  disabled={currentPage <= 1}
+                  className="h-8 w-8 p-0 rounded-xl"
+                  data-testid={`btn-page-first-${tableSlug}`}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="h-8 w-8 p-0 rounded-xl"
+                  data-testid={`btn-page-prev-${tableSlug}`}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === currentPage ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setPage(pageNum)}
+                      className={`h-8 w-8 p-0 rounded-xl text-xs ${pageNum === currentPage ? "bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90" : ""}`}
+                      data-testid={`btn-page-${pageNum}-${tableSlug}`}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="h-8 w-8 p-0 rounded-xl"
+                  data-testid={`btn-page-next-${tableSlug}`}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(totalPages)}
+                  disabled={currentPage >= totalPages}
+                  className="h-8 w-8 p-0 rounded-xl"
+                  data-testid={`btn-page-last-${tableSlug}`}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </Card>
