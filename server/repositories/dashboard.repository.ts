@@ -12,22 +12,28 @@ export const dashboardRepository = {
     wonCount: number;
     lostCount: number;
   }> {
-    const [clientCount] = await db.select({ count: sql<number>`count(*)` }).from(clients);
-    const [quoteCount] = await db.select({ count: sql<number>`count(*)` }).from(quotes);
-    const [revenue] = await db.select({ total: sql<number>`COALESCE(SUM(CAST(${commissions.netToAgency} AS DECIMAL)), 0)` }).from(commissions);
-    const [avgDeal] = await db.select({ avg: sql<number>`COALESCE(AVG(CAST(${commissions.netToAgency} AS DECIMAL)), 0)` }).from(commissions);
-    const [inPlay] = await db.select({ count: sql<number>`count(*)` }).from(quotes).where(eq(quotes.status, "In Play"));
-    const [won] = await db.select({ count: sql<number>`count(*)` }).from(quotes).where(eq(quotes.status, "Won"));
-    const [lost] = await db.select({ count: sql<number>`count(*)` }).from(quotes).where(eq(quotes.status, "Lost"));
+    const [clientCount, quoteStats, revenueStats] = await Promise.all([
+      db.select({ count: sql<number>`count(*)` }).from(clients),
+      db.select({
+        total: sql<number>`count(*)`,
+        inPlay: sql<number>`count(*) FILTER (WHERE ${quotes.status} = 'In Play')`,
+        won: sql<number>`count(*) FILTER (WHERE ${quotes.status} = 'Won')`,
+        lost: sql<number>`count(*) FILTER (WHERE ${quotes.status} = 'Lost')`,
+      }).from(quotes),
+      db.select({
+        total: sql<number>`COALESCE(SUM(CAST(${commissions.netToAgency} AS DECIMAL)), 0)`,
+        avg: sql<number>`COALESCE(AVG(CAST(${commissions.netToAgency} AS DECIMAL)), 0)`,
+      }).from(commissions),
+    ]);
 
     return {
-      totalClients: Number(clientCount.count),
-      totalQuotes: Number(quoteCount.count),
-      totalRevenue: Number(revenue.total),
-      avgDealSize: Number(avgDeal.avg),
-      inPlayCount: Number(inPlay.count),
-      wonCount: Number(won.count),
-      lostCount: Number(lost.count),
+      totalClients: Number(clientCount[0].count),
+      totalQuotes: Number(quoteStats[0].total),
+      totalRevenue: Number(revenueStats[0].total),
+      avgDealSize: Number(revenueStats[0].avg),
+      inPlayCount: Number(quoteStats[0].inPlay),
+      wonCount: Number(quoteStats[0].won),
+      lostCount: Number(quoteStats[0].lost),
     };
   },
 };

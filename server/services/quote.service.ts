@@ -27,14 +27,15 @@ export const quoteService = {
 
   async _attachImagesAndCommissions(quotes: Quote[]) {
     if (quotes.length === 0) return quotes;
+    const quoteIds = quotes.map((q) => q.id);
     const [allImages, allCommissions] = await Promise.all([
-      Promise.all(quotes.map((q) => quoteImageRepository.findByQuoteId(q.id))),
-      Promise.all(quotes.map((q) => commissionRepository.findByQuoteId(q.id))),
+      quoteImageRepository.findByQuoteIds(quoteIds),
+      commissionRepository.findByQuoteIds(quoteIds),
     ]);
-    return quotes.map((q, i) => ({
+    return quotes.map((q) => ({
       ...q,
-      images: allImages[i] || [],
-      commission: allCommissions[i] || null,
+      images: allImages.filter((img) => img.quoteId === q.id),
+      commission: allCommissions.find((c) => c.quoteId === q.id) || null,
     }));
   },
 

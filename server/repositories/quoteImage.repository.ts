@@ -1,10 +1,15 @@
 import { db } from "../config/database";
 import { quoteImages, type QuoteImage, type InsertQuoteImage } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export const quoteImageRepository = {
   async findByQuoteId(quoteId: string): Promise<QuoteImage[]> {
     return await db.select().from(quoteImages).where(eq(quoteImages.quoteId, quoteId));
+  },
+
+  async findByQuoteIds(quoteIds: string[]): Promise<QuoteImage[]> {
+    if (quoteIds.length === 0) return [];
+    return await db.select().from(quoteImages).where(inArray(quoteImages.quoteId, quoteIds));
   },
 
   async create(image: InsertQuoteImage): Promise<QuoteImage> {
