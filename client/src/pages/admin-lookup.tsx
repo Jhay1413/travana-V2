@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell, type Role } from "@/components/command-center-shell";
@@ -143,12 +143,14 @@ function parseCSV(text: string): Record<string, string>[] {
 }
 
 function coerceValues(row: Record<string, string>): Record<string, any> {
-  const intFields = ["country_id", "destination_id", "resorts_id", "type_id", "park_id", "package_type_id", "tour_operator_id", "month", "year", "bedrooms", "bathrooms", "sleeps", "pets", "adults", "children", "infants", "owner_id"];
+  const uuidFields = ["country_id", "destination_id", "resorts_id", "type_id", "park_id", "package_type_id", "tour_operator_id", "owner_id"];
+  const intFields = ["month", "year", "bedrooms", "bathrooms", "sleeps", "pets", "adults", "children", "infants"];
   const boolFields = ["is_used", "isPrimary"];
   const numFields = ["percentage_commission", "target", "company_commission", "agent_commission", "adjustment"];
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(row)) {
-    if (intFields.includes(k)) out[k] = parseInt(v, 10) || 0;
+    if (uuidFields.includes(k)) out[k] = v;
+    else if (intFields.includes(k)) out[k] = parseInt(v, 10) || 0;
     else if (boolFields.includes(k)) out[k] = v === "true" || v === "1" || v === "yes";
     else if (numFields.includes(k)) out[k] = parseFloat(v) || 0;
     else out[k] = v;
@@ -178,6 +180,64 @@ export default function AdminLookupPage() {
     enabled: !!def,
   });
 
+  const hasCountryRef = def?.displayColumns.includes("country_id");
+  const hasDestRef = def?.displayColumns.includes("destination_id");
+  const hasResortRef = def?.displayColumns.includes("resorts_id");
+  const hasTypeRef = def?.displayColumns.includes("type_id");
+
+  const { data: countriesLookup } = useQuery({
+    queryKey: ["admin", "data", "country"],
+    queryFn: async () => {
+      const res = await axios.get("/api/admin/data/country");
+      return res.data as { rows: Array<{ id: string; country_name: string }> };
+    },
+    enabled: !!hasCountryRef,
+  });
+  const { data: destLookup } = useQuery({
+    queryKey: ["admin", "data", "destination"],
+    queryFn: async () => {
+      const res = await axios.get("/api/admin/data/destination");
+      return res.data as { rows: Array<{ id: string; name: string }> };
+    },
+    enabled: !!hasDestRef,
+  });
+  const { data: resortLookup } = useQuery({
+    queryKey: ["admin", "data", "resorts"],
+    queryFn: async () => {
+      const res = await axios.get("/api/admin/data/resorts");
+      return res.data as { rows: Array<{ id: string; name: string }> };
+    },
+    enabled: !!hasResortRef,
+  });
+  const { data: accomTypeLookup } = useQuery({
+    queryKey: ["admin", "data", "accomodation_type"],
+    queryFn: async () => {
+      const res = await axios.get("/api/admin/data/accomodation_type");
+      return res.data as { rows: Array<{ id: string; type: string }> };
+    },
+    enabled: !!hasTypeRef,
+  });
+
+  const lookupMaps = useMemo(() => {
+    const country: Record<string, string> = {};
+    const dest: Record<string, string> = {};
+    const resort: Record<string, string> = {};
+    const accomType: Record<string, string> = {};
+    countriesLookup?.rows?.forEach((r) => { country[r.id] = r.country_name; });
+    destLookup?.rows?.forEach((r) => { dest[r.id] = r.name; });
+    resortLookup?.rows?.forEach((r) => { resort[r.id] = r.name; });
+    accomTypeLookup?.rows?.forEach((r) => { accomType[r.id] = r.type; });
+    return { country_id: country, destination_id: dest, resorts_id: resort, type_id: accomType };
+  }, [countriesLookup, destLookup, resortLookup, accomTypeLookup]);
+
+  const resolveValue = useCallback((col: string, value: any): string => {
+    if (value == null || value === "") return "—";
+    const map = lookupMaps[col as keyof typeof lookupMaps];
+    if (map && map[String(value)]) return map[String(value)];
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    return String(value);
+  }, [lookupMaps]);
+
   const createMutation = useMutation({
     mutationFn: async (row: Record<string, any>) => {
       await axios.post(`/api/admin/data/${def!.apiKey}`, row);
@@ -190,7 +250,7 @@ export default function AdminLookupPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (id: string) => {
       await axios.delete(`/api/admin/data/${def!.apiKey}/${id}`);
     },
     onSuccess: () => {
@@ -289,7 +349,7 @@ export default function AdminLookupPage() {
   const filtered = search.trim()
     ? rows.filter((r) =>
         def.displayColumns.some((col) =>
-          String(r[col] ?? "").toLowerCase().includes(search.toLowerCase())
+          resolveValue(col, r[col]).toLowerCase().includes(search.toLowerCase())
         )
       )
     : rows;
@@ -435,9 +495,10 @@ export default function AdminLookupPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm">
                   <tr className="border-b border-black/10 dark:border-white/10">
-                    {def.displayColumns.map((col) => (
-                      <th key={col} className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">{col}</th>
-                    ))}
+                    {def.displayColumns.map((col) => {
+                      const friendly: Record<string, string> = { country_id: "Country", destination_id: "Destination", resorts_id: "Resort", type_id: "Type", country_name: "Country Name", country_code: "Country Code", airport_name: "Airport Name", airport_code: "Airport Code" };
+                      return <th key={col} className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">{friendly[col] || col.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}</th>;
+                    })}
                     <th className="py-3 px-2 text-right font-medium text-black/70 dark:text-white/70">Actions</th>
                   </tr>
                 </thead>
@@ -446,7 +507,7 @@ export default function AdminLookupPage() {
                     <tr key={row.id ?? idx} className="border-b border-black/5 dark:border-white/5" data-testid={`row-${tableSlug}-${row.id ?? idx}`}>
                       {def.displayColumns.map((col) => (
                         <td key={col} className="py-3 px-2 max-w-[200px] truncate">
-                          {typeof row[col] === "boolean" ? (row[col] ? "Yes" : "No") : String(row[col] ?? "—")}
+                          {resolveValue(col, row[col])}
                         </td>
                       ))}
                       <td className="py-3 px-2 text-right">

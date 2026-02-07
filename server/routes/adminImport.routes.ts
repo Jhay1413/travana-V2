@@ -138,7 +138,7 @@ router.delete(
     }
 
     if (table.id) {
-      await db.delete(table).where(eq(table.id, parseInt(id, 10)));
+      await db.delete(table).where(eq(table.id, id));
     }
     return successResponse(res, null, "Row deleted");
   })
