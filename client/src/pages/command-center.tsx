@@ -57,6 +57,7 @@ import {
   Camera,
   Smartphone,
   Trash2,
+  TrendingUp,
   Upload,
   Pin,
   PinOff,
@@ -322,10 +323,13 @@ function ShellNav({
   onRoleChange: (role: Role | null) => void;
 }) {
   const [, navigate] = useLocation();
+  type NavItem = { key: string; label: string; icon: React.ReactNode; route?: string; children?: NavItem[] };
+  type NavSection = { id: string; label: string; icon: React.ReactNode; items: NavItem[] };
   const nav = useMemo(() => {
-    const base = [
+    const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+      { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
       { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
@@ -334,7 +338,7 @@ function ShellNav({
 
     if (role === "Admin") {
       return {
-        grouped: true,
+        grouped: true as const,
         sections: [
           {
             id: "admin",
@@ -362,8 +366,8 @@ function ShellNav({
                 { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" /> },
                 { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" /> },
                 { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
-              ] },
-            ],
+              ] as NavItem[] },
+            ] as NavItem[],
           },
           {
             id: "agent",
@@ -372,45 +376,47 @@ function ShellNav({
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+              { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
               { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
-            ],
+            ] as NavItem[],
           },
-        ],
+        ] as NavSection[],
+        items: undefined as NavItem[] | undefined,
       };
     }
 
     if (role === "Manager") {
-      return { grouped: false, items: [
+      return { grouped: false as const, items: [
         { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
         { key: "team", label: "Team Pipeline", icon: <BarChart3 className="h-4 w-4" /> },
         { key: "coverage", label: "Coverage", icon: <Compass className="h-4 w-4" /> },
         { key: "coaching", label: "Coaching", icon: <BadgeCheck className="h-4 w-4" /> },
         { key: "reports", label: "Reports", icon: <FileText className="h-4 w-4" /> },
-      ]};
+      ] as NavItem[], sections: undefined as NavSection[] | undefined };
     }
 
     if (role === "Homeworker") {
-      return { grouped: false, items: [
+      return { grouped: false as const, items: [
         { key: "overview", label: "Work Queue", icon: <ListChecks className="h-4 w-4" /> },
         { key: "assigned", label: "Assigned Clients", icon: <Users className="h-4 w-4" /> },
         { key: "callbacks", label: "Callbacks", icon: <Phone className="h-4 w-4" /> },
         { key: "messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
-      ]};
+      ] as NavItem[], sections: undefined as NavSection[] | undefined };
     }
 
     if (role === "Referer") {
-      return { grouped: false, items: [
+      return { grouped: false as const, items: [
         { key: "overview", label: "Affiliate Hub", icon: <Link2 className="h-4 w-4" /> },
         { key: "leads", label: "Leads", icon: <Users className="h-4 w-4" /> },
         { key: "commission", label: "Commission", icon: <CircleDollarSign className="h-4 w-4" /> },
         { key: "payouts", label: "Payouts", icon: <Banknote className="h-4 w-4" /> },
-      ]};
+      ] as NavItem[], sections: undefined as NavSection[] | undefined };
     }
 
-    return { grouped: false, items: base };
+    return { grouped: false as const, items: base, sections: undefined as NavSection[] | undefined };
   }, [role]);
 
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
@@ -509,6 +515,7 @@ function ShellNav({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (item.route) { navigate(item.route); return; }
                                   onActiveChange(item.key);
                                 }}
                                 className={
@@ -612,7 +619,7 @@ function ShellNav({
             return (
               <button
                 key={item.key}
-                onClick={() => onActiveChange(item.key)}
+                onClick={() => { if (item.route) { navigate(item.route); return; } onActiveChange(item.key); }}
                 className={
                   "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                   (isActive
