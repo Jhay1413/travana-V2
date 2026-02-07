@@ -1,13 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import {
   Calendar,
   ChevronRight,
+  GripVertical,
   MapPin,
-  Plane,
   PoundSterling,
   TrendingUp,
   Users,
@@ -16,11 +16,20 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useQuotes, useNeonClients } from "@/hooks/queries";
+import { useUpdateQuote } from "@/hooks/mutations";
+import { useToast } from "@/hooks/use-toast";
 import type { Quote } from "@/types/quote";
 
 type PipelineStage = "New Lead" | "In Play" | "Booked" | "Lost";
 
 const STAGES: PipelineStage[] = ["New Lead", "In Play", "Booked", "Lost"];
+
+const STAGE_TO_STATUS: Record<PipelineStage, string> = {
+  "New Lead": "In Play",
+  "In Play": "In Play",
+  "Booked": "Booked",
+  "Lost": "Lost",
+};
 
 function stageColor(stage: PipelineStage) {
   switch (stage) {
@@ -31,6 +40,7 @@ function stageColor(stage: PipelineStage) {
         text: "text-blue-700",
         dot: "bg-blue-500",
         header: "bg-blue-50 border-blue-200",
+        dropHighlight: "ring-2 ring-blue-400 bg-blue-500/10",
       };
     case "In Play":
       return {
@@ -39,6 +49,7 @@ function stageColor(stage: PipelineStage) {
         text: "text-amber-700",
         dot: "bg-amber-500",
         header: "bg-amber-50 border-amber-200",
+        dropHighlight: "ring-2 ring-amber-400 bg-amber-500/10",
       };
     case "Booked":
       return {
@@ -47,6 +58,7 @@ function stageColor(stage: PipelineStage) {
         text: "text-emerald-700",
         dot: "bg-emerald-500",
         header: "bg-emerald-50 border-emerald-200",
+        dropHighlight: "ring-2 ring-emerald-400 bg-emerald-500/10",
       };
     case "Lost":
       return {
@@ -55,6 +67,7 @@ function stageColor(stage: PipelineStage) {
         text: "text-red-700",
         dot: "bg-red-500",
         header: "bg-red-50 border-red-200",
+        dropHighlight: "ring-2 ring-red-400 bg-red-500/10",
       };
   }
 }
@@ -106,53 +119,73 @@ interface PipelineCardProps {
   quote: Quote;
   stage: PipelineStage;
   clientName: string;
+  onDragStart: (quote: Quote, stage: PipelineStage) => void;
 }
 
-function PipelineCard({ quote, stage, clientName }: PipelineCardProps) {
+function PipelineCard({ quote, stage, clientName, onDragStart }: PipelineCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const profit = getProfit(quote, stage);
   const totalValue = getTotalValue(quote);
   const colors = stageColor(stage);
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ quoteId: quote.id, fromStage: stage }));
+    e.dataTransfer.effectAllowed = "move";
+    setIsDragging(true);
+    setIsHovered(false);
+    onDragStart(quote, stage);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
   return (
     <div
-      className="relative"
-      onMouseEnter={() => setIsHovered(true)}
+      className={`relative ${isDragging ? "opacity-40" : ""}`}
+      onMouseEnter={() => !isDragging && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
-      <Link href={`/clients/${quote.clientId}/quotes/${quote.id}`}>
-        <motion.div
-          whileHover={{ y: -2 }}
-          className={`p-3.5 rounded-xl border ${colors.border} ${colors.bg} cursor-pointer transition-shadow hover:shadow-md`}
-          data-testid={`pipeline-card-${quote.id}`}
-        >
-          <h4 className="text-sm font-semibold text-black/80 truncate mb-1.5" data-testid={`pipeline-title-${quote.id}`}>
-            {quote.quoteTitle}
-          </h4>
-          <div className="flex items-center gap-1.5 text-xs text-black/50 mb-1">
-            <Users className="h-3 w-3" />
-            <span className="truncate" data-testid={`pipeline-client-${quote.id}`}>{clientName}</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-black/50 mb-2">
-            <Calendar className="h-3 w-3" />
-            <span data-testid={`pipeline-date-${quote.id}`}>{formatDate(quote.travelDate)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <PoundSterling className="h-3 w-3 text-emerald-600" />
-              <span className="text-sm font-semibold text-emerald-700" data-testid={`pipeline-profit-${quote.id}`}>
-                {profit > 0 ? formatCurrency(profit) : "TBC"}
-              </span>
-              {profit > 0 && quote.commission && !(parseFloat(quote.commission.agentSplitValue) > 0) && (
-                <span className="text-[10px] text-black/30 ml-0.5">(est.)</span>
-              )}
+      <motion.div
+        whileHover={!isDragging ? { y: -2 } : undefined}
+        className={`p-3.5 rounded-xl border ${colors.border} ${colors.bg} cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md`}
+        data-testid={`pipeline-card-${quote.id}`}
+      >
+        <div className="flex items-start gap-2">
+          <GripVertical className="h-4 w-4 text-black/20 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-semibold text-black/80 truncate mb-1.5" data-testid={`pipeline-title-${quote.id}`}>
+              {quote.quoteTitle}
+            </h4>
+            <div className="flex items-center gap-1.5 text-xs text-black/50 mb-1">
+              <Users className="h-3 w-3" />
+              <span className="truncate" data-testid={`pipeline-client-${quote.id}`}>{clientName}</span>
             </div>
-            <ChevronRight className="h-3.5 w-3.5 text-black/20" />
+            <div className="flex items-center gap-1.5 text-xs text-black/50 mb-2">
+              <Calendar className="h-3 w-3" />
+              <span data-testid={`pipeline-date-${quote.id}`}>{formatDate(quote.travelDate)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <PoundSterling className="h-3 w-3 text-emerald-600" />
+                <span className="text-sm font-semibold text-emerald-700" data-testid={`pipeline-profit-${quote.id}`}>
+                  {profit > 0 ? formatCurrency(profit) : "TBC"}
+                </span>
+                {profit > 0 && quote.commission && !(parseFloat(quote.commission.agentSplitValue) > 0) && (
+                  <span className="text-[10px] text-black/30 ml-0.5">(est.)</span>
+                )}
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 text-black/20" />
+            </div>
           </div>
-        </motion.div>
-      </Link>
+        </div>
+      </motion.div>
 
-      {isHovered && (
+      {isHovered && !isDragging && (
         <div
           className="absolute left-0 right-0 top-full mt-1 z-50 p-4 rounded-xl border border-black/15 bg-white shadow-xl"
           data-testid={`pipeline-hover-${quote.id}`}
@@ -241,8 +274,107 @@ function PipelineCard({ quote, stage, clientName }: PipelineCardProps) {
               )}
             </div>
           ) : null}
+          <div className="mt-3 pt-2 border-t border-black/10">
+            <Link
+              href={stage === "Booked" ? `/clients/${quote.clientId}/bookings/${quote.id}` : `/clients/${quote.clientId}/quotes/${quote.id}`}
+              className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+              data-testid={`pipeline-view-${quote.id}`}
+            >
+              View details →
+            </Link>
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface PipelineColumnProps {
+  stage: PipelineStage;
+  quotes: Quote[];
+  getClientName: (clientId: string) => string;
+  onDragStart: (quote: Quote, stage: PipelineStage) => void;
+  onDrop: (quoteId: string, fromStage: PipelineStage, toStage: PipelineStage) => void;
+  isDragActive: boolean;
+  dragFromStage: PipelineStage | null;
+}
+
+function PipelineColumn({ stage, quotes: stageQuotes, getClientName, onDragStart, onDrop, isDragActive, dragFromStage }: PipelineColumnProps) {
+  const [isOver, setIsOver] = useState(false);
+  const colors = stageColor(stage);
+  const isValidTarget = isDragActive && dragFromStage !== stage;
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!isValidTarget) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsOver(false);
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      if (data.quoteId && data.fromStage !== stage) {
+        onDrop(data.quoteId, data.fromStage, stage);
+      }
+    } catch {}
+  };
+
+  return (
+    <div className="flex flex-col" data-testid={`pipeline-column-${stage.toLowerCase().replace(" ", "-")}`}>
+      <div className={`rounded-t-2xl border ${colors.header} p-3 flex items-center justify-between`}>
+        <div className="flex items-center gap-2">
+          <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
+          <h3 className={`text-sm font-semibold ${colors.text}`}>{stage}</h3>
+        </div>
+        <Badge className={`rounded-full text-[10px] ${colors.bg} ${colors.text} ${colors.border}`}>
+          {stageQuotes.length}
+        </Badge>
+      </div>
+      <div
+        className={`flex-1 rounded-b-2xl border border-t-0 p-2 space-y-2 min-h-[200px] transition-all duration-200 ${
+          isOver
+            ? colors.dropHighlight
+            : isValidTarget
+            ? "border-black/20 bg-black/[0.03]"
+            : "border-black/10 bg-black/[0.015]"
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isOver && (
+          <div className={`rounded-lg border-2 border-dashed ${colors.border} p-3 text-center`}>
+            <p className={`text-xs font-medium ${colors.text}`}>
+              Drop here to move to {stage}
+            </p>
+          </div>
+        )}
+        {stageQuotes.length === 0 && !isOver ? (
+          <div className="flex items-center justify-center h-full min-h-[180px]">
+            <p className="text-xs text-black/30">
+              {isDragActive && isValidTarget ? `Drop here` : "No quotes"}
+            </p>
+          </div>
+        ) : (
+          stageQuotes.map((quote) => (
+            <PipelineCard
+              key={quote.id}
+              quote={quote}
+              stage={stage}
+              clientName={getClientName(quote.clientId)}
+              onDragStart={onDragStart}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -251,6 +383,15 @@ export default function PipelinePage() {
   const { role, setRole } = useRole();
   const { data: quotes, isLoading: quotesLoading } = useQuotes();
   const { data: neonClientsData } = useNeonClients({ page: 1, limit: 200 });
+  const updateQuoteMutation = useUpdateQuote();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+
+  const [dragState, setDragState] = useState<{
+    active: boolean;
+    fromStage: PipelineStage | null;
+    quoteId: string | null;
+  }>({ active: false, fromStage: null, quoteId: null });
 
   const clientNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -304,6 +445,70 @@ export default function PipelinePage() {
     return clientNameMap.get(clientId) || "Unknown Client";
   };
 
+  const handleDragStart = useCallback((quote: Quote, stage: PipelineStage) => {
+    setDragState({ active: true, fromStage: stage, quoteId: quote.id });
+  }, []);
+
+  const handleDrop = useCallback((quoteId: string, fromStage: PipelineStage, toStage: PipelineStage) => {
+    setDragState({ active: false, fromStage: null, quoteId: null });
+
+    if (fromStage === toStage) return;
+
+    const allQuotes = quotes || [];
+    const quote = allQuotes.find((q) => q.id === quoteId);
+    if (!quote) return;
+
+    if (toStage === "In Play" || toStage === "Booked") {
+      const newStatus = STAGE_TO_STATUS[toStage];
+      updateQuoteMutation.mutate(
+        { id: quoteId, data: { status: newStatus } },
+        {
+          onSuccess: () => {
+            toast({
+              title: `Moved to ${toStage}`,
+              description: `Opening ${quote.quoteTitle} so you can update the details.`,
+            });
+            const route = toStage === "Booked"
+              ? `/clients/${quote.clientId}/bookings/${quoteId}`
+              : `/clients/${quote.clientId}/quotes/${quoteId}`;
+            setTimeout(() => navigate(route), 500);
+          },
+          onError: () => {
+            toast({
+              title: "Error",
+              description: "Failed to move the quote. Please try again.",
+              variant: "destructive",
+            });
+          },
+        }
+      );
+    } else {
+      const newStatus = STAGE_TO_STATUS[toStage];
+      updateQuoteMutation.mutate(
+        { id: quoteId, data: { status: newStatus } },
+        {
+          onSuccess: () => {
+            toast({
+              title: `Moved to ${toStage}`,
+              description: `${quote.quoteTitle} has been updated.`,
+            });
+          },
+          onError: () => {
+            toast({
+              title: "Error",
+              description: "Failed to move the quote. Please try again.",
+              variant: "destructive",
+            });
+          },
+        }
+      );
+    }
+  }, [quotes, updateQuoteMutation, toast, navigate]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragState({ active: false, fromStage: null, quoteId: null });
+  }, []);
+
   if (quotesLoading) {
     return (
       <CommandCenterShell
@@ -321,7 +526,6 @@ export default function PipelinePage() {
   }
 
   const totalPipelineProfit = STAGES.reduce((sum, stage) => sum + stageTotals[stage].profit, 0);
-  const totalPipelineValue = STAGES.reduce((sum, stage) => sum + stageTotals[stage].value, 0);
 
   return (
     <CommandCenterShell
@@ -335,6 +539,7 @@ export default function PipelinePage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="space-y-6"
+        onDragEnd={handleDragEnd}
       >
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {STAGES.map((stage) => {
@@ -380,40 +585,25 @@ export default function PipelinePage() {
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {STAGES.map((stage) => {
-            const colors = stageColor(stage);
-            const stageQuotes = pipeline[stage];
-            return (
-              <div key={stage} className="flex flex-col" data-testid={`pipeline-column-${stage.toLowerCase().replace(" ", "-")}`}>
-                <div className={`rounded-t-2xl border ${colors.header} p-3 flex items-center justify-between`}>
-                  <div className="flex items-center gap-2">
-                    <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
-                    <h3 className={`text-sm font-semibold ${colors.text}`}>{stage}</h3>
-                  </div>
-                  <Badge className={`rounded-full text-[10px] ${colors.bg} ${colors.text} ${colors.border}`}>
-                    {stageQuotes.length}
-                  </Badge>
-                </div>
-                <div className="flex-1 rounded-b-2xl border border-t-0 border-black/10 bg-black/[0.015] p-2 space-y-2 min-h-[200px]">
-                  {stageQuotes.length === 0 ? (
-                    <div className="flex items-center justify-center h-full min-h-[180px]">
-                      <p className="text-xs text-black/30">No quotes</p>
-                    </div>
-                  ) : (
-                    stageQuotes.map((quote) => (
-                      <PipelineCard
-                        key={quote.id}
-                        quote={quote}
-                        stage={stage}
-                        clientName={getClientName(quote.clientId)}
-                      />
-                    ))
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {STAGES.map((stage) => (
+            <PipelineColumn
+              key={stage}
+              stage={stage}
+              quotes={pipeline[stage]}
+              getClientName={getClientName}
+              onDragStart={handleDragStart}
+              onDrop={handleDrop}
+              isDragActive={dragState.active}
+              dragFromStage={dragState.fromStage}
+            />
+          ))}
         </div>
+
+        {dragState.active && (
+          <p className="text-center text-xs text-black/40 animate-pulse">
+            Drag to a column to move this deal
+          </p>
+        )}
       </motion.div>
     </CommandCenterShell>
   );
