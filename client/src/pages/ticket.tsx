@@ -28,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useTickets, useClients, useUsers, useCurrentUser, useAttachments, useReplies, getAttachmentDownloadUrl } from "@/hooks/queries";
+import { useTickets, useUsers, useCurrentUser, useAttachments, useReplies, getAttachmentDownloadUrl } from "@/hooks/queries";
 import { useUpdateTicket, useDeleteTicket, useUploadAttachment, useDeleteAttachment, useCreateReply, useUpdateReply, useDeleteReply } from "@/hooks/mutations";
 import type { Ticket } from "@/types/ticket";
 import type { TicketAttachment } from "@/types/attachment";
@@ -635,8 +635,6 @@ export default function TicketPage() {
 
   const { data: tickets, isLoading: ticketsLoading } = useTickets();
 
-  const { data: clients } = useClients();
-
   const { data: users } = useUsers();
 
   const ticket = tickets?.find((t) => t.id === ticketId);
@@ -705,12 +703,12 @@ export default function TicketPage() {
     }
   };
 
-  const getClientName = (clientId: string) => {
-    const client = clients?.find((c) => c.id === clientId);
-    return client?.name || "Unknown Client";
+  const getClientName = () => {
+    return ticket?.clientName?.trim() || "Unknown Client";
   };
 
   const getUserName = (userId: string) => {
+    if (ticket?.userName && userId === ticket.userId) return ticket.userName;
     const user = users?.find((u) => u.id === userId);
     return user?.name || "Unassigned";
   };
@@ -934,7 +932,7 @@ export default function TicketPage() {
                     <p className="text-xs text-black/40 mb-1">Customer</p>
                     <p className="text-sm font-medium flex items-center gap-1.5">
                       <Users className="h-3.5 w-3.5 text-black/40" />
-                      {getClientName(ticket.clientId)}
+                      {getClientName()}
                     </p>
                   </div>
                   <div>

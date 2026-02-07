@@ -10,6 +10,8 @@ export interface Ticket {
   createdAt: string;
   updatedAt: string | null;
   resolvedAt: string | null;
+  clientName?: string | null;
+  userName?: string | null;
 }
 
 export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt">;

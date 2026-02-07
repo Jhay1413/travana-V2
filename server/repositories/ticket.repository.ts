@@ -1,23 +1,47 @@
 import { db } from "../config/database";
-import { tickets, type Ticket, type InsertTicket } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { tickets, clientTable, users, type Ticket, type InsertTicket } from "@shared/schema";
+import { eq, desc, sql } from "drizzle-orm";
+
+export type TicketWithNames = Ticket & { clientName: string | null; userName: string | null };
+
+function buildTicketWithNamesQuery() {
+  return db
+    .select({
+      id: tickets.id,
+      clientId: tickets.clientId,
+      userId: tickets.userId,
+      type: tickets.type,
+      status: tickets.status,
+      priority: tickets.priority,
+      subject: tickets.subject,
+      description: tickets.description,
+      createdAt: tickets.createdAt,
+      updatedAt: tickets.updatedAt,
+      resolvedAt: tickets.resolvedAt,
+      clientName: sql<string | null>`COALESCE(NULLIF(${clientTable.title}, 'NULL') || ' ', '') || ${clientTable.firstName} || ' ' || ${clientTable.surename}`.as("client_name"),
+      userName: users.name,
+    })
+    .from(tickets)
+    .leftJoin(clientTable, eq(tickets.clientId, clientTable.id))
+    .leftJoin(users, eq(tickets.userId, users.id));
+}
 
 export const ticketRepository = {
-  async findById(id: string): Promise<Ticket | undefined> {
-    const [result] = await db.select().from(tickets).where(eq(tickets.id, id)).limit(1);
-    return result;
+  async findById(id: string): Promise<TicketWithNames | undefined> {
+    const results = await buildTicketWithNamesQuery().where(eq(tickets.id, id)).limit(1);
+    return results[0];
   },
 
-  async findAll(): Promise<Ticket[]> {
-    return await db.select().from(tickets).orderBy(desc(tickets.createdAt));
+  async findAll(): Promise<TicketWithNames[]> {
+    return await buildTicketWithNamesQuery().orderBy(desc(tickets.createdAt));
   },
 
-  async findByClientId(clientId: string): Promise<Ticket[]> {
-    return await db.select().from(tickets).where(eq(tickets.clientId, clientId)).orderBy(desc(tickets.createdAt));
+  async findByClientId(clientId: string): Promise<TicketWithNames[]> {
+    return await buildTicketWithNamesQuery().where(eq(tickets.clientId, clientId)).orderBy(desc(tickets.createdAt));
   },
 
-  async findByUserId(userId: string): Promise<Ticket[]> {
-    return await db.select().from(tickets).where(eq(tickets.userId, userId)).orderBy(desc(tickets.createdAt));
+  async findByUserId(userId: string): Promise<TicketWithNames[]> {
+    return await buildTicketWithNamesQuery().where(eq(tickets.userId, userId)).orderBy(desc(tickets.createdAt));
   },
 
   async create(ticket: InsertTicket): Promise<Ticket> {

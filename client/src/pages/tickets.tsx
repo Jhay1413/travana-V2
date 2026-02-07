@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { CommandCenterShell } from "@/components/command-center-shell";
@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useTickets, useClients, useUsers } from "@/hooks/queries";
+import { useTickets, useNeonClients, useUsers } from "@/hooks/queries";
 import { useCreateTicket } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 
@@ -92,6 +92,10 @@ export default function TicketsPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [selectedCustomerName, setSelectedCustomerName] = useState("");
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState({
     clientId: "",
     userId: "",
@@ -106,9 +110,19 @@ export default function TicketsPage() {
 
   const { data: tickets, isLoading: ticketsLoading } = useTickets();
 
-  const { data: clients } = useClients();
+  const { data: neonClientsData } = useNeonClients({ page: 1, limit: 20, search: customerSearch });
 
   const { data: users } = useUsers();
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const createTicketMutation = useCreateTicket();
 
@@ -122,6 +136,9 @@ export default function TicketsPage() {
       subject: "",
       description: "",
     });
+    setCustomerSearch("");
+    setSelectedCustomerName("");
+    setShowCustomerDropdown(false);
   };
 
   const handleCreate = () => {
@@ -160,13 +177,14 @@ export default function TicketsPage() {
     return matchesQuery && matchesType && matchesStatus && matchesPriority;
   });
 
-  const getClientName = (clientId: string) => {
-    const client = clients?.find((c) => c.id === clientId);
-    return client?.name || "Unknown Client";
+  const getClientName = (ticket: { clientName?: string | null; clientId: string }) => {
+    const name = ticket.clientName?.trim();
+    return name && name !== "null" ? name : "Unknown Client";
   };
 
-  const getUserName = (userId: string) => {
-    const user = users?.find((u) => u.id === userId);
+  const getUserName = (ticket: { userName?: string | null; userId: string }) => {
+    if (ticket.userName) return ticket.userName;
+    const user = users?.find((u) => u.id === ticket.userId);
     return user?.name || "Unassigned";
   };
 
@@ -352,11 +370,11 @@ export default function TicketsPage() {
                       <div className="flex items-center gap-4 mt-3 text-xs text-black/50">
                         <span className="flex items-center gap-1">
                           <Users className="h-3.5 w-3.5" />
-                          {getClientName(ticket.clientId)}
+                          {getClientName(ticket)}
                         </span>
                         <span className="flex items-center gap-1">
                           <User className="h-3.5 w-3.5" />
-                          {getUserName(ticket.userId)}
+                          {getUserName(ticket)}
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3.5 w-3.5" />
@@ -383,18 +401,49 @@ export default function TicketsPage() {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="client">Customer *</Label>
-              <Select value={formData.clientId} onValueChange={(v) => setFormData({ ...formData, clientId: v })}>
-                <SelectTrigger data-testid="select-client">
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients?.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative" ref={customerDropdownRef}>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  data-testid="select-client"
+                  placeholder="Search customers..."
+                  value={selectedCustomerName || customerSearch}
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value);
+                    setSelectedCustomerName("");
+                    setFormData({ ...formData, clientId: "" });
+                    setShowCustomerDropdown(true);
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  className="pl-9"
+                />
+                {showCustomerDropdown && customerSearch.length >= 1 && (
+                  <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-black/10 bg-white shadow-lg">
+                    {neonClientsData?.clients && neonClientsData.clients.length > 0 ? (
+                      neonClientsData.clients.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-black/5"
+                          data-testid={`customer-option-${c.id}`}
+                          onClick={() => {
+                            const displayName = `${c.title && c.title !== "NULL" ? c.title + " " : ""}${c.firstName || ""} ${c.surename || ""}`.trim();
+                            setFormData({ ...formData, clientId: c.id });
+                            setSelectedCustomerName(displayName);
+                            setCustomerSearch("");
+                            setShowCustomerDropdown(false);
+                          }}
+                        >
+                          <User className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{c.title && c.title !== "NULL" ? c.title + " " : ""}{c.firstName} {c.surename}</span>
+                          {c.phoneNumber && <span className="ml-auto text-xs text-muted-foreground">{c.phoneNumber}</span>}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">No customers found</div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="user">Assigned To *</Label>
