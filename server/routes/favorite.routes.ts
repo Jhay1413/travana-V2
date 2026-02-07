@@ -1,11 +1,17 @@
 import { Router, Request, Response } from "express";
 import { favoriteService } from "../services/favorite.service";
+import { isAuthenticated } from "../replit_integrations/auth";
 
 const router = Router();
 
-router.get("/", async (req: Request, res: Response) => {
+function getUserId(req: Request): string | null {
+  const user = (req as any).user;
+  return user?.claims?.sub || null;
+}
+
+router.get("/", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const data = await favoriteService.getUserFavorites(userId);
     res.json({ success: true, message: "Favorites retrieved successfully", data });
@@ -14,9 +20,9 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { itemType, itemId, label, subtitle } = req.body;
     if (!itemType || !itemId || !label) {
@@ -29,9 +35,9 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/toggle", async (req: Request, res: Response) => {
+router.post("/toggle", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { itemType, itemId, label, subtitle } = req.body;
     if (!itemType || !itemId || !label) {
@@ -44,9 +50,9 @@ router.post("/toggle", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/check", async (req: Request, res: Response) => {
+router.get("/check", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const itemType = req.query.itemType as string | undefined;
     const itemId = req.query.itemId as string | undefined;
@@ -60,9 +66,9 @@ router.get("/check", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const favId = req.params.id as string;
     const existing = await favoriteService.getFavoriteById(favId);
