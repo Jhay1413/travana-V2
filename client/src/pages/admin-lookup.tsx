@@ -94,7 +94,7 @@ const TABLE_DEFS: Record<string, { apiKey: string; label: string; navKey: string
     apiKey: "lodges",
     label: "Lodges",
     navKey: "lodges-admin",
-    columns: ["park_id", "lodge_name", "lodge_code", "adults", "children", "bedrooms", "bathrooms", "pets", "sleeps", "infants"],
+    columns: ["park_id", "lodge_code", "lodge_name", "image", "adults", "children", "bedrooms", "bathrooms", "pets", "sleeps", "infants"],
     displayColumns: ["park_id", "lodge_name", "lodge_code", "bedrooms", "sleeps"],
   },
   "cruise-extras": {
