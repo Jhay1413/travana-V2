@@ -3,7 +3,7 @@ import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
 import { asyncHandler } from "../utils/async-handler";
 import { successResponse } from "../utils/response";
 import { db } from "../config/database";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, ilike, or } from "drizzle-orm";
 import {
   accomodation_type,
   board_basis,
@@ -46,7 +46,103 @@ const tableMap: Record<string, any> = {
   forwards_report: forwardsReport,
 };
 
+const tableConfig: Record<string, { label: string; columns: string[]; searchFields: string[]; dependsOn: string[] }> = {
+  country: { label: "Countries", columns: ["id", "country_name", "country_code"], searchFields: ["country_name", "country_code"], dependsOn: [] },
+  destination: { label: "Destinations", columns: ["id", "name", "type", "country_id"], searchFields: ["name", "type"], dependsOn: ["country"] },
+  resorts: { label: "Resorts", columns: ["id", "name", "destination_id"], searchFields: ["name"], dependsOn: ["destination"] },
+  accomodation_type: { label: "Accommodation Types", columns: ["id", "type"], searchFields: ["type"], dependsOn: [] },
+  accomodation_list: { label: "Accommodation List", columns: ["id", "type_id", "name", "resorts_id", "description"], searchFields: ["name", "description"], dependsOn: ["accomodation_type", "resorts"] },
+  board_basis: { label: "Board Basis", columns: ["id", "type"], searchFields: ["type"], dependsOn: [] },
+  tour_operator: { label: "Tour Operators", columns: ["id", "name"], searchFields: ["name"], dependsOn: [] },
+  package_type: { label: "Package Types", columns: ["id", "name"], searchFields: ["name"], dependsOn: [] },
+  tour_package_commission: { label: "Package Commissions", columns: ["package_type_id", "tour_operator_id", "percentage_commission"], searchFields: [], dependsOn: ["package_type", "tour_operator"] },
+  park: { label: "Parks", columns: ["id", "name", "image_1", "image_2", "location", "city", "county", "code", "description"], searchFields: ["name", "location", "city"], dependsOn: [] },
+  cottages: { label: "Cottages", columns: ["id", "cottage_name", "location", "cottage_code", "bedrooms", "bathrooms", "sleeps", "pets", "image_1", "image_2", "details_url"], searchFields: ["cottage_name", "location", "cottage_code"], dependsOn: [] },
+  lodges: { label: "Lodges", columns: ["id", "park_id", "lodge_name", "lodge_code", "image", "adults", "children", "bedrooms", "bathrooms", "pets", "sleeps", "infants"], searchFields: ["lodge_name", "lodge_code"], dependsOn: ["park"] },
+  cruise_extra_item: { label: "Cruise Extras", columns: ["id", "name"], searchFields: ["name"], dependsOn: [] },
+  deletion_codes: { label: "Deletion Codes", columns: ["id", "code", "description", "is_used"], searchFields: ["code", "description"], dependsOn: [] },
+  room_type: { label: "Room Types", columns: ["id", "name"], searchFields: ["name"], dependsOn: [] },
+  deal_images: { label: "Deal Images", columns: ["id", "image_url", "s3Key", "owner_type", "owner_id", "isPrimary"], searchFields: ["image_url", "owner_type"], dependsOn: [] },
+  forwards_report: { label: "Forwards Reports", columns: ["id", "month", "monthName", "year", "target", "company_commission", "agent_commission", "adjustment", "deal_ids", "historical_ids"], searchFields: ["monthName"], dependsOn: [] },
+};
+
 router.use(isAuthenticated);
+
+router.get(
+  "/tables",
+  asyncHandler(async (_req: Request, res: Response) => {
+    const tables = Object.entries(tableConfig).map(([key, cfg]) => ({
+      key,
+      label: cfg.label,
+      columns: cfg.columns,
+      dependsOn: cfg.dependsOn,
+    }));
+
+    const counts: Record<string, number> = {};
+    for (const t of tables) {
+      try {
+        const tbl = tableMap[t.key];
+        const [result] = await db.select({ count: sql<number>`count(*)` }).from(tbl);
+        counts[t.key] = Number(result.count);
+      } catch {
+        counts[t.key] = 0;
+      }
+    }
+
+    return successResponse(res, { tables, counts }, "Tables retrieved");
+  })
+);
+
+router.get(
+  "/data/:tableName",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tableName = req.params.tableName as string;
+    const table = tableMap[tableName];
+    if (!table) {
+      return res.status(400).json({ success: false, message: `Unknown table: ${tableName}` });
+    }
+
+    const rows = await db.select().from(table);
+    return successResponse(res, { rows, total: rows.length }, `${tableName} data retrieved`);
+  })
+);
+
+router.post(
+  "/data/:tableName",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tableName = req.params.tableName as string;
+    const table = tableMap[tableName];
+    if (!table) {
+      return res.status(400).json({ success: false, message: `Unknown table: ${tableName}` });
+    }
+
+    const row = req.body;
+    if (!row || typeof row !== "object") {
+      return res.status(400).json({ success: false, message: "Invalid row data" });
+    }
+
+    const result = await db.insert(table).values(row).returning();
+    const inserted = Array.isArray(result) ? result[0] : result;
+    return successResponse(res, inserted, "Row created");
+  })
+);
+
+router.delete(
+  "/data/:tableName/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tableName = req.params.tableName as string;
+    const id = req.params.id as string;
+    const table = tableMap[tableName];
+    if (!table) {
+      return res.status(400).json({ success: false, message: `Unknown table: ${tableName}` });
+    }
+
+    if (table.id) {
+      await db.delete(table).where(eq(table.id, parseInt(id, 10)));
+    }
+    return successResponse(res, null, "Row deleted");
+  })
+);
 
 router.post(
   "/import/:tableName",
@@ -85,43 +181,6 @@ router.post(
     }
 
     return successResponse(res, { imported, errors, total: rows.length }, `Import complete: ${imported}/${rows.length} rows imported`);
-  })
-);
-
-router.get(
-  "/tables",
-  asyncHandler(async (req: Request, res: Response) => {
-    const tables = [
-      { key: "accomodation_type", label: "Accommodation Types", columns: ["id", "type"], dependsOn: [] },
-      { key: "board_basis", label: "Board Basis", columns: ["id", "type"], dependsOn: [] },
-      { key: "country", label: "Countries", columns: ["id", "country_name", "country_code"], dependsOn: [] },
-      { key: "destination", label: "Destinations", columns: ["id", "name", "type", "country_id"], dependsOn: ["country"] },
-      { key: "resorts", label: "Resorts", columns: ["id", "name", "destination_id"], dependsOn: ["destination"] },
-      { key: "accomodation_list", label: "Accommodation List", columns: ["id", "type_id", "name", "resorts_id", "description"], dependsOn: ["accomodation_type", "resorts"] },
-      { key: "tour_operator", label: "Tour Operators", columns: ["id", "name"], dependsOn: [] },
-      { key: "package_type", label: "Package Types", columns: ["id", "name"], dependsOn: [] },
-      { key: "tour_package_commission", label: "Tour Package Commissions", columns: ["package_type_id", "tour_operator_id", "percentage_commission"], dependsOn: ["package_type", "tour_operator"] },
-      { key: "park", label: "Parks", columns: ["id", "name", "image_1", "image_2", "location", "city", "county", "code", "description"], dependsOn: [] },
-      { key: "cottages", label: "Cottages", columns: ["id", "cottage_name", "location", "cottage_code", "bedrooms", "bathrooms", "sleeps", "pets", "image_1", "image_2", "details_url"], dependsOn: [] },
-      { key: "lodges", label: "Lodges", columns: ["id", "park_id", "lodge_name", "lodge_code", "image", "adults", "children", "bedrooms", "bathrooms", "pets", "sleeps", "infants"], dependsOn: ["park"] },
-      { key: "cruise_extra_item", label: "Cruise Extra Items", columns: ["id", "name"], dependsOn: [] },
-      { key: "room_type", label: "Room Types", columns: ["id", "name"], dependsOn: [] },
-      { key: "deal_images", label: "Deal Images", columns: ["id", "image_url", "s3Key", "owner_type", "owner_id", "isPrimary"], dependsOn: [] },
-      { key: "forwards_report", label: "Forwards Reports", columns: ["id", "month", "monthName", "year", "target", "company_commission", "agent_commission", "adjustment", "deal_ids", "historical_ids"], dependsOn: [] },
-    ];
-
-    const counts: Record<string, number> = {};
-    for (const t of tables) {
-      try {
-        const tbl = tableMap[t.key];
-        const [result] = await db.select({ count: sql<number>`count(*)` }).from(tbl);
-        counts[t.key] = Number(result.count);
-      } catch {
-        counts[t.key] = 0;
-      }
-    }
-
-    return successResponse(res, { tables, counts }, "Tables retrieved");
   })
 );
 

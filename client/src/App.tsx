@@ -14,6 +14,7 @@ import EnquiryPage from "@/pages/enquiry";
 import TicketsPage from "@/pages/tickets";
 import TicketPage from "@/pages/ticket";
 import AdminImportPage from "@/pages/admin-import";
+import AdminLookupPage from "@/pages/admin-lookup";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -38,6 +39,7 @@ function AuthenticatedRouter() {
       <Route path="/tickets" component={TicketsPage} />
       <Route path="/tickets/:ticketId" component={TicketPage} />
       <Route path="/admin/import" component={AdminImportPage} />
+      <Route path="/admin/lookup/:tableSlug" component={AdminLookupPage} />
       <Route component={NotFound} />
     </Switch>
   );
