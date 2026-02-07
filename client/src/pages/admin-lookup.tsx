@@ -149,11 +149,21 @@ function coerceValues(row: Record<string, string>): Record<string, any> {
   const numFields = ["percentage_commission", "target", "company_commission", "agent_commission", "adjustment"];
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(row)) {
-    if (uuidFields.includes(k)) out[k] = v;
-    else if (intFields.includes(k)) out[k] = parseInt(v, 10) || 0;
-    else if (boolFields.includes(k)) out[k] = v === "true" || v === "1" || v === "yes";
-    else if (numFields.includes(k)) out[k] = parseFloat(v) || 0;
-    else out[k] = v;
+    if (v === "" || v === undefined || v === null) {
+      out[k] = null;
+    } else if (uuidFields.includes(k)) {
+      out[k] = v;
+    } else if (intFields.includes(k)) {
+      const parsed = parseInt(v, 10);
+      out[k] = isNaN(parsed) ? null : parsed;
+    } else if (boolFields.includes(k)) {
+      out[k] = v === "true" || v === "1" || v === "yes";
+    } else if (numFields.includes(k)) {
+      const parsed = parseFloat(v);
+      out[k] = isNaN(parsed) ? null : parsed;
+    } else {
+      out[k] = v;
+    }
   }
   return out;
 }
@@ -184,6 +194,7 @@ export default function AdminLookupPage() {
   const hasDestRef = def?.displayColumns.includes("destination_id");
   const hasResortRef = def?.displayColumns.includes("resorts_id");
   const hasTypeRef = def?.displayColumns.includes("type_id");
+  const hasParkRef = def?.displayColumns.includes("park_id");
 
   const { data: countriesLookup } = useQuery({
     queryKey: ["admin", "data", "country"],
@@ -217,18 +228,28 @@ export default function AdminLookupPage() {
     },
     enabled: !!hasTypeRef,
   });
+  const { data: parkLookup } = useQuery({
+    queryKey: ["admin", "data", "park"],
+    queryFn: async () => {
+      const res = await axios.get("/api/admin/data/park");
+      return res.data as { rows: Array<{ id: string; name: string }> };
+    },
+    enabled: !!hasParkRef,
+  });
 
   const lookupMaps = useMemo(() => {
     const country: Record<string, string> = {};
     const dest: Record<string, string> = {};
     const resort: Record<string, string> = {};
     const accomType: Record<string, string> = {};
+    const parkMap: Record<string, string> = {};
     countriesLookup?.rows?.forEach((r) => { country[r.id] = r.country_name; });
     destLookup?.rows?.forEach((r) => { dest[r.id] = r.name; });
     resortLookup?.rows?.forEach((r) => { resort[r.id] = r.name; });
     accomTypeLookup?.rows?.forEach((r) => { accomType[r.id] = r.type; });
-    return { country_id: country, destination_id: dest, resorts_id: resort, type_id: accomType };
-  }, [countriesLookup, destLookup, resortLookup, accomTypeLookup]);
+    parkLookup?.rows?.forEach((r) => { parkMap[r.id] = r.name; });
+    return { country_id: country, destination_id: dest, resorts_id: resort, type_id: accomType, park_id: parkMap };
+  }, [countriesLookup, destLookup, resortLookup, accomTypeLookup, parkLookup]);
 
   const resolveValue = useCallback((col: string, value: any): string => {
     if (value == null || value === "") return "—";
@@ -496,7 +517,7 @@ export default function AdminLookupPage() {
                 <thead className="sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm">
                   <tr className="border-b border-black/10 dark:border-white/10">
                     {def.displayColumns.map((col) => {
-                      const friendly: Record<string, string> = { country_id: "Country", destination_id: "Destination", resorts_id: "Resort", type_id: "Type", country_name: "Country Name", country_code: "Country Code", airport_name: "Airport Name", airport_code: "Airport Code" };
+                      const friendly: Record<string, string> = { country_id: "Country", destination_id: "Destination", resorts_id: "Resort", type_id: "Type", park_id: "Park", country_name: "Country Name", country_code: "Country Code", airport_name: "Airport Name", airport_code: "Airport Code", lodge_name: "Lodge Name", lodge_code: "Lodge Code", cottage_name: "Cottage Name", cottage_code: "Cottage Code" };
                       return <th key={col} className="py-3 px-2 text-left font-medium text-black/70 dark:text-white/70">{friendly[col] || col.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}</th>;
                     })}
                     <th className="py-3 px-2 text-right font-medium text-black/70 dark:text-white/70">Actions</th>
