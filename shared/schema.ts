@@ -562,3 +562,20 @@ export const forwardsReport = pgTable('forwards_report', {
 ])
 export type ForwardsReport = typeof forwardsReport.$inferSelect;
 export type InsertForwardsReport = typeof forwardsReport.$inferInsert;
+
+// Tasks table
+export const tasks = pgTable("tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  entityType: text("entity_type").notNull(), // enquiry, quote, booking
+  entityId: varchar("entity_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  completed: boolean("completed").notNull().default(false),
+  completedAt: timestamp("completed_at"),
+  notified: boolean("notified").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, completedAt: true, notified: true });
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = z.infer<typeof insertTaskSchema>;
