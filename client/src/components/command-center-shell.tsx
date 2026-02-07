@@ -533,13 +533,12 @@ export function CommandCenterShell({
                                         className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
                                       />
                                     </Link>
-                                    {hasChildren && (isActive || childActive) && (
+                                    {hasChildren && (
                                       <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
                                         {item.children!.map((child) => (
-                                          <button
+                                          <Link
                                             key={child.key}
-                                            type="button"
-                                            onClick={() => navigate("/")}
+                                            href={getNavRoute(child.key)}
                                             className={
                                               "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
                                               (active === child.key
@@ -550,7 +549,7 @@ export function CommandCenterShell({
                                           >
                                             <span className="text-black/60 dark:text-white/60">{child.icon}</span>
                                             <span>{child.label}</span>
-                                          </button>
+                                          </Link>
                                         ))}
                                       </div>
                                     )}
