@@ -30,6 +30,7 @@ export interface Quote {
   bookedAt: string | null;
   createdAt: string;
   images?: QuoteImage[];
+  commission?: Commission | null;
 }
 
 export interface Accommodation {
