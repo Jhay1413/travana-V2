@@ -18,6 +18,7 @@ import dashboardRoutes from "./dashboard.routes";
 import enquiryRoutes from "./enquiry.routes";
 import favoriteRoutes from "./favorite.routes";
 import adminImportRoutes from "./adminImport.routes";
+import taskRoutes from "./task.routes";
 
 const router = Router();
 
@@ -40,5 +41,6 @@ router.use("/dashboard", dashboardRoutes);
 router.use("/enquiries", enquiryRoutes);
 router.use("/favorites", favoriteRoutes);
 router.use("/admin", adminImportRoutes);
+router.use("/tasks", taskRoutes);
 
 export default router;

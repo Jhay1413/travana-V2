@@ -14,3 +14,4 @@ export { quoteImageApi } from "./endpoints/quote-image.api";
 export { noteApi } from "./endpoints/note.api";
 export { enquiryApi } from "./endpoints/enquiry.api";
 export { enquiryNoteApi } from "./endpoints/enquiry-note.api";
+export { taskApi } from "./endpoints/task.api";

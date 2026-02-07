@@ -4,6 +4,7 @@ import { createServer } from "http";
 import routes from "./routes/index";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { errorHandler } from "./middlewares/error.middleware";
+import { taskRepository } from "./repositories/task.repository";
 
 const app = express();
 const httpServer = createServer(app);
@@ -86,6 +87,14 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+
+      setInterval(async () => {
+        try {
+          await taskRepository.checkAndNotifyDueTasks();
+        } catch (err) {
+          console.error("Task notification check failed:", err);
+        }
+      }, 60_000);
     },
   );
 })();
