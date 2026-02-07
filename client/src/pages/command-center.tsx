@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
@@ -346,6 +346,20 @@ function ShellNav({
               { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: [
                 { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
                 { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
+                { key: "countries", label: "Countries", icon: <Globe className="h-4 w-4" /> },
+                { key: "destinations", label: "Destinations", icon: <Compass className="h-4 w-4" /> },
+                { key: "resorts-admin", label: "Resorts", icon: <MapPin className="h-4 w-4" /> },
+                { key: "accommodation-types", label: "Accommodation Types", icon: <Building2 className="h-4 w-4" /> },
+                { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" /> },
+                { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" /> },
+                { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" /> },
+                { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" /> },
+                { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" /> },
+                { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" /> },
+                { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" /> },
+                { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" /> },
+                { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" /> },
+                { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
               ] },
             ],
           },
@@ -521,27 +535,64 @@ function ShellNav({
                                   className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
                                 />
                               </button>
-                              {hasChildren && (isActive || childActive) && (
+                              {hasChildren && (
                                 <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
-                                  {item.children.map((child: { key: string; label: string; icon: React.ReactNode }) => (
-                                    <button
-                                      key={child.key}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onActiveChange(child.key);
-                                      }}
-                                      className={
-                                        "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
-                                        (active === child.key
-                                          ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-                                          : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
-                                      }
-                                      data-testid={`nav-${child.key}`}
-                                    >
-                                      <span className="text-black/60 dark:text-white/60">{child.icon}</span>
-                                      <span>{child.label}</span>
-                                    </button>
-                                  ))}
+                                  {item.children.map((child: { key: string; label: string; icon: React.ReactNode; route?: string }) => {
+                                    const childRoutes: Record<string, string> = {
+                                      "countries": "/admin/lookup/countries",
+                                      "destinations": "/admin/lookup/destinations",
+                                      "resorts-admin": "/admin/lookup/resorts",
+                                      "accommodation-types": "/admin/lookup/accommodation-types",
+                                      "accommodation-list": "/admin/lookup/accommodation-list",
+                                      "board-basis": "/admin/lookup/board-basis",
+                                      "package-types": "/admin/lookup/package-types",
+                                      "package-commissions": "/admin/lookup/package-commissions",
+                                      "parks": "/admin/lookup/parks",
+                                      "cottages-admin": "/admin/lookup/cottages",
+                                      "lodges-admin": "/admin/lookup/lodges",
+                                      "cruise-extras": "/admin/lookup/cruise-extras",
+                                      "room-types": "/admin/lookup/room-types",
+                                      "deletion-codes": "/admin/lookup/deletion-codes",
+                                    };
+                                    const route = childRoutes[child.key];
+                                    if (route) {
+                                      return (
+                                        <Link
+                                          key={child.key}
+                                          href={route}
+                                          className={
+                                            "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
+                                            (active === child.key
+                                              ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                              : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                          }
+                                          data-testid={`nav-${child.key}`}
+                                        >
+                                          <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                          <span>{child.label}</span>
+                                        </Link>
+                                      );
+                                    }
+                                    return (
+                                      <button
+                                        key={child.key}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onActiveChange(child.key);
+                                        }}
+                                        className={
+                                          "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
+                                          (active === child.key
+                                            ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                            : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                        }
+                                        data-testid={`nav-${child.key}`}
+                                      >
+                                        <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                        <span>{child.label}</span>
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
