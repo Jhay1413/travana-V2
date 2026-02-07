@@ -10,6 +10,7 @@ router.get("/:id", quoteController.getQuoteById);
 router.get("/:id/full", quoteController.getQuoteFullDetails);
 router.post("/", validate(createQuoteValidator), quoteController.createQuote);
 router.patch("/:id", validate(updateQuoteValidator), quoteController.updateQuote);
+router.post("/:id/convert-to-booking", quoteController.convertToBooking);
 router.delete("/:id", quoteController.deleteQuote);
 
 export default router;

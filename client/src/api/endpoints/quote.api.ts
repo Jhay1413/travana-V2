@@ -30,4 +30,9 @@ export const quoteApi = {
     const { data } = await axiosClient.patch<Quote>(`/api/quotes/${id}`, quoteData);
     return data;
   },
+
+  convertToBooking: async (id: string, haysReference: string, tourReference: string): Promise<Quote> => {
+    const { data } = await axiosClient.post<Quote>(`/api/quotes/${id}/convert-to-booking`, { haysReference, tourReference });
+    return data;
+  },
 };

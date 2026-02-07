@@ -22,3 +22,14 @@ export function useUpdateQuote() {
     },
   });
 }
+
+export function useConvertToBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, haysReference, tourReference }: { id: string; haysReference: string; tourReference: string }) =>
+      quoteApi.convertToBooking(id, haysReference, tourReference),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+    },
+  });
+}

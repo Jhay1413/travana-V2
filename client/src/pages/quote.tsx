@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuoteFull, useNotes, useTasks } from "@/hooks/queries";
-import { useUpdateQuote, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
+import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1116,9 +1116,11 @@ function formatTagLabel(raw: string) {
   return raw.trim().replace(/\s+/g, " ");
 }
 
-export default function QuotePage() {
+export default function QuotePage({ isBooking = false }: { isBooking?: boolean } = {}) {
   const [, setLocation] = useLocation();
-  const [, params] = useRoute("/clients/:clientId/quotes/:quoteId");
+  const [, quoteParams] = useRoute("/clients/:clientId/quotes/:quoteId");
+  const [, bookingParams] = useRoute("/clients/:clientId/bookings/:quoteId");
+  const params = isBooking ? bookingParams : quoteParams;
 
   const { role } = useRole();
   const clientId = params?.clientId ?? "";
@@ -1133,6 +1135,10 @@ export default function QuotePage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
   const updateQuoteMutation = useUpdateQuote();
+  const convertToBookingMutation = useConvertToBooking();
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [convertHaysRef, setConvertHaysRef] = useState("");
+  const [convertTourRef, setConvertTourRef] = useState("");
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -1163,9 +1169,11 @@ export default function QuotePage() {
     return transformQuoteData(quoteData);
   }, [quoteData]);
 
+  const pageLabel = isBooking || quoteData?.status === "Booked" ? "Booking" : "Quote";
+
   if (isLoading) {
     return (
-      <CommandCenterShell role={role} title="Quote" theme="light" onRoleChange={() => {}}>
+      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-quote">
           <Spinner className="h-8 w-8" />
         </div>
@@ -1175,10 +1183,10 @@ export default function QuotePage() {
 
   if (error || !quote) {
     return (
-      <CommandCenterShell role={role} title="Quote" theme="light" onRoleChange={() => {}}>
+      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-quote">
           <div className="text-center">
-            <p className="text-sm text-black/70">Failed to load quote</p>
+            <p className="text-sm text-black/70">Failed to load {pageLabel.toLowerCase()}</p>
             <Button
               size="sm"
               variant="outline"
@@ -1194,7 +1202,7 @@ export default function QuotePage() {
   }
 
   return (
-    <CommandCenterShell role={role} title="Quote" theme="light" onRoleChange={() => {}}>
+    <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
       <div className="px-5 pb-8 pt-5" data-testid="page-quote">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
           <div className="flex items-start gap-3">
@@ -1419,9 +1427,9 @@ export default function QuotePage() {
                             {showEllipsisMenu && (
                               <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-quote-ellipsis">
                                 {[
-                                  { label: "Edit Quote", icon: Pencil, id: "edit" },
-                                  { label: "Convert Quote", icon: RefreshCw, id: "convert" },
-                                  { label: "Duplicate Quote", icon: Copy, id: "duplicate" },
+                                  { label: `Edit ${pageLabel}`, icon: Pencil, id: "edit" },
+                                  ...(quote.status !== "Booked" ? [{ label: "Convert to Booking", icon: RefreshCw, id: "convert" }] : []),
+                                  { label: `Duplicate ${pageLabel}`, icon: Copy, id: "duplicate" },
                                 ].map((item) => (
                                   <button
                                     key={item.id}
@@ -1432,6 +1440,8 @@ export default function QuotePage() {
                                       setShowEllipsisMenu(false);
                                       if (item.id === "edit") {
                                         setShowEditModal(true);
+                                      } else if (item.id === "convert") {
+                                        setShowConvertDialog(true);
                                       } else {
                                         toast({ title: `${item.label} — coming soon` });
                                       }
@@ -1520,6 +1530,22 @@ export default function QuotePage() {
                       </div>
                     </div>
                   </div>
+
+                  {quote.status === "Booked" && (quoteData?.haysReference || quoteData?.tourReference) && (
+                    <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3" data-testid="card-booking-references">
+                      <div className="text-xs font-semibold text-emerald-800 mb-2">Booking References</div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-hays-reference">
+                          <div className="text-xs font-semibold text-black/65">HAYS Reference</div>
+                          <div className="text-xs font-semibold text-black/85" data-testid="text-hays-reference-value">{quoteData?.haysReference || "—"}</div>
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-tour-reference">
+                          <div className="text-xs font-semibold text-black/65">Tour Reference</div>
+                          <div className="text-xs font-semibold text-black/85" data-testid="text-tour-reference-value">{quoteData?.tourReference || "—"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <QuoteNotesSection quoteId={quoteId} />
                 </div>
@@ -1616,6 +1642,64 @@ export default function QuotePage() {
           isSaving={updateQuoteMutation.isPending}
         />
       )}
+
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-convert-booking">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Convert to Booking</DialogTitle>
+            <DialogDescription className="text-xs text-black/55">
+              Enter the booking references to convert this quote.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-3 grid gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">HAYS Reference</Label>
+              <Input
+                value={convertHaysRef}
+                onChange={(e) => setConvertHaysRef(e.target.value)}
+                placeholder="e.g. HAYS-12345"
+                className="h-9 rounded-xl border-black/10 bg-white/70"
+                data-testid="input-convert-hays-ref"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Tour Reference</Label>
+              <Input
+                value={convertTourRef}
+                onChange={(e) => setConvertTourRef(e.target.value)}
+                placeholder="e.g. TOUR-67890"
+                className="h-9 rounded-xl border-black/10 bg-white/70"
+                data-testid="input-convert-tour-ref"
+              />
+            </div>
+            <Button
+              className="h-9 w-full rounded-xl bg-emerald-600 text-white hover:bg-emerald-600/90"
+              data-testid="button-confirm-convert"
+              onClick={() => {
+                convertToBookingMutation.mutate(
+                  { id: quoteId, haysReference: convertHaysRef, tourReference: convertTourRef },
+                  {
+                    onSuccess: () => {
+                      setShowConvertDialog(false);
+                      setConvertHaysRef("");
+                      setConvertTourRef("");
+                      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                      toast({ title: "Quote converted to booking" });
+                      setLocation(`/clients/${clientId}/bookings/${quoteId}`);
+                    },
+                    onError: () => {
+                      toast({ title: "Failed to convert", variant: "destructive" });
+                    },
+                  }
+                );
+              }}
+              disabled={convertToBookingMutation.isPending}
+            >
+              {convertToBookingMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Convert to Booking"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </CommandCenterShell>
   );
 }

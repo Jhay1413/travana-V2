@@ -1429,25 +1429,123 @@ export default function ClientPage() {
 
                 <TabsContent value="booked" className="mt-3">
                   <div className="grid gap-3" data-testid="list-booked">
-                    {["Hotel confirmation", "Transfers", "Activities"].map((title, idx) => (
-                      <div
-                        key={title}
-                        className="rounded-3xl border border-black/10 bg-white/70 p-4"
-                        data-testid={`card-booked-${idx}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold" data-testid={`text-booked-title-${idx}`}>
-                              {title}
-                            </div>
-                            <div className="mt-1 text-xs text-black/55" data-testid={`text-booked-meta-${idx}`}>
-                              Status: {client?.stage === "Booked" ? "Confirmed" : "Draft"} · Updated {idx === 0 ? "Today" : idx === 1 ? "3d" : "1w"}
-                            </div>
+                    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-bookings-list">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold" data-testid="text-bookings-title">
+                            Booked Packages
                           </div>
-                          <Ticket className="h-4 w-4 text-black/35" aria-hidden />
+                          <div className="mt-1 text-xs text-black/55" data-testid="text-bookings-subtitle">
+                            Confirmed bookings for this client.
+                          </div>
                         </div>
+                        <Ticket className="h-4 w-4 text-black/35" aria-hidden />
                       </div>
-                    ))}
+
+                      <div className="mt-4 grid gap-2" data-testid="section-bookings">
+                        {quotes.filter((q: any) => q.status === "Booked").length === 0 ? (
+                          <div className="rounded-3xl border border-dashed border-black/10 bg-white/40 p-8 text-center text-sm text-black/50" data-testid="empty-bookings">
+                            No bookings yet. Convert a quote to create a booking.
+                          </div>
+                        ) : (
+                          quotes
+                            .filter((q: any) => q.status === "Booked")
+                            .map((q: any) => (
+                              <button
+                                key={q.id}
+                                type="button"
+                                className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
+                                data-testid={`card-booking-${q.id}`}
+                                onClick={() => window.open(`/clients/${clientId}/bookings/${q.id}`, "_self")}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div
+                                    className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
+                                    aria-hidden
+                                  >
+                                    {q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url ? (
+                                      <img
+                                        src={q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url}
+                                        alt=""
+                                        className="absolute inset-0 h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-black/20">
+                                        <ImagePlus className="h-6 w-6" />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <div className="truncate text-sm font-semibold" data-testid={`text-booking-title-${q.id}`}>
+                                            {q.quoteTitle || `${q.destination} Trip`}
+                                          </div>
+                                          <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                            Booked
+                                          </span>
+                                        </div>
+                                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
+                                          <span data-testid={`text-booking-destination-${q.id}`}>{q.destination}</span>
+                                          <span className="text-black/25">•</span>
+                                          <span data-testid={`text-booking-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
+                                          <span className="text-black/25">•</span>
+                                          <span data-testid={`text-booking-created-${q.id}`}>Created {new Date(q.createdAt).toLocaleDateString("en-GB")}</span>
+                                        </div>
+                                        <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-black/60">
+                                          {q.haysReference && (
+                                            <span data-testid={`text-booking-hays-${q.id}`}>
+                                              HAYS Ref: <span className="font-semibold text-black/80">{q.haysReference}</span>
+                                            </span>
+                                          )}
+                                          {q.tourReference && (
+                                            <span data-testid={`text-booking-tour-${q.id}`}>
+                                              Tour Ref: <span className="font-semibold text-black/80">{q.tourReference}</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="mt-1 text-xs text-black/60" data-testid={`text-booking-operator-${q.id}`}>
+                                          Tour operator: <span className="font-semibold text-black/80">{q.packageType || "—"}</span>
+                                        </div>
+                                      </div>
+
+                                      <div className="shrink-0 text-right">
+                                        <div className="text-xs font-semibold text-black/85" data-testid={`text-booking-total-${q.id}`}>
+                                          {q.commission?.price && parseFloat(q.commission.price) > 0 ? currency.format(parseFloat(q.commission.price)) : "—"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="mt-1 flex items-end justify-end gap-3">
+                                      <div className="flex items-center gap-1">
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
+                                          data-testid={`button-pin-booking-${q.id}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.quoteTitle || q.destination, subtitle: q.destination || "" });
+                                          }}
+                                          title={userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
+                                        >
+                                          <Pin className="h-3.5 w-3.5" />
+                                        </span>
+                                        <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-booking-${q.id}`}>
+                                          View
+                                          <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                        )}
+                      </div>
+                    </Card>
                   </div>
                 </TabsContent>
 

@@ -231,6 +231,25 @@ export const quoteService = {
     return quote;
   },
 
+  async convertToBooking(id: string, haysReference?: string, tourReference?: string): Promise<Quote> {
+    const quote = await quoteRepository.findById(id);
+    if (!quote) {
+      throw new AppError("Quote not found", 404);
+    }
+    if (quote.status === "Booked") {
+      throw new AppError("Quote is already booked", 400);
+    }
+    const updated = await quoteRepository.update(id, {
+      status: "Booked",
+      haysReference: haysReference || null,
+      tourReference: tourReference || null,
+    });
+    if (!updated) {
+      throw new AppError("Failed to convert quote to booking", 500);
+    }
+    return updated;
+  },
+
   async deleteQuote(id: string): Promise<void> {
     await quoteRepository.remove(id);
   },

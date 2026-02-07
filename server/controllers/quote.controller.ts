@@ -42,6 +42,13 @@ export const quoteController = {
     return successResponse(res, quote, "Quote updated successfully");
   }),
 
+  convertToBooking: asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const { haysReference, tourReference } = req.body;
+    const quote = await quoteService.convertToBooking(id, haysReference, tourReference);
+    return successResponse(res, quote, "Quote converted to booking successfully");
+  }),
+
   deleteQuote: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     await quoteService.deleteQuote(id);
