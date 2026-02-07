@@ -68,7 +68,7 @@ export const quotes = pgTable("quotes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id), // owner
-  status: text("status").notNull().default("In Play"), // In Play, Won, Lost
+  status: text("status").notNull().default("In Play"), // In Play, Won, Lost, Booked
   packageType: text("package_type").notNull(),
   quoteTitle: text("quote_title").notNull(),
   quoteLink: text("quote_link"),
@@ -88,10 +88,13 @@ export const quotes = pgTable("quotes", {
   preBookedSeats: text("pre_booked_seats"),
   flightMeals: text("flight_meals"),
   leadSource: text("lead_source"),
+  haysReference: text("hays_reference"),
+  tourReference: text("tour_reference"),
+  bookedAt: timestamp("booked_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true });
+export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, createdAt: true, bookedAt: true });
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type Quote = typeof quotes.$inferSelect;
 
