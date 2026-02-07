@@ -622,7 +622,6 @@ export default function TicketPage() {
   const [, navigate] = useLocation();
   const { role, setRole } = useRole();
   const [isEditing, setIsEditing] = useState(false);
-  const [showAttachments, setShowAttachments] = useState(false);
   const [formData, setFormData] = useState({
     type: "",
     status: "",
@@ -637,7 +636,40 @@ export default function TicketPage() {
 
   const { data: users } = useUsers();
 
+  const { data: attachments } = useAttachments(ticketId, { enabled: !!ticketId });
+
+  const uploadMutation = useUploadAttachment();
+  const deleteAttachmentMutation = useDeleteAttachment(ticketId);
+  const ticketFileInputRef = useRef<HTMLInputElement>(null);
+  const [ticketUploading, setTicketUploading] = useState(false);
+
   const ticket = tickets?.find((t) => t.id === ticketId);
+
+  const handleTicketFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    setTicketUploading(true);
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    try {
+      for (const file of Array.from(files)) {
+        if (!allowedTypes.includes(file.type)) {
+          toast({ title: `${file.name}: Only images and PDFs allowed`, variant: "destructive" });
+          continue;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          toast({ title: `${file.name}: File too large (max 10MB)`, variant: "destructive" });
+          continue;
+        }
+        await uploadMutation.mutateAsync({ ticketId, file });
+      }
+      toast({ title: "Files uploaded" });
+    } catch {
+      toast({ title: "Failed to upload files", variant: "destructive" });
+    } finally {
+      setTicketUploading(false);
+      if (ticketFileInputRef.current) ticketFileInputRef.current.value = "";
+    }
+  };
 
   const updateTicketMutation = useUpdateTicket();
   const updateMutation = {
@@ -779,15 +811,6 @@ export default function TicketPage() {
               <>
                 <Button
                   variant="outline"
-                  onClick={() => setShowAttachments(true)}
-                  className="gap-2 rounded-2xl"
-                  data-testid="button-attachments"
-                >
-                  <Paperclip className="h-4 w-4" />
-                  Attachments
-                </Button>
-                <Button
-                  variant="outline"
                   onClick={handleStartEdit}
                   className="gap-2 rounded-2xl"
                   data-testid="button-edit-ticket"
@@ -927,6 +950,119 @@ export default function TicketPage() {
                   )}
                 </div>
 
+                {attachments && attachments.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="h-4 w-4 text-black/40" />
+                      <h3 className="text-sm font-medium text-black/60">Attachments ({attachments.length})</h3>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {attachments.filter(a => isImageType(a.mimeType)).map((attachment) => (
+                        <div
+                          key={attachment.id}
+                          className="group relative rounded-xl overflow-hidden border border-black/10 bg-black/[0.02]"
+                          data-testid={`inline-attachment-${attachment.id}`}
+                        >
+                          <a
+                            href={getAttachmentDownloadUrl(attachment.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block"
+                          >
+                            <img
+                              src={getAttachmentDownloadUrl(attachment.id)}
+                              alt={attachment.originalName}
+                              className="w-full h-32 object-cover"
+                            />
+                          </a>
+                          <div className="p-2 flex items-center justify-between">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-black/60 truncate">{attachment.originalName}</p>
+                              <p className="text-[10px] text-black/30">{formatFileSize(attachment.size)}</p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-black/40 hover:text-red-600"
+                              onClick={() => deleteAttachmentMutation.mutate(attachment.id)}
+                              data-testid={`button-delete-inline-attachment-${attachment.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {attachments.filter(a => !isImageType(a.mimeType)).length > 0 && (
+                      <div className="space-y-2">
+                        {attachments.filter(a => !isImageType(a.mimeType)).map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="group flex items-center gap-3 p-3 rounded-xl border border-black/10 bg-white/50"
+                            data-testid={`inline-attachment-${attachment.id}`}
+                          >
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-red-50 flex-shrink-0">
+                              <FileText className="h-5 w-5 text-red-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <a
+                                href={getAttachmentDownloadUrl(attachment.id)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-medium text-black/70 hover:text-black truncate block"
+                              >
+                                {attachment.originalName}
+                              </a>
+                              <p className="text-xs text-black/40">{formatFileSize(attachment.size)}</p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-black/40 hover:text-red-600"
+                              onClick={() => deleteAttachmentMutation.mutate(attachment.id)}
+                              data-testid={`button-delete-inline-file-${attachment.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <input
+                    ref={ticketFileInputRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    multiple
+                    onChange={handleTicketFileUpload}
+                    className="hidden"
+                    data-testid="input-ticket-file-upload"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => ticketFileInputRef.current?.click()}
+                    disabled={ticketUploading}
+                    className="gap-2 rounded-xl"
+                    data-testid="button-upload-to-ticket"
+                  >
+                    {ticketUploading ? (
+                      <>
+                        <Spinner className="h-4 w-4" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        Add Attachment
+                      </>
+                    )}
+                  </Button>
+                </div>
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-t border-b border-black/10">
                   <div>
                     <p className="text-xs text-black/40 mb-1">Customer</p>
@@ -965,11 +1101,6 @@ export default function TicketPage() {
         <TicketRepliesSection ticketId={ticketId} users={users || []} />
       </motion.div>
 
-      <AttachmentsDialog 
-        ticketId={ticketId} 
-        open={showAttachments} 
-        onOpenChange={setShowAttachments} 
-      />
     </CommandCenterShell>
   );
 }
