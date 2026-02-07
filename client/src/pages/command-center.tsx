@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@/api/client/axios-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
-import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports } from "@/hooks/queries";
+import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useQuotes } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -1525,6 +1525,7 @@ export default function CommandCenterPage() {
   const displayName = user?.firstName || user?.name || user?.email || "User";
 
   const { data: dashboardStats } = useDashboardStats();
+  const { data: quotesData } = useQuotes();
   const { data: userFavorites } = useFavorites();
   const removeFavoriteMutation = useRemoveFavorite();
   const toggleFavoriteMutation = useToggleFavorite();
@@ -1578,6 +1579,49 @@ export default function CommandCenterPage() {
   const clients = allClients;
   const clientsTotalPages = paginatedNeonClients?.totalPages ?? 1;
   const clientsTotal = paginatedNeonClients?.total ?? 0;
+
+  const pipelineStages = useMemo(() => {
+    type PStage = "New Lead" | "In Play" | "Booked";
+    const stages: Record<PStage, typeof quotesData extends (infer T)[] ? T[] : any[]> = {
+      "New Lead": [],
+      "In Play": [],
+      "Booked": [],
+    };
+    if (!quotesData) return stages;
+    for (const q of quotesData) {
+      if (q.status === "Booked" || q.status === "Won") {
+        stages["Booked"].push(q);
+      } else if (q.status === "Lost") {
+        // skip Lost
+      } else if (q.commission) {
+        stages["In Play"].push(q);
+      } else {
+        stages["New Lead"].push(q);
+      }
+    }
+    return stages;
+  }, [quotesData]);
+
+  const pipelineClientNames = useMemo(() => {
+    const map = new Map<string, string>();
+    if (paginatedNeonClients?.clients) {
+      for (const c of paginatedNeonClients.clients) {
+        const title = c.title && c.title !== "NULL" ? c.title : "";
+        map.set(c.id, [title, c.firstName, c.surename].filter(Boolean).join(" "));
+      }
+    }
+    return map;
+  }, [paginatedNeonClients]);
+
+  const getQuoteProfit = (q: any): number => {
+    if (q.commission) {
+      const split = parseFloat(q.commission.agentSplitValue) || 0;
+      if (split > 0) return split;
+      const price = parseFloat(q.commission.price) || 0;
+      if (price > 0) return price * 0.1;
+    }
+    return 0;
+  };
 
   const totals = useMemo(() => {
     if (dashboardStats) {
@@ -1799,52 +1843,85 @@ export default function CommandCenterPage() {
               <TabsContent value="pipeline" className="mt-0">
                 <div className="grid gap-3 md:grid-cols-3">
                   {([
-                    { stage: "Enquiry" as const, hint: "New inbound" },
-                    { stage: "Quote" as const, hint: "In progress" },
-                    { stage: "Booked" as const, hint: "Confirmed" },
+                    { stage: "New Lead" as const, hint: "No commission yet", color: "blue" },
+                    { stage: "In Play" as const, hint: "Commission added", color: "amber" },
+                    { stage: "Booked" as const, hint: "Confirmed", color: "emerald" },
                   ] as const).map((col) => {
-                    const items = allClients.filter((c) => c.stage === col.stage);
-                    const sum = items.reduce((s, i) => s + i.value, 0);
+                    const items = pipelineStages[col.stage] || [];
+                    const sum = items.reduce((s: number, q: any) => s + getQuoteProfit(q), 0);
+                    const dotColor = col.color === "blue" ? "bg-blue-500" : col.color === "amber" ? "bg-amber-500" : "bg-emerald-500";
+                    const textColor = col.color === "blue" ? "text-blue-700" : col.color === "amber" ? "text-amber-700" : "text-emerald-700";
                     return (
                       <div key={col.stage} className="space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="space-y-0.5">
-                            <div className="text-sm font-semibold">
-                              {col.stage}
+                            <div className="flex items-center gap-2">
+                              <div className={`h-2 w-2 rounded-full ${dotColor}`} />
+                              <div className={`text-sm font-semibold ${textColor}`}>
+                                {col.stage}
+                              </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {col.hint} · {items.length} items
+                              {col.hint} · {items.length} quotes
                             </div>
                           </div>
-                          <div className="text-xs text-black/60 dark:text-white/60">
+                          <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
                             {currency.format(sum)}
                           </div>
                         </div>
 
                         <div className="space-y-2">
-                          {items.map((c) => (
-                            <div
-                              key={c.id}
-                              className="rounded-2xl border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/5"
+                          {items.slice(0, 5).map((q: any) => (
+                            <button
+                              key={q.id}
+                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.clientId}/bookings/${q.id}` : `/clients/${q.clientId}/quotes/${q.id}`)}
+                              className="w-full rounded-2xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                              data-testid={`card-pipeline-${col.stage}-${q.id}`}
                             >
-                              <div className="flex items-center justify-between">
-                                <div className="truncate text-sm font-medium">{c.name}</div>
-                                <div className="text-xs font-medium">{currency.format(c.value)}</div>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-semibold" data-testid={`text-pipeline-name-${q.id}`}>
+                                    {q.quoteTitle}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/55 dark:text-white/55">
+                                    {pipelineClientNames.get(q.clientId) || "Client"}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/40 dark:text-white/40">
+                                    {q.destination} · {new Date(q.travelDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                                  </div>
+                                </div>
+                                <div className="text-xs font-semibold text-emerald-700" data-testid={`text-pipeline-value-${q.id}`}>
+                                  {getQuoteProfit(q) > 0 ? currency.format(getQuoteProfit(q)) : "TBC"}
+                                </div>
                               </div>
-                              <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55">
-                                {c.nextTrip}
-                              </div>
-                            </div>
+                            </button>
                           ))}
+                          {items.length > 5 && (
+                            <button
+                              onClick={() => navigate("/pipeline")}
+                              className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
+                            >
+                              +{items.length - 5} more · View full pipeline
+                            </button>
+                          )}
                           {items.length === 0 && (
                             <div className="rounded-2xl border border-dashed border-black/10 p-3 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45">
-                              No items
+                              No quotes
                             </div>
                           )}
                         </div>
                       </div>
                     );
                   })}
+                </div>
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => navigate("/pipeline")}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    data-testid="link-view-full-pipeline"
+                  >
+                    View full pipeline →
+                  </button>
                 </div>
               </TabsContent>
 
@@ -2192,24 +2269,32 @@ export default function CommandCenterPage() {
                 )}
               </Card>
 
-            <Card className="glass ringed grain rounded-3xl p-4">
+            <Card className="glass ringed grain rounded-3xl p-4 cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition" onClick={() => navigate("/pipeline")}>
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="text-xs text-black/70 dark:text-white/70">Pipeline</div>
                   <div className="title-serif text-2xl font-bold tabular-nums" data-testid="text-pipeline-total">
-                    {currency.format(totals.bookedValue + totals.openValue)}
+                    {currency.format(
+                      (pipelineStages["New Lead"] || []).reduce((s: number, q: any) => s + getQuoteProfit(q), 0) +
+                      (pipelineStages["In Play"] || []).reduce((s: number, q: any) => s + getQuoteProfit(q), 0) +
+                      (pipelineStages["Booked"] || []).reduce((s: number, q: any) => s + getQuoteProfit(q), 0)
+                    )}
                   </div>
                 </div>
                 <CircleDollarSign className="h-6 w-6 text-black/40 dark:text-white/40" />
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5">
-                  <div className="text-black/55 dark:text-white/55">Booked</div>
-                  <div className="font-medium">{currency.format(totals.bookedValue)}</div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                <div className="rounded-2xl border border-blue-200/50 bg-blue-50/50 px-3 py-2 dark:border-blue-800/30 dark:bg-blue-900/20">
+                  <div className="text-blue-700/70 dark:text-blue-400/70">New Lead</div>
+                  <div className="font-medium text-blue-800 dark:text-blue-300">{(pipelineStages["New Lead"] || []).length}</div>
                 </div>
-                <div className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 dark:border-white/10 dark:bg-white/5">
-                  <div className="text-black/55 dark:text-white/55">Open</div>
-                  <div className="font-medium">{currency.format(totals.openValue)}</div>
+                <div className="rounded-2xl border border-amber-200/50 bg-amber-50/50 px-3 py-2 dark:border-amber-800/30 dark:bg-amber-900/20">
+                  <div className="text-amber-700/70 dark:text-amber-400/70">In Play</div>
+                  <div className="font-medium text-amber-800 dark:text-amber-300">{(pipelineStages["In Play"] || []).length}</div>
+                </div>
+                <div className="rounded-2xl border border-emerald-200/50 bg-emerald-50/50 px-3 py-2 dark:border-emerald-800/30 dark:bg-emerald-900/20">
+                  <div className="text-emerald-700/70 dark:text-emerald-400/70">Booked</div>
+                  <div className="font-medium text-emerald-800 dark:text-emerald-300">{(pipelineStages["Booked"] || []).length}</div>
                 </div>
               </div>
             </Card>
@@ -2468,54 +2553,85 @@ export default function CommandCenterPage() {
               <TabsContent value="pipeline" className="mt-0">
                 <div className="grid gap-3 md:grid-cols-3">
                   {([
-                    { stage: "Enquiry" as const, hint: "New inbound" },
-                    { stage: "Quote" as const, hint: "In progress" },
-                    { stage: "Booked" as const, hint: "Confirmed" },
+                    { stage: "New Lead" as const, hint: "No commission yet", color: "blue" },
+                    { stage: "In Play" as const, hint: "Commission added", color: "amber" },
+                    { stage: "Booked" as const, hint: "Confirmed", color: "emerald" },
                   ] as const).map((col) => {
-                    const items = allClients.filter((c) => c.stage === col.stage);
-                    const sum = items.reduce((s, i) => s + i.value, 0);
+                    const items = pipelineStages[col.stage] || [];
+                    const sum = items.reduce((s: number, q: any) => s + getQuoteProfit(q), 0);
+                    const dotColor = col.color === "blue" ? "bg-blue-500" : col.color === "amber" ? "bg-amber-500" : "bg-emerald-500";
+                    const textColor = col.color === "blue" ? "text-blue-700" : col.color === "amber" ? "text-amber-700" : "text-emerald-700";
                     return (
                       <div key={col.stage} className="space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="space-y-0.5">
-                            <div className="text-sm font-semibold" data-testid={`text-pipeline-stage-${col.stage}`}>
-                              {col.stage}
+                            <div className="flex items-center gap-2">
+                              <div className={`h-2 w-2 rounded-full ${dotColor}`} />
+                              <div className={`text-sm font-semibold ${textColor}`} data-testid={`text-pipeline-stage-${col.stage}`}>
+                                {col.stage}
+                              </div>
                             </div>
                             <div className="text-xs text-muted-foreground" data-testid={`text-pipeline-hint-${col.stage}`}>
-                              {col.hint} · {items.length} items
+                              {col.hint} · {items.length} quotes
                             </div>
                           </div>
-                          <div className="text-xs text-black/60 dark:text-white/60" data-testid={`text-pipeline-sum-${col.stage}`}>
+                          <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400" data-testid={`text-pipeline-sum-${col.stage}`}>
                             {currency.format(sum)}
                           </div>
                         </div>
 
                         <div className="space-y-2">
-                          {items.map((c) => (
+                          {items.slice(0, 5).map((q: any) => (
                             <button
-                              key={c.id}
+                              key={q.id}
+                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.clientId}/bookings/${q.id}` : `/clients/${q.clientId}/quotes/${q.id}`)}
                               className="w-full rounded-3xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                              data-testid={`card-pipeline-${col.stage}-${c.id}`}
+                              data-testid={`card-pipeline-${col.stage}-${q.id}`}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <div className="truncate text-sm font-semibold" data-testid={`text-pipeline-name-${c.id}`}>
-                                    {c.name}
+                                  <div className="truncate text-sm font-semibold" data-testid={`text-pipeline-name-${q.id}`}>
+                                    {q.quoteTitle}
                                   </div>
-                                  <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55" data-testid={`text-pipeline-trip-${c.id}`}>
-                                    {c.nextTrip}
+                                  <div className="mt-0.5 truncate text-xs text-black/55 dark:text-white/55">
+                                    {pipelineClientNames.get(q.clientId) || "Client"}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/40 dark:text-white/40" data-testid={`text-pipeline-trip-${q.id}`}>
+                                    {q.destination} · {new Date(q.travelDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
                                   </div>
                                 </div>
-                                <div className="text-xs font-semibold" data-testid={`text-pipeline-value-${c.id}`}>
-                                  {currency.format(c.value)}
+                                <div className="text-xs font-semibold text-emerald-700" data-testid={`text-pipeline-value-${q.id}`}>
+                                  {getQuoteProfit(q) > 0 ? currency.format(getQuoteProfit(q)) : "TBC"}
                                 </div>
                               </div>
                             </button>
                           ))}
+                          {items.length > 5 && (
+                            <button
+                              onClick={() => navigate("/pipeline")}
+                              className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
+                            >
+                              +{items.length - 5} more · View full pipeline
+                            </button>
+                          )}
+                          {items.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-black/10 p-3 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45">
+                              No quotes
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
+                </div>
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => navigate("/pipeline")}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    data-testid="link-view-full-pipeline-workspace"
+                  >
+                    View full pipeline →
+                  </button>
                 </div>
               </TabsContent>
 
