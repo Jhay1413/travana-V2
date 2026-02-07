@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, boolean, index, jsonb, uuid, date } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -354,3 +354,211 @@ export const clientTable = pgTable("client_table", {
 export const insertClientTableSchema = createInsertSchema(clientTable).omit({ id: true, createdAt: true });
 export type InsertClientTable = z.infer<typeof insertClientTableSchema>;
 export type NeonClient = typeof clientTable.$inferSelect;
+
+// ==========================================
+// Lookup / Reference Tables (for data import)
+// ==========================================
+
+export const accomodation_type = pgTable('accomodation_type', {
+  id: uuid('id')
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  type: varchar(),
+});
+export type AccomodationType = typeof accomodation_type.$inferSelect;
+export type InsertAccomodationType = typeof accomodation_type.$inferInsert;
+
+export const board_basis = pgTable('board_basis', {
+  id: uuid('id')
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  type: varchar().notNull(),
+});
+export type BoardBasis = typeof board_basis.$inferSelect;
+export type InsertBoardBasis = typeof board_basis.$inferInsert;
+
+export const country = pgTable('country_table', {
+  id: uuid()
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  country_name: varchar().notNull(),
+  country_code: varchar(),
+});
+export type Country = typeof country.$inferSelect;
+export type InsertCountry = typeof country.$inferInsert;
+
+export const destination = pgTable('destination_table', {
+  id: uuid()
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  name: varchar().notNull(),
+  type: varchar(),
+  country_id: uuid().references(() => country.id),
+});
+export type Destination = typeof destination.$inferSelect;
+export type InsertDestination = typeof destination.$inferInsert;
+
+export const resorts = pgTable('resorts_table', {
+  id: uuid()
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  name: varchar().notNull(),
+  destination_id: uuid().references(() => destination.id),
+});
+export type Resort = typeof resorts.$inferSelect;
+export type InsertResort = typeof resorts.$inferInsert;
+
+export const accomodation_list = pgTable('accomodation_list_table', {
+  id: uuid()
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  type_id: uuid().references(() => accomodation_type.id),
+  name: varchar().notNull(),
+  resorts_id: uuid().references(() => resorts.id),
+  description: varchar(),
+});
+export type AccomodationList = typeof accomodation_list.$inferSelect;
+export type InsertAccomodationList = typeof accomodation_list.$inferInsert;
+
+export const tour_operator = pgTable('tour_operator_table', {
+  id: uuid()
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  name: varchar(),
+});
+export type TourOperatorLookup = typeof tour_operator.$inferSelect;
+export type InsertTourOperatorLookup = typeof tour_operator.$inferInsert;
+
+export const package_type = pgTable('package_type_table', {
+  id: uuid()
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  name: varchar().notNull(),
+});
+export type PackageType = typeof package_type.$inferSelect;
+export type InsertPackageType = typeof package_type.$inferInsert;
+
+export const tour_package_commission = pgTable(
+  'tour_package_commission_table',
+  {
+    package_type_id: uuid().references(() => package_type.id),
+    tour_operator_id: uuid().references(() => tour_operator.id),
+    percentage_commission: decimal({ precision: 5, scale: 2 }),
+  },
+  (table) => [primaryKey({ name: 'id', columns: [table.package_type_id, table.tour_operator_id] })]
+);
+export type TourPackageCommission = typeof tour_package_commission.$inferSelect;
+export type InsertTourPackageCommission = typeof tour_package_commission.$inferInsert;
+
+export const park = pgTable('park_table', {
+  id: uuid().defaultRandom().primaryKey(),
+  name: varchar(),
+  image_1: varchar(),
+  image_2: varchar(),
+  location: varchar(),
+  city: varchar(),
+  county: varchar(),
+  code: varchar(),
+  description: varchar(),
+});
+export type Park = typeof park.$inferSelect;
+export type InsertPark = typeof park.$inferInsert;
+
+export const cottages = pgTable('cottages_table', {
+  id: uuid().defaultRandom().primaryKey(),
+  cottage_name: varchar(),
+  location: varchar(),
+  cottage_code: varchar(),
+  bedrooms: integer(),
+  bathrooms: integer(),
+  sleeps: integer(),
+  pets: integer(),
+  image_1: varchar(),
+  image_2: varchar(),
+  details_url: varchar(),
+});
+export type Cottage = typeof cottages.$inferSelect;
+export type InsertCottage = typeof cottages.$inferInsert;
+
+export const lodges = pgTable(
+  'lodges_table',
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    park_id: uuid().references(() => park.id),
+    lodge_name: varchar(),
+    lodge_code: varchar(),
+    image: varchar(),
+    adults: integer(),
+    children: integer(),
+    bedrooms: integer(),
+    bathrooms: integer(),
+    pets: integer(),
+    sleeps: integer(),
+    infants: integer(),
+  },
+  (table) => ({
+    emailIdx: index('lodge_code_idx').on(table.lodge_code),
+  })
+);
+export type Lodge = typeof lodges.$inferSelect;
+export type InsertLodge = typeof lodges.$inferInsert;
+
+export const cruise_extra_item = pgTable('cruise_extra_item_table', {
+  id: uuid().defaultRandom().primaryKey(),
+  name: varchar(),
+});
+export type CruiseExtraItem = typeof cruise_extra_item.$inferSelect;
+export type InsertCruiseExtraItem = typeof cruise_extra_item.$inferInsert;
+
+export const deletion_codes = pgTable('deletion_codes', {
+  id: uuid().defaultRandom().primaryKey(),
+  is_used: boolean().default(false),
+  code: varchar(),
+  created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+});
+export type DeletionCode = typeof deletion_codes.$inferSelect;
+export type InsertDeletionCode = typeof deletion_codes.$inferInsert;
+
+export const room_type = pgTable('room_type', {
+  id: uuid().defaultRandom().primaryKey(),
+  name: varchar(),
+});
+export type RoomType = typeof room_type.$inferSelect;
+export type InsertRoomType = typeof room_type.$inferInsert;
+
+export const owner_type_enum = pgEnum('owner_type_enum', ['package_holiday', 'hot_tub_break', 'cruise']);
+export const deal_images = pgTable('deal_images', {
+  id: uuid().defaultRandom().primaryKey(),
+  image_url: varchar(),
+  s3Key: varchar(),
+  owner_type: owner_type_enum(),
+  owner_id: text().notNull(),
+  isPrimary: boolean().default(false),
+}, (table) => ({
+  unique_key: unique().on(table.owner_id, table.image_url)
+}));
+export type DealImage = typeof deal_images.$inferSelect;
+export type InsertDealImage = typeof deal_images.$inferInsert;
+
+export const forwardsReport = pgTable('forwards_report', {
+  id: uuid().defaultRandom().primaryKey(),
+  month: integer().notNull(),
+  monthName: varchar().notNull(),
+  year: integer().notNull(),
+  target: numeric({ precision: 10, scale: 2 }).notNull(),
+  company_commission: numeric({ precision: 10, scale: 2 }).notNull(),
+  agent_commission: numeric({ precision: 10, scale: 2 }).notNull(),
+  created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+  adjustment: numeric({ precision: 10, scale: 2 }).default("0.00"),
+  deal_ids: text().array()
+    .notNull()
+    .default(sql`ARRAY[]::text[]`),
+  historical_ids: text().array()
+    .notNull()
+    .default(sql`ARRAY[]::text[]`),
+}, (table) => [
+  unique('year_month_idx').on(table.year, table.month),
+  index('year_month_index').on(table.year, table.month),
+])
+export type ForwardsReport = typeof forwardsReport.$inferSelect;
+export type InsertForwardsReport = typeof forwardsReport.$inferInsert;

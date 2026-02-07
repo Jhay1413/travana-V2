@@ -13,6 +13,7 @@ import QuotePage from "@/pages/quote";
 import EnquiryPage from "@/pages/enquiry";
 import TicketsPage from "@/pages/tickets";
 import TicketPage from "@/pages/ticket";
+import AdminImportPage from "@/pages/admin-import";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -36,6 +37,7 @@ function AuthenticatedRouter() {
       <Route path="/clients/:clientId/enquiries/:enquiryId" component={EnquiryPage} />
       <Route path="/tickets" component={TicketsPage} />
       <Route path="/tickets/:ticketId" component={TicketPage} />
+      <Route path="/admin/import" component={AdminImportPage} />
       <Route component={NotFound} />
     </Switch>
   );

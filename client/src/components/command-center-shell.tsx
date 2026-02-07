@@ -66,6 +66,7 @@ function getNavRoute(key: string): string {
     bookings: "/",
     "agent-settings": "/",
     "agent-overview": "/",
+    "data-import": "/admin/import",
     org: "/",
     users: "/",
     audit: "/",
@@ -328,6 +329,7 @@ export function CommandCenterShell({
                 { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
                 { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
               ] },
+              { key: "data-import", label: "Data Import", icon: <Globe className="h-4 w-4" /> },
             ],
           },
           {
