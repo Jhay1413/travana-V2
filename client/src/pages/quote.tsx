@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare, Pin, PinOff } from "lucide-react";
+import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare, Pin, PinOff, CheckSquare, Circle, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -1080,6 +1080,49 @@ export default function QuotePage() {
                       ))}
                     </div>
                   )}
+
+                  <div className="mt-3 rounded-2xl border border-black/10 bg-white/60 p-2.5" data-testid="card-quote-tags-inline">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px] font-semibold" data-testid="text-tags-title-inline">Tags</div>
+                      <Tag className="h-3 w-3 text-black/35" aria-hidden />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5" data-testid="list-tags-inline">
+                      {["VIP", "Family", "Flexible dates"].map((t) => (
+                        <span
+                          key={t}
+                          className="group inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70"
+                          data-testid={`pill-tag-inline-${t}`}
+                        >
+                          {t}
+                          <button
+                            type="button"
+                            className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-black/35 transition hover:bg-black/[0.06] hover:text-black/60"
+                            data-testid={`button-remove-tag-inline-${t}`}
+                            onClick={() => {}}
+                          >
+                            <X className="h-2.5 w-2.5" aria-hidden />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex items-center gap-1.5" data-testid="row-add-tag-inline">
+                      <Input
+                        placeholder="Add tag…"
+                        className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
+                        data-testid="input-add-tag-inline"
+                        value={""}
+                        onChange={() => {}}
+                      />
+                      <Button
+                        size="sm"
+                        className="h-7 rounded-xl bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90"
+                        data-testid="button-add-tag-inline"
+                        onClick={() => {}}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="min-w-0" data-testid="section-itinerary-summary">
@@ -1317,53 +1360,67 @@ export default function QuotePage() {
                 </Tabs>
               </Card>
 
-              <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-tags">
-                <div className="flex items-center justify-between" data-testid="row-tags-header">
+              <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-tasks">
+                <div className="flex items-center justify-between" data-testid="row-tasks-header">
                   <div>
-                    <div className="text-sm font-semibold" data-testid="text-tags-title">
-                      Tags
+                    <div className="text-sm font-semibold" data-testid="text-tasks-title">
+                      Tasks
                     </div>
-                    <div className="mt-1 text-xs text-black/55" data-testid="text-tags-subtitle">
-                      Add quick labels to this quote.
+                    <div className="mt-1 text-xs text-black/55" data-testid="text-tasks-subtitle">
+                      Track to-dos for this quote.
                     </div>
                   </div>
-                  <Tag className="h-4 w-4 text-black/35" aria-hidden />
+                  <CheckSquare className="h-4 w-4 text-black/35" aria-hidden />
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2" data-testid="list-tags">
-                  {["VIP", "Family", "Flexible dates"].map((t) => (
-                    <span
-                      key={t}
-                      className="group inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-black/70"
-                      data-testid={`pill-tag-${t}`}
+                <div className="mt-3 grid gap-1.5" data-testid="list-tasks">
+                  {[
+                    { id: "1", label: "Send quote to client", done: true },
+                    { id: "2", label: "Chase deposit payment", done: false },
+                    { id: "3", label: "Confirm flight seats", done: false },
+                  ].map((task) => (
+                    <button
+                      key={task.id}
+                      type="button"
+                      className="group flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.02]"
+                      data-testid={`row-task-${task.id}`}
+                      onClick={() => {}}
                     >
-                      {t}
+                      {task.done ? (
+                        <CheckSquare className="h-3.5 w-3.5 shrink-0 text-emerald-500" data-testid={`icon-task-done-${task.id}`} />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5 shrink-0 text-black/30" data-testid={`icon-task-pending-${task.id}`} />
+                      )}
+                      <span className={`flex-1 text-xs font-medium ${task.done ? "text-black/40 line-through" : "text-black/75"}`} data-testid={`text-task-label-${task.id}`}>
+                        {task.label}
+                      </span>
                       <button
                         type="button"
-                        className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-black/35 transition hover:bg-black/[0.06] hover:text-black/60"
-                        data-testid={`button-remove-tag-${t}`}
-                        onClick={() => {}}
+                        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-black/25 opacity-0 transition hover:bg-black/[0.06] hover:text-black/60 group-hover:opacity-100"
+                        data-testid={`button-remove-task-${task.id}`}
+                        onClick={(e) => { e.stopPropagation(); }}
                       >
-                        <X className="h-3.5 w-3.5" aria-hidden />
+                        <X className="h-3 w-3" aria-hidden />
                       </button>
-                    </span>
+                    </button>
                   ))}
                 </div>
 
-                <div className="mt-3 flex items-center gap-2" data-testid="row-add-tag">
+                <div className="mt-3 flex items-center gap-2" data-testid="row-add-task">
                   <Input
-                    placeholder="Add tag…"
+                    placeholder="Add a task…"
                     className="h-9 rounded-2xl border-black/10 bg-white/70"
-                    data-testid="input-add-tag"
+                    data-testid="input-add-task"
                     value={""}
                     onChange={() => {}}
                   />
                   <Button
                     size="sm"
                     className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90"
-                    data-testid="button-add-tag"
+                    data-testid="button-add-task"
                     onClick={() => {}}
                   >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
                     Add
                   </Button>
                 </div>
