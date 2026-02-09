@@ -1603,18 +1603,22 @@ export default function CommandCenterPage() {
 
   const filteredTasks = useMemo(() => {
     if (!allTasksData) return [];
-    return allTasksData.filter((t) => {
-      const due = new Date(t.dueDate);
-      return due >= whatsOnDateRange.start && due < whatsOnDateRange.end;
-    });
+    return allTasksData
+      .filter((t) => {
+        const due = new Date(t.dueDate);
+        return due >= whatsOnDateRange.start && due < whatsOnDateRange.end;
+      })
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }, [allTasksData, whatsOnDateRange]);
 
   const filteredTickets = useMemo(() => {
     if (!allTicketsData) return [];
-    return allTicketsData.filter((t) => {
-      const created = new Date(t.createdAt);
-      return created >= whatsOnDateRange.start && created < whatsOnDateRange.end;
-    });
+    return allTicketsData
+      .filter((t) => {
+        const created = new Date(t.createdAt);
+        return created >= whatsOnDateRange.start && created < whatsOnDateRange.end;
+      })
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [allTicketsData, whatsOnDateRange]);
 
   const allClients = useMemo(() => {
@@ -1817,6 +1821,7 @@ export default function CommandCenterPage() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.dueDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                                 <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-whats-on-task-title-${task.id}`}>
                                   {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
                                   {task.title}
@@ -1828,7 +1833,6 @@ export default function CommandCenterPage() {
                                     {tag}
                                   </span>
                                 ))}
-                                <span>Due {new Date(task.dueDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                               </div>
                             </div>
                             <span className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
@@ -1865,8 +1869,11 @@ export default function CommandCenterPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium" data-testid={`text-whats-on-ticket-subject-${ticket.id}`}>
-                                {ticket.subject}
+                              <div className="flex items-center gap-2">
+                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(ticket.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                                <span className="truncate text-sm font-medium" data-testid={`text-whats-on-ticket-subject-${ticket.id}`}>
+                                  {ticket.subject}
+                                </span>
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
                                 {ticket.clientName && <span>{ticket.clientName}</span>}
@@ -2508,6 +2515,7 @@ export default function CommandCenterPage() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.dueDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                                 <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-workspace-task-title-${task.id}`}>
                                   {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
                                   {task.title}
@@ -2519,7 +2527,6 @@ export default function CommandCenterPage() {
                                     {tag}
                                   </span>
                                 ))}
-                                <span>Due {new Date(task.dueDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                               </div>
                             </div>
                             <span className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
@@ -2556,8 +2563,11 @@ export default function CommandCenterPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium" data-testid={`text-workspace-ticket-subject-${ticket.id}`}>
-                                {ticket.subject}
+                              <div className="flex items-center gap-2">
+                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(ticket.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                                <span className="truncate text-sm font-medium" data-testid={`text-workspace-ticket-subject-${ticket.id}`}>
+                                  {ticket.subject}
+                                </span>
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
                                 {ticket.clientName && <span>{ticket.clientName}</span>}
