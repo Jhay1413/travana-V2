@@ -1232,7 +1232,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-base font-semibold" data-testid="text-quote-title">
-                  {quote.quoteTitle}, <span className="text-sm font-semibold text-black/50">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
+                  {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                 </div>
                 <StatusPill status={quote.status} />
               </div>
@@ -1720,7 +1720,6 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
           isSaving={updateQuoteMutation.isPending}
         />
       )}
-
       <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
         <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-convert-booking">
           <DialogHeader>
