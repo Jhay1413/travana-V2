@@ -6,7 +6,7 @@ import axios from "@/api/client/axios-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useQuotes, useAllTasks, useTickets } from "@/hooks/queries";
-import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport } from "@/hooks/mutations";
+import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
@@ -82,6 +82,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -94,6 +95,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { Spinner } from "@/components/ui/spinner";
+import { useCurrentUser } from "@/hooks/queries";
+
+const TASK_PRESETS_BY_ENTITY: Record<string, string[]> = {
+  general: ["Follow up", "Phone call", "Send email", "Research", "Admin"],
+  enquiry: ["New Enquiry", "Start Quote"],
+  quote: ["Quote Call", "Start Quote", "Call Supplier", "Quote In Progress", "Re-Quote", "Quote Follow-Up", "Book or Ditch!!!"],
+  booking: ["Booking confirmation call", "Send booking confirmation", "Request passport details", "Online Visa", "Final payment", "Send travel documents", "Online check-in", "Holiday change", "Amend booking", "Cancellation"],
+};
+
+const TASK_CATEGORIES = [
+  { value: "general", label: "General Task" },
+  { value: "enquiry", label: "Enquiry" },
+  { value: "quote", label: "Quote" },
+  { value: "booking", label: "Booking" },
+];
 
 type Role = "Admin" | "Manager" | "Agent" | "Homeworker" | "Referer";
 type Stage = "Enquiry" | "Quote" | "Booked";
@@ -1529,6 +1547,41 @@ export default function CommandCenterPage() {
   const [tourOperatorSearch, setTourOperatorSearch] = useState("");
   const [airportSearch, setAirportSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
+  const [dashTaskCategory, setDashTaskCategory] = useState<string>("general");
+  const [dashNewTitle, setDashNewTitle] = useState("");
+  const [dashNewDueDate, setDashNewDueDate] = useState("");
+  const [dashNewDueTime, setDashNewDueTime] = useState("09:00");
+  const { data: currentUser } = useCurrentUser();
+  const { toast } = useToast();
+  const dashCreateTaskMutation = useCreateTask("quote", "");
+  const dashTaskPresets = TASK_PRESETS_BY_ENTITY[dashTaskCategory] || TASK_PRESETS_BY_ENTITY.general;
+
+  const handleDashAddTask = () => {
+    if (!dashNewTitle || !dashNewDueDate || !currentUser?.id) return;
+    const dueDate = new Date(`${dashNewDueDate}T${dashNewDueTime || "09:00"}`);
+    dashCreateTaskMutation.mutate(
+      {
+        entityType: dashTaskCategory === "booking" ? "quote" : dashTaskCategory,
+        entityId: "",
+        userId: currentUser.id,
+        title: dashNewTitle,
+        dueDate,
+        completed: false,
+      },
+      {
+        onSuccess: () => {
+          setShowAddTaskDialog(false);
+          setDashNewTitle("");
+          setDashNewDueDate("");
+          setDashNewDueTime("09:00");
+          setDashTaskCategory("general");
+          toast({ title: "Task added" });
+        },
+        onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
+      }
+    );
+  };
 
   const themeClass = theme === "dark" ? "dark" : "";
   const displayName = user?.firstName || user?.name || user?.email || "User";
@@ -3040,6 +3093,7 @@ export default function CommandCenterPage() {
                   variant="outline"
                   className="rounded-2xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
                   data-testid="button-add-task"
+                  onClick={() => setShowAddTaskDialog(true)}
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Add
@@ -4532,6 +4586,79 @@ export default function CommandCenterPage() {
       </div>
 
       <CsvImportDialog open={showImport} onClose={() => setShowImport(false)} />
+
+      <Dialog open={showAddTaskDialog} onOpenChange={setShowAddTaskDialog}>
+        <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-add-task-dashboard">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Add Task</DialogTitle>
+            <DialogDescription className="text-xs text-black/55">
+              Set a task with a due date and time.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-3 grid gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Category</Label>
+              <Select value={dashTaskCategory} onValueChange={(v) => { setDashTaskCategory(v); setDashNewTitle(""); }}>
+                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-dash-task-category">
+                  <SelectValue placeholder="Choose a category…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASK_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Task</Label>
+              <Select value={dashNewTitle} onValueChange={setDashNewTitle}>
+                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-dash-task-title">
+                  <SelectValue placeholder="Choose a task…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dashTaskPresets.map((preset) => (
+                    <SelectItem key={preset} value={preset}>{preset}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Due Date</Label>
+                <Input
+                  type="date"
+                  value={dashNewDueDate}
+                  onChange={(e) => setDashNewDueDate(e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="input-dash-task-due-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-black/60">Due Time</Label>
+                <Input
+                  type="time"
+                  value={dashNewDueTime}
+                  onChange={(e) => setDashNewDueTime(e.target.value)}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  data-testid="input-dash-task-due-time"
+                />
+              </div>
+            </div>
+
+            <Button
+              className="h-9 w-full rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+              data-testid="button-confirm-dash-add-task"
+              onClick={handleDashAddTask}
+              disabled={!dashNewTitle || !dashNewDueDate || dashCreateTaskMutation.isPending}
+            >
+              {dashCreateTaskMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Add Task"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -482,6 +482,13 @@ function ReplyCard({ reply, quoteId }: { reply: Note; quoteId: string }) {
 }
 
 const TASK_PRESETS_BY_ENTITY: Record<string, string[]> = {
+  general: [
+    "Follow up",
+    "Phone call",
+    "Send email",
+    "Research",
+    "Admin",
+  ],
   enquiry: [
     "New Enquiry",
     "Start Quote",
@@ -509,6 +516,13 @@ const TASK_PRESETS_BY_ENTITY: Record<string, string[]> = {
   ],
 };
 
+const TASK_CATEGORIES = [
+  { value: "general", label: "General Task" },
+  { value: "enquiry", label: "Enquiry" },
+  { value: "quote", label: "Quote" },
+  { value: "booking", label: "Booking" },
+];
+
 function formatTaskDue(date: Date | string) {
   const d = new Date(date);
   const now = new Date();
@@ -532,11 +546,12 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
   const deleteMutation = useDeleteTask(taskEntityType, quoteId);
   const { toast } = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [taskCategory, setTaskCategory] = useState<string>(entityType);
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
   const [newDueTime, setNewDueTime] = useState("09:00");
 
-  const presets = TASK_PRESETS_BY_ENTITY[entityType] || TASK_PRESETS_BY_ENTITY.quote;
+  const presets = TASK_PRESETS_BY_ENTITY[taskCategory] || TASK_PRESETS_BY_ENTITY.quote;
 
   const handleAdd = () => {
     if (!newTitle || !newDueDate || !currentUser?.id) return;
@@ -670,6 +685,20 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
           </DialogHeader>
 
           <div className="mt-3 grid gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Category</Label>
+              <Select value={taskCategory} onValueChange={(v) => { setTaskCategory(v); setNewTitle(""); }}>
+                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-task-category">
+                  <SelectValue placeholder="Choose a category…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASK_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Task</Label>
               <Select value={newTitle} onValueChange={setNewTitle}>
