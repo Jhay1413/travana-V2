@@ -3,6 +3,10 @@ import { AppError } from "../utils/error-handler";
 import type { Task, InsertTask } from "@shared/schema";
 
 export const taskService = {
+  async listAll(): Promise<Task[]> {
+    return await taskRepository.findAll();
+  },
+
   async listByEntity(entityType: string, entityId: string): Promise<Task[]> {
     await taskRepository.checkAndNotifyDueTasks();
     return await taskRepository.findByEntity(entityType, entityId);

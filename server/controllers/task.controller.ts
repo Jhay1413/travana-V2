@@ -6,6 +6,11 @@ import { AppError } from "../utils/error-handler";
 import { insertTaskSchema } from "@shared/schema";
 
 export const taskController = {
+  listAll: asyncHandler(async (req: Request, res: Response) => {
+    const tasks = await taskService.listAll();
+    return successResponse(res, tasks);
+  }),
+
   listByEntity: asyncHandler(async (req: Request, res: Response) => {
     const { entityType, entityId } = req.query as { entityType?: string; entityId?: string };
     if (!entityType || !entityId) {

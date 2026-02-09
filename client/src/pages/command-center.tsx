@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@/api/client/axios-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
-import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useQuotes } from "@/hooks/queries";
+import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useQuotes, useAllTasks, useTickets } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -1514,7 +1514,9 @@ export default function CommandCenterPage() {
   const { user, logout } = useAuth();
   const [active, setActive] = useState<string>("overview");
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"clients" | "pipeline" | "calendar" | "news">("clients");
+  const [tab, setTab] = useState<"whats-on" | "pipeline" | "calendar" | "news">("whats-on");
+  const [whatsOnFilter, setWhatsOnFilter] = useState<"today" | "tomorrow" | "this-week" | "custom">("today");
+  const [whatsOnDate, setWhatsOnDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -1565,6 +1567,55 @@ export default function CommandCenterPage() {
     }
     return map;
   }, [countriesData]);
+
+  const { data: allTasksData } = useAllTasks();
+  const { data: allTicketsData } = useTickets();
+
+  const whatsOnDateRange = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const endOfTomorrow = new Date(tomorrow);
+    endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
+    const dayOfWeek = today.getDay();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    switch (whatsOnFilter) {
+      case "today":
+        return { start: today, end: tomorrow };
+      case "tomorrow":
+        return { start: tomorrow, end: endOfTomorrow };
+      case "this-week":
+        return { start: startOfWeek, end: endOfWeek };
+      case "custom": {
+        const d = new Date(whatsOnDate);
+        d.setHours(0, 0, 0, 0);
+        const next = new Date(d);
+        next.setDate(next.getDate() + 1);
+        return { start: d, end: next };
+      }
+    }
+  }, [whatsOnFilter, whatsOnDate]);
+
+  const filteredTasks = useMemo(() => {
+    if (!allTasksData) return [];
+    return allTasksData.filter((t) => {
+      const due = new Date(t.dueDate);
+      return due >= whatsOnDateRange.start && due < whatsOnDateRange.end;
+    });
+  }, [allTasksData, whatsOnDateRange]);
+
+  const filteredTickets = useMemo(() => {
+    if (!allTicketsData) return [];
+    return allTicketsData.filter((t) => {
+      const created = new Date(t.createdAt);
+      return created >= whatsOnDateRange.start && created < whatsOnDateRange.end;
+    });
+  }, [allTicketsData, whatsOnDateRange]);
 
   const allClients = useMemo(() => {
     const neonClients = paginatedNeonClients?.clients;
@@ -1695,8 +1746,8 @@ export default function CommandCenterPage() {
 
               <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
                 <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-overview">
-                  <TabsTrigger value="clients" className="rounded-xl" data-testid="tab-overview-clients">
-                    Clients
+                  <TabsTrigger value="whats-on" className="rounded-xl" data-testid="tab-overview-whats-on">
+                    What's On!
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-overview-pipeline">
                     Pipeline
@@ -1714,156 +1765,132 @@ export default function CommandCenterPage() {
             <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
             <Tabs value={tab}>
-              <TabsContent value="clients" className="mt-0">
-                <div className="grid gap-3">
-                  {clients.map((c, idx) => (
-                    <motion.button
-                      key={c.id}
-                      className="group relative w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                      data-testid={`card-overview-client-${c.id}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.28, delay: idx * 0.03 }}
-                      onClick={() => navigate(`/clients/${c.id}`)}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-                              aria-hidden
-                            >
-                              <UserRound className="h-4 w-4 text-black/70 dark:text-white/80" />
-                            </div>
-                            <div className="min-w-0">
+              <TabsContent value="whats-on" className="mt-0">
+                <div className="grid gap-4" data-testid="panel-whats-on-overview">
+                  <div className="flex flex-wrap items-center gap-2" data-testid="whats-on-filters">
+                    {(["today", "tomorrow", "this-week", "custom"] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setWhatsOnFilter(f)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                          whatsOnFilter === f
+                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            : "border border-black/10 bg-black/5 text-black/70 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                        }`}
+                        data-testid={`button-whats-on-${f}`}
+                      >
+                        {f === "today" ? "Today" : f === "tomorrow" ? "Tomorrow" : f === "this-week" ? "This Week" : "Select Date"}
+                      </button>
+                    ))}
+                    {whatsOnFilter === "custom" && (
+                      <input
+                        type="date"
+                        value={whatsOnDate}
+                        onChange={(e) => setWhatsOnDate(e.target.value)}
+                        className="rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs dark:border-white/10 dark:bg-white/5"
+                        data-testid="input-whats-on-date"
+                      />
+                    )}
+                  </div>
+
+                  <div className="grid gap-3">
+                    <div className="flex items-center gap-2">
+                      <ListChecks className="h-4 w-4 text-black/50 dark:text-white/50" />
+                      <div className="text-sm font-semibold" data-testid="text-whats-on-tasks-title">Tasks ({filteredTasks.length})</div>
+                    </div>
+                    {filteredTasks.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-black/45 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/45" data-testid="empty-whats-on-tasks">
+                        No tasks due {whatsOnFilter === "today" ? "today" : whatsOnFilter === "tomorrow" ? "tomorrow" : whatsOnFilter === "this-week" ? "this week" : `on ${whatsOnDate}`}
+                      </div>
+                    ) : (
+                      filteredTasks.map((task, idx) => (
+                        <motion.div
+                          key={task.id}
+                          className={`rounded-2xl border p-3 transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"}`}
+                          data-testid={`card-whats-on-task-${task.id}`}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <div className="truncate text-sm font-semibold" data-testid={`text-overview-client-name-${c.id}`}>
-                                  {c.name}
+                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-whats-on-task-title-${task.id}`}>
+                                  {task.title}
                                 </div>
-                                <span className="text-xs text-black/35 dark:text-white/35">
-                                  {c.id.slice(0, 8)}
+                              </div>
+                              <div className="mt-1 ml-4 flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                                <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider dark:border-white/10 dark:bg-white/5" data-testid={`pill-whats-on-task-type-${task.id}`}>
+                                  {task.entityType}
+                                </span>
+                                <span>Due {new Date(task.dueDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                              </div>
+                            </div>
+                            <span className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                              {task.completed ? "Done" : "Pending"}
+                            </span>
+                          </div>
+                        </motion.div>
+                      ))
+                    )}
+                  </div>
+
+                  <Separator className="bg-black/10 dark:bg-white/10" />
+
+                  <div className="grid gap-3">
+                    <div className="flex items-center gap-2">
+                      <LifeBuoy className="h-4 w-4 text-black/50 dark:text-white/50" />
+                      <div className="text-sm font-semibold" data-testid="text-whats-on-tickets-title">Tickets ({filteredTickets.length})</div>
+                    </div>
+                    {filteredTickets.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-black/45 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/45" data-testid="empty-whats-on-tickets">
+                        No tickets {whatsOnFilter === "today" ? "today" : whatsOnFilter === "tomorrow" ? "tomorrow" : whatsOnFilter === "this-week" ? "this week" : `on ${whatsOnDate}`}
+                      </div>
+                    ) : (
+                      filteredTickets.map((ticket, idx) => (
+                        <motion.button
+                          key={ticket.id}
+                          type="button"
+                          className="group w-full rounded-2xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                          data-testid={`card-whats-on-ticket-${ticket.id}`}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium" data-testid={`text-whats-on-ticket-subject-${ticket.id}`}>
+                                {ticket.subject}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                                {ticket.clientName && <span>{ticket.clientName}</span>}
+                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  ticket.priority === "Urgent" ? "border-red-500/25 bg-red-500/10 text-red-700" :
+                                  ticket.priority === "High" ? "border-amber-500/25 bg-amber-500/10 text-amber-700" :
+                                  "border-black/10 bg-black/[0.03] text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/60"
+                                }`} data-testid={`pill-whats-on-ticket-priority-${ticket.id}`}>
+                                  {ticket.priority}
+                                </span>
+                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  ticket.status === "Open" ? "border-red-500/25 bg-red-500/10 text-red-700" :
+                                  ticket.status === "In Progress" ? "border-amber-500/25 bg-amber-500/10 text-amber-700" :
+                                  ticket.status === "Resolved" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" :
+                                  "border-black/10 bg-black/[0.03] text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/60"
+                                }`} data-testid={`pill-whats-on-ticket-status-${ticket.id}`}>
+                                  {ticket.status}
                                 </span>
                               </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <Badge
-                                  variant="outline"
-                                  className={`rounded-full ${tierPill(c.tier)}`}
-                                >
-                                  {c.tier}
-                                </Badge>
-                                <Badge
-                                  variant="outline"
-                                  className={`rounded-full ${stagePill(c.stage)}`}
-                                >
-                                  {c.stage}
-                                </Badge>
-                                <div className="inline-flex items-center gap-1 text-xs text-black/60 dark:text-white/60">
-                                  <MapPin className="h-3.5 w-3.5" />
-                                  <span>{c.location}</span>
-                                </div>
-                              </div>
                             </div>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />
                           </div>
-
-                          <div className="mt-3 grid gap-1">
-                            <div className="text-xs text-black/45 dark:text-white/45">
-                              Next trip
-                            </div>
-                            <div className="truncate text-sm">
-                              {c.nextTrip}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          <div className="text-sm font-semibold">
-                            {currency.format(c.value)}
-                          </div>
-                          <div className="text-xs text-black/45 dark:text-white/45">
-                            Last touch: {c.lastTouch}
-                          </div>
-                          <div className="mt-2 flex items-center gap-2">
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              className={`grid h-6 w-6 cursor-pointer place-items-center rounded-full transition ${
-                                userFavorites?.some((f: any) => f.itemType === "client" && f.itemId === c.id)
-                                  ? "text-amber-600 hover:bg-amber-500/10"
-                                  : "text-black/30 hover:bg-black/[0.06] hover:text-black/60 dark:text-white/30 dark:hover:bg-white/10"
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFavoriteMutation.mutate({ itemType: "client", itemId: c.id, label: c.name, subtitle: c.phone || c.email || "" });
-                              }}
-                              title={userFavorites?.some((f: any) => f.itemType === "client" && f.itemId === c.id) ? "Unpin" : "Pin to dashboard"}
-                              data-testid={`button-pin-overview-client-${c.id}`}
-                            >
-                              <Pin className="h-3 w-3" />
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-xs text-black/65 dark:text-white/65">
-                              Open
-                              <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-                {clientsTotalPages > 1 && (
-                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-4 py-3" data-testid="pagination-overview-clients">
-                    <div className="text-xs text-black/50 dark:text-white/50">
-                      Page {clientsPage} of {clientsTotalPages} ({clientsTotal} clients)
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={clientsPage <= 1}
-                        onClick={() => setClientsPage(clientsPage - 1)}
-                        className="rounded-xl px-3 py-1.5 text-xs font-semibold transition text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                        data-testid="button-overview-prev-page"
-                      >
-                        Previous
-                      </button>
-                      {Array.from({ length: Math.min(clientsTotalPages, 5) }, (_, i) => {
-                        let pageNum: number;
-                        if (clientsTotalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (clientsPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (clientsPage >= clientsTotalPages - 2) {
-                          pageNum = clientsTotalPages - 4 + i;
-                        } else {
-                          pageNum = clientsPage - 2 + i;
-                        }
-                        return (
-                          <button
-                            key={pageNum}
-                            type="button"
-                            onClick={() => setClientsPage(pageNum)}
-                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition ${
-                              clientsPage === pageNum
-                                ? "bg-[#3b82f6] text-white"
-                                : "text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10"
-                            }`}
-                            data-testid={`button-overview-page-${pageNum}`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        disabled={clientsPage >= clientsTotalPages}
-                        onClick={() => setClientsPage(clientsPage + 1)}
-                        className="rounded-xl px-3 py-1.5 text-xs font-semibold transition text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                        data-testid="button-overview-next-page"
-                      >
-                        Next
-                      </button>
-                    </div>
+                        </motion.button>
+                      ))
+                    )}
                   </div>
-                )}
+                </div>
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-0">
@@ -2407,8 +2434,8 @@ export default function CommandCenterPage() {
 
               <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
                 <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-workspace">
-                  <TabsTrigger value="clients" className="rounded-xl" data-testid="tab-clients">
-                    Clients
+                  <TabsTrigger value="whats-on" className="rounded-xl" data-testid="tab-whats-on">
+                    What's On!
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-pipeline">
                     Pipeline
@@ -2426,158 +2453,132 @@ export default function CommandCenterPage() {
             <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
             <Tabs value={tab}>
-              <TabsContent value="clients" className="mt-0">
-                <div className="grid gap-3">
-                  <button
-                    onClick={() => setShowImport(true)}
-                    className="flex w-full items-center justify-between rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-left transition hover:bg-blue-100 dark:hover:bg-blue-900/30"
-                    data-testid="button-import-csv"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-800/40">
-                        <Upload className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-blue-900 dark:text-blue-100">Import Clients from CSV</div>
-                        <div className="text-xs text-blue-600 dark:text-blue-400">Bulk import or update client records</div>
-                      </div>
+              <TabsContent value="whats-on" className="mt-0">
+                <div className="grid gap-4" data-testid="panel-whats-on-workspace">
+                  <div className="flex flex-wrap items-center gap-2" data-testid="whats-on-workspace-filters">
+                    {(["today", "tomorrow", "this-week", "custom"] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setWhatsOnFilter(f)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                          whatsOnFilter === f
+                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            : "border border-black/10 bg-black/5 text-black/70 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                        }`}
+                        data-testid={`button-workspace-whats-on-${f}`}
+                      >
+                        {f === "today" ? "Today" : f === "tomorrow" ? "Tomorrow" : f === "this-week" ? "This Week" : "Select Date"}
+                      </button>
+                    ))}
+                    {whatsOnFilter === "custom" && (
+                      <input
+                        type="date"
+                        value={whatsOnDate}
+                        onChange={(e) => setWhatsOnDate(e.target.value)}
+                        className="rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs dark:border-white/10 dark:bg-white/5"
+                        data-testid="input-workspace-whats-on-date"
+                      />
+                    )}
+                  </div>
+
+                  <div className="grid gap-3">
+                    <div className="flex items-center gap-2">
+                      <ListChecks className="h-4 w-4 text-black/50 dark:text-white/50" />
+                      <div className="text-sm font-semibold" data-testid="text-workspace-tasks-title">Tasks ({filteredTasks.length})</div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-blue-400" />
-                  </button>
-                  {clients.map((c, idx) => (
-                    <motion.button
-                      key={c.id}
-                      className="group relative w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                      data-testid={`card-client-${c.id}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.28, delay: idx * 0.03 }}
-                      onClick={() => navigate(`/clients/${c.id}`)}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-                              aria-hidden
-                            >
-                              <UserRound className="h-4 w-4 text-black/70 dark:text-white/80" />
-                            </div>
-                            <div className="min-w-0">
+                    {filteredTasks.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-black/45 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/45" data-testid="empty-workspace-tasks">
+                        No tasks due {whatsOnFilter === "today" ? "today" : whatsOnFilter === "tomorrow" ? "tomorrow" : whatsOnFilter === "this-week" ? "this week" : `on ${whatsOnDate}`}
+                      </div>
+                    ) : (
+                      filteredTasks.map((task, idx) => (
+                        <motion.div
+                          key={task.id}
+                          className={`rounded-2xl border p-3 transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"}`}
+                          data-testid={`card-workspace-task-${task.id}`}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <div className="truncate text-sm font-semibold" data-testid={`text-client-name-${c.id}`}>
-                                  {c.name}
+                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-workspace-task-title-${task.id}`}>
+                                  {task.title}
                                 </div>
-                                <span className="text-xs text-black/35 dark:text-white/35" data-testid={`text-client-id-${c.id}`}>
-                                  {c.id}
+                              </div>
+                              <div className="mt-1 ml-4 flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                                <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider dark:border-white/10 dark:bg-white/5" data-testid={`pill-workspace-task-type-${task.id}`}>
+                                  {task.entityType}
+                                </span>
+                                <span>Due {new Date(task.dueDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                              </div>
+                            </div>
+                            <span className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                              {task.completed ? "Done" : "Pending"}
+                            </span>
+                          </div>
+                        </motion.div>
+                      ))
+                    )}
+                  </div>
+
+                  <Separator className="bg-black/10 dark:bg-white/10" />
+
+                  <div className="grid gap-3">
+                    <div className="flex items-center gap-2">
+                      <LifeBuoy className="h-4 w-4 text-black/50 dark:text-white/50" />
+                      <div className="text-sm font-semibold" data-testid="text-workspace-tickets-title">Tickets ({filteredTickets.length})</div>
+                    </div>
+                    {filteredTickets.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-black/45 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/45" data-testid="empty-workspace-tickets">
+                        No tickets {whatsOnFilter === "today" ? "today" : whatsOnFilter === "tomorrow" ? "tomorrow" : whatsOnFilter === "this-week" ? "this week" : `on ${whatsOnDate}`}
+                      </div>
+                    ) : (
+                      filteredTickets.map((ticket, idx) => (
+                        <motion.button
+                          key={ticket.id}
+                          type="button"
+                          className="group w-full rounded-2xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                          data-testid={`card-workspace-ticket-${ticket.id}`}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium" data-testid={`text-workspace-ticket-subject-${ticket.id}`}>
+                                {ticket.subject}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                                {ticket.clientName && <span>{ticket.clientName}</span>}
+                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  ticket.priority === "Urgent" ? "border-red-500/25 bg-red-500/10 text-red-700" :
+                                  ticket.priority === "High" ? "border-amber-500/25 bg-amber-500/10 text-amber-700" :
+                                  "border-black/10 bg-black/[0.03] text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/60"
+                                }`} data-testid={`pill-workspace-ticket-priority-${ticket.id}`}>
+                                  {ticket.priority}
+                                </span>
+                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  ticket.status === "Open" ? "border-red-500/25 bg-red-500/10 text-red-700" :
+                                  ticket.status === "In Progress" ? "border-amber-500/25 bg-amber-500/10 text-amber-700" :
+                                  ticket.status === "Resolved" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" :
+                                  "border-black/10 bg-black/[0.03] text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/60"
+                                }`} data-testid={`pill-workspace-ticket-status-${ticket.id}`}>
+                                  {ticket.status}
                                 </span>
                               </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <Badge
-                                  variant="outline"
-                                  className={`rounded-full ${tierPill(c.tier)}`}
-                                  data-testid={`text-client-tier-${c.id}`}
-                                >
-                                  {c.tier}
-                                </Badge>
-                                <Badge
-                                  variant="outline"
-                                  className={`rounded-full ${stagePill(c.stage)}`}
-                                  data-testid={`status-client-stage-${c.id}`}
-                                >
-                                  {c.stage}
-                                </Badge>
-                                <div className="inline-flex items-center gap-1 text-xs text-black/60 dark:text-white/60">
-                                  <MapPin className="h-3.5 w-3.5" />
-                                  <span data-testid={`text-client-location-${c.id}`}>{c.location}</span>
-                                </div>
-                              </div>
                             </div>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />
                           </div>
-
-                          <div className="mt-3 grid gap-1">
-                            <div
-                              className="text-xs text-black/45 dark:text-white/45"
-                              data-testid={`text-client-nexttrip-label-${c.id}`}
-                            >
-                              Next trip
-                            </div>
-                            <div className="truncate text-sm" data-testid={`text-client-nexttrip-${c.id}`}>
-                              {c.nextTrip}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          <div className="text-sm font-semibold" data-testid={`text-client-value-${c.id}`}>
-                            {currency.format(c.value)}
-                          </div>
-                          <div className="text-xs text-black/45 dark:text-white/45" data-testid={`text-client-lasttouch-${c.id}`}>
-                            Last touch: {c.lastTouch}
-                          </div>
-                          <div className="mt-2 inline-flex items-center gap-1 text-xs text-black/65 dark:text-white/65">
-                            <span data-testid={`text-client-open-${c.id}`}>Open</span>
-                            <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                          </div>
-                        </div>
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-                {clientsTotalPages > 1 && (
-                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-4 py-3" data-testid="pagination-workspace-clients">
-                    <div className="text-xs text-black/50 dark:text-white/50">
-                      Page {clientsPage} of {clientsTotalPages} ({clientsTotal} clients)
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={clientsPage <= 1}
-                        onClick={() => setClientsPage(clientsPage - 1)}
-                        className="rounded-xl px-3 py-1.5 text-xs font-semibold transition text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                        data-testid="button-workspace-prev-page"
-                      >
-                        Previous
-                      </button>
-                      {Array.from({ length: Math.min(clientsTotalPages, 5) }, (_, i) => {
-                        let pageNum: number;
-                        if (clientsTotalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (clientsPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (clientsPage >= clientsTotalPages - 2) {
-                          pageNum = clientsTotalPages - 4 + i;
-                        } else {
-                          pageNum = clientsPage - 2 + i;
-                        }
-                        return (
-                          <button
-                            key={pageNum}
-                            type="button"
-                            onClick={() => setClientsPage(pageNum)}
-                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition ${
-                              clientsPage === pageNum
-                                ? "bg-[#3b82f6] text-white"
-                                : "text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10"
-                            }`}
-                            data-testid={`button-workspace-page-${pageNum}`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        disabled={clientsPage >= clientsTotalPages}
-                        onClick={() => setClientsPage(clientsPage + 1)}
-                        className="rounded-xl px-3 py-1.5 text-xs font-semibold transition text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                        data-testid="button-workspace-next-page"
-                      >
-                        Next
-                      </button>
-                    </div>
+                        </motion.button>
+                      ))
+                    )}
                   </div>
-                )}
+                </div>
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-0">

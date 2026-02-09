@@ -2,6 +2,11 @@ import axiosClient from "../client/axios-client";
 import type { Task, InsertTask } from "@shared/schema";
 
 export const taskApi = {
+  getAll: async (): Promise<Task[]> => {
+    const { data } = await axiosClient.get<Task[]>("/api/tasks/all");
+    return data;
+  },
+
   getByEntity: async (entityType: string, entityId: string): Promise<Task[]> => {
     const { data } = await axiosClient.get<Task[]>(`/api/tasks?entityType=${entityType}&entityId=${entityId}`);
     return data;

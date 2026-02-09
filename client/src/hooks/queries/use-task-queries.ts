@@ -4,10 +4,18 @@ import type { Task } from "@shared/schema";
 
 export const taskKeys = {
   all: ["tasks"] as const,
+  list: () => [...taskKeys.all, "list"] as const,
   byEntity: (entityType: string, entityId: string) =>
     [...taskKeys.all, "byEntity", entityType, entityId] as const,
   byUser: (userId: string) => [...taskKeys.all, "byUser", userId] as const,
 };
+
+export function useAllTasks() {
+  return useQuery<Task[]>({
+    queryKey: taskKeys.list(),
+    queryFn: () => taskApi.getAll(),
+  });
+}
 
 export function useTasks(entityType: string, entityId: string) {
   return useQuery<Task[]>({

@@ -14,6 +14,13 @@ function entityLink(entityType: string, entityId: string): string {
 }
 
 export const taskRepository = {
+  async findAll(): Promise<Task[]> {
+    return await db
+      .select()
+      .from(tasks)
+      .orderBy(desc(tasks.dueDate));
+  },
+
   async findByEntity(entityType: string, entityId: string): Promise<Task[]> {
     return await db
       .select()
