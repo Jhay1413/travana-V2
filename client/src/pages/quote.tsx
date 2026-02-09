@@ -1440,8 +1440,18 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-3" data-testid="row-itinerary-title">
                         <div className="min-w-0" data-testid="col-itinerary-title-left">
-                          <div className="truncate text-base font-semibold" data-testid="text-itinerary-quote-title">
-                            {quote.quoteTitle}
+                          <div className="flex items-center gap-2" data-testid="text-itinerary-quote-title">
+                            <span className="truncate text-base font-semibold">{quote.quoteTitle}</span>
+                            <span className="flex items-center gap-1.5 text-xs text-black/60" data-testid="text-itinerary-quote-summary">
+                              <span>{(() => {
+                                const start = new Date(quote.travelDate);
+                                const end = new Date(quote.returnDate);
+                                const nights = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                                return `${nights} nights`;
+                              })()}</span>
+                              <span className="text-black/25">•</span>
+                              <span>{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
+                            </span>
                           </div>
                           {quote.quoteLink && quote.quoteLink !== "#" && (
                             <a
@@ -1455,16 +1465,6 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                               View Quote Link
                             </a>
                           )}
-                          <div className="mt-1 flex items-center gap-2 text-xs text-black/60" data-testid="text-itinerary-quote-summary">
-                            <span>{(() => {
-                              const start = new Date(quote.travelDate);
-                              const end = new Date(quote.returnDate);
-                              const nights = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-                              return `${nights} nights`;
-                            })()}</span>
-                            <span className="text-black/25">•</span>
-                            <span>{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
-                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <span
