@@ -1119,7 +1119,7 @@ export default function ClientPage() {
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
               <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-                <TabsList className="grid w-full grid-cols-6 rounded-2xl border border-black/10 bg-white/70">
+                <TabsList className="grid w-full grid-cols-5 rounded-2xl border border-black/10 bg-white/70">
                   <TabsTrigger value="enquiries" className="rounded-xl" data-testid="tab-enquiries">
                     Enquiries
                   </TabsTrigger>
@@ -1134,9 +1134,6 @@ export default function ClientPage() {
                   </TabsTrigger>
                   <TabsTrigger value="tickets" className="rounded-xl" data-testid="tab-tickets">
                     Tickets
-                  </TabsTrigger>
-                  <TabsTrigger value="tags" className="rounded-xl" data-testid="tab-tags">
-                    Tags
                   </TabsTrigger>
                 </TabsList>
 
@@ -1714,42 +1711,6 @@ export default function ClientPage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="tags" className="mt-3">
-                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="panel-tags">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold" data-testid="text-tags-title">
-                          Tags
-                        </div>
-                        <div className="mt-1 text-xs text-black/55" data-testid="text-tags-subtitle">
-                          Maintain consistent tagging across clients.
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-9 rounded-2xl border border-black/10 bg-black/[0.03] px-3 text-black hover:bg-black/[0.05]"
-                        data-testid="button-tags-add"
-                        onClick={() => {}}
-                      >
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Add tag
-                      </Button>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2" data-testid="list-tags">
-                      {(client?.tags ?? []).map((t, i) => (
-                        <span
-                          key={t + i}
-                          className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70"
-                          data-testid={`pill-tag-${i}`}
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </TabsContent>
               </Tabs>
             </div>
           </Card>
