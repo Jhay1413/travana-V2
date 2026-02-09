@@ -1632,7 +1632,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
             <div className="grid gap-3" data-testid="col-quote-right">
               <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-summary-right">
-                <Tabs defaultValue="costings" className="w-full">
+                <Tabs defaultValue="summary" className="w-full">
                   <TabsList className="mb-3 w-full rounded-2xl border border-black/10 bg-white/70 p-1">
                     <TabsTrigger value="summary" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-summary">Quote Summary</TabsTrigger>
                     <TabsTrigger value="costings" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-costings">Quote Costings</TabsTrigger>
