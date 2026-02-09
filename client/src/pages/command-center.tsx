@@ -1808,14 +1808,26 @@ export default function CommandCenterPage() {
                         No tasks due {whatsOnFilter === "today" ? "today" : whatsOnFilter === "tomorrow" ? "tomorrow" : whatsOnFilter === "this-week" ? "this week" : `on ${whatsOnDate}`}
                       </div>
                     ) : (
-                      filteredTasks.map((task, idx) => (
-                        <motion.div
+                      filteredTasks.map((task, idx) => {
+                        const taskHref = task.clientId
+                          ? task.entityType === "enquiry"
+                            ? `/clients/${task.clientId}/enquiries/${task.entityId}`
+                            : task.entityType === "booking"
+                              ? `/clients/${task.clientId}/bookings/${task.entityId}`
+                              : task.entityType === "quote"
+                                ? `/clients/${task.clientId}/quotes/${task.entityId}`
+                                : `/clients/${task.clientId}`
+                          : null;
+                        return (
+                        <motion.button
                           key={task.id}
-                          className={`rounded-2xl border p-3 transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"}`}
+                          type="button"
+                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
                           data-testid={`card-whats-on-task-${task.id}`}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
+                          onClick={() => taskHref && navigate(taskHref)}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
@@ -1835,12 +1847,16 @@ export default function CommandCenterPage() {
                                 ))}
                               </div>
                             </div>
-                            <span className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                              {task.completed ? "Done" : "Pending"}
-                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                                {task.completed ? "Done" : "Pending"}
+                              </span>
+                              {taskHref && <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />}
+                            </div>
                           </div>
-                        </motion.div>
-                      ))
+                        </motion.button>
+                        );
+                      })
                     )}
                   </div>
 
@@ -2502,14 +2518,26 @@ export default function CommandCenterPage() {
                         No tasks due {whatsOnFilter === "today" ? "today" : whatsOnFilter === "tomorrow" ? "tomorrow" : whatsOnFilter === "this-week" ? "this week" : `on ${whatsOnDate}`}
                       </div>
                     ) : (
-                      filteredTasks.map((task, idx) => (
-                        <motion.div
+                      filteredTasks.map((task, idx) => {
+                        const taskHref = task.clientId
+                          ? task.entityType === "enquiry"
+                            ? `/clients/${task.clientId}/enquiries/${task.entityId}`
+                            : task.entityType === "booking"
+                              ? `/clients/${task.clientId}/bookings/${task.entityId}`
+                              : task.entityType === "quote"
+                                ? `/clients/${task.clientId}/quotes/${task.entityId}`
+                                : `/clients/${task.clientId}`
+                          : null;
+                        return (
+                        <motion.button
                           key={task.id}
-                          className={`rounded-2xl border p-3 transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"}`}
+                          type="button"
+                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
                           data-testid={`card-workspace-task-${task.id}`}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
+                          onClick={() => taskHref && navigate(taskHref)}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
@@ -2529,12 +2557,16 @@ export default function CommandCenterPage() {
                                 ))}
                               </div>
                             </div>
-                            <span className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                              {task.completed ? "Done" : "Pending"}
-                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                                {task.completed ? "Done" : "Pending"}
+                              </span>
+                              {taskHref && <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />}
+                            </div>
                           </div>
-                        </motion.div>
-                      ))
+                        </motion.button>
+                        );
+                      })
                     )}
                   </div>
 

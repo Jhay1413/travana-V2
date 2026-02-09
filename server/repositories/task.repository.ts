@@ -13,7 +13,7 @@ function entityLink(entityType: string, entityId: string): string {
   return `${base}/${entityId}`;
 }
 
-export type TaskWithClient = Task & { clientName: string | null; tags: string[] };
+export type TaskWithClient = Task & { clientId: string | null; clientName: string | null; tags: string[] };
 
 export const taskRepository = {
   async findAll(): Promise<TaskWithClient[]> {
@@ -66,7 +66,7 @@ export const taskRepository = {
     return allTasks.map(t => {
       const cid = clientIdMap.get(`${t.entityType}:${t.entityId}`);
       const clientName = cid ? clientNameMap.get(cid) ?? null : null;
-      return { ...t, clientName, tags: [t.entityType] };
+      return { ...t, clientId: cid ?? null, clientName, tags: [t.entityType] };
     });
   },
 
