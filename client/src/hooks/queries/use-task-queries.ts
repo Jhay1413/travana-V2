@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { taskApi } from "@/api/endpoints/task.api";
+import { taskApi, type TaskWithClient } from "@/api/endpoints/task.api";
 import type { Task } from "@shared/schema";
 
 export const taskKeys = {
@@ -11,7 +11,7 @@ export const taskKeys = {
 };
 
 export function useAllTasks() {
-  return useQuery<Task[]>({
+  return useQuery<TaskWithClient[]>({
     queryKey: taskKeys.list(),
     queryFn: () => taskApi.getAll(),
   });

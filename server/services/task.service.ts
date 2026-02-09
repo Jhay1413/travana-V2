@@ -1,9 +1,9 @@
-import { taskRepository } from "../repositories/task.repository";
+import { taskRepository, type TaskWithClient } from "../repositories/task.repository";
 import { AppError } from "../utils/error-handler";
 import type { Task, InsertTask } from "@shared/schema";
 
 export const taskService = {
-  async listAll(): Promise<Task[]> {
+  async listAll(): Promise<TaskWithClient[]> {
     return await taskRepository.findAll();
   },
 
