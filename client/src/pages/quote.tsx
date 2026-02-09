@@ -1232,7 +1232,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-base font-semibold" data-testid="text-quote-title">
-                  {quote.quoteTitle} <span className="text-sm font-medium text-black/50">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
+                  {quote.quoteTitle}, <span className="text-sm font-semibold text-black/50">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                 </div>
                 <StatusPill status={quote.status} />
               </div>
@@ -1441,8 +1441,8 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                       <div className="flex items-center justify-between gap-3" data-testid="row-itinerary-title">
                         <div className="min-w-0" data-testid="col-itinerary-title-left">
                           <div className="flex items-center gap-2" data-testid="text-itinerary-quote-title">
-                            <span className="truncate text-base font-semibold">{quote.quoteTitle}</span>
-                            <span className="flex items-center gap-1.5 text-xs text-black/60" data-testid="text-itinerary-quote-summary">
+                            <span className="truncate text-base font-semibold">{quote.quoteTitle},</span>
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-black/60" data-testid="text-itinerary-quote-summary">
                               <span>{(() => {
                                 const start = new Date(quote.travelDate);
                                 const end = new Date(quote.returnDate);
