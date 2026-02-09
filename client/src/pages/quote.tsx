@@ -1442,7 +1442,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         <div className="min-w-0" data-testid="col-itinerary-title-left">
                           <div className="flex items-center gap-2" data-testid="text-itinerary-quote-title">
                             <span className="truncate text-base font-semibold">{quote.quoteTitle},</span>
-                            <span className="flex items-center gap-1.5 text-xs font-semibold text-black/60" data-testid="text-itinerary-quote-summary">
+                            <span className="flex items-center gap-1.5 font-semibold text-[14px] text-[#000000]" data-testid="text-itinerary-quote-summary">
                               <span>{(() => {
                                 const start = new Date(quote.travelDate);
                                 const end = new Date(quote.returnDate);
