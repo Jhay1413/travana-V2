@@ -93,6 +93,7 @@ type Quote = {
     agentSplitValue: number;
     netToAgency: number;
   };
+  tags: string[];
   notes: string[];
 };
 
@@ -1030,6 +1031,7 @@ function transformQuoteData(apiData: QuoteFull): Quote {
     preBookedSeats: apiData.preBookedSeats || "",
     flightMeals: apiData.flightMeals || "",
     leadSource: apiData.leadSource || "",
+    tags: apiData.tags || [],
     passengers: {
       adults: apiData.passengersAdults,
       children: apiData.passengersChildren,
@@ -1140,6 +1142,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [convertHaysRef, setConvertHaysRef] = useState("");
   const [convertTourRef, setConvertTourRef] = useState("");
+  const [newTag, setNewTag] = useState("");
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -1322,7 +1325,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                       <Tag className="h-3 w-3 text-black/35" aria-hidden />
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5" data-testid="list-tags-inline">
-                      {["VIP", "Family", "Flexible dates"].map((t) => (
+                      {quote.tags.map((t) => (
                         <span
                           key={t}
                           className="group inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70"
@@ -1333,7 +1336,13 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                             type="button"
                             className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-black/35 transition hover:bg-black/[0.06] hover:text-black/60"
                             data-testid={`button-remove-tag-inline-${t}`}
-                            onClick={() => {}}
+                            onClick={() => {
+                              const updated = quote.tags.filter((tag) => tag !== t);
+                              updateQuoteMutation.mutate(
+                                { id: quoteId, data: { tags: updated } },
+                                { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quotes"] }) }
+                              );
+                            }}
                           >
                             <X className="h-2.5 w-2.5" aria-hidden />
                           </button>
@@ -1345,14 +1354,31 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         placeholder="Add tag…"
                         className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
                         data-testid="input-add-tag-inline"
-                        value={""}
-                        onChange={() => {}}
+                        value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newTag.trim()) {
+                            const updated = [...quote.tags, newTag.trim()];
+                            updateQuoteMutation.mutate(
+                              { id: quoteId, data: { tags: updated } },
+                              { onSuccess: () => { setNewTag(""); queryClient.invalidateQueries({ queryKey: ["quotes"] }); } }
+                            );
+                          }
+                        }}
                       />
                       <Button
                         size="sm"
                         className="h-7 rounded-xl bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90"
                         data-testid="button-add-tag-inline"
-                        onClick={() => {}}
+                        disabled={!newTag.trim()}
+                        onClick={() => {
+                          if (!newTag.trim()) return;
+                          const updated = [...quote.tags, newTag.trim()];
+                          updateQuoteMutation.mutate(
+                            { id: quoteId, data: { tags: updated } },
+                            { onSuccess: () => { setNewTag(""); queryClient.invalidateQueries({ queryKey: ["quotes"] }); } }
+                          );
+                        }}
                       >
                         Add
                       </Button>
@@ -1459,17 +1485,19 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
                         <span className="text-sm text-black/55" data-testid="text-itinerary-location">{quote.destination}</span>
-                        <div className="flex flex-wrap items-center gap-2" data-testid="list-itinerary-tags-inline">
-                          {"VIP, Family".split(", ").map((t) => (
-                            <span
-                              key={t}
-                              className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70"
-                              data-testid={`pill-itinerary-tag-${t}`}
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
+                        {quote.tags.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2" data-testid="list-itinerary-tags-inline">
+                            {quote.tags.map((t) => (
+                              <span
+                                key={t}
+                                className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-black/70"
+                                data-testid={`pill-itinerary-tag-${t}`}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

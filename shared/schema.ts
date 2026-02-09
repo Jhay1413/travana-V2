@@ -88,6 +88,7 @@ export const quotes = pgTable("quotes", {
   preBookedSeats: text("pre_booked_seats"),
   flightMeals: text("flight_meals"),
   leadSource: text("lead_source"),
+  tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
   haysReference: text("hays_reference"),
   tourReference: text("tour_reference"),
   bookedAt: timestamp("booked_at"),

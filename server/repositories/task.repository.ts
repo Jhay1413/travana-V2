@@ -29,14 +29,16 @@ export const taskRepository = {
 
     const clientIdMap = new Map<string, string>();
 
+    const quoteTagsMap = new Map<string, string[]>();
     if (quoteEntityIds.length > 0) {
       const quoteRows = await db
-        .select({ id: quotes.id, clientId: quotes.clientId })
+        .select({ id: quotes.id, clientId: quotes.clientId, tags: quotes.tags })
         .from(quotes)
         .where(inArray(quotes.id, quoteEntityIds));
       for (const q of quoteRows) {
         clientIdMap.set(`quote:${q.id}`, q.clientId);
         clientIdMap.set(`booking:${q.id}`, q.clientId);
+        quoteTagsMap.set(q.id, q.tags);
       }
     }
 
@@ -66,7 +68,8 @@ export const taskRepository = {
     return allTasks.map(t => {
       const cid = clientIdMap.get(`${t.entityType}:${t.entityId}`);
       const clientName = cid ? clientNameMap.get(cid) ?? null : null;
-      return { ...t, clientId: cid ?? null, clientName, tags: [t.entityType] };
+      const quoteTags = quoteTagsMap.get(t.entityId) || [];
+      return { ...t, clientId: cid ?? null, clientName, tags: [t.entityType, ...quoteTags] };
     });
   },
 

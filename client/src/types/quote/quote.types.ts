@@ -25,6 +25,7 @@ export interface Quote {
   preBookedSeats: string | null;
   flightMeals: string | null;
   leadSource: string | null;
+  tags: string[];
   haysReference: string | null;
   tourReference: string | null;
   bookedAt: string | null;
