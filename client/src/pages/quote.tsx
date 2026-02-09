@@ -481,20 +481,33 @@ function ReplyCard({ reply, quoteId }: { reply: Note; quoteId: string }) {
   );
 }
 
-const TASK_PRESETS = [
-  "Send quote to client",
-  "Chase deposit payment",
-  "Confirm flight seats",
-  "Book accommodation",
-  "Request passport details",
-  "Arrange airport transfers",
-  "Send booking confirmation",
-  "Follow up with client",
-  "Check visa requirements",
-  "Process final payment",
-  "Send travel documents",
-  "Arrange travel insurance",
-];
+const TASK_PRESETS_BY_ENTITY: Record<string, string[]> = {
+  enquiry: [
+    "New Enquiry",
+    "Start Quote",
+  ],
+  quote: [
+    "Quote Call",
+    "Start Quote",
+    "Call Supplier",
+    "Quote In Progress",
+    "Re-Quote",
+    "Quote Follow-Up",
+    "Book or Ditch!!!",
+  ],
+  booking: [
+    "Booking confirmation call",
+    "Send booking confirmation",
+    "Request passport details",
+    "Online Visa",
+    "Final payment",
+    "Send travel documents",
+    "Online check-in",
+    "Holiday change",
+    "Amend booking",
+    "Cancellation",
+  ],
+};
 
 function formatTaskDue(date: Date | string) {
   const d = new Date(date);
@@ -510,24 +523,27 @@ function formatTaskDue(date: Date | string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
-function QuoteTasksSection({ quoteId }: { quoteId: string }) {
-  const { data: tasksData, isLoading } = useTasks("quote", quoteId);
+function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string; entityType?: "enquiry" | "quote" | "booking" }) {
+  const taskEntityType = entityType === "booking" ? "quote" : entityType;
+  const { data: tasksData, isLoading } = useTasks(taskEntityType, quoteId);
   const { data: currentUser } = useCurrentUser();
-  const createMutation = useCreateTask("quote", quoteId);
-  const toggleMutation = useToggleTask("quote", quoteId);
-  const deleteMutation = useDeleteTask("quote", quoteId);
+  const createMutation = useCreateTask(taskEntityType, quoteId);
+  const toggleMutation = useToggleTask(taskEntityType, quoteId);
+  const deleteMutation = useDeleteTask(taskEntityType, quoteId);
   const { toast } = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
   const [newDueTime, setNewDueTime] = useState("09:00");
 
+  const presets = TASK_PRESETS_BY_ENTITY[entityType] || TASK_PRESETS_BY_ENTITY.quote;
+
   const handleAdd = () => {
     if (!newTitle || !newDueDate || !currentUser?.id) return;
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
       {
-        entityType: "quote",
+        entityType: taskEntityType,
         entityId: quoteId,
         userId: currentUser.id,
         title: newTitle,
@@ -556,7 +572,7 @@ function QuoteTasksSection({ quoteId }: { quoteId: string }) {
         <div className="flex items-center justify-between" data-testid="row-tasks-header">
           <div>
             <div className="text-sm font-semibold" data-testid="text-tasks-title">Tasks</div>
-            <div className="mt-1 text-xs text-black/55" data-testid="text-tasks-subtitle">Track to-dos for this quote.</div>
+            <div className="mt-1 text-xs text-black/55" data-testid="text-tasks-subtitle">Track to-dos for this {entityType}.</div>
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[9px] font-semibold text-black/50" data-testid="text-tasks-count">
@@ -661,7 +677,7 @@ function QuoteTasksSection({ quoteId }: { quoteId: string }) {
                   <SelectValue placeholder="Choose a task…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {TASK_PRESETS.map((preset) => (
+                  {presets.map((preset) => (
                     <SelectItem key={preset} value={preset}>{preset}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1690,7 +1706,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                 </Tabs>
               </Card>
 
-              <QuoteTasksSection quoteId={quoteId} />
+              <QuoteTasksSection quoteId={quoteId} entityType={pageLabel === "Booking" ? "booking" : "quote"} />
 
             </div>
           </div>
