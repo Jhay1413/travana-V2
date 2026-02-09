@@ -54,4 +54,9 @@ export const quoteController = {
     await quoteService.deleteQuote(id);
     res.status(204).send();
   }),
+
+  getAllTags: asyncHandler(async (_req: Request, res: Response) => {
+    const tags = await quoteService.getAllTags();
+    return successResponse(res, tags, "Tags retrieved successfully");
+  }),
 };

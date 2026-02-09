@@ -256,4 +256,8 @@ export const quoteService = {
   async deleteQuote(id: string): Promise<void> {
     await quoteRepository.remove(id);
   },
+
+  async getAllTags(): Promise<string[]> {
+    return quoteRepository.findAllUniqueTags();
+  },
 };

@@ -1,6 +1,6 @@
 import { db } from "../config/database";
 import { quotes, type Quote, type InsertQuote } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 export const quoteRepository = {
   async findById(id: string): Promise<Quote | undefined> {
@@ -32,5 +32,12 @@ export const quoteRepository = {
 
   async remove(id: string): Promise<void> {
     await db.delete(quotes).where(eq(quotes.id, id));
+  },
+
+  async findAllUniqueTags(): Promise<string[]> {
+    const result = await db.execute(
+      sql`SELECT DISTINCT unnest(tags) AS tag FROM quotes WHERE array_length(tags, 1) > 0 ORDER BY tag`
+    );
+    return (result.rows as { tag: string }[]).map(r => r.tag);
   },
 };

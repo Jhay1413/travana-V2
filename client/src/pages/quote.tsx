@@ -16,8 +16,8 @@ import { useQuoteFull, useNotes, useTasks, useClient } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
-import { useQueryClient } from "@tanstack/react-query";
-import { quoteImageApi } from "@/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { quoteImageApi, quoteApi } from "@/api";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -1143,11 +1143,19 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const [convertHaysRef, setConvertHaysRef] = useState("");
   const [convertTourRef, setConvertTourRef] = useState("");
   const [newTag, setNewTag] = useState("");
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
+  const tagSuggestionsRef = useRef<HTMLDivElement>(null);
+  const { data: allTags = [] } = useQuery({ queryKey: ["quote-tags"], queryFn: quoteApi.getAllTags });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ellipsisRef.current && !ellipsisRef.current.contains(e.target as Node)) {
         setShowEllipsisMenu(false);
+      }
+      if (tagSuggestionsRef.current && !tagSuggestionsRef.current.contains(e.target as Node) &&
+          tagInputRef.current && !tagInputRef.current.contains(e.target as Node)) {
+        setShowTagSuggestions(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -1349,23 +1357,64 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         </span>
                       ))}
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5" data-testid="row-add-tag-inline">
-                      <Input
-                        placeholder="Add tag…"
-                        className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
-                        data-testid="input-add-tag-inline"
-                        value={newTag}
-                        onChange={(e) => setNewTag(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && newTag.trim()) {
-                            const updated = [...quote.tags, newTag.trim()];
-                            updateQuoteMutation.mutate(
-                              { id: quoteId, data: { tags: updated } },
-                              { onSuccess: () => { setNewTag(""); queryClient.invalidateQueries({ queryKey: ["quotes"] }); } }
-                            );
-                          }
-                        }}
-                      />
+                    <div className="relative mt-2 flex items-center gap-1.5" data-testid="row-add-tag-inline">
+                      <div className="relative flex-1">
+                        <Input
+                          ref={tagInputRef}
+                          placeholder="Add tag…"
+                          className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
+                          data-testid="input-add-tag-inline"
+                          value={newTag}
+                          onChange={(e) => {
+                            setNewTag(e.target.value);
+                            setShowTagSuggestions(e.target.value.trim().length > 0);
+                          }}
+                          onFocus={() => {
+                            if (newTag.trim().length > 0) setShowTagSuggestions(true);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newTag.trim()) {
+                              const updated = [...quote.tags, newTag.trim()];
+                              updateQuoteMutation.mutate(
+                                { id: quoteId, data: { tags: updated } },
+                                { onSuccess: () => { setNewTag(""); setShowTagSuggestions(false); queryClient.invalidateQueries({ queryKey: ["quotes"] }); queryClient.invalidateQueries({ queryKey: ["quote-tags"] }); } }
+                              );
+                            }
+                            if (e.key === "Escape") setShowTagSuggestions(false);
+                          }}
+                        />
+                        {showTagSuggestions && (() => {
+                          const filtered = allTags.filter(
+                            (t) => t.toLowerCase().includes(newTag.trim().toLowerCase()) && !quote.tags.includes(t)
+                          );
+                          if (filtered.length === 0) return null;
+                          return (
+                            <div
+                              ref={tagSuggestionsRef}
+                              className="absolute left-0 top-full z-50 mt-1 max-h-32 w-full overflow-y-auto rounded-xl border border-black/10 bg-white shadow-lg"
+                              data-testid="list-tag-suggestions"
+                            >
+                              {filtered.map((t) => (
+                                <button
+                                  key={t}
+                                  type="button"
+                                  className="w-full px-2.5 py-1.5 text-left text-[11px] text-black/70 transition hover:bg-black/[0.04]"
+                                  data-testid={`button-tag-suggestion-${t}`}
+                                  onClick={() => {
+                                    const updated = [...quote.tags, t];
+                                    updateQuoteMutation.mutate(
+                                      { id: quoteId, data: { tags: updated } },
+                                      { onSuccess: () => { setNewTag(""); setShowTagSuggestions(false); queryClient.invalidateQueries({ queryKey: ["quotes"] }); queryClient.invalidateQueries({ queryKey: ["quote-tags"] }); } }
+                                    );
+                                  }}
+                                >
+                                  {t}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
                       <Button
                         size="sm"
                         className="h-7 rounded-xl bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90"
@@ -1376,7 +1425,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           const updated = [...quote.tags, newTag.trim()];
                           updateQuoteMutation.mutate(
                             { id: quoteId, data: { tags: updated } },
-                            { onSuccess: () => { setNewTag(""); queryClient.invalidateQueries({ queryKey: ["quotes"] }); } }
+                            { onSuccess: () => { setNewTag(""); setShowTagSuggestions(false); queryClient.invalidateQueries({ queryKey: ["quotes"] }); queryClient.invalidateQueries({ queryKey: ["quote-tags"] }); } }
                           );
                         }}
                       >

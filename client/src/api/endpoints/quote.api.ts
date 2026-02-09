@@ -35,4 +35,9 @@ export const quoteApi = {
     const { data } = await axiosClient.post<Quote>(`/api/quotes/${id}/convert-to-booking`, { haysReference, tourReference });
     return data;
   },
+
+  getAllTags: async (): Promise<string[]> => {
+    const { data } = await axiosClient.get<string[]>("/api/quotes/tags");
+    return data;
+  },
 };

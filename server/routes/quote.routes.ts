@@ -6,6 +6,7 @@ import { createQuoteValidator, updateQuoteValidator } from "../validators/quote.
 const router = Router();
 
 router.get("/", quoteController.listQuotes);
+router.get("/tags", quoteController.getAllTags);
 router.get("/:id", quoteController.getQuoteById);
 router.get("/:id/full", quoteController.getQuoteFullDetails);
 router.post("/", validate(createQuoteValidator), quoteController.createQuote);
