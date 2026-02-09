@@ -8,8 +8,11 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Clock,
   FileText,
   Filter,
+  Globe,
+  Home,
   Mail,
   MapPin,
   Pencil,
@@ -19,6 +22,7 @@ import {
   Sparkles,
   Ticket,
   ImagePlus,
+  TrendingUp,
   Trash2,
   UserRound,
   X,
@@ -370,7 +374,7 @@ export default function ClientPage() {
   const { role, setRole } = useRole();
   const [active] = useState<string>("clients");
   const [q, setQ] = useState("");
-  const [tab, setTab] = useState<"overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "tags">(
+  const [tab, setTab] = useState<"overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets">(
     "overview",
   );
   const [showEditClient, setShowEditClient] = useState(false);
@@ -1119,7 +1123,10 @@ export default function ClientPage() {
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
               <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-                <TabsList className="grid w-full grid-cols-5 rounded-2xl border border-black/10 bg-white/70">
+                <TabsList className="grid w-full grid-cols-6 rounded-2xl border border-black/10 bg-white/70">
+                  <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-overview">
+                    Overview
+                  </TabsTrigger>
                   <TabsTrigger value="enquiries" className="rounded-xl" data-testid="tab-enquiries">
                     Enquiries
                   </TabsTrigger>
@@ -1136,6 +1143,318 @@ export default function ClientPage() {
                     Tickets
                   </TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="overview" className="mt-3">
+                  <div className="grid gap-3" data-testid="panel-overview">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="overview-stats">
+                      <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-enquiries">
+                        <div className="text-2xl font-bold text-black/85">{enquiries.length}</div>
+                        <div className="mt-0.5 text-[11px] font-semibold text-black/50">Enquiries</div>
+                      </div>
+                      <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-quotes">
+                        <div className="text-2xl font-bold text-black/85">{quotes.filter((q: any) => q.status !== "Booked").length}</div>
+                        <div className="mt-0.5 text-[11px] font-semibold text-black/50">Quotes</div>
+                      </div>
+                      <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-bookings">
+                        <div className="text-2xl font-bold text-emerald-600">{quotes.filter((q: any) => q.status === "Booked").length}</div>
+                        <div className="mt-0.5 text-[11px] font-semibold text-black/50">Bookings</div>
+                      </div>
+                      <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-total-value">
+                        <div className="text-2xl font-bold text-black/85">
+                          {currency.format(quotes.reduce((sum: number, q: any) => sum + parseFloat(q.commission?.price || "0"), 0))}
+                        </div>
+                        <div className="mt-0.5 text-[11px] font-semibold text-black/50">Total Value</div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 md:grid-cols-2" data-testid="overview-details">
+                      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-contact">
+                        <div className="mb-3 text-xs font-semibold text-black/80">Contact Details</div>
+                        <div className="grid gap-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
+                              <UserRound className="h-3.5 w-3.5 text-black/50" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold text-black/45">Full Name</div>
+                              <div className="truncate text-sm text-black/85" data-testid="overview-name">
+                                {[clientData?.title, clientData?.firstName, clientData?.surename].filter(Boolean).join(" ") || "—"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
+                              <Phone className="h-3.5 w-3.5 text-black/50" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold text-black/45">Phone</div>
+                              <div className="truncate text-sm text-black/85" data-testid="overview-phone">
+                                {clientData?.phoneNumber || "—"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
+                              <Mail className="h-3.5 w-3.5 text-black/50" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold text-black/45">Email</div>
+                              <div className="truncate text-sm text-black/85" data-testid="overview-email">
+                                {clientData?.email || "—"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
+                              <Calendar className="h-3.5 w-3.5 text-black/50" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold text-black/45">Date of Birth</div>
+                              <div className="truncate text-sm text-black/85" data-testid="overview-dob">
+                                {clientData?.DOB ? new Date(clientData.DOB).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "—"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-address">
+                        <div className="mb-3 text-xs font-semibold text-black/80">Address</div>
+                        <div className="grid gap-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
+                              <Home className="h-3.5 w-3.5 text-black/50" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold text-black/45">Street</div>
+                              <div className="truncate text-sm text-black/85" data-testid="overview-street">
+                                {[clientData?.houseNumber, clientData?.street].filter(Boolean).join(" ") || "—"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
+                              <MapPin className="h-3.5 w-3.5 text-black/50" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold text-black/45">City</div>
+                              <div className="truncate text-sm text-black/85" data-testid="overview-city">
+                                {clientData?.city || "—"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
+                              <Globe className="h-3.5 w-3.5 text-black/50" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold text-black/45">Country</div>
+                              <div className="truncate text-sm text-black/85" data-testid="overview-country">
+                                {clientData?.country || "—"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
+                              <Mail className="h-3.5 w-3.5 text-black/50" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold text-black/45">Postcode</div>
+                              <div className="truncate text-sm text-black/85" data-testid="overview-postcode">
+                                {clientData?.post_code || "—"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-upcoming">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Plane className="h-4 w-4 text-black/50" />
+                        <div className="text-xs font-semibold text-black/80">Upcoming Trips</div>
+                      </div>
+                      {(() => {
+                        const upcoming = quotes
+                          .filter((q: any) => {
+                            if (!q.travelDate) return false;
+                            const td = new Date(q.travelDate);
+                            return td >= new Date() && (q.status === "Booked" || q.status === "In Play" || q.status === "Won");
+                          })
+                          .sort((a: any, b: any) => new Date(a.travelDate).getTime() - new Date(b.travelDate).getTime())
+                          .slice(0, 3);
+                        if (upcoming.length === 0) {
+                          return (
+                            <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-4 text-center text-xs text-black/45" data-testid="empty-upcoming">
+                              No upcoming trips scheduled
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="grid gap-2">
+                            {upcoming.map((q: any) => (
+                              <button
+                                key={q.id}
+                                type="button"
+                                className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
+                                data-testid={`upcoming-trip-${q.id}`}
+                                onClick={() => window.open(`/clients/${clientId}/${q.status === "Booked" ? "bookings" : "quotes"}/${q.id}`, "_self")}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
+                                    <Plane className="h-4 w-4 text-black/50" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-semibold text-black/85" data-testid={`upcoming-title-${q.id}`}>
+                                      {q.quoteTitle || `${q.destination} Trip`}
+                                    </div>
+                                    <div className="mt-0.5 flex items-center gap-2 text-xs text-black/55">
+                                      <span>{q.destination}</span>
+                                      <span className="text-black/25">&middot;</span>
+                                      <span>{new Date(q.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${q.status === "Booked" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                                    {q.status}
+                                  </span>
+                                  <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-activity">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-black/50" />
+                        <div className="text-xs font-semibold text-black/80">Recent Activity</div>
+                      </div>
+                      {(() => {
+                        const activities: Array<{ id: string; type: string; title: string; date: string; status?: string; link: string }> = [];
+                        enquiries.slice(0, 3).forEach((e: any) => {
+                          activities.push({ id: `e-${e.id}`, type: "Enquiry", title: e.enquiryTitle, date: e.createdAt || "", status: e.status, link: `/clients/${clientId}/enquiries/${e.id}` });
+                        });
+                        quotes.slice(0, 3).forEach((q: any) => {
+                          activities.push({ id: `q-${q.id}`, type: q.status === "Booked" ? "Booking" : "Quote", title: q.quoteTitle || `${q.destination} Trip`, date: q.createdAt || "", status: q.status, link: `/clients/${clientId}/${q.status === "Booked" ? "bookings" : "quotes"}/${q.id}` });
+                        });
+                        tickets.slice(0, 2).forEach((t: any) => {
+                          activities.push({ id: `t-${t.id}`, type: "Ticket", title: t.subject, date: t.createdAt || "", status: t.status, link: "#" });
+                        });
+                        activities.sort((a, b) => {
+                          if (!a.date) return 1;
+                          if (!b.date) return -1;
+                          return new Date(b.date).getTime() - new Date(a.date).getTime();
+                        });
+                        const recent = activities.slice(0, 5);
+                        if (recent.length === 0) {
+                          return (
+                            <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-4 text-center text-xs text-black/45" data-testid="empty-activity">
+                              No activity yet
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="grid gap-1.5">
+                            {recent.map((a) => (
+                              <button
+                                key={a.id}
+                                type="button"
+                                className="group flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-black/[0.03]"
+                                data-testid={`activity-${a.id}`}
+                                onClick={() => { if (a.link !== "#") window.open(a.link, "_self"); }}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                    a.type === "Enquiry" ? "border-violet-500/25 bg-violet-500/10 text-violet-700" :
+                                    a.type === "Quote" ? "border-sky-500/25 bg-sky-500/10 text-sky-700" :
+                                    a.type === "Booking" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" :
+                                    "border-amber-500/25 bg-amber-500/10 text-amber-700"
+                                  }`}>
+                                    {a.type}
+                                  </span>
+                                  <span className="truncate text-xs font-medium text-black/75">{a.title}</span>
+                                </div>
+                                <span className="shrink-0 text-[10px] text-black/40">
+                                  {a.date ? formatTicketDate(a.date) : ""}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-preferences">
+                        <div className="mb-3 flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4 text-black/50" />
+                          <div className="text-xs font-semibold text-black/80">Commission Summary</div>
+                        </div>
+                        <div className="grid gap-2">
+                          <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
+                            <span className="text-xs text-black/60">In Play value</span>
+                            <span className="text-xs font-semibold text-black/85" data-testid="overview-inplay-value">
+                              {currency.format(quotes.filter((q: any) => q.status === "In Play").reduce((sum: number, q: any) => sum + parseFloat(q.commission?.price || "0"), 0))}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
+                            <span className="text-xs text-black/60">Won value</span>
+                            <span className="text-xs font-semibold text-black/85" data-testid="overview-won-value">
+                              {currency.format(quotes.filter((q: any) => q.status === "Won").reduce((sum: number, q: any) => sum + parseFloat(q.commission?.price || "0"), 0))}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                            <span className="text-xs font-medium text-emerald-700">Booked value</span>
+                            <span className="text-xs font-bold text-emerald-700" data-testid="overview-booked-value">
+                              {currency.format(quotes.filter((q: any) => q.status === "Booked").reduce((sum: number, q: any) => sum + parseFloat(q.commission?.price || "0"), 0))}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-tags-section">
+                        <div className="mb-3 flex items-center gap-2">
+                          <BadgeCheck className="h-4 w-4 text-black/50" />
+                          <div className="text-xs font-semibold text-black/80">Tags &amp; Status</div>
+                        </div>
+                        <div className="grid gap-3">
+                          <div>
+                            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-black/40">Client Type</div>
+                            <span className="inline-flex items-center rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/10 px-2.5 py-0.5 text-xs font-semibold text-[#3b82f6]" data-testid="overview-client-type">
+                              {clientData?.badge || "New Client"}
+                            </span>
+                          </div>
+                          {(client?.tags ?? []).length > 0 && (
+                            <div>
+                              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-black/40">Tags</div>
+                              <div className="flex flex-wrap gap-1.5" data-testid="overview-tags-list">
+                                {(client?.tags ?? []).map((t, i) => (
+                                  <span
+                                    key={t + i}
+                                    className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70"
+                                    data-testid={`overview-tag-${i}`}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-black/40">Open Tickets</div>
+                            <span className="text-sm font-semibold text-black/85" data-testid="overview-open-tickets">
+                              {tickets.filter((t) => t.status === "Open" || t.status === "In Progress").length}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
 
                 <TabsContent value="enquiries" className="mt-3">
                   <div className="grid gap-3" data-testid="list-enquiries">
