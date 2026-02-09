@@ -1367,10 +1367,10 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           value={newTag}
                           onChange={(e) => {
                             setNewTag(e.target.value);
-                            setShowTagSuggestions(e.target.value.trim().length > 0);
+                            setShowTagSuggestions(true);
                           }}
                           onFocus={() => {
-                            if (newTag.trim().length > 0) setShowTagSuggestions(true);
+                            setShowTagSuggestions(true);
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && newTag.trim()) {
@@ -1385,7 +1385,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         />
                         {showTagSuggestions && (() => {
                           const filtered = allTags.filter(
-                            (t) => t.toLowerCase().includes(newTag.trim().toLowerCase()) && !quote.tags.includes(t)
+                            (t) => (!newTag.trim() || t.toLowerCase().includes(newTag.trim().toLowerCase())) && !quote.tags.includes(t)
                           );
                           if (filtered.length === 0) return null;
                           return (
