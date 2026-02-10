@@ -19,6 +19,13 @@ export interface Enquiry {
   budget: string | null;
   budgetType: string | null;
   notes: string | null;
+  accommodationType: string | null;
+  guests: number | null;
+  pets: string | null;
+  minBudget: string | null;
+  maxBudget: string | null;
+  weekendLodge: string | null;
+  flexibleOnDate: string | null;
   status: string;
   createdAt: string;
   updatedAt: string | null;
@@ -44,6 +51,13 @@ export interface CreateEnquiryData {
   budget?: string;
   budgetType?: string;
   notes?: string;
+  accommodationType?: string;
+  guests?: number;
+  pets?: string;
+  minBudget?: string;
+  maxBudget?: string;
+  weekendLodge?: string;
+  flexibleOnDate?: string;
   status?: string;
 }
 
