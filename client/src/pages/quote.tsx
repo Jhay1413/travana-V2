@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare, Pin, PinOff, CheckSquare, Circle, Plus } from "lucide-react";
+import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare, Pin, PinOff, CheckSquare, Circle, Plus, Anchor, PawPrint } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -1879,18 +1880,6 @@ function EditQuoteDialog({
       accommodation: form.accommodation,
       boardBasis: form.boardBasis,
       roomType: form.roomType,
-      outboundDepartAirport: form.outboundDepartAirport,
-      outboundDepartDate: form.outboundDepartDate,
-      outboundDepartTime: form.outboundDepartTime,
-      outboundArriveAirport: form.outboundArriveAirport,
-      outboundArriveDate: form.outboundArriveDate,
-      outboundArriveTime: form.outboundArriveTime,
-      inboundDepartAirport: form.inboundDepartAirport,
-      inboundDepartDate: form.inboundDepartDate,
-      inboundDepartTime: form.inboundDepartTime,
-      inboundArriveAirport: form.inboundArriveAirport,
-      inboundArriveDate: form.inboundArriveDate,
-      inboundArriveTime: form.inboundArriveTime,
       tourOperator: form.tourOperator,
       sales: form.sales,
       price: form.price,
@@ -1899,6 +1888,54 @@ function EditQuoteDialog({
       serviceCharge: form.serviceCharge,
       pricePerPerson: form.pricePerPerson,
     };
+
+    const showFlights = form.packageType !== "Hot Tub Break" && !(form.packageType === "Cruise Package" && form.cruiseOnly);
+    if (showFlights) {
+      updates.outboundDepartAirport = form.outboundDepartAirport;
+      updates.outboundDepartDate = form.outboundDepartDate;
+      updates.outboundDepartTime = form.outboundDepartTime;
+      updates.outboundArriveAirport = form.outboundArriveAirport;
+      updates.outboundArriveDate = form.outboundArriveDate;
+      updates.outboundArriveTime = form.outboundArriveTime;
+      updates.inboundDepartAirport = form.inboundDepartAirport;
+      updates.inboundDepartDate = form.inboundDepartDate;
+      updates.inboundDepartTime = form.inboundDepartTime;
+      updates.inboundArriveAirport = form.inboundArriveAirport;
+      updates.inboundArriveDate = form.inboundArriveDate;
+      updates.inboundArriveTime = form.inboundArriveTime;
+    } else {
+      updates.outboundDepartAirport = "";
+      updates.outboundDepartDate = "";
+      updates.outboundDepartTime = "";
+      updates.outboundArriveAirport = "";
+      updates.outboundArriveDate = "";
+      updates.outboundArriveTime = "";
+      updates.inboundDepartAirport = "";
+      updates.inboundDepartDate = "";
+      updates.inboundDepartTime = "";
+      updates.inboundArriveAirport = "";
+      updates.inboundArriveDate = "";
+      updates.inboundArriveTime = "";
+    }
+
+    if (form.packageType === "Cruise Package") {
+      updates.cruiseTitle = form.cruiseTitle;
+      updates.cruiseLine = form.cruiseLine;
+      updates.shipName = form.shipName;
+      updates.cruiseDate = form.cruiseDate;
+      updates.cabinType = form.cabinType;
+      updates.embarkation = form.embarkation;
+      updates.debarkation = form.debarkation;
+      updates.cruiseExtras = form.cruiseExtras;
+      updates.cruiseOnly = form.cruiseOnly;
+    }
+
+    if (form.packageType === "Hot Tub Break") {
+      updates.lodgeCode = form.lodgeCode;
+      updates.parkName = form.parkName;
+      updates.pets = form.pets;
+    }
+
     onSave(updates);
   };
 
@@ -1923,10 +1960,11 @@ function EditQuoteDialog({
                     <SelectValue placeholder="Select type..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Package (Flight + Hotel)">Package (Flight + Hotel)</SelectItem>
+                    <SelectItem value="Package Holiday">Package Holiday</SelectItem>
+                    <SelectItem value="Hot Tub Break">Hot Tub Break</SelectItem>
+                    <SelectItem value="Cruise Package">Cruise Package</SelectItem>
                     <SelectItem value="Flight Only">Flight Only</SelectItem>
                     <SelectItem value="Hotel Only">Hotel Only</SelectItem>
-                    <SelectItem value="Cruise">Cruise</SelectItem>
                     <SelectItem value="Tour">Tour</SelectItem>
                   </SelectContent>
                 </Select>
@@ -2056,352 +2094,609 @@ function EditQuoteDialog({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-            <div className="mb-3 text-sm font-semibold">Travel Details</div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                <DatePicker
-                  value={form.travelDate}
-                  onChange={(v) => set("travelDate", v)}
-                  placeholder="Pick a date"
-                  data-testid="edit-input-travel-date"
-                />
+          {form.packageType === "Hot Tub Break" ? (
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-travel-date-only">
+              <div className="mb-3 text-sm font-semibold">Travel Details</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Travel Date</Label>
+                  <DatePicker
+                    value={form.travelDate}
+                    onChange={(v) => set("travelDate", v)}
+                    placeholder="Pick a date"
+                    data-testid="edit-input-travel-date"
+                  />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Adults</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={form.passengersAdults}
-                  onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-adults"
-                />
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-travel-details">
+              <div className="mb-3 text-sm font-semibold">Travel Details</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Travel Date</Label>
+                  <DatePicker
+                    value={form.travelDate}
+                    onChange={(v) => set("travelDate", v)}
+                    placeholder="Pick a date"
+                    data-testid="edit-input-travel-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Adults</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.passengersAdults}
+                    onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-adults"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Children</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.passengersChildren}
+                    onChange={(e) => {
+                      const count = parseInt(e.target.value) || 0;
+                      set("passengersChildren", count);
+                      set("childAges", Array(count).fill(0));
+                    }}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-children"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Infants</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.passengersInfants}
+                    onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-infants"
+                  />
+                </div>
+                {form.passengersChildren > 0 && (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {form.childAges.map((age: number, idx: number) => (
+                        <Input
+                          key={idx}
+                          type="number"
+                          min={0}
+                          max={17}
+                          value={age}
+                          onChange={(e) => {
+                            const ages = [...form.childAges];
+                            ages[idx] = parseInt(e.target.value) || 0;
+                            set("childAges", ages);
+                          }}
+                          className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
+                          data-testid={`edit-input-child-age-${idx}`}
+                          placeholder={`Child ${idx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Children</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.passengersChildren}
-                  onChange={(e) => {
-                    const count = parseInt(e.target.value) || 0;
-                    set("passengersChildren", count);
-                    set("childAges", Array(count).fill(0));
-                  }}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-children"
-                />
+            </div>
+          )}
+
+          {form.packageType === "Cruise Package" ? (
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-cruise-cabin">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <Anchor className="h-4 w-4" />
+                Cruise & Cabin
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Infants</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.passengersInfants}
-                  onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-infants"
-                />
-              </div>
-              {form.passengersChildren > 0 && (
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {form.childAges.map((age: number, idx: number) => (
-                      <Input
-                        key={idx}
-                        type="number"
-                        min={0}
-                        max={17}
-                        value={age}
-                        onChange={(e) => {
-                          const ages = [...form.childAges];
-                          ages[idx] = parseInt(e.target.value) || 0;
-                          set("childAges", ages);
-                        }}
-                        className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
-                        data-testid={`edit-input-child-age-${idx}`}
-                        placeholder={`Child ${idx + 1}`}
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Cruise Title</Label>
+                  <Input
+                    placeholder="e.g. Western Mediterranean"
+                    value={form.cruiseTitle}
+                    onChange={(e) => set("cruiseTitle", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-cruise-title"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Cruise Line</Label>
+                  <Input
+                    placeholder="e.g. Royal Caribbean"
+                    value={form.cruiseLine}
+                    onChange={(e) => set("cruiseLine", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-cruise-line"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Ship Name</Label>
+                  <Input
+                    placeholder="e.g. Harmony of the Seas"
+                    value={form.shipName}
+                    onChange={(e) => set("shipName", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-ship-name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Cruise Date</Label>
+                  <DatePicker
+                    value={form.cruiseDate}
+                    onChange={(v) => set("cruiseDate", v)}
+                    placeholder="Pick a date"
+                    data-testid="edit-input-cruise-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Cabin Type</Label>
+                  <Select value={form.cabinType} onValueChange={(v) => set("cabinType", v)}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-cabin-type">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Inside">Inside</SelectItem>
+                      <SelectItem value="Outside">Outside</SelectItem>
+                      <SelectItem value="Balcony">Balcony</SelectItem>
+                      <SelectItem value="Suite">Suite</SelectItem>
+                      <SelectItem value="Mini Suite">Mini Suite</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Embarkation</Label>
+                  <Input
+                    placeholder="e.g. Southampton"
+                    value={form.embarkation}
+                    onChange={(e) => set("embarkation", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-embarkation"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Debarkation</Label>
+                  <Input
+                    placeholder="e.g. Barcelona"
+                    value={form.debarkation}
+                    onChange={(e) => set("debarkation", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-debarkation"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Cruise Extras Included</Label>
+                  <Input
+                    placeholder="e.g. Drinks package, WiFi"
+                    value={form.cruiseExtras}
+                    onChange={(e) => set("cruiseExtras", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-cruise-extras"
+                  />
+                </div>
+                <div className="flex items-end gap-3 pb-1">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Cruise Only</Label>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={form.cruiseOnly}
+                        onCheckedChange={(v) => set("cruiseOnly", v)}
+                        data-testid="edit-switch-cruise-only"
                       />
-                    ))}
+                      <span className="text-xs text-black/55">{form.cruiseOnly ? "Yes" : "No"}</span>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          ) : form.packageType === "Hot Tub Break" ? (
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-lodge-details">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <Hotel className="h-4 w-4" />
+                Lodge Details
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Lodge Code</Label>
+                  <Input
+                    placeholder="e.g. HT-2451"
+                    value={form.lodgeCode}
+                    onChange={(e) => set("lodgeCode", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-lodge-code"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Park Name</Label>
+                  <Input
+                    placeholder="e.g. Forest Holidays"
+                    value={form.parkName}
+                    onChange={(e) => set("parkName", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-park-name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.nights}
+                    onChange={(e) => set("nights", parseInt(e.target.value) || 1)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-lodge-nights"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
+                  <DatePicker
+                    value={form.checkInDate}
+                    onChange={(v) => set("checkInDate", v)}
+                    placeholder="Pick a date"
+                    data-testid="edit-input-lodge-checkin"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Adults</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.passengersAdults}
+                    onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-lodge-adults"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Children</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.passengersChildren}
+                    onChange={(e) => {
+                      const count = parseInt(e.target.value) || 0;
+                      set("passengersChildren", count);
+                      set("childAges", Array(count).fill(0));
+                    }}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-lodge-children"
+                  />
+                </div>
+                {form.passengersChildren > 0 && (
+                  <div className="space-y-1.5 md:col-span-3">
+                    <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {form.childAges.map((age: number, idx: number) => (
+                        <Input
+                          key={idx}
+                          type="number"
+                          min={0}
+                          max={17}
+                          value={age}
+                          onChange={(e) => {
+                            const ages = [...form.childAges];
+                            ages[idx] = parseInt(e.target.value) || 0;
+                            set("childAges", ages);
+                          }}
+                          className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
+                          data-testid={`edit-input-lodge-child-age-${idx}`}
+                          placeholder={`Child ${idx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Infants</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.passengersInfants}
+                    onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-lodge-infants"
+                  />
+                </div>
+                <div className="flex items-end gap-3 pb-1">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">
+                      <span className="flex items-center gap-1.5">
+                        <PawPrint className="h-3.5 w-3.5" />
+                        Pets
+                      </span>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={form.pets}
+                        onCheckedChange={(v) => set("pets", v)}
+                        data-testid="edit-switch-pets"
+                      />
+                      <span className="text-xs text-black/55">{form.pets ? "Yes" : "No"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-destination-accommodation">
+              <div className="mb-3 text-sm font-semibold">Destination & Accommodation</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Country</Label>
+                  <Input
+                    placeholder="e.g. United Kingdom"
+                    value={form.country}
+                    onChange={(e) => set("country", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-country"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Destination</Label>
+                  <Input
+                    placeholder="e.g. Maldives"
+                    value={form.destination}
+                    onChange={(e) => set("destination", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-destination"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Resort</Label>
+                  <Input
+                    placeholder="e.g. North Malé Atoll"
+                    value={form.resort}
+                    onChange={(e) => set("resort", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-resort"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Accommodation</Label>
+                  <Input
+                    placeholder="e.g. Azure Overwater Resort"
+                    value={form.accommodation}
+                    onChange={(e) => set("accommodation", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-accommodation"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
+                  <DatePicker
+                    value={form.checkInDate}
+                    onChange={(v) => set("checkInDate", v)}
+                    placeholder="Pick a date"
+                    data-testid="edit-input-checkin-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Check-in Time</Label>
+                  <Input
+                    type="time"
+                    value={form.checkInTime}
+                    onChange={(e) => set("checkInTime", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-checkin-time"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.nights}
+                    onChange={(e) => set("nights", parseInt(e.target.value) || 1)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-nights"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Board Basis</Label>
+                  <Select value={form.boardBasis} onValueChange={(v) => set("boardBasis", v)}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-board-basis">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Room Only">Room Only</SelectItem>
+                      <SelectItem value="Bed & Breakfast">Bed & Breakfast</SelectItem>
+                      <SelectItem value="Half Board">Half Board</SelectItem>
+                      <SelectItem value="Full Board">Full Board</SelectItem>
+                      <SelectItem value="All Inclusive">All Inclusive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Room Type</Label>
+                  <Input
+                    placeholder="e.g. Overwater Villa"
+                    value={form.roomType}
+                    onChange={(e) => set("roomType", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-room-type"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Transfer Type</Label>
+                  <Select value={form.transferType} onValueChange={(v) => set("transferType", v)}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-transfer-type">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Private Transfer">Private Transfer</SelectItem>
+                      <SelectItem value="Shared Transfer">Shared Transfer</SelectItem>
+                      <SelectItem value="Seaplane">Seaplane</SelectItem>
+                      <SelectItem value="Speedboat">Speedboat</SelectItem>
+                      <SelectItem value="Self-drive">Self-drive</SelectItem>
+                      <SelectItem value="None">None</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Pre-booked Seats</Label>
+                  <Input
+                    placeholder="e.g. Extra legroom (row 12)"
+                    value={form.preBookedSeats}
+                    onChange={(e) => set("preBookedSeats", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-prebooked-seats"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Flight Meals</Label>
+                  <Input
+                    placeholder="e.g. Standard + child meal"
+                    value={form.flightMeals}
+                    onChange={(e) => set("flightMeals", e.target.value)}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="edit-input-flight-meals"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
-          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-            <div className="mb-3 text-sm font-semibold">Destination & Accommodation</div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Country</Label>
-                <Input
-                  placeholder="e.g. United Kingdom"
-                  value={form.country}
-                  onChange={(e) => set("country", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-country"
-                />
+          {form.packageType !== "Hot Tub Break" && !(form.packageType === "Cruise Package" && form.cruiseOnly) && (
+            <>
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-outbound-flights">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                  <Plane className="h-4 w-4" />
+                  Flights — Outbound
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                    <Input
+                      placeholder="e.g. LHR"
+                      value={form.outboundDepartAirport}
+                      onChange={(e) => set("outboundDepartAirport", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-outbound-depart-airport"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                    <DatePicker
+                      value={form.outboundDepartDate}
+                      onChange={(v) => set("outboundDepartDate", v)}
+                      placeholder="Pick a date"
+                      data-testid="edit-input-outbound-depart-date"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                    <Input
+                      type="time"
+                      value={form.outboundDepartTime}
+                      onChange={(e) => set("outboundDepartTime", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-outbound-depart-time"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                    <Input
+                      placeholder="e.g. MLE"
+                      value={form.outboundArriveAirport}
+                      onChange={(e) => set("outboundArriveAirport", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-outbound-arrive-airport"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                    <DatePicker
+                      value={form.outboundArriveDate}
+                      onChange={(v) => set("outboundArriveDate", v)}
+                      placeholder="Pick a date"
+                      data-testid="edit-input-outbound-arrive-date"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                    <Input
+                      type="time"
+                      value={form.outboundArriveTime}
+                      onChange={(e) => set("outboundArriveTime", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-outbound-arrive-time"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Destination</Label>
-                <Input
-                  placeholder="e.g. Maldives"
-                  value={form.destination}
-                  onChange={(e) => set("destination", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-destination"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Resort</Label>
-                <Input
-                  placeholder="e.g. North Malé Atoll"
-                  value={form.resort}
-                  onChange={(e) => set("resort", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-resort"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Accommodation</Label>
-                <Input
-                  placeholder="e.g. Azure Overwater Resort"
-                  value={form.accommodation}
-                  onChange={(e) => set("accommodation", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-accommodation"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
-                <DatePicker
-                  value={form.checkInDate}
-                  onChange={(v) => set("checkInDate", v)}
-                  placeholder="Pick a date"
-                  data-testid="edit-input-checkin-date"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Check-in Time</Label>
-                <Input
-                  type="time"
-                  value={form.checkInTime}
-                  onChange={(e) => set("checkInTime", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-checkin-time"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={form.nights}
-                  onChange={(e) => set("nights", parseInt(e.target.value) || 1)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-nights"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Board Basis</Label>
-                <Select value={form.boardBasis} onValueChange={(v) => set("boardBasis", v)}>
-                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-board-basis">
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Room Only">Room Only</SelectItem>
-                    <SelectItem value="Bed & Breakfast">Bed & Breakfast</SelectItem>
-                    <SelectItem value="Half Board">Half Board</SelectItem>
-                    <SelectItem value="Full Board">Full Board</SelectItem>
-                    <SelectItem value="All Inclusive">All Inclusive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Room Type</Label>
-                <Input
-                  placeholder="e.g. Overwater Villa"
-                  value={form.roomType}
-                  onChange={(e) => set("roomType", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-room-type"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Transfer Type</Label>
-                <Select value={form.transferType} onValueChange={(v) => set("transferType", v)}>
-                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-transfer-type">
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Private Transfer">Private Transfer</SelectItem>
-                    <SelectItem value="Shared Transfer">Shared Transfer</SelectItem>
-                    <SelectItem value="Seaplane">Seaplane</SelectItem>
-                    <SelectItem value="Speedboat">Speedboat</SelectItem>
-                    <SelectItem value="Self-drive">Self-drive</SelectItem>
-                    <SelectItem value="None">None</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Pre-booked Seats</Label>
-                <Input
-                  placeholder="e.g. Extra legroom (row 12)"
-                  value={form.preBookedSeats}
-                  onChange={(e) => set("preBookedSeats", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-prebooked-seats"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Flight Meals</Label>
-                <Input
-                  placeholder="e.g. Standard + child meal"
-                  value={form.flightMeals}
-                  onChange={(e) => set("flightMeals", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-flight-meals"
-                />
-              </div>
-            </div>
-          </div>
 
-          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Plane className="h-4 w-4" />
-              Flights — Outbound
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                <Input
-                  placeholder="e.g. LHR"
-                  value={form.outboundDepartAirport}
-                  onChange={(e) => set("outboundDepartAirport", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-outbound-depart-airport"
-                />
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-inbound-flights">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                  <Plane className="h-4 w-4 rotate-180" />
+                  Flights — Inbound
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                    <Input
+                      placeholder="e.g. MLE"
+                      value={form.inboundDepartAirport}
+                      onChange={(e) => set("inboundDepartAirport", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-inbound-depart-airport"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                    <DatePicker
+                      value={form.inboundDepartDate}
+                      onChange={(v) => set("inboundDepartDate", v)}
+                      placeholder="Pick a date"
+                      data-testid="edit-input-inbound-depart-date"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                    <Input
+                      type="time"
+                      value={form.inboundDepartTime}
+                      onChange={(e) => set("inboundDepartTime", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-inbound-depart-time"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                    <Input
+                      placeholder="e.g. LHR"
+                      value={form.inboundArriveAirport}
+                      onChange={(e) => set("inboundArriveAirport", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-inbound-arrive-airport"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                    <DatePicker
+                      value={form.inboundArriveDate}
+                      onChange={(v) => set("inboundArriveDate", v)}
+                      placeholder="Pick a date"
+                      data-testid="edit-input-inbound-arrive-date"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                    <Input
+                      type="time"
+                      value={form.inboundArriveTime}
+                      onChange={(e) => set("inboundArriveTime", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-inbound-arrive-time"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                <DatePicker
-                  value={form.outboundDepartDate}
-                  onChange={(v) => set("outboundDepartDate", v)}
-                  placeholder="Pick a date"
-                  data-testid="edit-input-outbound-depart-date"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Departure Time</Label>
-                <Input
-                  type="time"
-                  value={form.outboundDepartTime}
-                  onChange={(e) => set("outboundDepartTime", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-outbound-depart-time"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                <Input
-                  placeholder="e.g. MLE"
-                  value={form.outboundArriveAirport}
-                  onChange={(e) => set("outboundArriveAirport", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-outbound-arrive-airport"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                <DatePicker
-                  value={form.outboundArriveDate}
-                  onChange={(v) => set("outboundArriveDate", v)}
-                  placeholder="Pick a date"
-                  data-testid="edit-input-outbound-arrive-date"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
-                <Input
-                  type="time"
-                  value={form.outboundArriveTime}
-                  onChange={(e) => set("outboundArriveTime", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-outbound-arrive-time"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Plane className="h-4 w-4 rotate-180" />
-              Flights — Inbound
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                <Input
-                  placeholder="e.g. MLE"
-                  value={form.inboundDepartAirport}
-                  onChange={(e) => set("inboundDepartAirport", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-inbound-depart-airport"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                <DatePicker
-                  value={form.inboundDepartDate}
-                  onChange={(v) => set("inboundDepartDate", v)}
-                  placeholder="Pick a date"
-                  data-testid="edit-input-inbound-depart-date"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Departure Time</Label>
-                <Input
-                  type="time"
-                  value={form.inboundDepartTime}
-                  onChange={(e) => set("inboundDepartTime", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-inbound-depart-time"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                <Input
-                  placeholder="e.g. LHR"
-                  value={form.inboundArriveAirport}
-                  onChange={(e) => set("inboundArriveAirport", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-inbound-arrive-airport"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                <DatePicker
-                  value={form.inboundArriveDate}
-                  onChange={(v) => set("inboundArriveDate", v)}
-                  placeholder="Pick a date"
-                  data-testid="edit-input-inbound-arrive-date"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
-                <Input
-                  type="time"
-                  value={form.inboundArriveTime}
-                  onChange={(e) => set("inboundArriveTime", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-inbound-arrive-time"
-                />
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
           <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
             <div className="mb-3 text-sm font-semibold">Package Commissions</div>
@@ -2509,9 +2804,18 @@ function EditQuoteDialog({
   );
 }
 
+function normalizePackageType(raw: string): string {
+  const map: Record<string, string> = {
+    "Package (Flight + Hotel)": "Package Holiday",
+    "Cruise": "Cruise Package",
+  };
+  return map[raw] || raw;
+}
+
 function buildEditForm(quote: Quote, quoteData: QuoteFull) {
+  const q = quoteData as any;
   return {
-    packageType: quote.packageType,
+    packageType: normalizePackageType(quote.packageType),
     quoteTitle: quote.quoteTitle,
     quoteLink: quote.quoteLink,
     status: quote.status,
@@ -2552,5 +2856,17 @@ function buildEditForm(quote: Quote, quoteData: QuoteFull) {
     discount: 0,
     serviceCharge: 0,
     pricePerPerson: quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1),
+    cruiseTitle: q.cruiseTitle || "",
+    cruiseLine: q.cruiseLine || "",
+    shipName: q.shipName || "",
+    cruiseDate: q.cruiseDate || "",
+    cabinType: q.cabinType || "",
+    embarkation: q.embarkation || "",
+    debarkation: q.debarkation || "",
+    cruiseExtras: q.cruiseExtras || "",
+    cruiseOnly: q.cruiseOnly || false,
+    lodgeCode: q.lodgeCode || "",
+    parkName: q.parkName || "",
+    pets: q.pets || false,
   };
 }
