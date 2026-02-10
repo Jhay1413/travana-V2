@@ -55,7 +55,7 @@ export function NotificationsDropdown({ userId }: NotificationsDropdownProps) {
         <Button
           variant="ghost"
           size="sm"
-          className="relative h-9 w-9 p-0 rounded-full"
+          className="relative h-9 w-9 p-0 rounded-full bg-[#f50000c7]"
           data-testid="button-notifications"
         >
           <Bell className="h-5 w-5 text-white/70" />
