@@ -48,7 +48,7 @@ const HOT_TUB_FLEXIBILITY_OPTIONS = [
   "+/- 7 Days",
   "+ 3 Days",
   "+ 7 Days",
-  "Anytime",
+  "Any Time",
 ];
 
 interface EnquiryForm {
@@ -213,7 +213,6 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         pets: form.pets || undefined,
         minBudget: form.minBudget || undefined,
         maxBudget: form.maxBudget || undefined,
-        budget: form.minBudget || undefined,
         budgetType: form.budgetType || undefined,
         nights: form.nights || undefined,
         weekendLodge: form.weekendLodge || undefined,
