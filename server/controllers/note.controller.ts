@@ -4,9 +4,9 @@ import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 
 export const noteController = {
-  listByQuoteId: asyncHandler(async (req: Request, res: Response) => {
-    const quoteId = req.params.quoteId as string;
-    const notes = await noteService.listByQuoteId(quoteId);
+  listByTransactionId: asyncHandler(async (req: Request, res: Response) => {
+    const transactionId = req.params.transactionId as string;
+    const notes = await noteService.listByTransactionId(transactionId);
     return successResponse(res, notes, "Notes retrieved successfully");
   }),
 

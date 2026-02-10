@@ -3,7 +3,8 @@ export interface DashboardStats {
   totalQuotes: number;
   totalRevenue: number;
   avgDealSize: number;
-  inPlayCount: number;
-  wonCount: number;
-  lostCount: number;
+  totalTransactions: number;
+  enquiryCount: number;
+  quotedCount: number;
+  bookedCount: number;
 }

@@ -14,12 +14,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuoteFull, useNotes, useTasks, useClient } from "@/hooks/queries";
+import { useQuote, useNotes, useTasks, useClient } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { quoteImageApi, quoteApi } from "@/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -29,8 +28,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TiptapLink from "@tiptap/extension-link";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import type { QuoteFull } from "@/types/quote";
-import type { Note } from "@shared/schema";
+import type { Quote as ApiQuote, TransactionNote } from "@/types/quote";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -47,9 +45,10 @@ function formatUKDate(input: string) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-type Quote = {
+type QuoteDisplay = {
   id: string;
-  status: "In Play" | "Won" | "Lost";
+  transaction_id: string;
+  status: string;
   packageType: string;
   quoteTitle: string;
   quoteLink: string;
@@ -274,8 +273,8 @@ function NoteCard({
   quoteId,
   currentUserName,
 }: {
-  note: Note;
-  replies: Note[];
+  note: TransactionNote;
+  replies: TransactionNote[];
   quoteId: string;
   currentUserName: string;
 }) {
@@ -312,7 +311,7 @@ function NoteCard({
 
   const handleReply = (html: string) => {
     createMutation.mutate(
-      { quoteId, content: html, authorName: currentUserName, parentId: note.id },
+      { transaction_id: quoteId, content: html },
       {
         onSuccess: () => { setIsReplying(false); toast({ title: "Reply added" }); },
         onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
@@ -333,13 +332,12 @@ function NoteCard({
         <div className="flex items-start justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]" data-testid={`note-avatar-${note.id}`}>
-              {(note.authorName || "A").charAt(0).toUpperCase()}
+              {(note.agent_id || "A").charAt(0).toUpperCase()}
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.authorName || "Agent"}</span>
+              <span className="text-[11px] font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.agent_id || "Agent"}</span>
               <span className="ml-1.5 text-[9px] text-black/40" data-testid={`note-time-${note.id}`}>
                 {formatRelativeTime(note.createdAt)}
-                {note.updatedAt && <span className="ml-1 italic">(edited)</span>}
               </span>
             </div>
           </div>
@@ -347,7 +345,7 @@ function NoteCard({
             <button
               type="button"
               onClick={() => toggleFavoriteMutation.mutate(
-                { itemType: "note", itemId: note.id, label: `Note by ${note.authorName || "Agent"}`, subtitle: `quoteId:${quoteId}|${note.content.replace(/<[^>]*>/g, "").slice(0, 40)}` },
+                { itemType: "note", itemId: note.id, label: `Note by ${note.agent_id || "Agent"}`, subtitle: `quoteId:${quoteId}|${(note.content || "").replace(/<[^>]*>/g, "").slice(0, 40)}` },
                 { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
               )}
               className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${isNotePinned ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/5 hover:text-black/70"}`}
@@ -382,7 +380,7 @@ function NoteCard({
         ) : (
           <div
             className="mt-1 prose prose-sm max-w-none text-[11px] leading-relaxed text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3"
-            dangerouslySetInnerHTML={{ __html: note.content }}
+            dangerouslySetInnerHTML={{ __html: note.content || "" }}
             data-testid={`note-content-${note.id}`}
           />
         )}
@@ -434,7 +432,7 @@ function NoteCard({
   );
 }
 
-function ReplyCard({ reply, quoteId }: { reply: Note; quoteId: string }) {
+function ReplyCard({ reply, quoteId }: { reply: TransactionNote; quoteId: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const { toast } = useToast();
   const updateMutation = useUpdateNote(quoteId);
@@ -455,12 +453,11 @@ function ReplyCard({ reply, quoteId }: { reply: Note; quoteId: string }) {
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-[8px] font-bold text-emerald-600">
-            {(reply.authorName || "A").charAt(0).toUpperCase()}
+            {(reply.agent_id || "A").charAt(0).toUpperCase()}
           </div>
-          <span className="text-[10px] font-semibold text-black/70">{reply.authorName || "Agent"}</span>
+          <span className="text-[10px] font-semibold text-black/70">{reply.agent_id || "Agent"}</span>
           <span className="text-[9px] text-black/35">
             {formatRelativeTime(reply.createdAt)}
-            {reply.updatedAt && <span className="ml-1 italic">(edited)</span>}
           </span>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 transition group-hover/reply:opacity-100">
@@ -477,7 +474,7 @@ function ReplyCard({ reply, quoteId }: { reply: Note; quoteId: string }) {
           <NoteEditor initialContent={reply.content} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact />
         </div>
       ) : (
-        <div className="mt-1 prose prose-sm max-w-none text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content }} data-testid={`reply-content-${reply.id}`} />
+        <div className="mt-1 prose prose-sm max-w-none text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content || "" }} data-testid={`reply-content-${reply.id}`} />
       )}
     </div>
   );
@@ -752,35 +749,35 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
   );
 }
 
-function QuoteNotesSection({ quoteId }: { quoteId: string }) {
-  const { data: notesData, isLoading } = useNotes(quoteId);
+function QuoteNotesSection({ transactionId }: { transactionId: string }) {
+  const { data: notesData, isLoading } = useNotes(transactionId);
   const { data: currentUser } = useCurrentUser();
-  const createMutation = useCreateNote(quoteId);
+  const createMutation = useCreateNote(transactionId);
   const { toast } = useToast();
 
   const authorName = currentUser?.name || currentUser?.username || "Agent";
 
   const topLevelNotes = useMemo(() => {
     if (!notesData) return [];
-    return notesData.filter((n) => !n.parentId);
+    return notesData.filter((n) => !n.parent_id);
   }, [notesData]);
 
   const repliesByParent = useMemo(() => {
-    if (!notesData) return new Map<string, Note[]>();
-    const map = new Map<string, Note[]>();
+    if (!notesData) return new Map<string, TransactionNote[]>();
+    const map = new Map<string, TransactionNote[]>();
     notesData
-      .filter((n) => n.parentId)
+      .filter((n) => n.parent_id)
       .forEach((n) => {
-        const existing = map.get(n.parentId!) || [];
+        const existing = map.get(n.parent_id!) || [];
         existing.push(n);
-        map.set(n.parentId!, existing);
+        map.set(n.parent_id!, existing);
       });
     return map;
   }, [notesData]);
 
   const handleCreate = (html: string) => {
     createMutation.mutate(
-      { quoteId, content: html, authorName },
+      { transaction_id: transactionId, content: html },
       {
         onSuccess: () => toast({ title: "Note added" }),
         onError: () => toast({ title: "Failed to add note", variant: "destructive" }),
@@ -815,7 +812,7 @@ function QuoteNotesSection({ quoteId }: { quoteId: string }) {
                 key={note.id}
                 note={note}
                 replies={repliesByParent.get(note.id) || []}
-                quoteId={quoteId}
+                quoteId={transactionId}
                 currentUserName={authorName}
               />
             ))}
@@ -860,7 +857,7 @@ function formatTime24(timeStr: string) {
   return timeStr.slice(0, 5);
 }
 
-function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
+function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
   const timelineItems: { type: string; sortKey: string; content: React.ReactNode }[] = [];
 
   if (quote.flights.outbound.from) {
@@ -1048,67 +1045,85 @@ function QuoteSummaryTimeline({ quote }: { quote: Quote }) {
   );
 }
 
-function transformQuoteData(apiData: QuoteFull): Quote {
-  const outboundFlight = apiData.flights.find(f => f.direction === "outbound");
-  const inboundFlight = apiData.flights.find(f => f.direction === "inbound");
+function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
+  const flights = apiData.flights || [];
+  const outboundFlight = flights.find(f => f.flight_type === "outbound") || flights[0];
+  const inboundFlight = flights.find(f => f.flight_type === "inbound") || flights[1];
 
-  const obDepart = splitIsoDateTime(outboundFlight?.depart || "");
-  const obArrive = splitIsoDateTime(outboundFlight?.arrive || "");
-  const ibDepart = splitIsoDateTime(inboundFlight?.depart || "");
-  const ibArrive = splitIsoDateTime(inboundFlight?.arrive || "");
+  const obDepart = splitIsoDateTime(outboundFlight?.departure_date_time || "");
+  const obArrive = splitIsoDateTime(outboundFlight?.arrival_date_time || "");
+  const ibDepart = splitIsoDateTime(inboundFlight?.departure_date_time || "");
+  const ibArrive = splitIsoDateTime(inboundFlight?.arrival_date_time || "");
+
+  const accommodations = apiData.accommodations || [];
+  const primaryAccom = accommodations.find(a => a.is_primary) || accommodations[0];
+
+  const travelDate = apiData.travel_date || "";
+  const numNights = apiData.num_of_nights || 0;
+  const returnDate = travelDate ? (() => {
+    const d = new Date(travelDate);
+    d.setDate(d.getDate() + numNights);
+    return d.toISOString().split("T")[0];
+  })() : "";
+
+  const salesPrice = parseFloat(apiData.sales_price || "0");
+  const packageCommission = parseFloat(apiData.package_commission || "0");
+
+  const childPassengers = (apiData.passengers || []).filter(p => p.type === "child");
 
   return {
     id: apiData.id,
-    status: apiData.status as "In Play" | "Won" | "Lost",
-    packageType: apiData.packageType,
-    quoteTitle: apiData.quoteTitle,
-    quoteLink: apiData.quoteLink || "",
-    travelDate: apiData.travelDate,
-    returnDate: apiData.returnDate,
-    destination: apiData.destination,
-    country: apiData.country || "",
-    resort: apiData.resort || "",
-    createdAt: apiData.createdAt,
-    passengersInfants: apiData.passengersInfants,
-    checkInDate: apiData.checkInDate || "",
-    checkInTime: apiData.checkInTime || "",
-    nights: apiData.nights || 0,
-    transferType: apiData.transferType || "",
-    preBookedSeats: apiData.preBookedSeats || "",
-    flightMeals: apiData.flightMeals || "",
-    leadSource: apiData.leadSource || "",
-    tags: apiData.tags || [],
+    transaction_id: apiData.transaction_id,
+    status: apiData.quote_status || "draft",
+    packageType: apiData.holiday_type_id || apiData.quote_type || "",
+    quoteTitle: apiData.title || "",
+    quoteLink: "",
+    travelDate,
+    returnDate,
+    destination: "",
+    country: "",
+    resort: "",
+    createdAt: apiData.date_created || "",
+    passengersInfants: apiData.infant || 0,
+    checkInDate: primaryAccom?.check_in_date_time?.split("T")[0] || "",
+    checkInTime: primaryAccom?.check_in_date_time ? splitIsoDateTime(primaryAccom.check_in_date_time).time : "",
+    nights: numNights,
+    transferType: apiData.transfer_type || "",
+    preBookedSeats: apiData.pre_booked_seats || "",
+    flightMeals: apiData.flight_meals ? "Yes" : "",
+    leadSource: "",
+    tags: [],
     passengers: {
-      adults: apiData.passengersAdults,
-      children: apiData.passengersChildren,
-      childAges: apiData.childAges,
+      adults: apiData.adult || 0,
+      children: apiData.child || 0,
+      childAges: childPassengers.map(p => p.age || 0),
     },
     accommodation: {
-      property: apiData.accommodation?.property || "",
-      board: apiData.accommodation?.board || "",
-      roomType: apiData.accommodation?.roomType || "",
-      notes: apiData.accommodation?.notes || "",
+      property: primaryAccom?.accomodation_id || "",
+      board: primaryAccom?.board_basis_id || "",
+      roomType: primaryAccom?.room_type || "",
+      notes: "",
     },
     flights: {
       outbound: {
-        from: outboundFlight?.fromAirport || "",
-        to: outboundFlight?.toAirport || "",
-        carrier: outboundFlight?.carrier || "",
-        flightNo: outboundFlight?.flightNo || "",
-        depart: outboundFlight?.depart || "",
-        arrive: outboundFlight?.arrive || "",
+        from: outboundFlight?.departing_airport_id || "",
+        to: outboundFlight?.arrival_airport_id || "",
+        carrier: "",
+        flightNo: outboundFlight?.flight_number || "",
+        depart: outboundFlight?.departure_date_time || "",
+        arrive: outboundFlight?.arrival_date_time || "",
         departDate: obDepart.date,
         departTime: obDepart.time,
         arriveDate: obArrive.date,
         arriveTime: obArrive.time,
       },
       inbound: {
-        from: inboundFlight?.fromAirport || "",
-        to: inboundFlight?.toAirport || "",
-        carrier: inboundFlight?.carrier || "",
-        flightNo: inboundFlight?.flightNo || "",
-        depart: inboundFlight?.depart || "",
-        arrive: inboundFlight?.arrive || "",
+        from: inboundFlight?.departing_airport_id || "",
+        to: inboundFlight?.arrival_airport_id || "",
+        carrier: "",
+        flightNo: inboundFlight?.flight_number || "",
+        depart: inboundFlight?.departure_date_time || "",
+        arrive: inboundFlight?.arrival_date_time || "",
         departDate: ibDepart.date,
         departTime: ibDepart.time,
         arriveDate: ibArrive.date,
@@ -1116,27 +1131,27 @@ function transformQuoteData(apiData: QuoteFull): Quote {
       },
     },
     owner: {
-      name: apiData.owner?.name || "Unknown",
-      role: (apiData.owner?.role as "Agent" | "Manager" | "Homeworker") || "Agent",
+      name: "Agent",
+      role: "Agent",
     },
     commissions: {
-      tourOperator: apiData.commission?.tourOperator || "",
-      price: parseFloat(apiData.commission?.price || "0"),
-      commissionPercent: parseFloat(apiData.commission?.commissionPercent || "0"),
-      commissionValue: parseFloat(apiData.commission?.commissionValue || "0"),
-      agentSplitPercent: parseFloat(apiData.commission?.agentSplitPercent || "0"),
-      agentSplitValue: parseFloat(apiData.commission?.agentSplitValue || "0"),
-      netToAgency: parseFloat(apiData.commission?.netToAgency || "0"),
+      tourOperator: apiData.main_tour_operator_id || "",
+      price: salesPrice,
+      commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
+      commissionValue: packageCommission,
+      agentSplitPercent: 0,
+      agentSplitValue: 0,
+      netToAgency: packageCommission,
     },
-    notes: apiData.notes.map(n => n.content),
+    notes: [],
   };
 }
 
-function StatusPill({ status }: { status: Quote["status"] }) {
+function StatusPill({ status }: { status: QuoteDisplay["status"] }) {
   const styles =
-    status === "Won"
+    status === "accepted"
       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-900"
-      : status === "Lost"
+      : status === "rejected" || status === "expired"
         ? "border-rose-500/20 bg-rose-500/10 text-rose-900"
         : "border-indigo-500/20 bg-indigo-500/10 text-indigo-900";
 
@@ -1174,7 +1189,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const clientId = params?.clientId ?? "";
   const quoteId = params?.quoteId ?? "";
 
-  const { data: quoteData, isLoading, error } = useQuoteFull(quoteId);
+  const { data: quoteData, isLoading, error } = useQuote(quoteId);
   const { data: clientData } = useClient(clientId);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1192,7 +1207,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const tagSuggestionsRef = useRef<HTMLDivElement>(null);
-  const { data: allTags = [] } = useQuery({ queryKey: ["quote-tags"], queryFn: quoteApi.getAllTags });
+  const allTags: string[] = [];
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -1208,26 +1223,19 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const images = useMemo(() => quoteData?.images || [], [quoteData]);
+  const images = useMemo(() => {
+    const imgs = quoteData?.images || [];
+    return imgs.map(img => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary }));
+  }, [quoteData]);
   const primaryImage = useMemo(() => images.find((img) => img.isPrimary) || images[0], [images]);
   const galleryImages = useMemo(() => images.filter((img) => img.id !== primaryImage?.id), [images, primaryImage]);
-
-  const handleSetPrimary = async (imageId: string) => {
-    try {
-      await quoteImageApi.setPrimary(imageId, quoteId);
-      queryClient.invalidateQueries({ queryKey: ["quotes"] });
-      toast({ title: "Main image updated" });
-    } catch {
-      toast({ title: "Failed to update main image", variant: "destructive" });
-    }
-  };
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
     return transformQuoteData(quoteData);
   }, [quoteData]);
 
-  const pageLabel = isBooking || quoteData?.status === "Booked" ? "Booking" : "Quote";
+  const pageLabel = isBooking || quoteData?.quote_status === "accepted" ? "Booking" : "Quote";
 
   if (isLoading) {
     return (
@@ -1360,7 +1368,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           type="button"
                           className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
                           data-testid={`button-gallery-image-${idx}`}
-                          onClick={() => handleSetPrimary(img.id)}
+                          onClick={() => {}}
                           title="Click to set as main image"
                         >
                           <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
@@ -1550,7 +1558,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                               <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-quote-ellipsis">
                                 {[
                                   { label: `Edit ${pageLabel}`, icon: Pencil, id: "edit" },
-                                  ...(quote.status !== "Booked" ? [{ label: "Convert to Booking", icon: RefreshCw, id: "convert" }] : []),
+                                  ...(quote.status !== "accepted" ? [{ label: "Convert to Booking", icon: RefreshCw, id: "convert" }] : []),
                                   { label: `Duplicate ${pageLabel}`, icon: Copy, id: "duplicate" },
                                 ].map((item) => (
                                   <button
@@ -1655,23 +1663,23 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                     </div>
                   </div>
 
-                  {quote.status === "Booked" && (quoteData?.haysReference || quoteData?.tourReference) && (
+                  {quote.status === "accepted" && (
                     <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3" data-testid="card-booking-references">
                       <div className="text-xs font-semibold text-emerald-800 mb-2">Booking References</div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-hays-reference">
                           <div className="text-xs font-semibold text-black/65">HAYS Reference</div>
-                          <div className="text-xs font-semibold text-black/85" data-testid="text-hays-reference-value">{quoteData?.haysReference || "—"}</div>
+                          <div className="text-xs font-semibold text-black/85" data-testid="text-hays-reference-value">—</div>
                         </div>
                         <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-tour-reference">
                           <div className="text-xs font-semibold text-black/65">Tour Reference</div>
-                          <div className="text-xs font-semibold text-black/85" data-testid="text-tour-reference-value">{quoteData?.tourReference || "—"}</div>
+                          <div className="text-xs font-semibold text-black/85" data-testid="text-tour-reference-value">—</div>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  <QuoteNotesSection quoteId={quoteId} />
+                  <QuoteNotesSection transactionId={quote.transaction_id} />
                 </div>
               </div>
             </Card>
@@ -1800,7 +1808,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               data-testid="button-confirm-convert"
               onClick={() => {
                 convertToBookingMutation.mutate(
-                  { id: quoteId, haysReference: convertHaysRef, tourReference: convertTourRef },
+                  { quoteId, haysRef: convertHaysRef, supplierRef: convertTourRef },
                   {
                     onSuccess: () => {
                       setShowConvertDialog(false);
@@ -1837,8 +1845,8 @@ function EditQuoteDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  quote: Quote;
-  quoteData: QuoteFull;
+  quote: QuoteDisplay;
+  quoteData: ApiQuote;
   onSave: (data: Record<string, any>) => void;
   isSaving: boolean;
 }) {
@@ -2085,9 +2093,11 @@ function EditQuoteDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="In Play">In Play</SelectItem>
-                    <SelectItem value="Won">Won</SelectItem>
-                    <SelectItem value="Lost">Lost</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="accepted">Accepted</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2812,7 +2822,7 @@ function normalizePackageType(raw: string): string {
   return map[raw] || raw;
 }
 
-function buildEditForm(quote: Quote, quoteData: QuoteFull) {
+function buildEditForm(quote: QuoteDisplay, quoteData: ApiQuote) {
   const q = quoteData as any;
   return {
     packageType: normalizePackageType(quote.packageType),

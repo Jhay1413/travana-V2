@@ -43,18 +43,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useNeonClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser, useEnquiries } from "@/hooks/queries";
-import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "@/hooks/mutations";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
+import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { Client as ApiClient } from "@/types/client";
 import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
-import type { CreateQuoteData } from "@/types/quote";
-import type { Enquiry, CreateEnquiryData } from "@/types/enquiry";
+import type { CreateQuoteData, Transaction, EnquiryTable, Quote as ApiQuote } from "@/types/quote";
+import type { Enquiry } from "@/types/enquiry";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { quoteImageApi } from "@/api";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
 import { DatePicker } from "@/components/ui/date-picker";
 
@@ -490,11 +489,9 @@ export default function ClientPage() {
 
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
 
-  const { data: quotesData, isLoading: isLoadingQuotes } = useQuotes({ clientId });
+  const { data: transactionsData, isLoading: isLoadingTransactions } = useTransactions({ clientId });
 
   const { data: ticketsData, isLoading: isLoadingTickets } = useTicketsByClient(clientId);
-
-  const { data: enquiriesData, isLoading: isLoadingEnquiries } = useEnquiries({ clientId });
 
   const { data: usersData } = useUsers();
 
@@ -574,16 +571,11 @@ export default function ClientPage() {
 
   const createQuoteMutationHook = useCreateQuote();
   const createQuoteMutation = {
-    mutate: async (data: CreateQuoteData) => {
-      createQuoteMutationHook.mutate(data, {
+    mutate: async (data: any) => {
+      createQuoteMutationHook.mutate(data as CreateQuoteData, {
         onSuccess: async (createdQuote) => {
           try {
-            if (quoteImageFiles.length > 0) {
-              await quoteImageApi.uploadImages(createdQuote.id, quoteImageFiles);
-            }
-            for (const url of quoteImageUrls) {
-              await quoteImageApi.createFromUrl(createdQuote.id, url);
-            }
+            // Image upload API removed - quoteImageApi no longer available
           } catch {
             toast({ title: "Quote created but some images failed to upload", variant: "destructive" });
           }
@@ -609,15 +601,16 @@ export default function ClientPage() {
   };
 
   const [showEnquiryWizard, setShowEnquiryWizard] = useState(false);
-  const [editingEnquiry, setEditingEnquiry] = useState<Enquiry | null>(null);
+  const [editingEnquiry, setEditingEnquiry] = useState<EnquiryTable | null>(null);
   const createEnquiryMutation = useCreateEnquiry();
   const updateEnquiryMutation = useUpdateEnquiry();
   const deleteEnquiryMutation = useDeleteEnquiry();
+  const createTransactionMutation = useCreateTransaction();
 
-  const handleEnquirySubmit = (data: Partial<CreateEnquiryData>) => {
+  const handleEnquirySubmit = (data: Partial<any>) => {
     if (editingEnquiry) {
       updateEnquiryMutation.mutate(
-        { id: editingEnquiry.id, data },
+        { id: editingEnquiry.id, data: data as Partial<EnquiryTable> },
         {
           onSuccess: () => {
             setShowEnquiryWizard(false);
@@ -630,8 +623,26 @@ export default function ClientPage() {
         }
       );
     } else {
-      createEnquiryMutation.mutate(
-        { ...data, clientId, userId: currentUser?.id || "" } as CreateEnquiryData,
+      createTransactionMutation.mutate(
+        {
+          client_id: clientId,
+          user_id: currentUser?.id || "",
+          holiday_type_id: data.holidayType || data.holiday_type_id || undefined,
+          lead_source: undefined,
+          enquiry: {
+            title: data.enquiryTitle || data.title || "",
+            holiday_type_id: data.holidayType || data.holiday_type_id || "",
+            travel_date: data.travelDate || data.travel_date || undefined,
+            adults: data.passengersAdults || data.adults || 2,
+            children: data.passengersChildren || data.children || 0,
+            infants: data.passengersInfants || data.infants || 0,
+            no_of_nights: data.nights || data.no_of_nights || undefined,
+            budget: data.budget || undefined,
+            budget_type: data.budgetType || data.budget_type || undefined,
+            cabin_type: data.cabinType || data.cabin_type || undefined,
+            status: "Active",
+          } as Partial<EnquiryTable>,
+        },
         {
           onSuccess: () => {
             setShowEnquiryWizard(false);
@@ -661,9 +672,9 @@ export default function ClientPage() {
     return transformNeonClientData(clientData);
   }, [clientData]);
 
-  const quotes = useMemo(() => quotesData || [], [quotesData]);
-
-  const enquiries = useMemo(() => enquiriesData || [], [enquiriesData]);
+  const transactions = useMemo(() => transactionsData || [], [transactionsData]);
+  const quotes = useMemo(() => transactions.flatMap((t: Transaction) => (t.quotes || []) as any[]), [transactions]);
+  const enquiries = useMemo(() => transactions.map((t: Transaction) => t.enquiry).filter(Boolean) as EnquiryTable[], [transactions]);
 
   const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
   const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
@@ -1169,16 +1180,16 @@ export default function ClientPage() {
                         <div className="mt-0.5 text-[11px] font-semibold text-black/50">Enquiries</div>
                       </div>
                       <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-quotes">
-                        <div className="text-2xl font-bold text-black/85">{quotes.filter((q: any) => q.status !== "Booked").length}</div>
+                        <div className="text-2xl font-bold text-black/85">{quotes.filter((q: any) => q.quote_status !== "Booked").length}</div>
                         <div className="mt-0.5 text-[11px] font-semibold text-black/50">Quotes</div>
                       </div>
                       <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-bookings">
-                        <div className="text-2xl font-bold text-emerald-600">{quotes.filter((q: any) => q.status === "Booked").length}</div>
+                        <div className="text-2xl font-bold text-emerald-600">{quotes.filter((q: any) => q.quote_status === "Booked").length}</div>
                         <div className="mt-0.5 text-[11px] font-semibold text-black/50">Bookings</div>
                       </div>
                       <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-total-value">
                         <div className="text-2xl font-bold text-black/85">
-                          {currency.format(quotes.reduce((sum: number, q: any) => sum + parseFloat(q.commission?.price || "0"), 0))}
+                          {currency.format(quotes.reduce((sum: number, q: any) => sum + parseFloat(q.sales_price || "0"), 0))}
                         </div>
                         <div className="mt-0.5 text-[11px] font-semibold text-black/50">Total Value</div>
                       </div>
@@ -1294,11 +1305,11 @@ export default function ClientPage() {
                       {(() => {
                         const upcoming = quotes
                           .filter((q: any) => {
-                            if (!q.travelDate) return false;
-                            const td = new Date(q.travelDate);
-                            return td >= new Date() && (q.status === "Booked" || q.status === "In Play" || q.status === "Won");
+                            if (!q.travel_date) return false;
+                            const td = new Date(q.travel_date);
+                            return td >= new Date() && (q.quote_status === "Booked" || q.quote_status === "In Play" || q.quote_status === "Won");
                           })
-                          .sort((a: any, b: any) => new Date(a.travelDate).getTime() - new Date(b.travelDate).getTime())
+                          .sort((a: any, b: any) => new Date(a.travel_date).getTime() - new Date(b.travel_date).getTime())
                           .slice(0, 3);
                         if (upcoming.length === 0) {
                           return (
@@ -1315,7 +1326,7 @@ export default function ClientPage() {
                                 type="button"
                                 className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
                                 data-testid={`upcoming-trip-${q.id}`}
-                                onClick={() => window.open(`/clients/${clientId}/${q.status === "Booked" ? "bookings" : "quotes"}/${q.id}`, "_self")}
+                                onClick={() => window.open(`/clients/${clientId}/${q.quote_status === "Booked" ? "bookings" : "quotes"}/${q.id}`, "_self")}
                               >
                                 <div className="flex items-center gap-3">
                                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
@@ -1323,18 +1334,18 @@ export default function ClientPage() {
                                   </div>
                                   <div className="min-w-0">
                                     <div className="truncate text-sm font-semibold text-black/85" data-testid={`upcoming-title-${q.id}`}>
-                                      {q.quoteTitle || `${q.destination} Trip`}
+                                      {q.title || "Trip"}
                                     </div>
                                     <div className="mt-0.5 flex items-center gap-2 text-xs text-black/55">
-                                      <span>{q.destination}</span>
+                                      <span>{q.quote_type || "—"}</span>
                                       <span className="text-black/25">&middot;</span>
-                                      <span>{new Date(q.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                      <span>{new Date(q.travel_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                                     </div>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${q.status === "Booked" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                                    {q.status}
+                                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${q.quote_status === "Booked" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                                    {q.quote_status}
                                   </span>
                                   <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
                                 </div>
@@ -1353,10 +1364,10 @@ export default function ClientPage() {
                       {(() => {
                         const activities: Array<{ id: string; type: string; title: string; date: string; status?: string; link: string }> = [];
                         enquiries.slice(0, 3).forEach((e: any) => {
-                          activities.push({ id: `e-${e.id}`, type: "Enquiry", title: e.enquiryTitle, date: e.createdAt || "", status: e.status, link: `/clients/${clientId}/enquiries/${e.id}` });
+                          activities.push({ id: `e-${e.id}`, type: "Enquiry", title: e.title || "Enquiry", date: e.date_created || "", status: e.status, link: `/clients/${clientId}/enquiries/${e.id}` });
                         });
                         quotes.slice(0, 3).forEach((q: any) => {
-                          activities.push({ id: `q-${q.id}`, type: q.status === "Booked" ? "Booking" : "Quote", title: q.quoteTitle || `${q.destination} Trip`, date: q.createdAt || "", status: q.status, link: `/clients/${clientId}/${q.status === "Booked" ? "bookings" : "quotes"}/${q.id}` });
+                          activities.push({ id: `q-${q.id}`, type: q.quote_status === "Booked" ? "Booking" : "Quote", title: q.title || "Trip", date: q.date_created || "", status: q.quote_status, link: `/clients/${clientId}/${q.quote_status === "Booked" ? "bookings" : "quotes"}/${q.id}` });
                         });
                         tickets.slice(0, 2).forEach((t: any) => {
                           activities.push({ id: `t-${t.id}`, type: "Ticket", title: t.subject, date: t.createdAt || "", status: t.status, link: "#" });
@@ -1415,19 +1426,19 @@ export default function ClientPage() {
                           <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
                             <span className="text-xs text-black/60">In Play value</span>
                             <span className="text-xs font-semibold text-black/85" data-testid="overview-inplay-value">
-                              {currency.format(quotes.filter((q: any) => q.status === "In Play").reduce((sum: number, q: any) => sum + parseFloat(q.commission?.price || "0"), 0))}
+                              {currency.format(quotes.filter((q: any) => q.quote_status === "In Play").reduce((sum: number, q: any) => sum + parseFloat(q.sales_price || "0"), 0))}
                             </span>
                           </div>
                           <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
                             <span className="text-xs text-black/60">Won value</span>
                             <span className="text-xs font-semibold text-black/85" data-testid="overview-won-value">
-                              {currency.format(quotes.filter((q: any) => q.status === "Won").reduce((sum: number, q: any) => sum + parseFloat(q.commission?.price || "0"), 0))}
+                              {currency.format(quotes.filter((q: any) => q.quote_status === "Won").reduce((sum: number, q: any) => sum + parseFloat(q.sales_price || "0"), 0))}
                             </span>
                           </div>
                           <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
                             <span className="text-xs font-medium text-emerald-700">Booked value</span>
                             <span className="text-xs font-bold text-emerald-700" data-testid="overview-booked-value">
-                              {currency.format(quotes.filter((q: any) => q.status === "Booked").reduce((sum: number, q: any) => sum + parseFloat(q.commission?.price || "0"), 0))}
+                              {currency.format(quotes.filter((q: any) => q.quote_status === "Booked").reduce((sum: number, q: any) => sum + parseFloat(q.sales_price || "0"), 0))}
                             </span>
                           </div>
                         </div>
@@ -1490,14 +1501,14 @@ export default function ClientPage() {
                         New Enquiry
                       </Button>
                     </div>
-                    {isLoadingEnquiries ? (
+                    {isLoadingTransactions ? (
                       <div className="flex justify-center py-8"><Spinner /></div>
                     ) : enquiries.length === 0 ? (
                       <div className="rounded-3xl border border-dashed border-black/10 bg-white/40 p-8 text-center text-sm text-black/50" data-testid="empty-enquiries">
                         No enquiries yet. Create one to get started.
                       </div>
                     ) : (
-                      enquiries.map((enq: Enquiry, idx: number) => (
+                      enquiries.map((enq: EnquiryTable, idx: number) => (
                         <motion.div
                           key={enq.id}
                           className="group cursor-pointer rounded-3xl border border-black/10 bg-white/70 p-4 transition hover:bg-black/[0.02] active:scale-[0.99]"
@@ -1511,7 +1522,7 @@ export default function ClientPage() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <div className="text-sm font-semibold" data-testid={`text-enquiry-title-${idx}`}>
-                                  {enq.enquiryTitle}
+                                  {enq.title}
                                 </div>
                                 {enq.status === "Converted" && (
                                   <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Converted</span>
@@ -1519,13 +1530,13 @@ export default function ClientPage() {
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid={`text-enquiry-meta-${idx}`}>
                                 <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70">
-                                  {enq.holidayType}
+                                  {enq.holiday_type_id}
                                 </span>
-                                {enq.destination && <span>{enq.destination}</span>}
-                                {enq.travelDate && <span>· {new Date(enq.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
-                                <span>· {enq.passengersAdults}A{enq.passengersChildren > 0 ? ` ${enq.passengersChildren}C` : ""}{enq.passengersInfants > 0 ? ` ${enq.passengersInfants}I` : ""}</span>
-                                {enq.nights && <span>· {enq.nights}N</span>}
-                                {enq.budget && <span>· £{parseFloat(enq.budget).toLocaleString()} {enq.budgetType?.toLowerCase()}</span>}
+                                {enq.destinations?.[0] && <span>{(enq.destinations[0] as any)?.name || enq.destinations[0]}</span>}
+                                {enq.travel_date && <span>· {new Date(enq.travel_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                                <span>· {enq.adults || 0}A{(enq.children || 0) > 0 ? ` ${enq.children}C` : ""}{(enq.infants || 0) > 0 ? ` ${enq.infants}I` : ""}</span>
+                                {enq.no_of_nights && <span>· {enq.no_of_nights}N</span>}
+                                {enq.budget && <span>· £{parseFloat(enq.budget).toLocaleString()} {enq.budget_type?.toLowerCase()}</span>}
                               </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-1">
@@ -1536,7 +1547,7 @@ export default function ClientPage() {
                                 data-testid={`button-pin-enquiry-${idx}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.enquiryTitle, subtitle: `${client?.name || ""}${enq.destination ? " · " + enq.destination : enq.holidayType ? " · " + enq.holidayType : ""}` });
+                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.title || "", subtitle: `${client?.name || ""}${enq.destinations?.[0] ? " · " + ((enq.destinations[0] as any)?.name || enq.destinations[0]) : enq.holiday_type_id ? " · " + enq.holiday_type_id : ""}` });
                                 }}
                                 title={userFavorites?.some((f: any) => f.itemType === "enquiry" && f.itemId === enq.id) ? "Unpin" : "Pin to dashboard"}
                               >
@@ -1605,51 +1616,51 @@ export default function ClientPage() {
                             id: "in-play",
                             title: "In Play",
                             rows: quotes
-                              .filter((q: any) => q.status === "In Play")
+                              .filter((q: any) => q.quote_status === "In Play")
                               .map((q: any) => ({
                                 id: q.id,
-                                title: q.quoteTitle || `${q.destination} Trip`,
-                                destination: q.destination,
-                                travelDate: q.travelDate,
-                                createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
-                                tourOperator: q.packageType || "—",
-                                totalCost: parseFloat(q.commission?.price || "0"),
-                                pricePerPerson: q.passengersAdults > 0 ? parseFloat(q.commission?.price || "0") / (q.passengersAdults + q.passengersChildren) : 0,
-                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url || null,
+                                title: q.title || "Trip",
+                                destination: q.quote_type || "—",
+                                travelDate: q.travel_date,
+                                createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                                tourOperator: q.quote_type || "—",
+                                totalCost: parseFloat(q.sales_price || "0"),
+                                pricePerPerson: (q.adult || 0) > 0 ? parseFloat(q.sales_price || "0") / ((q.adult || 0) + (q.child || 0)) : 0,
+                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
                               })),
                           },
                           {
                             id: "won",
                             title: "Won",
                             rows: quotes
-                              .filter((q: any) => q.status === "Won")
+                              .filter((q: any) => q.quote_status === "Won")
                               .map((q: any) => ({
                                 id: q.id,
-                                title: q.quoteTitle || `${q.destination} Trip`,
-                                destination: q.destination,
-                                travelDate: q.travelDate,
-                                createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
-                                tourOperator: q.packageType || "—",
-                                totalCost: parseFloat(q.commission?.price || "0"),
-                                pricePerPerson: q.passengersAdults > 0 ? parseFloat(q.commission?.price || "0") / (q.passengersAdults + q.passengersChildren) : 0,
-                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url || null,
+                                title: q.title || "Trip",
+                                destination: q.quote_type || "—",
+                                travelDate: q.travel_date,
+                                createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                                tourOperator: q.quote_type || "—",
+                                totalCost: parseFloat(q.sales_price || "0"),
+                                pricePerPerson: (q.adult || 0) > 0 ? parseFloat(q.sales_price || "0") / ((q.adult || 0) + (q.child || 0)) : 0,
+                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
                               })),
                           },
                           {
                             id: "lost",
                             title: "Lost",
                             rows: quotes
-                              .filter((q: any) => q.status === "Lost")
+                              .filter((q: any) => q.quote_status === "Lost")
                               .map((q: any) => ({
                                 id: q.id,
-                                title: q.quoteTitle || `${q.destination} Trip`,
-                                destination: q.destination,
-                                travelDate: q.travelDate,
-                                createdAt: new Date(q.createdAt).toLocaleDateString("en-GB"),
-                                tourOperator: q.packageType || "—",
-                                totalCost: parseFloat(q.commission?.price || "0"),
-                                pricePerPerson: q.passengersAdults > 0 ? parseFloat(q.commission?.price || "0") / (q.passengersAdults + q.passengersChildren) : 0,
-                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url || null,
+                                title: q.title || "Trip",
+                                destination: q.quote_type || "—",
+                                travelDate: q.travel_date,
+                                createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                                tourOperator: q.quote_type || "—",
+                                totalCost: parseFloat(q.sales_price || "0"),
+                                pricePerPerson: (q.adult || 0) > 0 ? parseFloat(q.sales_price || "0") / ((q.adult || 0) + (q.child || 0)) : 0,
+                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
                               })),
                           },
                         ].map((group) => (
@@ -1704,11 +1715,11 @@ export default function ClientPage() {
                                             {q.title}
                                           </div>
                                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                            <span data-testid={`text-quote-destination-${q.id}`}>{q.destination}</span>
+                                            <span data-testid={`text-quote-destination-${q.id}`}>{q.destination || "—"}</span>
                                             <span className="text-black/25">•</span>
                                             <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
                                             <span className="text-black/25">•</span>
-                                            <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt}</span>
+                                            <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt || "—"}</span>
                                           </div>
                                           <div className="mt-1 text-xs text-black/60" data-testid={`text-quote-operator-${q.id}`}>
                                             Tour operator: <span className="font-semibold text-black/80">{q.tourOperator}</span>
@@ -1734,7 +1745,7 @@ export default function ClientPage() {
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 e.preventDefault();
-                                                toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title, subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
+                                                toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title || "Quote", subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
                                               }}
                                               title={userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
                                             >
@@ -1798,13 +1809,13 @@ export default function ClientPage() {
                       </div>
 
                       <div className="mt-4 grid gap-2" data-testid="section-bookings">
-                        {quotes.filter((q: any) => q.status === "Booked").length === 0 ? (
+                        {quotes.filter((q: any) => q.quote_status === "Booked").length === 0 ? (
                           <div className="rounded-3xl border border-dashed border-black/10 bg-white/40 p-8 text-center text-sm text-black/50" data-testid="empty-bookings">
                             No bookings yet. Add a booking or convert a quote.
                           </div>
                         ) : (
                           quotes
-                            .filter((q: any) => q.status === "Booked")
+                            .filter((q: any) => q.quote_status === "Booked")
                             .map((q: any) => (
                               <button
                                 key={q.id}
@@ -1818,9 +1829,9 @@ export default function ClientPage() {
                                     className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
                                     aria-hidden
                                   >
-                                    {q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url ? (
+                                    {q.images?.find((img: any) => img.isPrimary)?.image_url || q.images?.[0]?.image_url ? (
                                       <img
-                                        src={q.images?.find((img: any) => img.isPrimary)?.url || q.images?.[0]?.url}
+                                        src={q.images?.find((img: any) => img.isPrimary)?.image_url || q.images?.[0]?.image_url}
                                         alt=""
                                         className="absolute inset-0 h-full w-full object-cover"
                                       />
@@ -1836,39 +1847,39 @@ export default function ClientPage() {
                                       <div className="min-w-0">
                                         <div className="flex items-center gap-2">
                                           <div className="truncate text-sm font-semibold" data-testid={`text-booking-title-${q.id}`}>
-                                            {q.quoteTitle || `${q.destination} Trip`}
+                                            {q.title || "Booking"}
                                           </div>
                                           <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                                             Booked
                                           </span>
                                         </div>
                                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                          <span data-testid={`text-booking-destination-${q.id}`}>{q.destination}</span>
+                                          <span data-testid={`text-booking-destination-${q.id}`}>{q.quote_type || "—"}</span>
                                           <span className="text-black/25">•</span>
-                                          <span data-testid={`text-booking-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
+                                          <span data-testid={`text-booking-traveldate-${q.id}`}>{formatUKDate(q.travel_date)}</span>
                                           <span className="text-black/25">•</span>
-                                          <span data-testid={`text-booking-created-${q.id}`}>Created {new Date(q.createdAt).toLocaleDateString("en-GB")}</span>
+                                          <span data-testid={`text-booking-created-${q.id}`}>Created {q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—"}</span>
                                         </div>
                                         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-black/60">
-                                          {q.haysReference && (
+                                          {q.hays_reference && (
                                             <span data-testid={`text-booking-hays-${q.id}`}>
-                                              HAYS Ref: <span className="font-semibold text-black/80">{q.haysReference}</span>
+                                              HAYS Ref: <span className="font-semibold text-black/80">{q.hays_reference}</span>
                                             </span>
                                           )}
-                                          {q.tourReference && (
+                                          {q.tour_reference && (
                                             <span data-testid={`text-booking-tour-${q.id}`}>
-                                              Tour Ref: <span className="font-semibold text-black/80">{q.tourReference}</span>
+                                              Tour Ref: <span className="font-semibold text-black/80">{q.tour_reference}</span>
                                             </span>
                                           )}
                                         </div>
                                         <div className="mt-1 text-xs text-black/60" data-testid={`text-booking-operator-${q.id}`}>
-                                          Tour operator: <span className="font-semibold text-black/80">{q.packageType || "—"}</span>
+                                          Tour operator: <span className="font-semibold text-black/80">{q.quote_type || "—"}</span>
                                         </div>
                                       </div>
 
                                       <div className="shrink-0 text-right">
                                         <div className="text-xs font-semibold text-black/85" data-testid={`text-booking-total-${q.id}`}>
-                                          {q.commission?.price && parseFloat(q.commission.price) > 0 ? currency.format(parseFloat(q.commission.price)) : "—"}
+                                          {q.sales_price && parseFloat(q.sales_price) > 0 ? currency.format(parseFloat(q.sales_price)) : "—"}
                                         </div>
                                       </div>
                                     </div>
@@ -1882,7 +1893,7 @@ export default function ClientPage() {
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             e.preventDefault();
-                                            toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.quoteTitle || q.destination, subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
+                                            toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title || "Booking", subtitle: `${client?.name || ""}` });
                                           }}
                                           title={userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
                                         >
@@ -3026,8 +3037,8 @@ export default function ClientPage() {
               </Button>
               <Button
                 className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
-                disabled={createQuoteMutationHook.isPending}
-                onClick={() => {
+                disabled={createQuoteMutationHook.isPending || createTransactionMutation.isPending}
+                onClick={async () => {
                   if (!clientId || !currentUser?.id) {
                     toast({ title: "Please wait, loading user info...", variant: "destructive" });
                     return;
@@ -3036,79 +3047,38 @@ export default function ClientPage() {
                     toast({ title: "Please fill in Package Type, Quote Title and Travel Date", variant: "destructive" });
                     return;
                   }
-                  const travelDateObj = new Date(newQuote.travelDate);
-                  const returnDateObj = new Date(travelDateObj);
-                  returnDateObj.setDate(returnDateObj.getDate() + (newQuote.nights || 7));
-                  const returnDate = newQuote.returnDate || returnDateObj.toISOString().split('T')[0];
 
-                  const shouldClearFlights = newQuote.packageType === "Hot Tub Break" || (newQuote.packageType === "Cruise Package" && newQuote.cruiseOnly);
-                  
-                  createQuoteMutation.mutate({
-                    clientId,
-                    userId: currentUser.id,
-                    status: newQuoteIsBooking ? "Booked" : "In Play",
-                    packageType: newQuote.packageType,
-                    quoteTitle: newQuote.quoteTitle,
-                    quoteLink: newQuote.quoteLink || undefined,
-                    destination: newQuote.destination,
-                    travelDate: newQuote.travelDate,
-                    returnDate: returnDate,
-                    passengersAdults: newQuote.passengersAdults,
-                    passengersChildren: newQuote.passengersChildren,
-                    passengersInfants: newQuote.passengersInfants,
-                    childAges: newQuote.childAges,
-                    country: newQuote.country || undefined,
-                    resort: newQuote.resort || undefined,
-                    accommodation: newQuote.accommodation || undefined,
-                    checkInDate: newQuote.checkInDate || undefined,
-                    checkInTime: newQuote.checkInTime || undefined,
-                    nights: newQuote.nights || undefined,
-                    boardBasis: newQuote.boardBasis || undefined,
-                    roomType: newQuote.roomType || undefined,
-                    transferType: newQuote.transferType || undefined,
-                    preBookedSeats: newQuote.preBookedSeats || undefined,
-                    flightMeals: newQuote.flightMeals || undefined,
-                    leadSource: newQuote.leadSource || undefined,
-                    outboundDepartAirport: shouldClearFlights ? undefined : (newQuote.outboundDepartAirport || undefined),
-                    outboundDepartDate: shouldClearFlights ? undefined : (newQuote.outboundDepartDate || undefined),
-                    outboundDepartTime: shouldClearFlights ? undefined : (newQuote.outboundDepartTime || undefined),
-                    outboundArriveAirport: shouldClearFlights ? undefined : (newQuote.outboundArriveAirport || undefined),
-                    outboundArriveDate: shouldClearFlights ? undefined : (newQuote.outboundArriveDate || undefined),
-                    outboundArriveTime: shouldClearFlights ? undefined : (newQuote.outboundArriveTime || undefined),
-                    inboundDepartAirport: shouldClearFlights ? undefined : (newQuote.inboundDepartAirport || undefined),
-                    inboundDepartDate: shouldClearFlights ? undefined : (newQuote.inboundDepartDate || undefined),
-                    inboundDepartTime: shouldClearFlights ? undefined : (newQuote.inboundDepartTime || undefined),
-                    inboundArriveAirport: shouldClearFlights ? undefined : (newQuote.inboundArriveAirport || undefined),
-                    inboundArriveDate: shouldClearFlights ? undefined : (newQuote.inboundArriveDate || undefined),
-                    inboundArriveTime: shouldClearFlights ? undefined : (newQuote.inboundArriveTime || undefined),
-                    tourOperator: newQuote.tourOperator || undefined,
-                    sales: newQuote.sales || undefined,
-                    price: newQuote.price || undefined,
-                    commission: newQuote.commission || undefined,
-                    discount: newQuote.discount || undefined,
-                    serviceCharge: newQuote.serviceCharge || undefined,
-                    pricePerPerson: newQuote.pricePerPerson || undefined,
-                    ...(newQuote.packageType === "Cruise Package" ? {
-                      cruiseTitle: newQuote.cruiseTitle || undefined,
-                      cruiseLine: newQuote.cruiseLine || undefined,
-                      shipName: newQuote.shipName || undefined,
-                      cruiseDate: newQuote.cruiseDate || undefined,
-                      cabinType: newQuote.cabinType || undefined,
-                      embarkation: newQuote.embarkation || undefined,
-                      debarkation: newQuote.debarkation || undefined,
-                      cruiseExtras: newQuote.cruiseExtras || undefined,
-                      cruiseOnly: newQuote.cruiseOnly,
-                    } : {}),
-                    ...(newQuote.packageType === "Hot Tub Break" ? {
-                      lodgeCode: newQuote.lodgeCode || undefined,
-                      parkName: newQuote.parkName || undefined,
-                      pets: newQuote.pets,
-                    } : {}),
-                    ...(newQuoteIsBooking ? {
-                      haysReference: newQuote.haysReference || undefined,
-                      tourReference: newQuote.tourReference || undefined,
-                    } : {}),
-                  });
+                  createTransactionMutation.mutate(
+                    {
+                      client_id: clientId,
+                      user_id: currentUser.id,
+                      holiday_type_id: newQuote.packageType,
+                      lead_source: newQuote.leadSource || undefined,
+                    },
+                    {
+                      onSuccess: (createdTransaction: any) => {
+                        createQuoteMutation.mutate({
+                          transaction_id: createdTransaction.id,
+                          holiday_type_id: newQuote.packageType,
+                          travel_date: newQuote.travelDate,
+                          quote_type: newQuote.packageType,
+                          num_of_nights: newQuote.nights || undefined,
+                          adult: newQuote.passengersAdults,
+                          child: newQuote.passengersChildren,
+                          infant: newQuote.passengersInfants,
+                          sales_price: newQuote.price ? String(newQuote.price) : undefined,
+                          package_commission: newQuote.commission ? String(newQuote.commission) : undefined,
+                          title: newQuote.quoteTitle,
+                          price_per_person: newQuote.pricePerPerson ? String(newQuote.pricePerPerson) : undefined,
+                          transfer_type: newQuote.transferType || undefined,
+                          quote_status: newQuoteIsBooking ? "Booked" : "In Play",
+                        });
+                      },
+                      onError: () => {
+                        toast({ title: "Failed to create transaction", variant: "destructive" });
+                      },
+                    }
+                  );
                 }}
                 data-testid="button-save-quote"
               >
@@ -3203,9 +3173,9 @@ export default function ClientPage() {
                     <SelectValue placeholder="Select quote..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {quotes.map((q) => (
+                    {quotes.map((q: any) => (
                       <SelectItem key={q.id} value={q.id}>
-                        {q.quoteTitle || q.destination} - {q.status}
+                        {q.title || q.quote_type || "Quote"} - {q.quote_status || "—"}
                       </SelectItem>
                     ))}
                   </SelectContent>

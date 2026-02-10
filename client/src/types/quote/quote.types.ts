@@ -1,146 +1,316 @@
-import type { Client } from "../client";
-import type { User } from "../user";
+export interface Transaction {
+  id: string;
+  status: string | null;
+  is_active: boolean | null;
+  client_id: string | null;
+  holiday_type_id: string | null;
+  agent_id: string | null;
+  lead_source: string | null;
+  user_id: string;
+  created_at: string;
+  enquiry?: EnquiryTable | null;
+  quotes?: Quote[];
+  booking?: Booking | null;
+  client?: any;
+  agent?: any;
+}
+
+export interface EnquiryTable {
+  id: string;
+  transaction_id: string;
+  holiday_type_id: string;
+  accomodation_type_id: string | null;
+  travel_date: string | null;
+  adults: number | null;
+  children: number | null;
+  infants: number | null;
+  cabin_type: string | null;
+  title: string | null;
+  flexibility_date: string | null;
+  flexible_date: string | null;
+  weekend_lodge: string | null;
+  accom_min_star_rating: string | null;
+  no_of_nights: number | null;
+  budget: string | null;
+  max_budget: string | null;
+  budget_type: string | null;
+  no_of_guests: number | null;
+  no_of_pets: number | null;
+  pre_cruise_stay: number | null;
+  post_cruise_stay: number | null;
+  status: string | null;
+  date_created: string | null;
+  date_expiry: string | null;
+  is_future_deal: boolean | null;
+  future_deal_date: string | null;
+  is_expired: boolean | null;
+  is_active: boolean | null;
+  deletion_code: string | null;
+  email: string | null;
+  destinations?: any[];
+  resorts?: any[];
+  accommodations?: any[];
+  boardBases?: any[];
+  airports?: any[];
+  passengers?: any[];
+}
 
 export interface Quote {
   id: string;
-  clientId: string;
-  userId: string;
-  status: string;
-  packageType: string;
-  quoteTitle: string;
-  quoteLink: string | null;
-  destination: string;
-  country: string | null;
-  resort: string | null;
-  travelDate: string;
-  returnDate: string;
-  passengersAdults: number;
-  passengersChildren: number;
-  passengersInfants: number;
-  childAges: number[];
-  checkInDate: string | null;
-  checkInTime: string | null;
-  nights: number | null;
-  transferType: string | null;
-  preBookedSeats: string | null;
-  flightMeals: string | null;
-  leadSource: string | null;
-  tags: string[];
-  haysReference: string | null;
-  tourReference: string | null;
-  bookedAt: string | null;
+  transaction_id: string;
+  deal_id: string | null;
+  holiday_type_id: string;
+  sales_price: string | null;
+  package_commission: string | null;
+  travel_date: string;
+  discounts: string | null;
+  service_charge: string | null;
+  num_of_nights: number;
+  pets: number;
+  cottage_id: string | null;
+  lodge_id: string | null;
+  quote_type: string;
+  deal_type: string | null;
+  pre_booked_seats: string | null;
+  flight_meals: boolean | null;
+  infant: number | null;
+  child: number | null;
+  adult: number | null;
+  title: string | null;
+  price_per_person: string;
+  lodge_type: string | null;
+  transfer_type: string;
+  quote_status: string | null;
+  main_tour_operator_id: string | null;
+  date_created: string | null;
+  date_expiry: string | null;
+  is_future_deal: boolean | null;
+  future_deal_date: string | null;
+  is_active: boolean | null;
+  quote_ref: string | null;
+  isQuoteCopy: boolean | null;
+  isFreeQuote: boolean | null;
+  flights?: QuoteFlight[];
+  accommodations?: QuoteAccommodation[];
+  transfers?: QuoteTransfer[];
+  carHires?: QuoteCarHire[];
+  attractionTickets?: QuoteAttractionTicket[];
+  loungePasses?: QuoteLoungePass[];
+  airportParkings?: QuoteAirportParking[];
+  cruises?: QuoteCruise[];
+  passengers?: Passenger[];
+  images?: DealImage[];
+}
+
+export interface QuoteFlight {
+  id: string;
+  quote_id: string | null;
+  flight_number: string | null;
+  flight_ref: string | null;
+  departing_airport_id: string | null;
+  arrival_airport_id: string | null;
+  tour_operator_id: string | null;
+  flight_type: string | null;
+  departure_date_time: string | null;
+  arrival_date_time: string | null;
+  is_included_in_package: boolean | null;
+  cost: string | null;
+  commission: string | null;
+}
+
+export interface QuoteAccommodation {
+  id: string;
+  booking_ref: string | null;
+  tour_operator_id: string | null;
+  no_of_nights: number;
+  room_type: string | null;
+  board_basis_id: string | null;
+  check_in_date_time: string | null;
+  stay_type: string | null;
+  is_primary: boolean | null;
+  is_included_in_package: boolean | null;
+  cost: string | null;
+  commission: string | null;
+  accomodation_id: string | null;
+  quote_id: string | null;
+}
+
+export interface QuoteTransfer {
+  id: string;
+  booking_ref: string | null;
+  tour_operator_id: string | null;
+  pick_up_location: string | null;
+  drop_off_location: string | null;
+  pick_up_time: string | null;
+  drop_off_time: string | null;
+  is_included_in_package: boolean | null;
+  cost: string | null;
+  commission: string | null;
+  quote_id: string | null;
+  note: string | null;
+}
+
+export interface QuoteCarHire {
+  id: string;
+  quote_id: string | null;
+  booking_ref: string | null;
+  tour_operator_id: string | null;
+  pick_up_location: string | null;
+  drop_off_location: string | null;
+  pick_up_time: string | null;
+  drop_off_time: string | null;
+  no_of_days: number;
+  driver_age: number;
+  is_included_in_package: boolean | null;
+  cost: string | null;
+  commission: string | null;
+}
+
+export interface QuoteAttractionTicket {
+  id: string;
+  quote_id: string | null;
+  booking_ref: string | null;
+  tour_operator_id: string | null;
+  ticket_type: string | null;
+  date_of_visit: string | null;
+  cost: string | null;
+  commission: string | null;
+  number_of_tickets: number;
+  is_included_in_package: boolean | null;
+}
+
+export interface QuoteLoungePass {
+  id: string;
+  quote_id: string | null;
+  booking_ref: string | null;
+  terminal: string | null;
+  airport_id: string | null;
+  date_of_usage: string | null;
+  tour_operator_id: string | null;
+  cost: string | null;
+  commission: string | null;
+  is_included_in_package: boolean | null;
+  note: string | null;
+}
+
+export interface QuoteAirportParking {
+  id: string;
+  booking_ref: string | null;
+  quote_id: string | null;
+  airport_id: string | null;
+  parking_type: string | null;
+  parking_date: string | null;
+  car_make: string | null;
+  car_model: string | null;
+  colour: string | null;
+  car_reg_number: string | null;
+  duration: string | null;
+  tour_operator_id: string | null;
+  is_included_in_package: boolean | null;
+  cost: string | null;
+  commission: string | null;
+}
+
+export interface QuoteCruise {
+  id: string;
+  tour_operator_id: string | null;
+  cruise_line: string | null;
+  ship: string | null;
+  cruise_date: string | null;
+  cabin_type: string | null;
+  cruise_name: string | null;
+  pre_cruise_stay: number;
+  post_cruise_stay: number;
+  quote_id: string | null;
+}
+
+export interface Passenger {
+  id: string;
+  type: string | null;
+  age: number;
+  quote_id: string | null;
+  lounge_pass_id: string | null;
+  booking_id: string | null;
+}
+
+export interface DealImage {
+  id: string;
+  image_url: string | null;
+  s3Key: string | null;
+  owner_type: string | null;
+  owner_id: string;
+  isPrimary: boolean | null;
+}
+
+export interface Booking {
+  id: string;
+  transaction_id: string;
+  deal_type: string | null;
+  pre_booked_seats: string | null;
+  flight_meals: boolean | null;
+  holiday_type_id: string;
+  hays_ref: string;
+  supplier_ref: string;
+  is_active: boolean | null;
+  sales_price: string | null;
+  package_commission: string | null;
+  travel_date: string;
+  title: string | null;
+  discounts: string | null;
+  service_charge: string | null;
+  num_of_nights: number;
+  pets: number;
+  cottage_id: string | null;
+  lodge_id: string | null;
+  lodge_type: string | null;
+  transfer_type: string | null;
+  infant: number;
+  child: number;
+  adult: number;
+  booking_status: string | null;
+  main_tour_operator_id: string | null;
+  date_created: string | null;
+}
+
+export interface TransactionNote {
+  id: string;
+  description: string | null;
+  content: string | null;
+  agent_id: string | null;
+  user_id: string | null;
   createdAt: string;
-  images?: QuoteImage[];
-  commission?: Commission | null;
+  parent_id: string | null;
+  transaction_id: string | null;
 }
 
-export interface Accommodation {
-  id: string;
-  quoteId: string;
-  property: string;
-  board: string;
-  roomType: string;
-  notes: string | null;
-}
-
-export interface Flight {
-  id: string;
-  quoteId: string;
-  direction: string;
-  fromAirport: string;
-  toAirport: string;
-  carrier: string;
-  flightNo: string;
-  depart: string;
-  arrive: string;
-}
-
-export interface Commission {
-  id: string;
-  quoteId: string;
-  tourOperator: string;
-  price: string;
-  commissionPercent: string;
-  commissionValue: string;
-  agentSplitPercent: string;
-  agentSplitValue: string;
-  netToAgency: string;
-}
-
-export interface QuoteImage {
-  id: string;
-  quoteId: string;
-  url: string;
-  isPrimary: boolean;
-}
-
-export interface Note {
-  id: string;
-  quoteId: string;
-  content: string;
-  createdAt: string;
-}
-
-export interface QuoteFull extends Quote {
-  accommodation?: Accommodation;
-  flights: Flight[];
-  commission?: Commission;
-  images: QuoteImage[];
-  notes: Note[];
-  client?: Client;
-  owner?: User;
+export interface CreateTransactionData {
+  client_id?: string;
+  holiday_type_id?: string;
+  agent_id?: string;
+  lead_source?: string;
+  user_id: string;
+  enquiry?: Partial<EnquiryTable>;
 }
 
 export interface CreateQuoteData {
-  clientId: string;
-  userId?: string;
-  status?: string;
-  packageType?: string;
-  quoteTitle?: string;
-  quoteLink?: string;
-  travelDate?: string;
-  returnDate?: string;
-  passengersAdults?: number;
-  passengersChildren?: number;
-  passengersInfants?: number;
-  childAges?: number[];
-  country?: string;
-  destination?: string;
-  resort?: string;
-  accommodation?: string;
-  checkInDate?: string;
-  checkInTime?: string;
-  nights?: number;
-  boardBasis?: string;
-  roomType?: string;
-  transferType?: string;
-  preBookedSeats?: string;
-  flightMeals?: string;
-  leadSource?: string;
-  outboundDepartAirport?: string;
-  outboundDepartDate?: string;
-  outboundDepartTime?: string;
-  outboundArriveAirport?: string;
-  outboundArriveDate?: string;
-  outboundArriveTime?: string;
-  inboundDepartAirport?: string;
-  inboundDepartDate?: string;
-  inboundDepartTime?: string;
-  inboundArriveAirport?: string;
-  inboundArriveDate?: string;
-  inboundArriveTime?: string;
-  tourOperator?: string;
-  sales?: number;
-  price?: number;
-  commission?: number;
-  discount?: number;
-  serviceCharge?: number;
-  pricePerPerson?: number;
-  haysReference?: string;
-  tourReference?: string;
+  transaction_id: string;
+  holiday_type_id: string;
+  travel_date: string;
+  quote_type: string;
+  num_of_nights?: number;
+  adult?: number;
+  child?: number;
+  infant?: number;
+  sales_price?: string;
+  package_commission?: string;
+  title?: string;
+  price_per_person?: string;
+  transfer_type?: string;
+  main_tour_operator_id?: string;
+  quote_status?: string;
 }
 
 export interface QuoteFilters {
   status?: string;
-  clientId?: string;
+  transactionId?: string;
 }

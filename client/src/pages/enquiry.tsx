@@ -37,9 +37,8 @@ import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useEnquiry, useClient, useTasks } from "@/hooks/queries";
-import { useEnquiryNotes, enquiryNoteKeys } from "@/hooks/queries/use-enquiry-note-queries";
-import { useCreateEnquiryNote, useUpdateEnquiryNote, useDeleteEnquiryNote } from "@/hooks/mutations/use-enquiry-note-mutations";
+import { useEnquiry, useClient, useTasks, useNotes, noteKeys } from "@/hooks/queries";
+import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations/use-note-mutations";
 import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -58,7 +57,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
 import type { Enquiry } from "@/types/enquiry";
-import type { EnquiryNote } from "@shared/schema";
+import type { TransactionNote } from "@/types/quote";
+import type { CreateNoteData } from "@/api/endpoints/note.api";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -159,14 +159,14 @@ function NoteEditor({ initialContent, placeholder, onSubmit, onCancel, submitLab
   );
 }
 
-function EnquiryNoteCard({ note, replies, enquiryId, currentUserName }: { note: EnquiryNote; replies: EnquiryNote[]; enquiryId: string; currentUserName: string }) {
+function EnquiryNoteCard({ note, replies, transactionId, currentUserName }: { note: TransactionNote; replies: TransactionNote[]; transactionId: string; currentUserName: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(true);
   const { toast } = useToast();
-  const updateMutation = useUpdateEnquiryNote(enquiryId);
-  const deleteMutation = useDeleteEnquiryNote(enquiryId);
-  const createMutation = useCreateEnquiryNote(enquiryId);
+  const updateMutation = useUpdateNote(transactionId);
+  const deleteMutation = useDeleteNote(transactionId);
+  const createMutation = useCreateNote(transactionId);
 
   const handleEdit = (html: string) => {
     updateMutation.mutate({ id: note.id, content: html }, {
@@ -181,7 +181,7 @@ function EnquiryNoteCard({ note, replies, enquiryId, currentUserName }: { note: 
     });
   };
   const handleReply = (html: string) => {
-    createMutation.mutate({ enquiryId, content: html, authorName: currentUserName, parentId: note.id }, {
+    createMutation.mutate({ transaction_id: transactionId, content: html } as CreateNoteData, {
       onSuccess: () => { setIsReplying(false); toast({ title: "Reply added" }); },
       onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
     });
@@ -192,10 +192,10 @@ function EnquiryNoteCard({ note, replies, enquiryId, currentUserName }: { note: 
       <div className="rounded-xl border border-black/10 bg-white/60 p-2">
         <div className="flex items-start justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]">{(note.authorName || "A").charAt(0).toUpperCase()}</div>
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]">{(currentUserName || "A").charAt(0).toUpperCase()}</div>
             <div>
-              <span className="text-[11px] font-semibold text-black/80">{note.authorName || "Agent"}</span>
-              <span className="ml-1.5 text-[9px] text-black/40">{formatRelativeTime(note.createdAt)}{note.updatedAt && <span className="ml-1 italic">(edited)</span>}</span>
+              <span className="text-[11px] font-semibold text-black/80">{currentUserName || "Agent"}</span>
+              <span className="ml-1.5 text-[9px] text-black/40">{formatRelativeTime(note.createdAt)}</span>
             </div>
           </div>
           <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
@@ -205,9 +205,9 @@ function EnquiryNoteCard({ note, replies, enquiryId, currentUserName }: { note: 
           </div>
         </div>
         {isEditing ? (
-          <div className="mt-1.5"><NoteEditor initialContent={note.content} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact /></div>
+          <div className="mt-1.5"><NoteEditor initialContent={note.content || ""} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact /></div>
         ) : (
-          <div className="mt-1 prose prose-sm max-w-none text-[11px] leading-relaxed text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: note.content }} data-testid={`note-content-${note.id}`} />
+          <div className="mt-1 prose prose-sm max-w-none text-[11px] leading-relaxed text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: note.content || "" }} data-testid={`note-content-${note.id}`} />
         )}
         {replies.length > 0 && (
           <div className="mt-1.5">
@@ -218,7 +218,7 @@ function EnquiryNoteCard({ note, replies, enquiryId, currentUserName }: { note: 
               {showReplies && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="mt-1.5 space-y-1 overflow-hidden border-l-2 border-[#3b82f6]/20 pl-2">
                   {replies.map((reply) => (
-                    <EnquiryReplyCard key={reply.id} reply={reply} enquiryId={enquiryId} />
+                    <EnquiryReplyCard key={reply.id} reply={reply} transactionId={transactionId} />
                   ))}
                 </motion.div>
               )}
@@ -233,11 +233,11 @@ function EnquiryNoteCard({ note, replies, enquiryId, currentUserName }: { note: 
   );
 }
 
-function EnquiryReplyCard({ reply, enquiryId }: { reply: EnquiryNote; enquiryId: string }) {
+function EnquiryReplyCard({ reply, transactionId }: { reply: TransactionNote; transactionId: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const { toast } = useToast();
-  const updateMutation = useUpdateEnquiryNote(enquiryId);
-  const deleteMutation = useDeleteEnquiryNote(enquiryId);
+  const updateMutation = useUpdateNote(transactionId);
+  const deleteMutation = useDeleteNote(transactionId);
   const handleEdit = (html: string) => {
     updateMutation.mutate({ id: reply.id, content: html }, {
       onSuccess: () => { setIsEditing(false); toast({ title: "Reply updated" }); },
@@ -248,9 +248,9 @@ function EnquiryReplyCard({ reply, enquiryId }: { reply: EnquiryNote; enquiryId:
     <div className="group/reply rounded-xl border border-black/5 bg-white/50 p-2" data-testid={`reply-card-${reply.id}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-[8px] font-bold text-emerald-600">{(reply.authorName || "A").charAt(0).toUpperCase()}</div>
-          <span className="text-[10px] font-semibold text-black/70">{reply.authorName || "Agent"}</span>
-          <span className="text-[9px] text-black/35">{formatRelativeTime(reply.createdAt)}{reply.updatedAt && <span className="ml-1 italic">(edited)</span>}</span>
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-[8px] font-bold text-emerald-600">A</div>
+          <span className="text-[10px] font-semibold text-black/70">Agent</span>
+          <span className="text-[9px] text-black/35">{formatRelativeTime(reply.createdAt)}</span>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 transition group-hover/reply:opacity-100">
           <button type="button" onClick={() => setIsEditing(!isEditing)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/35 hover:bg-black/5 hover:text-black/60"><Pencil className="h-2.5 w-2.5" /></button>
@@ -258,39 +258,39 @@ function EnquiryReplyCard({ reply, enquiryId }: { reply: EnquiryNote; enquiryId:
         </div>
       </div>
       {isEditing ? (
-        <div className="mt-1.5"><NoteEditor initialContent={reply.content} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact /></div>
+        <div className="mt-1.5"><NoteEditor initialContent={reply.content || ""} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact /></div>
       ) : (
-        <div className="mt-1 prose prose-sm max-w-none text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content }} />
+        <div className="mt-1 prose prose-sm max-w-none text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content || "" }} />
       )}
     </div>
   );
 }
 
-function EnquiryNotesSection({ enquiryId }: { enquiryId: string }) {
-  const { data: notesData, isLoading } = useEnquiryNotes(enquiryId);
+function EnquiryNotesSection({ transactionId }: { transactionId: string }) {
+  const { data: notesData, isLoading } = useNotes(transactionId);
   const { data: currentUser } = useCurrentUser();
-  const createMutation = useCreateEnquiryNote(enquiryId);
+  const createMutation = useCreateNote(transactionId);
   const { toast } = useToast();
   const authorName = currentUser?.name || "Agent";
 
   const topLevelNotes = useMemo(() => {
     if (!notesData) return [];
-    return notesData.filter((n) => !n.parentId);
+    return notesData.filter((n) => !n.parent_id);
   }, [notesData]);
 
   const repliesByParent = useMemo(() => {
-    if (!notesData) return new Map<string, EnquiryNote[]>();
-    const map = new Map<string, EnquiryNote[]>();
-    notesData.filter((n) => n.parentId).forEach((n) => {
-      const existing = map.get(n.parentId!) || [];
+    if (!notesData) return new Map<string, TransactionNote[]>();
+    const map = new Map<string, TransactionNote[]>();
+    notesData.filter((n) => n.parent_id).forEach((n) => {
+      const existing = map.get(n.parent_id!) || [];
       existing.push(n);
-      map.set(n.parentId!, existing);
+      map.set(n.parent_id!, existing);
     });
     return map;
   }, [notesData]);
 
   const handleCreate = (html: string) => {
-    createMutation.mutate({ enquiryId, content: html, authorName }, {
+    createMutation.mutate({ transaction_id: transactionId, content: html }, {
       onSuccess: () => toast({ title: "Note added" }),
       onError: () => toast({ title: "Failed to add note", variant: "destructive" }),
     });
@@ -313,7 +313,7 @@ function EnquiryNotesSection({ enquiryId }: { enquiryId: string }) {
         ) : (
           <AnimatePresence>
             {topLevelNotes.map((note) => (
-              <EnquiryNoteCard key={note.id} note={note} replies={repliesByParent.get(note.id) || []} enquiryId={enquiryId} currentUserName={authorName} />
+              <EnquiryNoteCard key={note.id} note={note} replies={repliesByParent.get(note.id) || []} transactionId={transactionId} currentUserName={authorName} />
             ))}
           </AnimatePresence>
         )}
@@ -416,13 +416,12 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
       {
-        entityType: "enquiry",
-        entityId: enquiryId,
-        userId: currentUser.id,
+        transaction_type: "enquiry",
+        user_id: currentUser.id,
         title: newTitle,
-        dueDate,
-        completed: false,
-      },
+        due_date: dueDate,
+        status: "pending",
+      } as any,
       {
         onSuccess: () => {
           setShowAddDialog(false);
@@ -436,8 +435,8 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
     );
   };
 
-  const pendingTasks = useMemo(() => (tasksData || []).filter((t) => !t.completed), [tasksData]);
-  const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.completed), [tasksData]);
+  const pendingTasks = useMemo(() => (tasksData || []).filter((t) => t.status !== "completed"), [tasksData]);
+  const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.status === "completed"), [tasksData]);
 
   return (
     <>
@@ -467,7 +466,7 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
           ) : (
             <>
               {pendingTasks.map((task) => {
-                const isOverdue = new Date(task.dueDate) < new Date();
+                const isOverdue = task.due_date ? new Date(task.due_date) < new Date() : false;
                 return (
                   <div
                     key={task.id}
@@ -481,7 +480,7 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
                       {task.title}
                     </span>
                     <span className={`shrink-0 text-[10px] font-semibold ${isOverdue ? "text-rose-500" : "text-black/40"}`} data-testid={`text-task-due-${task.id}`}>
-                      {formatTaskDue(task.dueDate)}
+                      {task.due_date ? formatTaskDue(task.due_date) : "—"}
                     </span>
                     <button
                       type="button"
@@ -636,30 +635,17 @@ export default function EnquiryPage() {
     setIsConverting(true);
 
     const quoteData: Record<string, any> = {
-      clientId: enquiry.clientId,
-      userId: currentUser?.id || enquiry.userId,
-      status: "In Play",
-      quoteTitle: enquiry.enquiryTitle,
-      destination: enquiry.destination || "",
-      country: enquiry.country || "",
-      resort: enquiry.resort || "",
-      travelDate: enquiry.travelDate || new Date().toISOString().split("T")[0],
-      returnDate: enquiry.travelDate && enquiry.nights
-        ? new Date(new Date(enquiry.travelDate).getTime() + enquiry.nights * 86400000).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
-      passengersAdults: enquiry.passengersAdults,
-      passengersChildren: enquiry.passengersChildren,
-      passengersInfants: enquiry.passengersInfants,
-      nights: enquiry.nights,
-      boardBasis: enquiry.boardBasis || "",
-      packageType: enquiry.holidayType || "Package (Flight + Hotel)",
-      leadSource: "Enquiry",
+      transaction_id: enquiry.transaction_id,
+      holiday_type_id: enquiry.holiday_type_id,
+      travel_date: enquiry.travel_date || new Date().toISOString().split("T")[0],
+      quote_type: "Package",
+      num_of_nights: enquiry.no_of_nights || 7,
+      adult: enquiry.adults || 2,
+      child: enquiry.children || 0,
+      infant: enquiry.infants || 0,
+      title: enquiry.title || "",
+      quote_status: "In Play",
     };
-
-    if (enquiry.departureAirport) {
-      quoteData.outboundDepartAirport = enquiry.departureAirport;
-      quoteData.inboundArriveAirport = enquiry.departureAirport;
-    }
 
     createQuoteMutation.mutate(quoteData as any, {
       onSuccess: (newQuote: any) => {
@@ -712,12 +698,20 @@ export default function EnquiryPage() {
     : enquiry.status === "Converted" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
     : "border-black/10 bg-black/5 text-black/60";
 
-  const totalPassengers = enquiry.passengersAdults + enquiry.passengersChildren + enquiry.passengersInfants;
+  const adultsCount = enquiry.adults || 0;
+  const childrenCount = enquiry.children || 0;
+  const infantsCount = enquiry.infants || 0;
+  const totalPassengers = adultsCount + childrenCount + infantsCount;
   const passengerBreakdown = [
-    `${enquiry.passengersAdults} Adult${enquiry.passengersAdults !== 1 ? "s" : ""}`,
-    enquiry.passengersChildren > 0 ? `${enquiry.passengersChildren} Child${enquiry.passengersChildren !== 1 ? "ren" : ""}` : null,
-    enquiry.passengersInfants > 0 ? `${enquiry.passengersInfants} Infant${enquiry.passengersInfants !== 1 ? "s" : ""}` : null,
+    `${adultsCount} Adult${adultsCount !== 1 ? "s" : ""}`,
+    childrenCount > 0 ? `${childrenCount} Child${childrenCount !== 1 ? "ren" : ""}` : null,
+    infantsCount > 0 ? `${infantsCount} Infant${infantsCount !== 1 ? "s" : ""}` : null,
   ].filter(Boolean).join(", ");
+
+  const destinationNames = enquiry.destinations?.map((d: any) => d.name || d).filter(Boolean).join(", ") || null;
+  const resortNames = enquiry.resorts?.map((r: any) => r.name || r).filter(Boolean).join(", ") || null;
+  const airportNames = enquiry.airports?.map((a: any) => a.name || a.airport_name || a).filter(Boolean).join(", ") || null;
+  const boardBaseNames = enquiry.boardBases?.map((b: any) => b.name || b).filter(Boolean).join(", ") || null;
 
   return (
     <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
@@ -729,11 +723,11 @@ export default function EnquiryPage() {
             </button>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-xl font-bold text-black/90" data-testid="text-enquiry-title">{enquiry.enquiryTitle}</h1>
+                <h1 className="truncate text-xl font-bold text-black/90" data-testid="text-enquiry-title">{enquiry.title || "Untitled Enquiry"}</h1>
                 <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusColor}`} data-testid="badge-enquiry-status">{enquiry.status}</span>
               </div>
               <div className="mt-0.5 text-xs text-black/50">
-                Created {formatUKDate(enquiry.createdAt)}
+                Created {formatUKDate(enquiry.date_created)}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -741,7 +735,7 @@ export default function EnquiryPage() {
                 type="button"
                 onClick={() =>
                   toggleFavoriteMutation.mutate(
-                    { itemType: "enquiry", itemId: enquiryId, label: enquiry.enquiryTitle, subtitle: `${clientData?.name || ""}${enquiry.destination ? " · " + enquiry.destination : enquiry.holidayType ? " · " + enquiry.holidayType : ""}` },
+                    { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + enquiry.holiday_type_id : ""}` },
                     { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                   )
                 }
@@ -773,10 +767,9 @@ export default function EnquiryPage() {
                   <div className="text-sm font-bold">Holiday Details</div>
                 </div>
                 <div className="divide-y divide-black/5">
-                  <InfoRow icon={Globe} label="Holiday Type" value={enquiry.holidayType} />
-                  <InfoRow icon={MapPin} label="Country" value={enquiry.country} />
-                  <InfoRow icon={MapPin} label="Destination" value={enquiry.destination} />
-                  <InfoRow icon={MapPin} label="Resort" value={enquiry.resort} />
+                  <InfoRow icon={Globe} label="Holiday Type" value={enquiry.holiday_type_id} />
+                  <InfoRow icon={MapPin} label="Destination" value={destinationNames} />
+                  <InfoRow icon={MapPin} label="Resort" value={resortNames} />
                 </div>
               </Card>
 
@@ -788,10 +781,10 @@ export default function EnquiryPage() {
                   <div className="text-sm font-bold">Travel & Passengers</div>
                 </div>
                 <div className="divide-y divide-black/5">
-                  <InfoRow icon={Plane} label="Departure Airport" value={enquiry.departureAirport} />
-                  <InfoRow icon={Calendar} label="Travel Date" value={formatUKDate(enquiry.travelDate)} />
-                  <InfoRow icon={Calendar} label="Flexibility" value={enquiry.flexibility} />
-                  <InfoRow icon={Users} label="Passengers" value={`${totalPassengers} total — ${passengerBreakdown}`} />
+                  <InfoRow icon={Plane} label="Departure Airport" value={airportNames} />
+                  <InfoRow icon={Calendar} label="Travel Date" value={formatUKDate(enquiry.travel_date)} />
+                  <InfoRow icon={Calendar} label="Flexibility" value={enquiry.flexibility_date || enquiry.flexible_date} />
+                  <InfoRow icon={Users} label="Passengers" value={totalPassengers > 0 ? `${totalPassengers} total — ${passengerBreakdown}` : null} />
                 </div>
               </Card>
 
@@ -803,10 +796,10 @@ export default function EnquiryPage() {
                   <div className="text-sm font-bold">Accommodation & Budget</div>
                 </div>
                 <div className="divide-y divide-black/5">
-                  <InfoRow icon={Calendar} label="Nights" value={enquiry.nights ? `${enquiry.nights} nights` : null} />
-                  <InfoRow icon={Star} label="Star Rating" value={enquiry.starRating} />
-                  <InfoRow icon={Hotel} label="Board Basis" value={enquiry.boardBasis} />
-                  <InfoRow icon={Wallet} label="Budget" value={enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budgetType?.toLowerCase() || ""}` : null} />
+                  <InfoRow icon={Calendar} label="Nights" value={enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : null} />
+                  <InfoRow icon={Star} label="Star Rating" value={enquiry.accom_min_star_rating} />
+                  <InfoRow icon={Hotel} label="Board Basis" value={boardBaseNames} />
+                  <InfoRow icon={Wallet} label="Budget" value={enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : null} />
                 </div>
               </Card>
             </div>
@@ -816,12 +809,12 @@ export default function EnquiryPage() {
                 <div className="text-sm font-bold mb-3">Quick Summary</div>
                 <div className="space-y-2">
                   {[
-                    { label: "Type", value: enquiry.holidayType, color: "bg-blue-500/10 text-blue-700" },
-                    { label: "Destination", value: [enquiry.destination, enquiry.country].filter(Boolean).join(", ") || "—" },
-                    { label: "Travel Date", value: formatUKDate(enquiry.travelDate) },
-                    { label: "Passengers", value: passengerBreakdown },
-                    { label: "Duration", value: enquiry.nights ? `${enquiry.nights} nights` : "—" },
-                    { label: "Budget", value: enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budgetType?.toLowerCase() || ""}` : "—" },
+                    { label: "Type", value: enquiry.holiday_type_id, color: "bg-blue-500/10 text-blue-700" },
+                    { label: "Destination", value: destinationNames || "—" },
+                    { label: "Travel Date", value: formatUKDate(enquiry.travel_date) },
+                    { label: "Passengers", value: passengerBreakdown || "—" },
+                    { label: "Duration", value: enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : "—" },
+                    { label: "Budget", value: enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : "—" },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between gap-3 rounded-xl bg-black/[0.02] px-3 py-2">
                       <span className="text-[11px] font-medium text-black/50">{item.label}</span>
@@ -833,7 +826,7 @@ export default function EnquiryPage() {
 
               <EnquiryTasksSection enquiryId={enquiryId} />
 
-              <EnquiryNotesSection enquiryId={enquiryId} />
+              {enquiry.transaction_id && <EnquiryNotesSection transactionId={enquiry.transaction_id} />}
             </div>
           </div>
         </motion.div>

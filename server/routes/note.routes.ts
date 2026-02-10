@@ -5,7 +5,7 @@ import { createNoteValidator, updateNoteValidator } from "../validators/note.val
 
 const router = Router();
 
-router.get("/quote/:quoteId", noteController.listByQuoteId);
+router.get("/transaction/:transactionId", noteController.listByTransactionId);
 router.post("/", validate(createNoteValidator), noteController.createNote);
 router.patch("/:id", validate(updateNoteValidator), noteController.updateNote);
 router.delete("/:id", noteController.deleteNote);

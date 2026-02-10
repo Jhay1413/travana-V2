@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
-import { quoteKeys } from "@/hooks/queries";
+import { quoteKeys, transactionKeys } from "@/hooks/queries";
 import type { CreateQuoteData } from "@/types/quote";
 
 export function useCreateQuote() {
@@ -9,6 +9,7 @@ export function useCreateQuote() {
     mutationFn: (data: CreateQuoteData) => quoteApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }
@@ -19,17 +20,18 @@ export function useUpdateQuote() {
     mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) => quoteApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }
 
-export function useConvertToBooking() {
+export function useDeleteQuote() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, haysReference, tourReference }: { id: string; haysReference: string; tourReference: string }) =>
-      quoteApi.convertToBooking(id, haysReference, tourReference),
+    mutationFn: (id: string) => quoteApi.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+      queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }

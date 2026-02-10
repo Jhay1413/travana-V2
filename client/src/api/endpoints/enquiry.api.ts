@@ -1,27 +1,29 @@
 import axiosClient from "../client/axios-client";
-import type { Enquiry, CreateEnquiryData, EnquiryFilters } from "@/types/enquiry";
+import type { EnquiryTable } from "@/types/quote";
 
 export const enquiryApi = {
-  getAll: async (filters?: EnquiryFilters): Promise<Enquiry[]> => {
-    const params = new URLSearchParams();
-    if (filters?.clientId) params.append("clientId", filters.clientId);
-    const query = params.toString();
-    const { data } = await axiosClient.get<Enquiry[]>(`/api/enquiries${query ? `?${query}` : ""}`);
+  getAll: async (): Promise<EnquiryTable[]> => {
+    const { data } = await axiosClient.get<EnquiryTable[]>("/api/enquiries");
     return data;
   },
 
-  getById: async (id: string): Promise<Enquiry> => {
-    const { data } = await axiosClient.get<Enquiry>(`/api/enquiries/${id}`);
+  getById: async (id: string): Promise<EnquiryTable> => {
+    const { data } = await axiosClient.get<EnquiryTable>(`/api/enquiries/${id}`);
     return data;
   },
 
-  create: async (enquiryData: CreateEnquiryData): Promise<Enquiry> => {
-    const { data } = await axiosClient.post<Enquiry>("/api/enquiries", enquiryData);
+  getByTransactionId: async (transactionId: string): Promise<EnquiryTable> => {
+    const { data } = await axiosClient.get<EnquiryTable>(`/api/enquiries/transaction/${transactionId}`);
     return data;
   },
 
-  update: async (id: string, enquiryData: Partial<CreateEnquiryData>): Promise<Enquiry> => {
-    const { data } = await axiosClient.patch<Enquiry>(`/api/enquiries/${id}`, enquiryData);
+  create: async (enquiryData: Partial<EnquiryTable>): Promise<EnquiryTable> => {
+    const { data } = await axiosClient.post<EnquiryTable>("/api/enquiries", enquiryData);
+    return data;
+  },
+
+  update: async (id: string, enquiryData: Partial<EnquiryTable> & { destinations?: string[]; resorts?: string[]; boardBases?: string[]; departureAirports?: string[]; passengers?: any[] }): Promise<EnquiryTable> => {
+    const { data } = await axiosClient.patch<EnquiryTable>(`/api/enquiries/${id}`, enquiryData);
     return data;
   },
 

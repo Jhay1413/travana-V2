@@ -1,10 +1,10 @@
 import { db } from "../config/database";
 import { notes, type Note, type InsertNote } from "@shared/schema";
-import { eq, desc, isNull } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export const noteRepository = {
-  async findByQuoteId(quoteId: string): Promise<Note[]> {
-    return await db.select().from(notes).where(eq(notes.quoteId, quoteId)).orderBy(desc(notes.createdAt));
+  async findByTransactionId(transactionId: string): Promise<Note[]> {
+    return await db.select().from(notes).where(eq(notes.transaction_id, transactionId)).orderBy(desc(notes.createdAt));
   },
 
   async findById(id: string): Promise<Note | undefined> {
@@ -18,7 +18,7 @@ export const noteRepository = {
   },
 
   async update(id: string, content: string): Promise<Note | undefined> {
-    const [result] = await db.update(notes).set({ content, updatedAt: new Date() }).where(eq(notes.id, id)).returning();
+    const [result] = await db.update(notes).set({ content }).where(eq(notes.id, id)).returning();
     return result;
   },
 

@@ -1,42 +1,42 @@
 import { Request, Response } from "express";
-import { enquiryService } from "../services/enquiry.service";
+import { newEnquiryService } from "../services/newEnquiry.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 
 export const enquiryController = {
-  listEnquiries: asyncHandler(async (req: Request, res: Response) => {
-    const { clientId } = req.query;
-    let enquiries;
-
-    if (clientId && typeof clientId === "string") {
-      enquiries = await enquiryService.listEnquiriesByClient(clientId);
-    } else {
-      enquiries = await enquiryService.listEnquiries();
-    }
-
+  listEnquiries: asyncHandler(async (_req: Request, res: Response) => {
+    const enquiries = await newEnquiryService.listEnquiries();
     return successResponse(res, enquiries, "Enquiries retrieved successfully");
   }),
 
   getEnquiryById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const enquiry = await enquiryService.getEnquiryById(id);
+    const enquiry = await newEnquiryService.getEnquiryWithRelations(id);
+    return successResponse(res, enquiry, "Enquiry retrieved successfully");
+  }),
+
+  getEnquiryByTransactionId: asyncHandler(async (req: Request, res: Response) => {
+    const transactionId = req.params.transactionId as string;
+    const enquiry = await newEnquiryService.getEnquiryByTransactionId(transactionId);
     return successResponse(res, enquiry, "Enquiry retrieved successfully");
   }),
 
   createEnquiry: asyncHandler(async (req: Request, res: Response) => {
-    const enquiry = await enquiryService.createEnquiry(req.body);
+    const enquiry = await newEnquiryService.createEnquiry(req.body);
     return successResponse(res, enquiry, "Enquiry created successfully", 201);
   }),
 
   updateEnquiry: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const enquiry = await enquiryService.updateEnquiry(id, req.body);
+    const { destinations, resorts, boardBases, departureAirports, passengers, ...enquiryData } = req.body;
+    const relations = { destinations, resorts, boardBases, departureAirports, passengers };
+    const enquiry = await newEnquiryService.updateEnquiry(id, enquiryData, relations);
     return successResponse(res, enquiry, "Enquiry updated successfully");
   }),
 
   deleteEnquiry: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    await enquiryService.deleteEnquiry(id);
+    await newEnquiryService.deleteEnquiry(id);
     res.status(204).send();
   }),
 };

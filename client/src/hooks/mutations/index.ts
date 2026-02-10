@@ -1,7 +1,11 @@
 export { useLogout } from "./use-auth-mutations";
 export { useCreateClient, useUpdateClient } from "./use-client-mutations";
 export { useUpdateNeonClient, useImportNeonClients } from "./use-neon-client-mutations";
-export { useCreateQuote, useUpdateQuote, useConvertToBooking } from "./use-quote-mutations";
+export { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "./use-transaction-mutations";
+export { useCreateQuote, useUpdateQuote, useDeleteQuote } from "./use-quote-mutations";
+export { useConvertToBooking, useUpdateBooking, useDeleteBooking } from "./use-booking-mutations";
+export { useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "./use-enquiry-mutations";
+export { useCreateNote, useUpdateNote, useDeleteNote } from "./use-note-mutations";
 export { useCreateTicket, useUpdateTicket, useDeleteTicket } from "./use-ticket-mutations";
 export { useUploadAttachment, useDeleteAttachment } from "./use-attachment-mutations";
 export { useCreateReply, useUpdateReply, useDeleteReply } from "./use-reply-mutations";
@@ -9,7 +13,4 @@ export { useMarkNotificationRead, useMarkAllNotificationsRead, useDeleteNotifica
 export { useUpdateUser, useDeleteUser } from "./use-user-mutations";
 export { useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator } from "./use-tour-operator-mutations";
 export { useCreateAirport, useDeleteAirport } from "./use-airport-mutations";
-export { useCreateNote, useUpdateNote, useDeleteNote } from "./use-note-mutations";
-export { useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "./use-enquiry-mutations";
-export { useCreateEnquiryNote, useUpdateEnquiryNote, useDeleteEnquiryNote } from "./use-enquiry-note-mutations";
 export { useCreateTask, useToggleTask, useDeleteTask } from "./use-task-mutations";

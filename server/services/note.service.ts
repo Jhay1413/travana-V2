@@ -3,8 +3,8 @@ import { AppError } from "../utils/error-handler";
 import type { Note, InsertNote } from "@shared/schema";
 
 export const noteService = {
-  async listByQuoteId(quoteId: string): Promise<Note[]> {
-    return await noteRepository.findByQuoteId(quoteId);
+  async listByTransactionId(transactionId: string): Promise<Note[]> {
+    return await noteRepository.findByTransactionId(transactionId);
   },
 
   async getNote(id: string): Promise<Note> {

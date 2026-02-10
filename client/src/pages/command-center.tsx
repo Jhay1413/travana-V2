@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@/api/client/axios-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
-import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useQuotes, useAllTasks, useTickets } from "@/hooks/queries";
+import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useTickets } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -528,7 +528,7 @@ function ShellNav({
                         {section.items.map((item) => {
                           const isActive = active === item.key;
                           const hasChildren = item.children && item.children.length > 0;
-                          const childActive = hasChildren && item.children.some((c: { key: string }) => active === c.key);
+                          const childActive = hasChildren && item.children!.some((c: { key: string }) => active === c.key);
                           return (
                             <div key={item.key}>
                               <button
@@ -565,7 +565,7 @@ function ShellNav({
                               </button>
                               {hasChildren && (
                                 <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
-                                  {item.children.map((child: { key: string; label: string; icon: React.ReactNode; route?: string }) => {
+                                  {item.children!.map((child: { key: string; label: string; icon: React.ReactNode; route?: string }) => {
                                     const childRoutes: Record<string, string> = {
                                       "countries": "/admin/lookup/countries",
                                       "destinations": "/admin/lookup/destinations",
@@ -1563,12 +1563,12 @@ export default function CommandCenterPage() {
     const dueDate = new Date(`${dashNewDueDate}T${dashNewDueTime || "09:00"}`);
     dashCreateTaskMutation.mutate(
       {
-        entityType: dashTaskCategory === "booking" ? "quote" : dashTaskCategory,
-        entityId: "",
-        userId: currentUser.id,
+        transaction_type: dashTaskCategory === "booking" ? "quote" : dashTaskCategory,
+        deal_id: "",
+        user_id: currentUser.id,
         title: dashNewTitle,
-        dueDate,
-        completed: false,
+        due_date: dueDate,
+        status: "pending",
       },
       {
         onSuccess: () => {
@@ -1588,7 +1588,7 @@ export default function CommandCenterPage() {
   const displayName = user?.firstName || user?.name || user?.email || "User";
 
   const { data: dashboardStats } = useDashboardStats();
-  const { data: quotesData } = useQuotes();
+  const { data: transactionsData } = useTransactions();
   const { data: userFavorites } = useFavorites();
   const removeFavoriteMutation = useRemoveFavorite();
   const toggleFavoriteMutation = useToggleFavorite();
@@ -1659,10 +1659,11 @@ export default function CommandCenterPage() {
     if (!allTasksData) return [];
     return allTasksData
       .filter((t) => {
-        const due = new Date(t.dueDate);
+        if (!t.due_date) return false;
+        const due = new Date(t.due_date);
         return due >= whatsOnDateRange.start && due < whatsOnDateRange.end;
       })
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      .sort((a, b) => new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime());
   }, [allTasksData, whatsOnDateRange]);
 
   const filteredTickets = useMemo(() => {
@@ -1699,25 +1700,23 @@ export default function CommandCenterPage() {
 
   const pipelineStages = useMemo(() => {
     type PStage = "New Lead" | "In Play" | "Booked";
-    const stages: Record<PStage, typeof quotesData extends (infer T)[] ? T[] : any[]> = {
+    const stages: Record<PStage, any[]> = {
       "New Lead": [],
       "In Play": [],
       "Booked": [],
     };
-    if (!quotesData) return stages;
-    for (const q of quotesData) {
-      if (q.status === "Booked" || q.status === "Won") {
-        stages["Booked"].push(q);
-      } else if (q.status === "Lost") {
-        // skip Lost
-      } else if (q.commission) {
-        stages["In Play"].push(q);
+    if (!transactionsData) return stages;
+    for (const t of transactionsData) {
+      if (t.status === "on_booking" || t.booking) {
+        stages["Booked"].push({ ...t, title: t.enquiry?.title || t.booking?.title || "Untitled", travel_date: t.booking?.travel_date || t.enquiry?.travel_date || t.created_at, sales_price: t.booking?.sales_price || t.quotes?.[0]?.sales_price, package_commission: t.booking?.package_commission || t.quotes?.[0]?.package_commission, transaction_id: t.client_id });
+      } else if (t.status === "on_quote" && t.quotes && t.quotes.length > 0) {
+        stages["In Play"].push({ ...t, title: t.quotes[0]?.title || t.enquiry?.title || "Untitled", travel_date: t.quotes[0]?.travel_date || t.enquiry?.travel_date || t.created_at, sales_price: t.quotes[0]?.sales_price, package_commission: t.quotes[0]?.package_commission, transaction_id: t.client_id });
       } else {
-        stages["New Lead"].push(q);
+        stages["New Lead"].push({ ...t, title: t.enquiry?.title || "New Enquiry", travel_date: t.enquiry?.travel_date || t.created_at, sales_price: null, package_commission: null, transaction_id: t.client_id });
       }
     }
     return stages;
-  }, [quotesData]);
+  }, [transactionsData]);
 
   const allClientNames = useMemo(() => {
     const map = new Map<string, string>();
@@ -1738,23 +1737,21 @@ export default function CommandCenterPage() {
 
   const pinnedClientNameMap = useMemo(() => {
     const map = new Map<string, string>();
-    if (quotesData) {
-      for (const q of quotesData as any[]) {
-        if (q.clientId && allClientNames.has(q.clientId)) {
-          map.set(q.id, allClientNames.get(q.clientId)!);
+    if (transactionsData) {
+      for (const t of transactionsData as any[]) {
+        if (t.client_id && allClientNames.has(t.client_id)) {
+          map.set(t.id, allClientNames.get(t.client_id)!);
         }
       }
     }
     return map;
-  }, [quotesData, allClientNames]);
+  }, [transactionsData, allClientNames]);
 
   const getQuoteProfit = (q: any): number => {
-    if (q.commission) {
-      const split = parseFloat(q.commission.agentSplitValue) || 0;
-      if (split > 0) return split;
-      const price = parseFloat(q.commission.price) || 0;
-      if (price > 0) return price * 0.1;
-    }
+    const commission = parseFloat(q.package_commission) || 0;
+    if (commission > 0) return commission;
+    const salesPrice = parseFloat(q.sales_price) || 0;
+    if (salesPrice > 0) return salesPrice * 0.1;
     return 0;
   };
 
@@ -1762,10 +1759,10 @@ export default function CommandCenterPage() {
     if (dashboardStats) {
       // Use API stats if available
       return {
-        bookedCount: dashboardStats.wonCount,
-        openCount: dashboardStats.inPlayCount + dashboardStats.lostCount,
+        bookedCount: dashboardStats.bookedCount,
+        openCount: dashboardStats.quotedCount + dashboardStats.enquiryCount,
         bookedValue: dashboardStats.totalRevenue,
-        openValue: (dashboardStats.totalQuotes - dashboardStats.wonCount) * dashboardStats.avgDealSize,
+        openValue: (dashboardStats.totalTransactions - dashboardStats.bookedCount) * dashboardStats.avgDealSize,
         avgDeal: Math.round(dashboardStats.avgDealSize),
       };
     }
@@ -1863,19 +1860,19 @@ export default function CommandCenterPage() {
                     ) : (
                       filteredTasks.map((task, idx) => {
                         const taskHref = task.clientId
-                          ? task.entityType === "enquiry"
-                            ? `/clients/${task.clientId}/enquiries/${task.entityId}`
-                            : task.entityType === "booking"
-                              ? `/clients/${task.clientId}/bookings/${task.entityId}`
-                              : task.entityType === "quote"
-                                ? `/clients/${task.clientId}/quotes/${task.entityId}`
+                          ? task.transaction_type === "enquiry"
+                            ? `/clients/${task.clientId}/enquiries/${task.deal_id}`
+                            : task.transaction_type === "booking"
+                              ? `/clients/${task.clientId}/bookings/${task.deal_id}`
+                              : task.transaction_type === "quote"
+                                ? `/clients/${task.clientId}/quotes/${task.deal_id}`
                                 : `/clients/${task.clientId}`
                           : null;
                         return (
                         <motion.button
                           key={task.id}
                           type="button"
-                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
+                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.status === "completed" ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
                           data-testid={`card-whats-on-task-${task.id}`}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -1885,9 +1882,9 @@ export default function CommandCenterPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
-                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.dueDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
-                                <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-whats-on-task-title-${task.id}`}>
+                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.due_date || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                                <div className={`truncate text-sm font-medium ${task.status === "completed" ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-whats-on-task-title-${task.id}`}>
                                   {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
                                   {task.title}
                                 </div>
@@ -1901,8 +1898,8 @@ export default function CommandCenterPage() {
                               </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
-                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                                {task.completed ? "Done" : "Pending"}
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.status === "completed" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                                {task.status === "completed" ? "Done" : "Pending"}
                               </span>
                               {taskHref && <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />}
                             </div>
@@ -2006,20 +2003,20 @@ export default function CommandCenterPage() {
                           {items.slice(0, 5).map((q: any) => (
                             <button
                               key={q.id}
-                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.clientId}/bookings/${q.id}` : `/clients/${q.clientId}/quotes/${q.id}`)}
+                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.transaction_id}/bookings/${q.booking?.id || q.id}` : col.stage === "In Play" ? `/clients/${q.transaction_id}/quotes/${q.quotes?.[0]?.id || q.id}` : `/clients/${q.transaction_id}/enquiries/${q.enquiry?.id || q.id}`)}
                               className="w-full rounded-2xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
                               data-testid={`card-pipeline-${col.stage}-${q.id}`}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="truncate text-sm font-semibold" data-testid={`text-pipeline-name-${q.id}`}>
-                                    {q.quoteTitle}
+                                    {q.title}
                                   </div>
                                   <div className="mt-0.5 truncate text-xs text-black/55 dark:text-white/55">
-                                    {pipelineClientNames.get(q.clientId) || "Client"}
+                                    {pipelineClientNames.get(q.transaction_id) || "Client"}
                                   </div>
                                   <div className="mt-0.5 truncate text-xs text-black/40 dark:text-white/40">
-                                    {q.destination} · {new Date(q.travelDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                                    {new Date(q.travel_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
                                   </div>
                                 </div>
                                 <div className="text-xs font-semibold text-emerald-700" data-testid={`text-pipeline-value-${q.id}`}>
@@ -2279,7 +2276,7 @@ export default function CommandCenterPage() {
                                 <span className="text-black/45 dark:text-white/45">Board</span>: {p.board}
                               </div>
                               <div className="truncate" data-testid={`text-overview-social-post-travel-date-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travelDate}
+                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travel_date}
                               </div>
                               <div className="truncate" data-testid={`text-overview-social-post-created-${p.id}`}>
                                 <span className="text-black/45 dark:text-white/45">Date created</span>: {p.createdAt}
@@ -2571,19 +2568,19 @@ export default function CommandCenterPage() {
                     ) : (
                       filteredTasks.map((task, idx) => {
                         const taskHref = task.clientId
-                          ? task.entityType === "enquiry"
-                            ? `/clients/${task.clientId}/enquiries/${task.entityId}`
-                            : task.entityType === "booking"
-                              ? `/clients/${task.clientId}/bookings/${task.entityId}`
-                              : task.entityType === "quote"
-                                ? `/clients/${task.clientId}/quotes/${task.entityId}`
+                          ? task.transaction_type === "enquiry"
+                            ? `/clients/${task.clientId}/enquiries/${task.deal_id}`
+                            : task.transaction_type === "booking"
+                              ? `/clients/${task.clientId}/bookings/${task.deal_id}`
+                              : task.transaction_type === "quote"
+                                ? `/clients/${task.clientId}/quotes/${task.deal_id}`
                                 : `/clients/${task.clientId}`
                           : null;
                         return (
                         <motion.button
                           key={task.id}
                           type="button"
-                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
+                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.status === "completed" ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
                           data-testid={`card-workspace-task-${task.id}`}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -2593,9 +2590,9 @@ export default function CommandCenterPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
-                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.dueDate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
-                                <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-workspace-task-title-${task.id}`}>
+                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.due_date || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                                <div className={`truncate text-sm font-medium ${task.status === "completed" ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-workspace-task-title-${task.id}`}>
                                   {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
                                   {task.title}
                                 </div>
@@ -2609,8 +2606,8 @@ export default function CommandCenterPage() {
                               </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
-                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                                {task.completed ? "Done" : "Pending"}
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.status === "completed" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                                {task.status === "completed" ? "Done" : "Pending"}
                               </span>
                               {taskHref && <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />}
                             </div>
@@ -2714,20 +2711,20 @@ export default function CommandCenterPage() {
                           {items.slice(0, 5).map((q: any) => (
                             <button
                               key={q.id}
-                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.clientId}/bookings/${q.id}` : `/clients/${q.clientId}/quotes/${q.id}`)}
+                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.transaction_id}/bookings/${q.booking?.id || q.id}` : col.stage === "In Play" ? `/clients/${q.transaction_id}/quotes/${q.quotes?.[0]?.id || q.id}` : `/clients/${q.transaction_id}/enquiries/${q.enquiry?.id || q.id}`)}
                               className="w-full rounded-3xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
                               data-testid={`card-pipeline-${col.stage}-${q.id}`}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="truncate text-sm font-semibold" data-testid={`text-pipeline-name-${q.id}`}>
-                                    {q.quoteTitle}
+                                    {q.title}
                                   </div>
                                   <div className="mt-0.5 truncate text-xs text-black/55 dark:text-white/55">
-                                    {pipelineClientNames.get(q.clientId) || "Client"}
+                                    {pipelineClientNames.get(q.transaction_id) || "Client"}
                                   </div>
                                   <div className="mt-0.5 truncate text-xs text-black/40 dark:text-white/40" data-testid={`text-pipeline-trip-${q.id}`}>
-                                    {q.destination} · {new Date(q.travelDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                                    {new Date(q.travel_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
                                   </div>
                                 </div>
                                 <div className="text-xs font-semibold text-emerald-700" data-testid={`text-pipeline-value-${q.id}`}>
@@ -2987,7 +2984,7 @@ export default function CommandCenterPage() {
                                 <span className="text-black/45 dark:text-white/45">Board</span>: {p.board}
                               </div>
                               <div className="truncate" data-testid={`text-social-post-travel-date-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travelDate}
+                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travel_date}
                               </div>
                               <div className="truncate" data-testid={`text-social-post-created-${p.id}`}>
                                 <span className="text-black/45 dark:text-white/45">Date created</span>: {p.createdAt}

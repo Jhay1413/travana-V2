@@ -1,15 +1,4 @@
-import type { Quote, Client, User, Accommodation, Flight, Commission, QuoteImage, Note } from "@shared/schema";
-
 export type { Quote, InsertQuote } from "@shared/schema";
-
-export type UpdateQuoteDTO = Partial<import("@shared/schema").InsertQuote>;
-
-export interface QuoteFullDetails extends Quote {
-  accommodation: Accommodation | undefined;
-  flights: Flight[];
-  commission: Commission | undefined;
-  images: QuoteImage[];
-  notes: Note[];
-  client: Client | undefined;
-  owner: User | undefined;
-}
+export type { QuoteFlight, QuoteAccomodation, QuoteTransfer, QuoteCarHire } from "@shared/schema";
+export type { QuoteAttractionTicket, QuoteLoungePass, QuoteAirportParking, QuoteCruise } from "@shared/schema";
+export type { DealImage, Passenger } from "@shared/schema";

@@ -1,14 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { enquiryApi } from "@/api";
-import { enquiryKeys } from "@/hooks/queries";
-import type { CreateEnquiryData } from "@/types/enquiry";
+import { enquiryKeys, transactionKeys } from "@/hooks/queries";
+import type { EnquiryTable } from "@/types/quote";
 
 export function useCreateEnquiry() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateEnquiryData) => enquiryApi.create(data),
+    mutationFn: (data: Partial<EnquiryTable>) => enquiryApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }
@@ -16,9 +17,10 @@ export function useCreateEnquiry() {
 export function useUpdateEnquiry() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<CreateEnquiryData> }) => enquiryApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<EnquiryTable> }) => enquiryApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: enquiryKeys.all });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }
@@ -29,6 +31,7 @@ export function useDeleteEnquiry() {
     mutationFn: (id: string) => enquiryApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }

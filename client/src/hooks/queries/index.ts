@@ -1,7 +1,11 @@
 export { useCurrentUser, authKeys } from "./use-auth-queries";
 export { useClients, useClient, clientKeys } from "./use-client-queries";
 export { useNeonClients, useNeonClient, neonClientKeys } from "./use-neon-client-queries";
-export { useQuotes, useQuote, useQuoteFull, quoteKeys } from "./use-quote-queries";
+export { useTransactions, useTransaction, useTransactionStats, transactionKeys } from "./use-transaction-queries";
+export { useQuotes, useQuote, quoteKeys } from "./use-quote-queries";
+export { useBookings, useBooking, useBookingByTransaction, bookingKeys } from "./use-booking-queries";
+export { useEnquiries, useEnquiry, useEnquiryByTransaction, enquiryKeys } from "./use-enquiry-queries";
+export { useNotes, noteKeys } from "./use-note-queries";
 export { useUsers, userKeys } from "./use-user-queries";
 export { useTickets, useTicket, useTicketsByClient, useTicketsByUser, ticketKeys } from "./use-ticket-queries";
 export { useAttachments, attachmentKeys, getAttachmentDownloadUrl } from "./use-attachment-queries";
@@ -10,7 +14,4 @@ export { useNotifications, useUnreadNotifications, notificationKeys } from "./us
 export { useDashboardStats, dashboardKeys } from "./use-dashboard-queries";
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";
 export { useAirports, airportKeys } from "./use-airport-queries";
-export { useNotes, noteKeys } from "./use-note-queries";
-export { useEnquiries, useEnquiry, enquiryKeys } from "./use-enquiry-queries";
-export { useEnquiryNotes, enquiryNoteKeys } from "./use-enquiry-note-queries";
 export { useAllTasks, useTasks, useUserTasks, taskKeys } from "./use-task-queries";

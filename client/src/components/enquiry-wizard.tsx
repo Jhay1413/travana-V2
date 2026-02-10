@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
-import type { Enquiry, CreateEnquiryData } from "@/types/enquiry";
+import type { Enquiry } from "@/types/enquiry";
+import type { EnquiryTable } from "@/types/quote";
 
 const HOLIDAY_TYPES = [
   "Package Holiday",
@@ -135,36 +136,36 @@ const defaultForm: EnquiryForm = {
 
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
   return {
-    enquiryTitle: enquiry.enquiryTitle,
-    holidayType: enquiry.holidayType,
-    country: enquiry.country || "",
-    destination: enquiry.destination || "",
-    resort: enquiry.resort || "",
-    departureAirport: enquiry.departureAirport || "",
-    travelDate: enquiry.travelDate || "",
-    flexibility: enquiry.flexibility || "",
-    passengersAdults: enquiry.passengersAdults,
-    passengersChildren: enquiry.passengersChildren,
-    passengersInfants: enquiry.passengersInfants,
-    nights: enquiry.nights || 7,
-    starRating: enquiry.starRating || "",
-    boardBasis: enquiry.boardBasis || "",
+    enquiryTitle: enquiry.title || "",
+    holidayType: enquiry.holiday_type_id || "",
+    country: (enquiry.destinations as any)?.[0]?.country || "",
+    destination: (enquiry.destinations as any)?.[0]?.destination || "",
+    resort: (enquiry.resorts as any)?.[0]?.resort || "",
+    departureAirport: (enquiry.airports as any)?.[0]?.airport || "",
+    travelDate: enquiry.travel_date || "",
+    flexibility: enquiry.flexibility_date || enquiry.flexible_date || "",
+    passengersAdults: enquiry.adults || 2,
+    passengersChildren: enquiry.children || 0,
+    passengersInfants: enquiry.infants || 0,
+    nights: enquiry.no_of_nights || 7,
+    starRating: enquiry.accom_min_star_rating || "",
+    boardBasis: (enquiry.boardBases as any)?.[0]?.board_basis || "",
     budget: enquiry.budget || "",
-    budgetType: enquiry.budgetType || "Per Person",
-    notes: enquiry.notes || "",
-    accommodationType: enquiry.accommodationType || "",
-    guests: enquiry.guests || 2,
-    pets: enquiry.pets || "No",
-    minBudget: enquiry.minBudget || "",
-    maxBudget: enquiry.maxBudget || "",
-    weekendLodge: enquiry.weekendLodge || "No",
-    flexibleOnDate: enquiry.flexibleOnDate || "No",
-    cruiseDestination: enquiry.cruiseDestination || "",
-    cruiseNights: enquiry.cruiseNights || "",
-    cruiseLine: enquiry.cruiseLine || "",
-    cabinType: enquiry.cabinType || "",
-    preCruiseStayDays: enquiry.preCruiseStayDays || "",
-    postCruiseStayDays: enquiry.postCruiseStayDays || "",
+    budgetType: enquiry.budget_type || "Per Person",
+    notes: "",
+    accommodationType: enquiry.accomodation_type_id || "",
+    guests: enquiry.no_of_guests || 2,
+    pets: enquiry.no_of_pets ? String(enquiry.no_of_pets) : "No",
+    minBudget: enquiry.budget || "",
+    maxBudget: enquiry.max_budget || "",
+    weekendLodge: enquiry.weekend_lodge || "No",
+    flexibleOnDate: enquiry.flexible_date || "No",
+    cruiseDestination: (enquiry.destinations as any)?.[0]?.destination || "",
+    cruiseNights: enquiry.no_of_nights ? String(enquiry.no_of_nights) : "",
+    cruiseLine: "",
+    cabinType: enquiry.cabin_type || "",
+    preCruiseStayDays: enquiry.pre_cruise_stay ? String(enquiry.pre_cruise_stay) : "",
+    postCruiseStayDays: enquiry.post_cruise_stay ? String(enquiry.post_cruise_stay) : "",
   };
 }
 
@@ -172,7 +173,7 @@ interface EnquiryWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enquiry?: Enquiry | null;
-  onSubmit: (data: Partial<CreateEnquiryData>) => void;
+  onSubmit: (data: Partial<EnquiryTable>) => void;
   isSaving: boolean;
 }
 
@@ -240,62 +241,42 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   };
 
   const handleSubmit = () => {
-    const base: Partial<CreateEnquiryData> = {
-      enquiryTitle: form.enquiryTitle,
-      holidayType: form.holidayType,
+    const base: Partial<EnquiryTable> = {
+      title: form.enquiryTitle,
+      holiday_type_id: form.holidayType,
       notes: form.notes || undefined,
-    };
+    } as any;
 
     if (form.holidayType === "Hot Tub Break") {
       Object.assign(base, {
-        accommodationType: form.accommodationType || undefined,
-        destination: form.destination || undefined,
-        guests: form.guests,
-        pets: form.pets || undefined,
-        minBudget: form.minBudget || undefined,
-        maxBudget: form.maxBudget || undefined,
-        budgetType: form.budgetType || undefined,
-        nights: form.nights || undefined,
-        weekendLodge: form.weekendLodge || undefined,
-        flexibleOnDate: form.flexibleOnDate || undefined,
-        flexibility: form.flexibleOnDate === "Yes" ? form.flexibility : undefined,
-        travelDate: form.travelDate || undefined,
+        destinations: form.destination ? [{ name: form.destination }] : undefined,
+        budget: form.minBudget || form.maxBudget || undefined,
+        budget_type: form.budgetType || undefined,
+        no_of_nights: form.nights || undefined,
+        travel_date: form.travelDate || undefined,
       });
     } else if (form.holidayType === "Cruise Package") {
       Object.assign(base, {
-        cruiseDestination: form.cruiseDestination || undefined,
-        destination: form.cruiseDestination || undefined,
-        travelDate: form.travelDate || undefined,
-        cruiseNights: form.cruiseNights || undefined,
-        nights: form.cruiseNights ? (form.cruiseNights === "21+" ? 21 : parseInt(form.cruiseNights)) : undefined,
-        flexibility: form.flexibility || undefined,
-        minBudget: form.minBudget || undefined,
-        maxBudget: form.maxBudget || undefined,
-        budgetType: form.budgetType || undefined,
-        passengersAdults: form.passengersAdults,
-        passengersChildren: form.passengersChildren,
-        passengersInfants: form.passengersInfants,
-        cruiseLine: form.cruiseLine || undefined,
-        cabinType: form.cabinType || undefined,
-        preCruiseStayDays: form.preCruiseStayDays || undefined,
-        postCruiseStayDays: form.postCruiseStayDays || undefined,
+        destinations: form.cruiseDestination ? [{ name: form.cruiseDestination }] : undefined,
+        travel_date: form.travelDate || undefined,
+        no_of_nights: form.cruiseNights ? (form.cruiseNights === "21+" ? 21 : parseInt(form.cruiseNights)) : undefined,
+        budget: form.minBudget || form.maxBudget || undefined,
+        budget_type: form.budgetType || undefined,
+        adults: form.passengersAdults,
+        children: form.passengersChildren,
+        infants: form.passengersInfants,
       });
     } else {
       Object.assign(base, {
-        country: form.country || undefined,
-        destination: form.destination || undefined,
-        resort: form.resort || undefined,
-        departureAirport: form.departureAirport || undefined,
-        travelDate: form.travelDate || undefined,
-        flexibility: form.flexibility || undefined,
-        passengersAdults: form.passengersAdults,
-        passengersChildren: form.passengersChildren,
-        passengersInfants: form.passengersInfants,
-        nights: form.nights || undefined,
-        starRating: form.starRating || undefined,
-        boardBasis: form.boardBasis || undefined,
+        destinations: form.destination ? [{ name: form.destination }] : undefined,
+        travel_date: form.travelDate || undefined,
+        adults: form.passengersAdults,
+        children: form.passengersChildren,
+        infants: form.passengersInfants,
+        no_of_nights: form.nights || undefined,
+        board_basis: form.boardBasis || undefined,
         budget: form.budget || undefined,
-        budgetType: form.budgetType || undefined,
+        budget_type: form.budgetType || undefined,
       });
     }
 

@@ -1,26 +1,25 @@
 import axiosClient from "../client/axios-client";
-import type { Note } from "@shared/schema";
+import type { TransactionNote } from "@/types/quote";
 
 export type CreateNoteData = {
-  quoteId: string;
+  transaction_id: string;
   content: string;
-  authorName: string;
-  parentId?: string | null;
+  description?: string;
 };
 
 export const noteApi = {
-  getByQuote: async (quoteId: string): Promise<Note[]> => {
-    const { data } = await axiosClient.get<Note[]>(`/api/notes/quote/${quoteId}`);
+  getByTransaction: async (transactionId: string): Promise<TransactionNote[]> => {
+    const { data } = await axiosClient.get<TransactionNote[]>(`/api/notes/transaction/${transactionId}`);
     return data;
   },
 
-  create: async (noteData: CreateNoteData): Promise<Note> => {
-    const { data } = await axiosClient.post<Note>("/api/notes", noteData);
+  create: async (noteData: CreateNoteData): Promise<TransactionNote> => {
+    const { data } = await axiosClient.post<TransactionNote>("/api/notes", noteData);
     return data;
   },
 
-  update: async (id: string, content: string): Promise<Note> => {
-    const { data } = await axiosClient.patch<Note>(`/api/notes/${id}`, { content });
+  update: async (id: string, content: string): Promise<TransactionNote> => {
+    const { data } = await axiosClient.patch<TransactionNote>(`/api/notes/${id}`, { content });
     return data;
   },
 
