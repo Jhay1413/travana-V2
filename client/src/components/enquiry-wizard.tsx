@@ -26,6 +26,15 @@ const FLEXIBILITY_OPTIONS = [
   "Anytime in Month",
 ];
 
+const CRUISE_FLEXIBILITY_OPTIONS = [
+  "Exact Date",
+  "+/- 3 Days",
+  "+/- 7 Days",
+  "+ 3 Days",
+  "+ 7 Days",
+  "Any Time",
+];
+
 const STAR_RATINGS = ["2 Star", "3 Star", "4 Star", "5 Star"];
 
 const BOARD_BASIS_OPTIONS = [
@@ -49,6 +58,13 @@ const HOT_TUB_FLEXIBILITY_OPTIONS = [
   "+ 3 Days",
   "+ 7 Days",
   "Any Time",
+];
+
+const CABIN_TYPES = ["Inside Cabin", "Outside Cabin", "Balcony", "Suite"];
+
+const CRUISE_NIGHTS_OPTIONS = [
+  ...Array.from({ length: 20 }, (_, i) => String(i + 1)),
+  "21+",
 ];
 
 interface EnquiryForm {
@@ -76,6 +92,12 @@ interface EnquiryForm {
   maxBudget: string;
   weekendLodge: string;
   flexibleOnDate: string;
+  cruiseDestination: string;
+  cruiseNights: string;
+  cruiseLine: string;
+  cabinType: string;
+  preCruiseStayDays: string;
+  postCruiseStayDays: string;
 }
 
 const defaultForm: EnquiryForm = {
@@ -103,6 +125,12 @@ const defaultForm: EnquiryForm = {
   maxBudget: "",
   weekendLodge: "No",
   flexibleOnDate: "No",
+  cruiseDestination: "",
+  cruiseNights: "",
+  cruiseLine: "",
+  cabinType: "",
+  preCruiseStayDays: "",
+  postCruiseStayDays: "",
 };
 
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
@@ -124,13 +152,19 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     budget: enquiry.budget || "",
     budgetType: enquiry.budgetType || "Per Person",
     notes: enquiry.notes || "",
-    accommodationType: (enquiry as any).accommodationType || "",
-    guests: (enquiry as any).guests || 2,
-    pets: (enquiry as any).pets || "No",
-    minBudget: (enquiry as any).minBudget || "",
-    maxBudget: (enquiry as any).maxBudget || "",
-    weekendLodge: (enquiry as any).weekendLodge || "No",
-    flexibleOnDate: (enquiry as any).flexibleOnDate || "No",
+    accommodationType: enquiry.accommodationType || "",
+    guests: enquiry.guests || 2,
+    pets: enquiry.pets || "No",
+    minBudget: enquiry.minBudget || "",
+    maxBudget: enquiry.maxBudget || "",
+    weekendLodge: enquiry.weekendLodge || "No",
+    flexibleOnDate: enquiry.flexibleOnDate || "No",
+    cruiseDestination: enquiry.cruiseDestination || "",
+    cruiseNights: enquiry.cruiseNights || "",
+    cruiseLine: enquiry.cruiseLine || "",
+    cabinType: enquiry.cabinType || "",
+    preCruiseStayDays: enquiry.preCruiseStayDays || "",
+    postCruiseStayDays: enquiry.postCruiseStayDays || "",
   };
 }
 
@@ -156,8 +190,15 @@ const HOT_TUB_STEPS: StepDef[] = [
   { title: "Stay & Dates", description: "Duration and date preferences." },
 ];
 
+const CRUISE_STEPS: StepDef[] = [
+  { title: "Cruise Details", description: "Tell us about the cruise." },
+  { title: "Budget & Passengers", description: "Budget and who's travelling?" },
+  { title: "Cruise Preferences", description: "Cruise line and cabin preferences." },
+];
+
 function getSteps(holidayType: string): StepDef[] {
   if (holidayType === "Hot Tub Break") return HOT_TUB_STEPS;
+  if (holidayType === "Cruise Package") return CRUISE_STEPS;
   return PACKAGE_STEPS;
 }
 
@@ -220,6 +261,25 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         flexibility: form.flexibleOnDate === "Yes" ? form.flexibility : undefined,
         travelDate: form.travelDate || undefined,
       });
+    } else if (form.holidayType === "Cruise Package") {
+      Object.assign(base, {
+        cruiseDestination: form.cruiseDestination || undefined,
+        destination: form.cruiseDestination || undefined,
+        travelDate: form.travelDate || undefined,
+        cruiseNights: form.cruiseNights || undefined,
+        nights: form.cruiseNights ? (form.cruiseNights === "21+" ? 21 : parseInt(form.cruiseNights)) : undefined,
+        flexibility: form.flexibility || undefined,
+        minBudget: form.minBudget || undefined,
+        maxBudget: form.maxBudget || undefined,
+        budgetType: form.budgetType || undefined,
+        passengersAdults: form.passengersAdults,
+        passengersChildren: form.passengersChildren,
+        passengersInfants: form.passengersInfants,
+        cruiseLine: form.cruiseLine || undefined,
+        cabinType: form.cabinType || undefined,
+        preCruiseStayDays: form.preCruiseStayDays || undefined,
+        postCruiseStayDays: form.postCruiseStayDays || undefined,
+      });
     } else {
       Object.assign(base, {
         country: form.country || undefined,
@@ -249,6 +309,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   };
 
   const isHotTub = form.holidayType === "Hot Tub Break";
+  const isCruise = form.holidayType === "Cruise Package";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -305,12 +366,17 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
               transition={{ duration: 0.2, ease: "easeInOut" }}
               className="grid gap-4"
             >
+              {/* ===== STEP 0 ===== */}
               {step === 0 && (
                 <>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Enquiry Title *</Label>
                     <Input
-                      placeholder={isHotTub ? "e.g. Lake District Hot Tub Weekend" : "e.g. Maldives Family Holiday"}
+                      placeholder={
+                        isHotTub ? "e.g. Lake District Hot Tub Weekend" :
+                        isCruise ? "e.g. Mediterranean Cruise" :
+                        "e.g. Maldives Family Holiday"
+                      }
                       value={form.enquiryTitle}
                       onChange={(e) => set("enquiryTitle", e.target.value)}
                       className="h-10 rounded-xl border-black/10 bg-white/70"
@@ -331,7 +397,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                     </Select>
                   </div>
 
-                  {isHotTub ? (
+                  {isHotTub && (
                     <>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Accommodation Type</Label>
@@ -357,7 +423,61 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         />
                       </div>
                     </>
-                  ) : (
+                  )}
+
+                  {isCruise && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Cruise Destination</Label>
+                        <Input
+                          placeholder="e.g. Mediterranean, Caribbean"
+                          value={form.cruiseDestination}
+                          onChange={(e) => set("cruiseDestination", e.target.value)}
+                          className="h-10 rounded-xl border-black/10 bg-white/70"
+                          data-testid="input-cruise-destination"
+                        />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Travel Date</Label>
+                          <DatePicker
+                            value={form.travelDate}
+                            onChange={(v) => set("travelDate", v)}
+                            placeholder="Pick a date"
+                            data-testid="input-travel-date"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+                          <Select value={form.cruiseNights} onValueChange={(v) => set("cruiseNights", v)}>
+                            <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-cruise-nights">
+                              <SelectValue placeholder="Select nights..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CRUISE_NIGHTS_OPTIONS.map((n) => (
+                                <SelectItem key={n} value={n}>{n}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Flexibility</Label>
+                        <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
+                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-flexibility">
+                            <SelectValue placeholder="Select flexibility..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CRUISE_FLEXIBILITY_OPTIONS.map((f) => (
+                              <SelectItem key={f} value={f}>{f}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+
+                  {!isHotTub && !isCruise && (
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Country</Label>
@@ -406,6 +526,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                 </>
               )}
 
+              {/* ===== STEP 1: HOT TUB ===== */}
               {step === 1 && isHotTub && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
@@ -494,7 +615,107 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                 </>
               )}
 
-              {step === 1 && !isHotTub && (
+              {/* ===== STEP 1: CRUISE ===== */}
+              {step === 1 && isCruise && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Min Budget (£)</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={50}
+                          placeholder="0.00"
+                          value={form.minBudget}
+                          onChange={(e) => set("minBudget", e.target.value)}
+                          className="h-10 rounded-xl border-black/10 bg-white/70 pl-7"
+                          data-testid="input-min-budget"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Max Budget (£)</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={50}
+                          placeholder="0.00"
+                          value={form.maxBudget}
+                          onChange={(e) => set("maxBudget", e.target.value)}
+                          className="h-10 rounded-xl border-black/10 bg-white/70 pl-7"
+                          data-testid="input-max-budget"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Budget Type</Label>
+                    <Select value={form.budgetType} onValueChange={(v) => set("budgetType", v)}>
+                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-budget-type">
+                        <SelectValue placeholder="Per person or package..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BUDGET_TYPES.map((bt) => (
+                          <SelectItem key={bt} value={bt}>{bt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Adults</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={form.passengersAdults}
+                        onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
+                        className="h-10 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-adults"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Children</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.passengersChildren}
+                        onChange={(e) => set("passengersChildren", parseInt(e.target.value) || 0)}
+                        className="h-10 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-children"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Infants</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.passengersInfants}
+                        onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
+                        className="h-10 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-infants"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Notes</Label>
+                    <Textarea
+                      placeholder="Any notes about budget or passengers..."
+                      value={form.notes}
+                      onChange={(e) => set("notes", e.target.value)}
+                      rows={2}
+                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
+                      data-testid="textarea-enquiry-notes-step1"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* ===== STEP 1: PACKAGE / OTHERS ===== */}
+              {step === 1 && !isHotTub && !isCruise && (
                 <>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departure Airport</Label>
@@ -579,6 +800,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                 </>
               )}
 
+              {/* ===== STEP 2: HOT TUB ===== */}
               {step === 2 && isHotTub && (
                 <>
                   <div className="space-y-1.5">
@@ -656,7 +878,74 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                 </>
               )}
 
-              {step === 2 && !isHotTub && (
+              {/* ===== STEP 2: CRUISE ===== */}
+              {step === 2 && isCruise && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Cruise Line</Label>
+                    <Input
+                      placeholder="e.g. Royal Caribbean, MSC, P&O"
+                      value={form.cruiseLine}
+                      onChange={(e) => set("cruiseLine", e.target.value)}
+                      className="h-10 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-cruise-line"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Cabin Type</Label>
+                    <Select value={form.cabinType} onValueChange={(v) => set("cabinType", v)}>
+                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-cabin-type">
+                        <SelectValue placeholder="Select cabin type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CABIN_TYPES.map((ct) => (
+                          <SelectItem key={ct} value={ct}>{ct}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Pre-Cruise Stay Days</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="0"
+                        value={form.preCruiseStayDays}
+                        onChange={(e) => set("preCruiseStayDays", e.target.value)}
+                        className="h-10 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-pre-cruise-days"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Post-Cruise Stay Days</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="0"
+                        value={form.postCruiseStayDays}
+                        onChange={(e) => set("postCruiseStayDays", e.target.value)}
+                        className="h-10 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-post-cruise-days"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Notes</Label>
+                    <Textarea
+                      placeholder="Any notes about cruise preferences..."
+                      value={form.notes}
+                      onChange={(e) => set("notes", e.target.value)}
+                      rows={2}
+                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
+                      data-testid="textarea-enquiry-notes-step2"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* ===== STEP 2: PACKAGE / OTHERS ===== */}
+              {step === 2 && !isHotTub && !isCruise && (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">

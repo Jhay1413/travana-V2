@@ -26,6 +26,12 @@ export interface Enquiry {
   maxBudget: string | null;
   weekendLodge: string | null;
   flexibleOnDate: string | null;
+  cruiseDestination: string | null;
+  cruiseNights: string | null;
+  cruiseLine: string | null;
+  cabinType: string | null;
+  preCruiseStayDays: string | null;
+  postCruiseStayDays: string | null;
   status: string;
   createdAt: string;
   updatedAt: string | null;
@@ -58,6 +64,12 @@ export interface CreateEnquiryData {
   maxBudget?: string;
   weekendLodge?: string;
   flexibleOnDate?: string;
+  cruiseDestination?: string;
+  cruiseNights?: string;
+  cruiseLine?: string;
+  cabinType?: string;
+  preCruiseStayDays?: string;
+  postCruiseStayDays?: string;
   status?: string;
 }
 
