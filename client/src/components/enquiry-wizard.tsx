@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { Enquiry, CreateEnquiryData } from "@/types/enquiry";
 
 const HOLIDAY_TYPES = [
@@ -55,6 +56,7 @@ interface EnquiryForm {
   boardBasis: string;
   budget: string;
   budgetType: string;
+  notes: string;
 }
 
 const defaultForm: EnquiryForm = {
@@ -74,6 +76,7 @@ const defaultForm: EnquiryForm = {
   boardBasis: "",
   budget: "",
   budgetType: "Per Person",
+  notes: "",
 };
 
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
@@ -94,6 +97,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     boardBasis: enquiry.boardBasis || "",
     budget: enquiry.budget || "",
     budgetType: enquiry.budgetType || "Per Person",
+    notes: enquiry.notes || "",
   };
 }
 
@@ -164,6 +168,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
       boardBasis: form.boardBasis || undefined,
       budget: form.budget || undefined,
       budgetType: form.budgetType || undefined,
+      notes: form.notes || undefined,
     };
     onSubmit(data);
   };
@@ -286,6 +291,17 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                       />
                     </div>
                   </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Notes</Label>
+                    <Textarea
+                      placeholder="Any notes about the holiday details..."
+                      value={form.notes}
+                      onChange={(e) => set("notes", e.target.value)}
+                      rows={2}
+                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
+                      data-testid="textarea-enquiry-notes-step0"
+                    />
+                  </div>
                 </>
               )}
 
@@ -361,6 +377,17 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                       />
                     </div>
                   </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Notes</Label>
+                    <Textarea
+                      placeholder="Any notes about travel or passengers..."
+                      value={form.notes}
+                      onChange={(e) => set("notes", e.target.value)}
+                      rows={2}
+                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
+                      data-testid="textarea-enquiry-notes-step1"
+                    />
+                  </div>
                 </>
               )}
 
@@ -435,6 +462,17 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Notes</Label>
+                    <Textarea
+                      placeholder="Any notes about accommodation or budget..."
+                      value={form.notes}
+                      onChange={(e) => set("notes", e.target.value)}
+                      rows={2}
+                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
+                      data-testid="textarea-enquiry-notes-step2"
+                    />
                   </div>
                 </>
               )}

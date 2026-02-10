@@ -180,6 +180,7 @@ export const enquiries = pgTable("enquiries", {
   boardBasis: text("board_basis"),
   budget: decimal("budget", { precision: 10, scale: 2 }),
   budgetType: text("budget_type").default("Per Person"),
+  notes: text("notes"),
   status: text("status").notNull().default("Open"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

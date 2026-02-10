@@ -18,6 +18,7 @@ export interface Enquiry {
   boardBasis: string | null;
   budget: string | null;
   budgetType: string | null;
+  notes: string | null;
   status: string;
   createdAt: string;
   updatedAt: string | null;
@@ -42,6 +43,7 @@ export interface CreateEnquiryData {
   boardBasis?: string;
   budget?: string;
   budgetType?: string;
+  notes?: string;
   status?: string;
 }
 
