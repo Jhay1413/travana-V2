@@ -142,6 +142,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
   const airportRecord = (enquiry.airports as any)?.[0];
 
   const destinationId = destRecord?.destination_id || destRecord?.destination || "";
+  const countryId = destRecord?.country_id || "";
   const resortId = resortRecord?.resorts_id || resortRecord?.resort || "";
   const boardBasisId = bbRecord?.board_basis_id || bbRecord?.board_basis || "";
   const airportId = airportRecord?.airport_id || airportRecord?.airport || "";
@@ -149,7 +150,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
   return {
     enquiryTitle: enquiry.title || "",
     holidayType: enquiry.holiday_type_id || "",
-    country: "",
+    country: countryId,
     destination: destinationId,
     resort: resortId,
     departureAirport: airportId,
@@ -268,9 +269,15 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
     if (form.holidayType === "Hot Tub Break") {
       Object.assign(base, {
         budget: form.minBudget || form.maxBudget || undefined,
+        max_budget: form.maxBudget || undefined,
         budget_type: form.budgetType || undefined,
         no_of_nights: form.nights || undefined,
+        no_of_guests: form.guests || undefined,
+        no_of_pets: form.pets !== "No" ? parseInt(form.pets) || 0 : 0,
         travel_date: form.travelDate || undefined,
+        flexible_date: form.flexibleOnDate || undefined,
+        weekend_lodge: form.weekendLodge || undefined,
+        accomodation_type_id: form.accommodationType || undefined,
         destinations: form.destination ? [form.destination] : undefined,
       });
     } else if (form.holidayType === "Cruise Package") {
@@ -278,11 +285,16 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         travel_date: form.travelDate || undefined,
         no_of_nights: form.cruiseNights ? (form.cruiseNights === "21+" ? 21 : parseInt(form.cruiseNights)) : undefined,
         budget: form.minBudget || form.maxBudget || undefined,
+        max_budget: form.maxBudget || undefined,
         budget_type: form.budgetType || undefined,
         adults: form.passengersAdults,
         children: form.passengersChildren,
         infants: form.passengersInfants,
         cabin_type: form.cabinType || undefined,
+        pre_cruise_stay: form.preCruiseStayDays ? parseInt(form.preCruiseStayDays) : undefined,
+        post_cruise_stay: form.postCruiseStayDays ? parseInt(form.postCruiseStayDays) : undefined,
+        destinations: form.cruiseDestination ? [form.cruiseDestination] : undefined,
+        departureAirports: form.departureAirport ? [form.departureAirport] : undefined,
       });
     } else {
       Object.assign(base, {
@@ -293,9 +305,12 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         no_of_nights: form.nights || undefined,
         budget: form.budget || undefined,
         budget_type: form.budgetType || undefined,
+        accom_min_star_rating: form.starRating || undefined,
+        flexibility_date: form.flexibility || undefined,
         destinations: form.destination ? [form.destination] : undefined,
         resorts: form.resort ? [form.resort] : undefined,
         boardBases: form.boardBasis ? [form.boardBasis] : undefined,
+        departureAirports: form.departureAirport ? [form.departureAirport] : undefined,
       });
     }
 
