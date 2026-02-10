@@ -136,13 +136,23 @@ const defaultForm: EnquiryForm = {
 };
 
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
+  const destRecord = (enquiry.destinations as any)?.[0];
+  const resortRecord = (enquiry.resorts as any)?.[0];
+  const bbRecord = (enquiry.boardBases as any)?.[0];
+  const airportRecord = (enquiry.airports as any)?.[0];
+
+  const destinationId = destRecord?.destination_id || destRecord?.destination || "";
+  const resortId = resortRecord?.resorts_id || resortRecord?.resort || "";
+  const boardBasisId = bbRecord?.board_basis_id || bbRecord?.board_basis || "";
+  const airportId = airportRecord?.airport_id || airportRecord?.airport || "";
+
   return {
     enquiryTitle: enquiry.title || "",
     holidayType: enquiry.holiday_type_id || "",
-    country: (enquiry.destinations as any)?.[0]?.country || "",
-    destination: (enquiry.destinations as any)?.[0]?.destination || "",
-    resort: (enquiry.resorts as any)?.[0]?.resort || "",
-    departureAirport: (enquiry.airports as any)?.[0]?.airport || "",
+    country: "",
+    destination: destinationId,
+    resort: resortId,
+    departureAirport: airportId,
     travelDate: enquiry.travel_date || "",
     flexibility: enquiry.flexibility_date || enquiry.flexible_date || "",
     passengersAdults: enquiry.adults || 2,
@@ -150,7 +160,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     passengersInfants: enquiry.infants || 0,
     nights: enquiry.no_of_nights || 7,
     starRating: enquiry.accom_min_star_rating || "",
-    boardBasis: (enquiry.boardBases as any)?.[0]?.board_basis || "",
+    boardBasis: boardBasisId,
     budget: enquiry.budget || "",
     budgetType: enquiry.budget_type || "Per Person",
     notes: "",
@@ -161,7 +171,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     maxBudget: enquiry.max_budget || "",
     weekendLodge: enquiry.weekend_lodge || "No",
     flexibleOnDate: enquiry.flexible_date || "No",
-    cruiseDestination: (enquiry.destinations as any)?.[0]?.destination || "",
+    cruiseDestination: destRecord?.destination_id || destRecord?.destination || "",
     cruiseNights: enquiry.no_of_nights ? String(enquiry.no_of_nights) : "",
     cruiseLine: "",
     cabinType: enquiry.cabin_type || "",
@@ -248,30 +258,23 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
     }
   };
 
-  const resolveCountryName = (id: string) => (countriesData || []).find(c => c.id === id)?.country_name || id;
-  const resolveDestinationName = (id: string) => (destinationsData || []).find(d => d.id === id)?.name || id;
-  const resolveResortName = (id: string) => (resortsData || []).find(r => r.id === id)?.name || id;
-  const resolveParkName = (id: string) => (parksData || []).find(p => p.id === id)?.name || id;
-  const resolveLodgeName = (id: string) => (lodgesData || []).find(l => l.id === id)?.lodge_name || id;
-
   const handleSubmit = () => {
-    const base: Partial<EnquiryTable> = {
+    const base: Record<string, any> = {
       title: form.enquiryTitle,
       holiday_type_id: form.holidayType,
       notes: form.notes || undefined,
-    } as any;
+    };
 
     if (form.holidayType === "Hot Tub Break") {
       Object.assign(base, {
-        destinations: form.destination ? [{ name: resolveParkName(form.destination) }] : undefined,
         budget: form.minBudget || form.maxBudget || undefined,
         budget_type: form.budgetType || undefined,
         no_of_nights: form.nights || undefined,
         travel_date: form.travelDate || undefined,
+        destinations: form.destination ? [form.destination] : undefined,
       });
     } else if (form.holidayType === "Cruise Package") {
       Object.assign(base, {
-        destinations: form.cruiseDestination ? [{ name: form.cruiseDestination }] : undefined,
         travel_date: form.travelDate || undefined,
         no_of_nights: form.cruiseNights ? (form.cruiseNights === "21+" ? 21 : parseInt(form.cruiseNights)) : undefined,
         budget: form.minBudget || form.maxBudget || undefined,
@@ -279,19 +282,20 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         adults: form.passengersAdults,
         children: form.passengersChildren,
         infants: form.passengersInfants,
+        cabin_type: form.cabinType || undefined,
       });
     } else {
       Object.assign(base, {
-        destinations: form.destination ? [{ name: resolveDestinationName(form.destination) }] : undefined,
-        resorts: form.resort ? [{ resort: resolveResortName(form.resort) }] : undefined,
         travel_date: form.travelDate || undefined,
         adults: form.passengersAdults,
         children: form.passengersChildren,
         infants: form.passengersInfants,
         no_of_nights: form.nights || undefined,
-        board_basis: form.boardBasis || undefined,
         budget: form.budget || undefined,
         budget_type: form.budgetType || undefined,
+        destinations: form.destination ? [form.destination] : undefined,
+        resorts: form.resort ? [form.resort] : undefined,
+        boardBases: form.boardBasis ? [form.boardBasis] : undefined,
       });
     }
 
@@ -1004,7 +1008,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                       </SelectTrigger>
                       <SelectContent>
                         {(boardBasisData || BOARD_BASIS_OPTIONS.map(b => ({ id: b, type: b }))).map((b) => (
-                          <SelectItem key={b.id} value={b.type}>{b.type}</SelectItem>
+                          <SelectItem key={b.id} value={b.id}>{b.type}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

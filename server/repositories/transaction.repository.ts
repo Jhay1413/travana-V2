@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 
@@ -49,9 +49,28 @@ export const transactionRepository = {
     const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
     const [agent] = txn.agent_id ? await db.select().from(user).where(eq(user.id, txn.agent_id)).limit(1) : [undefined];
 
+    let enrichedEnquiry: any = enquiryResult || null;
+    if (enquiryResult) {
+      const [destinations, resorts, accommodations, boardBases, airports] = await Promise.all([
+        db.select().from(enquiry_destination).where(eq(enquiry_destination.enquiry_id, enquiryResult.id)),
+        db.select().from(enquiry_resorts).where(eq(enquiry_resorts.enquiry_id, enquiryResult.id)),
+        db.select().from(enquiry_accomodation).where(eq(enquiry_accomodation.enquiry_id, enquiryResult.id)),
+        db.select().from(enquiry_board_basis).where(eq(enquiry_board_basis.enquiry_id, enquiryResult.id)),
+        db.select().from(enquiry_departure_airport).where(eq(enquiry_departure_airport.enquiry_id, enquiryResult.id)),
+      ]);
+      enrichedEnquiry = {
+        ...enquiryResult,
+        destinations,
+        resorts,
+        accommodations,
+        boardBases,
+        airports,
+      };
+    }
+
     return {
       ...txn,
-      enquiry: enquiryResult || null,
+      enquiry: enrichedEnquiry,
       quotes,
       booking: bookingResult || null,
       client: client || null,

@@ -283,13 +283,21 @@ export interface TransactionNote {
   transaction_id: string | null;
 }
 
+export interface EnquiryRelations {
+  destinations?: string[];
+  resorts?: string[];
+  accommodations?: string[];
+  boardBases?: string[];
+  departureAirports?: string[];
+}
+
 export interface CreateTransactionData {
   client_id?: string;
   holiday_type_id?: string;
   agent_id?: string;
   lead_source?: string;
   user_id: string;
-  enquiry?: Partial<EnquiryTable>;
+  enquiry?: Partial<EnquiryTable> & EnquiryRelations;
 }
 
 export interface CreateQuoteData {
@@ -308,6 +316,9 @@ export interface CreateQuoteData {
   transfer_type?: string;
   main_tour_operator_id?: string;
   quote_status?: string;
+  lodge_id?: string;
+  cottage_id?: string;
+  pets?: number;
 }
 
 export interface QuoteFilters {

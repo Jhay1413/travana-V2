@@ -51,6 +51,7 @@ import type { Client as ApiClient } from "@/types/client";
 import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
 import type { CreateQuoteData, Transaction, EnquiryTable, Quote as ApiQuote } from "@/types/quote";
+import { quoteApi } from "@/api";
 import type { Enquiry } from "@/types/enquiry";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -583,9 +584,18 @@ export default function ClientPage() {
       createQuoteMutationHook.mutate(data as CreateQuoteData, {
         onSuccess: async (createdQuote) => {
           try {
-            // Image upload API removed - quoteImageApi no longer available
+            if (newQuote.packageType === "Package Holiday" && newQuote.accommodation) {
+              await quoteApi.addAccommodation(createdQuote.id, {
+                accomodation_id: newQuote.accommodation,
+                board_basis_id: newQuote.boardBasis || undefined,
+                no_of_nights: newQuote.nights || 0,
+                check_in_date_time: newQuote.checkInDate || undefined,
+                is_primary: true,
+                is_included_in_package: true,
+              });
+            }
           } catch {
-            toast({ title: "Quote created but some images failed to upload", variant: "destructive" });
+            toast({ title: "Quote created but accommodation details failed to save", variant: "destructive" });
           }
           if (quoteImageFiles.length > 0 || quoteImageUrls.length > 0) {
             queryClient.invalidateQueries({ queryKey: ["quotes"] });
@@ -649,7 +659,10 @@ export default function ClientPage() {
             budget_type: data.budgetType || data.budget_type || undefined,
             cabin_type: data.cabinType || data.cabin_type || undefined,
             status: "Active",
-          } as Partial<EnquiryTable>,
+            destinations: data.destinations || undefined,
+            resorts: data.resorts || undefined,
+            boardBases: data.boardBases || undefined,
+          } as any,
         },
         {
           onSuccess: () => {
@@ -2775,7 +2788,7 @@ export default function ClientPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {(boardBasisData || []).map((bb: any) => (
-                          <SelectItem key={bb.id} value={bb.type}>{bb.type}</SelectItem>
+                          <SelectItem key={bb.id} value={bb.id}>{bb.type}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -3096,6 +3109,8 @@ export default function ClientPage() {
                           price_per_person: newQuote.pricePerPerson ? String(newQuote.pricePerPerson) : undefined,
                           transfer_type: newQuote.transferType || undefined,
                           quote_status: newQuoteIsBooking ? "Booked" : "In Play",
+                          lodge_id: newQuote.packageType === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
+                          pets: newQuote.packageType === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
                         });
                       },
                       onError: () => {
