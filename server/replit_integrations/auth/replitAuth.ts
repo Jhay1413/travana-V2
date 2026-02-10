@@ -59,9 +59,11 @@ async function upsertUser(claims: any) {
     id: claims["sub"],
     name,
     email: claims["email"] || "",
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
+    firstName: firstName || "",
+    lastName: lastName || "",
+    phoneNumber: "",
+    image: claims["profile_image_url"] || null,
+    role: "Agent",
   });
 }
 
