@@ -28,6 +28,9 @@ import {
   X,
   Pin,
   PinOff,
+  Anchor,
+  PawPrint,
+  Hotel,
   Plus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +42,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useNeonClient, useQuotes, useTicketsByClient, useUsers, useCurrentUser, useEnquiries } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
@@ -465,6 +469,18 @@ export default function ClientPage() {
     returnDate: "",
     haysReference: "",
     tourReference: "",
+    cruiseTitle: "",
+    cruiseLine: "",
+    shipName: "",
+    cruiseDate: "",
+    cabinType: "",
+    embarkation: "",
+    debarkation: "",
+    cruiseExtras: "",
+    cruiseOnly: false,
+    lodgeCode: "",
+    parkName: "",
+    pets: false,
   };
   const [newQuote, setNewQuote] = useState(newQuoteDefaults);
   const [quoteImageFiles, setQuoteImageFiles] = useState<File[]>([]);
@@ -2056,10 +2072,11 @@ export default function ClientPage() {
                       <SelectValue placeholder="Select type..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Package (Flight + Hotel)">Package (Flight + Hotel)</SelectItem>
+                      <SelectItem value="Package Holiday">Package Holiday</SelectItem>
+                      <SelectItem value="Hot Tub Break">Hot Tub Break</SelectItem>
+                      <SelectItem value="Cruise Package">Cruise Package</SelectItem>
                       <SelectItem value="Flight Only">Flight Only</SelectItem>
                       <SelectItem value="Hotel Only">Hotel Only</SelectItem>
-                      <SelectItem value="Cruise">Cruise</SelectItem>
                       <SelectItem value="Tour">Tour</SelectItem>
                     </SelectContent>
                   </Select>
@@ -2314,351 +2331,607 @@ export default function ClientPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-              <div className="mb-3 text-sm font-semibold">Travel Details</div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                  <DatePicker
-                    value={newQuote.travelDate}
-                    onChange={(v) => setNewQuote({ ...newQuote, travelDate: v })}
-                    placeholder="Pick a date"
-                    data-testid="input-travel-date"
-                  />
+            {newQuote.packageType === "Hot Tub Break" ? (
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-travel-date-only">
+                <div className="mb-3 text-sm font-semibold">Travel Details</div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Travel Date</Label>
+                    <DatePicker
+                      value={newQuote.travelDate}
+                      onChange={(v) => setNewQuote({ ...newQuote, travelDate: v })}
+                      placeholder="Pick a date"
+                      data-testid="input-travel-date"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Adults</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={newQuote.passengersAdults}
-                    onChange={(e) => setNewQuote({ ...newQuote, passengersAdults: parseInt(e.target.value) || 1 })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-adults"
-                  />
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-travel-details">
+                <div className="mb-3 text-sm font-semibold">Travel Details</div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Travel Date</Label>
+                    <DatePicker
+                      value={newQuote.travelDate}
+                      onChange={(v) => setNewQuote({ ...newQuote, travelDate: v })}
+                      placeholder="Pick a date"
+                      data-testid="input-travel-date"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Adults</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={newQuote.passengersAdults}
+                      onChange={(e) => setNewQuote({ ...newQuote, passengersAdults: parseInt(e.target.value) || 1 })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-adults"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Children</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={newQuote.passengersChildren}
+                      onChange={(e) => {
+                        const count = parseInt(e.target.value) || 0;
+                        setNewQuote({ ...newQuote, passengersChildren: count, childAges: Array(count).fill(0) });
+                      }}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-children"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Infants</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={newQuote.passengersInfants}
+                      onChange={(e) => setNewQuote({ ...newQuote, passengersInfants: parseInt(e.target.value) || 0 })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-infants"
+                    />
+                  </div>
+                  {newQuote.passengersChildren > 0 && (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {newQuote.childAges.map((age, idx) => (
+                          <Input
+                            key={idx}
+                            type="number"
+                            min={0}
+                            max={17}
+                            value={age}
+                            onChange={(e) => {
+                              const ages = [...newQuote.childAges];
+                              ages[idx] = parseInt(e.target.value) || 0;
+                              setNewQuote({ ...newQuote, childAges: ages });
+                            }}
+                            className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
+                            data-testid={`input-child-age-${idx}`}
+                            placeholder={`Child ${idx + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Children</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={newQuote.passengersChildren}
-                    onChange={(e) => {
-                      const count = parseInt(e.target.value) || 0;
-                      setNewQuote({ ...newQuote, passengersChildren: count, childAges: Array(count).fill(0) });
-                    }}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-children"
-                  />
+              </div>
+            )}
+
+            {newQuote.packageType === "Cruise Package" ? (
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-cruise-cabin">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                  <Anchor className="h-4 w-4" />
+                  Cruise & Cabin
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Infants</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={newQuote.passengersInfants}
-                    onChange={(e) => setNewQuote({ ...newQuote, passengersInfants: parseInt(e.target.value) || 0 })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-infants"
-                  />
-                </div>
-                {newQuote.passengersChildren > 0 && (
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {newQuote.childAges.map((age, idx) => (
-                        <Input
-                          key={idx}
-                          type="number"
-                          min={0}
-                          max={17}
-                          value={age}
-                          onChange={(e) => {
-                            const ages = [...newQuote.childAges];
-                            ages[idx] = parseInt(e.target.value) || 0;
-                            setNewQuote({ ...newQuote, childAges: ages });
-                          }}
-                          className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
-                          data-testid={`input-child-age-${idx}`}
-                          placeholder={`Child ${idx + 1}`}
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Cruise Title</Label>
+                    <Input
+                      placeholder="e.g. Western Mediterranean"
+                      value={newQuote.cruiseTitle}
+                      onChange={(e) => setNewQuote({ ...newQuote, cruiseTitle: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-cruise-title"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Cruise Line</Label>
+                    <Input
+                      placeholder="e.g. Royal Caribbean"
+                      value={newQuote.cruiseLine}
+                      onChange={(e) => setNewQuote({ ...newQuote, cruiseLine: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-cruise-line"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Ship Name</Label>
+                    <Input
+                      placeholder="e.g. Harmony of the Seas"
+                      value={newQuote.shipName}
+                      onChange={(e) => setNewQuote({ ...newQuote, shipName: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-ship-name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Cruise Date</Label>
+                    <DatePicker
+                      value={newQuote.cruiseDate}
+                      onChange={(v) => setNewQuote({ ...newQuote, cruiseDate: v })}
+                      placeholder="Pick a date"
+                      data-testid="input-cruise-date"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Cabin Type</Label>
+                    <Select value={newQuote.cabinType} onValueChange={(v) => setNewQuote({ ...newQuote, cabinType: v })}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-cabin-type">
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inside">Inside</SelectItem>
+                        <SelectItem value="Outside">Outside</SelectItem>
+                        <SelectItem value="Balcony">Balcony</SelectItem>
+                        <SelectItem value="Suite">Suite</SelectItem>
+                        <SelectItem value="Mini Suite">Mini Suite</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Embarkation</Label>
+                    <Input
+                      placeholder="e.g. Southampton"
+                      value={newQuote.embarkation}
+                      onChange={(e) => setNewQuote({ ...newQuote, embarkation: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-embarkation"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Debarkation</Label>
+                    <Input
+                      placeholder="e.g. Barcelona"
+                      value={newQuote.debarkation}
+                      onChange={(e) => setNewQuote({ ...newQuote, debarkation: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-debarkation"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Cruise Extras Included</Label>
+                    <Input
+                      placeholder="e.g. Drinks package, WiFi"
+                      value={newQuote.cruiseExtras}
+                      onChange={(e) => setNewQuote({ ...newQuote, cruiseExtras: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-cruise-extras"
+                    />
+                  </div>
+                  <div className="flex items-end gap-3 pb-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Cruise Only</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={newQuote.cruiseOnly}
+                          onCheckedChange={(v) => setNewQuote({ ...newQuote, cruiseOnly: v })}
+                          data-testid="switch-cruise-only"
                         />
-                      ))}
+                        <span className="text-xs text-black/55">{newQuote.cruiseOnly ? "Yes" : "No"}</span>
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
-            </div>
+            ) : newQuote.packageType === "Hot Tub Break" ? (
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-lodge-details">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                  <Hotel className="h-4 w-4" />
+                  Lodge Details
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Lodge Code</Label>
+                    <Input
+                      placeholder="e.g. HT-2451"
+                      value={newQuote.lodgeCode}
+                      onChange={(e) => setNewQuote({ ...newQuote, lodgeCode: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-lodge-code"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Park Name</Label>
+                    <Input
+                      placeholder="e.g. Forest Holidays"
+                      value={newQuote.parkName}
+                      onChange={(e) => setNewQuote({ ...newQuote, parkName: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-park-name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={newQuote.nights}
+                      onChange={(e) => setNewQuote({ ...newQuote, nights: parseInt(e.target.value) || 1 })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-lodge-nights"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
+                    <DatePicker
+                      value={newQuote.checkInDate}
+                      onChange={(v) => setNewQuote({ ...newQuote, checkInDate: v })}
+                      placeholder="Pick a date"
+                      data-testid="input-lodge-checkin"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Adults</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={newQuote.passengersAdults}
+                      onChange={(e) => setNewQuote({ ...newQuote, passengersAdults: parseInt(e.target.value) || 1 })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-lodge-adults"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Children</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={newQuote.passengersChildren}
+                      onChange={(e) => {
+                        const count = parseInt(e.target.value) || 0;
+                        setNewQuote({ ...newQuote, passengersChildren: count, childAges: Array(count).fill(0) });
+                      }}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-lodge-children"
+                    />
+                  </div>
+                  {newQuote.passengersChildren > 0 && (
+                    <div className="space-y-1.5 md:col-span-3">
+                      <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {newQuote.childAges.map((age, idx) => (
+                          <Input
+                            key={idx}
+                            type="number"
+                            min={0}
+                            max={17}
+                            value={age}
+                            onChange={(e) => {
+                              const ages = [...newQuote.childAges];
+                              ages[idx] = parseInt(e.target.value) || 0;
+                              setNewQuote({ ...newQuote, childAges: ages });
+                            }}
+                            className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
+                            data-testid={`input-lodge-child-age-${idx}`}
+                            placeholder={`Child ${idx + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Infants</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={newQuote.passengersInfants}
+                      onChange={(e) => setNewQuote({ ...newQuote, passengersInfants: parseInt(e.target.value) || 0 })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-lodge-infants"
+                    />
+                  </div>
+                  <div className="flex items-end gap-3 pb-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">
+                        <span className="flex items-center gap-1.5">
+                          <PawPrint className="h-3.5 w-3.5" />
+                          Pets
+                        </span>
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={newQuote.pets}
+                          onCheckedChange={(v) => setNewQuote({ ...newQuote, pets: v })}
+                          data-testid="switch-pets"
+                        />
+                        <span className="text-xs text-black/55">{newQuote.pets ? "Yes" : "No"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-destination-accommodation">
+                <div className="mb-3 text-sm font-semibold">Destination & Accommodation</div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Country</Label>
+                    <Input
+                      placeholder="e.g. United Kingdom"
+                      value={newQuote.country}
+                      onChange={(e) => setNewQuote({ ...newQuote, country: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-country"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Destination</Label>
+                    <Input
+                      placeholder="e.g. Maldives"
+                      value={newQuote.destination}
+                      onChange={(e) => setNewQuote({ ...newQuote, destination: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-destination"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Resort</Label>
+                    <Input
+                      placeholder="e.g. North Malé Atoll"
+                      value={newQuote.resort}
+                      onChange={(e) => setNewQuote({ ...newQuote, resort: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-resort"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Accommodation</Label>
+                    <Input
+                      placeholder="e.g. Azure Overwater Resort"
+                      value={newQuote.accommodation}
+                      onChange={(e) => setNewQuote({ ...newQuote, accommodation: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-accommodation"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
+                    <DatePicker
+                      value={newQuote.checkInDate}
+                      onChange={(v) => setNewQuote({ ...newQuote, checkInDate: v })}
+                      placeholder="Pick a date"
+                      data-testid="input-checkin-date"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Check-in Time</Label>
+                    <Input
+                      type="time"
+                      value={newQuote.checkInTime}
+                      onChange={(e) => setNewQuote({ ...newQuote, checkInTime: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-checkin-time"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={newQuote.nights}
+                      onChange={(e) => setNewQuote({ ...newQuote, nights: parseInt(e.target.value) || 1 })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-nights"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Board Basis</Label>
+                    <Select value={newQuote.boardBasis} onValueChange={(v) => setNewQuote({ ...newQuote, boardBasis: v })}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-board-basis">
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Room Only">Room Only</SelectItem>
+                        <SelectItem value="Bed & Breakfast">Bed & Breakfast</SelectItem>
+                        <SelectItem value="Half Board">Half Board</SelectItem>
+                        <SelectItem value="Full Board">Full Board</SelectItem>
+                        <SelectItem value="All Inclusive">All Inclusive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Room Type</Label>
+                    <Input
+                      placeholder="e.g. Overwater Villa"
+                      value={newQuote.roomType}
+                      onChange={(e) => setNewQuote({ ...newQuote, roomType: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-room-type"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Transfer Type</Label>
+                    <Select value={newQuote.transferType} onValueChange={(v) => setNewQuote({ ...newQuote, transferType: v })}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-transfer-type">
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Private Transfer">Private Transfer</SelectItem>
+                        <SelectItem value="Shared Transfer">Shared Transfer</SelectItem>
+                        <SelectItem value="Seaplane">Seaplane</SelectItem>
+                        <SelectItem value="Speedboat">Speedboat</SelectItem>
+                        <SelectItem value="Self-drive">Self-drive</SelectItem>
+                        <SelectItem value="None">None</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Pre-booked Seats</Label>
+                    <Input
+                      placeholder="e.g. Extra legroom (row 12)"
+                      value={newQuote.preBookedSeats}
+                      onChange={(e) => setNewQuote({ ...newQuote, preBookedSeats: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-prebooked-seats"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Flight Meals</Label>
+                    <Input
+                      placeholder="e.g. Standard + child meal"
+                      value={newQuote.flightMeals}
+                      onChange={(e) => setNewQuote({ ...newQuote, flightMeals: e.target.value })}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="input-flight-meals"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-              <div className="mb-3 text-sm font-semibold">Destination & Accommodation</div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Country</Label>
-                  <Input
-                    placeholder="e.g. United Kingdom"
-                    value={newQuote.country}
-                    onChange={(e) => setNewQuote({ ...newQuote, country: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-country"
-                  />
+            {newQuote.packageType !== "Hot Tub Break" && !(newQuote.packageType === "Cruise Package" && newQuote.cruiseOnly) && (
+              <>
+                <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-outbound-flights">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                    <Plane className="h-4 w-4" />
+                    Flights — Outbound
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                      <Input
+                        placeholder="e.g. LHR"
+                        value={newQuote.outboundDepartAirport}
+                        onChange={(e) => setNewQuote({ ...newQuote, outboundDepartAirport: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-outbound-depart-airport"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                      <DatePicker
+                        value={newQuote.outboundDepartDate}
+                        onChange={(v) => setNewQuote({ ...newQuote, outboundDepartDate: v })}
+                        placeholder="Pick a date"
+                        data-testid="input-outbound-depart-date"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                      <Input
+                        type="time"
+                        value={newQuote.outboundDepartTime}
+                        onChange={(e) => setNewQuote({ ...newQuote, outboundDepartTime: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-outbound-depart-time"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                      <Input
+                        placeholder="e.g. MLE"
+                        value={newQuote.outboundArriveAirport}
+                        onChange={(e) => setNewQuote({ ...newQuote, outboundArriveAirport: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-outbound-arrive-airport"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                      <DatePicker
+                        value={newQuote.outboundArriveDate}
+                        onChange={(v) => setNewQuote({ ...newQuote, outboundArriveDate: v })}
+                        placeholder="Pick a date"
+                        data-testid="input-outbound-arrive-date"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                      <Input
+                        type="time"
+                        value={newQuote.outboundArriveTime}
+                        onChange={(e) => setNewQuote({ ...newQuote, outboundArriveTime: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-outbound-arrive-time"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Destination</Label>
-                  <Input
-                    placeholder="e.g. Maldives"
-                    value={newQuote.destination}
-                    onChange={(e) => setNewQuote({ ...newQuote, destination: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-destination"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Resort</Label>
-                  <Input
-                    placeholder="e.g. North Malé Atoll"
-                    value={newQuote.resort}
-                    onChange={(e) => setNewQuote({ ...newQuote, resort: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-resort"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Accommodation</Label>
-                  <Input
-                    placeholder="e.g. Azure Overwater Resort"
-                    value={newQuote.accommodation}
-                    onChange={(e) => setNewQuote({ ...newQuote, accommodation: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-accommodation"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
-                  <DatePicker
-                    value={newQuote.checkInDate}
-                    onChange={(v) => setNewQuote({ ...newQuote, checkInDate: v })}
-                    placeholder="Pick a date"
-                    data-testid="input-checkin-date"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Check-in Time</Label>
-                  <Input
-                    type="time"
-                    value={newQuote.checkInTime}
-                    onChange={(e) => setNewQuote({ ...newQuote, checkInTime: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-checkin-time"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={newQuote.nights}
-                    onChange={(e) => setNewQuote({ ...newQuote, nights: parseInt(e.target.value) || 1 })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-nights"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Board Basis</Label>
-                  <Select value={newQuote.boardBasis} onValueChange={(v) => setNewQuote({ ...newQuote, boardBasis: v })}>
-                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-board-basis">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Room Only">Room Only</SelectItem>
-                      <SelectItem value="Bed & Breakfast">Bed & Breakfast</SelectItem>
-                      <SelectItem value="Half Board">Half Board</SelectItem>
-                      <SelectItem value="Full Board">Full Board</SelectItem>
-                      <SelectItem value="All Inclusive">All Inclusive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Room Type</Label>
-                  <Input
-                    placeholder="e.g. Overwater Villa"
-                    value={newQuote.roomType}
-                    onChange={(e) => setNewQuote({ ...newQuote, roomType: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-room-type"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Transfer Type</Label>
-                  <Select value={newQuote.transferType} onValueChange={(v) => setNewQuote({ ...newQuote, transferType: v })}>
-                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-transfer-type">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Private Transfer">Private Transfer</SelectItem>
-                      <SelectItem value="Shared Transfer">Shared Transfer</SelectItem>
-                      <SelectItem value="Seaplane">Seaplane</SelectItem>
-                      <SelectItem value="Speedboat">Speedboat</SelectItem>
-                      <SelectItem value="Self-drive">Self-drive</SelectItem>
-                      <SelectItem value="None">None</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Pre-booked Seats</Label>
-                  <Input
-                    placeholder="e.g. Extra legroom (row 12)"
-                    value={newQuote.preBookedSeats}
-                    onChange={(e) => setNewQuote({ ...newQuote, preBookedSeats: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-prebooked-seats"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Flight Meals</Label>
-                  <Input
-                    placeholder="e.g. Standard + child meal"
-                    value={newQuote.flightMeals}
-                    onChange={(e) => setNewQuote({ ...newQuote, flightMeals: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-flight-meals"
-                  />
-                </div>
-              </div>
-            </div>
 
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <Plane className="h-4 w-4" />
-                Flights — Outbound
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                  <Input
-                    placeholder="e.g. LHR"
-                    value={newQuote.outboundDepartAirport}
-                    onChange={(e) => setNewQuote({ ...newQuote, outboundDepartAirport: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-outbound-depart-airport"
-                  />
+                <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-inbound-flights">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                    <Plane className="h-4 w-4 rotate-180" />
+                    Flights — Inbound
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                      <Input
+                        placeholder="e.g. MLE"
+                        value={newQuote.inboundDepartAirport}
+                        onChange={(e) => setNewQuote({ ...newQuote, inboundDepartAirport: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-inbound-depart-airport"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                      <DatePicker
+                        value={newQuote.inboundDepartDate}
+                        onChange={(v) => setNewQuote({ ...newQuote, inboundDepartDate: v })}
+                        placeholder="Pick a date"
+                        data-testid="input-inbound-depart-date"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                      <Input
+                        type="time"
+                        value={newQuote.inboundDepartTime}
+                        onChange={(e) => setNewQuote({ ...newQuote, inboundDepartTime: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-inbound-depart-time"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                      <Input
+                        placeholder="e.g. LHR"
+                        value={newQuote.inboundArriveAirport}
+                        onChange={(e) => setNewQuote({ ...newQuote, inboundArriveAirport: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-inbound-arrive-airport"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                      <DatePicker
+                        value={newQuote.inboundArriveDate}
+                        onChange={(v) => setNewQuote({ ...newQuote, inboundArriveDate: v })}
+                        placeholder="Pick a date"
+                        data-testid="input-inbound-arrive-date"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                      <Input
+                        type="time"
+                        value={newQuote.inboundArriveTime}
+                        onChange={(e) => setNewQuote({ ...newQuote, inboundArriveTime: e.target.value })}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        data-testid="input-inbound-arrive-time"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                  <DatePicker
-                    value={newQuote.outboundDepartDate}
-                    onChange={(v) => setNewQuote({ ...newQuote, outboundDepartDate: v })}
-                    placeholder="Pick a date"
-                    data-testid="input-outbound-depart-date"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Departure Time</Label>
-                  <Input
-                    type="time"
-                    value={newQuote.outboundDepartTime}
-                    onChange={(e) => setNewQuote({ ...newQuote, outboundDepartTime: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-outbound-depart-time"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                  <Input
-                    placeholder="e.g. MLE"
-                    value={newQuote.outboundArriveAirport}
-                    onChange={(e) => setNewQuote({ ...newQuote, outboundArriveAirport: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-outbound-arrive-airport"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                  <DatePicker
-                    value={newQuote.outboundArriveDate}
-                    onChange={(v) => setNewQuote({ ...newQuote, outboundArriveDate: v })}
-                    placeholder="Pick a date"
-                    data-testid="input-outbound-arrive-date"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
-                  <Input
-                    type="time"
-                    value={newQuote.outboundArriveTime}
-                    onChange={(e) => setNewQuote({ ...newQuote, outboundArriveTime: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-outbound-arrive-time"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <Plane className="h-4 w-4 rotate-180" />
-                Flights — Inbound
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                  <Input
-                    placeholder="e.g. MLE"
-                    value={newQuote.inboundDepartAirport}
-                    onChange={(e) => setNewQuote({ ...newQuote, inboundDepartAirport: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-inbound-depart-airport"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                  <DatePicker
-                    value={newQuote.inboundDepartDate}
-                    onChange={(v) => setNewQuote({ ...newQuote, inboundDepartDate: v })}
-                    placeholder="Pick a date"
-                    data-testid="input-inbound-depart-date"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Departure Time</Label>
-                  <Input
-                    type="time"
-                    value={newQuote.inboundDepartTime}
-                    onChange={(e) => setNewQuote({ ...newQuote, inboundDepartTime: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-inbound-depart-time"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                  <Input
-                    placeholder="e.g. LHR"
-                    value={newQuote.inboundArriveAirport}
-                    onChange={(e) => setNewQuote({ ...newQuote, inboundArriveAirport: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-inbound-arrive-airport"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                  <DatePicker
-                    value={newQuote.inboundArriveDate}
-                    onChange={(v) => setNewQuote({ ...newQuote, inboundArriveDate: v })}
-                    placeholder="Pick a date"
-                    data-testid="input-inbound-arrive-date"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
-                  <Input
-                    type="time"
-                    value={newQuote.inboundArriveTime}
-                    onChange={(e) => setNewQuote({ ...newQuote, inboundArriveTime: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-inbound-arrive-time"
-                  />
-                </div>
-              </div>
-            </div>
+              </>
+            )}
 
             <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
               <div className="mb-3 text-sm font-semibold">Package Commissions</div>
@@ -2759,14 +3032,16 @@ export default function ClientPage() {
                     toast({ title: "Please wait, loading user info...", variant: "destructive" });
                     return;
                   }
-                  if (!newQuote.packageType || !newQuote.quoteTitle || !newQuote.destination || !newQuote.travelDate) {
-                    toast({ title: "Please fill in Package Type, Quote Title, Destination and Travel Date", variant: "destructive" });
+                  if (!newQuote.packageType || !newQuote.quoteTitle || !newQuote.travelDate) {
+                    toast({ title: "Please fill in Package Type, Quote Title and Travel Date", variant: "destructive" });
                     return;
                   }
                   const travelDateObj = new Date(newQuote.travelDate);
                   const returnDateObj = new Date(travelDateObj);
                   returnDateObj.setDate(returnDateObj.getDate() + (newQuote.nights || 7));
                   const returnDate = newQuote.returnDate || returnDateObj.toISOString().split('T')[0];
+
+                  const shouldClearFlights = newQuote.packageType === "Hot Tub Break" || (newQuote.packageType === "Cruise Package" && newQuote.cruiseOnly);
                   
                   createQuoteMutation.mutate({
                     clientId,
@@ -2794,18 +3069,18 @@ export default function ClientPage() {
                     preBookedSeats: newQuote.preBookedSeats || undefined,
                     flightMeals: newQuote.flightMeals || undefined,
                     leadSource: newQuote.leadSource || undefined,
-                    outboundDepartAirport: newQuote.outboundDepartAirport || undefined,
-                    outboundDepartDate: newQuote.outboundDepartDate || undefined,
-                    outboundDepartTime: newQuote.outboundDepartTime || undefined,
-                    outboundArriveAirport: newQuote.outboundArriveAirport || undefined,
-                    outboundArriveDate: newQuote.outboundArriveDate || undefined,
-                    outboundArriveTime: newQuote.outboundArriveTime || undefined,
-                    inboundDepartAirport: newQuote.inboundDepartAirport || undefined,
-                    inboundDepartDate: newQuote.inboundDepartDate || undefined,
-                    inboundDepartTime: newQuote.inboundDepartTime || undefined,
-                    inboundArriveAirport: newQuote.inboundArriveAirport || undefined,
-                    inboundArriveDate: newQuote.inboundArriveDate || undefined,
-                    inboundArriveTime: newQuote.inboundArriveTime || undefined,
+                    outboundDepartAirport: shouldClearFlights ? undefined : (newQuote.outboundDepartAirport || undefined),
+                    outboundDepartDate: shouldClearFlights ? undefined : (newQuote.outboundDepartDate || undefined),
+                    outboundDepartTime: shouldClearFlights ? undefined : (newQuote.outboundDepartTime || undefined),
+                    outboundArriveAirport: shouldClearFlights ? undefined : (newQuote.outboundArriveAirport || undefined),
+                    outboundArriveDate: shouldClearFlights ? undefined : (newQuote.outboundArriveDate || undefined),
+                    outboundArriveTime: shouldClearFlights ? undefined : (newQuote.outboundArriveTime || undefined),
+                    inboundDepartAirport: shouldClearFlights ? undefined : (newQuote.inboundDepartAirport || undefined),
+                    inboundDepartDate: shouldClearFlights ? undefined : (newQuote.inboundDepartDate || undefined),
+                    inboundDepartTime: shouldClearFlights ? undefined : (newQuote.inboundDepartTime || undefined),
+                    inboundArriveAirport: shouldClearFlights ? undefined : (newQuote.inboundArriveAirport || undefined),
+                    inboundArriveDate: shouldClearFlights ? undefined : (newQuote.inboundArriveDate || undefined),
+                    inboundArriveTime: shouldClearFlights ? undefined : (newQuote.inboundArriveTime || undefined),
                     tourOperator: newQuote.tourOperator || undefined,
                     sales: newQuote.sales || undefined,
                     price: newQuote.price || undefined,
@@ -2813,6 +3088,22 @@ export default function ClientPage() {
                     discount: newQuote.discount || undefined,
                     serviceCharge: newQuote.serviceCharge || undefined,
                     pricePerPerson: newQuote.pricePerPerson || undefined,
+                    ...(newQuote.packageType === "Cruise Package" ? {
+                      cruiseTitle: newQuote.cruiseTitle || undefined,
+                      cruiseLine: newQuote.cruiseLine || undefined,
+                      shipName: newQuote.shipName || undefined,
+                      cruiseDate: newQuote.cruiseDate || undefined,
+                      cabinType: newQuote.cabinType || undefined,
+                      embarkation: newQuote.embarkation || undefined,
+                      debarkation: newQuote.debarkation || undefined,
+                      cruiseExtras: newQuote.cruiseExtras || undefined,
+                      cruiseOnly: newQuote.cruiseOnly,
+                    } : {}),
+                    ...(newQuote.packageType === "Hot Tub Break" ? {
+                      lodgeCode: newQuote.lodgeCode || undefined,
+                      parkName: newQuote.parkName || undefined,
+                      pets: newQuote.pets,
+                    } : {}),
                     ...(newQuoteIsBooking ? {
                       haysReference: newQuote.haysReference || undefined,
                       tourReference: newQuote.tourReference || undefined,
