@@ -98,6 +98,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Spinner } from "@/components/ui/spinner";
 import { useCurrentUser } from "@/hooks/queries";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const TASK_PRESETS_BY_ENTITY: Record<string, string[]> = {
   general: ["Follow up", "Phone call", "Send email", "Research", "Admin"],
@@ -1841,11 +1842,10 @@ export default function CommandCenterPage() {
                       </button>
                     ))}
                     {whatsOnFilter === "custom" && (
-                      <input
-                        type="date"
+                      <DatePicker
                         value={whatsOnDate}
-                        onChange={(e) => setWhatsOnDate(e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs dark:border-white/10 dark:bg-white/5"
+                        onChange={(v) => setWhatsOnDate(v)}
+                        placeholder="Pick a date"
                         data-testid="input-whats-on-date"
                       />
                     )}
@@ -2103,11 +2103,10 @@ export default function CommandCenterPage() {
                     </div>
 
                     <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-overview-social-date">
-                      <Input
-                        type="date"
+                      <DatePicker
                         value={socialDate}
-                        onChange={(e) => setSocialDate(e.target.value)}
-                        className="h-9 w-[170px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+                        onChange={(v) => setSocialDate(v)}
+                        placeholder="Pick a date"
                         data-testid="input-overview-social-date"
                       />
                       <span className="text-xs text-black/45 dark:text-white/45" data-testid="text-overview-social-date-hint">
@@ -2551,11 +2550,10 @@ export default function CommandCenterPage() {
                       </button>
                     ))}
                     {whatsOnFilter === "custom" && (
-                      <input
-                        type="date"
+                      <DatePicker
                         value={whatsOnDate}
-                        onChange={(e) => setWhatsOnDate(e.target.value)}
-                        className="rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs dark:border-white/10 dark:bg-white/5"
+                        onChange={(v) => setWhatsOnDate(v)}
+                        placeholder="Pick a date"
                         data-testid="input-workspace-whats-on-date"
                       />
                     )}
@@ -2813,11 +2811,10 @@ export default function CommandCenterPage() {
                     </div>
 
                     <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-social-date">
-                      <Input
-                        type="date"
+                      <DatePicker
                         value={socialDate}
-                        onChange={(e) => setSocialDate(e.target.value)}
-                        className="h-9 w-[170px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+                        onChange={(v) => setSocialDate(v)}
+                        placeholder="Pick a date"
                         data-testid="input-social-date"
                       />
                       <span className="text-xs text-black/45 dark:text-white/45" data-testid="text-social-date-hint">
@@ -4628,11 +4625,10 @@ export default function CommandCenterPage() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Due Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={dashNewDueDate}
-                  onChange={(e) => setDashNewDueDate(e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => setDashNewDueDate(v)}
+                  placeholder="Pick a date"
                   data-testid="input-dash-task-due-date"
                 />
               </div>

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -716,11 +717,10 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Due Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={newDueDate}
-                  onChange={(e) => setNewDueDate(e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => setNewDueDate(v)}
+                  placeholder="Pick a date"
                   data-testid="input-task-due-date"
                 />
               </div>
@@ -2061,11 +2061,10 @@ function EditQuoteDialog({
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={form.travelDate}
-                  onChange={(e) => set("travelDate", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => set("travelDate", v)}
+                  placeholder="Pick a date"
                   data-testid="edit-input-travel-date"
                 />
               </div>
@@ -2178,11 +2177,10 @@ function EditQuoteDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={form.checkInDate}
-                  onChange={(e) => set("checkInDate", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => set("checkInDate", v)}
+                  placeholder="Pick a date"
                   data-testid="edit-input-checkin-date"
                 />
               </div>
@@ -2289,11 +2287,10 @@ function EditQuoteDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={form.outboundDepartDate}
-                  onChange={(e) => set("outboundDepartDate", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => set("outboundDepartDate", v)}
+                  placeholder="Pick a date"
                   data-testid="edit-input-outbound-depart-date"
                 />
               </div>
@@ -2319,11 +2316,10 @@ function EditQuoteDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={form.outboundArriveDate}
-                  onChange={(e) => set("outboundArriveDate", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => set("outboundArriveDate", v)}
+                  placeholder="Pick a date"
                   data-testid="edit-input-outbound-arrive-date"
                 />
               </div>
@@ -2358,11 +2354,10 @@ function EditQuoteDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={form.inboundDepartDate}
-                  onChange={(e) => set("inboundDepartDate", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => set("inboundDepartDate", v)}
+                  placeholder="Pick a date"
                   data-testid="edit-input-inbound-depart-date"
                 />
               </div>
@@ -2388,11 +2383,10 @@ function EditQuoteDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={form.inboundArriveDate}
-                  onChange={(e) => set("inboundArriveDate", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => set("inboundArriveDate", v)}
+                  placeholder="Pick a date"
                   data-testid="edit-input-inbound-arrive-date"
                 />
               </div>

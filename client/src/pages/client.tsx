@@ -52,6 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { quoteImageApi } from "@/api";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
+import { DatePicker } from "@/components/ui/date-picker";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 
@@ -2318,11 +2319,10 @@ export default function ClientPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={newQuote.travelDate}
-                    onChange={(e) => setNewQuote({ ...newQuote, travelDate: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    onChange={(v) => setNewQuote({ ...newQuote, travelDate: v })}
+                    placeholder="Pick a date"
                     data-testid="input-travel-date"
                   />
                 </div>
@@ -2434,11 +2434,10 @@ export default function ClientPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={newQuote.checkInDate}
-                    onChange={(e) => setNewQuote({ ...newQuote, checkInDate: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    onChange={(v) => setNewQuote({ ...newQuote, checkInDate: v })}
+                    placeholder="Pick a date"
                     data-testid="input-checkin-date"
                   />
                 </div>
@@ -2545,11 +2544,10 @@ export default function ClientPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={newQuote.outboundDepartDate}
-                    onChange={(e) => setNewQuote({ ...newQuote, outboundDepartDate: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    onChange={(v) => setNewQuote({ ...newQuote, outboundDepartDate: v })}
+                    placeholder="Pick a date"
                     data-testid="input-outbound-depart-date"
                   />
                 </div>
@@ -2575,11 +2573,10 @@ export default function ClientPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={newQuote.outboundArriveDate}
-                    onChange={(e) => setNewQuote({ ...newQuote, outboundArriveDate: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    onChange={(v) => setNewQuote({ ...newQuote, outboundArriveDate: v })}
+                    placeholder="Pick a date"
                     data-testid="input-outbound-arrive-date"
                   />
                 </div>
@@ -2614,11 +2611,10 @@ export default function ClientPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={newQuote.inboundDepartDate}
-                    onChange={(e) => setNewQuote({ ...newQuote, inboundDepartDate: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    onChange={(v) => setNewQuote({ ...newQuote, inboundDepartDate: v })}
+                    placeholder="Pick a date"
                     data-testid="input-inbound-depart-date"
                   />
                 </div>
@@ -2644,11 +2640,10 @@ export default function ClientPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={newQuote.inboundArriveDate}
-                    onChange={(e) => setNewQuote({ ...newQuote, inboundArriveDate: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    onChange={(v) => setNewQuote({ ...newQuote, inboundArriveDate: v })}
+                    placeholder="Pick a date"
                     data-testid="input-inbound-arrive-date"
                   />
                 </div>
@@ -3100,11 +3095,10 @@ export default function ClientPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-dob">Date of Birth</Label>
-              <Input
-                id="edit-dob"
-                type="date"
+              <DatePicker
                 value={editForm.DOB}
-                onChange={(e) => setEditForm({ ...editForm, DOB: e.target.value })}
+                onChange={(v) => setEditForm({ ...editForm, DOB: v })}
+                placeholder="Pick a date"
                 data-testid="input-edit-dob"
               />
             </div>

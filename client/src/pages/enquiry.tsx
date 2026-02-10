@@ -46,6 +46,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -573,11 +574,10 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Due Date</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={newDueDate}
-                  onChange={(e) => setNewDueDate(e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  onChange={(v) => setNewDueDate(v)}
+                  placeholder="Pick a date"
                   data-testid="input-task-due-date"
                 />
               </div>

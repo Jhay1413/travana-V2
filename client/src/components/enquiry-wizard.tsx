@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry, CreateEnquiryData } from "@/types/enquiry";
 
 const HOLIDAY_TYPES = [
@@ -320,11 +321,10 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                      <Input
-                        type="date"
+                      <DatePicker
                         value={form.travelDate}
-                        onChange={(e) => set("travelDate", e.target.value)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
+                        onChange={(v) => set("travelDate", v)}
+                        placeholder="Pick a date"
                         data-testid="input-travel-date"
                       />
                     </div>
