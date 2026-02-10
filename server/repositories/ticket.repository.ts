@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { tickets, clientTable, users, type Ticket, type InsertTicket } from "@shared/schema";
+import { tickets, clientTable, user, type Ticket, type InsertTicket } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 
 export type TicketWithNames = Ticket & { clientName: string | null; userName: string | null };
@@ -19,11 +19,11 @@ function buildTicketWithNamesQuery() {
       updatedAt: tickets.updatedAt,
       resolvedAt: tickets.resolvedAt,
       clientName: sql<string | null>`COALESCE(NULLIF(${clientTable.title}, 'NULL') || ' ', '') || ${clientTable.firstName} || ' ' || ${clientTable.surename}`.as("client_name"),
-      userName: users.name,
+      userName: user.name,
     })
     .from(tickets)
     .leftJoin(clientTable, eq(tickets.clientId, clientTable.id))
-    .leftJoin(users, eq(tickets.userId, users.id));
+    .leftJoin(user, eq(tickets.userId, user.id));
 }
 
 export const ticketRepository = {

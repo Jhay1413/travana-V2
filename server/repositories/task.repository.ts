@@ -1,6 +1,9 @@
 import { db } from "../config/database";
-import { tasks, notifications, quotes, enquiries, clientTable, type Task, type InsertTask } from "@shared/schema";
+import { tasks, notifications, quotes, enquiries, clientTable } from "@shared/schema";
 import { eq, and, desc, lte, inArray } from "drizzle-orm";
+
+type LegacyTask = typeof tasks.$inferSelect;
+type InsertLegacyTask = typeof tasks.$inferInsert;
 
 const entityRouteMap: Record<string, string> = {
   enquiry: "/enquiries",
@@ -13,7 +16,7 @@ function entityLink(entityType: string, entityId: string): string {
   return `${base}/${entityId}`;
 }
 
-export type TaskWithClient = Task & { clientId: string | null; clientName: string | null; tags: string[] };
+export type TaskWithClient = LegacyTask & { clientId: string | null; clientName: string | null; tags: string[] };
 
 export const taskRepository = {
   async findAll(): Promise<TaskWithClient[]> {
@@ -24,21 +27,29 @@ export const taskRepository = {
 
     if (allTasks.length === 0) return [];
 
-    const quoteEntityIds = allTasks.filter(t => t.entityType === "quote" || t.entityType === "booking").map(t => t.entityId);
-    const enquiryEntityIds = allTasks.filter(t => t.entityType === "enquiry").map(t => t.entityId);
+    const quoteEntityIds = allTasks
+      .filter(t => t.entityType === "quote" || t.entityType === "booking")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+    const enquiryEntityIds = allTasks
+      .filter(t => t.entityType === "enquiry")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
 
     const clientIdMap = new Map<string, string>();
-
     const quoteTagsMap = new Map<string, string[]>();
+
     if (quoteEntityIds.length > 0) {
       const quoteRows = await db
         .select({ id: quotes.id, clientId: quotes.clientId, tags: quotes.tags })
         .from(quotes)
         .where(inArray(quotes.id, quoteEntityIds));
       for (const q of quoteRows) {
-        clientIdMap.set(`quote:${q.id}`, q.clientId);
-        clientIdMap.set(`booking:${q.id}`, q.clientId);
-        quoteTagsMap.set(q.id, q.tags);
+        if (q.clientId) {
+          clientIdMap.set(`quote:${q.id}`, q.clientId);
+          clientIdMap.set(`booking:${q.id}`, q.clientId);
+        }
+        quoteTagsMap.set(q.id, q.tags ?? []);
       }
     }
 
@@ -48,11 +59,13 @@ export const taskRepository = {
         .from(enquiries)
         .where(inArray(enquiries.id, enquiryEntityIds));
       for (const e of enquiryRows) {
-        clientIdMap.set(`enquiry:${e.id}`, e.clientId);
+        if (e.clientId) {
+          clientIdMap.set(`enquiry:${e.id}`, e.clientId);
+        }
       }
     }
 
-    const uniqueClientIds = Array.from(new Set(Array.from(clientIdMap.values())));
+    const uniqueClientIds = Array.from(new Set(Array.from(clientIdMap.values()).filter((v): v is string => v !== null)));
     const clientNameMap = new Map<string, string>();
 
     if (uniqueClientIds.length > 0) {
@@ -66,14 +79,15 @@ export const taskRepository = {
     }
 
     return allTasks.map(t => {
-      const cid = clientIdMap.get(`${t.entityType}:${t.entityId}`);
+      const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
+      const cid = clientIdMap.get(key);
       const clientName = cid ? clientNameMap.get(cid) ?? null : null;
-      const quoteTags = quoteTagsMap.get(t.entityId) || [];
-      return { ...t, clientId: cid ?? null, clientName, tags: [t.entityType, ...quoteTags] };
+      const quoteTags = t.entityId ? quoteTagsMap.get(t.entityId) ?? [] : [];
+      return { ...t, clientId: cid ?? null, clientName, tags: [t.entityType ?? "", ...quoteTags].filter(Boolean) };
     });
   },
 
-  async findByEntity(entityType: string, entityId: string): Promise<Task[]> {
+  async findByEntity(entityType: string, entityId: string): Promise<LegacyTask[]> {
     return await db
       .select()
       .from(tasks)
@@ -81,7 +95,7 @@ export const taskRepository = {
       .orderBy(desc(tasks.createdAt));
   },
 
-  async findByUserId(userId: string): Promise<Task[]> {
+  async findByUserId(userId: string): Promise<LegacyTask[]> {
     return await db
       .select()
       .from(tasks)
@@ -89,12 +103,12 @@ export const taskRepository = {
       .orderBy(desc(tasks.createdAt));
   },
 
-  async create(task: InsertTask): Promise<Task> {
-    const [result] = await db.insert(tasks).values(task).returning();
+  async create(taskData: InsertLegacyTask): Promise<LegacyTask> {
+    const [result] = await db.insert(tasks).values(taskData).returning();
     return result;
   },
 
-  async toggleComplete(id: string): Promise<Task | undefined> {
+  async toggleComplete(id: string): Promise<LegacyTask | undefined> {
     const [existing] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
     if (!existing) return undefined;
     const [result] = await db
@@ -125,15 +139,17 @@ export const taskRepository = {
         )
       );
 
-    for (const task of dueTasks) {
-      await db.insert(notifications).values({
-        userId: task.userId,
-        type: "task_due",
-        title: "Task Due",
-        message: `Task "${task.title}" is now due.`,
-        link: entityLink(task.entityType, task.entityId),
-      });
-      await db.update(tasks).set({ notified: true }).where(eq(tasks.id, task.id));
+    for (const t of dueTasks) {
+      if (t.userId) {
+        await db.insert(notifications).values({
+          userId: t.userId,
+          type: "task_due",
+          title: "Task Due",
+          message: `Task "${t.title}" is now due.`,
+          link: entityLink(t.entityType ?? "", t.entityId ?? ""),
+        });
+      }
+      await db.update(tasks).set({ notified: true }).where(eq(tasks.id, t.id));
     }
   },
 };

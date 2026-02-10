@@ -1,24 +1,27 @@
 import { db } from "../config/database";
-import { airports, type Airport, type InsertAirport } from "@shared/schema";
+import { airports } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
+type LegacyAirport = typeof airports.$inferSelect;
+type InsertLegacyAirport = typeof airports.$inferInsert;
+
 export const airportRepository = {
-  async findById(id: string): Promise<Airport | undefined> {
+  async findById(id: string): Promise<LegacyAirport | undefined> {
     const [result] = await db.select().from(airports).where(eq(airports.id, id)).limit(1);
     return result;
   },
 
-  async findAll(): Promise<Airport[]> {
+  async findAll(): Promise<LegacyAirport[]> {
     return await db.select().from(airports).orderBy(airports.airport_name);
   },
 
-  async create(airport: InsertAirport): Promise<Airport> {
-    const [result] = await db.insert(airports).values(airport).returning();
+  async create(airportData: InsertLegacyAirport): Promise<LegacyAirport> {
+    const [result] = await db.insert(airports).values(airportData).returning();
     return result;
   },
 
-  async update(id: string, airport: Partial<InsertAirport>): Promise<Airport | undefined> {
-    const [result] = await db.update(airports).set(airport).where(eq(airports.id, id)).returning();
+  async update(id: string, airportData: Partial<InsertLegacyAirport>): Promise<LegacyAirport | undefined> {
+    const [result] = await db.update(airports).set(airportData).where(eq(airports.id, id)).returning();
     return result;
   },
 

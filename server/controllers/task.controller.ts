@@ -3,7 +3,7 @@ import { taskService } from "../services/task.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 import { AppError } from "../utils/error-handler";
-import { insertTaskSchema } from "@shared/schema";
+import { insertTasksSchema } from "@shared/schema";
 
 export const taskController = {
   listAll: asyncHandler(async (req: Request, res: Response) => {
@@ -34,7 +34,7 @@ export const taskController = {
     if (typeof body.dueDate === "string") {
       body.dueDate = new Date(body.dueDate);
     }
-    const parsed = insertTaskSchema.parse(body);
+    const parsed = insertTasksSchema.parse(body);
     const task = await taskService.create(parsed);
     return successResponse(res, task, "Task created", 201);
   }),

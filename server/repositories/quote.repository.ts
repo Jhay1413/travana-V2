@@ -1,32 +1,35 @@
 import { db } from "../config/database";
-import { quotes, type Quote, type InsertQuote } from "@shared/schema";
+import { quotes } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 
+type LegacyQuote = typeof quotes.$inferSelect;
+type InsertLegacyQuote = typeof quotes.$inferInsert;
+
 export const quoteRepository = {
-  async findById(id: string): Promise<Quote | undefined> {
+  async findById(id: string): Promise<LegacyQuote | undefined> {
     const [result] = await db.select().from(quotes).where(eq(quotes.id, id)).limit(1);
     return result;
   },
 
-  async findAll(): Promise<Quote[]> {
+  async findAll(): Promise<LegacyQuote[]> {
     return await db.select().from(quotes).orderBy(desc(quotes.createdAt));
   },
 
-  async findByClientId(clientId: string): Promise<Quote[]> {
+  async findByClientId(clientId: string): Promise<LegacyQuote[]> {
     return await db.select().from(quotes).where(eq(quotes.clientId, clientId)).orderBy(desc(quotes.createdAt));
   },
 
-  async findByStatus(status: string): Promise<Quote[]> {
+  async findByStatus(status: string): Promise<LegacyQuote[]> {
     return await db.select().from(quotes).where(eq(quotes.status, status)).orderBy(desc(quotes.createdAt));
   },
 
-  async create(quote: InsertQuote): Promise<Quote> {
-    const [result] = await db.insert(quotes).values(quote).returning();
+  async create(quoteData: InsertLegacyQuote): Promise<LegacyQuote> {
+    const [result] = await db.insert(quotes).values(quoteData).returning();
     return result;
   },
 
-  async update(id: string, quote: Partial<InsertQuote>): Promise<Quote | undefined> {
-    const [result] = await db.update(quotes).set(quote).where(eq(quotes.id, id)).returning();
+  async update(id: string, quoteData: Partial<InsertLegacyQuote>): Promise<LegacyQuote | undefined> {
+    const [result] = await db.update(quotes).set(quoteData).where(eq(quotes.id, id)).returning();
     return result;
   },
 
