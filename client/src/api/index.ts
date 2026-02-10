@@ -15,3 +15,4 @@ export { attachmentApi } from "./endpoints/attachment.api";
 export { replyApi } from "./endpoints/reply.api";
 export { notificationApi } from "./endpoints/notification.api";
 export { taskApi } from "./endpoints/task.api";
+export { lookupApi } from "./endpoints/lookup.api";

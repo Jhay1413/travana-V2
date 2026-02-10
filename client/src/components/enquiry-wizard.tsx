@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
+import { useCountries, useDestinations, useResorts, useParks, useLodges, useBoardBasis } from "@/hooks/queries";
 
 const HOLIDAY_TYPES = [
   "Package Holiday",
@@ -209,6 +210,13 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   const [form, setForm] = useState<EnquiryForm>(defaultForm);
   const [direction, setDirection] = useState(1);
 
+  const { data: countriesData } = useCountries();
+  const { data: destinationsData } = useDestinations(form.country);
+  const { data: resortsData } = useResorts(form.destination);
+  const { data: boardBasisData } = useBoardBasis();
+  const { data: parksData } = useParks();
+  const { data: lodgesData } = useLodges(form.destination);
+
   const steps = useMemo(() => getSteps(form.holidayType), [form.holidayType]);
 
   useEffect(() => {
@@ -240,6 +248,12 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
     }
   };
 
+  const resolveCountryName = (id: string) => (countriesData || []).find(c => c.id === id)?.country_name || id;
+  const resolveDestinationName = (id: string) => (destinationsData || []).find(d => d.id === id)?.name || id;
+  const resolveResortName = (id: string) => (resortsData || []).find(r => r.id === id)?.name || id;
+  const resolveParkName = (id: string) => (parksData || []).find(p => p.id === id)?.name || id;
+  const resolveLodgeName = (id: string) => (lodgesData || []).find(l => l.id === id)?.lodge_name || id;
+
   const handleSubmit = () => {
     const base: Partial<EnquiryTable> = {
       title: form.enquiryTitle,
@@ -249,7 +263,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
 
     if (form.holidayType === "Hot Tub Break") {
       Object.assign(base, {
-        destinations: form.destination ? [{ name: form.destination }] : undefined,
+        destinations: form.destination ? [{ name: resolveParkName(form.destination) }] : undefined,
         budget: form.minBudget || form.maxBudget || undefined,
         budget_type: form.budgetType || undefined,
         no_of_nights: form.nights || undefined,
@@ -268,7 +282,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
       });
     } else {
       Object.assign(base, {
-        destinations: form.destination ? [{ name: form.destination }] : undefined,
+        destinations: form.destination ? [{ name: resolveDestinationName(form.destination) }] : undefined,
+        resorts: form.resort ? [{ resort: resolveResortName(form.resort) }] : undefined,
         travel_date: form.travelDate || undefined,
         adults: form.passengersAdults,
         children: form.passengersChildren,
@@ -393,15 +408,33 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Destination</Label>
-                        <Input
-                          placeholder="e.g. Lake District"
-                          value={form.destination}
-                          onChange={(e) => set("destination", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70"
-                          data-testid="input-enquiry-destination"
-                        />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Park</Label>
+                          <Select value={form.destination} onValueChange={(v) => setForm(prev => ({ ...prev, destination: v, resort: "" }))}>
+                            <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-park">
+                              <SelectValue placeholder="Select park..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(parksData || []).map((p) => (
+                                <SelectItem key={p.id} value={p.id}>{p.name || "Unnamed Park"}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Lodge</Label>
+                          <Select value={form.resort} onValueChange={(v) => set("resort", v)} disabled={!form.destination}>
+                            <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-lodge">
+                              <SelectValue placeholder={form.destination ? "Select lodge..." : "Select park first"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(lodgesData || []).map((l) => (
+                                <SelectItem key={l.id} value={l.id}>{l.lodge_name || "Unnamed"} {l.lodge_code ? `(${l.lodge_code})` : ""}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </>
                   )}
@@ -462,33 +495,42 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Country</Label>
-                        <Input
-                          placeholder="e.g. Spain"
-                          value={form.country}
-                          onChange={(e) => set("country", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70"
-                          data-testid="input-enquiry-country"
-                        />
+                        <Select value={form.country} onValueChange={(v) => setForm(prev => ({ ...prev, country: v, destination: "", resort: "" }))}>
+                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-country">
+                            <SelectValue placeholder="Select country..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(countriesData || []).map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.country_name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Destination</Label>
-                        <Input
-                          placeholder="e.g. Canary Islands"
-                          value={form.destination}
-                          onChange={(e) => set("destination", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70"
-                          data-testid="input-enquiry-destination"
-                        />
+                        <Select value={form.destination} onValueChange={(v) => setForm(prev => ({ ...prev, destination: v, resort: "" }))} disabled={!form.country}>
+                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-destination">
+                            <SelectValue placeholder={form.country ? "Select destination..." : "Select country first"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(destinationsData || []).map((d) => (
+                              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Resort</Label>
-                        <Input
-                          placeholder="e.g. Costa Adeje"
-                          value={form.resort}
-                          onChange={(e) => set("resort", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70"
-                          data-testid="input-enquiry-resort"
-                        />
+                        <Select value={form.resort} onValueChange={(v) => set("resort", v)} disabled={!form.destination}>
+                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-resort">
+                            <SelectValue placeholder={form.destination ? "Select resort..." : "Select destination first"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(resortsData || []).map((r) => (
+                              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   )}
@@ -961,8 +1003,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         <SelectValue placeholder="Select board basis..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {BOARD_BASIS_OPTIONS.map((b) => (
-                          <SelectItem key={b} value={b}>{b}</SelectItem>
+                        {(boardBasisData || BOARD_BASIS_OPTIONS.map(b => ({ id: b, type: b }))).map((b) => (
+                          <SelectItem key={b.id} value={b.type}>{b.type}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

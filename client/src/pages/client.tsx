@@ -43,7 +43,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -496,6 +496,14 @@ export default function ClientPage() {
   const { data: usersData } = useUsers();
 
   const { data: currentUser } = useCurrentUser();
+
+  const { data: countriesData } = useCountries();
+  const { data: destinationsData } = useDestinations(newQuote.country);
+  const { data: resortsData } = useResorts(newQuote.destination);
+  const { data: accommodationsData } = useAccommodations(newQuote.resort);
+  const { data: boardBasisData } = useBoardBasis();
+  const { data: parksData } = useParks();
+  const { data: lodgesData } = useLodges(newQuote.parkName);
 
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
@@ -2548,24 +2556,30 @@ export default function ClientPage() {
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Lodge Code</Label>
-                    <Input
-                      placeholder="e.g. HT-2451"
-                      value={newQuote.lodgeCode}
-                      onChange={(e) => setNewQuote({ ...newQuote, lodgeCode: e.target.value })}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-lodge-code"
-                    />
+                    <Label className="text-xs font-medium text-black/60">Park Name</Label>
+                    <Select value={newQuote.parkName} onValueChange={(v) => setNewQuote({ ...newQuote, parkName: v, lodgeCode: "" })}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-park-name">
+                        <SelectValue placeholder="Select park..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(parksData || []).map((park: any) => (
+                          <SelectItem key={park.id} value={park.id}>{park.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Park Name</Label>
-                    <Input
-                      placeholder="e.g. Forest Holidays"
-                      value={newQuote.parkName}
-                      onChange={(e) => setNewQuote({ ...newQuote, parkName: e.target.value })}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-park-name"
-                    />
+                    <Label className="text-xs font-medium text-black/60">Lodge Code</Label>
+                    <Select value={newQuote.lodgeCode} onValueChange={(v) => setNewQuote({ ...newQuote, lodgeCode: v })} disabled={!newQuote.parkName}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-lodge-code">
+                        <SelectValue placeholder="Select lodge..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(lodgesData || []).map((lodge: any) => (
+                          <SelectItem key={lodge.id} value={lodge.id}>{lodge.lodge_name}{lodge.lodge_code ? ` (${lodge.lodge_code})` : ""}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
@@ -2673,43 +2687,55 @@ export default function ClientPage() {
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Country</Label>
-                    <Input
-                      placeholder="e.g. United Kingdom"
-                      value={newQuote.country}
-                      onChange={(e) => setNewQuote({ ...newQuote, country: e.target.value })}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-country"
-                    />
+                    <Select value={newQuote.country} onValueChange={(v) => setNewQuote({ ...newQuote, country: v, destination: "", resort: "", accommodation: "" })}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-country">
+                        <SelectValue placeholder="Select country..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(countriesData || []).map((c: any) => (
+                          <SelectItem key={c.id} value={c.id}>{c.country_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Destination</Label>
-                    <Input
-                      placeholder="e.g. Maldives"
-                      value={newQuote.destination}
-                      onChange={(e) => setNewQuote({ ...newQuote, destination: e.target.value })}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-destination"
-                    />
+                    <Select value={newQuote.destination} onValueChange={(v) => setNewQuote({ ...newQuote, destination: v, resort: "", accommodation: "" })} disabled={!newQuote.country}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-destination">
+                        <SelectValue placeholder="Select destination..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(destinationsData || []).map((d: any) => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Resort</Label>
-                    <Input
-                      placeholder="e.g. North Malé Atoll"
-                      value={newQuote.resort}
-                      onChange={(e) => setNewQuote({ ...newQuote, resort: e.target.value })}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-resort"
-                    />
+                    <Select value={newQuote.resort} onValueChange={(v) => setNewQuote({ ...newQuote, resort: v, accommodation: "" })} disabled={!newQuote.destination}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-resort">
+                        <SelectValue placeholder="Select resort..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(resortsData || []).map((r: any) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Accommodation</Label>
-                    <Input
-                      placeholder="e.g. Azure Overwater Resort"
-                      value={newQuote.accommodation}
-                      onChange={(e) => setNewQuote({ ...newQuote, accommodation: e.target.value })}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-accommodation"
-                    />
+                    <Select value={newQuote.accommodation} onValueChange={(v) => setNewQuote({ ...newQuote, accommodation: v })} disabled={!newQuote.resort}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-accommodation">
+                        <SelectValue placeholder="Select accommodation..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(accommodationsData || []).map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
@@ -2748,11 +2774,9 @@ export default function ClientPage() {
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Room Only">Room Only</SelectItem>
-                        <SelectItem value="Bed & Breakfast">Bed & Breakfast</SelectItem>
-                        <SelectItem value="Half Board">Half Board</SelectItem>
-                        <SelectItem value="Full Board">Full Board</SelectItem>
-                        <SelectItem value="All Inclusive">All Inclusive</SelectItem>
+                        {(boardBasisData || []).map((bb: any) => (
+                          <SelectItem key={bb.id} value={bb.type}>{bb.type}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
