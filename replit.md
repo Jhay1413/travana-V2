@@ -66,19 +66,42 @@ Authentication is handled through dedicated routes in `/server/replit_integratio
 - **ORM**: Drizzle ORM with Zod schema validation
 - **Migrations**: Drizzle Kit with `drizzle-kit push` for schema sync
 
+The architecture follows a **transaction-centric** pattern where a `Transaction` is the central entity:
+- Transaction → Enquiry (1:1)
+- Transaction → Quotes (1:N, multi-variant)
+- Transaction → Booking (1:1, converted from accepted quote)
+- Transaction → Notes (1:N)
+
+Transaction status lifecycle: `on_enquiry` → `on_quote` → `on_booking`
+
 Schema includes tables for:
 - `sessions` - Authentication session storage
 - `users` - User accounts with role-based access
-- `clients` - Customer records with tier/stage tracking
-- `quotes` - Travel quote packages
-- `accommodations` - Lodging details per quote
-- `flights` - Flight itineraries per quote
-- `commissions` - Commission tracking
-- `quote_images` - Image attachments for quotes
-- `notes` - General notes system
-- `enquiries` - Travel enquiry records
-- `enquiry_notes` - Notes on enquiries
-- `favorites` - Pinned/favorited items per user (clients, quotes, enquiries)
+- `client_table` / `neon_clients` - Customer records (3300+ neon clients)
+- `transaction` - Central entity linking enquiry, quotes, booking
+- `enquiry_table` - Travel enquiry records (1:1 with transaction)
+- `quote` - Multi-variant quote packages (N:1 with transaction)
+- `booking` - Confirmed bookings (1:1 with transaction)
+- `transaction_notes` - Notes keyed by transaction
+- `deal_images` - Image attachments for deals
+- `tasks` - Task management system
+- `favorites` - Pinned/favorited items per user
+- `tour_operators` / `airports` - Lookup tables
+- `tickets` / `ticket_attachments` / `ticket_replies` - Support ticket system
+- `notifications` - User notification system
+
+Backend uses repository/service/controller pattern:
+- `server/repositories/` - Data access layer (transaction, newQuote, booking, enquiryTable, etc.)
+- `server/services/` - Business logic layer
+- `server/controllers/` - Request handling
+- `server/routes/` - Express route definitions
+
+Frontend hooks follow transaction-centric pattern:
+- `useTransactions()` - Fetch transactions with nested enquiry/quotes/booking
+- `useQuote(id)` / `useQuotes()` - Quote data access
+- `useBooking(id)` / `useBookings()` - Booking data access
+- `useEnquiry(id)` / `useEnquiries()` - Enquiry data access
+- `useNotes(transactionId)` - Notes keyed by transaction
 
 ### Development vs Production
 - **Development**: Vite dev server with HMR, served through Express middleware
