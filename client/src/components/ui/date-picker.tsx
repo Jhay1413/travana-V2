@@ -1,5 +1,5 @@
 import * as React from "react";
-import { format, parse } from "date-fns";
+import { format, parse, parseISO, isValid } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,6 +14,24 @@ interface DatePickerProps {
   "data-testid"?: string;
 }
 
+function parseDate(value: string): Date | undefined {
+  if (!value) return undefined;
+
+  const tryYmd = parse(value, "yyyy-MM-dd", new Date());
+  if (isValid(tryYmd)) return tryYmd;
+
+  const tryIso = parseISO(value);
+  if (isValid(tryIso)) return tryIso;
+
+  const tryDmy = parse(value, "dd/MM/yyyy", new Date());
+  if (isValid(tryDmy)) return tryDmy;
+
+  const native = new Date(value);
+  if (isValid(native)) return native;
+
+  return undefined;
+}
+
 function DatePicker({
   value,
   onChange,
@@ -23,11 +41,7 @@ function DatePicker({
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
-  const selectedDate = React.useMemo(() => {
-    if (!value) return undefined;
-    const parsed = parse(value, "yyyy-MM-dd", new Date());
-    return isNaN(parsed.getTime()) ? undefined : parsed;
-  }, [value]);
+  const selectedDate = React.useMemo(() => parseDate(value), [value]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -37,7 +51,7 @@ function DatePicker({
           data-testid={testId}
           className={cn(
             "h-10 w-full justify-start rounded-xl border-black/10 bg-white/70 px-3 text-left text-sm font-normal hover:bg-white/80",
-            !value && "text-muted-foreground",
+            !selectedDate && "text-muted-foreground",
             className
           )}
         >
