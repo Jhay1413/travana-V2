@@ -493,7 +493,7 @@ export const enquiry_passenger = pgTable('enquiry_passenger', {
 export type EnquiryPassenger = typeof enquiry_passenger.$inferSelect;
 export type InsertEnquiryPassenger = typeof enquiry_passenger.$inferInsert;
 
-export const quote = pgTable('quote', {
+export const quote = pgTable('quote_table', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   transaction_id: uuid().notNull().references(() => transaction.id, { onDelete: "cascade" }),
   deal_id: varchar(),
