@@ -274,8 +274,8 @@ export const forwardsReport = pgTable('forwards_report', {
 export type ForwardsReport = typeof forwardsReport.$inferSelect;
 export type InsertForwardsReport = typeof forwardsReport.$inferInsert;
 
-export const airport = pgTable('airport', {
-  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+export const airport = pgTable('airport_table', {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
   airport_code: varchar().notNull(),
   airport_name: varchar().notNull(),
   country_id: uuid().references(() => country.id),
@@ -283,6 +283,52 @@ export const airport = pgTable('airport', {
 export const insertAirportSchema = createInsertSchema(airport).omit({ id: true });
 export type Airport = typeof airport.$inferSelect;
 export type InsertAirport = typeof airport.$inferInsert;
+
+export const flights = pgTable('flights_table', {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  flight_id: varchar(),
+  flight_number: varchar(),
+  flight_route: varchar(),
+  departure_date: date({ mode: 'string' }),
+  departure_time: varchar(),
+  arrival_date: date({ mode: 'string' }),
+  arrival_time: varchar(),
+  departure_airport_id: uuid().references(() => airport.id),
+  destination_airport_id: uuid().references(() => airport.id),
+});
+export type FlightRecord = typeof flights.$inferSelect;
+export type InsertFlightRecord = typeof flights.$inferInsert;
+
+export const airport_relations = relations(airport, ({ one, many }) => ({
+  enquiry_departure_airport: many(enquiry_departure_airport),
+  departure_flight: many(flights, { relationName: 'departure_airport_relation' }),
+  destination_flight: many(flights, { relationName: 'destination_airport_relation' }),
+  country: one(country, {
+    fields: [airport.country_id],
+    references: [country.id],
+  }),
+  quote_lounge_pass: many(quote_lounge_pass),
+  quote_parking: many(quote_airport_parking),
+  quote_flights_departure_airport: many(quote_flights, { relationName: 'departing_airport_relation' }),
+  quote_flights_arrival_airport: many(quote_flights, { relationName: 'arrival_airport_relation' }),
+  booking_lounge_pass: many(booking_lounge_pass),
+  booking_parking: many(booking_airport_parking),
+  booking_flights_departure_airport: many(booking_flights, { relationName: 'departing_airport_relation' }),
+  booking_flights_arrival_airport: many(booking_flights, { relationName: 'arrival_airport_relation' }),
+}));
+
+export const flight_relations = relations(flights, ({ one }) => ({
+  departure_aiport: one(airport, {
+    fields: [flights.departure_airport_id],
+    references: [airport.id],
+    relationName: 'departure_airport_relation',
+  }),
+  destination_aiport: one(airport, {
+    fields: [flights.destination_airport_id],
+    references: [airport.id],
+    relationName: 'destination_airport_relation',
+  }),
+}));
 
 export const cruise_line = pgTable('cruise_line_table', {
   id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
@@ -1154,21 +1200,6 @@ export const insertAccommodationSchema = createInsertSchema(accommodations);
 export type Accommodation = typeof accommodations.$inferSelect;
 export type InsertAccommodation = z.infer<typeof insertAccommodationSchema>;
 
-export const flights = pgTable("flights", {
-  id: varchar("id").primaryKey(),
-  quoteId: varchar("quote_id"),
-  direction: text("direction"),
-  fromAirport: text("from_airport"),
-  toAirport: text("to_airport"),
-  carrier: text("carrier"),
-  flightNo: text("flight_no"),
-  depart: timestamp("depart"),
-  arrive: timestamp("arrive"),
-});
-
-export const insertFlightSchema = createInsertSchema(flights);
-export type Flight = typeof flights.$inferSelect;
-export type InsertFlight = z.infer<typeof insertFlightSchema>;
 
 export const commissions = pgTable("commissions", {
   id: varchar("id").primaryKey(),
