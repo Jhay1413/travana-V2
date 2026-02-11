@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
-import { useCountries, useDestinations, useResorts, useParks, useLodges, useBoardBasis } from "@/hooks/queries";
+import { useCountries, useDestinations, useResorts, useParks, useLodges, useBoardBasis, useAirports } from "@/hooks/queries";
 
 const HOLIDAY_TYPES = [
   "Package Holiday",
@@ -227,6 +227,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   const { data: boardBasisData } = useBoardBasis();
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(form.destination);
+  const { data: airportsData } = useAirports();
 
   const steps = useMemo(() => getSteps(form.holidayType), [form.holidayType]);
 
@@ -761,13 +762,18 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                 <>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departure Airport</Label>
-                    <Input
-                      placeholder="e.g. Manchester (MAN)"
-                      value={form.departureAirport}
-                      onChange={(e) => set("departureAirport", e.target.value)}
-                      className="h-10 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-departure-airport"
-                    />
+                    <Select value={form.departureAirport} onValueChange={(v) => set("departureAirport", v)}>
+                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="input-departure-airport">
+                        <SelectValue placeholder="Select airport..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(airportsData || []).map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.airport_name} ({a.airport_code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">

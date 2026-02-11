@@ -44,7 +44,7 @@ function DatePicker({
   const selectedDate = React.useMemo(() => parseDate(value), [value]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -59,7 +59,7 @@ function DatePicker({
           {selectedDate ? format(selectedDate, "dd/MM/yyyy") : <span className="opacity-50">{placeholder}</span>}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="z-[9999] w-auto p-0" align="start">
         <Calendar
           mode="single"
           selected={selectedDate}
