@@ -644,7 +644,6 @@ export default function ClientPage() {
         {
           client_id: clientId,
           user_id: currentUser?.id || "",
-          holiday_type_id: data.holidayType || data.holiday_type_id || undefined,
           lead_source: undefined,
           enquiry: {
             title: data.enquiryTitle || data.title || "",
@@ -3153,7 +3152,6 @@ export default function ClientPage() {
                       {
                         client_id: clientId,
                         user_id: currentUser.id,
-                        holiday_type_id: newQuote.packageType,
                         lead_source: newQuote.leadSource || undefined,
                         booking: {
                           holiday_type_id: newQuote.packageType,
@@ -3198,7 +3196,6 @@ export default function ClientPage() {
                       {
                         client_id: clientId,
                         user_id: currentUser.id,
-                        holiday_type_id: newQuote.packageType,
                         lead_source: newQuote.leadSource || undefined,
                         quote: {
                           ...quotePayload,

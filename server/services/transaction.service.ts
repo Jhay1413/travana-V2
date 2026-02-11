@@ -48,7 +48,6 @@ export const transactionService = {
     const enquiry = await enquiryTableRepository.create({
       ...enquiryFields,
       transaction_id: txn.id,
-      holiday_type_id: enquiryFields.holiday_type_id || transactionData.holiday_type_id,
     });
 
     if (destinations?.length) {
@@ -90,7 +89,6 @@ export const transactionService = {
       const [q] = await tx.insert(quote).values({
         ...quoteData,
         transaction_id: txn.id,
-        holiday_type_id: transactionData.holiday_type_id || quoteData.holiday_type_id,
       }).returning();
 
       return { transaction: txn, quote: q };
@@ -107,7 +105,6 @@ export const transactionService = {
       const [b] = await tx.insert(booking).values({
         ...bookingData,
         transaction_id: txn.id,
-        holiday_type_id: transactionData.holiday_type_id || bookingData.holiday_type_id,
         booking_status: 'BOOKED',
       }).returning();
 

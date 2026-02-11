@@ -3,7 +3,6 @@ export interface Transaction {
   status: string | null;
   is_active: boolean | null;
   client_id: string | null;
-  holiday_type_id: string | null;
   agent_id: string | null;
   lead_source: string | null;
   user_id: string;
@@ -293,7 +292,6 @@ export interface EnquiryRelations {
 
 export interface CreateTransactionData {
   client_id?: string;
-  holiday_type_id?: string;
   agent_id?: string;
   lead_source?: string;
   user_id: string;

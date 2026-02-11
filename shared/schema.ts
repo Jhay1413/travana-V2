@@ -424,7 +424,6 @@ export const transaction = pgTable('transaction', {
   status: transaction_status_enum(),
   is_active: boolean().default(true),
   client_id: uuid().references(() => clientTable.id),
-  holiday_type_id: uuid().references(() => package_type.id),
   agent_id: text().references(() => user.id),
   lead_source: lead_source_enum().default('SHOP'),
   user_id: text().notNull().references(() => user.id),

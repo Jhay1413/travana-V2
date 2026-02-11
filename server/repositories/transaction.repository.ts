@@ -69,13 +69,19 @@ async function enrichTransactions(txns: Transaction[]) {
     });
   }
 
-  return txns.map(txn => ({
-    ...txn,
-    holiday_type_name: txn.holiday_type_id ? (packageTypeMap.get(txn.holiday_type_id) || txn.holiday_type_id) : null,
-    enquiry: enquiryMap.get(txn.id) || null,
-    quotes: quotesMap.get(txn.id) || [],
-    booking: bookingMap.get(txn.id) || null,
-  }));
+  return txns.map(txn => {
+    const enquiry = enquiryMap.get(txn.id) || null;
+    const quotes = quotesMap.get(txn.id) || [];
+    const bookingEntry = bookingMap.get(txn.id) || null;
+    const holiday_type_name = enquiry?.holiday_type_name || quotes[0]?.holiday_type_name || bookingEntry?.holiday_type_name || null;
+    return {
+      ...txn,
+      holiday_type_name,
+      enquiry,
+      quotes,
+      booking: bookingEntry,
+    };
+  });
 }
 
 export const transactionRepository = {
