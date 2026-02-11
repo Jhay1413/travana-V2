@@ -14,7 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuote, useNotes, useTasks, useClient } from "@/hooks/queries";
+import { useQuote, useNotes, useTasks, useClient, useTourOperators, useAirports } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
@@ -1044,7 +1044,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
   );
 }
 
-function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
+function transformQuoteData(apiData: ApiQuote, lookups?: { airportMap: Record<string, string>; tourOperatorMap: Record<string, string> }): QuoteDisplay {
   const flights = apiData.flights || [];
   const outboundFlight = flights.find(f => f.flight_type === "outbound") || flights[0];
   const inboundFlight = flights.find(f => f.flight_type === "inbound") || flights[1];
@@ -1105,8 +1105,8 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
     },
     flights: {
       outbound: {
-        from: outboundFlight?.departing_airport_id || "",
-        to: outboundFlight?.arrival_airport_id || "",
+        from: (outboundFlight?.departing_airport_id && lookups?.airportMap[outboundFlight.departing_airport_id]) || outboundFlight?.departing_airport_id || "",
+        to: (outboundFlight?.arrival_airport_id && lookups?.airportMap[outboundFlight.arrival_airport_id]) || outboundFlight?.arrival_airport_id || "",
         carrier: "",
         flightNo: outboundFlight?.flight_number || "",
         depart: outboundFlight?.departure_date_time || "",
@@ -1117,8 +1117,8 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
         arriveTime: obArrive.time,
       },
       inbound: {
-        from: inboundFlight?.departing_airport_id || "",
-        to: inboundFlight?.arrival_airport_id || "",
+        from: (inboundFlight?.departing_airport_id && lookups?.airportMap[inboundFlight.departing_airport_id]) || inboundFlight?.departing_airport_id || "",
+        to: (inboundFlight?.arrival_airport_id && lookups?.airportMap[inboundFlight.arrival_airport_id]) || inboundFlight?.arrival_airport_id || "",
         carrier: "",
         flightNo: inboundFlight?.flight_number || "",
         depart: inboundFlight?.departure_date_time || "",
@@ -1134,7 +1134,7 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
       role: "Agent",
     },
     commissions: {
-      tourOperator: apiData.main_tour_operator_id || "",
+      tourOperator: (apiData.main_tour_operator_id && lookups?.tourOperatorMap[apiData.main_tour_operator_id]) || apiData.main_tour_operator_id || "",
       price: salesPrice,
       commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
       commissionValue: packageCommission,
@@ -1190,10 +1190,28 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   const { data: quoteData, isLoading, error } = useQuote(quoteId);
   const { data: clientData } = useClient(clientId);
+  const { data: tourOperatorsData } = useTourOperators();
+  const { data: airportsData } = useAirports();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
+
+  const lookupMaps = useMemo(() => {
+    const airportMap: Record<string, string> = {};
+    if (airportsData) {
+      for (const a of airportsData) {
+        airportMap[a.id] = a.airport_name + (a.airport_code ? ` (${a.airport_code})` : "");
+      }
+    }
+    const tourOperatorMap: Record<string, string> = {};
+    if (tourOperatorsData) {
+      for (const t of tourOperatorsData) {
+        tourOperatorMap[t.id] = t.name;
+      }
+    }
+    return { airportMap, tourOperatorMap };
+  }, [airportsData, tourOperatorsData]);
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
@@ -1231,8 +1249,8 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
-    return transformQuoteData(quoteData);
-  }, [quoteData]);
+    return transformQuoteData(quoteData, lookupMaps);
+  }, [quoteData, lookupMaps]);
 
   const pageLabel = isBooking || quoteData?.quote_status === "accepted" ? "Booking" : "Quote";
 
