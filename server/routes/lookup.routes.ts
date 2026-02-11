@@ -100,8 +100,10 @@ router.get("/lodges", async (req, res) => {
 
 router.get("/package-types", async (_req, res) => {
   try {
+    const allowedNames = ["Package Holiday", "Cruise Package", "Hot Tub Break", "Others"];
     const rows = await db.select().from(package_type).orderBy(package_type.name);
-    res.json({ success: true, data: rows });
+    const filtered = rows.filter((r) => allowedNames.includes(r.name));
+    res.json({ success: true, data: filtered });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
