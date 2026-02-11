@@ -38,39 +38,41 @@ export const transactionService = {
   },
 
   async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: any) {
+    const { destinations, resorts, boardBases, departureAirports, passengers, notes, ...enquiryFields } = enquiryData;
+
     const txn = await transactionRepository.create({
       ...transactionData,
       status: 'on_enquiry',
     });
 
     const enquiry = await enquiryTableRepository.create({
-      ...enquiryData,
+      ...enquiryFields,
       transaction_id: txn.id,
-      holiday_type_id: transactionData.holiday_type_id,
+      holiday_type_id: enquiryFields.holiday_type_id || transactionData.holiday_type_id,
     });
 
-    if (enquiryData.destinations?.length) {
-      for (const destId of enquiryData.destinations) {
+    if (destinations?.length) {
+      for (const destId of destinations) {
         await enquiryTableRepository.addDestination(enquiry.id, destId);
       }
     }
-    if (enquiryData.resorts?.length) {
-      for (const resortId of enquiryData.resorts) {
+    if (resorts?.length) {
+      for (const resortId of resorts) {
         await enquiryTableRepository.addResort(enquiry.id, resortId);
       }
     }
-    if (enquiryData.boardBases?.length) {
-      for (const bbId of enquiryData.boardBases) {
+    if (boardBases?.length) {
+      for (const bbId of boardBases) {
         await enquiryTableRepository.addBoardBasis(enquiry.id, bbId);
       }
     }
-    if (enquiryData.departureAirports?.length) {
-      for (const airportId of enquiryData.departureAirports) {
+    if (departureAirports?.length) {
+      for (const airportId of departureAirports) {
         await enquiryTableRepository.addDepartureAirport(enquiry.id, airportId);
       }
     }
-    if (enquiryData.passengers?.length) {
-      for (const p of enquiryData.passengers) {
+    if (passengers?.length) {
+      for (const p of passengers) {
         await enquiryTableRepository.addPassenger(enquiry.id, p.type, p.age);
       }
     }

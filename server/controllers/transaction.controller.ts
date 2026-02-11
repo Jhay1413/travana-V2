@@ -3,6 +3,93 @@ import { transactionService } from "../services/transaction.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 
+const BUDGET_TYPE_MAP: Record<string, string> = {
+  "Per Person": "PER_PERSON",
+  "per person": "PER_PERSON",
+  "PER_PERSON": "PER_PERSON",
+  "Package": "PACKAGE",
+  "package": "PACKAGE",
+  "PACKAGE": "PACKAGE",
+};
+
+const ENQUIRY_STATUS_MAP: Record<string, string> = {
+  "Active": "ACTIVE",
+  "active": "ACTIVE",
+  "ACTIVE": "ACTIVE",
+  "New Lead": "NEW_LEAD",
+  "new_lead": "NEW_LEAD",
+  "NEW_LEAD": "NEW_LEAD",
+  "Lost": "LOST",
+  "LOST": "LOST",
+  "Inactive": "INACTIVE",
+  "INACTIVE": "INACTIVE",
+  "Expired": "EXPIRED",
+  "EXPIRED": "EXPIRED",
+};
+
+const QUOTE_STATUS_MAP: Record<string, string> = {
+  "In Play": "QUOTE_IN_PROGRESS",
+  "in play": "QUOTE_IN_PROGRESS",
+  "New Lead": "NEW_LEAD",
+  "NEW_LEAD": "NEW_LEAD",
+  "Quote In Progress": "QUOTE_IN_PROGRESS",
+  "QUOTE_IN_PROGRESS": "QUOTE_IN_PROGRESS",
+  "Quote Call": "QUOTE_CALL",
+  "QUOTE_CALL": "QUOTE_CALL",
+  "Quote Ready": "QUOTE_READY",
+  "QUOTE_READY": "QUOTE_READY",
+  "Awaiting Decision": "AWAITING_DECISION",
+  "AWAITING_DECISION": "AWAITING_DECISION",
+  "Requote": "REQUOTE",
+  "REQUOTE": "REQUOTE",
+  "Won": "WON",
+  "WON": "WON",
+  "Archived": "ARCHIVED",
+  "ARCHIVED": "ARCHIVED",
+  "Lost": "LOST",
+  "LOST": "LOST",
+  "Inactive": "INACTIVE",
+  "INACTIVE": "INACTIVE",
+  "Expired": "EXPIRED",
+  "EXPIRED": "EXPIRED",
+};
+
+function normalizeEnquiry(data: any) {
+  const normalized = { ...data };
+  if (normalized.budget_type) {
+    normalized.budget_type = BUDGET_TYPE_MAP[normalized.budget_type] || "PACKAGE";
+  }
+  if (normalized.status) {
+    normalized.status = ENQUIRY_STATUS_MAP[normalized.status] || "NEW_LEAD";
+  }
+  return normalized;
+}
+
+function normalizeQuote(data: any) {
+  const normalized = { ...data };
+  if (normalized.quote_status) {
+    normalized.quote_status = QUOTE_STATUS_MAP[normalized.quote_status] || "QUOTE_IN_PROGRESS";
+  }
+  if (!normalized.transfer_type) {
+    normalized.transfer_type = "none";
+  }
+  if (!normalized.price_per_person && normalized.price_per_person !== 0) {
+    normalized.price_per_person = "0.00";
+  }
+  return normalized;
+}
+
+function normalizeBooking(data: any) {
+  const normalized = { ...data };
+  if (!normalized.hays_ref) normalized.hays_ref = "";
+  if (!normalized.supplier_ref) normalized.supplier_ref = "";
+  if (!normalized.transfer_type) normalized.transfer_type = "none";
+  if (normalized.deleted_at === undefined) {
+    delete normalized.deleted_at;
+  }
+  return normalized;
+}
+
 export const transactionController = {
   listTransactions: asyncHandler(async (req: Request, res: Response) => {
     const { clientId, agentId, status } = req.query;
@@ -29,7 +116,8 @@ export const transactionController = {
     const { enquiry, quote, booking, ...transactionData } = req.body;
 
     if (enquiry) {
-      const result = await transactionService.createTransactionWithEnquiry(transactionData, enquiry);
+      const normalizedEnquiry = normalizeEnquiry(enquiry);
+      const result = await transactionService.createTransactionWithEnquiry(transactionData, normalizedEnquiry);
       return successResponse(res, result, "Transaction with enquiry created successfully", 201);
     }
 
@@ -37,7 +125,8 @@ export const transactionController = {
       if (!quote.holiday_type_id || !quote.travel_date) {
         return res.status(400).json({ success: false, error: "Quote requires holiday_type_id and travel_date" });
       }
-      const result = await transactionService.createTransactionWithQuote(transactionData, quote);
+      const normalizedQuote = normalizeQuote(quote);
+      const result = await transactionService.createTransactionWithQuote(transactionData, normalizedQuote);
       return successResponse(res, result, "Transaction with quote created successfully", 201);
     }
 
@@ -45,7 +134,8 @@ export const transactionController = {
       if (!booking.holiday_type_id || !booking.travel_date) {
         return res.status(400).json({ success: false, error: "Booking requires holiday_type_id and travel_date" });
       }
-      const result = await transactionService.createTransactionWithBooking(transactionData, booking);
+      const normalizedBooking = normalizeBooking(booking);
+      const result = await transactionService.createTransactionWithBooking(transactionData, normalizedBooking);
       return successResponse(res, result, "Transaction with booking created successfully", 201);
     }
 
