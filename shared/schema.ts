@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -283,22 +283,22 @@ export const airport = pgTable('airport', {
 export type Airport = typeof airport.$inferSelect;
 export type InsertAirport = typeof airport.$inferInsert;
 
-export const cruise_line = pgTable('cruise_line', {
-  id: uuid().defaultRandom().primaryKey(),
+export const cruise_line = pgTable('cruise_line_table', {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
   name: varchar(),
 });
 export type CruiseLine = typeof cruise_line.$inferSelect;
 export type InsertCruiseLine = typeof cruise_line.$inferInsert;
 
-export const cruise_ship = pgTable('cruise_ship', {
-  id: uuid().defaultRandom().primaryKey(),
+export const cruise_ship = pgTable('ship_table', {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
   name: varchar(),
   cruise_line_id: uuid().references(() => cruise_line.id, { onDelete: "cascade" }),
 });
 export type CruiseShip = typeof cruise_ship.$inferSelect;
 export type InsertCruiseShip = typeof cruise_ship.$inferInsert;
 
-export const cruise_itenary = pgTable('cruise_itenary', {
+export const cruise_itenary = pgTable('cruise_itenary_table', {
   id: uuid().defaultRandom().primaryKey(),
   ship_id: uuid().references(() => cruise_ship.id, { onDelete: "cascade" }),
   itenary: varchar(),
@@ -308,7 +308,7 @@ export const cruise_itenary = pgTable('cruise_itenary', {
 export type CruiseItenary = typeof cruise_itenary.$inferSelect;
 export type InsertCruiseItenary = typeof cruise_itenary.$inferInsert;
 
-export const cruise_voyage = pgTable('cruise_voyage', {
+export const cruise_voyage = pgTable('cruise_voyage_table', {
   id: uuid().defaultRandom().primaryKey(),
   itinerary_id: uuid().references(() => cruise_itenary.id, { onDelete: "cascade" }),
   day_number: numeric(),
@@ -317,20 +317,60 @@ export const cruise_voyage = pgTable('cruise_voyage', {
 export type CruiseVoyage = typeof cruise_voyage.$inferSelect;
 export type InsertCruiseVoyage = typeof cruise_voyage.$inferInsert;
 
-export const cruise_destination = pgTable('cruise_destination', {
-  id: uuid().defaultRandom().primaryKey(),
+export const cruise_destination = pgTable('cruise_destination_table', {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
   name: varchar(),
 });
 export type CruiseDestination = typeof cruise_destination.$inferSelect;
 export type InsertCruiseDestination = typeof cruise_destination.$inferInsert;
 
-export const port = pgTable('port', {
-  id: uuid().defaultRandom().primaryKey(),
+export const port = pgTable('port_table', {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
   cruise_destination_id: uuid().references(() => cruise_destination.id),
   name: varchar(),
 });
 export type Port = typeof port.$inferSelect;
 export type InsertPort = typeof port.$inferInsert;
+
+export const cruise_line_relation = relations(cruise_line, ({ many }) => ({
+  cruise_ship: many(cruise_ship),
+  enquiry_cruise_line: many(enquiry_cruise_line),
+}));
+
+export const cruise_ship_relation = relations(cruise_ship, ({ one, many }) => ({
+  cruise_line: one(cruise_line, {
+    fields: [cruise_ship.cruise_line_id],
+    references: [cruise_line.id],
+  }),
+  itenary: many(cruise_itenary),
+}));
+
+export const cruise_itenerary_relation = relations(cruise_itenary, ({ one, many }) => ({
+  cruise_ship: one(cruise_ship, {
+    fields: [cruise_itenary.ship_id],
+    references: [cruise_ship.id],
+  }),
+  cruise_voyage: many(cruise_voyage),
+}));
+
+export const cruise_voyage_relation = relations(cruise_voyage, ({ one }) => ({
+  cruise_itenary: one(cruise_itenary, {
+    fields: [cruise_voyage.itinerary_id],
+    references: [cruise_itenary.id],
+  }),
+}));
+
+export const cruise_destination_relation = relations(cruise_destination, ({ many }) => ({
+  port: many(port),
+  enquiry_cruise_destination: many(enquiry_cruise_destination),
+}));
+
+export const port_relation = relations(port, ({ one }) => ({
+  cruise_destination: one(cruise_destination, {
+    fields: [port.cruise_destination_id],
+    references: [cruise_destination.id],
+  }),
+}));
 
 export const transaction = pgTable('transaction', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
