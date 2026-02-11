@@ -1,7 +1,82 @@
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
+
+async function enrichTransactions(txns: Transaction[]) {
+  if (txns.length === 0) return [];
+  const txnIds = txns.map(t => t.id);
+
+  const [allEnquiries, allQuotes, allBookings, allPackageTypes] = await Promise.all([
+    db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    db.select().from(quote).where(inArray(quote.transaction_id, txnIds)),
+    db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
+    db.select().from(package_type),
+  ]);
+
+  const packageTypeMap = new Map(allPackageTypes.map(pt => [pt.id, pt.name]));
+
+  const enquiryIds = allEnquiries.map(e => e.id);
+  let allDestinations: any[] = [];
+  if (enquiryIds.length > 0) {
+    allDestinations = await db.select({
+      enquiry_id: enquiry_destination.enquiry_id,
+      destination_id: enquiry_destination.destination_id,
+      name: destination.name,
+      country_id: destination.country_id,
+    }).from(enquiry_destination)
+      .leftJoin(destination, eq(enquiry_destination.destination_id, destination.id))
+      .where(inArray(enquiry_destination.enquiry_id, enquiryIds));
+  }
+
+  const quoteIds = allQuotes.map(q => q.id);
+  const bookingIds = allBookings.map(b => b.id);
+  const ownerIds = [...quoteIds, ...bookingIds];
+  let allImages: any[] = [];
+  if (ownerIds.length > 0) {
+    allImages = await db.select().from(deal_images).where(inArray(deal_images.owner_id, ownerIds));
+  }
+
+  const enquiryMap = new Map<string, any>();
+  for (const enq of allEnquiries) {
+    const destinations = allDestinations.filter(d => d.enquiry_id === enq.id);
+    enquiryMap.set(enq.transaction_id, {
+      ...enq,
+      destinations,
+      holiday_type_name: packageTypeMap.get(enq.holiday_type_id) || enq.holiday_type_id,
+    });
+  }
+
+  const quotesMap = new Map<string, any[]>();
+  for (const q of allQuotes) {
+    const images = allImages.filter(img => img.owner_id === q.id);
+    const entry = {
+      ...q,
+      holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
+      images,
+    };
+    if (!quotesMap.has(q.transaction_id)) quotesMap.set(q.transaction_id, []);
+    quotesMap.get(q.transaction_id)!.push(entry);
+  }
+
+  const bookingMap = new Map<string, any>();
+  for (const b of allBookings) {
+    const images = allImages.filter(img => img.owner_id === b.id);
+    bookingMap.set(b.transaction_id, {
+      ...b,
+      holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id,
+      images,
+    });
+  }
+
+  return txns.map(txn => ({
+    ...txn,
+    holiday_type_name: txn.holiday_type_id ? (packageTypeMap.get(txn.holiday_type_id) || txn.holiday_type_id) : null,
+    enquiry: enquiryMap.get(txn.id) || null,
+    quotes: quotesMap.get(txn.id) || [],
+    booking: bookingMap.get(txn.id) || null,
+  }));
+}
 
 export const transactionRepository = {
   async findById(id: string): Promise<Transaction | undefined> {
@@ -9,16 +84,19 @@ export const transactionRepository = {
     return result;
   },
 
-  async findAll(): Promise<Transaction[]> {
-    return await db.select().from(transaction).orderBy(desc(transaction.created_at));
+  async findAll() {
+    const txns = await db.select().from(transaction).orderBy(desc(transaction.created_at));
+    return enrichTransactions(txns);
   },
 
-  async findByClientId(clientId: string): Promise<Transaction[]> {
-    return await db.select().from(transaction).where(eq(transaction.client_id, clientId)).orderBy(desc(transaction.created_at));
+  async findByClientId(clientId: string) {
+    const txns = await db.select().from(transaction).where(eq(transaction.client_id, clientId)).orderBy(desc(transaction.created_at));
+    return enrichTransactions(txns);
   },
 
-  async findByAgentId(agentId: string): Promise<Transaction[]> {
-    return await db.select().from(transaction).where(eq(transaction.agent_id, agentId)).orderBy(desc(transaction.created_at));
+  async findByAgentId(agentId: string) {
+    const txns = await db.select().from(transaction).where(eq(transaction.agent_id, agentId)).orderBy(desc(transaction.created_at));
+    return enrichTransactions(txns);
   },
 
   async findByStatus(status: string): Promise<Transaction[]> {
