@@ -7,6 +7,11 @@ import {
 } from "@shared/schema";
 import type { Quote, InsertQuote, QuoteFlight, InsertQuoteFlight, QuoteAccomodation, InsertQuoteAccomodation } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
+import {
+  buildLookupMaps, enrichQuoteOrBooking, enrichFlights, enrichAccommodations,
+  enrichTransfers, enrichCarHires, enrichAttractionTickets, enrichLoungePasses,
+  enrichAirportParkings, enrichCruises,
+} from "../utils/lookup-resolver";
 
 export const newQuoteRepository = {
   async findById(id: string): Promise<Quote | undefined> {
@@ -44,7 +49,8 @@ export const newQuoteRepository = {
     const [q] = await db.select().from(quote).where(eq(quote.id, id)).limit(1);
     if (!q) return undefined;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images] = await Promise.all([
+    const [maps, flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images] = await Promise.all([
+      buildLookupMaps(),
       db.select().from(quote_flights).where(eq(quote_flights.quote_id, id)),
       db.select().from(quote_accomodation).where(eq(quote_accomodation.quote_id, id)),
       db.select().from(quote_transfers).where(eq(quote_transfers.quote_id, id)),
@@ -58,15 +64,15 @@ export const newQuoteRepository = {
     ]);
 
     return {
-      ...q,
-      flights,
-      accommodations,
-      transfers,
-      carHires,
-      attractionTickets,
-      loungePasses,
-      airportParkings,
-      cruises,
+      ...enrichQuoteOrBooking(q, maps),
+      flights: enrichFlights(flights, maps),
+      accommodations: enrichAccommodations(accommodations, maps),
+      transfers: enrichTransfers(transfers, maps),
+      carHires: enrichCarHires(carHires, maps),
+      attractionTickets: enrichAttractionTickets(attractionTickets, maps),
+      loungePasses: enrichLoungePasses(loungePasses, maps),
+      airportParkings: enrichAirportParkings(airportParkings, maps),
+      cruises: enrichCruises(cruises, maps),
       passengers: passengerList,
       images,
     };

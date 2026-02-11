@@ -6,6 +6,7 @@ import {
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
+import { buildLookupMaps, resolve, enrichEnquiryRelations } from "../utils/lookup-resolver";
 
 export const enquiryTableRepository = {
   async findById(id: string): Promise<EnquiryTable | undefined> {
@@ -40,7 +41,8 @@ export const enquiryTableRepository = {
     const [enq] = await db.select().from(enquiry_table).where(eq(enquiry_table.id, id)).limit(1);
     if (!enq) return undefined;
 
-    const [destinations, resorts, accommodations, boardBases, airports, ports, cruiseLines, cruiseDestinations, passengers] = await Promise.all([
+    const [maps, destinations, resorts, accommodations, boardBases, airports, ports, cruiseLines, cruiseDestinations, passengers] = await Promise.all([
+      buildLookupMaps(),
       db.select().from(enquiry_destination).where(eq(enquiry_destination.enquiry_id, id)),
       db.select().from(enquiry_resorts).where(eq(enquiry_resorts.enquiry_id, id)),
       db.select().from(enquiry_accomodation).where(eq(enquiry_accomodation.enquiry_id, id)),
@@ -52,13 +54,12 @@ export const enquiryTableRepository = {
       db.select().from(enquiry_passenger).where(eq(enquiry_passenger.enquiry_id, id)),
     ]);
 
+    const enriched = enrichEnquiryRelations({ destinations, resorts, accommodations, boardBases, airports }, maps);
+
     return {
       ...enq,
-      destinations,
-      resorts,
-      accommodations,
-      boardBases,
-      airports,
+      holiday_type_name: resolve(maps.packageType, enq.holiday_type_id),
+      ...enriched,
       ports,
       cruiseLines,
       cruiseDestinations,

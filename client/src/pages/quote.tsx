@@ -14,7 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuote, useNotes, useTasks, useClient, useTourOperators, useAirports, usePackageTypes, useBoardBasis, useAllAccommodations, useAllDestinations, useAllResorts } from "@/hooks/queries";
+import { useQuote, useNotes, useTasks, useClient } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
@@ -1044,17 +1044,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
   );
 }
 
-type LookupMaps = {
-  airportMap: Record<string, string>;
-  tourOperatorMap: Record<string, string>;
-  packageTypeMap: Record<string, string>;
-  boardBasisMap: Record<string, string>;
-  accommodationMap: Record<string, string>;
-  destinationMap: Record<string, string>;
-  resortMap: Record<string, string>;
-};
-
-function transformQuoteData(apiData: ApiQuote, lookups?: LookupMaps): QuoteDisplay {
+function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
   const flights = apiData.flights || [];
   const outboundFlight = flights.find(f => f.flight_type === "outbound") || flights[0];
   const inboundFlight = flights.find(f => f.flight_type === "inbound") || flights[1];
@@ -1084,14 +1074,14 @@ function transformQuoteData(apiData: ApiQuote, lookups?: LookupMaps): QuoteDispl
     id: apiData.id,
     transaction_id: apiData.transaction_id,
     status: apiData.quote_status || "draft",
-    packageType: (apiData.holiday_type_id && lookups?.packageTypeMap[apiData.holiday_type_id]) || apiData.holiday_type_id || apiData.quote_type || "",
+    packageType: (apiData as any).holiday_type_name || apiData.quote_type || "",
     quoteTitle: apiData.title || "",
     quoteLink: "",
     travelDate,
     returnDate,
-    destination: (apiData as any).destination_id ? (lookups?.destinationMap[(apiData as any).destination_id] || (apiData as any).destination_id) : "",
+    destination: "",
     country: "",
-    resort: (apiData as any).resort_id ? (lookups?.resortMap[(apiData as any).resort_id] || (apiData as any).resort_id) : "",
+    resort: "",
     createdAt: apiData.date_created || "",
     passengersInfants: apiData.infant || 0,
     checkInDate: primaryAccom?.check_in_date_time?.split("T")[0] || "",
@@ -1108,15 +1098,15 @@ function transformQuoteData(apiData: ApiQuote, lookups?: LookupMaps): QuoteDispl
       childAges: childPassengers.map(p => p.age || 0),
     },
     accommodation: {
-      property: (primaryAccom?.accomodation_id && lookups?.accommodationMap[primaryAccom.accomodation_id]) || primaryAccom?.accomodation_id || "",
-      board: (primaryAccom?.board_basis_id && lookups?.boardBasisMap[primaryAccom.board_basis_id]) || primaryAccom?.board_basis_id || "",
+      property: (primaryAccom as any)?.accomodation_name || "",
+      board: (primaryAccom as any)?.board_basis_name || "",
       roomType: primaryAccom?.room_type || "",
       notes: "",
     },
     flights: {
       outbound: {
-        from: (outboundFlight?.departing_airport_id && lookups?.airportMap[outboundFlight.departing_airport_id]) || outboundFlight?.departing_airport_id || "",
-        to: (outboundFlight?.arrival_airport_id && lookups?.airportMap[outboundFlight.arrival_airport_id]) || outboundFlight?.arrival_airport_id || "",
+        from: (outboundFlight as any)?.departing_airport_name || "",
+        to: (outboundFlight as any)?.arrival_airport_name || "",
         carrier: "",
         flightNo: outboundFlight?.flight_number || "",
         depart: outboundFlight?.departure_date_time || "",
@@ -1127,8 +1117,8 @@ function transformQuoteData(apiData: ApiQuote, lookups?: LookupMaps): QuoteDispl
         arriveTime: obArrive.time,
       },
       inbound: {
-        from: (inboundFlight?.departing_airport_id && lookups?.airportMap[inboundFlight.departing_airport_id]) || inboundFlight?.departing_airport_id || "",
-        to: (inboundFlight?.arrival_airport_id && lookups?.airportMap[inboundFlight.arrival_airport_id]) || inboundFlight?.arrival_airport_id || "",
+        from: (inboundFlight as any)?.departing_airport_name || "",
+        to: (inboundFlight as any)?.arrival_airport_name || "",
         carrier: "",
         flightNo: inboundFlight?.flight_number || "",
         depart: inboundFlight?.departure_date_time || "",
@@ -1144,7 +1134,7 @@ function transformQuoteData(apiData: ApiQuote, lookups?: LookupMaps): QuoteDispl
       role: "Agent",
     },
     commissions: {
-      tourOperator: (apiData.main_tour_operator_id && lookups?.tourOperatorMap[apiData.main_tour_operator_id]) || apiData.main_tour_operator_id || "",
+      tourOperator: (apiData as any).main_tour_operator_name || "",
       price: salesPrice,
       commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
       commissionValue: packageCommission,
@@ -1200,63 +1190,10 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   const { data: quoteData, isLoading, error } = useQuote(quoteId);
   const { data: clientData } = useClient(clientId);
-  const { data: tourOperatorsData } = useTourOperators();
-  const { data: airportsData } = useAirports();
-  const { data: packageTypesData } = usePackageTypes();
-  const { data: boardBasisData } = useBoardBasis();
-  const { data: allAccommodationsData } = useAllAccommodations();
-  const { data: allDestinationsData } = useAllDestinations();
-  const { data: allResortsData } = useAllResorts();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
-
-  const lookupMaps = useMemo(() => {
-    const airportMap: Record<string, string> = {};
-    if (airportsData) {
-      for (const a of airportsData) {
-        airportMap[a.id] = a.airport_name + (a.airport_code ? ` (${a.airport_code})` : "");
-      }
-    }
-    const tourOperatorMap: Record<string, string> = {};
-    if (tourOperatorsData) {
-      for (const t of tourOperatorsData) {
-        tourOperatorMap[t.id] = t.name;
-      }
-    }
-    const packageTypeMap: Record<string, string> = {};
-    if (packageTypesData) {
-      for (const p of packageTypesData) {
-        packageTypeMap[p.id] = p.name;
-      }
-    }
-    const boardBasisMap: Record<string, string> = {};
-    if (boardBasisData) {
-      for (const b of boardBasisData) {
-        boardBasisMap[b.id] = b.type;
-      }
-    }
-    const accommodationMap: Record<string, string> = {};
-    if (allAccommodationsData) {
-      for (const a of allAccommodationsData) {
-        accommodationMap[a.id] = a.name;
-      }
-    }
-    const destinationMap: Record<string, string> = {};
-    if (allDestinationsData) {
-      for (const d of allDestinationsData) {
-        destinationMap[d.id] = d.name;
-      }
-    }
-    const resortMap: Record<string, string> = {};
-    if (allResortsData) {
-      for (const r of allResortsData) {
-        resortMap[r.id] = r.name;
-      }
-    }
-    return { airportMap, tourOperatorMap, packageTypeMap, boardBasisMap, accommodationMap, destinationMap, resortMap };
-  }, [airportsData, tourOperatorsData, packageTypesData, boardBasisData, allAccommodationsData, allDestinationsData, allResortsData]);
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
@@ -1294,8 +1231,8 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
-    return transformQuoteData(quoteData, lookupMaps);
-  }, [quoteData, lookupMaps]);
+    return transformQuoteData(quoteData);
+  }, [quoteData]);
 
   const pageLabel = isBooking || quoteData?.quote_status === "accepted" ? "Booking" : "Quote";
 

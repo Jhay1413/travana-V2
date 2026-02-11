@@ -7,6 +7,11 @@ import {
 } from "@shared/schema";
 import type { Booking, InsertBooking } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
+import {
+  buildLookupMaps, enrichQuoteOrBooking, enrichFlights, enrichAccommodations,
+  enrichTransfers, enrichCarHires, enrichAttractionTickets, enrichLoungePasses,
+  enrichAirportParkings, enrichCruises,
+} from "../utils/lookup-resolver";
 
 export const bookingRepository = {
   async findById(id: string): Promise<Booking | undefined> {
@@ -41,7 +46,8 @@ export const bookingRepository = {
     const [b] = await db.select().from(booking).where(eq(booking.id, id)).limit(1);
     if (!b) return undefined;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images] = await Promise.all([
+    const [maps, flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images] = await Promise.all([
+      buildLookupMaps(),
       db.select().from(booking_flights).where(eq(booking_flights.booking_id, id)),
       db.select().from(booking_accomodation).where(eq(booking_accomodation.booking_id, id)),
       db.select().from(booking_transfers).where(eq(booking_transfers.booking_id, id)),
@@ -55,15 +61,15 @@ export const bookingRepository = {
     ]);
 
     return {
-      ...b,
-      flights,
-      accommodations,
-      transfers,
-      carHires,
-      attractionTickets,
-      loungePasses,
-      airportParkings,
-      cruises,
+      ...enrichQuoteOrBooking(b, maps),
+      flights: enrichFlights(flights, maps),
+      accommodations: enrichAccommodations(accommodations, maps),
+      transfers: enrichTransfers(transfers, maps),
+      carHires: enrichCarHires(carHires, maps),
+      attractionTickets: enrichAttractionTickets(attractionTickets, maps),
+      loungePasses: enrichLoungePasses(loungePasses, maps),
+      airportParkings: enrichAirportParkings(airportParkings, maps),
+      cruises: enrichCruises(cruises, maps),
       passengers: passengerList,
       images,
     };

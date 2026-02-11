@@ -37,7 +37,7 @@ import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes } from "@/hooks/queries";
+import { useEnquiry, useClient, useTasks, useNotes, noteKeys } from "@/hooks/queries";
 import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations/use-note-mutations";
 import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
@@ -617,27 +617,11 @@ export default function EnquiryPage() {
   const { data: enquiry, isLoading } = useEnquiry(enquiryId);
   const { data: clientData } = useClient(clientId);
   const { data: currentUser } = useCurrentUser();
-  const { data: packageTypesData } = usePackageTypes();
   const createQuoteMutation = useCreateQuote();
   const updateEnquiryMutation = useUpdateEnquiry();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
-
-  const packageTypeMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (packageTypesData) {
-      for (const p of packageTypesData) {
-        map[p.id] = p.name;
-      }
-    }
-    return map;
-  }, [packageTypesData]);
-
-  const resolveHolidayType = useCallback((id: string | null | undefined) => {
-    if (!id) return "—";
-    return packageTypeMap[id] || id;
-  }, [packageTypeMap]);
   const isEnquiryPinned = useMemo(() => {
     if (!userFavorites || !enquiryId) return false;
     return userFavorites.some((f: any) => f.itemType === "enquiry" && f.itemId === enquiryId);
@@ -724,10 +708,10 @@ export default function EnquiryPage() {
     infantsCount > 0 ? `${infantsCount} Infant${infantsCount !== 1 ? "s" : ""}` : null,
   ].filter(Boolean).join(", ");
 
-  const destinationNames = enquiry.destinations?.map((d: any) => d.name || d).filter(Boolean).join(", ") || null;
-  const resortNames = enquiry.resorts?.map((r: any) => r.name || r).filter(Boolean).join(", ") || null;
-  const airportNames = enquiry.airports?.map((a: any) => a.name || a.airport_name || a).filter(Boolean).join(", ") || null;
-  const boardBaseNames = enquiry.boardBases?.map((b: any) => b.name || b).filter(Boolean).join(", ") || null;
+  const destinationNames = enquiry.destinations?.map((d: any) => d.destination_name || d.name || d).filter(Boolean).join(", ") || null;
+  const resortNames = enquiry.resorts?.map((r: any) => r.resort_name || r.name || r).filter(Boolean).join(", ") || null;
+  const airportNames = enquiry.airports?.map((a: any) => a.airport_name || a.name || a).filter(Boolean).join(", ") || null;
+  const boardBaseNames = enquiry.boardBases?.map((b: any) => b.board_basis_name || b.name || b).filter(Boolean).join(", ") || null;
 
   return (
     <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
@@ -751,7 +735,7 @@ export default function EnquiryPage() {
                 type="button"
                 onClick={() =>
                   toggleFavoriteMutation.mutate(
-                    { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + resolveHolidayType(enquiry.holiday_type_id) : ""}` },
+                    { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + (enquiry as any).holiday_type_name || "—" : ""}` },
                     { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                   )
                 }
@@ -783,7 +767,7 @@ export default function EnquiryPage() {
                   <div className="text-sm font-bold">Holiday Details</div>
                 </div>
                 <div className="divide-y divide-black/5">
-                  <InfoRow icon={Globe} label="Holiday Type" value={resolveHolidayType(enquiry.holiday_type_id)} />
+                  <InfoRow icon={Globe} label="Holiday Type" value={(enquiry as any).holiday_type_name || "—"} />
                   <InfoRow icon={MapPin} label="Destination" value={destinationNames} />
                   <InfoRow icon={MapPin} label="Resort" value={resortNames} />
                 </div>
@@ -825,7 +809,7 @@ export default function EnquiryPage() {
                 <div className="text-sm font-bold mb-3">Quick Summary</div>
                 <div className="space-y-2">
                   {[
-                    { label: "Type", value: resolveHolidayType(enquiry.holiday_type_id), color: "bg-blue-500/10 text-blue-700" },
+                    { label: "Type", value: (enquiry as any).holiday_type_name || "—", color: "bg-blue-500/10 text-blue-700" },
                     { label: "Destination", value: destinationNames || "—" },
                     { label: "Travel Date", value: formatUKDate(enquiry.travel_date) },
                     { label: "Passengers", value: passengerBreakdown || "—" },
