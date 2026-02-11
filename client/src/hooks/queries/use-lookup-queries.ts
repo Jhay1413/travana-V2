@@ -5,8 +5,11 @@ export const lookupKeys = {
   packageTypes: ["lookup", "package-types"] as const,
   countries: ["lookup", "countries"] as const,
   destinations: (countryId?: string) => ["lookup", "destinations", countryId] as const,
+  allDestinations: ["lookup", "destinations", "all"] as const,
   resorts: (destinationId?: string) => ["lookup", "resorts", destinationId] as const,
+  allResorts: ["lookup", "resorts", "all"] as const,
   accommodations: (resortId?: string) => ["lookup", "accommodations", resortId] as const,
+  allAccommodations: ["lookup", "accommodations", "all"] as const,
   boardBasis: ["lookup", "board-basis"] as const,
   parks: ["lookup", "parks"] as const,
   lodges: (parkId?: string) => ["lookup", "lodges", parkId] as const,
@@ -85,6 +88,30 @@ export function useCottages() {
   return useQuery({
     queryKey: lookupKeys.cottages,
     queryFn: () => lookupApi.getCottages(),
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useAllDestinations() {
+  return useQuery({
+    queryKey: lookupKeys.allDestinations,
+    queryFn: () => lookupApi.getDestinations(),
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useAllResorts() {
+  return useQuery({
+    queryKey: lookupKeys.allResorts,
+    queryFn: () => lookupApi.getResorts(),
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useAllAccommodations() {
+  return useQuery({
+    queryKey: lookupKeys.allAccommodations,
+    queryFn: () => lookupApi.getAccommodations(),
     staleTime: 1000 * 60 * 30,
   });
 }

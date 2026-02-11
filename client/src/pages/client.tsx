@@ -43,7 +43,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages } from "@/hooks/queries";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, usePackageTypes } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -505,6 +505,17 @@ export default function ClientPage() {
   const { data: boardBasisData } = useBoardBasis();
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(newQuote.parkName);
+  const { data: packageTypesData } = usePackageTypes();
+
+  const packageTypeMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (packageTypesData) {
+      for (const p of packageTypesData) {
+        map[p.id] = p.name;
+      }
+    }
+    return map;
+  }, [packageTypesData]);
 
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
@@ -1578,7 +1589,7 @@ export default function ClientPage() {
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid={`text-enquiry-meta-${idx}`}>
                                 <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70">
-                                  {(enq as any).holiday_type_name || enq.holiday_type_id}
+                                  {(enq as any).holiday_type_name || (enq.holiday_type_id && packageTypeMap[enq.holiday_type_id]) || enq.holiday_type_id}
                                 </span>
                                 {enq.destinations?.[0] && <span>{(enq.destinations[0] as any)?.name || (enq.destinations[0] as any)?.destination_id || "—"}</span>}
                                 {enq.travel_date && <span>· {new Date(enq.travel_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
@@ -1595,7 +1606,7 @@ export default function ClientPage() {
                                 data-testid={`button-pin-enquiry-${idx}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.title || "", subtitle: `${client?.name || ""}${enq.destinations?.[0] ? " · " + ((enq.destinations[0] as any)?.name || enq.destinations[0]) : enq.holiday_type_id ? " · " + enq.holiday_type_id : ""}` });
+                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.title || "", subtitle: `${client?.name || ""}${enq.destinations?.[0] ? " · " + ((enq.destinations[0] as any)?.name || enq.destinations[0]) : enq.holiday_type_id ? " · " + (packageTypeMap[enq.holiday_type_id] || enq.holiday_type_id) : ""}` });
                                 }}
                                 title={userFavorites?.some((f: any) => f.itemType === "enquiry" && f.itemId === enq.id) ? "Unpin" : "Pin to dashboard"}
                               >
