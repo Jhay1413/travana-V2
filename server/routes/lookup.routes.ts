@@ -9,6 +9,7 @@ import {
   park,
   lodges,
   cottages,
+  package_type,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -91,6 +92,15 @@ router.get("/lodges", async (req, res) => {
       query = query.where(eq(lodges.park_id, parkId)) as any;
     }
     const rows = await query.orderBy(lodges.lodge_name);
+    res.json({ success: true, data: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/package-types", async (_req, res) => {
+  try {
+    const rows = await db.select().from(package_type).orderBy(package_type.name);
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

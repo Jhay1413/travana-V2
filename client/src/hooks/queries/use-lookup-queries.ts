@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { lookupApi } from "@/api/endpoints/lookup.api";
 
 export const lookupKeys = {
+  packageTypes: ["lookup", "package-types"] as const,
   countries: ["lookup", "countries"] as const,
   destinations: (countryId?: string) => ["lookup", "destinations", countryId] as const,
   resorts: (destinationId?: string) => ["lookup", "resorts", destinationId] as const,
@@ -11,6 +12,14 @@ export const lookupKeys = {
   lodges: (parkId?: string) => ["lookup", "lodges", parkId] as const,
   cottages: ["lookup", "cottages"] as const,
 };
+
+export function usePackageTypes() {
+  return useQuery({
+    queryKey: lookupKeys.packageTypes,
+    queryFn: () => lookupApi.getPackageTypes(),
+    staleTime: 1000 * 60 * 30,
+  });
+}
 
 export function useCountries() {
   return useQuery({

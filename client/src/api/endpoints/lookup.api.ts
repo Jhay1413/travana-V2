@@ -65,7 +65,16 @@ export interface LookupCottage {
   pets: number | null;
 }
 
+export interface LookupPackageType {
+  id: string;
+  name: string;
+}
+
 export const lookupApi = {
+  getPackageTypes: async (): Promise<LookupPackageType[]> => {
+    const { data } = await axios.get<LookupPackageType[]>("/api/lookup/package-types");
+    return data;
+  },
   getCountries: async (): Promise<LookupCountry[]> => {
     const { data } = await axios.get<LookupCountry[]>("/api/lookup/countries");
     return data;

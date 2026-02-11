@@ -10,14 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
-import { useCountries, useDestinations, useResorts, useParks, useLodges, useBoardBasis, useAirports } from "@/hooks/queries";
-
-const HOLIDAY_TYPES = [
-  "Package Holiday",
-  "Hot Tub Break",
-  "Cruise Package",
-  "Others",
-];
+import { usePackageTypes, useCountries, useDestinations, useResorts, useParks, useLodges, useBoardBasis, useAirports } from "@/hooks/queries";
 
 const FLEXIBILITY_OPTIONS = [
   "Exact Date",
@@ -228,8 +221,15 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(form.destination);
   const { data: airportsData } = useAirports();
+  const { data: packageTypesData } = usePackageTypes();
 
-  const steps = useMemo(() => getSteps(form.holidayType), [form.holidayType]);
+  const holidayTypeName = useMemo(() => {
+    if (!form.holidayType || !packageTypesData) return "";
+    const pt = packageTypesData.find((p: any) => p.id === form.holidayType);
+    return pt?.name || "";
+  }, [form.holidayType, packageTypesData]);
+
+  const steps = useMemo(() => getSteps(holidayTypeName), [holidayTypeName]);
 
   useEffect(() => {
     if (open) {
@@ -267,7 +267,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
       notes: form.notes || undefined,
     };
 
-    if (form.holidayType === "Hot Tub Break") {
+    if (holidayTypeName === "Hot Tub Break") {
       Object.assign(base, {
         budget: form.minBudget || form.maxBudget || undefined,
         max_budget: form.maxBudget || undefined,
@@ -281,7 +281,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         accomodation_type_id: form.accommodationType || undefined,
         destinations: form.destination ? [form.destination] : undefined,
       });
-    } else if (form.holidayType === "Cruise Package") {
+    } else if (holidayTypeName === "Cruise Package") {
       Object.assign(base, {
         travel_date: form.travelDate || undefined,
         no_of_nights: form.cruiseNights ? (form.cruiseNights === "21+" ? 21 : parseInt(form.cruiseNights)) : undefined,
@@ -324,8 +324,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
     exit: (dir: number) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
   };
 
-  const isHotTub = form.holidayType === "Hot Tub Break";
-  const isCruise = form.holidayType === "Cruise Package";
+  const isHotTub = holidayTypeName === "Hot Tub Break";
+  const isCruise = holidayTypeName === "Cruise Package";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -406,8 +406,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         <SelectValue placeholder="Select holiday type..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {HOLIDAY_TYPES.map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        {(packageTypesData || []).map((pt: any) => (
+                          <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
