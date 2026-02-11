@@ -280,6 +280,7 @@ export const airport = pgTable('airport', {
   airport_name: varchar().notNull(),
   country_id: uuid().references(() => country.id),
 });
+export const insertAirportSchema = createInsertSchema(airport).omit({ id: true });
 export type Airport = typeof airport.$inferSelect;
 export type InsertAirport = typeof airport.$inferInsert;
 
@@ -1196,15 +1197,6 @@ export const insertQuoteImageSchema = createInsertSchema(quoteImages);
 export type QuoteImage = typeof quoteImages.$inferSelect;
 export type InsertQuoteImage = z.infer<typeof insertQuoteImageSchema>;
 
-export const airports = pgTable("airports", {
-  id: varchar("id").primaryKey(),
-  airport_name: text("airport_name"),
-  airport_code: text("airport_code"),
-  country_id: text("country_id"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertAirportSchema = createInsertSchema(airports);
 
 export const tourOperators = pgTable("tour_operators", {
   id: varchar("id").primaryKey(),
