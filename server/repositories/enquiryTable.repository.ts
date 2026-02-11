@@ -3,10 +3,10 @@ import {
   enquiry_table, enquiry_destination, enquiry_resorts, enquiry_accomodation,
   enquiry_board_basis, enquiry_departure_airport, enquiry_departure_port,
   enquiry_cruise_line, enquiry_cruise_destination, enquiry_passenger,
+  package_type, destination, resorts, accomodation_list, board_basis, airport,
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
-import { buildLookupMaps, resolve, enrichEnquiryRelations } from "../utils/lookup-resolver";
+import { eq, desc, sql } from "drizzle-orm";
 
 export const enquiryTableRepository = {
   async findById(id: string): Promise<EnquiryTable | undefined> {
@@ -38,32 +38,82 @@ export const enquiryTableRepository = {
   },
 
   async findWithRelations(id: string) {
-    const [enq] = await db.select().from(enquiry_table).where(eq(enquiry_table.id, id)).limit(1);
+    const [enq] = await db
+      .select({
+        enquiry: enquiry_table,
+        holiday_type_name: package_type.name,
+      })
+      .from(enquiry_table)
+      .leftJoin(package_type, eq(enquiry_table.holiday_type_id, package_type.id))
+      .where(eq(enquiry_table.id, id))
+      .limit(1);
+
     if (!enq) return undefined;
 
-    const [maps, destinations, resorts, accommodations, boardBases, airports, ports, cruiseLines, cruiseDestinations, passengers] = await Promise.all([
-      buildLookupMaps(),
-      db.select().from(enquiry_destination).where(eq(enquiry_destination.enquiry_id, id)),
-      db.select().from(enquiry_resorts).where(eq(enquiry_resorts.enquiry_id, id)),
-      db.select().from(enquiry_accomodation).where(eq(enquiry_accomodation.enquiry_id, id)),
-      db.select().from(enquiry_board_basis).where(eq(enquiry_board_basis.enquiry_id, id)),
-      db.select().from(enquiry_departure_airport).where(eq(enquiry_departure_airport.enquiry_id, id)),
+    const [destinations, resortList, accommodations, boardBases, airports, ports, cruiseLines, cruiseDestinations, passengerList] = await Promise.all([
+      db.select({
+        enquiry_id: enquiry_destination.enquiry_id,
+        destination_id: enquiry_destination.destination_id,
+        destination_name: destination.name,
+      })
+        .from(enquiry_destination)
+        .leftJoin(destination, eq(enquiry_destination.destination_id, destination.id))
+        .where(eq(enquiry_destination.enquiry_id, id)),
+
+      db.select({
+        enquiry_id: enquiry_resorts.enquiry_id,
+        resorts_id: enquiry_resorts.resorts_id,
+        resort_name: resorts.name,
+      })
+        .from(enquiry_resorts)
+        .leftJoin(resorts, eq(enquiry_resorts.resorts_id, resorts.id))
+        .where(eq(enquiry_resorts.enquiry_id, id)),
+
+      db.select({
+        enquiry_id: enquiry_accomodation.enquiry_id,
+        accomodation_id: enquiry_accomodation.accomodation_id,
+        accomodation_name: accomodation_list.name,
+      })
+        .from(enquiry_accomodation)
+        .leftJoin(accomodation_list, eq(enquiry_accomodation.accomodation_id, accomodation_list.id))
+        .where(eq(enquiry_accomodation.enquiry_id, id)),
+
+      db.select({
+        enquiry_id: enquiry_board_basis.enquiry_id,
+        board_basis_id: enquiry_board_basis.board_basis_id,
+        board_basis_name: board_basis.type,
+      })
+        .from(enquiry_board_basis)
+        .leftJoin(board_basis, eq(enquiry_board_basis.board_basis_id, board_basis.id))
+        .where(eq(enquiry_board_basis.enquiry_id, id)),
+
+      db.select({
+        enquiry_id: enquiry_departure_airport.enquiry_id,
+        airport_id: enquiry_departure_airport.airport_id,
+        airport_name: sql<string>`concat(${airport.airport_name}, ' (', ${airport.airport_code}, ')')`,
+      })
+        .from(enquiry_departure_airport)
+        .leftJoin(airport, eq(enquiry_departure_airport.airport_id, airport.id))
+        .where(eq(enquiry_departure_airport.enquiry_id, id)),
+
       db.select().from(enquiry_departure_port).where(eq(enquiry_departure_port.enquiry_id, id)),
       db.select().from(enquiry_cruise_line).where(eq(enquiry_cruise_line.enquiry_id, id)),
       db.select().from(enquiry_cruise_destination).where(eq(enquiry_cruise_destination.enquiry_id, id)),
       db.select().from(enquiry_passenger).where(eq(enquiry_passenger.enquiry_id, id)),
     ]);
 
-    const enriched = enrichEnquiryRelations({ destinations, resorts, accommodations, boardBases, airports }, maps);
-
     return {
-      ...enq,
-      holiday_type_name: resolve(maps.packageType, enq.holiday_type_id),
-      ...enriched,
+      ...enq.enquiry,
+      holiday_type_name: enq.holiday_type_name,
+      destinations,
+      resorts: resortList,
+      accommodations,
+      boardBases,
+      airports,
       ports,
       cruiseLines,
       cruiseDestinations,
-      passengers,
+      passengers: passengerList,
     };
   },
 
