@@ -5,7 +5,8 @@ import { bookingRepository } from "../repositories/booking.repository";
 import { AppError } from "../utils/error-handler";
 import type { InsertTransaction } from "@shared/schema";
 import { db } from "../config/database";
-import { transaction, enquiry_table } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 export const transactionService = {
   async listTransactions() {
@@ -75,6 +76,41 @@ export const transactionService = {
     }
 
     return { transaction: txn, enquiry };
+  },
+
+  async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: any) {
+    return await db.transaction(async (tx) => {
+      const [txn] = await tx.insert(transaction).values({
+        ...transactionData,
+        status: 'on_quote',
+      }).returning();
+
+      const [q] = await tx.insert(quote).values({
+        ...quoteData,
+        transaction_id: txn.id,
+        holiday_type_id: transactionData.holiday_type_id || quoteData.holiday_type_id,
+      }).returning();
+
+      return { transaction: txn, quote: q };
+    });
+  },
+
+  async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: any) {
+    return await db.transaction(async (tx) => {
+      const [txn] = await tx.insert(transaction).values({
+        ...transactionData,
+        status: 'on_booking',
+      }).returning();
+
+      const [b] = await tx.insert(booking).values({
+        ...bookingData,
+        transaction_id: txn.id,
+        holiday_type_id: transactionData.holiday_type_id || bookingData.holiday_type_id,
+        booking_status: 'BOOKED',
+      }).returning();
+
+      return { transaction: txn, booking: b };
+    });
   },
 
   async updateTransaction(id: string, data: Partial<InsertTransaction>) {

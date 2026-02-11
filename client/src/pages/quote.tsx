@@ -369,7 +369,7 @@ function NoteCard({
         {isEditing ? (
           <div className="mt-1.5">
             <NoteEditor
-              initialContent={note.content}
+              initialContent={note.content ?? undefined}
               onSubmit={handleEdit}
               onCancel={() => setIsEditing(false)}
               submitLabel="Save"
@@ -471,7 +471,7 @@ function ReplyCard({ reply, quoteId }: { reply: TransactionNote; quoteId: string
       </div>
       {isEditing ? (
         <div className="mt-1.5">
-          <NoteEditor initialContent={reply.content} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact />
+          <NoteEditor initialContent={reply.content ?? undefined} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact />
         </div>
       ) : (
         <div className="mt-1 prose prose-sm max-w-none text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content || "" }} data-testid={`reply-content-${reply.id}`} />
@@ -557,12 +557,11 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
       {
-        entityType: taskEntityType,
-        entityId: quoteId,
-        userId: currentUser.id,
+        transaction_id: quoteId,
+        user_id: currentUser.id,
         title: newTitle,
-        dueDate,
-        completed: false,
+        due_date: dueDate,
+        status: "pending",
       },
       {
         onSuccess: () => {
@@ -577,8 +576,8 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
     );
   };
 
-  const pendingTasks = useMemo(() => (tasksData || []).filter((t) => !t.completed), [tasksData]);
-  const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.completed), [tasksData]);
+  const pendingTasks = useMemo(() => (tasksData || []).filter((t) => t.status !== 'completed'), [tasksData]);
+  const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.status === 'completed'), [tasksData]);
 
   return (
     <>
@@ -608,7 +607,7 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
           ) : (
             <>
               {pendingTasks.map((task) => {
-                const isOverdue = new Date(task.dueDate) < new Date();
+                const isOverdue = new Date(task.due_date!) < new Date();
                 return (
                   <div
                     key={task.id}
@@ -622,7 +621,7 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
                       {task.title}
                     </span>
                     <span className={`shrink-0 text-[10px] font-semibold ${isOverdue ? "text-rose-500" : "text-black/40"}`} data-testid={`text-task-due-${task.id}`}>
-                      {formatTaskDue(task.dueDate)}
+                      {formatTaskDue(task.due_date!)}
                     </span>
                     <button
                       type="button"
@@ -755,7 +754,7 @@ function QuoteNotesSection({ transactionId }: { transactionId: string }) {
   const createMutation = useCreateNote(transactionId);
   const { toast } = useToast();
 
-  const authorName = currentUser?.name || currentUser?.username || "Agent";
+  const authorName = currentUser?.name || "Agent";
 
   const topLevelNotes = useMemo(() => {
     if (!notesData) return [];

@@ -298,6 +298,8 @@ export interface CreateTransactionData {
   lead_source?: string;
   user_id: string;
   enquiry?: Partial<EnquiryTable> & EnquiryRelations;
+  quote?: Partial<CreateQuoteData>;
+  booking?: Partial<Booking>;
 }
 
 export interface CreateQuoteData {

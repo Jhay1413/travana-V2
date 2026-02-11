@@ -133,8 +133,8 @@ function transformClientData(apiData: ApiClient): Client {
     nextTrip: apiData.nextTrip || "",
     value: parseFloat(apiData.value || "0"),
     lastTouch: apiData.lastTouch || "",
-    email: apiData.email,
-    phone: apiData.phone,
+    email: apiData.email ?? "",
+    phone: apiData.phone ?? "",
     tags: apiData.tags,
   };
 }
@@ -3074,7 +3074,7 @@ export default function ClientPage() {
               </Button>
               <Button
                 className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
-                disabled={createQuoteMutationHook.isPending || createTransactionMutation.isPending}
+                disabled={createTransactionMutation.isPending}
                 onClick={async () => {
                   if (!clientId || !currentUser?.id) {
                     toast({ title: "Please wait, loading user info...", variant: "destructive" });
@@ -3085,43 +3085,114 @@ export default function ClientPage() {
                     return;
                   }
 
-                  createTransactionMutation.mutate(
-                    {
-                      client_id: clientId,
-                      user_id: currentUser.id,
-                      holiday_type_id: newQuote.packageType,
-                      lead_source: newQuote.leadSource || undefined,
-                    },
-                    {
-                      onSuccess: (createdTransaction: any) => {
-                        createQuoteMutation.mutate({
-                          transaction_id: createdTransaction.id,
+                  const quotePayload = {
+                    holiday_type_id: newQuote.packageType,
+                    travel_date: newQuote.travelDate,
+                    quote_type: newQuote.packageType,
+                    num_of_nights: newQuote.nights || undefined,
+                    adult: newQuote.passengersAdults,
+                    child: newQuote.passengersChildren,
+                    infant: newQuote.passengersInfants,
+                    sales_price: newQuote.price ? String(newQuote.price) : undefined,
+                    package_commission: newQuote.commission ? String(newQuote.commission) : undefined,
+                    title: newQuote.quoteTitle,
+                    price_per_person: newQuote.pricePerPerson ? String(newQuote.pricePerPerson) : undefined,
+                    transfer_type: newQuote.transferType || undefined,
+                    lodge_id: newQuote.packageType === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
+                    pets: newQuote.packageType === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
+                  };
+
+                  if (newQuoteIsBooking) {
+                    createTransactionMutation.mutate(
+                      {
+                        client_id: clientId,
+                        user_id: currentUser.id,
+                        holiday_type_id: newQuote.packageType,
+                        lead_source: newQuote.leadSource || undefined,
+                        booking: {
                           holiday_type_id: newQuote.packageType,
+                          hays_ref: newQuote.haysReference || "",
+                          supplier_ref: newQuote.tourReference || "",
                           travel_date: newQuote.travelDate,
-                          quote_type: newQuote.packageType,
-                          num_of_nights: newQuote.nights || undefined,
-                          adult: newQuote.passengersAdults,
-                          child: newQuote.passengersChildren,
-                          infant: newQuote.passengersInfants,
+                          title: newQuote.quoteTitle,
+                          num_of_nights: newQuote.nights || 0,
+                          adult: newQuote.passengersAdults || 0,
+                          child: newQuote.passengersChildren || 0,
+                          infant: newQuote.passengersInfants || 0,
                           sales_price: newQuote.price ? String(newQuote.price) : undefined,
                           package_commission: newQuote.commission ? String(newQuote.commission) : undefined,
-                          title: newQuote.quoteTitle,
-                          price_per_person: newQuote.pricePerPerson ? String(newQuote.pricePerPerson) : undefined,
+                          discounts: newQuote.discount ? String(newQuote.discount) : undefined,
+                          service_charge: newQuote.serviceCharge ? String(newQuote.serviceCharge) : undefined,
                           transfer_type: newQuote.transferType || undefined,
-                          quote_status: newQuoteIsBooking ? "Booked" : "In Play",
                           lodge_id: newQuote.packageType === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
-                          pets: newQuote.packageType === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
-                        });
+                          pets: newQuote.packageType === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : 0,
+                          main_tour_operator_id: newQuote.tourOperator || undefined,
+                        } as any,
                       },
-                      onError: () => {
-                        toast({ title: "Failed to create transaction", variant: "destructive" });
+                      {
+                        onSuccess: (result: any) => {
+                          setShowNewQuoteModal(false);
+                          setNewQuoteIsBooking(false);
+                          setNewQuote(newQuoteDefaults);
+                          setQuoteImageFiles([]);
+                          setQuoteImageUrls([]);
+                          toast({ title: "Booking created successfully" });
+                          const bookingId = result?.booking?.id;
+                          if (bookingId) {
+                            window.open(`/clients/${clientId}/bookings/${bookingId}`, "_self");
+                          }
+                        },
+                        onError: () => {
+                          toast({ title: "Failed to create booking", variant: "destructive" });
+                        },
+                      }
+                    );
+                  } else {
+                    createTransactionMutation.mutate(
+                      {
+                        client_id: clientId,
+                        user_id: currentUser.id,
+                        holiday_type_id: newQuote.packageType,
+                        lead_source: newQuote.leadSource || undefined,
+                        quote: {
+                          ...quotePayload,
+                          quote_status: "In Play",
+                        } as any,
                       },
-                    }
-                  );
+                      {
+                        onSuccess: async (result: any) => {
+                          const createdQuote = result?.quote;
+                          if (createdQuote && newQuote.packageType === "Package Holiday" && newQuote.accommodation) {
+                            try {
+                              await quoteApi.addAccommodation(createdQuote.id, {
+                                accomodation_id: newQuote.accommodation,
+                                board_basis_id: newQuote.boardBasis || undefined,
+                                no_of_nights: newQuote.nights || 0,
+                                check_in_date_time: newQuote.checkInDate || undefined,
+                                is_primary: true,
+                                is_included_in_package: true,
+                              });
+                            } catch {
+                              toast({ title: "Quote created but accommodation details failed to save", variant: "destructive" });
+                            }
+                          }
+                          setShowNewQuoteModal(false);
+                          setNewQuoteIsBooking(false);
+                          setNewQuote(newQuoteDefaults);
+                          setQuoteImageFiles([]);
+                          setQuoteImageUrls([]);
+                          toast({ title: "Quote created successfully" });
+                        },
+                        onError: () => {
+                          toast({ title: "Failed to create quote", variant: "destructive" });
+                        },
+                      }
+                    );
+                  }
                 }}
                 data-testid="button-save-quote"
               >
-                {createQuoteMutationHook.isPending ? "Creating..." : newQuoteIsBooking ? "Create Booking" : "Create Quote"}
+                {createTransactionMutation.isPending ? "Creating..." : newQuoteIsBooking ? "Create Booking" : "Create Quote"}
               </Button>
             </div>
           </div>
@@ -3266,7 +3337,7 @@ export default function ClientPage() {
                 className="rounded-2xl border-black/10 px-4"
                 onClick={() => {
                   setShowUploadFileModal(false);
-                  setUploadFile({ file: null, fileType: "", allocationType: "", allocationId: "" });
+                  setUploadFile({ file: null, title: "", fileType: "", allocationType: "", allocationId: "" });
                 }}
                 data-testid="button-cancel-upload"
               >

@@ -26,11 +26,27 @@ export const transactionController = {
   }),
 
   createTransaction: asyncHandler(async (req: Request, res: Response) => {
-    const { enquiry, ...transactionData } = req.body;
+    const { enquiry, quote, booking, ...transactionData } = req.body;
 
     if (enquiry) {
       const result = await transactionService.createTransactionWithEnquiry(transactionData, enquiry);
       return successResponse(res, result, "Transaction with enquiry created successfully", 201);
+    }
+
+    if (quote) {
+      if (!quote.holiday_type_id || !quote.travel_date) {
+        return res.status(400).json({ success: false, error: "Quote requires holiday_type_id and travel_date" });
+      }
+      const result = await transactionService.createTransactionWithQuote(transactionData, quote);
+      return successResponse(res, result, "Transaction with quote created successfully", 201);
+    }
+
+    if (booking) {
+      if (!booking.holiday_type_id || !booking.travel_date) {
+        return res.status(400).json({ success: false, error: "Booking requires holiday_type_id and travel_date" });
+      }
+      const result = await transactionService.createTransactionWithBooking(transactionData, booking);
+      return successResponse(res, result, "Transaction with booking created successfully", 201);
     }
 
     const txn = await transactionService.createTransaction(transactionData);
