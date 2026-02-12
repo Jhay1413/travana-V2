@@ -42,8 +42,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
-import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages } from "@/hooks/queries";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAirports, useTourOperators } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -503,6 +504,8 @@ export default function ClientPage() {
   const { data: resortsData } = useResorts(newQuote.destination);
   const { data: accommodationsData } = useAccommodations(newQuote.resort);
   const { data: boardBasisData } = useBoardBasis();
+  const { data: airportsData } = useAirports();
+  const { data: tourOperatorsData } = useTourOperators();
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(newQuote.parkName);
   const { data: userFavorites } = useFavorites();
@@ -2898,11 +2901,13 @@ export default function ClientPage() {
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                      <Input
-                        placeholder="e.g. LHR"
+                      <SearchableSelect
                         value={newQuote.outboundDepartAirport}
-                        onChange={(e) => setNewQuote({ ...newQuote, outboundDepartAirport: e.target.value })}
-                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        onValueChange={(v) => setNewQuote({ ...newQuote, outboundDepartAirport: v })}
+                        options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                        placeholder="Select airport..."
+                        searchPlaceholder="Search airports..."
+                        emptyMessage="No airports found."
                         data-testid="input-outbound-depart-airport"
                       />
                     </div>
@@ -2927,11 +2932,13 @@ export default function ClientPage() {
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                      <Input
-                        placeholder="e.g. MLE"
+                      <SearchableSelect
                         value={newQuote.outboundArriveAirport}
-                        onChange={(e) => setNewQuote({ ...newQuote, outboundArriveAirport: e.target.value })}
-                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        onValueChange={(v) => setNewQuote({ ...newQuote, outboundArriveAirport: v })}
+                        options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                        placeholder="Select airport..."
+                        searchPlaceholder="Search airports..."
+                        emptyMessage="No airports found."
                         data-testid="input-outbound-arrive-airport"
                       />
                     </div>
@@ -2965,11 +2972,13 @@ export default function ClientPage() {
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                      <Input
-                        placeholder="e.g. MLE"
+                      <SearchableSelect
                         value={newQuote.inboundDepartAirport}
-                        onChange={(e) => setNewQuote({ ...newQuote, inboundDepartAirport: e.target.value })}
-                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        onValueChange={(v) => setNewQuote({ ...newQuote, inboundDepartAirport: v })}
+                        options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                        placeholder="Select airport..."
+                        searchPlaceholder="Search airports..."
+                        emptyMessage="No airports found."
                         data-testid="input-inbound-depart-airport"
                       />
                     </div>
@@ -2994,11 +3003,13 @@ export default function ClientPage() {
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                      <Input
-                        placeholder="e.g. LHR"
+                      <SearchableSelect
                         value={newQuote.inboundArriveAirport}
-                        onChange={(e) => setNewQuote({ ...newQuote, inboundArriveAirport: e.target.value })}
-                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        onValueChange={(v) => setNewQuote({ ...newQuote, inboundArriveAirport: v })}
+                        options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                        placeholder="Select airport..."
+                        searchPlaceholder="Search airports..."
+                        emptyMessage="No airports found."
                         data-testid="input-inbound-arrive-airport"
                       />
                     </div>
@@ -3031,11 +3042,13 @@ export default function ClientPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Tour Operator</Label>
-                  <Input
-                    placeholder="e.g. Luxury Escapes UK"
+                  <SearchableSelect
                     value={newQuote.tourOperator}
-                    onChange={(e) => setNewQuote({ ...newQuote, tourOperator: e.target.value })}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    onValueChange={(v) => setNewQuote({ ...newQuote, tourOperator: v })}
+                    options={(tourOperatorsData || []).map((t: any) => ({ value: t.id, label: t.name }))}
+                    placeholder="Select tour operator..."
+                    searchPlaceholder="Search tour operators..."
+                    emptyMessage="No tour operators found."
                     data-testid="input-tour-operator"
                   />
                 </div>
