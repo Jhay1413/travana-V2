@@ -610,7 +610,7 @@ export default function ClientPage() {
           setNewQuote(newQuoteDefaults);
           toast({ title: wasBooking ? "Booking created successfully" : "Quote created successfully" });
           if (wasBooking) {
-            window.open(`/clients/${clientId}/bookings/${createdQuote.id}`, "_self");
+            navigate(`/clients/${clientId}/bookings/${createdQuote.id}`);
           }
         },
         onError: (error: Error) => {
@@ -1399,7 +1399,7 @@ export default function ClientPage() {
                                 type="button"
                                 className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
                                 data-testid={`upcoming-trip-${item.id}`}
-                                onClick={() => window.open(`/clients/${clientId}/${item.isBooking ? "bookings" : "quotes"}/${item.id}`, "_self")}
+                                onClick={() => navigate(`/clients/${clientId}/${item.isBooking ? "bookings" : "quotes"}/${item.id}`)}
                               >
                                 <div className="flex items-center gap-3">
                                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
@@ -1469,7 +1469,7 @@ export default function ClientPage() {
                                 type="button"
                                 className="group flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-black/[0.03]"
                                 data-testid={`activity-${a.id}`}
-                                onClick={() => { if (a.link !== "#") window.open(a.link, "_self"); }}
+                                onClick={() => { if (a.link !== "#") navigate(a.link); }}
                               >
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
@@ -1502,13 +1502,13 @@ export default function ClientPage() {
                           <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
                             <span className="text-xs text-black/60">In Play value</span>
                             <span className="text-xs font-semibold text-black/85" data-testid="overview-inplay-value">
-                              {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status === "In Play").reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
+                              {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status && !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status)).reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
                             </span>
                           </div>
                           <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
                             <span className="text-xs text-black/60">Won value</span>
                             <span className="text-xs font-semibold text-black/85" data-testid="overview-won-value">
-                              {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status === "Won").reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
+                              {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status === "WON").reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
                             </span>
                           </div>
                           <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
@@ -1592,7 +1592,7 @@ export default function ClientPage() {
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.18) }}
-                          onClick={() => window.open(`/clients/${clientId}/enquiries/${enq.id}`, "_self")}
+                          onClick={() => navigate(`/clients/${clientId}/enquiries/${enq.id}`)}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
@@ -1636,6 +1636,7 @@ export default function ClientPage() {
                                   data-testid={`button-convert-enquiry-${idx}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    e.preventDefault();
                                     handleConvertEnquiryToQuote(enq);
                                   }}
                                   title="Convert to Quote"
@@ -1782,7 +1783,7 @@ export default function ClientPage() {
                                   type="button"
                                   className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                                   data-testid={`card-quote-intro-${q.id}`}
-                                  onClick={() => window.open(`/clients/${clientId}/quotes/${q.id}`, "_self")}
+                                  onClick={() => navigate(`/clients/${clientId}/quotes/${q.id}`)}
                                 >
                                   <div className="flex items-start gap-3">
                                     <div
@@ -1926,7 +1927,7 @@ export default function ClientPage() {
                                 type="button"
                                 className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                                 data-testid={`card-booking-${b.id}`}
-                                onClick={() => window.open(`/clients/${clientId}/bookings/${b.id}`, "_self")}
+                                onClick={() => navigate(`/clients/${clientId}/bookings/${b.id}`)}
                               >
                                 <div className="flex items-start gap-3">
                                   <div
@@ -3266,7 +3267,7 @@ export default function ClientPage() {
                           toast({ title: "Booking created successfully" });
                           const bookingId = result?.booking?.id;
                           if (bookingId) {
-                            window.open(`/clients/${clientId}/bookings/${bookingId}`, "_self");
+                            navigate(`/clients/${clientId}/bookings/${bookingId}`);
                           }
                         },
                         onError: () => {
