@@ -10,6 +10,7 @@ export const lookupKeys = {
   allResorts: ["lookup", "resorts", "all"] as const,
   accommodations: (resortId?: string) => ["lookup", "accommodations", resortId] as const,
   allAccommodations: ["lookup", "accommodations", "all"] as const,
+  accommodationTypes: ["lookup", "accommodation-types"] as const,
   boardBasis: ["lookup", "board-basis"] as const,
   parks: ["lookup", "parks"] as const,
   lodges: (parkId?: string) => ["lookup", "lodges", parkId] as const,
@@ -104,6 +105,14 @@ export function useAllResorts() {
   return useQuery({
     queryKey: lookupKeys.allResorts,
     queryFn: () => lookupApi.getResorts(),
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useAccommodationTypes() {
+  return useQuery({
+    queryKey: lookupKeys.accommodationTypes,
+    queryFn: () => lookupApi.getAccommodationTypes(),
     staleTime: 1000 * 60 * 30,
   });
 }

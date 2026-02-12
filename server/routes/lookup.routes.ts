@@ -5,6 +5,7 @@ import {
   destination,
   resorts,
   accomodation_list,
+  accomodation_type,
   board_basis,
   park,
   lodges,
@@ -104,6 +105,15 @@ router.get("/package-types", async (_req, res) => {
     const rows = await db.select().from(package_type).orderBy(package_type.name);
     const filtered = rows.filter((r) => allowedNames.includes(r.name));
     res.json({ success: true, data: filtered });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/accommodation-types", async (_req, res) => {
+  try {
+    const rows = await db.select().from(accomodation_type).orderBy(accomodation_type.type);
+    res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

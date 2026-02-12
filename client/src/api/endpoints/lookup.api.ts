@@ -65,6 +65,11 @@ export interface LookupCottage {
   pets: number | null;
 }
 
+export interface LookupAccommodationType {
+  id: string;
+  type: string | null;
+}
+
 export interface LookupPackageType {
   id: string;
   name: string;
@@ -105,6 +110,10 @@ export const lookupApi = {
   },
   getCottages: async (): Promise<LookupCottage[]> => {
     const { data } = await axios.get<LookupCottage[]>("/api/lookup/cottages");
+    return data;
+  },
+  getAccommodationTypes: async (): Promise<LookupAccommodationType[]> => {
+    const { data } = await axios.get<LookupAccommodationType[]>("/api/lookup/accommodation-types");
     return data;
   },
 };

@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
-import { usePackageTypes, useCountries, useDestinations, useResorts, useParks, useLodges, useBoardBasis, useAirports } from "@/hooks/queries";
+import { usePackageTypes, useCountries, useDestinations, useResorts, useParks, useLodges, useBoardBasis, useAirports, useAccommodationTypes, useAllDestinations } from "@/hooks/queries";
 
 const FLEXIBILITY_OPTIONS = [
   "Exact Date",
@@ -32,19 +32,9 @@ const CRUISE_FLEXIBILITY_OPTIONS = [
 
 const STAR_RATINGS = ["2 Star", "3 Star", "4 Star", "5 Star"];
 
-const BOARD_BASIS_OPTIONS = [
-  "Room Only",
-  "Bed and Breakfast",
-  "Half Board",
-  "Full Board",
-  "All Inclusive",
-  "Ultra All-Inclusive",
-  "Self Catering",
-];
 
 const BUDGET_TYPES = ["Per Person", "Package"];
 
-const ACCOMMODATION_TYPES = ["Lodge", "Cottage", "Hotel"];
 
 const HOT_TUB_FLEXIBILITY_OPTIONS = [
   "Exact Date",
@@ -222,6 +212,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   const { data: lodgesData } = useLodges(form.destination);
   const { data: airportsData } = useAirports();
   const { data: packageTypesData } = usePackageTypes();
+  const { data: accommodationTypesData } = useAccommodationTypes();
+  const { data: allDestinationsData } = useAllDestinations();
 
   const holidayTypeName = useMemo(() => {
     if (!form.holidayType || !packageTypesData) return "";
@@ -422,8 +414,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                             <SelectValue placeholder="Select accommodation type..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {ACCOMMODATION_TYPES.map((t) => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            {(accommodationTypesData || []).map((t: any) => (
+                              <SelectItem key={t.id} value={t.id}>{t.type}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -463,13 +455,16 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                     <>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Cruise Destination</Label>
-                        <Input
-                          placeholder="e.g. Mediterranean, Caribbean"
-                          value={form.cruiseDestination}
-                          onChange={(e) => set("cruiseDestination", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70"
-                          data-testid="input-cruise-destination"
-                        />
+                        <Select value={form.cruiseDestination} onValueChange={(v) => set("cruiseDestination", v)}>
+                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-cruise-destination">
+                            <SelectValue placeholder="Select destination..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(allDestinationsData || []).map((d: any) => (
+                              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
@@ -1028,7 +1023,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         <SelectValue placeholder="Select board basis..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(boardBasisData || BOARD_BASIS_OPTIONS.map(b => ({ id: b, type: b }))).map((b) => (
+                        {(boardBasisData || []).map((b: any) => (
                           <SelectItem key={b.id} value={b.id}>{b.type}</SelectItem>
                         ))}
                       </SelectContent>

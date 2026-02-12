@@ -15,4 +15,4 @@ export { useDashboardStats, dashboardKeys } from "./use-dashboard-queries";
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";
 export { useAirports, airportKeys } from "./use-airport-queries";
 export { useAllTasks, useTasks, useUserTasks, taskKeys } from "./use-task-queries";
-export { usePackageTypes, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, lookupKeys } from "./use-lookup-queries";
+export { usePackageTypes, useCountries, useDestinations, useResorts, useAccommodations, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, lookupKeys } from "./use-lookup-queries";
