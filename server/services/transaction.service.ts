@@ -43,6 +43,31 @@ interface BookingRelationPayload extends InsertBooking {
   primaryAccommodation?: Partial<InsertBookingAccomodation>;
 }
 
+function toDateOrNull(value: unknown): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function convertFlightDates(flight: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...flight,
+    departure_date_time: toDateOrNull(flight.departure_date_time),
+    arrival_date_time: toDateOrNull(flight.arrival_date_time),
+  };
+}
+
+function convertAccommodationDates(accom: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...accom,
+    check_in_date_time: toDateOrNull(accom.check_in_date_time),
+  };
+}
+
 export const transactionService = {
   async listTransactions() {
     return await transactionRepository.findAll();
@@ -123,28 +148,34 @@ export const transactionService = {
         status: 'on_quote',
       }).returning();
 
-      const [q] = await tx.insert(quote).values({
+      const quoteValues: Record<string, unknown> = {
         ...quoteFields,
         transaction_id: txn.id,
-      }).returning();
+      };
+      if (quoteValues.date_expiry) quoteValues.date_expiry = toDateOrNull(quoteValues.date_expiry);
+      if (quoteValues.deleted_at) quoteValues.deleted_at = toDateOrNull(quoteValues.deleted_at);
+      const [q] = await tx.insert(quote).values(quoteValues as InsertQuote).returning();
 
       if (outboundFlight && (outboundFlight.departing_airport_id || outboundFlight.arrival_airport_id)) {
+        const converted = convertFlightDates(outboundFlight);
         await tx.insert(quote_flights).values({
-          ...outboundFlight,
+          ...converted,
           quote_id: q.id,
           flight_type: 'outbound',
         });
       }
       if (inboundFlight && (inboundFlight.departing_airport_id || inboundFlight.arrival_airport_id)) {
+        const converted = convertFlightDates(inboundFlight);
         await tx.insert(quote_flights).values({
-          ...inboundFlight,
+          ...converted,
           quote_id: q.id,
           flight_type: 'inbound',
         });
       }
       if (primaryAccommodation && primaryAccommodation.accomodation_id) {
+        const converted = convertAccommodationDates(primaryAccommodation);
         await tx.insert(quote_accomodation).values({
-          ...primaryAccommodation,
+          ...converted,
           quote_id: q.id,
           is_primary: true,
         });
@@ -163,29 +194,34 @@ export const transactionService = {
         status: 'on_booking',
       }).returning();
 
-      const [b] = await tx.insert(booking).values({
+      const bookingValues: Record<string, unknown> = {
         ...bookingFields,
         transaction_id: txn.id,
         booking_status: 'BOOKED',
-      }).returning();
+      };
+      if (bookingValues.deleted_at) bookingValues.deleted_at = toDateOrNull(bookingValues.deleted_at);
+      const [b] = await tx.insert(booking).values(bookingValues as InsertBooking).returning();
 
       if (outboundFlight && (outboundFlight.departing_airport_id || outboundFlight.arrival_airport_id)) {
+        const converted = convertFlightDates(outboundFlight);
         await tx.insert(booking_flights).values({
-          ...outboundFlight,
+          ...converted,
           booking_id: b.id,
           flight_type: 'outbound',
         });
       }
       if (inboundFlight && (inboundFlight.departing_airport_id || inboundFlight.arrival_airport_id)) {
+        const converted = convertFlightDates(inboundFlight);
         await tx.insert(booking_flights).values({
-          ...inboundFlight,
+          ...converted,
           booking_id: b.id,
           flight_type: 'inbound',
         });
       }
       if (primaryAccommodation && primaryAccommodation.accomodation_id) {
+        const converted = convertAccommodationDates(primaryAccommodation);
         await tx.insert(booking_accomodation).values({
-          ...primaryAccommodation,
+          ...converted,
           booking_id: b.id,
           is_primary: true,
         });

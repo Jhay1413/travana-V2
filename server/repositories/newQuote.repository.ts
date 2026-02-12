@@ -14,6 +14,29 @@ import type {
 import { eq, desc, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+function toDateOrNull(value: unknown): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function convertFlightDates(data: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...data };
+  if ('departure_date_time' in result) result.departure_date_time = toDateOrNull(result.departure_date_time);
+  if ('arrival_date_time' in result) result.arrival_date_time = toDateOrNull(result.arrival_date_time);
+  return result;
+}
+
+function convertAccommodationDates(data: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...data };
+  if ('check_in_date_time' in result) result.check_in_date_time = toDateOrNull(result.check_in_date_time);
+  return result;
+}
+
 const departAirport = alias(airport, "depart_airport");
 const arriveAirport = alias(airport, "arrive_airport");
 const flightTourOp = alias(tour_operator, "flight_tour_op");
@@ -41,8 +64,8 @@ export const newQuoteRepository = {
     return await db.select().from(quote).orderBy(desc(quote.date_created));
   },
 
-  async findByStatus(status: string): Promise<Quote[]> {
-    return await db.select().from(quote).where(eq(quote.quote_status, status)).orderBy(desc(quote.date_created));
+  async findByStatus(status: Quote['quote_status']): Promise<Quote[]> {
+    return await db.select().from(quote).where(sql`${quote.quote_status} = ${status}`).orderBy(desc(quote.date_created));
   },
 
   async create(data: InsertQuote): Promise<Quote> {
@@ -255,29 +278,31 @@ export const newQuoteRepository = {
   },
 
   async upsertFlightByType(quoteId: string, flightType: string, data: Partial<InsertQuoteFlight>): Promise<QuoteFlight> {
+    const converted = convertFlightDates(data as Record<string, unknown>) as Partial<InsertQuoteFlight>;
     const existing = await db.select().from(quote_flights)
       .where(eq(quote_flights.quote_id, quoteId))
       .then(rows => rows.find(r => r.flight_type === flightType));
 
     if (existing) {
-      const [result] = await db.update(quote_flights).set(data).where(eq(quote_flights.id, existing.id)).returning();
+      const [result] = await db.update(quote_flights).set(converted).where(eq(quote_flights.id, existing.id)).returning();
       return result;
     } else {
-      const [result] = await db.insert(quote_flights).values({ ...data, quote_id: quoteId, flight_type: flightType }).returning();
+      const [result] = await db.insert(quote_flights).values({ ...converted, quote_id: quoteId, flight_type: flightType }).returning();
       return result;
     }
   },
 
   async upsertPrimaryAccommodation(quoteId: string, data: Partial<InsertQuoteAccomodation>): Promise<QuoteAccomodation> {
+    const converted = convertAccommodationDates(data as Record<string, unknown>) as Partial<InsertQuoteAccomodation>;
     const existing = await db.select().from(quote_accomodation)
       .where(eq(quote_accomodation.quote_id, quoteId))
       .then(rows => rows.find(r => r.is_primary));
 
     if (existing) {
-      const [result] = await db.update(quote_accomodation).set(data).where(eq(quote_accomodation.id, existing.id)).returning();
+      const [result] = await db.update(quote_accomodation).set(converted).where(eq(quote_accomodation.id, existing.id)).returning();
       return result;
     } else {
-      const [result] = await db.insert(quote_accomodation).values({ ...data, quote_id: quoteId, is_primary: true }).returning();
+      const [result] = await db.insert(quote_accomodation).values({ ...converted, quote_id: quoteId, is_primary: true }).returning();
       return result;
     }
   },

@@ -13,6 +13,29 @@ import type {
 import { eq, desc, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+function toDateOrNull(value: unknown): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function convertFlightDates(data: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...data };
+  if ('departure_date_time' in result) result.departure_date_time = toDateOrNull(result.departure_date_time);
+  if ('arrival_date_time' in result) result.arrival_date_time = toDateOrNull(result.arrival_date_time);
+  return result;
+}
+
+function convertAccommodationDates(data: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...data };
+  if ('check_in_date_time' in result) result.check_in_date_time = toDateOrNull(result.check_in_date_time);
+  return result;
+}
+
 const departAirport = alias(airport, "depart_airport");
 const arriveAirport = alias(airport, "arrive_airport");
 const flightTourOp = alias(tour_operator, "flight_tour_op");
@@ -196,29 +219,31 @@ export const bookingRepository = {
   },
 
   async upsertFlightByType(bookingId: string, flightType: string, data: Partial<InsertBookingFlight>): Promise<BookingFlight> {
+    const converted = convertFlightDates(data as Record<string, unknown>) as Partial<InsertBookingFlight>;
     const existing = await db.select().from(booking_flights)
       .where(eq(booking_flights.booking_id, bookingId))
       .then(rows => rows.find(r => r.flight_type === flightType));
 
     if (existing) {
-      const [result] = await db.update(booking_flights).set(data).where(eq(booking_flights.id, existing.id)).returning();
+      const [result] = await db.update(booking_flights).set(converted).where(eq(booking_flights.id, existing.id)).returning();
       return result;
     } else {
-      const [result] = await db.insert(booking_flights).values({ ...data, booking_id: bookingId, flight_type: flightType }).returning();
+      const [result] = await db.insert(booking_flights).values({ ...converted, booking_id: bookingId, flight_type: flightType }).returning();
       return result;
     }
   },
 
   async upsertPrimaryAccommodation(bookingId: string, data: Partial<InsertBookingAccomodation>): Promise<BookingAccomodation> {
+    const converted = convertAccommodationDates(data as Record<string, unknown>) as Partial<InsertBookingAccomodation>;
     const existing = await db.select().from(booking_accomodation)
       .where(eq(booking_accomodation.booking_id, bookingId))
       .then(rows => rows.find(r => r.is_primary));
 
     if (existing) {
-      const [result] = await db.update(booking_accomodation).set(data).where(eq(booking_accomodation.id, existing.id)).returning();
+      const [result] = await db.update(booking_accomodation).set(converted).where(eq(booking_accomodation.id, existing.id)).returning();
       return result;
     } else {
-      const [result] = await db.insert(booking_accomodation).values({ ...data, booking_id: bookingId, is_primary: true }).returning();
+      const [result] = await db.insert(booking_accomodation).values({ ...converted, booking_id: bookingId, is_primary: true }).returning();
       return result;
     }
   },

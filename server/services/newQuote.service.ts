@@ -2,6 +2,7 @@ import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
 import { AppError } from "../utils/error-handler";
 import type {
+  Quote,
   InsertQuote,
   InsertQuoteFlight,
   InsertQuoteAccomodation,
@@ -42,7 +43,7 @@ export const newQuoteService = {
     return await newQuoteRepository.findByTransactionId(transactionId);
   },
 
-  async listQuotesByStatus(status: string) {
+  async listQuotesByStatus(status: Quote['quote_status']) {
     return await newQuoteRepository.findByStatus(status);
   },
 
