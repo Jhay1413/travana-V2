@@ -35,4 +35,22 @@ export const bookingApi = {
   delete: async (id: string): Promise<void> => {
     await axiosClient.delete(`/api/bookings/${id}`);
   },
+
+  addFlight: async (bookingId: string, flightData: any): Promise<any> => {
+    const { data } = await axiosClient.post(`/api/bookings/${bookingId}/flights`, flightData);
+    return data;
+  },
+
+  removeFlight: async (bookingId: string, flightId: string): Promise<void> => {
+    await axiosClient.delete(`/api/bookings/${bookingId}/flights/${flightId}`);
+  },
+
+  addAccommodation: async (bookingId: string, accommodationData: any): Promise<any> => {
+    const { data } = await axiosClient.post(`/api/bookings/${bookingId}/accommodations`, accommodationData);
+    return data;
+  },
+
+  removeAccommodation: async (bookingId: string, accommodationId: string): Promise<void> => {
+    await axiosClient.delete(`/api/bookings/${bookingId}/accommodations/${accommodationId}`);
+  },
 };

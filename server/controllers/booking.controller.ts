@@ -44,4 +44,28 @@ export const bookingController = {
     await bookingService.deleteBooking(id);
     res.status(204).send();
   }),
+
+  addFlight: asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id as string;
+    const flight = await bookingService.addFlight(bookingId, req.body);
+    return successResponse(res, flight, "Flight added", 201);
+  }),
+
+  removeFlight: asyncHandler(async (req: Request, res: Response) => {
+    const flightId = req.params.flightId as string;
+    await bookingService.removeFlight(flightId);
+    res.status(204).send();
+  }),
+
+  addAccommodation: asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.id as string;
+    const accommodation = await bookingService.addAccommodation(bookingId, req.body);
+    return successResponse(res, accommodation, "Accommodation added", 201);
+  }),
+
+  removeAccommodation: asyncHandler(async (req: Request, res: Response) => {
+    const accommodationId = req.params.accommodationId as string;
+    await bookingService.removeAccommodation(accommodationId);
+    res.status(204).send();
+  }),
 };

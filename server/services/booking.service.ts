@@ -61,6 +61,43 @@ export const bookingService = {
       flight_meals: q.flight_meals,
     });
 
+    const quoteDetails = await newQuoteRepository.findWithDetails(quoteId);
+    if (quoteDetails) {
+      for (const f of quoteDetails.flights || []) {
+        await bookingRepository.addFlight({
+          booking_id: b.id,
+          flight_number: f.flight_number,
+          flight_ref: f.flight_ref,
+          departing_airport_id: f.departing_airport_id,
+          arrival_airport_id: f.arrival_airport_id,
+          tour_operator_id: f.tour_operator_id,
+          flight_type: f.flight_type,
+          departure_date_time: f.departure_date_time,
+          arrival_date_time: f.arrival_date_time,
+          is_included_in_package: f.is_included_in_package,
+          cost: f.cost,
+          commission: f.commission,
+        });
+      }
+      for (const a of quoteDetails.accommodations || []) {
+        await bookingRepository.addAccommodation({
+          booking_id: b.id,
+          booking_ref: a.booking_ref,
+          tour_operator_id: a.tour_operator_id,
+          no_of_nights: a.no_of_nights,
+          room_type: a.room_type,
+          board_basis_id: a.board_basis_id,
+          check_in_date_time: a.check_in_date_time,
+          stay_type: a.stay_type,
+          is_primary: a.is_primary,
+          is_included_in_package: a.is_included_in_package,
+          cost: a.cost,
+          commission: a.commission,
+          accomodation_id: a.accomodation_id,
+        });
+      }
+    }
+
     await newQuoteRepository.update(quoteId, { quote_status: 'WON' });
     await transactionRepository.update(q.transaction_id, { status: 'on_booking' });
 
@@ -87,5 +124,21 @@ export const bookingService = {
 
   async deleteBooking(id: string) {
     await bookingRepository.remove(id);
+  },
+
+  async addFlight(bookingId: string, flightData: any) {
+    return await bookingRepository.addFlight({ ...flightData, booking_id: bookingId });
+  },
+
+  async removeFlight(flightId: string) {
+    await bookingRepository.removeFlight(flightId);
+  },
+
+  async addAccommodation(bookingId: string, accommodationData: any) {
+    return await bookingRepository.addAccommodation({ ...accommodationData, booking_id: bookingId });
+  },
+
+  async removeAccommodation(accommodationId: string) {
+    await bookingRepository.removeAccommodation(accommodationId);
   },
 };
