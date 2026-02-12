@@ -740,7 +740,7 @@ export const quote_cruise_itinerary = pgTable('quote_cruise_itinerary', {
 export type QuoteCruiseItinerary = typeof quote_cruise_itinerary.$inferSelect;
 export type InsertQuoteCruiseItinerary = typeof quote_cruise_itinerary.$inferInsert;
 
-export const booking = pgTable('booking', {
+export const booking = pgTable('booking_table', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   transaction_id: uuid().notNull().references(() => transaction.id, { onDelete: "cascade" }).unique(),
   deal_type: varchar(),
