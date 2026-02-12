@@ -4,6 +4,7 @@ import {
   enquiry_board_basis, enquiry_departure_airport, enquiry_departure_port,
   enquiry_cruise_line, enquiry_cruise_destination, enquiry_passenger,
   package_type, destination, resorts, accomodation_list, board_basis, airport,
+  port, cruise_line, cruise_destination,
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
@@ -96,9 +97,30 @@ export const enquiryTableRepository = {
         .leftJoin(airport, eq(enquiry_departure_airport.airport_id, airport.id))
         .where(eq(enquiry_departure_airport.enquiry_id, id)),
 
-      db.select().from(enquiry_departure_port).where(eq(enquiry_departure_port.enquiry_id, id)),
-      db.select().from(enquiry_cruise_line).where(eq(enquiry_cruise_line.enquiry_id, id)),
-      db.select().from(enquiry_cruise_destination).where(eq(enquiry_cruise_destination.enquiry_id, id)),
+      db.select({
+        enquiry_id: enquiry_departure_port.enquiry_id,
+        port_id: enquiry_departure_port.port_id,
+        port_name: port.name,
+      })
+        .from(enquiry_departure_port)
+        .leftJoin(port, eq(enquiry_departure_port.port_id, port.id))
+        .where(eq(enquiry_departure_port.enquiry_id, id)),
+      db.select({
+        enquiry_id: enquiry_cruise_line.enquiry_id,
+        cruise_line_id: enquiry_cruise_line.cruise_line_id,
+        cruise_line_name: cruise_line.name,
+      })
+        .from(enquiry_cruise_line)
+        .leftJoin(cruise_line, eq(enquiry_cruise_line.cruise_line_id, cruise_line.id))
+        .where(eq(enquiry_cruise_line.enquiry_id, id)),
+      db.select({
+        enquiry_id: enquiry_cruise_destination.enquiry_id,
+        cruise_destination_id: enquiry_cruise_destination.cruise_destination_id,
+        cruise_destination_name: cruise_destination.name,
+      })
+        .from(enquiry_cruise_destination)
+        .leftJoin(cruise_destination, eq(enquiry_cruise_destination.cruise_destination_id, cruise_destination.id))
+        .where(eq(enquiry_cruise_destination.enquiry_id, id)),
       db.select().from(enquiry_passenger).where(eq(enquiry_passenger.enquiry_id, id)),
     ]);
 

@@ -1,13 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import {
+  Anchor,
   ArrowRight,
   Bold,
   Calendar,
   CheckSquare,
   ChevronLeft,
   Circle,
+  Dog,
   Globe,
+  Home,
   Hotel,
   Italic,
   Link as LinkIcon,
@@ -21,6 +24,7 @@ import {
   Redo,
   Reply,
   Send,
+  Ship,
   SmilePlus,
   Sparkles,
   Star,
@@ -708,10 +712,17 @@ export default function EnquiryPage() {
     infantsCount > 0 ? `${infantsCount} Infant${infantsCount !== 1 ? "s" : ""}` : null,
   ].filter(Boolean).join(", ");
 
+  const holidayTypeName = (enquiry as any).holiday_type_name || "";
+  const isHotTub = holidayTypeName.toLowerCase().includes("hot tub");
+  const isCruise = holidayTypeName.toLowerCase().includes("cruise");
+
   const destinationNames = enquiry.destinations?.map((d: any) => d.destination_name || d.name || d).filter(Boolean).join(", ") || null;
   const resortNames = enquiry.resorts?.map((r: any) => r.resort_name || r.name || r).filter(Boolean).join(", ") || null;
   const airportNames = enquiry.airports?.map((a: any) => a.airport_name || a.name || a).filter(Boolean).join(", ") || null;
   const boardBaseNames = enquiry.boardBases?.map((b: any) => b.board_basis_name || b.name || b).filter(Boolean).join(", ") || null;
+  const portNames = (enquiry as any).ports?.map((p: any) => p.port_name || p.name || p).filter(Boolean).join(", ") || null;
+  const cruiseLineNames = (enquiry as any).cruiseLines?.map((c: any) => c.cruise_line_name || c.name || c).filter(Boolean).join(", ") || null;
+  const cruiseDestinationNames = (enquiry as any).cruiseDestinations?.map((c: any) => c.cruise_destination_name || c.name || c).filter(Boolean).join(", ") || null;
 
   return (
     <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
@@ -767,38 +778,52 @@ export default function EnquiryPage() {
                   <div className="text-sm font-bold">Holiday Details</div>
                 </div>
                 <div className="divide-y divide-black/5">
-                  <InfoRow icon={Globe} label="Holiday Type" value={(enquiry as any).holiday_type_name || "—"} />
+                  <InfoRow icon={Globe} label="Holiday Type" value={holidayTypeName || "—"} />
                   <InfoRow icon={MapPin} label="Destination" value={destinationNames} />
-                  <InfoRow icon={MapPin} label="Resort" value={resortNames} />
+                  {!isCruise && <InfoRow icon={MapPin} label="Resort" value={resortNames} />}
+                  {isCruise && <InfoRow icon={Ship} label="Cruise Destinations" value={cruiseDestinationNames} />}
+                  {isCruise && <InfoRow icon={Anchor} label="Cruise Lines" value={cruiseLineNames} />}
                 </div>
               </Card>
 
               <Card className="rounded-3xl border-black/10 bg-white/70 p-5" data-testid="card-travel-details">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10">
-                    <Plane className="h-4 w-4 text-emerald-600" />
+                    {isCruise ? <Ship className="h-4 w-4 text-emerald-600" /> : isHotTub ? <Home className="h-4 w-4 text-emerald-600" /> : <Plane className="h-4 w-4 text-emerald-600" />}
                   </div>
-                  <div className="text-sm font-bold">Travel & Passengers</div>
+                  <div className="text-sm font-bold">{isCruise ? "Cruise & Passengers" : isHotTub ? "Stay & Guests" : "Travel & Passengers"}</div>
                 </div>
                 <div className="divide-y divide-black/5">
-                  <InfoRow icon={Plane} label="Departure Airport" value={airportNames} />
-                  <InfoRow icon={Calendar} label="Travel Date" value={formatUKDate(enquiry.travel_date)} />
+                  {!isHotTub && !isCruise && <InfoRow icon={Plane} label="Departure Airport" value={airportNames} />}
+                  {isCruise && <InfoRow icon={Anchor} label="Departure Port" value={portNames} />}
+                  {isHotTub && <InfoRow icon={Home} label="Weekend Lodge" value={enquiry.weekend_lodge} />}
+                  <InfoRow icon={Calendar} label={isCruise ? "Cruise Date" : "Travel Date"} value={formatUKDate(enquiry.travel_date)} />
                   <InfoRow icon={Calendar} label="Flexibility" value={enquiry.flexibility_date || enquiry.flexible_date} />
-                  <InfoRow icon={Users} label="Passengers" value={totalPassengers > 0 ? `${totalPassengers} total — ${passengerBreakdown}` : null} />
+                  {isHotTub ? (
+                    <>
+                      <InfoRow icon={Users} label="Guests" value={enquiry.no_of_guests ? `${enquiry.no_of_guests} guest${enquiry.no_of_guests !== 1 ? "s" : ""}` : null} />
+                      <InfoRow icon={Dog} label="Pets" value={enquiry.no_of_pets != null ? `${enquiry.no_of_pets} pet${enquiry.no_of_pets !== 1 ? "s" : ""}` : null} />
+                    </>
+                  ) : (
+                    <InfoRow icon={Users} label="Passengers" value={totalPassengers > 0 ? `${totalPassengers} total — ${passengerBreakdown}` : null} />
+                  )}
                 </div>
               </Card>
 
               <Card className="rounded-3xl border-black/10 bg-white/70 p-5" data-testid="card-accommodation-details">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
-                    <Hotel className="h-4 w-4 text-amber-600" />
+                    {isCruise ? <Ship className="h-4 w-4 text-amber-600" /> : <Hotel className="h-4 w-4 text-amber-600" />}
                   </div>
-                  <div className="text-sm font-bold">Accommodation & Budget</div>
+                  <div className="text-sm font-bold">{isCruise ? "Cabin & Budget" : isHotTub ? "Lodge & Budget" : "Accommodation & Budget"}</div>
                 </div>
                 <div className="divide-y divide-black/5">
                   <InfoRow icon={Calendar} label="Nights" value={enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : null} />
-                  <InfoRow icon={Star} label="Star Rating" value={enquiry.accom_min_star_rating} />
-                  <InfoRow icon={Hotel} label="Board Basis" value={boardBaseNames} />
+                  {isCruise && <InfoRow icon={Ship} label="Cabin Type" value={enquiry.cabin_type} />}
+                  {isCruise && <InfoRow icon={Calendar} label="Pre-Cruise Stay" value={enquiry.pre_cruise_stay != null ? `${enquiry.pre_cruise_stay} nights` : null} />}
+                  {isCruise && <InfoRow icon={Calendar} label="Post-Cruise Stay" value={enquiry.post_cruise_stay != null ? `${enquiry.post_cruise_stay} nights` : null} />}
+                  {!isCruise && !isHotTub && <InfoRow icon={Star} label="Star Rating" value={enquiry.accom_min_star_rating} />}
+                  {!isCruise && !isHotTub && <InfoRow icon={Hotel} label="Board Basis" value={boardBaseNames} />}
                   <InfoRow icon={Wallet} label="Budget" value={enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : null} />
                 </div>
               </Card>
@@ -809,13 +834,24 @@ export default function EnquiryPage() {
                 <div className="text-sm font-bold mb-3">Quick Summary</div>
                 <div className="space-y-2">
                   {[
-                    { label: "Type", value: (enquiry as any).holiday_type_name || "—", color: "bg-blue-500/10 text-blue-700" },
-                    { label: "Destination", value: destinationNames || "—" },
-                    { label: "Travel Date", value: formatUKDate(enquiry.travel_date) },
-                    { label: "Passengers", value: passengerBreakdown || "—" },
+                    { label: "Type", value: holidayTypeName || "—", color: "bg-blue-500/10 text-blue-700" },
+                    { label: "Destination", value: isCruise ? (cruiseDestinationNames || destinationNames || "—") : (destinationNames || "—") },
+                    { label: isCruise ? "Cruise Date" : "Travel Date", value: formatUKDate(enquiry.travel_date) },
+                    isHotTub
+                      ? { label: "Guests", value: enquiry.no_of_guests ? `${enquiry.no_of_guests} guest${enquiry.no_of_guests !== 1 ? "s" : ""}` : "—" }
+                      : { label: "Passengers", value: passengerBreakdown || "—" },
                     { label: "Duration", value: enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : "—" },
+                    isHotTub && enquiry.no_of_pets != null
+                      ? { label: "Pets", value: `${enquiry.no_of_pets} pet${enquiry.no_of_pets !== 1 ? "s" : ""}` }
+                      : null,
+                    isCruise
+                      ? { label: "Cruise Line", value: cruiseLineNames || "—" }
+                      : null,
+                    isCruise && enquiry.cabin_type
+                      ? { label: "Cabin", value: enquiry.cabin_type }
+                      : null,
                     { label: "Budget", value: enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : "—" },
-                  ].map((item) => (
+                  ].filter(Boolean).map((item: any) => (
                     <div key={item.label} className="flex items-center justify-between gap-3 rounded-xl bg-black/[0.02] px-3 py-2">
                       <span className="text-[11px] font-medium text-black/50">{item.label}</span>
                       <span className={cn("text-xs font-semibold text-black/80", item.color)}>{item.value}</span>

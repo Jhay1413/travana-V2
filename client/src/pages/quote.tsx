@@ -97,6 +97,12 @@ type QuoteDisplay = {
   };
   tags: string[];
   notes: string[];
+  lodge?: { name: string; type: string; code: string };
+  cottage?: { name: string; code: string };
+  cruise?: { cruiseLine: string; ship: string; cabinType: string; cruiseName: string; cruiseDate: string; preCruiseStay: number; postCruiseStay: number };
+  pets: number;
+  haysRef?: string;
+  supplierRef?: string;
 };
 
 const EMOJI_CATEGORIES = [
@@ -859,72 +865,30 @@ function formatTime24(timeStr: string) {
 
 function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
   const timelineItems: { type: string; sortKey: string; content: React.ReactNode }[] = [];
+  const isHotTub = quote.packageType?.toLowerCase().includes("hot tub");
+  const isCruise = quote.packageType?.toLowerCase().includes("cruise");
 
-  if (quote.flights.outbound.from) {
-    const sortKey = quote.flights.outbound.departDate + "T" + (quote.flights.outbound.departTime || "00:00");
-    timelineItems.push({
-      type: "outbound",
-      sortKey,
-      content: (
-        <div className="flex gap-2.5" data-testid="timeline-outbound">
-          <div className="flex flex-col items-center">
-            <div className="grid h-7 w-7 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-600">
-              <Plane className="h-3.5 w-3.5" />
-            </div>
-            <div className="mt-1 h-full w-px bg-black/10" />
-          </div>
-          <div className="flex-1 pb-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">Outbound Flight</div>
-            <div className="mt-0.5 text-xs font-semibold">{quote.flights.outbound.from} → {quote.flights.outbound.to}</div>
-            <div className="mt-1 grid gap-1">
-              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                <Calendar className="h-3 w-3 shrink-0" />
-                <span>{formatTimelineDate(quote.flights.outbound.departDate)}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                <Clock className="h-3 w-3 shrink-0" />
-                <span>Depart {formatTime24(quote.flights.outbound.departTime)}{quote.flights.outbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.outbound.arriveTime)}` : ""}</span>
-              </div>
-              {(quote.flights.outbound.carrier || quote.flights.outbound.flightNo) && (
-                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                  <Plane className="h-3 w-3 shrink-0" />
-                  <span>{[quote.flights.outbound.carrier, quote.flights.outbound.flightNo].filter(Boolean).join(" ")}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ),
-    });
-  }
-
-  if (quote.accommodation.property) {
+  if (isHotTub) {
     const checkIn = quote.checkInDate || quote.travelDate;
-    const checkInTime = quote.checkInTime || "14:00";
-    const sortKey = checkIn + "T" + checkInTime;
+    const sortKey = checkIn + "T14:00";
     timelineItems.push({
-      type: "hotel",
+      type: "lodge-checkin",
       sortKey,
       content: (
-        <div className="flex gap-2.5" data-testid="timeline-hotel">
+        <div className="flex gap-2.5" data-testid="timeline-lodge-checkin">
           <div className="flex flex-col items-center">
-            <div className="grid h-7 w-7 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
-              <Hotel className="h-3.5 w-3.5" />
+            <div className="grid h-7 w-7 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
+              <PawPrint className="h-3.5 w-3.5" />
             </div>
             <div className="mt-1 h-full w-px bg-black/10" />
           </div>
           <div className="flex-1 pb-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Hotel Check-in</div>
-            <div className="mt-0.5 text-xs font-semibold">{quote.accommodation.property}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Lodge Check-in</div>
+            <div className="mt-0.5 text-xs font-semibold">{quote.lodge?.type || "Lodge"}</div>
             <div className="mt-1 grid gap-1">
               <div className="flex items-center gap-1.5 text-[11px] text-black/60">
                 <Calendar className="h-3 w-3 shrink-0" />
                 <span>{formatTimelineDate(checkIn)}</span>
-                {checkInTime && <span>at {formatTime24(checkInTime)}</span>}
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                <MapPin className="h-3 w-3 shrink-0" />
-                <span>{[quote.resort, quote.country].filter(Boolean).join(", ") || quote.destination}</span>
               </div>
               {quote.nights > 0 && (
                 <div className="flex items-center gap-1.5 text-[11px] text-black/60">
@@ -932,91 +896,266 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
                   <span>{quote.nights} nights</span>
                 </div>
               )}
-              <div className="mt-0.5 flex flex-wrap gap-1.5">
-                {quote.accommodation.roomType && (
-                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{quote.accommodation.roomType}</span>
-                )}
-                {quote.accommodation.board && (
-                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{quote.accommodation.board}</span>
-                )}
-              </div>
+              {quote.pets > 0 && (
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <PawPrint className="h-3 w-3 shrink-0" />
+                  <span>{quote.pets} pet{quote.pets !== 1 ? "s" : ""}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
       ),
     });
-  }
 
-  if (quote.transferType) {
-    const transferDate = quote.checkInDate || quote.travelDate;
-    const sortKey = transferDate + "T" + (quote.flights.outbound.arriveTime || "12:00");
-    timelineItems.push({
-      type: "transfer",
-      sortKey,
-      content: (
-        <div className="flex gap-2.5" data-testid="timeline-transfer">
-          <div className="flex flex-col items-center">
-            <div className="grid h-7 w-7 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
-              <Bus className="h-3.5 w-3.5" />
+    if (quote.accommodation.property) {
+      const arrivalSortKey = checkIn + "T15:00";
+      timelineItems.push({
+        type: "lodge-arrival",
+        sortKey: arrivalSortKey,
+        content: (
+          <div className="flex gap-2.5" data-testid="timeline-lodge-arrival">
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
+                <Hotel className="h-3.5 w-3.5" />
+              </div>
+              <div className="mt-1 h-full w-px bg-black/10" />
             </div>
-            <div className="mt-1 h-full w-px bg-black/10" />
-          </div>
-          <div className="flex-1 pb-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Transfer</div>
-            <div className="mt-0.5 text-xs font-semibold">{quote.transferType}</div>
-            <div className="mt-1 grid gap-1">
-              <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                <MapPin className="h-3 w-3 shrink-0" />
-                <span>{quote.flights.outbound.to || "Airport"} → {quote.accommodation.property || quote.destination}</span>
+            <div className="flex-1 pb-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Lodge Arrival</div>
+              <div className="mt-0.5 text-xs font-semibold">{quote.accommodation.property}</div>
+              <div className="mt-1 grid gap-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span>{[quote.resort, quote.country].filter(Boolean).join(", ") || quote.destination}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      ),
-    });
-  }
+        ),
+      });
+    }
 
-  const hasInbound = quote.flights.inbound.from || quote.flights.inbound.to || quote.flights.inbound.departDate || quote.returnDate;
-  if (hasInbound) {
-    const ibDate = quote.flights.inbound.departDate || quote.returnDate;
-    const sortKey = ibDate + "T" + (quote.flights.inbound.departTime || "23:59");
-    const ibFrom = quote.flights.inbound.from || quote.flights.outbound.to || "";
-    const ibTo = quote.flights.inbound.to || quote.flights.outbound.from || "";
+    const checkoutDate = quote.returnDate || quote.travelDate;
     timelineItems.push({
-      type: "inbound",
-      sortKey,
+      type: "lodge-checkout",
+      sortKey: checkoutDate + "T10:00",
       content: (
-        <div className="flex gap-2.5" data-testid="timeline-inbound">
+        <div className="flex gap-2.5" data-testid="timeline-lodge-checkout">
           <div className="flex flex-col items-center">
             <div className="grid h-7 w-7 place-items-center rounded-full border border-purple-200 bg-purple-50 text-purple-600">
-              <Plane className="h-3.5 w-3.5 rotate-180" />
+              <PawPrint className="h-3.5 w-3.5" />
             </div>
           </div>
           <div className="flex-1 pb-2">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-600">Inbound Flight</div>
-            <div className="mt-0.5 text-xs font-semibold">{ibFrom} → {ibTo}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-600">Lodge Checkout</div>
             <div className="mt-1 grid gap-1">
               <div className="flex items-center gap-1.5 text-[11px] text-black/60">
                 <Calendar className="h-3 w-3 shrink-0" />
-                <span>{formatTimelineDate(ibDate)}</span>
+                <span>{formatTimelineDate(checkoutDate)}</span>
               </div>
-              {quote.flights.inbound.departTime && (
-                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                  <Clock className="h-3 w-3 shrink-0" />
-                  <span>Depart {formatTime24(quote.flights.inbound.departTime)}{quote.flights.inbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.inbound.arriveTime)}` : ""}</span>
-                </div>
-              )}
-              {(quote.flights.inbound.carrier || quote.flights.inbound.flightNo) && (
-                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                  <Plane className="h-3 w-3 shrink-0" />
-                  <span>{[quote.flights.inbound.carrier, quote.flights.inbound.flightNo].filter(Boolean).join(" ")}</span>
-                </div>
-              )}
             </div>
           </div>
         </div>
       ),
     });
+  } else {
+    if (quote.flights.outbound.from) {
+      const sortKey = quote.flights.outbound.departDate + "T" + (quote.flights.outbound.departTime || "00:00");
+      timelineItems.push({
+        type: "outbound",
+        sortKey,
+        content: (
+          <div className="flex gap-2.5" data-testid="timeline-outbound">
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-600">
+                <Plane className="h-3.5 w-3.5" />
+              </div>
+              <div className="mt-1 h-full w-px bg-black/10" />
+            </div>
+            <div className="flex-1 pb-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">Outbound Flight</div>
+              <div className="mt-0.5 text-xs font-semibold">{quote.flights.outbound.from} → {quote.flights.outbound.to}</div>
+              <div className="mt-1 grid gap-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  <span>{formatTimelineDate(quote.flights.outbound.departDate)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Clock className="h-3 w-3 shrink-0" />
+                  <span>Depart {formatTime24(quote.flights.outbound.departTime)}{quote.flights.outbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.outbound.arriveTime)}` : ""}</span>
+                </div>
+                {(quote.flights.outbound.carrier || quote.flights.outbound.flightNo) && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                    <Plane className="h-3 w-3 shrink-0" />
+                    <span>{[quote.flights.outbound.carrier, quote.flights.outbound.flightNo].filter(Boolean).join(" ")}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    }
+
+    if (isCruise && quote.cruise) {
+      const cruiseDate = quote.cruise.cruiseDate || quote.travelDate;
+      const sortKey = cruiseDate + "T12:00";
+      timelineItems.push({
+        type: "cruise-embarkation",
+        sortKey,
+        content: (
+          <div className="flex gap-2.5" data-testid="timeline-cruise-embarkation">
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-cyan-200 bg-cyan-50 text-cyan-600">
+                <Anchor className="h-3.5 w-3.5" />
+              </div>
+              <div className="mt-1 h-full w-px bg-black/10" />
+            </div>
+            <div className="flex-1 pb-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-cyan-600">Cruise Embarkation</div>
+              <div className="mt-0.5 text-xs font-semibold">{quote.cruise.ship || quote.cruise.cruiseLine}</div>
+              <div className="mt-1 grid gap-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  <span>{formatTimelineDate(cruiseDate)}</span>
+                </div>
+                {quote.cruise.cruiseName && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                    <Anchor className="h-3 w-3 shrink-0" />
+                    <span>{quote.cruise.cruiseName}</span>
+                  </div>
+                )}
+                {quote.cruise.cabinType && (
+                  <span className="mt-0.5 inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{quote.cruise.cabinType}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    }
+
+    if (quote.accommodation.property) {
+      const checkIn = quote.checkInDate || quote.travelDate;
+      const checkInTime = quote.checkInTime || "14:00";
+      const sortKey = checkIn + "T" + checkInTime;
+      timelineItems.push({
+        type: "hotel",
+        sortKey,
+        content: (
+          <div className="flex gap-2.5" data-testid="timeline-hotel">
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
+                <Hotel className="h-3.5 w-3.5" />
+              </div>
+              <div className="mt-1 h-full w-px bg-black/10" />
+            </div>
+            <div className="flex-1 pb-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Hotel Check-in</div>
+              <div className="mt-0.5 text-xs font-semibold">{quote.accommodation.property}</div>
+              <div className="mt-1 grid gap-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  <span>{formatTimelineDate(checkIn)}</span>
+                  {checkInTime && <span>at {formatTime24(checkInTime)}</span>}
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span>{[quote.resort, quote.country].filter(Boolean).join(", ") || quote.destination}</span>
+                </div>
+                {quote.nights > 0 && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>{quote.nights} nights</span>
+                  </div>
+                )}
+                <div className="mt-0.5 flex flex-wrap gap-1.5">
+                  {quote.accommodation.roomType && (
+                    <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{quote.accommodation.roomType}</span>
+                  )}
+                  {quote.accommodation.board && (
+                    <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{quote.accommodation.board}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    }
+
+    if (quote.transferType && !isCruise) {
+      const transferDate = quote.checkInDate || quote.travelDate;
+      const sortKey = transferDate + "T" + (quote.flights.outbound.arriveTime || "12:00");
+      timelineItems.push({
+        type: "transfer",
+        sortKey,
+        content: (
+          <div className="flex gap-2.5" data-testid="timeline-transfer">
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
+                <Bus className="h-3.5 w-3.5" />
+              </div>
+              <div className="mt-1 h-full w-px bg-black/10" />
+            </div>
+            <div className="flex-1 pb-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Transfer</div>
+              <div className="mt-0.5 text-xs font-semibold">{quote.transferType}</div>
+              <div className="mt-1 grid gap-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span>{quote.flights.outbound.to || "Airport"} → {quote.accommodation.property || quote.destination}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    }
+
+    const hasInbound = quote.flights.inbound.from || quote.flights.inbound.to || quote.flights.inbound.departDate || quote.returnDate;
+    if (hasInbound) {
+      const ibDate = quote.flights.inbound.departDate || quote.returnDate;
+      const sortKey = ibDate + "T" + (quote.flights.inbound.departTime || "23:59");
+      const ibFrom = quote.flights.inbound.from || quote.flights.outbound.to || "";
+      const ibTo = quote.flights.inbound.to || quote.flights.outbound.from || "";
+      timelineItems.push({
+        type: "inbound",
+        sortKey,
+        content: (
+          <div className="flex gap-2.5" data-testid="timeline-inbound">
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-purple-200 bg-purple-50 text-purple-600">
+                <Plane className="h-3.5 w-3.5 rotate-180" />
+              </div>
+            </div>
+            <div className="flex-1 pb-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-600">Inbound Flight</div>
+              <div className="mt-0.5 text-xs font-semibold">{ibFrom} → {ibTo}</div>
+              <div className="mt-1 grid gap-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  <span>{formatTimelineDate(ibDate)}</span>
+                </div>
+                {quote.flights.inbound.departTime && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>Depart {formatTime24(quote.flights.inbound.departTime)}{quote.flights.inbound.arriveTime ? ` — Arrive ${formatTime24(quote.flights.inbound.arriveTime)}` : ""}</span>
+                  </div>
+                )}
+                {(quote.flights.inbound.carrier || quote.flights.inbound.flightNo) && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                    <Plane className="h-3 w-3 shrink-0" />
+                    <span>{[quote.flights.inbound.carrier, quote.flights.inbound.flightNo].filter(Boolean).join(" ")}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    }
   }
 
   timelineItems.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
@@ -1047,6 +1186,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
 
 function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
   const flights = apiData.flights || [];
+  const cruises = (apiData as any).cruises || [];
   const outboundFlight = flights.find(f => f.flight_type === "outbound") || flights[0];
   const inboundFlight = flights.find(f => f.flight_type === "inbound") || flights[1];
 
@@ -1144,6 +1284,11 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
       netToAgency: packageCommission,
     },
     notes: [],
+    pets: apiData.pets || 0,
+    lodge: apiData.lodge_type ? { name: "", type: apiData.lodge_type || "", code: "" } : undefined,
+    cruise: cruises.length > 0 ? { cruiseLine: cruises[0].cruise_line || "", ship: cruises[0].ship || "", cabinType: cruises[0].cabin_type || "", cruiseName: cruises[0].cruise_name || "", cruiseDate: cruises[0].cruise_date || "", preCruiseStay: cruises[0].pre_cruise_stay || 0, postCruiseStay: cruises[0].post_cruise_stay || 0 } : undefined,
+    haysRef: (apiData as any).hays_ref || undefined,
+    supplierRef: (apiData as any).supplier_ref || undefined,
   };
 }
 
@@ -1230,18 +1375,18 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   }, []);
 
   const images = useMemo(() => {
-    const imgs = quoteData?.images || [];
-    return imgs.map(img => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary }));
+    const imgs = (quoteData as any)?.images || [];
+    return imgs.map((img: any) => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary }));
   }, [quoteData]);
-  const primaryImage = useMemo(() => images.find((img) => img.isPrimary) || images[0], [images]);
-  const galleryImages = useMemo(() => images.filter((img) => img.id !== primaryImage?.id), [images, primaryImage]);
+  const primaryImage = useMemo(() => images.find((img: any) => img.isPrimary) || images[0], [images]);
+  const galleryImages = useMemo(() => images.filter((img: any) => img.id !== primaryImage?.id), [images, primaryImage]);
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
-    return transformQuoteData(quoteData);
+    return transformQuoteData(quoteData as any);
   }, [quoteData]);
 
-  const pageLabel = isBooking || quoteData?.quote_status === "accepted" ? "Booking" : "Quote";
+  const pageLabel = isBooking || (quoteData as any)?.quote_status === "accepted" || (quoteData as any)?.booking_status ? "Booking" : "Quote";
 
   if (isLoading) {
     return (
@@ -1368,7 +1513,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
                   {galleryImages.length > 0 && (
                     <div className="grid grid-cols-3 gap-1.5" data-testid="grid-itinerary-gallery">
-                      {galleryImages.map((img, idx) => (
+                      {galleryImages.map((img: any, idx: number) => (
                         <button
                           key={img.id}
                           type="button"
@@ -1612,74 +1757,155 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                   </div>
 
                   <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
-                    <div className="grid content-start gap-2" data-testid="col-itinerary-left">
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-hotel-label">Hotel</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-room-label">Room Type</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-board">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-board-label">Board Basis</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-transfer-label">Transfer Type</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-transfer-value">{quote.transferType || "Private Transfer"}</div>
-                      </div>
-                    </div>
-
-                    <div className="grid content-start gap-2" data-testid="col-itinerary-right">
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-departure-airport">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-departure-airport-label">Departure Airport</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-departure-airport-value">{quote.flights.outbound.from}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
-                          {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children (${[12, 7].join(", ")})` : ""}
+                    {quote.packageType?.toLowerCase().includes("hot tub") ? (
+                      <>
+                        <div className="grid content-start gap-2" data-testid="col-itinerary-left">
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lodge-type">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lodge-type-label">Lodge Type</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lodge-type-value">{quote.lodge?.type || "—"}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-pets">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-pets-label">Pets</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-pets-value">{quote.pets}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-guests">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-guests-label">Number of Guests</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-guests-value">{quote.passengers.adults + quote.passengers.children}</div>
+                          </div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-nights">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-nights-label">Number of Nights</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-nights-value">{quote.nights}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{quote.leadSource || "—"}</div>
-                      </div>
-                    </div>
+                        <div className="grid content-start gap-2" data-testid="col-itinerary-right">
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
+                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-nights">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-nights-label">Number of Nights</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-nights-value">{quote.nights}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{quote.leadSource || "—"}</div>
+                          </div>
+                        </div>
+                      </>
+                    ) : quote.packageType?.toLowerCase().includes("cruise") ? (
+                      <>
+                        <div className="grid content-start gap-2" data-testid="col-itinerary-left">
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cruise-line">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cruise-line-label">Cruise Line</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-cruise-line-value">{quote.cruise?.cruiseLine || "—"}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-ship">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-ship-label">Ship</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-ship-value">{quote.cruise?.ship || "—"}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cabin-type">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cabin-type-label">Cabin Type</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-cabin-type-value">{quote.cruise?.cabinType || "—"}</div>
+                          </div>
+                        </div>
+                        <div className="grid content-start gap-2" data-testid="col-itinerary-right">
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cruise-date">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cruise-date-label">Cruise Date</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-cruise-date-value">{quote.cruise?.cruiseDate ? formatUKDate(quote.cruise.cruiseDate) : "—"}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-pre-cruise">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-pre-cruise-label">Pre-Cruise Stay</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-pre-cruise-value">{quote.cruise?.preCruiseStay || 0} nights</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-post-cruise">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-post-cruise-label">Post-Cruise Stay</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-post-cruise-value">{quote.cruise?.postCruiseStay || 0} nights</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
+                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid content-start gap-2" data-testid="col-itinerary-left">
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-hotel-label">Hotel</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-room-label">Room Type</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-board">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-board-label">Board Basis</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-transfer-label">Transfer Type</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-transfer-value">{quote.transferType || "Private Transfer"}</div>
+                          </div>
+                        </div>
+                        <div className="grid content-start gap-2" data-testid="col-itinerary-right">
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-departure-airport">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-departure-airport-label">Departure Airport</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-departure-airport-value">{quote.flights.outbound.from}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
+                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children (${quote.passengers.childAges.join(", ")})` : ""}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-nights">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-nights-label">Number of Nights</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-nights-value">{quote.nights}</div>
+                          </div>
+                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
+                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{quote.leadSource || "—"}</div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
 
-                  {quote.status === "accepted" && (
+                  {(isBooking || quote.status === "accepted" || quote.status === "BOOKED" || quote.haysRef || quote.supplierRef) && (
                     <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3" data-testid="card-booking-references">
                       <div className="text-xs font-semibold text-emerald-800 mb-2">Booking References</div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-hays-reference">
                           <div className="text-xs font-semibold text-black/65">HAYS Reference</div>
-                          <div className="text-xs font-semibold text-black/85" data-testid="text-hays-reference-value">—</div>
+                          <div className="text-xs font-semibold text-black/85" data-testid="text-hays-reference-value">{quote.haysRef || "—"}</div>
                         </div>
                         <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-tour-reference">
-                          <div className="text-xs font-semibold text-black/65">Tour Reference</div>
-                          <div className="text-xs font-semibold text-black/85" data-testid="text-tour-reference-value">—</div>
+                          <div className="text-xs font-semibold text-black/65">Supplier Reference</div>
+                          <div className="text-xs font-semibold text-black/85" data-testid="text-tour-reference-value">{quote.supplierRef || "—"}</div>
                         </div>
                       </div>
                     </div>
@@ -1761,7 +1987,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
           open={showEditModal}
           onOpenChange={setShowEditModal}
           quote={quote}
-          quoteData={quoteData!}
+          quoteData={quoteData as any}
           onSave={(updates) => {
             updateQuoteMutation.mutate(
               { id: quoteId, data: updates },
@@ -1884,7 +2110,7 @@ function EditQuoteDialog({
       infant: form.passengersInfants,
       transfer_type: form.transferType,
       pre_booked_seats: form.preBookedSeats,
-      flight_meals: form.flightMeals === "Yes" || form.flightMeals === true,
+      flight_meals: form.flightMeals === "Yes" || form.flightMeals === true as any,
       main_tour_operator_id: form.tourOperatorId || null,
       sales_price: String(form.price || 0),
       package_commission: String(((form.commission || 0) / 100) * (form.price || 0)),
