@@ -971,7 +971,7 @@ export const notes = pgTable('notes', {
   content: text(),
   agent_id: text().references(() => user.id),
   user_id: text().references(() => user.id),
-  createdAt: timestamp("createdAt", { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { mode: 'string' }).notNull().defaultNow(),
   parent_id: varchar(),
   transaction_id: uuid().references(() => transaction.id, { onDelete: "cascade" }),
 });

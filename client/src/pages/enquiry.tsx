@@ -41,7 +41,7 @@ import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useEnquiry, useClient, useTasks, useNotes, noteKeys } from "@/hooks/queries";
+import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes, useTourOperators, useAirports, useDestinations, useResorts, useBoardBasis, useAccommodations } from "@/hooks/queries";
 import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations/use-note-mutations";
 import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
@@ -53,6 +53,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import type { CreateQuoteData } from "@/types/quote";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -632,37 +634,194 @@ export default function EnquiryPage() {
   }, [userFavorites, enquiryId]);
 
   const [showEditWizard, setShowEditWizard] = useState(false);
-  const [isConverting, setIsConverting] = useState(false);
+  const [showConvertModal, setShowConvertModal] = useState(false);
+
+  const { data: packageTypesData } = usePackageTypes();
+  const { data: tourOperatorsData } = useTourOperators();
+  const { data: airportsData } = useAirports();
+
+  interface ConvertFormState {
+    packageType: string;
+    quoteTitle: string;
+    travelDate: string;
+    passengersAdults: number;
+    passengersChildren: number;
+    passengersInfants: number;
+    nights: number;
+    destination: string;
+    resort: string;
+    boardBasis: string;
+    outboundDepartAirport: string;
+    outboundArriveAirport: string;
+    outboundDepartDate: string;
+    outboundDepartTime: string;
+    outboundArriveDate: string;
+    outboundArriveTime: string;
+    inboundDepartAirport: string;
+    inboundArriveAirport: string;
+    inboundDepartDate: string;
+    inboundDepartTime: string;
+    inboundArriveDate: string;
+    inboundArriveTime: string;
+    accommodation: string;
+    checkInDate: string;
+    price: string;
+    pricePerPerson: string;
+    commission: string;
+    transferType: string;
+    tourOperator: string;
+    lodgeCode: string;
+    pets: boolean;
+    cabinType: string;
+  }
+
+  const convertFormDefaults: ConvertFormState = {
+    packageType: "",
+    quoteTitle: "",
+    travelDate: "",
+    passengersAdults: 2,
+    passengersChildren: 0,
+    passengersInfants: 0,
+    nights: 7,
+    destination: "",
+    resort: "",
+    boardBasis: "",
+    outboundDepartAirport: "",
+    outboundArriveAirport: "",
+    outboundDepartDate: "",
+    outboundDepartTime: "",
+    outboundArriveDate: "",
+    outboundArriveTime: "",
+    inboundDepartAirport: "",
+    inboundArriveAirport: "",
+    inboundDepartDate: "",
+    inboundDepartTime: "",
+    inboundArriveDate: "",
+    inboundArriveTime: "",
+    accommodation: "",
+    checkInDate: "",
+    price: "",
+    pricePerPerson: "",
+    commission: "",
+    transferType: "",
+    tourOperator: "",
+    lodgeCode: "",
+    pets: false,
+    cabinType: "",
+  };
+
+  const [convertForm, setConvertForm] = useState<ConvertFormState>(convertFormDefaults);
+
+  const { data: destinationsData } = useDestinations();
+  const { data: resortsData } = useResorts(convertForm.destination || undefined);
+  const { data: boardBasisData } = useBoardBasis();
+  const { data: accommodationsData } = useAccommodations(convertForm.resort || undefined);
+
+  const packageTypeName = useMemo(() => {
+    if (!convertForm.packageType || !packageTypesData) return "";
+    const pt = packageTypesData.find((p: { id: string; name: string }) => p.id === convertForm.packageType);
+    return pt?.name || "";
+  }, [convertForm.packageType, packageTypesData]);
 
   const handleConvertToQuote = () => {
     if (!enquiry) return;
-    setIsConverting(true);
+    const firstDestination = enquiry.destinations?.[0];
+    const firstResort = enquiry.resorts?.[0];
+    const firstAirport = enquiry.airports?.[0];
+    const firstBoardBasis = enquiry.boardBases?.[0];
 
-    const quoteData: Record<string, any> = {
+    setConvertForm({
+      ...convertFormDefaults,
+      packageType: enquiry.holiday_type_id || "",
+      quoteTitle: enquiry.title || "",
+      travelDate: enquiry.travel_date || "",
+      passengersAdults: enquiry.adults || 2,
+      passengersChildren: enquiry.children || 0,
+      passengersInfants: enquiry.infants || 0,
+      nights: enquiry.no_of_nights || 7,
+      destination: firstDestination?.destination_id || "",
+      resort: firstResort?.resort_id || (firstResort as unknown as { resorts_id?: string })?.resorts_id || "",
+      boardBasis: firstBoardBasis?.board_basis_id || "",
+      outboundDepartAirport: firstAirport?.airport_id || "",
+      cabinType: enquiry.cabin_type || "",
+      pets: (enquiry.no_of_pets && enquiry.no_of_pets > 0) ? true : false,
+    });
+    setShowConvertModal(true);
+  };
+
+  const handleConvertSubmit = () => {
+    if (!enquiry) return;
+    if (!convertForm.packageType || !convertForm.quoteTitle || !convertForm.travelDate) {
+      toast({ title: "Please fill in Package Type, Quote Title and Travel Date", variant: "destructive" });
+      return;
+    }
+
+    const outboundFlight = (convertForm.outboundDepartAirport || convertForm.outboundArriveAirport) ? {
+      departing_airport_id: convertForm.outboundDepartAirport || undefined,
+      arrival_airport_id: convertForm.outboundArriveAirport || undefined,
+      departure_date_time: convertForm.outboundDepartDate && convertForm.outboundDepartTime
+        ? `${convertForm.outboundDepartDate}T${convertForm.outboundDepartTime}` : convertForm.outboundDepartDate || undefined,
+      arrival_date_time: convertForm.outboundArriveDate && convertForm.outboundArriveTime
+        ? `${convertForm.outboundArriveDate}T${convertForm.outboundArriveTime}` : convertForm.outboundArriveDate || undefined,
+      is_included_in_package: true,
+    } : undefined;
+    const inboundFlight = (convertForm.inboundDepartAirport || convertForm.inboundArriveAirport) ? {
+      departing_airport_id: convertForm.inboundDepartAirport || undefined,
+      arrival_airport_id: convertForm.inboundArriveAirport || undefined,
+      departure_date_time: convertForm.inboundDepartDate && convertForm.inboundDepartTime
+        ? `${convertForm.inboundDepartDate}T${convertForm.inboundDepartTime}` : convertForm.inboundDepartDate || undefined,
+      arrival_date_time: convertForm.inboundArriveDate && convertForm.inboundArriveTime
+        ? `${convertForm.inboundArriveDate}T${convertForm.inboundArriveTime}` : convertForm.inboundArriveDate || undefined,
+      is_included_in_package: true,
+    } : undefined;
+    const primaryAccommodation = convertForm.accommodation ? {
+      accomodation_id: convertForm.accommodation,
+      board_basis_id: convertForm.boardBasis || undefined,
+      no_of_nights: convertForm.nights || 0,
+      check_in_date_time: convertForm.checkInDate || undefined,
+      is_included_in_package: true,
+    } : undefined;
+
+    const convertPayload: CreateQuoteData = {
       transaction_id: enquiry.transaction_id,
-      holiday_type_id: enquiry.holiday_type_id,
-      travel_date: enquiry.travel_date || new Date().toISOString().split("T")[0],
-      quote_type: "Package",
-      num_of_nights: enquiry.no_of_nights || 7,
-      adult: enquiry.adults || 2,
-      child: enquiry.children || 0,
-      infant: enquiry.infants || 0,
-      title: enquiry.title || "",
-      quote_status: "In Play",
+      holiday_type_id: convertForm.packageType,
+      travel_date: convertForm.travelDate,
+      quote_type: packageTypeName || convertForm.packageType,
+      num_of_nights: convertForm.nights || undefined,
+      adult: convertForm.passengersAdults,
+      child: convertForm.passengersChildren,
+      infant: convertForm.passengersInfants,
+      sales_price: convertForm.price || undefined,
+      package_commission: convertForm.commission || undefined,
+      title: convertForm.quoteTitle,
+      price_per_person: convertForm.pricePerPerson || undefined,
+      transfer_type: convertForm.transferType || undefined,
+      main_tour_operator_id: convertForm.tourOperator || undefined,
+      lodge_id: packageTypeName === "Hot Tub Break" ? (convertForm.lodgeCode || undefined) : undefined,
+      pets: packageTypeName === "Hot Tub Break" ? (convertForm.pets ? 1 : 0) : undefined,
+      quote_status: "NEW_LEAD",
     };
 
-    createQuoteMutation.mutate(quoteData as any, {
-      onSuccess: (newQuote: any) => {
-        updateEnquiryMutation.mutate({ id: enquiry.id, data: { status: "Converted" } });
-        toast({ title: "Enquiry converted to quote!" });
-        setIsConverting(false);
-        navigate(`/clients/${clientId}/quotes/${newQuote.id}`);
-      },
-      onError: () => {
-        toast({ title: "Failed to create quote", variant: "destructive" });
-        setIsConverting(false);
-      },
-    });
+    createQuoteMutation.mutate(
+      {
+        ...convertPayload,
+        outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
+        inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
+        primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
+      } as CreateQuoteData,
+      {
+        onSuccess: (newQuote: { id: string }) => {
+          updateEnquiryMutation.mutate({ id: enquiry.id, data: { status: "Converted" } });
+          setShowConvertModal(false);
+          setConvertForm(convertFormDefaults);
+          toast({ title: "Enquiry converted to quote!" });
+          navigate(`/clients/${clientId}/quotes/${newQuote.id}`);
+        },
+        onError: () => {
+          toast({ title: "Failed to convert enquiry to quote", variant: "destructive" });
+        },
+      }
+    );
   };
 
   const handleEditSubmit = (data: any) => {
@@ -760,8 +919,8 @@ export default function EnquiryPage() {
                 <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
               </Button>
               {enquiry.status !== "Converted" && (
-                <Button size="sm" className="h-9 rounded-2xl bg-black px-4 text-white hover:bg-black/90" onClick={handleConvertToQuote} disabled={isConverting} data-testid="button-convert-to-quote">
-                  {isConverting ? <Spinner className="mr-2 h-3.5 w-3.5" /> : <ArrowRight className="mr-2 h-3.5 w-3.5" />}
+                <Button size="sm" className="h-9 rounded-2xl bg-black px-4 text-white hover:bg-black/90" onClick={handleConvertToQuote} data-testid="button-convert-to-quote">
+                  <ArrowRight className="mr-2 h-3.5 w-3.5" />
                   Convert to Quote
                 </Button>
               )}
@@ -875,6 +1034,293 @@ export default function EnquiryPage() {
         onSubmit={handleEditSubmit}
         isSaving={updateEnquiryMutation.isPending}
       />
+
+      <Dialog open={showConvertModal} onOpenChange={(open) => { setShowConvertModal(open); if (!open) setConvertForm(convertFormDefaults); }}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Convert Enquiry to Quote</DialogTitle>
+            <DialogDescription className="text-sm text-black/55">
+              Review and adjust the details from the enquiry, then create the quote.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 grid gap-6">
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Package Details</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Package Type</Label>
+                  <SearchableSelect
+                    value={convertForm.packageType}
+                    onValueChange={(v) => setConvertForm({ ...convertForm, packageType: v })}
+                    options={(packageTypesData || []).map((pt: { id: string; name: string }) => ({ value: pt.id, label: pt.name }))}
+                    placeholder="Select type..."
+                    searchPlaceholder="Search types..."
+                    emptyMessage="No types found."
+                    data-testid="convert-select-package-type"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Quote Title</Label>
+                  <Input
+                    placeholder="e.g. Maldives — Overwater Villa, 9 nights"
+                    value={convertForm.quoteTitle}
+                    onChange={(e) => setConvertForm({ ...convertForm, quoteTitle: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="convert-input-title"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Travel Date</Label>
+                  <Input
+                    type="date"
+                    value={convertForm.travelDate}
+                    onChange={(e) => setConvertForm({ ...convertForm, travelDate: e.target.value })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="convert-input-travel-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Nights</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={convertForm.nights}
+                    onChange={(e) => setConvertForm({ ...convertForm, nights: parseInt(e.target.value) || 0 })}
+                    className="h-9 rounded-xl border-black/10 bg-white/70"
+                    data-testid="convert-input-nights"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Passengers</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Adults</Label>
+                  <Input type="number" min={0} value={convertForm.passengersAdults} onChange={(e) => setConvertForm({ ...convertForm, passengersAdults: parseInt(e.target.value) || 0 })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-adults" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Children</Label>
+                  <Input type="number" min={0} value={convertForm.passengersChildren} onChange={(e) => setConvertForm({ ...convertForm, passengersChildren: parseInt(e.target.value) || 0 })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-children" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Infants</Label>
+                  <Input type="number" min={0} value={convertForm.passengersInfants} onChange={(e) => setConvertForm({ ...convertForm, passengersInfants: parseInt(e.target.value) || 0 })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-infants" />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Destination & Accommodation</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Destination</Label>
+                  <SearchableSelect
+                    value={convertForm.destination}
+                    onValueChange={(v) => setConvertForm({ ...convertForm, destination: v, resort: "", accommodation: "" })}
+                    options={(destinationsData || []).map((d: { id: string; name: string }) => ({ value: d.id, label: d.name }))}
+                    placeholder="Select destination..."
+                    searchPlaceholder="Search destinations..."
+                    emptyMessage="No destinations found."
+                    data-testid="convert-select-destination"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Resort</Label>
+                  <SearchableSelect
+                    value={convertForm.resort}
+                    onValueChange={(v) => setConvertForm({ ...convertForm, resort: v, accommodation: "" })}
+                    options={(resortsData || []).map((r: { id: string; name: string }) => ({ value: r.id, label: r.name }))}
+                    placeholder="Select resort..."
+                    searchPlaceholder="Search resorts..."
+                    emptyMessage="No resorts found."
+                    data-testid="convert-select-resort"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Board Basis</Label>
+                  <SearchableSelect
+                    value={convertForm.boardBasis}
+                    onValueChange={(v) => setConvertForm({ ...convertForm, boardBasis: v })}
+                    options={(boardBasisData || []).map((b: { id: string; type: string }) => ({ value: b.id, label: b.type }))}
+                    placeholder="Select board basis..."
+                    searchPlaceholder="Search..."
+                    emptyMessage="No options found."
+                    data-testid="convert-select-board-basis"
+                  />
+                </div>
+                {packageTypeName === "Package Holiday" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Accommodation</Label>
+                    <SearchableSelect
+                      value={convertForm.accommodation}
+                      onValueChange={(v) => setConvertForm({ ...convertForm, accommodation: v })}
+                      options={(accommodationsData || []).map((a: { id: string; name: string }) => ({ value: a.id, label: a.name }))}
+                      placeholder="Select accommodation..."
+                      searchPlaceholder="Search..."
+                      emptyMessage="No accommodations found."
+                      data-testid="convert-select-accommodation"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {packageTypeName === "Package Holiday" && (
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                <div className="mb-3 text-sm font-semibold">Flights</div>
+                <div className="grid gap-4">
+                  <div>
+                    <div className="mb-2 text-xs font-medium text-black/50">Outbound</div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                        <SearchableSelect
+                          value={convertForm.outboundDepartAirport}
+                          onValueChange={(v) => setConvertForm({ ...convertForm, outboundDepartAirport: v })}
+                          options={(airportsData || []).map((a: { id: string; airport_name: string }) => ({ value: a.id, label: a.airport_name }))}
+                          placeholder="Select airport..."
+                          searchPlaceholder="Search airports..."
+                          emptyMessage="No airports found."
+                          data-testid="convert-select-outbound-depart-airport"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Arriving Airport</Label>
+                        <SearchableSelect
+                          value={convertForm.outboundArriveAirport}
+                          onValueChange={(v) => setConvertForm({ ...convertForm, outboundArriveAirport: v })}
+                          options={(airportsData || []).map((a: { id: string; airport_name: string }) => ({ value: a.id, label: a.airport_name }))}
+                          placeholder="Select airport..."
+                          searchPlaceholder="Search airports..."
+                          emptyMessage="No airports found."
+                          data-testid="convert-select-outbound-arrive-airport"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                        <Input type="date" value={convertForm.outboundDepartDate} onChange={(e) => setConvertForm({ ...convertForm, outboundDepartDate: e.target.value })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-outbound-depart-date" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                        <Input type="time" value={convertForm.outboundDepartTime} onChange={(e) => setConvertForm({ ...convertForm, outboundDepartTime: e.target.value })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-outbound-depart-time" />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs font-medium text-black/50">Inbound</div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                        <SearchableSelect
+                          value={convertForm.inboundDepartAirport}
+                          onValueChange={(v) => setConvertForm({ ...convertForm, inboundDepartAirport: v })}
+                          options={(airportsData || []).map((a: { id: string; airport_name: string }) => ({ value: a.id, label: a.airport_name }))}
+                          placeholder="Select airport..."
+                          searchPlaceholder="Search airports..."
+                          emptyMessage="No airports found."
+                          data-testid="convert-select-inbound-depart-airport"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Arriving Airport</Label>
+                        <SearchableSelect
+                          value={convertForm.inboundArriveAirport}
+                          onValueChange={(v) => setConvertForm({ ...convertForm, inboundArriveAirport: v })}
+                          options={(airportsData || []).map((a: { id: string; airport_name: string }) => ({ value: a.id, label: a.airport_name }))}
+                          placeholder="Select airport..."
+                          searchPlaceholder="Search airports..."
+                          emptyMessage="No airports found."
+                          data-testid="convert-select-inbound-arrive-airport"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                        <Input type="date" value={convertForm.inboundArriveDate} onChange={(e) => setConvertForm({ ...convertForm, inboundArriveDate: e.target.value })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-inbound-arrive-date" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                        <Input type="time" value={convertForm.inboundArriveTime} onChange={(e) => setConvertForm({ ...convertForm, inboundArriveTime: e.target.value })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-inbound-arrive-time" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Pricing & Commission</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Total Price (GBP)</Label>
+                  <Input type="number" step="0.01" min={0} placeholder="0.00" value={convertForm.price} onChange={(e) => setConvertForm({ ...convertForm, price: e.target.value })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-price" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Price Per Person</Label>
+                  <Input type="number" step="0.01" min={0} placeholder="0.00" value={convertForm.pricePerPerson} onChange={(e) => setConvertForm({ ...convertForm, pricePerPerson: e.target.value })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-price-pp" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Commission (GBP)</Label>
+                  <Input type="number" step="0.01" min={0} placeholder="0.00" value={convertForm.commission} onChange={(e) => setConvertForm({ ...convertForm, commission: e.target.value })} className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-input-commission" />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <div className="mb-3 text-sm font-semibold">Additional Details</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Tour Operator</Label>
+                  <SearchableSelect
+                    value={convertForm.tourOperator}
+                    onValueChange={(v) => setConvertForm({ ...convertForm, tourOperator: v })}
+                    options={(tourOperatorsData || []).map((t: { id: string; name: string | null }) => ({ value: t.id, label: t.name || "Unnamed" }))}
+                    placeholder="Select operator..."
+                    searchPlaceholder="Search operators..."
+                    emptyMessage="No operators found."
+                    data-testid="convert-select-tour-operator"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-black/60">Transfer Type</Label>
+                  <Select value={convertForm.transferType} onValueChange={(v) => setConvertForm({ ...convertForm, transferType: v })}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="convert-select-transfer-type">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Private">Private</SelectItem>
+                      <SelectItem value="Shared">Shared</SelectItem>
+                      <SelectItem value="Self Drive">Self Drive</SelectItem>
+                      <SelectItem value="None">None</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                className="rounded-2xl border-black/10 px-4"
+                onClick={() => setShowConvertModal(false)}
+                data-testid="convert-button-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="rounded-2xl bg-black px-4 text-white hover:bg-black/90"
+                disabled={createQuoteMutation.isPending}
+                onClick={handleConvertSubmit}
+                data-testid="convert-button-submit"
+              >
+                {createQuoteMutation.isPending ? "Converting..." : "Convert to Quote"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </CommandCenterShell>
   );
 }
