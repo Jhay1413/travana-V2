@@ -769,8 +769,9 @@ export const booking = pgTable('booking_table', {
   main_tour_operator_id: uuid().references(() => tour_operator.id),
   date_created: timestamp({ withTimezone: true }).defaultNow(),
   deletion_code: varchar(),
-  deleted_by: text().references(() => user.id),
-  deleted_at: timestamp({ withTimezone: true }).defaultNow(),
+  deleted_by: uuid("deleted_by"),
+  deleted_by_user: text("deleted_by_user").references(() => user.id),
+  deleted_at: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
 });
 
 export const insertBookingSchema = createInsertSchema(booking).omit({ id: true, date_created: true });
