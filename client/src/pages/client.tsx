@@ -44,7 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
-import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAirports, useTourOperators } from "@/hooks/queries";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAirports, useTourOperators, usePackageTypes } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -506,6 +506,12 @@ export default function ClientPage() {
   const { data: boardBasisData } = useBoardBasis();
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
+  const { data: packageTypesData } = usePackageTypes();
+  const packageTypeName = useMemo(() => {
+    if (!newQuote.packageType || !packageTypesData) return "";
+    const pt = (packageTypesData as any[]).find((p: any) => p.id === newQuote.packageType);
+    return pt?.name || "";
+  }, [newQuote.packageType, packageTypesData]);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(newQuote.parkName);
   const { data: userFavorites } = useFavorites();
@@ -586,7 +592,7 @@ export default function ClientPage() {
       createQuoteMutationHook.mutate(data as CreateQuoteData, {
         onSuccess: async (createdQuote) => {
           try {
-            if (newQuote.packageType === "Package Holiday" && newQuote.accommodation) {
+            if (packageTypeName === "Package Holiday" && newQuote.accommodation) {
               await quoteApi.addAccommodation(createdQuote.id, {
                 accomodation_id: newQuote.accommodation,
                 board_basis_id: newQuote.boardBasis || undefined,
@@ -2147,19 +2153,15 @@ export default function ClientPage() {
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Package Type</Label>
-                  <Select value={newQuote.packageType} onValueChange={(v) => setNewQuote({ ...newQuote, packageType: v })}>
-                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-package-type">
-                      <SelectValue placeholder="Select type..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Package Holiday">Package Holiday</SelectItem>
-                      <SelectItem value="Hot Tub Break">Hot Tub Break</SelectItem>
-                      <SelectItem value="Cruise Package">Cruise Package</SelectItem>
-                      <SelectItem value="Flight Only">Flight Only</SelectItem>
-                      <SelectItem value="Hotel Only">Hotel Only</SelectItem>
-                      <SelectItem value="Tour">Tour</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={newQuote.packageType}
+                    onValueChange={(v) => setNewQuote({ ...newQuote, packageType: v })}
+                    options={(packageTypesData || []).map((pt: any) => ({ value: pt.id, label: pt.name }))}
+                    placeholder="Select type..."
+                    searchPlaceholder="Search types..."
+                    emptyMessage="No types found."
+                    data-testid="select-package-type"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Quote Title</Label>
@@ -2411,7 +2413,7 @@ export default function ClientPage() {
               </div>
             </div>
 
-            {newQuote.packageType === "Hot Tub Break" ? (
+            {packageTypeName === "Hot Tub Break" ? (
               <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-travel-date-only">
                 <div className="mb-3 text-sm font-semibold">Travel Details</div>
                 <div className="grid gap-3 md:grid-cols-3">
@@ -2503,7 +2505,7 @@ export default function ClientPage() {
               </div>
             )}
 
-            {newQuote.packageType === "Cruise Package" ? (
+            {packageTypeName === "Cruise Package" ? (
               <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-cruise-cabin">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
                   <Anchor className="h-4 w-4" />
@@ -2609,7 +2611,7 @@ export default function ClientPage() {
                   </div>
                 </div>
               </div>
-            ) : newQuote.packageType === "Hot Tub Break" ? (
+            ) : packageTypeName === "Hot Tub Break" ? (
               <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-lodge-details">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
                   <Hotel className="h-4 w-4" />
@@ -2891,7 +2893,7 @@ export default function ClientPage() {
               </div>
             )}
 
-            {newQuote.packageType !== "Hot Tub Break" && !(newQuote.packageType === "Cruise Package" && newQuote.cruiseOnly) && (
+            {packageTypeName !== "Hot Tub Break" && !(packageTypeName === "Cruise Package" && newQuote.cruiseOnly) && (
               <>
                 <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-outbound-flights">
                   <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
@@ -3146,7 +3148,7 @@ export default function ClientPage() {
                   const quotePayload = {
                     holiday_type_id: newQuote.packageType,
                     travel_date: newQuote.travelDate,
-                    quote_type: newQuote.packageType,
+                    quote_type: packageTypeName || newQuote.packageType,
                     num_of_nights: newQuote.nights || undefined,
                     adult: newQuote.passengersAdults,
                     child: newQuote.passengersChildren,
@@ -3156,8 +3158,8 @@ export default function ClientPage() {
                     title: newQuote.quoteTitle,
                     price_per_person: newQuote.pricePerPerson ? String(newQuote.pricePerPerson) : undefined,
                     transfer_type: newQuote.transferType || undefined,
-                    lodge_id: newQuote.packageType === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
-                    pets: newQuote.packageType === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
+                    lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
+                    pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
                   };
 
                   if (newQuoteIsBooking) {
@@ -3181,8 +3183,8 @@ export default function ClientPage() {
                           discounts: newQuote.discount ? String(newQuote.discount) : undefined,
                           service_charge: newQuote.serviceCharge ? String(newQuote.serviceCharge) : undefined,
                           transfer_type: newQuote.transferType || undefined,
-                          lodge_id: newQuote.packageType === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
-                          pets: newQuote.packageType === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : 0,
+                          lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
+                          pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : 0,
                           main_tour_operator_id: newQuote.tourOperator || undefined,
                         } as any,
                       },
@@ -3218,7 +3220,7 @@ export default function ClientPage() {
                       {
                         onSuccess: async (result: any) => {
                           const createdQuote = result?.quote;
-                          if (createdQuote && newQuote.packageType === "Package Holiday" && newQuote.accommodation) {
+                          if (createdQuote && packageTypeName === "Package Holiday" && newQuote.accommodation) {
                             try {
                               await quoteApi.addAccommodation(createdQuote.id, {
                                 accomodation_id: newQuote.accommodation,
