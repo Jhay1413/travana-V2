@@ -1,1 +1,1 @@
-export type { TourOperator, InsertTourOperator } from "@shared/schema";
+export type { TourOperatorLookup as TourOperator, InsertTourOperatorLookup as InsertTourOperator } from "@shared/schema";

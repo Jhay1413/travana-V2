@@ -1,13 +1,16 @@
 import { z } from "zod";
-import { insertTourOperatorSchema } from "@shared/schema";
 
 export const createTourOperatorValidator = z.object({
-  body: insertTourOperatorSchema,
+  body: z.object({
+    name: z.string().min(1),
+  }),
 });
 
 export const updateTourOperatorValidator = z.object({
   params: z.object({
     id: z.string(),
   }),
-  body: insertTourOperatorSchema.partial(),
+  body: z.object({
+    name: z.string().min(1),
+  }).partial(),
 });
