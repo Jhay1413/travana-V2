@@ -3,10 +3,45 @@ import { enquiryTableRepository } from "../repositories/enquiryTable.repository"
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { bookingRepository } from "../repositories/booking.repository";
 import { AppError } from "../utils/error-handler";
-import type { InsertTransaction } from "@shared/schema";
+import type {
+  InsertTransaction,
+  InsertEnquiryTable,
+  InsertQuote,
+  InsertQuoteFlight,
+  InsertQuoteAccomodation,
+  InsertBooking,
+  InsertBookingFlight,
+  InsertBookingAccomodation,
+} from "@shared/schema";
 import { db } from "../config/database";
 import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation } from "@shared/schema";
 import { eq } from "drizzle-orm";
+
+interface EnquiryPassenger {
+  type: string;
+  age?: number;
+}
+
+interface CreateEnquiryPayload extends InsertEnquiryTable {
+  destinations?: string[];
+  resorts?: string[];
+  boardBases?: string[];
+  departureAirports?: string[];
+  passengers?: EnquiryPassenger[];
+  notes?: string[];
+}
+
+interface QuoteRelationPayload extends InsertQuote {
+  outboundFlight?: Partial<InsertQuoteFlight>;
+  inboundFlight?: Partial<InsertQuoteFlight>;
+  primaryAccommodation?: Partial<InsertQuoteAccomodation>;
+}
+
+interface BookingRelationPayload extends InsertBooking {
+  outboundFlight?: Partial<InsertBookingFlight>;
+  inboundFlight?: Partial<InsertBookingFlight>;
+  primaryAccommodation?: Partial<InsertBookingAccomodation>;
+}
 
 export const transactionService = {
   async listTransactions() {
@@ -37,7 +72,7 @@ export const transactionService = {
     return await transactionRepository.create(data);
   },
 
-  async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: any) {
+  async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: CreateEnquiryPayload) {
     const { destinations, resorts, boardBases, departureAirports, passengers, notes, ...enquiryFields } = enquiryData;
 
     const txn = await transactionRepository.create({
@@ -72,14 +107,14 @@ export const transactionService = {
     }
     if (passengers?.length) {
       for (const p of passengers) {
-        await enquiryTableRepository.addPassenger(enquiry.id, p.type, p.age);
+        await enquiryTableRepository.addPassenger(enquiry.id, p.type, p.age ?? 0);
       }
     }
 
     return { transaction: txn, enquiry };
   },
 
-  async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: any) {
+  async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: QuoteRelationPayload) {
     const { outboundFlight, inboundFlight, primaryAccommodation, ...quoteFields } = quoteData;
 
     return await db.transaction(async (tx) => {
@@ -119,7 +154,7 @@ export const transactionService = {
     });
   },
 
-  async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: any) {
+  async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: BookingRelationPayload) {
     const { outboundFlight, inboundFlight, primaryAccommodation, ...bookingFields } = bookingData;
 
     return await db.transaction(async (tx) => {

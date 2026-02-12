@@ -6,7 +6,11 @@ import {
   passengers, deal_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
 } from "@shared/schema";
-import type { Quote, InsertQuote, QuoteFlight, InsertQuoteFlight, QuoteAccomodation, InsertQuoteAccomodation } from "@shared/schema";
+import type {
+  Quote, InsertQuote, QuoteFlight, InsertQuoteFlight, QuoteAccomodation, InsertQuoteAccomodation,
+  InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
+  InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
+} from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -38,7 +42,7 @@ export const newQuoteRepository = {
   },
 
   async findByStatus(status: string): Promise<Quote[]> {
-    return await db.select().from(quote).where(eq(quote.quote_status, status as any)).orderBy(desc(quote.date_created));
+    return await db.select().from(quote).where(eq(quote.quote_status, status)).orderBy(desc(quote.date_created));
   },
 
   async create(data: InsertQuote): Promise<Quote> {
@@ -196,7 +200,7 @@ export const newQuoteRepository = {
     await db.delete(quote_accomodation).where(eq(quote_accomodation.id, id));
   },
 
-  async addTransfer(data: any) {
+  async addTransfer(data: InsertQuoteTransfer) {
     const [result] = await db.insert(quote_transfers).values(data).returning();
     return result;
   },
@@ -205,7 +209,7 @@ export const newQuoteRepository = {
     await db.delete(quote_transfers).where(eq(quote_transfers.id, id));
   },
 
-  async addCarHire(data: any) {
+  async addCarHire(data: InsertQuoteCarHire) {
     const [result] = await db.insert(quote_car_hire).values(data).returning();
     return result;
   },
@@ -214,7 +218,7 @@ export const newQuoteRepository = {
     await db.delete(quote_car_hire).where(eq(quote_car_hire.id, id));
   },
 
-  async addAttractionTicket(data: any) {
+  async addAttractionTicket(data: InsertQuoteAttractionTicket) {
     const [result] = await db.insert(quote_attraction_ticket).values(data).returning();
     return result;
   },
@@ -223,7 +227,7 @@ export const newQuoteRepository = {
     await db.delete(quote_attraction_ticket).where(eq(quote_attraction_ticket.id, id));
   },
 
-  async addLoungePass(data: any) {
+  async addLoungePass(data: InsertQuoteLoungePass) {
     const [result] = await db.insert(quote_lounge_pass).values(data).returning();
     return result;
   },
@@ -232,7 +236,7 @@ export const newQuoteRepository = {
     await db.delete(quote_lounge_pass).where(eq(quote_lounge_pass.id, id));
   },
 
-  async addAirportParking(data: any) {
+  async addAirportParking(data: InsertQuoteAirportParking) {
     const [result] = await db.insert(quote_airport_parking).values(data).returning();
     return result;
   },
@@ -241,7 +245,7 @@ export const newQuoteRepository = {
     await db.delete(quote_airport_parking).where(eq(quote_airport_parking.id, id));
   },
 
-  async addPassenger(data: any) {
+  async addPassenger(data: InsertPassenger) {
     const [result] = await db.insert(passengers).values(data).returning();
     return result;
   },

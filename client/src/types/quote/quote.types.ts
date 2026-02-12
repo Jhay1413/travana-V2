@@ -10,8 +10,50 @@ export interface Transaction {
   enquiry?: EnquiryTable | null;
   quotes?: Quote[];
   booking?: Booking | null;
-  client?: any;
-  agent?: any;
+  client?: { id: string; name?: string } | null;
+  agent?: { id: string; name?: string } | null;
+}
+
+export interface EnquiryDestination {
+  id: string;
+  enquiry_id: string;
+  destination_id: string;
+  name?: string;
+}
+
+export interface EnquiryResort {
+  id: string;
+  enquiry_id: string;
+  resort_id: string;
+  name?: string;
+}
+
+export interface EnquiryAccommodation {
+  id: string;
+  enquiry_id: string;
+  accomodation_id: string;
+  name?: string;
+}
+
+export interface EnquiryBoardBasis {
+  id: string;
+  enquiry_id: string;
+  board_basis_id: string;
+  name?: string;
+}
+
+export interface EnquiryAirport {
+  id: string;
+  enquiry_id: string;
+  airport_id: string;
+  name?: string;
+}
+
+export interface EnquiryPassenger {
+  id: string;
+  enquiry_id: string;
+  type: string;
+  age: number;
 }
 
 export interface EnquiryTable {
@@ -46,12 +88,13 @@ export interface EnquiryTable {
   is_active: boolean | null;
   deletion_code: string | null;
   email: string | null;
-  destinations?: any[];
-  resorts?: any[];
-  accommodations?: any[];
-  boardBases?: any[];
-  airports?: any[];
-  passengers?: any[];
+  holiday_type_name?: string;
+  destinations?: EnquiryDestination[];
+  resorts?: EnquiryResort[];
+  accommodations?: EnquiryAccommodation[];
+  boardBases?: EnquiryBoardBasis[];
+  airports?: EnquiryAirport[];
+  passengers?: EnquiryPassenger[];
 }
 
 export interface Quote {
@@ -290,14 +333,48 @@ export interface EnquiryRelations {
   departureAirports?: string[];
 }
 
+export interface FlightRelationData {
+  departing_airport_id?: string;
+  arrival_airport_id?: string;
+  departure_date_time?: string;
+  arrival_date_time?: string;
+  is_included_in_package?: boolean;
+  flight_number?: string;
+  flight_ref?: string;
+  tour_operator_id?: string;
+  cost?: string;
+  commission?: string;
+}
+
+export interface AccommodationRelationData {
+  accomodation_id?: string;
+  board_basis_id?: string;
+  no_of_nights?: number;
+  check_in_date_time?: string;
+  is_included_in_package?: boolean;
+  is_primary?: boolean;
+  room_type?: string;
+  stay_type?: string;
+  booking_ref?: string;
+  tour_operator_id?: string;
+  cost?: string;
+  commission?: string;
+}
+
+export interface WithRelations {
+  outboundFlight?: FlightRelationData;
+  inboundFlight?: FlightRelationData;
+  primaryAccommodation?: AccommodationRelationData;
+}
+
 export interface CreateTransactionData {
   client_id?: string;
   agent_id?: string;
   lead_source?: string;
   user_id: string;
   enquiry?: Partial<EnquiryTable> & EnquiryRelations;
-  quote?: Partial<CreateQuoteData>;
-  booking?: Partial<Booking>;
+  quote?: Partial<CreateQuoteData> & WithRelations;
+  booking?: Partial<Booking> & WithRelations;
 }
 
 export interface CreateQuoteData {

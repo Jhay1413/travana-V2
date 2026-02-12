@@ -2,7 +2,19 @@ import { bookingRepository } from "../repositories/booking.repository";
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
 import { AppError } from "../utils/error-handler";
-import type { InsertBooking } from "@shared/schema";
+import type {
+  InsertBooking,
+  InsertBookingFlight,
+  InsertBookingAccomodation,
+} from "@shared/schema";
+
+interface BookingRelationData {
+  outboundFlight?: Partial<InsertBookingFlight>;
+  inboundFlight?: Partial<InsertBookingFlight>;
+  primaryAccommodation?: Partial<InsertBookingAccomodation>;
+}
+
+type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
 
 export const bookingService = {
   async listBookings() {
@@ -116,24 +128,23 @@ export const bookingService = {
     return b;
   },
 
-  async updateBooking(id: string, data: any) {
+  async updateBooking(id: string, data: UpdateBookingPayload) {
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
       ...bookingFields
     } = data;
 
     const bookingData: Partial<InsertBooking> = {};
-    const directFields = [
+    const directFields: (keyof InsertBooking)[] = [
       'holiday_type_id', 'sales_price', 'package_commission', 'travel_date',
       'discounts', 'service_charge', 'num_of_nights', 'pets', 'cottage_id',
       'lodge_id', 'lodge_type', 'transfer_type', 'booking_status',
       'main_tour_operator_id', 'deal_type', 'pre_booked_seats', 'flight_meals',
       'infant', 'child', 'adult', 'title', 'hays_ref', 'supplier_ref',
-      'price_per_person',
     ];
     for (const key of directFields) {
       if (key in bookingFields) {
-        (bookingData as any)[key] = bookingFields[key];
+        (bookingData[key] as InsertBooking[typeof key]) = (bookingFields as Record<string, unknown>)[key] as InsertBooking[typeof key];
       }
     }
 
@@ -157,7 +168,7 @@ export const bookingService = {
     await bookingRepository.remove(id);
   },
 
-  async addFlight(bookingId: string, flightData: any) {
+  async addFlight(bookingId: string, flightData: Omit<InsertBookingFlight, 'booking_id'>) {
     return await bookingRepository.addFlight({ ...flightData, booking_id: bookingId });
   },
 
@@ -165,7 +176,7 @@ export const bookingService = {
     await bookingRepository.removeFlight(flightId);
   },
 
-  async addAccommodation(bookingId: string, accommodationData: any) {
+  async addAccommodation(bookingId: string, accommodationData: Omit<InsertBookingAccomodation, 'booking_id'>) {
     return await bookingRepository.addAccommodation({ ...accommodationData, booking_id: bookingId });
   },
 

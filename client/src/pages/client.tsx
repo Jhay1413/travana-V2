@@ -48,15 +48,22 @@ import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurren
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
+import type { Favorite } from "@/api/endpoints/favorite.api";
 import type { Client as ApiClient } from "@/types/client";
 import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
-import type { CreateQuoteData, Transaction, EnquiryTable, Quote as ApiQuote } from "@/types/quote";
+import type { CreateQuoteData, Transaction, EnquiryTable, Quote as ApiQuote, Booking, DealImage } from "@/types/quote";
 import type { Enquiry } from "@/types/enquiry";
+import type { LookupPackageType, LookupCountry, LookupDestination, LookupResort, LookupAccommodation, LookupBoardBasis, LookupPark, LookupLodge } from "@/api/endpoints/lookup.api";
+import type { Airport } from "@/types/airport";
+import type { TourOperator } from "@/types/tour-operator";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
 import { DatePicker } from "@/components/ui/date-picker";
+
+type QuoteWithJoins = ApiQuote & { holiday_type_name?: string };
+type BookingWithJoins = Booking & { images?: DealImage[]; holiday_type_name?: string };
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 
@@ -274,12 +281,12 @@ type Quote = {
   jsonPayload: string;
 };
 
-function safeJsonParse(value: string): { ok: true; data: any } | { ok: false; error: string } {
+function safeJsonParse(value: string): { ok: true; data: unknown } | { ok: false; error: string } {
   try {
     const data = JSON.parse(value);
     return { ok: true, data };
-  } catch (e: any) {
-    return { ok: false, error: e?.message ?? "Invalid JSON" };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "Invalid JSON" };
   }
 }
 
@@ -379,9 +386,8 @@ export default function ClientPage() {
   const { role, setRole } = useRole();
   const [active] = useState<string>("clients");
   const [q, setQ] = useState("");
-  const [tab, setTab] = useState<"overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets">(
-    "overview",
-  );
+  type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets";
+  const [tab, setTab] = useState<ClientTab>("overview");
   const [showEditClient, setShowEditClient] = useState(false);
   const [editForm, setEditForm] = useState({
     title: "",
@@ -508,7 +514,7 @@ export default function ClientPage() {
   const { data: packageTypesData } = usePackageTypes();
   const packageTypeName = useMemo(() => {
     if (!newQuote.packageType || !packageTypesData) return "";
-    const pt = (packageTypesData as any[]).find((p: any) => p.id === newQuote.packageType);
+    const pt = packageTypesData?.find((p) => p.id === newQuote.packageType);
     return pt?.name || "";
   }, [newQuote.packageType, packageTypesData]);
   const { data: parksData } = useParks();
@@ -517,7 +523,7 @@ export default function ClientPage() {
   const toggleFavoriteMutation = useToggleFavorite();
   const isClientPinned = useMemo(() => {
     if (!userFavorites || !clientId) return false;
-    return userFavorites.some((f: any) => f.itemType === "client" && f.itemId === clientId);
+    return userFavorites.some((f: Favorite) => f.itemType === "client" && f.itemId === clientId);
   }, [userFavorites, clientId]);
 
   const updateClientMutationHook = useUpdateClient();
@@ -557,7 +563,7 @@ export default function ClientPage() {
   };
 
   const handleSaveClient = () => {
-    const updates: Record<string, any> = {};
+    const updates: Record<string, string | boolean | null> = {};
     if (editForm.title) updates.title = editForm.title;
     if (editForm.firstName) updates.firstName = editForm.firstName;
     if (editForm.surename) updates.surename = editForm.surename;
@@ -587,8 +593,8 @@ export default function ClientPage() {
 
   const createQuoteMutationHook = useCreateQuote();
   const createQuoteMutation = {
-    mutate: async (data: any) => {
-      createQuoteMutationHook.mutate(data as CreateQuoteData, {
+    mutate: async (data: CreateQuoteData) => {
+      createQuoteMutationHook.mutate(data, {
         onSuccess: (createdQuote) => {
           if (quoteImageFiles.length > 0 || quoteImageUrls.length > 0) {
             queryClient.invalidateQueries({ queryKey: ["quotes"] });
@@ -618,7 +624,7 @@ export default function ClientPage() {
   const deleteEnquiryMutation = useDeleteEnquiry();
   const createTransactionMutation = useCreateTransaction();
 
-  const handleEnquirySubmit = (data: Partial<any>) => {
+  const handleEnquirySubmit = (data: Partial<EnquiryTable> & Record<string, unknown>) => {
     if (editingEnquiry) {
       updateEnquiryMutation.mutate(
         { id: editingEnquiry.id, data: data as Partial<EnquiryTable> },
@@ -665,7 +671,7 @@ export default function ClientPage() {
             resorts: data.resorts || undefined,
             boardBases: data.boardBases || undefined,
             departureAirports: data.departureAirports || undefined,
-          } as any,
+          },
         },
         {
           onSuccess: () => {
@@ -697,9 +703,9 @@ export default function ClientPage() {
   }, [clientData]);
 
   const transactions = useMemo(() => transactionsData || [], [transactionsData]);
-  const quotes = useMemo(() => transactions.flatMap((t: Transaction) => (t.quotes || []) as any[]), [transactions]);
+  const quotes = useMemo(() => transactions.flatMap((t: Transaction) => t.quotes || []), [transactions]);
   const enquiries = useMemo(() => transactions.map((t: Transaction) => t.enquiry).filter(Boolean) as EnquiryTable[], [transactions]);
-  const bookings = useMemo(() => transactions.map((t: any) => t.booking).filter(Boolean) as any[], [transactions]);
+  const bookings = useMemo(() => transactions.map((t: Transaction) => t.booking).filter((b): b is NonNullable<Transaction["booking"]> => Boolean(b)), [transactions]);
 
   const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
   const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
@@ -838,7 +844,7 @@ export default function ClientPage() {
                     const subtitle = client?.phone || client?.email || "";
                     toggleFavoriteMutation.mutate(
                       { itemType: "client", itemId: clientId, label: clientName, subtitle },
-                      { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                      { onSuccess: (data: { favorited?: boolean; favorite?: Favorite }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                     );
                   }}
                   className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isClientPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
@@ -948,7 +954,7 @@ export default function ClientPage() {
             </div>
 
             <div className="mt-3 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-sections">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+              <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
                 <TabsList className="grid w-full grid-cols-3 rounded-2xl border border-black/10 bg-white/70">
                   <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-client-overview">
                     Overview
@@ -1175,7 +1181,7 @@ export default function ClientPage() {
             </div>
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+              <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
                 <TabsList className="grid w-full grid-cols-6 rounded-2xl border border-black/10 bg-white/70">
                   <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-overview">
                     Overview
@@ -1215,8 +1221,8 @@ export default function ClientPage() {
                       <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-total-value">
                         <div className="text-2xl font-bold text-black/85">
                           {currency.format(
-                            quotes.reduce((sum: number, q: any) => sum + parseFloat(q.sales_price || "0"), 0) +
-                            bookings.reduce((sum: number, b: any) => sum + parseFloat(b.sales_price || "0"), 0)
+                            quotes.reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0) +
+                            bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.sales_price || "0"), 0)
                           )}
                         </div>
                         <div className="mt-0.5 text-[11px] font-semibold text-black/50">Total Value</div>
@@ -1332,14 +1338,14 @@ export default function ClientPage() {
                       </div>
                       {(() => {
                         const upcomingItems: Array<{ id: string; title: string; type: string; travelDate: string; status: string; isBooking: boolean }> = [];
-                        quotes.forEach((q: any) => {
+                        quotes.forEach((q: QuoteWithJoins) => {
                           if (!q.travel_date) return;
                           const td = new Date(q.travel_date);
                           if (td >= new Date() && !["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status || "")) {
                             upcomingItems.push({ id: q.id, title: q.title || q.holiday_type_name || "Trip", type: q.holiday_type_name || q.quote_type || "—", travelDate: q.travel_date, status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), isBooking: false });
                           }
                         });
-                        bookings.forEach((b: any) => {
+                        bookings.forEach((b: BookingWithJoins) => {
                           if (!b.travel_date) return;
                           const td = new Date(b.travel_date);
                           if (td >= new Date()) {
@@ -1400,16 +1406,16 @@ export default function ClientPage() {
                       </div>
                       {(() => {
                         const activities: Array<{ id: string; type: string; title: string; date: string; status?: string; link: string }> = [];
-                        enquiries.slice(0, 3).forEach((e: any) => {
+                        enquiries.slice(0, 3).forEach((e: EnquiryTable) => {
                           activities.push({ id: `e-${e.id}`, type: "Enquiry", title: e.title || "Enquiry", date: e.date_created || "", status: e.status, link: `/clients/${clientId}/enquiries/${e.id}` });
                         });
-                        quotes.slice(0, 3).forEach((q: any) => {
+                        quotes.slice(0, 3).forEach((q: QuoteWithJoins) => {
                           activities.push({ id: `q-${q.id}`, type: "Quote", title: q.title || q.holiday_type_name || "Trip", date: q.date_created || "", status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), link: `/clients/${clientId}/quotes/${q.id}` });
                         });
-                        bookings.slice(0, 3).forEach((b: any) => {
+                        bookings.slice(0, 3).forEach((b: BookingWithJoins) => {
                           activities.push({ id: `b-${b.id}`, type: "Booking", title: b.title || b.holiday_type_name || "Booking", date: b.date_created || "", status: b.booking_status || "BOOKED", link: `/clients/${clientId}/bookings/${b.id}` });
                         });
-                        tickets.slice(0, 2).forEach((t: any) => {
+                        tickets.slice(0, 2).forEach((t: TicketItem) => {
                           activities.push({ id: `t-${t.id}`, type: "Ticket", title: t.subject, date: t.createdAt || "", status: t.status, link: "#" });
                         });
                         activities.sort((a, b) => {
@@ -1466,19 +1472,19 @@ export default function ClientPage() {
                           <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
                             <span className="text-xs text-black/60">In Play value</span>
                             <span className="text-xs font-semibold text-black/85" data-testid="overview-inplay-value">
-                              {currency.format(quotes.filter((q: any) => q.quote_status === "In Play").reduce((sum: number, q: any) => sum + parseFloat(q.sales_price || "0"), 0))}
+                              {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status === "In Play").reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
                             </span>
                           </div>
                           <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
                             <span className="text-xs text-black/60">Won value</span>
                             <span className="text-xs font-semibold text-black/85" data-testid="overview-won-value">
-                              {currency.format(quotes.filter((q: any) => q.quote_status === "Won").reduce((sum: number, q: any) => sum + parseFloat(q.sales_price || "0"), 0))}
+                              {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status === "Won").reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
                             </span>
                           </div>
                           <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
                             <span className="text-xs font-medium text-emerald-700">Booked value</span>
                             <span className="text-xs font-bold text-emerald-700" data-testid="overview-booked-value">
-                              {currency.format(bookings.reduce((sum: number, b: any) => sum + parseFloat(b.sales_price || "0"), 0))}
+                              {currency.format(bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.sales_price || "0"), 0))}
                             </span>
                           </div>
                         </div>
@@ -1570,9 +1576,9 @@ export default function ClientPage() {
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid={`text-enquiry-meta-${idx}`}>
                                 <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70">
-                                  {(enq as any).holiday_type_name || enq.holiday_type_id}
+                                  {enq.holiday_type_name || enq.holiday_type_id}
                                 </span>
-                                {enq.destinations?.[0] && <span>{(enq.destinations[0] as any)?.name || (enq.destinations[0] as any)?.destination_id || "—"}</span>}
+                                {enq.destinations?.[0] && <span>{enq.destinations[0]?.name || enq.destinations[0]?.destination_id || "—"}</span>}
                                 {enq.travel_date && <span>· {new Date(enq.travel_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
                                 <span>· {enq.adults || 0}A{(enq.children || 0) > 0 ? ` ${enq.children}C` : ""}{(enq.infants || 0) > 0 ? ` ${enq.infants}I` : ""}</span>
                                 {enq.no_of_nights && <span>· {enq.no_of_nights}N</span>}
@@ -1583,13 +1589,13 @@ export default function ClientPage() {
                               <span
                                 role="button"
                                 tabIndex={0}
-                                className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: any) => f.itemType === "enquiry" && f.itemId === enq.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
+                                className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "enquiry" && f.itemId === enq.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
                                 data-testid={`button-pin-enquiry-${idx}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.title || "", subtitle: `${client?.name || ""}${enq.destinations?.[0] ? " · " + ((enq.destinations[0] as any)?.name || enq.destinations[0]) : (enq as any).holiday_type_name ? " · " + (enq as any).holiday_type_name : ""}` });
+                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.title || "", subtitle: `${client?.name || ""}${enq.destinations?.[0] ? " · " + (enq.destinations[0]?.name || enq.destinations[0]?.destination_id) : enq.holiday_type_name ? " · " + enq.holiday_type_name : ""}` });
                                 }}
-                                title={userFavorites?.some((f: any) => f.itemType === "enquiry" && f.itemId === enq.id) ? "Unpin" : "Pin to dashboard"}
+                                title={userFavorites?.some((f: Favorite) => f.itemType === "enquiry" && f.itemId === enq.id) ? "Unpin" : "Pin to dashboard"}
                               >
                                 <Pin className="h-3.5 w-3.5" />
                               </span>
@@ -1656,8 +1662,8 @@ export default function ClientPage() {
                             id: "in-play",
                             title: "In Play",
                             rows: quotes
-                              .filter((q: any) => !q.quote_status || !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
-                              .map((q: any) => ({
+                              .filter((q: QuoteWithJoins) => !q.quote_status || !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
+                              .map((q: QuoteWithJoins) => ({
                                 id: q.id,
                                 title: q.title || q.holiday_type_name || "Trip",
                                 destination: q.holiday_type_name || q.quote_type || "—",
@@ -1666,7 +1672,7 @@ export default function ClientPage() {
                                 status: q.quote_status || "NEW_LEAD",
                                 totalCost: parseFloat(q.sales_price || "0"),
                                 pricePerPerson: parseFloat(q.price_per_person || "0"),
-                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
+                                imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
                                 pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
                                 nights: q.num_of_nights || 0,
                               })),
@@ -1675,8 +1681,8 @@ export default function ClientPage() {
                             id: "won",
                             title: "Won",
                             rows: quotes
-                              .filter((q: any) => q.quote_status === "WON")
-                              .map((q: any) => ({
+                              .filter((q: QuoteWithJoins) => q.quote_status === "WON")
+                              .map((q: QuoteWithJoins) => ({
                                 id: q.id,
                                 title: q.title || q.holiday_type_name || "Trip",
                                 destination: q.holiday_type_name || q.quote_type || "—",
@@ -1685,7 +1691,7 @@ export default function ClientPage() {
                                 status: q.quote_status,
                                 totalCost: parseFloat(q.sales_price || "0"),
                                 pricePerPerson: parseFloat(q.price_per_person || "0"),
-                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
+                                imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
                                 pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
                                 nights: q.num_of_nights || 0,
                               })),
@@ -1694,8 +1700,8 @@ export default function ClientPage() {
                             id: "lost",
                             title: "Lost",
                             rows: quotes
-                              .filter((q: any) => q.quote_status === "LOST")
-                              .map((q: any) => ({
+                              .filter((q: QuoteWithJoins) => q.quote_status === "LOST")
+                              .map((q: QuoteWithJoins) => ({
                                 id: q.id,
                                 title: q.title || q.holiday_type_name || "Trip",
                                 destination: q.holiday_type_name || q.quote_type || "—",
@@ -1704,7 +1710,7 @@ export default function ClientPage() {
                                 status: q.quote_status,
                                 totalCost: parseFloat(q.sales_price || "0"),
                                 pricePerPerson: parseFloat(q.price_per_person || "0"),
-                                imageUrl: q.images?.find((img: any) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
+                                imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
                                 pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
                                 nights: q.num_of_nights || 0,
                               })),
@@ -1796,14 +1802,14 @@ export default function ClientPage() {
                                             <span
                                               role="button"
                                               tabIndex={0}
-                                              className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
+                                              className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === q.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
                                               data-testid={`button-pin-quote-${q.id}`}
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 e.preventDefault();
                                                 toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title || "Quote", subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
                                               }}
-                                              title={userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
+                                              title={userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
                                             >
                                               <Pin className="h-3.5 w-3.5" />
                                             </span>
@@ -1870,7 +1876,7 @@ export default function ClientPage() {
                             No bookings yet. Add a booking or convert a quote.
                           </div>
                         ) : (
-                          bookings.map((b: any) => (
+                          bookings.map((b: BookingWithJoins) => (
                               <button
                                 key={b.id}
                                 type="button"
@@ -1883,9 +1889,9 @@ export default function ClientPage() {
                                     className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
                                     aria-hidden
                                   >
-                                    {b.images?.find((img: any) => img.isPrimary)?.image_url || b.images?.[0]?.image_url ? (
+                                    {b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url ? (
                                       <img
-                                        src={b.images?.find((img: any) => img.isPrimary)?.image_url || b.images?.[0]?.image_url}
+                                        src={b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url}
                                         alt=""
                                         className="absolute inset-0 h-full w-full object-cover"
                                       />
@@ -1948,14 +1954,14 @@ export default function ClientPage() {
                                         <span
                                           role="button"
                                           tabIndex={0}
-                                          className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: any) => f.itemType === "booking" && f.itemId === b.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
+                                          className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "booking" && f.itemId === b.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
                                           data-testid={`button-pin-booking-${b.id}`}
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             e.preventDefault();
                                             toggleFavoriteMutation.mutate({ itemType: "booking", itemId: b.id, label: b.title || "Booking", subtitle: `${client?.name || ""}` });
                                           }}
-                                          title={userFavorites?.some((f: any) => f.itemType === "booking" && f.itemId === b.id) ? "Unpin" : "Pin to dashboard"}
+                                          title={userFavorites?.some((f: Favorite) => f.itemType === "booking" && f.itemId === b.id) ? "Unpin" : "Pin to dashboard"}
                                         >
                                           <Pin className="h-3.5 w-3.5" />
                                         </span>
@@ -2141,7 +2147,7 @@ export default function ClientPage() {
                   <SearchableSelect
                     value={newQuote.packageType}
                     onValueChange={(v) => setNewQuote({ ...newQuote, packageType: v })}
-                    options={(packageTypesData || []).map((pt: any) => ({ value: pt.id, label: pt.name }))}
+                    options={(packageTypesData || []).map((pt: LookupPackageType) => ({ value: pt.id, label: pt.name }))}
                     placeholder="Select type..."
                     searchPlaceholder="Search types..."
                     emptyMessage="No types found."
@@ -2610,7 +2616,7 @@ export default function ClientPage() {
                         <SelectValue placeholder="Select park..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(parksData || []).map((park: any) => (
+                        {(parksData || []).map((park: LookupPark) => (
                           <SelectItem key={park.id} value={park.id}>{park.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2623,7 +2629,7 @@ export default function ClientPage() {
                         <SelectValue placeholder="Select lodge..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(lodgesData || []).map((lodge: any) => (
+                        {(lodgesData || []).map((lodge: LookupLodge) => (
                           <SelectItem key={lodge.id} value={lodge.id}>{lodge.lodge_name}{lodge.lodge_code ? ` (${lodge.lodge_code})` : ""}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2740,7 +2746,7 @@ export default function ClientPage() {
                         <SelectValue placeholder="Select country..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(countriesData || []).map((c: any) => (
+                        {(countriesData || []).map((c: LookupCountry) => (
                           <SelectItem key={c.id} value={c.id}>{c.country_name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2753,7 +2759,7 @@ export default function ClientPage() {
                         <SelectValue placeholder="Select destination..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(destinationsData || []).map((d: any) => (
+                        {(destinationsData || []).map((d: LookupDestination) => (
                           <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2766,7 +2772,7 @@ export default function ClientPage() {
                         <SelectValue placeholder="Select resort..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(resortsData || []).map((r: any) => (
+                        {(resortsData || []).map((r: LookupResort) => (
                           <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2779,7 +2785,7 @@ export default function ClientPage() {
                         <SelectValue placeholder="Select accommodation..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(accommodationsData || []).map((a: any) => (
+                        {(accommodationsData || []).map((a: LookupAccommodation) => (
                           <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2822,7 +2828,7 @@ export default function ClientPage() {
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(boardBasisData || []).map((bb: any) => (
+                        {(boardBasisData || []).map((bb: LookupBoardBasis) => (
                           <SelectItem key={bb.id} value={bb.id}>{bb.type}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2891,7 +2897,7 @@ export default function ClientPage() {
                       <SearchableSelect
                         value={newQuote.outboundDepartAirport}
                         onValueChange={(v) => setNewQuote({ ...newQuote, outboundDepartAirport: v })}
-                        options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                        options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
                         placeholder="Select airport..."
                         searchPlaceholder="Search airports..."
                         emptyMessage="No airports found."
@@ -2922,7 +2928,7 @@ export default function ClientPage() {
                       <SearchableSelect
                         value={newQuote.outboundArriveAirport}
                         onValueChange={(v) => setNewQuote({ ...newQuote, outboundArriveAirport: v })}
-                        options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                        options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
                         placeholder="Select airport..."
                         searchPlaceholder="Search airports..."
                         emptyMessage="No airports found."
@@ -2962,7 +2968,7 @@ export default function ClientPage() {
                       <SearchableSelect
                         value={newQuote.inboundDepartAirport}
                         onValueChange={(v) => setNewQuote({ ...newQuote, inboundDepartAirport: v })}
-                        options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                        options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
                         placeholder="Select airport..."
                         searchPlaceholder="Search airports..."
                         emptyMessage="No airports found."
@@ -2993,7 +2999,7 @@ export default function ClientPage() {
                       <SearchableSelect
                         value={newQuote.inboundArriveAirport}
                         onValueChange={(v) => setNewQuote({ ...newQuote, inboundArriveAirport: v })}
-                        options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                        options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
                         placeholder="Select airport..."
                         searchPlaceholder="Search airports..."
                         emptyMessage="No airports found."
@@ -3032,7 +3038,7 @@ export default function ClientPage() {
                   <SearchableSelect
                     value={newQuote.tourOperator}
                     onValueChange={(v) => setNewQuote({ ...newQuote, tourOperator: v })}
-                    options={(tourOperatorsData || []).map((t: any) => ({ value: t.id, label: t.name }))}
+                    options={(tourOperatorsData || []).map((t: TourOperator) => ({ value: t.id, label: t.name || "" }))}
                     placeholder="Select tour operator..."
                     searchPlaceholder="Search tour operators..."
                     emptyMessage="No tour operators found."
@@ -3204,10 +3210,10 @@ export default function ClientPage() {
                           outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
                           inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
                           primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
-                        } as any,
+                        },
                       },
                       {
-                        onSuccess: (result: any) => {
+                        onSuccess: (result: { transaction?: { id: string }; booking?: { id: string } }) => {
                           setShowNewQuoteModal(false);
                           setNewQuoteIsBooking(false);
                           setNewQuote(newQuoteDefaults);
@@ -3233,7 +3239,7 @@ export default function ClientPage() {
                         quote: {
                           ...quotePayload,
                           quote_status: "In Play",
-                        } as any,
+                        },
                       },
                       {
                         onSuccess: () => {
@@ -3344,7 +3350,7 @@ export default function ClientPage() {
                     <SelectValue placeholder="Select quote..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {quotes.map((q: any) => (
+                    {quotes.map((q: QuoteWithJoins) => (
                       <SelectItem key={q.id} value={q.id}>
                         {q.title || q.quote_type || "Quote"} - {q.quote_status || "—"}
                       </SelectItem>

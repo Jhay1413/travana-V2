@@ -6,7 +6,10 @@ import {
   booking_cruise_itinerary, passengers, deal_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
 } from "@shared/schema";
-import type { Booking, InsertBooking, InsertBookingFlight, BookingFlight, InsertBookingAccomodation, BookingAccomodation } from "@shared/schema";
+import type {
+  Booking, InsertBooking, InsertBookingFlight, BookingFlight,
+  InsertBookingAccomodation, BookingAccomodation, InsertBookingTransfer,
+} from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -165,7 +168,7 @@ export const bookingRepository = {
     };
   },
 
-  async addFlight(data: any) {
+  async addFlight(data: InsertBookingFlight) {
     const [result] = await db.insert(booking_flights).values(data).returning();
     return result;
   },
@@ -174,7 +177,7 @@ export const bookingRepository = {
     await db.delete(booking_flights).where(eq(booking_flights.id, id));
   },
 
-  async addAccommodation(data: any) {
+  async addAccommodation(data: InsertBookingAccomodation) {
     const [result] = await db.insert(booking_accomodation).values(data).returning();
     return result;
   },
@@ -183,7 +186,7 @@ export const bookingRepository = {
     await db.delete(booking_accomodation).where(eq(booking_accomodation.id, id));
   },
 
-  async addTransfer(data: any) {
+  async addTransfer(data: InsertBookingTransfer) {
     const [result] = await db.insert(booking_transfers).values(data).returning();
     return result;
   },

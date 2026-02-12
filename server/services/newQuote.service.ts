@@ -1,7 +1,37 @@
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
 import { AppError } from "../utils/error-handler";
-import type { InsertQuote } from "@shared/schema";
+import type {
+  InsertQuote,
+  InsertQuoteFlight,
+  InsertQuoteAccomodation,
+  InsertQuoteTransfer,
+  InsertQuoteCarHire,
+  InsertQuoteAttractionTicket,
+  InsertQuoteLoungePass,
+  InsertQuoteAirportParking,
+  InsertPassenger,
+} from "@shared/schema";
+
+interface QuoteRelationData {
+  outboundFlight?: Partial<InsertQuoteFlight>;
+  inboundFlight?: Partial<InsertQuoteFlight>;
+  primaryAccommodation?: Partial<InsertQuoteAccomodation>;
+}
+
+type CreateQuotePayload = InsertQuote & QuoteRelationData;
+
+type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
+  cruiseTitle?: string;
+  cruiseLine?: string;
+  shipName?: string;
+  cruiseDate?: string;
+  cabinType?: string;
+  embarkation?: string;
+  debarkation?: string;
+  cruiseExtras?: string;
+  cruiseOnly?: boolean;
+};
 
 export const newQuoteService = {
   async listQuotes() {
@@ -28,7 +58,7 @@ export const newQuoteService = {
     return q;
   },
 
-  async createQuote(data: any) {
+  async createQuote(data: CreateQuotePayload) {
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
       ...quoteFields
@@ -37,7 +67,7 @@ export const newQuoteService = {
     const txn = await transactionRepository.findById(quoteFields.transaction_id);
     if (!txn) throw new AppError("Transaction not found", 404);
 
-    const q = await newQuoteRepository.create(quoteFields as InsertQuote);
+    const q = await newQuoteRepository.create(quoteFields);
 
     if (txn.status !== 'on_quote' && txn.status !== 'on_booking') {
       await transactionRepository.update(txn.id, { status: 'on_quote' });
@@ -56,7 +86,7 @@ export const newQuoteService = {
     return q;
   },
 
-  async updateQuote(id: string, data: any) {
+  async updateQuote(id: string, data: UpdateQuotePayload) {
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType,
@@ -65,7 +95,7 @@ export const newQuoteService = {
     } = data;
 
     const quoteData: Partial<InsertQuote> = {};
-    const directFields = [
+    const directFields: (keyof InsertQuote)[] = [
       'holiday_type_id', 'sales_price', 'package_commission', 'travel_date',
       'discounts', 'service_charge', 'num_of_nights', 'pets', 'cottage_id',
       'lodge_id', 'quote_type', 'deal_type', 'pre_booked_seats', 'flight_meals',
@@ -74,7 +104,7 @@ export const newQuoteService = {
     ];
     for (const key of directFields) {
       if (key in quoteFields) {
-        (quoteData as any)[key] = quoteFields[key];
+        (quoteData[key] as InsertQuote[typeof key]) = (quoteFields as Record<string, unknown>)[key] as InsertQuote[typeof key];
       }
     }
 
@@ -98,11 +128,11 @@ export const newQuoteService = {
     await newQuoteRepository.remove(id);
   },
 
-  async addFlight(quoteId: string, data: any) {
+  async addFlight(quoteId: string, data: Omit<InsertQuoteFlight, 'quote_id'>) {
     return await newQuoteRepository.addFlight({ ...data, quote_id: quoteId });
   },
 
-  async updateFlight(flightId: string, data: any) {
+  async updateFlight(flightId: string, data: Partial<InsertQuoteFlight>) {
     return await newQuoteRepository.updateFlight(flightId, data);
   },
 
@@ -110,11 +140,11 @@ export const newQuoteService = {
     await newQuoteRepository.removeFlight(flightId);
   },
 
-  async addAccommodation(quoteId: string, data: any) {
+  async addAccommodation(quoteId: string, data: Omit<InsertQuoteAccomodation, 'quote_id'>) {
     return await newQuoteRepository.addAccommodation({ ...data, quote_id: quoteId });
   },
 
-  async updateAccommodation(accommodationId: string, data: any) {
+  async updateAccommodation(accommodationId: string, data: Partial<InsertQuoteAccomodation>) {
     return await newQuoteRepository.updateAccommodation(accommodationId, data);
   },
 
@@ -122,7 +152,7 @@ export const newQuoteService = {
     await newQuoteRepository.removeAccommodation(accommodationId);
   },
 
-  async addTransfer(quoteId: string, data: any) {
+  async addTransfer(quoteId: string, data: Omit<InsertQuoteTransfer, 'quote_id'>) {
     return await newQuoteRepository.addTransfer({ ...data, quote_id: quoteId });
   },
 
@@ -130,7 +160,7 @@ export const newQuoteService = {
     await newQuoteRepository.removeTransfer(transferId);
   },
 
-  async addCarHire(quoteId: string, data: any) {
+  async addCarHire(quoteId: string, data: Omit<InsertQuoteCarHire, 'quote_id'>) {
     return await newQuoteRepository.addCarHire({ ...data, quote_id: quoteId });
   },
 
@@ -138,7 +168,7 @@ export const newQuoteService = {
     await newQuoteRepository.removeCarHire(carHireId);
   },
 
-  async addAttractionTicket(quoteId: string, data: any) {
+  async addAttractionTicket(quoteId: string, data: Omit<InsertQuoteAttractionTicket, 'quote_id'>) {
     return await newQuoteRepository.addAttractionTicket({ ...data, quote_id: quoteId });
   },
 
@@ -146,7 +176,7 @@ export const newQuoteService = {
     await newQuoteRepository.removeAttractionTicket(ticketId);
   },
 
-  async addLoungePass(quoteId: string, data: any) {
+  async addLoungePass(quoteId: string, data: Omit<InsertQuoteLoungePass, 'quote_id'>) {
     return await newQuoteRepository.addLoungePass({ ...data, quote_id: quoteId });
   },
 
@@ -154,7 +184,7 @@ export const newQuoteService = {
     await newQuoteRepository.removeLoungePass(loungePassId);
   },
 
-  async addAirportParking(quoteId: string, data: any) {
+  async addAirportParking(quoteId: string, data: Omit<InsertQuoteAirportParking, 'quote_id'>) {
     return await newQuoteRepository.addAirportParking({ ...data, quote_id: quoteId });
   },
 
@@ -162,7 +192,7 @@ export const newQuoteService = {
     await newQuoteRepository.removeAirportParking(parkingId);
   },
 
-  async addPassenger(quoteId: string, data: any) {
+  async addPassenger(quoteId: string, data: Omit<InsertPassenger, 'quote_id'>) {
     return await newQuoteRepository.addPassenger({ ...data, quote_id: quoteId });
   },
 
