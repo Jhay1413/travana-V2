@@ -41,10 +41,42 @@ export const newQuoteService = {
     return q;
   },
 
-  async updateQuote(id: string, data: Partial<InsertQuote>) {
-    const q = await newQuoteRepository.update(id, data);
+  async updateQuote(id: string, data: any) {
+    const {
+      outboundFlight, inboundFlight, primaryAccommodation,
+      cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType,
+      embarkation, debarkation, cruiseExtras, cruiseOnly,
+      ...quoteFields
+    } = data;
+
+    const quoteData: Partial<InsertQuote> = {};
+    const directFields = [
+      'holiday_type_id', 'sales_price', 'package_commission', 'travel_date',
+      'discounts', 'service_charge', 'num_of_nights', 'pets', 'cottage_id',
+      'lodge_id', 'quote_type', 'deal_type', 'pre_booked_seats', 'flight_meals',
+      'infant', 'child', 'adult', 'title', 'price_per_person', 'lodge_type',
+      'transfer_type', 'quote_status', 'main_tour_operator_id', 'quote_ref',
+    ];
+    for (const key of directFields) {
+      if (key in quoteFields) {
+        (quoteData as any)[key] = quoteFields[key];
+      }
+    }
+
+    const q = await newQuoteRepository.update(id, quoteData);
     if (!q) throw new AppError("Quote not found", 404);
-    return q;
+
+    if (outboundFlight) {
+      await newQuoteRepository.upsertFlightByType(id, "outbound", outboundFlight);
+    }
+    if (inboundFlight) {
+      await newQuoteRepository.upsertFlightByType(id, "inbound", inboundFlight);
+    }
+    if (primaryAccommodation) {
+      await newQuoteRepository.upsertPrimaryAccommodation(id, primaryAccommodation);
+    }
+
+    return await newQuoteRepository.findWithDetails(id);
   },
 
   async deleteQuote(id: string) {

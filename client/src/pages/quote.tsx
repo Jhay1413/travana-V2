@@ -14,7 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuote, useNotes, useTasks, useClient } from "@/hooks/queries";
+import { useQuote, useNotes, useTasks, useClient, useAirports, useTourOperators, useBoardBasis, useAllAccommodations } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
@@ -1857,72 +1857,67 @@ function EditQuoteDialog({
 
   const set = (key: string, val: any) => setForm((prev: any) => ({ ...prev, [key]: val }));
 
+  const { data: airportsData } = useAirports();
+  const { data: tourOperatorsData } = useTourOperators();
+  const { data: boardBasisData } = useBoardBasis();
+  const { data: accommodationsData } = useAllAccommodations();
+
   const handleSave = () => {
     const travelDateObj = new Date(form.travelDate);
     const returnDateObj = new Date(travelDateObj);
     returnDateObj.setDate(returnDateObj.getDate() + (form.nights || 7));
-    const returnDate = returnDateObj.toISOString().split("T")[0];
 
     const updates: Record<string, any> = {
-      packageType: form.packageType,
-      quoteTitle: form.quoteTitle,
-      quoteLink: form.quoteLink,
-      status: form.status,
-      destination: form.destination,
-      country: form.country,
-      resort: form.resort,
-      travelDate: form.travelDate,
-      returnDate: returnDate,
-      passengersAdults: form.passengersAdults,
-      passengersChildren: form.passengersChildren,
-      passengersInfants: form.passengersInfants,
-      childAges: form.childAges,
-      checkInDate: form.checkInDate,
-      checkInTime: form.checkInTime,
-      nights: form.nights,
-      transferType: form.transferType,
-      preBookedSeats: form.preBookedSeats,
-      flightMeals: form.flightMeals,
-      leadSource: form.leadSource,
-      accommodation: form.accommodation,
-      boardBasis: form.boardBasis,
-      roomType: form.roomType,
-      tourOperator: form.tourOperator,
-      sales: form.sales,
-      price: form.price,
-      commission: form.commission,
-      discount: form.discount,
-      serviceCharge: form.serviceCharge,
-      pricePerPerson: form.pricePerPerson,
+      title: form.quoteTitle,
+      quote_status: form.status,
+      travel_date: form.travelDate,
+      num_of_nights: form.nights,
+      adult: form.passengersAdults,
+      child: form.passengersChildren,
+      infant: form.passengersInfants,
+      transfer_type: form.transferType,
+      pre_booked_seats: form.preBookedSeats,
+      flight_meals: form.flightMeals === "Yes" || form.flightMeals === true,
+      main_tour_operator_id: form.tourOperatorId || null,
+      sales_price: String(form.price || 0),
+      package_commission: String(((form.commission || 0) / 100) * (form.price || 0)),
+      discounts: String(form.discount || 0),
+      service_charge: String(form.serviceCharge || 0),
+      price_per_person: String(form.pricePerPerson || 0),
     };
 
     const showFlights = form.packageType !== "Hot Tub Break" && !(form.packageType === "Cruise Package" && form.cruiseOnly);
     if (showFlights) {
-      updates.outboundDepartAirport = form.outboundDepartAirport;
-      updates.outboundDepartDate = form.outboundDepartDate;
-      updates.outboundDepartTime = form.outboundDepartTime;
-      updates.outboundArriveAirport = form.outboundArriveAirport;
-      updates.outboundArriveDate = form.outboundArriveDate;
-      updates.outboundArriveTime = form.outboundArriveTime;
-      updates.inboundDepartAirport = form.inboundDepartAirport;
-      updates.inboundDepartDate = form.inboundDepartDate;
-      updates.inboundDepartTime = form.inboundDepartTime;
-      updates.inboundArriveAirport = form.inboundArriveAirport;
-      updates.inboundArriveDate = form.inboundArriveDate;
-      updates.inboundArriveTime = form.inboundArriveTime;
-    } else {
-      updates.outboundDepartAirport = "";
-      updates.outboundDepartDate = "";
-      updates.outboundDepartTime = "";
-      updates.outboundArriveAirport = "";
-      updates.outboundArriveDate = "";
-      updates.outboundArriveTime = "";
-      updates.inboundDepartAirport = "";
-      updates.inboundDepartDate = "";
-      updates.inboundDepartTime = "";
-      updates.inboundArriveAirport = "";
-      updates.inboundArriveDate = "";
-      updates.inboundArriveTime = "";
+      const buildDateTime = (date: string, time: string) => {
+        if (!date) return null;
+        return time ? `${date}T${time}:00` : `${date}T00:00:00`;
+      };
+
+      updates.outboundFlight = {
+        departing_airport_id: form.outboundDepartAirportId || null,
+        arrival_airport_id: form.outboundArriveAirportId || null,
+        departure_date_time: buildDateTime(form.outboundDepartDate, form.outboundDepartTime),
+        arrival_date_time: buildDateTime(form.outboundArriveDate, form.outboundArriveTime),
+        flight_number: form.outboundFlightNumber || null,
+      };
+
+      updates.inboundFlight = {
+        departing_airport_id: form.inboundDepartAirportId || null,
+        arrival_airport_id: form.inboundArriveAirportId || null,
+        departure_date_time: buildDateTime(form.inboundDepartDate, form.inboundDepartTime),
+        arrival_date_time: buildDateTime(form.inboundArriveDate, form.inboundArriveTime),
+        flight_number: form.inboundFlightNumber || null,
+      };
+    }
+
+    if (form.packageType !== "Hot Tub Break") {
+      updates.primaryAccommodation = {
+        accomodation_id: form.accommodationId || null,
+        board_basis_id: form.boardBasisId || null,
+        room_type: form.roomType || null,
+        no_of_nights: form.nights || 0,
+        check_in_date_time: form.checkInDate ? (form.checkInTime ? `${form.checkInDate}T${form.checkInTime}:00` : `${form.checkInDate}T00:00:00`) : null,
+      };
     }
 
     if (form.packageType === "Cruise Package") {
@@ -1938,9 +1933,8 @@ function EditQuoteDialog({
     }
 
     if (form.packageType === "Hot Tub Break") {
-      updates.lodgeCode = form.lodgeCode;
-      updates.parkName = form.parkName;
-      updates.pets = form.pets;
+      updates.lodge_type = form.lodgeCode;
+      updates.pets = form.pets ? 1 : 0;
     }
 
     onSave(updates);
@@ -2466,13 +2460,16 @@ function EditQuoteDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Accommodation</Label>
-                  <Input
-                    placeholder="e.g. Azure Overwater Resort"
-                    value={form.accommodation}
-                    onChange={(e) => set("accommodation", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-accommodation"
-                  />
+                  <Select value={form.accommodationId || ""} onValueChange={(v) => set("accommodationId", v)}>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-accommodation">
+                      <SelectValue placeholder="Select accommodation..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {(accommodationsData || []).map((a: any) => (
+                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
@@ -2506,16 +2503,14 @@ function EditQuoteDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Board Basis</Label>
-                  <Select value={form.boardBasis} onValueChange={(v) => set("boardBasis", v)}>
+                  <Select value={form.boardBasisId || ""} onValueChange={(v) => set("boardBasisId", v)}>
                     <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-board-basis">
                       <SelectValue placeholder="Select..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Room Only">Room Only</SelectItem>
-                      <SelectItem value="Bed & Breakfast">Bed & Breakfast</SelectItem>
-                      <SelectItem value="Half Board">Half Board</SelectItem>
-                      <SelectItem value="Full Board">Full Board</SelectItem>
-                      <SelectItem value="All Inclusive">All Inclusive</SelectItem>
+                      {(boardBasisData || []).map((b: any) => (
+                        <SelectItem key={b.id} value={b.id}>{b.type}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -2579,13 +2574,16 @@ function EditQuoteDialog({
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                    <Input
-                      placeholder="e.g. LHR"
-                      value={form.outboundDepartAirport}
-                      onChange={(e) => set("outboundDepartAirport", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-outbound-depart-airport"
-                    />
+                    <Select value={form.outboundDepartAirportId || ""} onValueChange={(v) => set("outboundDepartAirportId", v)}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-outbound-depart-airport">
+                        <SelectValue placeholder="Select airport..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {(airportsData || []).map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.airport_name} ({a.airport_code})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departure Date</Label>
@@ -2608,13 +2606,16 @@ function EditQuoteDialog({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                    <Input
-                      placeholder="e.g. MLE"
-                      value={form.outboundArriveAirport}
-                      onChange={(e) => set("outboundArriveAirport", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-outbound-arrive-airport"
-                    />
+                    <Select value={form.outboundArriveAirportId || ""} onValueChange={(v) => set("outboundArriveAirportId", v)}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-outbound-arrive-airport">
+                        <SelectValue placeholder="Select airport..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {(airportsData || []).map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.airport_name} ({a.airport_code})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
@@ -2635,6 +2636,16 @@ function EditQuoteDialog({
                       data-testid="edit-input-outbound-arrive-time"
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Flight Number</Label>
+                    <Input
+                      placeholder="e.g. BA123"
+                      value={form.outboundFlightNumber}
+                      onChange={(e) => set("outboundFlightNumber", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-outbound-flight-number"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2646,13 +2657,16 @@ function EditQuoteDialog({
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                    <Input
-                      placeholder="e.g. MLE"
-                      value={form.inboundDepartAirport}
-                      onChange={(e) => set("inboundDepartAirport", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-inbound-depart-airport"
-                    />
+                    <Select value={form.inboundDepartAirportId || ""} onValueChange={(v) => set("inboundDepartAirportId", v)}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-inbound-depart-airport">
+                        <SelectValue placeholder="Select airport..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {(airportsData || []).map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.airport_name} ({a.airport_code})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departure Date</Label>
@@ -2675,13 +2689,16 @@ function EditQuoteDialog({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                    <Input
-                      placeholder="e.g. LHR"
-                      value={form.inboundArriveAirport}
-                      onChange={(e) => set("inboundArriveAirport", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-inbound-arrive-airport"
-                    />
+                    <Select value={form.inboundArriveAirportId || ""} onValueChange={(v) => set("inboundArriveAirportId", v)}>
+                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-inbound-arrive-airport">
+                        <SelectValue placeholder="Select airport..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {(airportsData || []).map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.airport_name} ({a.airport_code})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
@@ -2702,6 +2719,16 @@ function EditQuoteDialog({
                       data-testid="edit-input-inbound-arrive-time"
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Flight Number</Label>
+                    <Input
+                      placeholder="e.g. BA456"
+                      value={form.inboundFlightNumber}
+                      onChange={(e) => set("inboundFlightNumber", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid="edit-input-inbound-flight-number"
+                    />
+                  </div>
                 </div>
               </div>
             </>
@@ -2712,13 +2739,16 @@ function EditQuoteDialog({
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Tour Operator</Label>
-                <Input
-                  placeholder="e.g. Luxury Escapes UK"
-                  value={form.tourOperator}
-                  onChange={(e) => set("tourOperator", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-tour-operator"
-                />
+                <Select value={form.tourOperatorId || ""} onValueChange={(v) => set("tourOperatorId", v)}>
+                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-tour-operator">
+                    <SelectValue placeholder="Select tour operator..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {(tourOperatorsData || []).map((t: any) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Sales (£)</Label>
@@ -2823,6 +2853,12 @@ function normalizePackageType(raw: string): string {
 
 function buildEditForm(quote: QuoteDisplay, quoteData: ApiQuote) {
   const q = quoteData as any;
+  const flights = q.flights || [];
+  const outboundFlight = flights.find((f: any) => f.flight_type === "outbound") || flights[0];
+  const inboundFlight = flights.find((f: any) => f.flight_type === "inbound") || flights[1];
+  const accommodations = q.accommodations || [];
+  const primaryAccom = accommodations.find((a: any) => a.is_primary) || accommodations[0];
+
   return {
     packageType: normalizePackageType(quote.packageType),
     quoteTitle: quote.quoteTitle,
@@ -2836,29 +2872,31 @@ function buildEditForm(quote: QuoteDisplay, quoteData: ApiQuote) {
     country: quote.country,
     destination: quote.destination,
     resort: quote.resort,
-    accommodation: quote.accommodation.property,
+    accommodationId: primaryAccom?.accomodation_id || "",
     checkInDate: quote.checkInDate,
     checkInTime: quote.checkInTime,
     nights: quote.nights,
-    boardBasis: quote.accommodation.board,
+    boardBasisId: primaryAccom?.board_basis_id || "",
     roomType: quote.accommodation.roomType,
     transferType: quote.transferType,
     preBookedSeats: quote.preBookedSeats,
     flightMeals: quote.flightMeals,
     leadSource: quote.leadSource,
-    outboundDepartAirport: quote.flights.outbound.from,
+    outboundDepartAirportId: outboundFlight?.departing_airport_id || "",
     outboundDepartDate: quote.flights.outbound.departDate,
     outboundDepartTime: quote.flights.outbound.departTime,
-    outboundArriveAirport: quote.flights.outbound.to,
+    outboundArriveAirportId: outboundFlight?.arrival_airport_id || "",
     outboundArriveDate: quote.flights.outbound.arriveDate,
     outboundArriveTime: quote.flights.outbound.arriveTime,
-    inboundDepartAirport: quote.flights.inbound.from,
+    outboundFlightNumber: outboundFlight?.flight_number || "",
+    inboundDepartAirportId: inboundFlight?.departing_airport_id || "",
     inboundDepartDate: quote.flights.inbound.departDate,
     inboundDepartTime: quote.flights.inbound.departTime,
-    inboundArriveAirport: quote.flights.inbound.to,
+    inboundArriveAirportId: inboundFlight?.arrival_airport_id || "",
     inboundArriveDate: quote.flights.inbound.arriveDate,
     inboundArriveTime: quote.flights.inbound.arriveTime,
-    tourOperator: quote.commissions.tourOperator,
+    inboundFlightNumber: inboundFlight?.flight_number || "",
+    tourOperatorId: q.main_tour_operator_id || "",
     sales: quote.commissions.agentSplitPercent || 50,
     price: quote.commissions.price,
     commission: quote.commissions.commissionPercent || 0,

@@ -249,4 +249,40 @@ export const newQuoteRepository = {
   async removePassenger(id: string): Promise<void> {
     await db.delete(passengers).where(eq(passengers.id, id));
   },
+
+  async upsertFlightByType(quoteId: string, flightType: string, data: Partial<InsertQuoteFlight>): Promise<QuoteFlight> {
+    const existing = await db.select().from(quote_flights)
+      .where(eq(quote_flights.quote_id, quoteId))
+      .then(rows => rows.find(r => r.flight_type === flightType));
+
+    if (existing) {
+      const [result] = await db.update(quote_flights).set(data).where(eq(quote_flights.id, existing.id)).returning();
+      return result;
+    } else {
+      const [result] = await db.insert(quote_flights).values({ ...data, quote_id: quoteId, flight_type: flightType }).returning();
+      return result;
+    }
+  },
+
+  async upsertPrimaryAccommodation(quoteId: string, data: Partial<InsertQuoteAccomodation>): Promise<QuoteAccomodation> {
+    const existing = await db.select().from(quote_accomodation)
+      .where(eq(quote_accomodation.quote_id, quoteId))
+      .then(rows => rows.find(r => r.is_primary));
+
+    if (existing) {
+      const [result] = await db.update(quote_accomodation).set(data).where(eq(quote_accomodation.id, existing.id)).returning();
+      return result;
+    } else {
+      const [result] = await db.insert(quote_accomodation).values({ ...data, quote_id: quoteId, is_primary: true }).returning();
+      return result;
+    }
+  },
+
+  async removeFlightsByQuote(quoteId: string): Promise<void> {
+    await db.delete(quote_flights).where(eq(quote_flights.quote_id, quoteId));
+  },
+
+  async removeAccommodationsByQuote(quoteId: string): Promise<void> {
+    await db.delete(quote_accomodation).where(eq(quote_accomodation.quote_id, quoteId));
+  },
 };
