@@ -2230,11 +2230,11 @@ function EditQuoteDialog({
                     <SelectValue placeholder="Select source..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Shop">Shop</SelectItem>
-                    <SelectItem value="Facebook">Facebook</SelectItem>
-                    <SelectItem value="WhatsApp">WhatsApp</SelectItem>
-                    <SelectItem value="Instagram">Instagram</SelectItem>
-                    <SelectItem value="Phone Enquiry">Phone Enquiry</SelectItem>
+                    <SelectItem value="SHOP">Shop</SelectItem>
+                    <SelectItem value="FACEBOOK">Facebook</SelectItem>
+                    <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
+                    <SelectItem value="INSTAGRAM">Instagram</SelectItem>
+                    <SelectItem value="PHONE_ENQUIRY">Phone Enquiry</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
