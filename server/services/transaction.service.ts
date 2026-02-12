@@ -5,7 +5,7 @@ import { bookingRepository } from "../repositories/booking.repository";
 import { AppError } from "../utils/error-handler";
 import type { InsertTransaction } from "@shared/schema";
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export const transactionService = {
@@ -80,6 +80,8 @@ export const transactionService = {
   },
 
   async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: any) {
+    const { outboundFlight, inboundFlight, primaryAccommodation, ...quoteFields } = quoteData;
+
     return await db.transaction(async (tx) => {
       const [txn] = await tx.insert(transaction).values({
         ...transactionData,
@@ -87,15 +89,39 @@ export const transactionService = {
       }).returning();
 
       const [q] = await tx.insert(quote).values({
-        ...quoteData,
+        ...quoteFields,
         transaction_id: txn.id,
       }).returning();
+
+      if (outboundFlight && (outboundFlight.departing_airport_id || outboundFlight.arrival_airport_id)) {
+        await tx.insert(quote_flights).values({
+          ...outboundFlight,
+          quote_id: q.id,
+          flight_type: 'outbound',
+        });
+      }
+      if (inboundFlight && (inboundFlight.departing_airport_id || inboundFlight.arrival_airport_id)) {
+        await tx.insert(quote_flights).values({
+          ...inboundFlight,
+          quote_id: q.id,
+          flight_type: 'inbound',
+        });
+      }
+      if (primaryAccommodation && primaryAccommodation.accomodation_id) {
+        await tx.insert(quote_accomodation).values({
+          ...primaryAccommodation,
+          quote_id: q.id,
+          is_primary: true,
+        });
+      }
 
       return { transaction: txn, quote: q };
     });
   },
 
   async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: any) {
+    const { outboundFlight, inboundFlight, primaryAccommodation, ...bookingFields } = bookingData;
+
     return await db.transaction(async (tx) => {
       const [txn] = await tx.insert(transaction).values({
         ...transactionData,
@@ -103,10 +129,32 @@ export const transactionService = {
       }).returning();
 
       const [b] = await tx.insert(booking).values({
-        ...bookingData,
+        ...bookingFields,
         transaction_id: txn.id,
         booking_status: 'BOOKED',
       }).returning();
+
+      if (outboundFlight && (outboundFlight.departing_airport_id || outboundFlight.arrival_airport_id)) {
+        await tx.insert(booking_flights).values({
+          ...outboundFlight,
+          booking_id: b.id,
+          flight_type: 'outbound',
+        });
+      }
+      if (inboundFlight && (inboundFlight.departing_airport_id || inboundFlight.arrival_airport_id)) {
+        await tx.insert(booking_flights).values({
+          ...inboundFlight,
+          booking_id: b.id,
+          flight_type: 'inbound',
+        });
+      }
+      if (primaryAccommodation && primaryAccommodation.accomodation_id) {
+        await tx.insert(booking_accomodation).values({
+          ...primaryAccommodation,
+          booking_id: b.id,
+          is_primary: true,
+        });
+      }
 
       return { transaction: txn, booking: b };
     });

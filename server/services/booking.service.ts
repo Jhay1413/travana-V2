@@ -116,10 +116,41 @@ export const bookingService = {
     return b;
   },
 
-  async updateBooking(id: string, data: Partial<InsertBooking>) {
-    const b = await bookingRepository.update(id, data);
+  async updateBooking(id: string, data: any) {
+    const {
+      outboundFlight, inboundFlight, primaryAccommodation,
+      ...bookingFields
+    } = data;
+
+    const bookingData: Partial<InsertBooking> = {};
+    const directFields = [
+      'holiday_type_id', 'sales_price', 'package_commission', 'travel_date',
+      'discounts', 'service_charge', 'num_of_nights', 'pets', 'cottage_id',
+      'lodge_id', 'lodge_type', 'transfer_type', 'booking_status',
+      'main_tour_operator_id', 'deal_type', 'pre_booked_seats', 'flight_meals',
+      'infant', 'child', 'adult', 'title', 'hays_ref', 'supplier_ref',
+      'price_per_person',
+    ];
+    for (const key of directFields) {
+      if (key in bookingFields) {
+        (bookingData as any)[key] = bookingFields[key];
+      }
+    }
+
+    const b = await bookingRepository.update(id, bookingData);
     if (!b) throw new AppError("Booking not found", 404);
-    return b;
+
+    if (outboundFlight) {
+      await bookingRepository.upsertFlightByType(id, "outbound", outboundFlight);
+    }
+    if (inboundFlight) {
+      await bookingRepository.upsertFlightByType(id, "inbound", inboundFlight);
+    }
+    if (primaryAccommodation) {
+      await bookingRepository.upsertPrimaryAccommodation(id, primaryAccommodation);
+    }
+
+    return await bookingRepository.findWithDetails(id);
   },
 
   async deleteBooking(id: string) {

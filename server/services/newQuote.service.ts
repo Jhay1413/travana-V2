@@ -28,14 +28,29 @@ export const newQuoteService = {
     return q;
   },
 
-  async createQuote(data: InsertQuote) {
-    const txn = await transactionRepository.findById(data.transaction_id);
+  async createQuote(data: any) {
+    const {
+      outboundFlight, inboundFlight, primaryAccommodation,
+      ...quoteFields
+    } = data;
+
+    const txn = await transactionRepository.findById(quoteFields.transaction_id);
     if (!txn) throw new AppError("Transaction not found", 404);
 
-    const q = await newQuoteRepository.create(data);
+    const q = await newQuoteRepository.create(quoteFields as InsertQuote);
 
     if (txn.status !== 'on_quote' && txn.status !== 'on_booking') {
       await transactionRepository.update(txn.id, { status: 'on_quote' });
+    }
+
+    if (outboundFlight) {
+      await newQuoteRepository.upsertFlightByType(q.id, "outbound", outboundFlight);
+    }
+    if (inboundFlight) {
+      await newQuoteRepository.upsertFlightByType(q.id, "inbound", inboundFlight);
+    }
+    if (primaryAccommodation) {
+      await newQuoteRepository.upsertPrimaryAccommodation(q.id, primaryAccommodation);
     }
 
     return q;

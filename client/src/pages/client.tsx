@@ -52,7 +52,6 @@ import type { Client as ApiClient } from "@/types/client";
 import type { NeonClient } from "@/types/neon-client";
 import type { Ticket as ApiTicket } from "@/types/ticket";
 import type { CreateQuoteData, Transaction, EnquiryTable, Quote as ApiQuote } from "@/types/quote";
-import { quoteApi, bookingApi } from "@/api";
 import type { Enquiry } from "@/types/enquiry";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -590,47 +589,7 @@ export default function ClientPage() {
   const createQuoteMutation = {
     mutate: async (data: any) => {
       createQuoteMutationHook.mutate(data as CreateQuoteData, {
-        onSuccess: async (createdQuote) => {
-          try {
-            if (packageTypeName === "Package Holiday") {
-              if (newQuote.accommodation) {
-                await quoteApi.addAccommodation(createdQuote.id, {
-                  accomodation_id: newQuote.accommodation,
-                  board_basis_id: newQuote.boardBasis || undefined,
-                  no_of_nights: newQuote.nights || 0,
-                  check_in_date_time: newQuote.checkInDate || undefined,
-                  is_primary: true,
-                  is_included_in_package: true,
-                });
-              }
-              if (newQuote.outboundDepartAirport || newQuote.outboundArriveAirport) {
-                await quoteApi.addFlight(createdQuote.id, {
-                  flight_type: "outbound",
-                  departing_airport_id: newQuote.outboundDepartAirport || undefined,
-                  arrival_airport_id: newQuote.outboundArriveAirport || undefined,
-                  departure_date_time: newQuote.outboundDepartDate && newQuote.outboundDepartTime
-                    ? `${newQuote.outboundDepartDate}T${newQuote.outboundDepartTime}` : newQuote.outboundDepartDate || undefined,
-                  arrival_date_time: newQuote.outboundArriveDate && newQuote.outboundArriveTime
-                    ? `${newQuote.outboundArriveDate}T${newQuote.outboundArriveTime}` : newQuote.outboundArriveDate || undefined,
-                  is_included_in_package: true,
-                });
-              }
-              if (newQuote.inboundDepartAirport || newQuote.inboundArriveAirport) {
-                await quoteApi.addFlight(createdQuote.id, {
-                  flight_type: "inbound",
-                  departing_airport_id: newQuote.inboundDepartAirport || undefined,
-                  arrival_airport_id: newQuote.inboundArriveAirport || undefined,
-                  departure_date_time: newQuote.inboundDepartDate && newQuote.inboundDepartTime
-                    ? `${newQuote.inboundDepartDate}T${newQuote.inboundDepartTime}` : newQuote.inboundDepartDate || undefined,
-                  arrival_date_time: newQuote.inboundArriveDate && newQuote.inboundArriveTime
-                    ? `${newQuote.inboundArriveDate}T${newQuote.inboundArriveTime}` : newQuote.inboundArriveDate || undefined,
-                  is_included_in_package: true,
-                });
-              }
-            }
-          } catch {
-            toast({ title: "Quote created but some details failed to save", variant: "destructive" });
-          }
+        onSuccess: (createdQuote) => {
           if (quoteImageFiles.length > 0 || quoteImageUrls.length > 0) {
             queryClient.invalidateQueries({ queryKey: ["quotes"] });
           }
@@ -3171,6 +3130,32 @@ export default function ClientPage() {
                     return;
                   }
 
+                  const outboundFlight = (newQuote.outboundDepartAirport || newQuote.outboundArriveAirport) ? {
+                    departing_airport_id: newQuote.outboundDepartAirport || undefined,
+                    arrival_airport_id: newQuote.outboundArriveAirport || undefined,
+                    departure_date_time: newQuote.outboundDepartDate && newQuote.outboundDepartTime
+                      ? `${newQuote.outboundDepartDate}T${newQuote.outboundDepartTime}` : newQuote.outboundDepartDate || undefined,
+                    arrival_date_time: newQuote.outboundArriveDate && newQuote.outboundArriveTime
+                      ? `${newQuote.outboundArriveDate}T${newQuote.outboundArriveTime}` : newQuote.outboundArriveDate || undefined,
+                    is_included_in_package: true,
+                  } : undefined;
+                  const inboundFlight = (newQuote.inboundDepartAirport || newQuote.inboundArriveAirport) ? {
+                    departing_airport_id: newQuote.inboundDepartAirport || undefined,
+                    arrival_airport_id: newQuote.inboundArriveAirport || undefined,
+                    departure_date_time: newQuote.inboundDepartDate && newQuote.inboundDepartTime
+                      ? `${newQuote.inboundDepartDate}T${newQuote.inboundDepartTime}` : newQuote.inboundDepartDate || undefined,
+                    arrival_date_time: newQuote.inboundArriveDate && newQuote.inboundArriveTime
+                      ? `${newQuote.inboundArriveDate}T${newQuote.inboundArriveTime}` : newQuote.inboundArriveDate || undefined,
+                    is_included_in_package: true,
+                  } : undefined;
+                  const primaryAccommodation = newQuote.accommodation ? {
+                    accomodation_id: newQuote.accommodation,
+                    board_basis_id: newQuote.boardBasis || undefined,
+                    no_of_nights: newQuote.nights || 0,
+                    check_in_date_time: newQuote.checkInDate || undefined,
+                    is_included_in_package: true,
+                  } : undefined;
+
                   const quotePayload = {
                     holiday_type_id: newQuote.packageType,
                     travel_date: newQuote.travelDate,
@@ -3186,6 +3171,10 @@ export default function ClientPage() {
                     transfer_type: newQuote.transferType || undefined,
                     lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
                     pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
+                    main_tour_operator_id: newQuote.tourOperator || undefined,
+                    outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
+                    inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
+                    primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
                   };
 
                   if (newQuoteIsBooking) {
@@ -3212,58 +3201,20 @@ export default function ClientPage() {
                           lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
                           pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : 0,
                           main_tour_operator_id: newQuote.tourOperator || undefined,
+                          outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
+                          inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
+                          primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
                         } as any,
                       },
                       {
-                        onSuccess: async (result: any) => {
-                          const createdBooking = result?.booking;
-                          if (createdBooking && packageTypeName === "Package Holiday") {
-                            try {
-                              if (newQuote.accommodation) {
-                                await bookingApi.addAccommodation(createdBooking.id, {
-                                  accomodation_id: newQuote.accommodation,
-                                  board_basis_id: newQuote.boardBasis || undefined,
-                                  no_of_nights: newQuote.nights || 0,
-                                  check_in_date_time: newQuote.checkInDate || undefined,
-                                  is_primary: true,
-                                  is_included_in_package: true,
-                                });
-                              }
-                              if (newQuote.outboundDepartAirport || newQuote.outboundArriveAirport) {
-                                await bookingApi.addFlight(createdBooking.id, {
-                                  flight_type: "outbound",
-                                  departing_airport_id: newQuote.outboundDepartAirport || undefined,
-                                  arrival_airport_id: newQuote.outboundArriveAirport || undefined,
-                                  departure_date_time: newQuote.outboundDepartDate && newQuote.outboundDepartTime
-                                    ? `${newQuote.outboundDepartDate}T${newQuote.outboundDepartTime}` : newQuote.outboundDepartDate || undefined,
-                                  arrival_date_time: newQuote.outboundArriveDate && newQuote.outboundArriveTime
-                                    ? `${newQuote.outboundArriveDate}T${newQuote.outboundArriveTime}` : newQuote.outboundArriveDate || undefined,
-                                  is_included_in_package: true,
-                                });
-                              }
-                              if (newQuote.inboundDepartAirport || newQuote.inboundArriveAirport) {
-                                await bookingApi.addFlight(createdBooking.id, {
-                                  flight_type: "inbound",
-                                  departing_airport_id: newQuote.inboundDepartAirport || undefined,
-                                  arrival_airport_id: newQuote.inboundArriveAirport || undefined,
-                                  departure_date_time: newQuote.inboundDepartDate && newQuote.inboundDepartTime
-                                    ? `${newQuote.inboundDepartDate}T${newQuote.inboundDepartTime}` : newQuote.inboundDepartDate || undefined,
-                                  arrival_date_time: newQuote.inboundArriveDate && newQuote.inboundArriveTime
-                                    ? `${newQuote.inboundArriveDate}T${newQuote.inboundArriveTime}` : newQuote.inboundArriveDate || undefined,
-                                  is_included_in_package: true,
-                                });
-                              }
-                            } catch {
-                              toast({ title: "Booking created but some details failed to save", variant: "destructive" });
-                            }
-                          }
+                        onSuccess: (result: any) => {
                           setShowNewQuoteModal(false);
                           setNewQuoteIsBooking(false);
                           setNewQuote(newQuoteDefaults);
                           setQuoteImageFiles([]);
                           setQuoteImageUrls([]);
                           toast({ title: "Booking created successfully" });
-                          const bookingId = createdBooking?.id;
+                          const bookingId = result?.booking?.id;
                           if (bookingId) {
                             window.open(`/clients/${clientId}/bookings/${bookingId}`, "_self");
                           }
@@ -3285,48 +3236,7 @@ export default function ClientPage() {
                         } as any,
                       },
                       {
-                        onSuccess: async (result: any) => {
-                          const createdQuote = result?.quote;
-                          if (createdQuote && packageTypeName === "Package Holiday") {
-                            try {
-                              if (newQuote.accommodation) {
-                                await quoteApi.addAccommodation(createdQuote.id, {
-                                  accomodation_id: newQuote.accommodation,
-                                  board_basis_id: newQuote.boardBasis || undefined,
-                                  no_of_nights: newQuote.nights || 0,
-                                  check_in_date_time: newQuote.checkInDate || undefined,
-                                  is_primary: true,
-                                  is_included_in_package: true,
-                                });
-                              }
-                              if (newQuote.outboundDepartAirport || newQuote.outboundArriveAirport) {
-                                await quoteApi.addFlight(createdQuote.id, {
-                                  flight_type: "outbound",
-                                  departing_airport_id: newQuote.outboundDepartAirport || undefined,
-                                  arrival_airport_id: newQuote.outboundArriveAirport || undefined,
-                                  departure_date_time: newQuote.outboundDepartDate && newQuote.outboundDepartTime
-                                    ? `${newQuote.outboundDepartDate}T${newQuote.outboundDepartTime}` : newQuote.outboundDepartDate || undefined,
-                                  arrival_date_time: newQuote.outboundArriveDate && newQuote.outboundArriveTime
-                                    ? `${newQuote.outboundArriveDate}T${newQuote.outboundArriveTime}` : newQuote.outboundArriveDate || undefined,
-                                  is_included_in_package: true,
-                                });
-                              }
-                              if (newQuote.inboundDepartAirport || newQuote.inboundArriveAirport) {
-                                await quoteApi.addFlight(createdQuote.id, {
-                                  flight_type: "inbound",
-                                  departing_airport_id: newQuote.inboundDepartAirport || undefined,
-                                  arrival_airport_id: newQuote.inboundArriveAirport || undefined,
-                                  departure_date_time: newQuote.inboundDepartDate && newQuote.inboundDepartTime
-                                    ? `${newQuote.inboundDepartDate}T${newQuote.inboundDepartTime}` : newQuote.inboundDepartDate || undefined,
-                                  arrival_date_time: newQuote.inboundArriveDate && newQuote.inboundArriveTime
-                                    ? `${newQuote.inboundArriveDate}T${newQuote.inboundArriveTime}` : newQuote.inboundArriveDate || undefined,
-                                  is_included_in_package: true,
-                                });
-                              }
-                            } catch {
-                              toast({ title: "Quote created but some details failed to save", variant: "destructive" });
-                            }
-                          }
+                        onSuccess: () => {
                           setShowNewQuoteModal(false);
                           setNewQuoteIsBooking(false);
                           setNewQuote(newQuoteDefaults);

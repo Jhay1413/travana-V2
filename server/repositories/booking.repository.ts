@@ -6,7 +6,7 @@ import {
   booking_cruise_itinerary, passengers, deal_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
 } from "@shared/schema";
-import type { Booking, InsertBooking } from "@shared/schema";
+import type { Booking, InsertBooking, InsertBookingFlight, BookingFlight, InsertBookingAccomodation, BookingAccomodation } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -190,5 +190,33 @@ export const bookingRepository = {
 
   async removeTransfer(id: string): Promise<void> {
     await db.delete(booking_transfers).where(eq(booking_transfers.id, id));
+  },
+
+  async upsertFlightByType(bookingId: string, flightType: string, data: Partial<InsertBookingFlight>): Promise<BookingFlight> {
+    const existing = await db.select().from(booking_flights)
+      .where(eq(booking_flights.booking_id, bookingId))
+      .then(rows => rows.find(r => r.flight_type === flightType));
+
+    if (existing) {
+      const [result] = await db.update(booking_flights).set(data).where(eq(booking_flights.id, existing.id)).returning();
+      return result;
+    } else {
+      const [result] = await db.insert(booking_flights).values({ ...data, booking_id: bookingId, flight_type: flightType }).returning();
+      return result;
+    }
+  },
+
+  async upsertPrimaryAccommodation(bookingId: string, data: Partial<InsertBookingAccomodation>): Promise<BookingAccomodation> {
+    const existing = await db.select().from(booking_accomodation)
+      .where(eq(booking_accomodation.booking_id, bookingId))
+      .then(rows => rows.find(r => r.is_primary));
+
+    if (existing) {
+      const [result] = await db.update(booking_accomodation).set(data).where(eq(booking_accomodation.id, existing.id)).returning();
+      return result;
+    } else {
+      const [result] = await db.insert(booking_accomodation).values({ ...data, booking_id: bookingId, is_primary: true }).returning();
+      return result;
+    }
   },
 };
