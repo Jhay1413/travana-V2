@@ -15,8 +15,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useAirports, useTourOperators, useBoardBasis, useAllAccommodations } from "@/hooks/queries";
+import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
+import { QuoteFormFields, defaultQuoteFormState } from "@/components/quote-form-fields";
+import type { QuoteFormState } from "@/components/quote-form-fields";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
 import { useQueryClient } from "@tanstack/react-query";
@@ -2079,28 +2081,85 @@ function EditQuoteDialog({
   onOpenChange: (v: boolean) => void;
   quote: QuoteDisplay;
   quoteData: ApiQuote;
-  onSave: (data: Record<string, any>) => void;
+  onSave: (data: Record<string, unknown>) => void;
   isSaving: boolean;
 }) {
-  const [form, setForm] = useState(() => buildEditForm(quote, quoteData));
+  const [form, setForm] = useState<QuoteFormState>(() => buildEditForm(quote, quoteData));
 
   useEffect(() => {
     if (open) setForm(buildEditForm(quote, quoteData));
   }, [open, quote, quoteData]);
 
-  const set = (key: string, val: any) => setForm((prev: any) => ({ ...prev, [key]: val }));
-
-  const { data: airportsData } = useAirports();
-  const { data: tourOperatorsData } = useTourOperators();
-  const { data: boardBasisData } = useBoardBasis();
-  const { data: accommodationsData } = useAllAccommodations();
+  const handleJsonUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = (ev.target?.result as string) || "";
+      const toIsoDate = (d: string | undefined): string => {
+        if (!d) return "";
+        const match = d.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+        if (match) {
+          const [, day, month, year] = match;
+          return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        }
+        return d;
+      };
+      try {
+        const data = JSON.parse(content);
+        setForm((prev) => ({
+          ...prev,
+          packageType: data.packageType || data.package_type || prev.packageType,
+          quoteTitle: data.quoteTitle || data.quote_title || data.title || prev.quoteTitle,
+          quoteLink: data.quoteLink || data.quote_link || data.link || prev.quoteLink,
+          travelDate: toIsoDate(data.travelDate || data.travel_date || data.departureDate) || prev.travelDate,
+          passengersAdults: data.passengers?.adults || data.adults || data.passengersAdults || prev.passengersAdults,
+          passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
+          passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
+          childAges: data.childAges || data.child_ages || data.passengers?.childAges || prev.childAges,
+          country: data.country || prev.country,
+          destination: data.destination || prev.destination,
+          resort: data.resort || prev.resort,
+          accommodation: data.accommodation || data.hotel || data.property || prev.accommodation,
+          checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
+          checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
+          nights: data.nights || data.duration || prev.nights,
+          boardBasis: data.boardBasis || data.board_basis || data.board || prev.boardBasis,
+          roomType: data.roomType || data.room_type || data.room || prev.roomType,
+          transferType: data.transferType || data.transfer_type || data.transfers || prev.transferType,
+          preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
+          flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
+          outboundDepartAirport: data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || prev.outboundDepartAirport,
+          outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
+          outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
+          outboundArriveAirport: data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || prev.outboundArriveAirport,
+          outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
+          outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
+          inboundDepartAirport: data.flights?.inbound?.departAirport || data.inbound?.from || prev.inboundDepartAirport,
+          inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
+          inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
+          inboundArriveAirport: data.flights?.inbound?.arriveAirport || data.inbound?.to || prev.inboundArriveAirport,
+          inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
+          inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
+          tourOperator: data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || prev.tourOperator,
+          sales: data.commissions?.sales || data.sales || prev.sales,
+          price: data.commissions?.price || data.price || data.total || prev.price,
+          commission: data.commissions?.commission || data.commission || prev.commission,
+          discount: data.commissions?.discount || data.discount || prev.discount,
+          serviceCharge: data.commissions?.serviceCharge || data.serviceCharge || data.service_charge || prev.serviceCharge,
+          pricePerPerson: data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp || prev.pricePerPerson,
+        }));
+      } catch {
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleSave = () => {
-    const travelDateObj = new Date(form.travelDate);
-    const returnDateObj = new Date(travelDateObj);
-    returnDateObj.setDate(returnDateObj.getDate() + (form.nights || 7));
+    const buildDateTime = (date: string, time: string) => {
+      if (!date) return null;
+      return time ? `${date}T${time}:00` : `${date}T00:00:00`;
+    };
 
-    const updates: Record<string, any> = {
+    const updates: Record<string, unknown> = {
       title: form.quoteTitle,
       quote_status: form.status,
       travel_date: form.travelDate,
@@ -2110,22 +2169,20 @@ function EditQuoteDialog({
       infant: form.passengersInfants,
       transfer_type: form.transferType,
       pre_booked_seats: form.preBookedSeats,
-      flight_meals: form.flightMeals === "Yes" || form.flightMeals === true as any,
+      flight_meals: form.flightMeals === "Yes" || form.flightMeals === ("true" as string),
       main_tour_operator_id: form.tourOperatorId || null,
       sales_price: String(form.price || 0),
-      package_commission: String(((form.commission || 0) / 100) * (form.price || 0)),
+      package_commission: String(((Number(form.commission) || 0) / 100) * (Number(form.price) || 0)),
       discounts: String(form.discount || 0),
       service_charge: String(form.serviceCharge || 0),
       price_per_person: String(form.pricePerPerson || 0),
+      country: form.country || null,
+      destination: form.destination || null,
+      resort: form.resort || null,
     };
 
     const showFlights = form.packageType !== "Hot Tub Break" && !(form.packageType === "Cruise Package" && form.cruiseOnly);
     if (showFlights) {
-      const buildDateTime = (date: string, time: string) => {
-        if (!date) return null;
-        return time ? `${date}T${time}:00` : `${date}T00:00:00`;
-      };
-
       updates.outboundFlight = {
         departing_airport_id: form.outboundDepartAirportId || null,
         arrival_airport_id: form.outboundArriveAirportId || null,
@@ -2133,7 +2190,6 @@ function EditQuoteDialog({
         arrival_date_time: buildDateTime(form.outboundArriveDate, form.outboundArriveTime),
         flight_number: form.outboundFlightNumber || null,
       };
-
       updates.inboundFlight = {
         departing_airport_id: form.inboundDepartAirportId || null,
         arrival_airport_id: form.inboundArriveAirportId || null,
@@ -2183,869 +2239,15 @@ function EditQuoteDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-4 grid gap-6">
-          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-            <div className="mb-3 text-sm font-semibold">Package Details</div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Package Type</Label>
-                <Select value={form.packageType} onValueChange={(v) => set("packageType", v)}>
-                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-package-type">
-                    <SelectValue placeholder="Select type..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Package Holiday">Package Holiday</SelectItem>
-                    <SelectItem value="Hot Tub Break">Hot Tub Break</SelectItem>
-                    <SelectItem value="Cruise Package">Cruise Package</SelectItem>
-                    <SelectItem value="Flight Only">Flight Only</SelectItem>
-                    <SelectItem value="Hotel Only">Hotel Only</SelectItem>
-                    <SelectItem value="Tour">Tour</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Quote Title</Label>
-                <Input
-                  placeholder="e.g. Maldives — Overwater Villa, 9 nights"
-                  value={form.quoteTitle}
-                  onChange={(e) => set("quoteTitle", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-quote-title"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Quote Link</Label>
-                <Input
-                  placeholder="https://..."
-                  value={form.quoteLink}
-                  onChange={(e) => set("quoteLink", e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-quote-link"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Lead Source</Label>
-                <Select value={form.leadSource} onValueChange={(v) => set("leadSource", v)}>
-                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-lead-source">
-                    <SelectValue placeholder="Select source..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SHOP">Shop</SelectItem>
-                    <SelectItem value="FACEBOOK">Facebook</SelectItem>
-                    <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
-                    <SelectItem value="INSTAGRAM">Instagram</SelectItem>
-                    <SelectItem value="PHONE_ENQUIRY">Phone Enquiry</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">JSON Upload</Label>
-                <Input
-                  type="file"
-                  accept=".json"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        const content = ev.target?.result as string || "";
-                        const toIsoDate = (d: string | undefined): string => {
-                          if (!d) return "";
-                          const match = d.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
-                          if (match) {
-                            const [, day, month, year] = match;
-                            return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-                          }
-                          return d;
-                        };
-                        try {
-                          const data = JSON.parse(content);
-                          setForm((prev: any) => ({
-                            ...prev,
-                            packageType: data.packageType || data.package_type || prev.packageType,
-                            quoteTitle: data.quoteTitle || data.quote_title || data.title || prev.quoteTitle,
-                            quoteLink: data.quoteLink || data.quote_link || data.link || prev.quoteLink,
-                            travelDate: toIsoDate(data.travelDate || data.travel_date || data.departureDate) || prev.travelDate,
-                            passengersAdults: data.passengers?.adults || data.adults || data.passengersAdults || prev.passengersAdults,
-                            passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
-                            passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
-                            childAges: data.childAges || data.child_ages || data.passengers?.childAges || prev.childAges,
-                            country: data.country || prev.country,
-                            destination: data.destination || prev.destination,
-                            resort: data.resort || prev.resort,
-                            accommodation: data.accommodation || data.hotel || data.property || prev.accommodation,
-                            checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
-                            checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
-                            nights: data.nights || data.duration || prev.nights,
-                            boardBasis: data.boardBasis || data.board_basis || data.board || prev.boardBasis,
-                            roomType: data.roomType || data.room_type || data.room || prev.roomType,
-                            transferType: data.transferType || data.transfer_type || data.transfers || prev.transferType,
-                            preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
-                            flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
-                            outboundDepartAirport: data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || prev.outboundDepartAirport,
-                            outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
-                            outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
-                            outboundArriveAirport: data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || prev.outboundArriveAirport,
-                            outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
-                            outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
-                            inboundDepartAirport: data.flights?.inbound?.departAirport || data.inbound?.from || prev.inboundDepartAirport,
-                            inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
-                            inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
-                            inboundArriveAirport: data.flights?.inbound?.arriveAirport || data.inbound?.to || prev.inboundArriveAirport,
-                            inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
-                            inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
-                            tourOperator: data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || prev.tourOperator,
-                            sales: data.commissions?.sales || data.sales || prev.sales,
-                            price: data.commissions?.price || data.price || data.total || prev.price,
-                            commission: data.commissions?.commission || data.commission || prev.commission,
-                            discount: data.commissions?.discount || data.discount || prev.discount,
-                            serviceCharge: data.commissions?.serviceCharge || data.serviceCharge || data.service_charge || prev.serviceCharge,
-                            pricePerPerson: data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp || prev.pricePerPerson,
-                          }));
-                        } catch {
-                        }
-                      };
-                      reader.readAsText(file);
-                    }
-                  }}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-json-upload"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Status</Label>
-                <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
-                    <SelectItem value="accepted">Accepted</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
+        <div className="mt-4">
+          <QuoteFormFields
+            form={form}
+            setForm={setForm}
+            mode="edit"
+            onJsonUpload={handleJsonUpload}
+          />
 
-          {form.packageType === "Hot Tub Break" ? (
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-travel-date-only">
-              <div className="mb-3 text-sm font-semibold">Travel Details</div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                  <DatePicker
-                    value={form.travelDate}
-                    onChange={(v) => set("travelDate", v)}
-                    placeholder="Pick a date"
-                    data-testid="edit-input-travel-date"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-travel-details">
-              <div className="mb-3 text-sm font-semibold">Travel Details</div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                  <DatePicker
-                    value={form.travelDate}
-                    onChange={(v) => set("travelDate", v)}
-                    placeholder="Pick a date"
-                    data-testid="edit-input-travel-date"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Adults</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={form.passengersAdults}
-                    onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-adults"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Children</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.passengersChildren}
-                    onChange={(e) => {
-                      const count = parseInt(e.target.value) || 0;
-                      set("passengersChildren", count);
-                      set("childAges", Array(count).fill(0));
-                    }}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-children"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Infants</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.passengersInfants}
-                    onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-infants"
-                  />
-                </div>
-                {form.passengersChildren > 0 && (
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {form.childAges.map((age: number, idx: number) => (
-                        <Input
-                          key={idx}
-                          type="number"
-                          min={0}
-                          max={17}
-                          value={age}
-                          onChange={(e) => {
-                            const ages = [...form.childAges];
-                            ages[idx] = parseInt(e.target.value) || 0;
-                            set("childAges", ages);
-                          }}
-                          className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
-                          data-testid={`edit-input-child-age-${idx}`}
-                          placeholder={`Child ${idx + 1}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {form.packageType === "Cruise Package" ? (
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-cruise-cabin">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <Anchor className="h-4 w-4" />
-                Cruise & Cabin
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Cruise Title</Label>
-                  <Input
-                    placeholder="e.g. Western Mediterranean"
-                    value={form.cruiseTitle}
-                    onChange={(e) => set("cruiseTitle", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-cruise-title"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Cruise Line</Label>
-                  <Input
-                    placeholder="e.g. Royal Caribbean"
-                    value={form.cruiseLine}
-                    onChange={(e) => set("cruiseLine", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-cruise-line"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Ship Name</Label>
-                  <Input
-                    placeholder="e.g. Harmony of the Seas"
-                    value={form.shipName}
-                    onChange={(e) => set("shipName", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-ship-name"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Cruise Date</Label>
-                  <DatePicker
-                    value={form.cruiseDate}
-                    onChange={(v) => set("cruiseDate", v)}
-                    placeholder="Pick a date"
-                    data-testid="edit-input-cruise-date"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Cabin Type</Label>
-                  <Select value={form.cabinType} onValueChange={(v) => set("cabinType", v)}>
-                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-cabin-type">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Inside">Inside</SelectItem>
-                      <SelectItem value="Outside">Outside</SelectItem>
-                      <SelectItem value="Balcony">Balcony</SelectItem>
-                      <SelectItem value="Suite">Suite</SelectItem>
-                      <SelectItem value="Mini Suite">Mini Suite</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Embarkation</Label>
-                  <Input
-                    placeholder="e.g. Southampton"
-                    value={form.embarkation}
-                    onChange={(e) => set("embarkation", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-embarkation"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Debarkation</Label>
-                  <Input
-                    placeholder="e.g. Barcelona"
-                    value={form.debarkation}
-                    onChange={(e) => set("debarkation", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-debarkation"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Cruise Extras Included</Label>
-                  <Input
-                    placeholder="e.g. Drinks package, WiFi"
-                    value={form.cruiseExtras}
-                    onChange={(e) => set("cruiseExtras", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-cruise-extras"
-                  />
-                </div>
-                <div className="flex items-end gap-3 pb-1">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Cruise Only</Label>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={form.cruiseOnly}
-                        onCheckedChange={(v) => set("cruiseOnly", v)}
-                        data-testid="edit-switch-cruise-only"
-                      />
-                      <span className="text-xs text-black/55">{form.cruiseOnly ? "Yes" : "No"}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : form.packageType === "Hot Tub Break" ? (
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-lodge-details">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <Hotel className="h-4 w-4" />
-                Lodge Details
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Lodge Code</Label>
-                  <Input
-                    placeholder="e.g. HT-2451"
-                    value={form.lodgeCode}
-                    onChange={(e) => set("lodgeCode", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-lodge-code"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Park Name</Label>
-                  <Input
-                    placeholder="e.g. Forest Holidays"
-                    value={form.parkName}
-                    onChange={(e) => set("parkName", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-park-name"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={form.nights}
-                    onChange={(e) => set("nights", parseInt(e.target.value) || 1)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-lodge-nights"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
-                  <DatePicker
-                    value={form.checkInDate}
-                    onChange={(v) => set("checkInDate", v)}
-                    placeholder="Pick a date"
-                    data-testid="edit-input-lodge-checkin"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Adults</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={form.passengersAdults}
-                    onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-lodge-adults"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Children</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.passengersChildren}
-                    onChange={(e) => {
-                      const count = parseInt(e.target.value) || 0;
-                      set("passengersChildren", count);
-                      set("childAges", Array(count).fill(0));
-                    }}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-lodge-children"
-                  />
-                </div>
-                {form.passengersChildren > 0 && (
-                  <div className="space-y-1.5 md:col-span-3">
-                    <Label className="text-xs font-medium text-black/60">Children's Ages</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {form.childAges.map((age: number, idx: number) => (
-                        <Input
-                          key={idx}
-                          type="number"
-                          min={0}
-                          max={17}
-                          value={age}
-                          onChange={(e) => {
-                            const ages = [...form.childAges];
-                            ages[idx] = parseInt(e.target.value) || 0;
-                            set("childAges", ages);
-                          }}
-                          className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
-                          data-testid={`edit-input-lodge-child-age-${idx}`}
-                          placeholder={`Child ${idx + 1}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Infants</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.passengersInfants}
-                    onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-lodge-infants"
-                  />
-                </div>
-                <div className="flex items-end gap-3 pb-1">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">
-                      <span className="flex items-center gap-1.5">
-                        <PawPrint className="h-3.5 w-3.5" />
-                        Pets
-                      </span>
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={form.pets}
-                        onCheckedChange={(v) => set("pets", v)}
-                        data-testid="edit-switch-pets"
-                      />
-                      <span className="text-xs text-black/55">{form.pets ? "Yes" : "No"}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-destination-accommodation">
-              <div className="mb-3 text-sm font-semibold">Destination & Accommodation</div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Country</Label>
-                  <Input
-                    placeholder="e.g. United Kingdom"
-                    value={form.country}
-                    onChange={(e) => set("country", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-country"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Destination</Label>
-                  <Input
-                    placeholder="e.g. Maldives"
-                    value={form.destination}
-                    onChange={(e) => set("destination", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-destination"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Resort</Label>
-                  <Input
-                    placeholder="e.g. North Malé Atoll"
-                    value={form.resort}
-                    onChange={(e) => set("resort", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-resort"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Accommodation</Label>
-                  <SearchableSelect
-                    value={form.accommodationId || ""}
-                    onValueChange={(v) => set("accommodationId", v)}
-                    options={(accommodationsData || []).map((a: any) => ({ value: a.id, label: a.name }))}
-                    placeholder="Select accommodation..."
-                    searchPlaceholder="Search accommodations..."
-                    emptyMessage="No accommodations found."
-                    data-testid="edit-select-accommodation"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
-                  <DatePicker
-                    value={form.checkInDate}
-                    onChange={(v) => set("checkInDate", v)}
-                    placeholder="Pick a date"
-                    data-testid="edit-input-checkin-date"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Check-in Time</Label>
-                  <Input
-                    type="time"
-                    value={form.checkInTime}
-                    onChange={(e) => set("checkInTime", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-checkin-time"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={form.nights}
-                    onChange={(e) => set("nights", parseInt(e.target.value) || 1)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-nights"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Board Basis</Label>
-                  <SearchableSelect
-                    value={form.boardBasisId || ""}
-                    onValueChange={(v) => set("boardBasisId", v)}
-                    options={(boardBasisData || []).map((b: any) => ({ value: b.id, label: b.type }))}
-                    placeholder="Select board basis..."
-                    searchPlaceholder="Search..."
-                    emptyMessage="No options found."
-                    data-testid="edit-select-board-basis"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Room Type</Label>
-                  <Input
-                    placeholder="e.g. Overwater Villa"
-                    value={form.roomType}
-                    onChange={(e) => set("roomType", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-room-type"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Transfer Type</Label>
-                  <Select value={form.transferType} onValueChange={(v) => set("transferType", v)}>
-                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-transfer-type">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Private Transfer">Private Transfer</SelectItem>
-                      <SelectItem value="Shared Transfer">Shared Transfer</SelectItem>
-                      <SelectItem value="Seaplane">Seaplane</SelectItem>
-                      <SelectItem value="Speedboat">Speedboat</SelectItem>
-                      <SelectItem value="Self-drive">Self-drive</SelectItem>
-                      <SelectItem value="None">None</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Pre-booked Seats</Label>
-                  <Input
-                    placeholder="e.g. Extra legroom (row 12)"
-                    value={form.preBookedSeats}
-                    onChange={(e) => set("preBookedSeats", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-prebooked-seats"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">Flight Meals</Label>
-                  <Input
-                    placeholder="e.g. Standard + child meal"
-                    value={form.flightMeals}
-                    onChange={(e) => set("flightMeals", e.target.value)}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="edit-input-flight-meals"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {form.packageType !== "Hot Tub Break" && !(form.packageType === "Cruise Package" && form.cruiseOnly) && (
-            <>
-              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-outbound-flights">
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                  <Plane className="h-4 w-4" />
-                  Flights — Outbound
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                    <SearchableSelect
-                      value={form.outboundDepartAirportId || ""}
-                      onValueChange={(v) => set("outboundDepartAirportId", v)}
-                      options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
-                      placeholder="Select airport..."
-                      searchPlaceholder="Search airports..."
-                      emptyMessage="No airports found."
-                      data-testid="edit-select-outbound-depart-airport"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                    <DatePicker
-                      value={form.outboundDepartDate}
-                      onChange={(v) => set("outboundDepartDate", v)}
-                      placeholder="Pick a date"
-                      data-testid="edit-input-outbound-depart-date"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Departure Time</Label>
-                    <Input
-                      type="time"
-                      value={form.outboundDepartTime}
-                      onChange={(e) => set("outboundDepartTime", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-outbound-depart-time"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                    <SearchableSelect
-                      value={form.outboundArriveAirportId || ""}
-                      onValueChange={(v) => set("outboundArriveAirportId", v)}
-                      options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
-                      placeholder="Select airport..."
-                      searchPlaceholder="Search airports..."
-                      emptyMessage="No airports found."
-                      data-testid="edit-select-outbound-arrive-airport"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                    <DatePicker
-                      value={form.outboundArriveDate}
-                      onChange={(v) => set("outboundArriveDate", v)}
-                      placeholder="Pick a date"
-                      data-testid="edit-input-outbound-arrive-date"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
-                    <Input
-                      type="time"
-                      value={form.outboundArriveTime}
-                      onChange={(e) => set("outboundArriveTime", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-outbound-arrive-time"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Flight Number</Label>
-                    <Input
-                      placeholder="e.g. BA123"
-                      value={form.outboundFlightNumber}
-                      onChange={(e) => set("outboundFlightNumber", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-outbound-flight-number"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="edit-section-inbound-flights">
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                  <Plane className="h-4 w-4 rotate-180" />
-                  Flights — Inbound
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                    <SearchableSelect
-                      value={form.inboundDepartAirportId || ""}
-                      onValueChange={(v) => set("inboundDepartAirportId", v)}
-                      options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
-                      placeholder="Select airport..."
-                      searchPlaceholder="Search airports..."
-                      emptyMessage="No airports found."
-                      data-testid="edit-select-inbound-depart-airport"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Departure Date</Label>
-                    <DatePicker
-                      value={form.inboundDepartDate}
-                      onChange={(v) => set("inboundDepartDate", v)}
-                      placeholder="Pick a date"
-                      data-testid="edit-input-inbound-depart-date"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Departure Time</Label>
-                    <Input
-                      type="time"
-                      value={form.inboundDepartTime}
-                      onChange={(e) => set("inboundDepartTime", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-inbound-depart-time"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                    <SearchableSelect
-                      value={form.inboundArriveAirportId || ""}
-                      onValueChange={(v) => set("inboundArriveAirportId", v)}
-                      options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
-                      placeholder="Select airport..."
-                      searchPlaceholder="Search airports..."
-                      emptyMessage="No airports found."
-                      data-testid="edit-select-inbound-arrive-airport"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
-                    <DatePicker
-                      value={form.inboundArriveDate}
-                      onChange={(v) => set("inboundArriveDate", v)}
-                      placeholder="Pick a date"
-                      data-testid="edit-input-inbound-arrive-date"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
-                    <Input
-                      type="time"
-                      value={form.inboundArriveTime}
-                      onChange={(e) => set("inboundArriveTime", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-inbound-arrive-time"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Flight Number</Label>
-                    <Input
-                      placeholder="e.g. BA456"
-                      value={form.inboundFlightNumber}
-                      onChange={(e) => set("inboundFlightNumber", e.target.value)}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="edit-input-inbound-flight-number"
-                    />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-            <div className="mb-3 text-sm font-semibold">Package Commissions</div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Tour Operator</Label>
-                <SearchableSelect
-                  value={form.tourOperatorId || ""}
-                  onValueChange={(v) => set("tourOperatorId", v)}
-                  options={(tourOperatorsData || []).map((t: any) => ({ value: t.id, label: t.name }))}
-                  placeholder="Select tour operator..."
-                  searchPlaceholder="Search tour operators..."
-                  emptyMessage="No tour operators found."
-                  data-testid="edit-select-tour-operator"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Sales (£)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.sales}
-                  onChange={(e) => set("sales", parseFloat(e.target.value) || 0)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-sales"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Price (£)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.price}
-                  onChange={(e) => set("price", parseFloat(e.target.value) || 0)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-price"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Commission (£)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.commission}
-                  onChange={(e) => set("commission", parseFloat(e.target.value) || 0)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-commission"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Discount (£)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.discount}
-                  onChange={(e) => set("discount", parseFloat(e.target.value) || 0)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-discount"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Service Charge (£)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.serviceCharge}
-                  onChange={(e) => set("serviceCharge", parseFloat(e.target.value) || 0)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-service-charge"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Price per Person (£)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.pricePerPerson}
-                  onChange={(e) => set("pricePerPerson", parseFloat(e.target.value) || 0)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="edit-input-price-per-person"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3">
+          <div className="mt-6 flex justify-end gap-3">
             <Button
               variant="outline"
               className="h-9 rounded-2xl border-black/10 px-4"
@@ -3077,15 +2279,16 @@ function normalizePackageType(raw: string): string {
   return map[raw] || raw;
 }
 
-function buildEditForm(quote: QuoteDisplay, quoteData: ApiQuote) {
-  const q = quoteData as any;
-  const flights = q.flights || [];
-  const outboundFlight = flights.find((f: any) => f.flight_type === "outbound") || flights[0];
-  const inboundFlight = flights.find((f: any) => f.flight_type === "inbound") || flights[1];
-  const accommodations = q.accommodations || [];
-  const primaryAccom = accommodations.find((a: any) => a.is_primary) || accommodations[0];
+function buildEditForm(quote: QuoteDisplay, quoteData: ApiQuote): QuoteFormState {
+  const q = quoteData as Record<string, unknown>;
+  const flights = (q.flights as Array<Record<string, unknown>>) || [];
+  const outboundFlight = flights.find((f) => f.flight_type === "outbound") || flights[0];
+  const inboundFlight = flights.find((f) => f.flight_type === "inbound") || flights[1];
+  const accommodations = (q.accommodations as Array<Record<string, unknown>>) || [];
+  const primaryAccom = accommodations.find((a) => a.is_primary) || accommodations[0];
 
   return {
+    ...defaultQuoteFormState,
     packageType: normalizePackageType(quote.packageType),
     quoteTitle: quote.quoteTitle,
     quoteLink: quote.quoteLink,
@@ -3098,48 +2301,48 @@ function buildEditForm(quote: QuoteDisplay, quoteData: ApiQuote) {
     country: quote.country,
     destination: quote.destination,
     resort: quote.resort,
-    accommodationId: primaryAccom?.accomodation_id || "",
+    accommodationId: (primaryAccom?.accomodation_id as string) || "",
     checkInDate: quote.checkInDate,
     checkInTime: quote.checkInTime,
     nights: quote.nights,
-    boardBasisId: primaryAccom?.board_basis_id || "",
+    boardBasisId: (primaryAccom?.board_basis_id as string) || "",
     roomType: quote.accommodation.roomType,
     transferType: quote.transferType,
     preBookedSeats: quote.preBookedSeats,
     flightMeals: quote.flightMeals,
     leadSource: quote.leadSource,
-    outboundDepartAirportId: outboundFlight?.departing_airport_id || "",
+    outboundDepartAirportId: (outboundFlight?.departing_airport_id as string) || "",
     outboundDepartDate: quote.flights.outbound.departDate,
     outboundDepartTime: quote.flights.outbound.departTime,
-    outboundArriveAirportId: outboundFlight?.arrival_airport_id || "",
+    outboundArriveAirportId: (outboundFlight?.arrival_airport_id as string) || "",
     outboundArriveDate: quote.flights.outbound.arriveDate,
     outboundArriveTime: quote.flights.outbound.arriveTime,
-    outboundFlightNumber: outboundFlight?.flight_number || "",
-    inboundDepartAirportId: inboundFlight?.departing_airport_id || "",
+    outboundFlightNumber: (outboundFlight?.flight_number as string) || "",
+    inboundDepartAirportId: (inboundFlight?.departing_airport_id as string) || "",
     inboundDepartDate: quote.flights.inbound.departDate,
     inboundDepartTime: quote.flights.inbound.departTime,
-    inboundArriveAirportId: inboundFlight?.arrival_airport_id || "",
+    inboundArriveAirportId: (inboundFlight?.arrival_airport_id as string) || "",
     inboundArriveDate: quote.flights.inbound.arriveDate,
     inboundArriveTime: quote.flights.inbound.arriveTime,
-    inboundFlightNumber: inboundFlight?.flight_number || "",
-    tourOperatorId: q.main_tour_operator_id || "",
+    inboundFlightNumber: (inboundFlight?.flight_number as string) || "",
+    tourOperatorId: (q.main_tour_operator_id as string) || "",
     sales: quote.commissions.agentSplitPercent || 50,
     price: quote.commissions.price,
     commission: quote.commissions.commissionPercent || 0,
     discount: 0,
     serviceCharge: 0,
     pricePerPerson: quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1),
-    cruiseTitle: q.cruiseTitle || "",
-    cruiseLine: q.cruiseLine || "",
-    shipName: q.shipName || "",
-    cruiseDate: q.cruiseDate || "",
-    cabinType: q.cabinType || "",
-    embarkation: q.embarkation || "",
-    debarkation: q.debarkation || "",
-    cruiseExtras: q.cruiseExtras || "",
-    cruiseOnly: q.cruiseOnly || false,
-    lodgeCode: q.lodgeCode || "",
-    parkName: q.parkName || "",
-    pets: q.pets || false,
+    cruiseTitle: (q.cruiseTitle as string) || "",
+    cruiseLine: (q.cruiseLine as string) || "",
+    shipName: (q.shipName as string) || "",
+    cruiseDate: (q.cruiseDate as string) || "",
+    cabinType: (q.cabinType as string) || "",
+    embarkation: (q.embarkation as string) || "",
+    debarkation: (q.debarkation as string) || "",
+    cruiseExtras: (q.cruiseExtras as string) || "",
+    cruiseOnly: (q.cruiseOnly as boolean) || false,
+    lodgeCode: (q.lodgeCode as string) || "",
+    parkName: (q.parkName as string) || "",
+    pets: (q.pets as boolean) || false,
   };
 }
