@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useQuote, useNotes, useTasks, useClient, useAirports, useTourOperators, useBoardBasis, useAllAccommodations } from "@/hooks/queries";
+import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useAirports, useTourOperators, useBoardBasis, useAllAccommodations } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import type { Task } from "@shared/schema";
@@ -1074,7 +1074,7 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
   return {
     id: apiData.id,
     transaction_id: apiData.transaction_id,
-    status: apiData.quote_status || "draft",
+    status: apiData.quote_status || (apiData as any).booking_status || "draft",
     packageType: (apiData as any).holiday_type_name || apiData.quote_type || "",
     quoteTitle: apiData.title || "",
     quoteLink: "",
@@ -1189,8 +1189,14 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const clientId = params?.clientId ?? "";
   const quoteId = params?.quoteId ?? "";
 
-  const { data: quoteData, isLoading, error } = useQuote(quoteId);
-  const { data: clientData } = useClient(clientId);
+  const quoteQuery = useQuote(isBooking ? "" : quoteId);
+  const bookingQuery = useBooking(isBooking ? quoteId : "");
+  const { data: quoteData, isLoading, error } = isBooking ? bookingQuery : quoteQuery;
+  const clientQuery = useClient(isBooking ? "" : clientId);
+  const neonClientQuery = useNeonClient(isBooking ? clientId : "");
+  const clientData = isBooking
+    ? (neonClientQuery.data ? { name: `${neonClientQuery.data.firstName || ""} ${neonClientQuery.data.surename || ""}`.trim() } : undefined)
+    : clientQuery.data;
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
