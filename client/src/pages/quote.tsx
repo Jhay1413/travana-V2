@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useQuote, useNotes, useTasks, useClient, useAirports, useTourOperators, useBoardBasis, useAllAccommodations } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
@@ -2460,16 +2461,15 @@ function EditQuoteDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Accommodation</Label>
-                  <Select value={form.accommodationId || ""} onValueChange={(v) => set("accommodationId", v)}>
-                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-accommodation">
-                      <SelectValue placeholder="Select accommodation..." />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      {(accommodationsData || []).map((a: any) => (
-                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.accommodationId || ""}
+                    onValueChange={(v) => set("accommodationId", v)}
+                    options={(accommodationsData || []).map((a: any) => ({ value: a.id, label: a.name }))}
+                    placeholder="Select accommodation..."
+                    searchPlaceholder="Search accommodations..."
+                    emptyMessage="No accommodations found."
+                    data-testid="edit-select-accommodation"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Check-in Date</Label>
@@ -2503,16 +2503,15 @@ function EditQuoteDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Board Basis</Label>
-                  <Select value={form.boardBasisId || ""} onValueChange={(v) => set("boardBasisId", v)}>
-                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-board-basis">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(boardBasisData || []).map((b: any) => (
-                        <SelectItem key={b.id} value={b.id}>{b.type}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.boardBasisId || ""}
+                    onValueChange={(v) => set("boardBasisId", v)}
+                    options={(boardBasisData || []).map((b: any) => ({ value: b.id, label: b.type }))}
+                    placeholder="Select board basis..."
+                    searchPlaceholder="Search..."
+                    emptyMessage="No options found."
+                    data-testid="edit-select-board-basis"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-black/60">Room Type</Label>
@@ -2574,16 +2573,15 @@ function EditQuoteDialog({
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                    <Select value={form.outboundDepartAirportId || ""} onValueChange={(v) => set("outboundDepartAirportId", v)}>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-outbound-depart-airport">
-                        <SelectValue placeholder="Select airport..." />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {(airportsData || []).map((a: any) => (
-                          <SelectItem key={a.id} value={a.id}>{a.airport_name} ({a.airport_code})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.outboundDepartAirportId || ""}
+                      onValueChange={(v) => set("outboundDepartAirportId", v)}
+                      options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                      placeholder="Select airport..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid="edit-select-outbound-depart-airport"
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departure Date</Label>
@@ -2606,16 +2604,15 @@ function EditQuoteDialog({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                    <Select value={form.outboundArriveAirportId || ""} onValueChange={(v) => set("outboundArriveAirportId", v)}>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-outbound-arrive-airport">
-                        <SelectValue placeholder="Select airport..." />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {(airportsData || []).map((a: any) => (
-                          <SelectItem key={a.id} value={a.id}>{a.airport_name} ({a.airport_code})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.outboundArriveAirportId || ""}
+                      onValueChange={(v) => set("outboundArriveAirportId", v)}
+                      options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                      placeholder="Select airport..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid="edit-select-outbound-arrive-airport"
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
@@ -2657,16 +2654,15 @@ function EditQuoteDialog({
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
-                    <Select value={form.inboundDepartAirportId || ""} onValueChange={(v) => set("inboundDepartAirportId", v)}>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-inbound-depart-airport">
-                        <SelectValue placeholder="Select airport..." />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {(airportsData || []).map((a: any) => (
-                          <SelectItem key={a.id} value={a.id}>{a.airport_name} ({a.airport_code})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.inboundDepartAirportId || ""}
+                      onValueChange={(v) => set("inboundDepartAirportId", v)}
+                      options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                      placeholder="Select airport..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid="edit-select-inbound-depart-airport"
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Departure Date</Label>
@@ -2689,16 +2685,15 @@ function EditQuoteDialog({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
-                    <Select value={form.inboundArriveAirportId || ""} onValueChange={(v) => set("inboundArriveAirportId", v)}>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-inbound-arrive-airport">
-                        <SelectValue placeholder="Select airport..." />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {(airportsData || []).map((a: any) => (
-                          <SelectItem key={a.id} value={a.id}>{a.airport_name} ({a.airport_code})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.inboundArriveAirportId || ""}
+                      onValueChange={(v) => set("inboundArriveAirportId", v)}
+                      options={(airportsData || []).map((a: any) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                      placeholder="Select airport..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid="edit-select-inbound-arrive-airport"
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
@@ -2739,16 +2734,15 @@ function EditQuoteDialog({
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Tour Operator</Label>
-                <Select value={form.tourOperatorId || ""} onValueChange={(v) => set("tourOperatorId", v)}>
-                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="edit-select-tour-operator">
-                    <SelectValue placeholder="Select tour operator..." />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {(tourOperatorsData || []).map((t: any) => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.tourOperatorId || ""}
+                  onValueChange={(v) => set("tourOperatorId", v)}
+                  options={(tourOperatorsData || []).map((t: any) => ({ value: t.id, label: t.name }))}
+                  placeholder="Select tour operator..."
+                  searchPlaceholder="Search tour operators..."
+                  emptyMessage="No tour operators found."
+                  data-testid="edit-select-tour-operator"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Sales (£)</Label>
