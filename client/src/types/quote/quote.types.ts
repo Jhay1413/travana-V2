@@ -396,6 +396,9 @@ export interface CreateQuoteData {
   lodge_id?: string;
   cottage_id?: string;
   pets?: number;
+  outboundFlight?: Record<string, unknown>;
+  inboundFlight?: Record<string, unknown>;
+  primaryAccommodation?: Record<string, unknown>;
 }
 
 export interface QuoteFilters {

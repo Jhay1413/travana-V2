@@ -32,6 +32,7 @@ import {
   PawPrint,
   Hotel,
   Plus,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -405,6 +406,8 @@ export default function ClientPage() {
   });
   const [showNewQuoteModal, setShowNewQuoteModal] = useState(false);
   const [newQuoteIsBooking, setNewQuoteIsBooking] = useState(false);
+  const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
+  const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<{
     file: File | null;
@@ -695,6 +698,33 @@ export default function ClientPage() {
         toast({ title: "Failed to delete enquiry", variant: "destructive" });
       },
     });
+  };
+
+  const handleConvertEnquiryToQuote = (enq: EnquiryTable) => {
+    const firstDestination = enq.destinations?.[0];
+    const firstResort = enq.resorts?.[0];
+    const firstAirport = enq.airports?.[0];
+    const firstBoardBasis = enq.boardBases?.[0];
+
+    setNewQuote({
+      ...newQuoteDefaults,
+      packageType: enq.holiday_type_id || "",
+      quoteTitle: enq.title || "",
+      travelDate: enq.travel_date || "",
+      passengersAdults: enq.adults || 2,
+      passengersChildren: enq.children || 0,
+      passengersInfants: enq.infants || 0,
+      nights: enq.no_of_nights || 7,
+      destination: firstDestination?.destination_id || "",
+      resort: firstResort?.resort_id || "",
+      boardBasis: firstBoardBasis?.board_basis_id || "",
+      outboundDepartAirport: firstAirport?.airport_id || "",
+      cabinType: enq.cabin_type || "",
+      pets: (enq.no_of_pets && enq.no_of_pets > 0) ? true : false,
+    });
+    setConvertingFromEnquiryTxnId(enq.transaction_id);
+    setConvertingEnquiryId(enq.id);
+    setShowNewQuoteModal(true);
   };
 
   const client = useMemo(() => {
@@ -1599,6 +1629,20 @@ export default function ClientPage() {
                               >
                                 <Pin className="h-3.5 w-3.5" />
                               </span>
+                              {enq.status !== "Converted" && (
+                                <button
+                                  type="button"
+                                  className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-emerald-50 hover:text-emerald-600"
+                                  data-testid={`button-convert-enquiry-${idx}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleConvertEnquiryToQuote(enq);
+                                  }}
+                                  title="Convert to Quote"
+                                >
+                                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-black/[0.05] hover:text-black/70"
@@ -2129,12 +2173,12 @@ export default function ClientPage() {
           </Card>
         </div>
       </div>
-      <Dialog open={showNewQuoteModal} onOpenChange={(open) => { setShowNewQuoteModal(open); if (!open) { setNewQuoteIsBooking(false); setNewQuote(newQuoteDefaults); setQuoteImageFiles([]); setQuoteImageUrls([]); } }}>
+      <Dialog open={showNewQuoteModal} onOpenChange={(open) => { setShowNewQuoteModal(open); if (!open) { setNewQuoteIsBooking(false); setNewQuote(newQuoteDefaults); setQuoteImageFiles([]); setQuoteImageUrls([]); setConvertingFromEnquiryTxnId(null); setConvertingEnquiryId(null); } }}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">{newQuoteIsBooking ? "New Booking" : "New Quote"}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">{convertingFromEnquiryTxnId ? "Convert Enquiry to Quote" : newQuoteIsBooking ? "New Booking" : "New Quote"}</DialogTitle>
             <DialogDescription className="text-sm text-black/55">
-              {newQuoteIsBooking ? "Create a new booking" : "Create a new quote"} for {client?.name || "this client"}.
+              {convertingFromEnquiryTxnId ? "Review and adjust the details from the enquiry, then create the quote." : newQuoteIsBooking ? "Create a new booking" : "Create a new quote"} for {client?.name || "this client"}.
             </DialogDescription>
           </DialogHeader>
 
@@ -3230,6 +3274,52 @@ export default function ClientPage() {
                         },
                       }
                     );
+                  } else if (convertingFromEnquiryTxnId) {
+                    const convertPayload: CreateQuoteData = {
+                      transaction_id: convertingFromEnquiryTxnId,
+                      holiday_type_id: quotePayload.holiday_type_id,
+                      travel_date: quotePayload.travel_date,
+                      quote_type: quotePayload.quote_type,
+                      num_of_nights: quotePayload.num_of_nights,
+                      adult: quotePayload.adult,
+                      child: quotePayload.child,
+                      infant: quotePayload.infant,
+                      sales_price: quotePayload.sales_price,
+                      package_commission: quotePayload.package_commission,
+                      title: quotePayload.title,
+                      price_per_person: quotePayload.price_per_person,
+                      transfer_type: quotePayload.transfer_type,
+                      main_tour_operator_id: quotePayload.main_tour_operator_id,
+                      lodge_id: quotePayload.lodge_id,
+                      pets: quotePayload.pets,
+                      quote_status: "In Play",
+                    };
+                    createQuoteMutationHook.mutate(
+                      {
+                        ...convertPayload,
+                        outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
+                        inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
+                        primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
+                      },
+                      {
+                        onSuccess: () => {
+                          if (convertingEnquiryId) {
+                            updateEnquiryMutation.mutate({ id: convertingEnquiryId, data: { status: "Converted" } as Partial<EnquiryTable> });
+                          }
+                          setShowNewQuoteModal(false);
+                          setNewQuoteIsBooking(false);
+                          setNewQuote(newQuoteDefaults);
+                          setQuoteImageFiles([]);
+                          setQuoteImageUrls([]);
+                          setConvertingFromEnquiryTxnId(null);
+                          setConvertingEnquiryId(null);
+                          toast({ title: "Enquiry converted to quote!" });
+                        },
+                        onError: () => {
+                          toast({ title: "Failed to convert enquiry to quote", variant: "destructive" });
+                        },
+                      }
+                    );
                   } else {
                     createTransactionMutation.mutate(
                       {
@@ -3259,7 +3349,7 @@ export default function ClientPage() {
                 }}
                 data-testid="button-save-quote"
               >
-                {createTransactionMutation.isPending ? "Creating..." : newQuoteIsBooking ? "Create Booking" : "Create Quote"}
+                {(createTransactionMutation.isPending || createQuoteMutationHook.isPending) ? "Creating..." : convertingFromEnquiryTxnId ? "Convert to Quote" : newQuoteIsBooking ? "Create Booking" : "Create Quote"}
               </Button>
             </div>
           </div>
