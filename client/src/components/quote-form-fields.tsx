@@ -6,7 +6,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useAirports, useTourOperators, useBoardBasis, useAllAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes } from "@/hooks/queries";
+import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes } from "@/hooks/queries";
 import type { LookupCountry, LookupDestination, LookupResort, LookupAccommodation, LookupBoardBasis } from "@/api/endpoints/lookup.api";
 
 export interface QuoteFormState {
@@ -154,7 +154,7 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
   const { data: boardBasisData } = useBoardBasis();
-  const { data: accommodationsData } = useAllAccommodations();
+  const { data: accommodationsData } = useAccommodations(form.resort || undefined);
   const { data: countriesData } = useCountries();
   const { data: packageTypesData } = usePackageTypes();
   const { data: filteredDestinationsData } = useDestinations(form.country || undefined);
@@ -713,7 +713,7 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
                 options={(accommodationsData || []).map((a: LookupAccommodation) => ({ value: a.id, label: a.name }))}
                 placeholder="Select accommodation..."
                 searchPlaceholder="Search accommodations..."
-                emptyMessage="No accommodations found."
+                emptyMessage={form.resort ? "No accommodations found." : "Select a resort first."}
                 data-testid={`${prefix}-select-accommodation`}
               />
             </div>
