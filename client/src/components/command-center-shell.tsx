@@ -632,9 +632,10 @@ export function CommandCenterShell({
 
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
-              <button
-                className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                data-testid="button-support"
+              <Link
+                href="/hub"
+                className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 no-underline"
+                data-testid="link-hub"
               >
                 <div className="flex items-center gap-3">
                   <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
@@ -648,7 +649,7 @@ export function CommandCenterShell({
                   </div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-              </button>
+              </Link>
 
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
