@@ -5,6 +5,7 @@ import {
   quote_cruise, quote_cruise_item_extra, quote_cruise_itinerary,
   passengers, deal_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
+  transaction, resorts, destination, country,
 } from "@shared/schema";
 import type {
   Quote, InsertQuote, QuoteFlight, InsertQuoteFlight, QuoteAccomodation, InsertQuoteAccomodation,
@@ -88,10 +89,12 @@ export const newQuoteRepository = {
         quote: quote,
         holiday_type_name: package_type.name,
         main_tour_operator_name: tour_operator.name,
+        lead_source: transaction.lead_source,
       })
       .from(quote)
       .leftJoin(package_type, eq(quote.holiday_type_id, package_type.id))
       .leftJoin(tour_operator, eq(quote.main_tour_operator_id, tour_operator.id))
+      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
       .where(eq(quote.id, id))
       .limit(1);
 
@@ -115,9 +118,18 @@ export const newQuoteRepository = {
         accomodation_name: accomodation_list.name,
         board_basis_name: board_basis.type,
         tour_operator_name: accomTourOp.name,
+        resort_id: resorts.id,
+        resort_name: resorts.name,
+        destination_id: destination.id,
+        destination_name: destination.name,
+        country_id: country.id,
+        country_name: country.country_name,
       })
         .from(quote_accomodation)
         .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+        .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+        .leftJoin(destination, eq(resorts.destination_id, destination.id))
+        .leftJoin(country, eq(destination.country_id, country.id))
         .leftJoin(board_basis, eq(quote_accomodation.board_basis_id, board_basis.id))
         .leftJoin(accomTourOp, eq(quote_accomodation.tour_operator_id, accomTourOp.id))
         .where(eq(quote_accomodation.quote_id, id)),
@@ -178,12 +190,36 @@ export const newQuoteRepository = {
       db.select().from(deal_images).where(eq(deal_images.owner_id, id)),
     ]);
 
+    console.log('🔍 BACKEND - First accommodation data:', accommodations[0]);
+    console.log('🔍 BACKEND - Location IDs being returned:', {
+      country_id: accommodations[0]?.country_id || null,
+      destination_id: accommodations[0]?.destination_id || null,
+      resort_id: accommodations[0]?.resort_id || null,
+    });
+    console.log('🔍 BACKEND - Total accommodations found:', accommodations.length);
+
     return {
       ...q.quote,
       holiday_type_name: q.holiday_type_name,
       main_tour_operator_name: q.main_tour_operator_name,
+      lead_source: q.lead_source,
+      country_id: accommodations[0]?.country_id || null,
+      country_name: accommodations[0]?.country_name || null,
+      destination_id: accommodations[0]?.destination_id || null,
+      destination_name: accommodations[0]?.destination_name || null,
+      resort_id: accommodations[0]?.resort_id || null,
+      resort_name: accommodations[0]?.resort_name || null,
       flights: flights.map(f => ({ ...f.flight, departing_airport_name: f.departing_airport_name, arrival_airport_name: f.arrival_airport_name, tour_operator_name: f.tour_operator_name })),
-      accommodations: accommodations.map(a => ({ ...a.accommodation, accomodation_name: a.accomodation_name, board_basis_name: a.board_basis_name, tour_operator_name: a.tour_operator_name })),
+      accommodations: accommodations.map(a => ({ 
+        ...a.accommodation, 
+        accomodation_name: a.accomodation_name, 
+        board_basis_name: a.board_basis_name, 
+        tour_operator_name: a.tour_operator_name,
+        // Include location IDs for frontend use
+        resort_id: a.resort_id,
+        destination_id: a.destination_id,
+        country_id: a.country_id,
+      })),
       transfers: transfers.map(t => ({ ...t.transfer, tour_operator_name: t.tour_operator_name })),
       carHires: carHires.map(c => ({ ...c.carHire, tour_operator_name: c.tour_operator_name })),
       attractionTickets: attractionTickets.map(t => ({ ...t.attractionTicket, tour_operator_name: t.tour_operator_name })),

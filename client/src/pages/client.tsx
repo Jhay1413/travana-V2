@@ -45,7 +45,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
-import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAirports, useTourOperators, usePackageTypes } from "@/hooks/queries";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAirports, useTourOperators, usePackageTypes, useRoomTypes } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -512,6 +512,7 @@ export default function ClientPage() {
   const { data: resortsData } = useResorts(newQuote.destination);
   const { data: accommodationsData } = useAccommodations(newQuote.resort);
   const { data: boardBasisData } = useBoardBasis();
+  const { data: roomTypeData } = useRoomTypes();
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
   const { data: packageTypesData } = usePackageTypes();
@@ -2881,12 +2882,14 @@ export default function ClientPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Room Type</Label>
-                    <Input
-                      placeholder="e.g. Overwater Villa"
+                    <SearchableSelect
                       value={newQuote.roomType}
-                      onChange={(e) => setNewQuote({ ...newQuote, roomType: e.target.value })}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-room-type"
+                      onValueChange={(v) => setNewQuote({ ...newQuote, roomType: v })}
+                      options={(roomTypeData || []).map((r: { id: string; name: string | null }) => ({ value: r.name || "", label: r.name || "Unknown" }))}
+                      placeholder="Select room type..."
+                      searchPlaceholder="Search..."
+                      emptyMessage="No options found."
+                      data-testid="select-room-type"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -3202,6 +3205,7 @@ export default function ClientPage() {
                   const primaryAccommodation = newQuote.accommodation ? {
                     accomodation_id: newQuote.accommodation,
                     board_basis_id: newQuote.boardBasis || undefined,
+                    room_type: newQuote.roomType || undefined,
                     no_of_nights: newQuote.nights || 0,
                     check_in_date_time: newQuote.checkInDate || undefined,
                     is_included_in_package: true,

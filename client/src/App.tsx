@@ -9,7 +9,7 @@ import LandingPage from "@/pages/landing";
 import CommandCenterPage from "@/pages/command-center";
 import ClientsPage from "@/pages/clients";
 import ClientPage from "@/pages/client";
-import QuotePage from "@/pages/quote";
+import QuotePage from "@/pages/quote"; // Using original full-featured version
 import EnquiryPage from "@/pages/enquiry";
 import TicketsPage from "@/pages/tickets";
 import TicketPage from "@/pages/ticket";

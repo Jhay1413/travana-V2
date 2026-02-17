@@ -314,6 +314,55 @@ export interface Booking {
   date_created: string | null;
 }
 
+// Extended types with joined data from repository
+export interface EnrichedQuoteFlight extends QuoteFlight {
+  departing_airport_name?: string;
+  arrival_airport_name?: string;
+  tour_operator_name?: string;
+}
+
+export interface EnrichedQuoteAccommodation extends QuoteAccommodation {
+  accomodation_name?: string;
+  board_basis_name?: string;
+  tour_operator_name?: string;
+}
+
+export interface EnrichedQuoteCruise extends QuoteCruise {
+  tour_operator_name?: string;
+}
+
+export interface EnrichedQuote extends Quote {
+  holiday_type_name?: string;
+  main_tour_operator_name?: string;
+  lead_source?: string;
+  country_id?: string | null;
+  country_name?: string | null;
+  destination_id?: string | null;
+  destination_name?: string | null;
+  resort_id?: string | null;
+  resort_name?: string | null;
+  flights?: EnrichedQuoteFlight[];
+  accommodations?: EnrichedQuoteAccommodation[];
+  cruises?: EnrichedQuoteCruise[];
+}
+
+export interface EnrichedBooking extends Booking {
+  holiday_type_name?: string;
+  main_tour_operator_name?: string;
+  lead_source?: string;
+  country_id?: string | null;
+  country_name?: string | null;
+  destination_id?: string | null;
+  destination_name?: string | null;
+  resort_id?: string | null;
+  resort_name?: string | null;
+  flights?: EnrichedQuoteFlight[];
+  accommodations?: EnrichedQuoteAccommodation[];
+  cruises?: EnrichedQuoteCruise[];
+  passengers?: Passenger[];
+  images?: DealImage[];
+}
+
 export interface TransactionNote {
   id: string;
   description: string | null;

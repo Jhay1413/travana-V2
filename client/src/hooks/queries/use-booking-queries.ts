@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { bookingApi } from "@/api";
-import type { Booking } from "@/types/quote";
+import type { EnrichedBooking } from "@/types/quote";
 
 export const bookingKeys = {
   all: ["bookings"] as const,
@@ -12,14 +12,14 @@ export const bookingKeys = {
 };
 
 export function useBookings() {
-  return useQuery<Booking[]>({
+  return useQuery<EnrichedBooking[]>({
     queryKey: bookingKeys.list(),
     queryFn: () => bookingApi.getAll(),
   });
 }
 
 export function useBooking(id: string) {
-  return useQuery<Booking>({
+  return useQuery<EnrichedBooking>({
     queryKey: bookingKeys.detail(id),
     queryFn: () => bookingApi.getById(id),
     enabled: !!id,
@@ -27,7 +27,7 @@ export function useBooking(id: string) {
 }
 
 export function useBookingByTransaction(transactionId: string) {
-  return useQuery<Booking>({
+  return useQuery<EnrichedBooking>({
     queryKey: bookingKeys.byTransaction(transactionId),
     queryFn: () => bookingApi.getByTransactionId(transactionId),
     enabled: !!transactionId,

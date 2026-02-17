@@ -6,7 +6,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes } from "@/hooks/queries";
+import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes } from "@/hooks/queries";
 import type { LookupCountry, LookupDestination, LookupResort, LookupAccommodation, LookupBoardBasis } from "@/api/endpoints/lookup.api";
 
 export interface QuoteFormState {
@@ -154,6 +154,7 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
   const { data: boardBasisData } = useBoardBasis();
+  const { data: roomTypeData } = useRoomTypes();
   const { data: accommodationsData } = useAccommodations(form.resort || undefined);
   const { data: countriesData } = useCountries();
   const { data: packageTypesData } = usePackageTypes();
@@ -162,6 +163,20 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
   const { data: resortsData } = useResorts(form.destination || undefined);
 
   const destinationsData = form.country ? filteredDestinationsData : allDestinationsData;
+
+  console.log('🔍 QuoteFormFields - form state:', {
+    country: form.country,
+    destination: form.destination,
+    resort: form.resort,
+    accommodation: form.accommodation,
+    accommodationId: form.accommodationId
+  });
+  console.log('🔍 QuoteFormFields - loaded data:', {
+    countriesCount: countriesData?.length || 0,
+    destinationsCount: destinationsData?.length || 0,
+    resortsCount: resortsData?.length || 0,
+    accommodationsCount: accommodationsData?.length || 0
+  });
 
   const packageTypeName = useMemo(() => {
     if (externalPackageTypeName) return externalPackageTypeName;
@@ -761,12 +776,14 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Room Type</Label>
-              <Input
-                placeholder="e.g. Overwater Villa"
+              <SearchableSelect
                 value={form.roomType}
-                onChange={(e) => set("roomType", e.target.value)}
-                className="h-9 rounded-xl border-black/10 bg-white/70"
-                data-testid={`${prefix}-input-room-type`}
+                onValueChange={(v) => set("roomType", v)}
+                options={(roomTypeData || []).map((r: { id: string; name: string | null }) => ({ value: r.name || "", label: r.name || "Unknown" }))}
+                placeholder="Select room type..."
+                searchPlaceholder="Search..."
+                emptyMessage="No options found."
+                data-testid={`${prefix}-select-room-type`}
               />
             </div>
             <div className="space-y-1.5">

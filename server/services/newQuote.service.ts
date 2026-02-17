@@ -32,6 +32,7 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   debarkation?: string;
   cruiseExtras?: string;
   cruiseOnly?: boolean;
+  lead_source?: string;
 };
 
 export const newQuoteService = {
@@ -88,10 +89,14 @@ export const newQuoteService = {
   },
 
   async updateQuote(id: string, data: UpdateQuotePayload) {
+    console.log('🔍 QUOTE UPDATE - ID:', id);
+    console.log('🔍 QUOTE UPDATE - Received data:', JSON.stringify(data, null, 2));
+    
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType,
       embarkation, debarkation, cruiseExtras, cruiseOnly,
+      lead_source,
       ...quoteFields
     } = data;
 
@@ -109,8 +114,17 @@ export const newQuoteService = {
       }
     }
 
+    console.log('🔍 QUOTE UPDATE - Quote data to update:', quoteData);
+    console.log('🔍 QUOTE UPDATE - Flight updates:', { outboundFlight, inboundFlight });
+    console.log('🔍 QUOTE UPDATE - Accommodation update:', primaryAccommodation);
+
     const q = await newQuoteRepository.update(id, quoteData);
     if (!q) throw new AppError("Quote not found", 404);
+
+    // Update lead_source on the transaction table
+    if (lead_source !== undefined && q.transaction_id) {
+      await transactionRepository.update(q.transaction_id, { lead_source: lead_source as any });
+    }
 
     if (outboundFlight) {
       await newQuoteRepository.upsertFlightByType(id, "outbound", outboundFlight);

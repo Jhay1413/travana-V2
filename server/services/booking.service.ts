@@ -129,6 +129,9 @@ export const bookingService = {
   },
 
   async updateBooking(id: string, data: UpdateBookingPayload) {
+    console.log('🔍 BOOKING UPDATE - ID:', id);
+    console.log('🔍 BOOKING UPDATE - Received data:', JSON.stringify(data, null, 2));
+    
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
       ...bookingFields
@@ -147,6 +150,10 @@ export const bookingService = {
         (bookingData[key] as InsertBooking[typeof key]) = (bookingFields as Record<string, unknown>)[key] as InsertBooking[typeof key];
       }
     }
+
+    console.log('🔍 BOOKING UPDATE - Booking data to update:', bookingData);
+    console.log('🔍 BOOKING UPDATE - Flight updates:', { outboundFlight, inboundFlight });
+    console.log('🔍 BOOKING UPDATE - Accommodation update:', primaryAccommodation);
 
     const b = await bookingRepository.update(id, bookingData);
     if (!b) throw new AppError("Booking not found", 404);

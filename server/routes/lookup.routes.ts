@@ -11,6 +11,7 @@ import {
   lodges,
   cottages,
   package_type,
+  room_type,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -122,6 +123,15 @@ router.get("/accommodation-types", async (_req, res) => {
 router.get("/cottages", async (_req, res) => {
   try {
     const rows = await db.select().from(cottages).orderBy(cottages.cottage_name);
+    res.json({ success: true, data: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/room-types", async (_req, res) => {
+  try {
+    const rows = await db.select().from(room_type).orderBy(room_type.name);
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

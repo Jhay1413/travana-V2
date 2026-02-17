@@ -75,6 +75,11 @@ export interface LookupPackageType {
   name: string;
 }
 
+export interface LookupRoomType {
+  id: string;
+  name: string | null;
+}
+
 export const lookupApi = {
   getPackageTypes: async (): Promise<LookupPackageType[]> => {
     const { data } = await axios.get<LookupPackageType[]>("/api/lookup/package-types");
@@ -114,6 +119,10 @@ export const lookupApi = {
   },
   getAccommodationTypes: async (): Promise<LookupAccommodationType[]> => {
     const { data } = await axios.get<LookupAccommodationType[]>("/api/lookup/accommodation-types");
+    return data;
+  },
+  getRoomTypes: async (): Promise<LookupRoomType[]> => {
+    const { data } = await axios.get<LookupRoomType[]>("/api/lookup/room-types");
     return data;
   },
 };

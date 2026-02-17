@@ -5,6 +5,7 @@ import {
   booking_airport_parking, booking_cruise, booking_cruise_item_extra,
   booking_cruise_itinerary, passengers, deal_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
+  transaction, resorts, destination, country,
 } from "@shared/schema";
 import type {
   Booking, InsertBooking, InsertBookingFlight, BookingFlight,
@@ -84,10 +85,12 @@ export const bookingRepository = {
         booking: booking,
         holiday_type_name: package_type.name,
         main_tour_operator_name: tour_operator.name,
+        lead_source: transaction.lead_source,
       })
       .from(booking)
       .leftJoin(package_type, eq(booking.holiday_type_id, package_type.id))
       .leftJoin(tour_operator, eq(booking.main_tour_operator_id, tour_operator.id))
+      .leftJoin(transaction, eq(booking.transaction_id, transaction.id))
       .where(eq(booking.id, id))
       .limit(1);
 
@@ -111,9 +114,18 @@ export const bookingRepository = {
         accomodation_name: accomodation_list.name,
         board_basis_name: board_basis.type,
         tour_operator_name: accomTourOp.name,
+        resort_id: resorts.id,
+        resort_name: resorts.name,
+        destination_id: destination.id,
+        destination_name: destination.name,
+        country_id: country.id,
+        country_name: country.country_name,
       })
         .from(booking_accomodation)
         .leftJoin(accomodation_list, eq(booking_accomodation.accomodation_id, accomodation_list.id))
+        .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+        .leftJoin(destination, eq(resorts.destination_id, destination.id))
+        .leftJoin(country, eq(destination.country_id, country.id))
         .leftJoin(board_basis, eq(booking_accomodation.board_basis_id, board_basis.id))
         .leftJoin(accomTourOp, eq(booking_accomodation.tour_operator_id, accomTourOp.id))
         .where(eq(booking_accomodation.booking_id, id)),
@@ -178,8 +190,24 @@ export const bookingRepository = {
       ...b.booking,
       holiday_type_name: b.holiday_type_name,
       main_tour_operator_name: b.main_tour_operator_name,
+      lead_source: b.lead_source,
+      country_id: accommodations[0]?.country_id || null,
+      country_name: accommodations[0]?.country_name || null,
+      destination_id: accommodations[0]?.destination_id || null,
+      destination_name: accommodations[0]?.destination_name || null,
+      resort_id: accommodations[0]?.resort_id || null,
+      resort_name: accommodations[0]?.resort_name || null,
       flights: flights.map(f => ({ ...f.flight, departing_airport_name: f.departing_airport_name, arrival_airport_name: f.arrival_airport_name, tour_operator_name: f.tour_operator_name })),
-      accommodations: accommodations.map(a => ({ ...a.accommodation, accomodation_name: a.accomodation_name, board_basis_name: a.board_basis_name, tour_operator_name: a.tour_operator_name })),
+      accommodations: accommodations.map(a => ({ 
+        ...a.accommodation, 
+        accomodation_name: a.accomodation_name, 
+        board_basis_name: a.board_basis_name, 
+        tour_operator_name: a.tour_operator_name,
+        // Include location IDs for frontend use
+        resort_id: a.resort_id,
+        destination_id: a.destination_id,
+        country_id: a.country_id,
+      })),
       transfers: transfers.map(t => ({ ...t.transfer, tour_operator_name: t.tour_operator_name })),
       carHires: carHires.map(c => ({ ...c.carHire, tour_operator_name: c.tour_operator_name })),
       attractionTickets: attractionTickets.map(t => ({ ...t.attractionTicket, tour_operator_name: t.tour_operator_name })),

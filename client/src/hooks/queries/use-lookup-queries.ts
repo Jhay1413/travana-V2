@@ -15,6 +15,7 @@ export const lookupKeys = {
   parks: ["lookup", "parks"] as const,
   lodges: (parkId?: string) => ["lookup", "lodges", parkId] as const,
   cottages: ["lookup", "cottages"] as const,
+  roomTypes: ["lookup", "room-types"] as const,
 };
 
 export function usePackageTypes() {
@@ -121,6 +122,14 @@ export function useAllAccommodations() {
   return useQuery({
     queryKey: lookupKeys.allAccommodations,
     queryFn: () => lookupApi.getAccommodations(),
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useRoomTypes() {
+  return useQuery({
+    queryKey: lookupKeys.roomTypes,
+    queryFn: () => lookupApi.getRoomTypes(),
     staleTime: 1000 * 60 * 30,
   });
 }

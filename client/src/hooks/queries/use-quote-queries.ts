@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
-import type { Quote, QuoteFilters } from "@/types/quote";
+import type { EnrichedQuote, QuoteFilters } from "@/types/quote";
 
 export const quoteKeys = {
   all: ["quotes"] as const,
@@ -11,14 +11,14 @@ export const quoteKeys = {
 };
 
 export function useQuotes(filters?: QuoteFilters) {
-  return useQuery<Quote[]>({
+  return useQuery<EnrichedQuote[]>({
     queryKey: quoteKeys.list(filters),
     queryFn: () => quoteApi.getAll(filters),
   });
 }
 
 export function useQuote(id: string) {
-  return useQuery<Quote>({
+  return useQuery<EnrichedQuote>({
     queryKey: quoteKeys.detail(id),
     queryFn: () => quoteApi.getById(id),
     enabled: !!id,

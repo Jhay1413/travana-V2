@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient } from "@/hooks/queries";
+import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useRoomTypes } from "@/hooks/queries";
 import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { QuoteFormFields, defaultQuoteFormState } from "@/components/quote-form-fields";
 import type { QuoteFormState } from "@/components/quote-form-fields";
@@ -25,13 +25,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
+import type { Favorite } from "@/api/endpoints/favorite.api";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TiptapLink from "@tiptap/extension-link";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import type { Quote as ApiQuote, TransactionNote } from "@/types/quote";
+import type { EnrichedQuote, EnrichedBooking, TransactionNote, Passenger, DealImage } from "@/types/quote";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -48,6 +49,12 @@ function formatUKDate(input: string) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function formatLeadSource(source: string | null | undefined): string {
+  if (!source) return "—";
+  // Format enum values to be more readable
+  return source.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
 type QuoteDisplay = {
   id: string;
   transaction_id: string;
@@ -58,8 +65,11 @@ type QuoteDisplay = {
   travelDate: string;
   returnDate: string;
   destination: string;
+  destinationName: string;
   country: string;
+  countryName: string;
   resort: string;
+  resortName: string;
   createdAt: string;
   passengersInfants: number;
   checkInDate: string;
@@ -298,7 +308,7 @@ function NoteCard({
   const toggleFavoriteMutation = useToggleFavorite();
   const isNotePinned = useMemo(() => {
     if (!userFavorites) return false;
-    return userFavorites.some((f: any) => f.itemType === "note" && f.itemId === note.id);
+    return userFavorites.some((f: Favorite) => f.itemType === "note" && f.itemId === note.id);
   }, [userFavorites, note.id]);
 
   const handleEdit = (html: string) => {
@@ -355,7 +365,7 @@ function NoteCard({
               type="button"
               onClick={() => toggleFavoriteMutation.mutate(
                 { itemType: "note", itemId: note.id, label: `Note by ${note.agent_id || "Agent"}`, subtitle: `quoteId:${quoteId}|${(note.content || "").replace(/<[^>]*>/g, "").slice(0, 40)}` },
-                { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                { onSuccess: (data: { favorited?: boolean }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
               )}
               className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${isNotePinned ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/5 hover:text-black/70"}`}
               title={isNotePinned ? "Unpin" : "Pin to dashboard"}
@@ -929,7 +939,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
               <div className="mt-1 grid gap-1">
                 <div className="flex items-center gap-1.5 text-[11px] text-black/60">
                   <MapPin className="h-3 w-3 shrink-0" />
-                  <span>{[quote.resort, quote.country].filter(Boolean).join(", ") || quote.destination}</span>
+                  <span>{[quote.resortName, quote.countryName].filter(Boolean).join(", ") || quote.destinationName}</span>
                 </div>
               </div>
             </div>
@@ -1064,7 +1074,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-black/60">
                   <MapPin className="h-3 w-3 shrink-0" />
-                  <span>{[quote.resort, quote.country].filter(Boolean).join(", ") || quote.destination}</span>
+                  <span>{[quote.resortName, quote.countryName].filter(Boolean).join(", ") || quote.destinationName}</span>
                 </div>
                 {quote.nights > 0 && (
                   <div className="flex items-center gap-1.5 text-[11px] text-black/60">
@@ -1107,7 +1117,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
               <div className="mt-1 grid gap-1">
                 <div className="flex items-center gap-1.5 text-[11px] text-black/60">
                   <MapPin className="h-3 w-3 shrink-0" />
-                  <span>{quote.flights.outbound.to || "Airport"} → {quote.accommodation.property || quote.destination}</span>
+                  <span>{quote.flights.outbound.to || "Airport"} → {quote.accommodation.property || quote.destinationName}</span>
                 </div>
               </div>
             </div>
@@ -1167,7 +1177,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       <div className="mb-3">
         <div className="text-xs font-semibold" data-testid="text-timeline-title">Travel Summary</div>
         <div className="mt-0.5 text-[11px] text-black/55" data-testid="text-timeline-subtitle">
-          {formatTimelineDate(quote.travelDate)} — {formatTimelineDate(quote.returnDate)} · {quote.destination}
+          {formatTimelineDate(quote.travelDate)} — {formatTimelineDate(quote.returnDate)} · {quote.destinationName}
         </div>
       </div>
 
@@ -1186,9 +1196,11 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
   );
 }
 
-function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
+function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisplay {
+  console.log('🔍 Full API Data:', apiData);
+  console.log('🔍 API Data lead_source:', apiData.lead_source);
   const flights = apiData.flights || [];
-  const cruises = (apiData as any).cruises || [];
+  const cruises = apiData.cruises || [];
   const outboundFlight = flights.find(f => f.flight_type === "outbound") || flights[0];
   const inboundFlight = flights.find(f => f.flight_type === "inbound") || flights[1];
 
@@ -1211,20 +1223,23 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
   const salesPrice = parseFloat(apiData.sales_price || "0");
   const packageCommission = parseFloat(apiData.package_commission || "0");
 
-  const childPassengers = (apiData.passengers || []).filter(p => p.type === "child");
+  const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");
 
-  return {
+  const result = {
     id: apiData.id,
     transaction_id: apiData.transaction_id,
-    status: apiData.quote_status || (apiData as any).booking_status || "draft",
-    packageType: (apiData as any).holiday_type_name || apiData.quote_type || "",
+    status: ("quote_status" in apiData ? apiData.quote_status : "booking_status" in apiData ? apiData.booking_status : null) || "draft",
+    packageType: apiData.holiday_type_name || ("quote_type" in apiData ? apiData.quote_type : null) || "",
     quoteTitle: apiData.title || "",
     quoteLink: "",
     travelDate,
     returnDate,
-    destination: "",
-    country: "",
-    resort: "",
+    destination: apiData.destination_id || "",
+    destinationName: apiData.destination_name || "",
+    country: apiData.country_id || "",
+    countryName: apiData.country_name || "",
+    resort: apiData.resort_id || "",
+    resortName: apiData.resort_name || "",
     createdAt: apiData.date_created || "",
     passengersInfants: apiData.infant || 0,
     checkInDate: primaryAccom?.check_in_date_time?.split("T")[0] || "",
@@ -1233,23 +1248,23 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
     transferType: apiData.transfer_type || "",
     preBookedSeats: apiData.pre_booked_seats || "",
     flightMeals: apiData.flight_meals ? "Yes" : "",
-    leadSource: "",
+    leadSource: apiData.lead_source || "",
     tags: [],
     passengers: {
       adults: apiData.adult || 0,
       children: apiData.child || 0,
-      childAges: childPassengers.map(p => p.age || 0),
+      childAges: childPassengers.map((p: Passenger) => p.age || 0),
     },
     accommodation: {
-      property: (primaryAccom as any)?.accomodation_name || "",
-      board: (primaryAccom as any)?.board_basis_name || "",
+      property: primaryAccom?.accomodation_name || "",
+      board: primaryAccom?.board_basis_name || "",
       roomType: primaryAccom?.room_type || "",
       notes: "",
     },
     flights: {
       outbound: {
-        from: (outboundFlight as any)?.departing_airport_name || "",
-        to: (outboundFlight as any)?.arrival_airport_name || "",
+        from: outboundFlight?.departing_airport_name || "",
+        to: outboundFlight?.arrival_airport_name || "",
         carrier: "",
         flightNo: outboundFlight?.flight_number || "",
         depart: outboundFlight?.departure_date_time || "",
@@ -1260,8 +1275,8 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
         arriveTime: obArrive.time,
       },
       inbound: {
-        from: (inboundFlight as any)?.departing_airport_name || "",
-        to: (inboundFlight as any)?.arrival_airport_name || "",
+        from: inboundFlight?.departing_airport_name || "",
+        to: inboundFlight?.arrival_airport_name || "",
         carrier: "",
         flightNo: inboundFlight?.flight_number || "",
         depart: inboundFlight?.departure_date_time || "",
@@ -1274,10 +1289,10 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
     },
     owner: {
       name: "Agent",
-      role: "Agent",
+      role: "Agent" as const,
     },
     commissions: {
-      tourOperator: (apiData as any).main_tour_operator_name || "",
+      tourOperator: apiData.main_tour_operator_name || "",
       price: salesPrice,
       commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
       commissionValue: packageCommission,
@@ -1287,11 +1302,14 @@ function transformQuoteData(apiData: ApiQuote): QuoteDisplay {
     },
     notes: [],
     pets: apiData.pets || 0,
-    lodge: apiData.lodge_type ? { name: "", type: apiData.lodge_type || "", code: "" } : undefined,
+    lodge: ("lodge_type" in apiData && apiData.lodge_type) ? { name: "", type: apiData.lodge_type || "", code: "" } : undefined,
     cruise: cruises.length > 0 ? { cruiseLine: cruises[0].cruise_line || "", ship: cruises[0].ship || "", cabinType: cruises[0].cabin_type || "", cruiseName: cruises[0].cruise_name || "", cruiseDate: cruises[0].cruise_date || "", preCruiseStay: cruises[0].pre_cruise_stay || 0, postCruiseStay: cruises[0].post_cruise_stay || 0 } : undefined,
-    haysRef: (apiData as any).hays_ref || undefined,
-    supplierRef: (apiData as any).supplier_ref || undefined,
+    haysRef: ("hays_ref" in apiData ? apiData.hays_ref : undefined) || undefined,
+    supplierRef: ("supplier_ref" in apiData ? apiData.supplier_ref : undefined) || undefined,
   };
+  
+  console.log('✅ Transformed quote leadSource:', result.leadSource);
+  return result;
 }
 
 function StatusPill({ status }: { status: QuoteDisplay["status"] }) {
@@ -1377,18 +1395,18 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   }, []);
 
   const images = useMemo(() => {
-    const imgs = (quoteData as any)?.images || [];
-    return imgs.map((img: any) => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary }));
+    const imgs = quoteData?.images || [];
+    return imgs.map((img: DealImage) => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary }));
   }, [quoteData]);
-  const primaryImage = useMemo(() => images.find((img: any) => img.isPrimary) || images[0], [images]);
-  const galleryImages = useMemo(() => images.filter((img: any) => img.id !== primaryImage?.id), [images, primaryImage]);
+  const primaryImage = useMemo(() => images.find((img: { isPrimary: boolean | null }) => img.isPrimary) || images[0], [images]);
+  const galleryImages = useMemo(() => images.filter((img: { id: string }) => img.id !== primaryImage?.id), [images, primaryImage]);
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
-    return transformQuoteData(quoteData as any);
+    return transformQuoteData(quoteData);
   }, [quoteData]);
 
-  const pageLabel = isBooking || (quoteData as any)?.quote_status === "accepted" || (quoteData as any)?.booking_status ? "Booking" : "Quote";
+  const pageLabel = isBooking || (quoteData && ("quote_status" in quoteData && quoteData?.quote_status === "accepted")) || (quoteData && "booking_status" in quoteData) ? "Booking" : "Quote";
 
   if (isLoading) {
     return (
@@ -1423,12 +1441,12 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   return (
     <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
       <div className="px-5 pb-8 pt-5" data-testid="page-quote">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
+        <div className="flex flex-col gap-3 rounded-2xl bg-green-600 px-5 py-4 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
           <div className="flex items-start gap-3">
             <Button
               size="sm"
               variant="outline"
-              className="h-9 rounded-2xl border-black/10 bg-white/70"
+              className="h-9 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/20"
               data-testid="button-back-client"
               onClick={() => setLocation(`/clients/${clientId}`)}
             >
@@ -1438,18 +1456,18 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="text-base font-semibold" data-testid="text-quote-title">
-                  {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
+                <div className="text-base font-semibold text-white" data-testid="text-quote-title">
+                  {quote.quoteTitle}, <span className="text-sm font-semibold text-white/90">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                 </div>
                 <StatusPill status={quote.status} />
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
-                <span data-testid="text-quote-meta-destination">{quote.destination}</span>
-                <span className="text-black/25">•</span>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/70" data-testid="text-quote-meta">
+                <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
+                <span className="text-white/40">•</span>
                 <span data-testid="text-quote-meta-dates">
                   {formatUKDate(quote.travelDate)} → {formatUKDate(quote.returnDate)}
                 </span>
-                <span className="text-black/25">•</span>
+                <span className="text-white/40">•</span>
                 <span data-testid="text-quote-meta-created">Created {formatUKDate(quote.createdAt)}</span>
               </div>
             </div>
@@ -1460,27 +1478,27 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               type="button"
               onClick={() =>
                 toggleFavoriteMutation.mutate(
-                  { itemType: "quote", itemId: quoteId, label: quote.quoteTitle, subtitle: `${clientData?.name || ""}${quote.destination ? " · " + quote.destination : ""}` },
-                  { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                  { itemType: "quote", itemId: quoteId, label: quote.quoteTitle, subtitle: `${clientData?.name || ""}${quote.destinationName ? " · " + quote.destinationName : ""}` },
+                  { onSuccess: (data: { favorited?: boolean }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                 )
               }
-              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === quoteId) ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
+              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "border-amber-300/40 bg-amber-400/20 text-white hover:bg-amber-400/30" : "border-white/20 bg-white/10 text-white hover:bg-white/20"}`}
               data-testid="button-pin-quote"
             >
-              {userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-              {userFavorites?.some((f: any) => f.itemType === "quote" && f.itemId === quoteId) ? "Unpin" : "Pin"}
+              {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+              {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "Unpin" : "Pin"}
             </button>
             <Button
               size="sm"
               variant="outline"
-              className="h-9 rounded-2xl border-black/10 bg-white/70"
+              className="h-9 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/20"
               data-testid="button-copy-quote"
               onClick={() => navigator.clipboard.writeText(`${quote.quoteTitle} (${quote.id})`)}
             >
               <Copy className="mr-2 h-4 w-4" />
               Copy
             </Button>
-            <Button size="sm" className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90" data-testid="button-export-quote" onClick={() => {}}>
+            <Button size="sm" className="h-9 rounded-2xl bg-white px-3 text-blue-600 hover:bg-white/90" data-testid="button-export-quote" onClick={() => {}}>
               <FileText className="mr-2 h-4 w-4" />
               Export
             </Button>
@@ -1515,7 +1533,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
                   {galleryImages.length > 0 && (
                     <div className="grid grid-cols-3 gap-1.5" data-testid="grid-itinerary-gallery">
-                      {galleryImages.map((img: any, idx: number) => (
+                      {galleryImages.map((img: { id: string; url: string; isPrimary: boolean | null }, idx: number) => (
                         <button
                           key={img.id}
                           type="button"
@@ -1740,7 +1758,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         </div>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
-                        <span className="text-sm text-black/55" data-testid="text-itinerary-location">{quote.destination}</span>
+                        <span className="text-sm text-black/55" data-testid="text-itinerary-location">{quote.destinationName || quote.destination}</span>
                         {quote.tags.length > 0 && (
                           <div className="flex flex-wrap items-center gap-2" data-testid="list-itinerary-tags-inline">
                             {quote.tags.map((t) => (
@@ -1796,7 +1814,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{quote.leadSource || "—"}</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
                           </div>
                         </div>
                       </>
@@ -1890,7 +1908,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{quote.leadSource || "—"}</div>
+                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
                           </div>
                         </div>
                       </>
@@ -1984,12 +2002,12 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
           </div>
         </div>
       </div>
-      {quote && (
+      {quote && quoteData && (
         <EditQuoteDialog
           open={showEditModal}
           onOpenChange={setShowEditModal}
           quote={quote}
-          quoteData={quoteData as any}
+          quoteData={quoteData}
           onSave={(updates) => {
             updateQuoteMutation.mutate(
               { id: quoteId, data: updates },
@@ -2080,7 +2098,7 @@ function EditQuoteDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   quote: QuoteDisplay;
-  quoteData: ApiQuote;
+  quoteData: EnrichedQuote | EnrichedBooking;
   onSave: (data: Record<string, unknown>) => void;
   isSaving: boolean;
 }) {
@@ -2089,6 +2107,8 @@ function EditQuoteDialog({
   useEffect(() => {
     if (open) setForm(buildEditForm(quote, quoteData));
   }, [open, quote, quoteData]);
+
+  const { data: roomTypeData } = useRoomTypes();
 
   const handleJsonUpload = (file: File) => {
     const reader = new FileReader();
@@ -2159,6 +2179,11 @@ function EditQuoteDialog({
       return time ? `${date}T${time}:00` : `${date}T00:00:00`;
     };
 
+    // Convert room type ID to name for database storage
+    const roomTypeName = form.roomType && roomTypeData
+      ? roomTypeData.find((r: { id: string; name: string | null }) => r.id === form.roomType)?.name || form.roomType
+      : form.roomType;
+
     const updates: Record<string, unknown> = {
       title: form.quoteTitle,
       quote_status: form.status,
@@ -2179,6 +2204,7 @@ function EditQuoteDialog({
       country: form.country || null,
       destination: form.destination || null,
       resort: form.resort || null,
+      lead_source: form.leadSource || null,
     };
 
     const showFlights = form.packageType !== "Hot Tub Break" && !(form.packageType === "Cruise Package" && form.cruiseOnly);
@@ -2203,7 +2229,7 @@ function EditQuoteDialog({
       updates.primaryAccommodation = {
         accomodation_id: form.accommodationId || null,
         board_basis_id: form.boardBasisId || null,
-        room_type: form.roomType || null,
+        room_type: roomTypeName || null,
         no_of_nights: form.nights || 0,
         check_in_date_time: form.checkInDate ? (form.checkInTime ? `${form.checkInDate}T${form.checkInTime}:00` : `${form.checkInDate}T00:00:00`) : null,
       };
@@ -2279,12 +2305,11 @@ function normalizePackageType(raw: string): string {
   return map[raw] || raw;
 }
 
-function buildEditForm(quote: QuoteDisplay, quoteData: ApiQuote): QuoteFormState {
-  const q = quoteData as Record<string, unknown>;
-  const flights = (q.flights as Array<Record<string, unknown>>) || [];
+function buildEditForm(quote: QuoteDisplay, quoteData: EnrichedQuote | EnrichedBooking): QuoteFormState {
+  const flights = quoteData.flights || [];
   const outboundFlight = flights.find((f) => f.flight_type === "outbound") || flights[0];
   const inboundFlight = flights.find((f) => f.flight_type === "inbound") || flights[1];
-  const accommodations = (q.accommodations as Array<Record<string, unknown>>) || [];
+  const accommodations = quoteData.accommodations || [];
   const primaryAccom = accommodations.find((a) => a.is_primary) || accommodations[0];
 
   return {
@@ -2301,48 +2326,48 @@ function buildEditForm(quote: QuoteDisplay, quoteData: ApiQuote): QuoteFormState
     country: quote.country,
     destination: quote.destination,
     resort: quote.resort,
-    accommodationId: (primaryAccom?.accomodation_id as string) || "",
+    accommodationId: primaryAccom?.accomodation_id || "",
     checkInDate: quote.checkInDate,
     checkInTime: quote.checkInTime,
     nights: quote.nights,
-    boardBasisId: (primaryAccom?.board_basis_id as string) || "",
+    boardBasisId: primaryAccom?.board_basis_id || "",
     roomType: quote.accommodation.roomType,
     transferType: quote.transferType,
     preBookedSeats: quote.preBookedSeats,
     flightMeals: quote.flightMeals,
     leadSource: quote.leadSource,
-    outboundDepartAirportId: (outboundFlight?.departing_airport_id as string) || "",
+    outboundDepartAirportId: outboundFlight?.departing_airport_id || "",
     outboundDepartDate: quote.flights.outbound.departDate,
     outboundDepartTime: quote.flights.outbound.departTime,
-    outboundArriveAirportId: (outboundFlight?.arrival_airport_id as string) || "",
+    outboundArriveAirportId: outboundFlight?.arrival_airport_id || "",
     outboundArriveDate: quote.flights.outbound.arriveDate,
     outboundArriveTime: quote.flights.outbound.arriveTime,
-    outboundFlightNumber: (outboundFlight?.flight_number as string) || "",
-    inboundDepartAirportId: (inboundFlight?.departing_airport_id as string) || "",
+    outboundFlightNumber: outboundFlight?.flight_number || "",
+    inboundDepartAirportId: inboundFlight?.departing_airport_id || "",
     inboundDepartDate: quote.flights.inbound.departDate,
     inboundDepartTime: quote.flights.inbound.departTime,
-    inboundArriveAirportId: (inboundFlight?.arrival_airport_id as string) || "",
+    inboundArriveAirportId: inboundFlight?.arrival_airport_id || "",
     inboundArriveDate: quote.flights.inbound.arriveDate,
     inboundArriveTime: quote.flights.inbound.arriveTime,
-    inboundFlightNumber: (inboundFlight?.flight_number as string) || "",
-    tourOperatorId: (q.main_tour_operator_id as string) || "",
+    inboundFlightNumber: inboundFlight?.flight_number || "",
+    tourOperatorId: quoteData.main_tour_operator_id || "",
     sales: quote.commissions.agentSplitPercent || 50,
     price: quote.commissions.price,
     commission: quote.commissions.commissionPercent || 0,
     discount: 0,
     serviceCharge: 0,
     pricePerPerson: quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1),
-    cruiseTitle: (q.cruiseTitle as string) || "",
-    cruiseLine: (q.cruiseLine as string) || "",
-    shipName: (q.shipName as string) || "",
-    cruiseDate: (q.cruiseDate as string) || "",
-    cabinType: (q.cabinType as string) || "",
-    embarkation: (q.embarkation as string) || "",
-    debarkation: (q.debarkation as string) || "",
-    cruiseExtras: (q.cruiseExtras as string) || "",
-    cruiseOnly: (q.cruiseOnly as boolean) || false,
-    lodgeCode: (q.lodgeCode as string) || "",
-    parkName: (q.parkName as string) || "",
-    pets: (q.pets as boolean) || false,
+    cruiseTitle: "",
+    cruiseLine: "",
+    shipName: "",
+    cruiseDate: "",
+    cabinType: "",
+    embarkation: "",
+    debarkation: "",
+    cruiseExtras: "",
+    cruiseOnly: false,
+    lodgeCode: "",
+    parkName: "",
+    pets: false,
   };
 }
