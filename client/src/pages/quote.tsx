@@ -1224,7 +1224,7 @@ function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisp
   const packageCommission = parseFloat(apiData.package_commission || "0");
 
   const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");
-
+  console.log(apiData)
   const result = {
     id: apiData.id,
     transaction_id: apiData.transaction_id,
@@ -1258,7 +1258,7 @@ function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisp
     accommodation: {
       property: primaryAccom?.accomodation_name || "",
       board: primaryAccom?.board_basis_name || "",
-      roomType: primaryAccom?.room_type || "",
+      roomType: primaryAccom?.room_type_name || primaryAccom?.room_type || "",
       notes: "",
     },
     flights: {
@@ -1441,12 +1441,12 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   return (
     <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
       <div className="px-5 pb-8 pt-5" data-testid="page-quote">
-        <div className="flex flex-col gap-3 rounded-2xl bg-green-600 px-5 py-4 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
           <div className="flex items-start gap-3">
             <Button
               size="sm"
               variant="outline"
-              className="h-9 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/20"
+              className="h-9 rounded-2xl border-black/10 bg-white/70"
               data-testid="button-back-client"
               onClick={() => setLocation(`/clients/${clientId}`)}
             >
@@ -1456,18 +1456,18 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="text-base font-semibold text-white" data-testid="text-quote-title">
-                  {quote.quoteTitle}, <span className="text-sm font-semibold text-white/90">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
+                <div className="text-base font-semibold" data-testid="text-quote-title">
+                  {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                 </div>
                 <StatusPill status={quote.status} />
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/70" data-testid="text-quote-meta">
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
                 <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
-                <span className="text-white/40">•</span>
+                <span className="text-black/25">•</span>
                 <span data-testid="text-quote-meta-dates">
                   {formatUKDate(quote.travelDate)} → {formatUKDate(quote.returnDate)}
                 </span>
-                <span className="text-white/40">•</span>
+                <span className="text-black/25">•</span>
                 <span data-testid="text-quote-meta-created">Created {formatUKDate(quote.createdAt)}</span>
               </div>
             </div>
@@ -1482,7 +1482,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                   { onSuccess: (data: { favorited?: boolean }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                 )
               }
-              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "border-amber-300/40 bg-amber-400/20 text-white hover:bg-amber-400/30" : "border-white/20 bg-white/10 text-white hover:bg-white/20"}`}
+              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
               data-testid="button-pin-quote"
             >
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
@@ -1491,14 +1491,14 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
             <Button
               size="sm"
               variant="outline"
-              className="h-9 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/20"
+              className="h-9 rounded-2xl border-black/10 bg-white/70"
               data-testid="button-copy-quote"
               onClick={() => navigator.clipboard.writeText(`${quote.quoteTitle} (${quote.id})`)}
             >
               <Copy className="mr-2 h-4 w-4" />
               Copy
             </Button>
-            <Button size="sm" className="h-9 rounded-2xl bg-white px-3 text-blue-600 hover:bg-white/90" data-testid="button-export-quote" onClick={() => {}}>
+            <Button size="sm" className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90" data-testid="button-export-quote" onClick={() => {}}>
               <FileText className="mr-2 h-4 w-4" />
               Export
             </Button>

@@ -1,0 +1,328 @@
+Build a modern, scalable internal web application UI called:
+
+“TheHUB”
+
+This is an INTERNAL HUB for a travel agency (not customer-facing).
+
+The system must be clean, modern, SaaS-style, responsive and modular. Use a professional dashboard layout similar to modern SaaS tools (like Notion, Linear, or Slack style UI).
+
+Use:
+
+React (Next.js preferred)
+
+Tailwind CSS
+
+Component-based architecture
+
+Dark/light mode toggle
+
+Sidebar navigation
+
+Top navigation bar with profile + notifications
+
+Role-based UI placeholders (Owner, Senior Agent, Trainee)
+
+This is UI only for Phase 1 (mock data allowed).
+
+🔷 CORE STRUCTURE
+
+Create the following main layout:
+
+TheHub Menu Within TheHUB:
+
+Dashboard
+
+Training Centre
+
+AI Destination Intelligence
+
+Knowledge Vault
+
+Deal Wins Wall
+
+News & Announcements
+
+Profiles
+
+Admin (Owner only)
+
+Top Bar:
+
+Search
+
+Notifications icon
+
+AI Assistant button
+
+User profile dropdown
+
+Main content area dynamic per section.
+
+🔷 1️⃣ DASHBOARD PAGE
+
+Purpose: Internal overview.
+
+Include:
+
+Cards:
+
+Training Progress (for logged-in user)
+
+Knowledge Contributions
+
+This Month’s Focus Destination
+
+Recent Deal Wins
+
+Trending Destination (AI generated placeholder)
+
+Recent Announcements
+
+Include activity feed:
+
+“Sarah added new Antalya hotel notes”
+
+“James closed £4,200 Tenerife deal”
+
+“New training module added: Closing on First Call”
+
+🔷 2️⃣ TRAINING CENTRE
+
+Create structured learning UI:
+
+Sections:
+
+Sales Skills
+
+Destination Knowledge
+
+Cruise Mastery
+
+Objection Handling
+
+Advanced Closing
+
+Each module should display:
+
+Title
+
+Duration
+
+Skill level
+
+Completion progress bar
+
+“Start / Continue” button
+
+Inside module page:
+
+Video placeholder
+
+Key takeaways section
+
+Downloadable resources
+
+AI Summary button (mock)
+
+Mark complete button
+
+🔷 3️⃣ AI DESTINATION INTELLIGENCE PAGE
+
+This is the differentiator.
+
+Create a searchable destination page.
+
+Search bar: “Search destination…”
+
+When destination selected (mock example: Antalya):
+
+Show:
+
+Header:
+Destination name
+AI Generated Summary (placeholder text)
+
+Data Cards:
+
+Most Quoted Hotels
+
+Average Selling Price
+
+Most Common Board Basis
+
+Top Departure Airports
+
+Peak Booking Months
+
+Most Common Objections
+
+Sections:
+
+AI Insights
+
+Trending Hotels
+
+Pricing Trends Chart (mock data)
+
+Agent Notes (collaborative)
+
+Add Note button
+
+Must look like a data intelligence dashboard.
+
+🔷 4️⃣ KNOWLEDGE VAULT
+
+This is structured internal content.
+
+Tabs:
+
+Destination Guides
+
+Hotel Insights
+
+Sales Playbooks
+
+Supplier Notes
+
+Blogs
+
+Each entry should show:
+
+Author
+
+Date added
+
+Likes
+
+Tags
+
+Save / Bookmark
+
+Include filter by:
+
+Destination
+
+Author
+
+Category
+
+Most popular
+
+🔷 5️⃣ DEAL WINS WALL
+
+Grid layout of recent wins.
+
+Each card shows:
+
+Agent name
+
+Destination sold
+
+Sale value
+
+Summary of how it was closed
+
+Objection handled
+
+“Learn From This” button
+
+Include leaderboard sidebar:
+
+Top Seller This Month
+
+Top Knowledge Contributor
+
+Most Improved Agent
+
+🔷 6️⃣ NEWS & ANNOUNCEMENTS
+
+Internal feed style layout.
+
+Features:
+
+Post news (Admin only)
+
+Comment section
+
+Pin announcement
+
+Category tags (Supplier / Target / Incentive / Training)
+
+Clean LinkedIn-style feed design.
+
+🔷 7️⃣ PROFILE PAGE
+
+Each agent has a personal internal profile.
+
+Sections:
+
+Profile photo
+
+Bio
+
+Role
+
+Skill heatmap (visual)
+
+Contributions
+
+Pinned posts
+
+Training progress
+
+Deal wins
+
+Reputation score (mock points)
+
+Allow:
+
+Add blog post
+
+Upload training video
+
+Pin knowledge guide
+
+Add destination insight
+
+🔷 8️⃣ ADMIN PANEL (Owner Role Only)
+
+Simple UI for:
+
+Add training module
+
+Approve knowledge submissions
+
+Post announcements
+
+Set monthly focus destination
+
+View team skill gaps (mock data)
+
+Toggle AI features (placeholder)
+
+🔷 DESIGN REQUIREMENTS
+
+Clean SaaS design
+
+Rounded cards
+
+Soft shadows
+
+Minimal colour palette (navy/blue accent)
+
+Clear typography hierarchy
+
+Mobile responsive
+
+Component reusability
+
+Mock data only (static JSON)
+
+
+🔷 AI Assistant floating button (UI only)
+
+Dark mode toggle
+
+Notification dropdown UI
+
+Animated loading skeletons

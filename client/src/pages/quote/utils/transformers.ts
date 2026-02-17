@@ -82,7 +82,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     accommodation: {
       property: primaryAccom?.accomodation_name || "",
       board: primaryAccom?.board_basis_name || "",
-      roomType: primaryAccom?.room_type || "",
+      roomType: primaryAccom?.room_type_name || primaryAccom?.room_type || "",
       notes: "",
     },
     flights: {

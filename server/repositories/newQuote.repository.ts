@@ -5,7 +5,7 @@ import {
   quote_cruise, quote_cruise_item_extra, quote_cruise_itinerary,
   passengers, deal_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
-  transaction, resorts, destination, country,
+  transaction, resorts, destination, country, room_type,
 } from "@shared/schema";
 import type {
   Quote, InsertQuote, QuoteFlight, InsertQuoteFlight, QuoteAccomodation, InsertQuoteAccomodation,
@@ -118,6 +118,7 @@ export const newQuoteRepository = {
         accomodation_name: accomodation_list.name,
         board_basis_name: board_basis.type,
         tour_operator_name: accomTourOp.name,
+        room_type_name: room_type.name,
         resort_id: resorts.id,
         resort_name: resorts.name,
         destination_id: destination.id,
@@ -132,6 +133,7 @@ export const newQuoteRepository = {
         .leftJoin(country, eq(destination.country_id, country.id))
         .leftJoin(board_basis, eq(quote_accomodation.board_basis_id, board_basis.id))
         .leftJoin(accomTourOp, eq(quote_accomodation.tour_operator_id, accomTourOp.id))
+        .leftJoin(room_type, sql`CASE WHEN ${quote_accomodation.room_type} ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN ${quote_accomodation.room_type}::uuid ELSE NULL END = ${room_type.id}`)
         .where(eq(quote_accomodation.quote_id, id)),
 
       db.select({
@@ -196,6 +198,15 @@ export const newQuoteRepository = {
       destination_id: accommodations[0]?.destination_id || null,
       resort_id: accommodations[0]?.resort_id || null,
     });
+    console.log('🔍 BACKEND - Location NAMES being returned:', {
+      country_name: accommodations[0]?.country_name || null,
+      destination_name: accommodations[0]?.destination_name || null,
+      resort_name: accommodations[0]?.resort_name || null,
+    });
+    console.log('🔍 BACKEND - Accommodation chain:', {
+      has_accommodation: !!accommodations[0]?.accommodation,
+      accomodation_id: accommodations[0]?.accommodation?.accomodation_id || null,
+    });
     console.log('🔍 BACKEND - Total accommodations found:', accommodations.length);
 
     return {
@@ -205,16 +216,18 @@ export const newQuoteRepository = {
       lead_source: q.lead_source,
       country_id: accommodations[0]?.country_id || null,
       country_name: accommodations[0]?.country_name || null,
-      destination_id: accommodations[0]?.destination_id || null,
+      // destination_id: accommodations[0]?.destination_id || null,
       destination_name: accommodations[0]?.destination_name || null,
       resort_id: accommodations[0]?.resort_id || null,
       resort_name: accommodations[0]?.resort_name || null,
       flights: flights.map(f => ({ ...f.flight, departing_airport_name: f.departing_airport_name, arrival_airport_name: f.arrival_airport_name, tour_operator_name: f.tour_operator_name })),
       accommodations: accommodations.map(a => ({ 
         ...a.accommodation, 
+        destination_name: a.destination_name,
         accomodation_name: a.accomodation_name, 
         board_basis_name: a.board_basis_name, 
         tour_operator_name: a.tour_operator_name,
+        room_type_name: a.room_type_name,
         // Include location IDs for frontend use
         resort_id: a.resort_id,
         destination_id: a.destination_id,

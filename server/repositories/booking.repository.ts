@@ -5,7 +5,7 @@ import {
   booking_airport_parking, booking_cruise, booking_cruise_item_extra,
   booking_cruise_itinerary, passengers, deal_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
-  transaction, resorts, destination, country,
+  transaction, resorts, destination, country, room_type,
 } from "@shared/schema";
 import type {
   Booking, InsertBooking, InsertBookingFlight, BookingFlight,
@@ -114,6 +114,7 @@ export const bookingRepository = {
         accomodation_name: accomodation_list.name,
         board_basis_name: board_basis.type,
         tour_operator_name: accomTourOp.name,
+        room_type_name: room_type.name,
         resort_id: resorts.id,
         resort_name: resorts.name,
         destination_id: destination.id,
@@ -128,6 +129,7 @@ export const bookingRepository = {
         .leftJoin(country, eq(destination.country_id, country.id))
         .leftJoin(board_basis, eq(booking_accomodation.board_basis_id, board_basis.id))
         .leftJoin(accomTourOp, eq(booking_accomodation.tour_operator_id, accomTourOp.id))
+        .leftJoin(room_type, sql`CASE WHEN ${booking_accomodation.room_type} ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN ${booking_accomodation.room_type}::uuid ELSE NULL END = ${room_type.id}`)
         .where(eq(booking_accomodation.booking_id, id)),
 
       db.select({
@@ -203,6 +205,7 @@ export const bookingRepository = {
         accomodation_name: a.accomodation_name, 
         board_basis_name: a.board_basis_name, 
         tour_operator_name: a.tour_operator_name,
+        room_type_name: a.room_type_name,
         // Include location IDs for frontend use
         resort_id: a.resort_id,
         destination_id: a.destination_id,

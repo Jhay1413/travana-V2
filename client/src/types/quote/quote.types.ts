@@ -325,6 +325,7 @@ export interface EnrichedQuoteAccommodation extends QuoteAccommodation {
   accomodation_name?: string;
   board_basis_name?: string;
   tour_operator_name?: string;
+  room_type_name?: string;
 }
 
 export interface EnrichedQuoteCruise extends QuoteCruise {
