@@ -2103,6 +2103,7 @@ function EditQuoteDialog({
   isSaving: boolean;
 }) {
   const [form, setForm] = useState<QuoteFormState>(() => buildEditForm(quote, quoteData));
+  const { toast } = useToast();
 
   useEffect(() => {
     if (open) setForm(buildEditForm(quote, quoteData));
@@ -2112,7 +2113,7 @@ function EditQuoteDialog({
 
   const handleJsonUpload = (file: File) => {
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const content = (ev.target?.result as string) || "";
       const toIsoDate = (d: string | undefined): string => {
         if (!d) return "";
@@ -2129,18 +2130,93 @@ function EditQuoteDialog({
         const isScraperFormat = Array.isArray(data.flights) || data.sales_price !== undefined || data.departure_airport !== undefined;
 
         if (isScraperFormat) {
-          import("@/lib/scraper-json-parser").then(({ mapScraperJsonToFormFields }) => {
+          try {
+            const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
+            const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
+            
+            console.log("📋 Parsing scraper JSON format...");
             const result = mapScraperJsonToFormFields(data);
+            console.log("📋 Parsed fields:", result.fields);
+            
+            // Extract only the fields needed for ID mapping
+            const mappingInput = {
+              country: result.fields.country,
+              destination: result.fields.destination,
+              resort: result.fields.resort,
+              accommodation: result.fields.accommodation,
+              boardBasis: result.fields.boardBasis,
+              tourOperator: result.fields.tourOperator,
+              outboundDepartAirport: result.fields.outboundDepartAirport,
+              outboundArriveAirport: result.fields.outboundArriveAirport,
+              inboundDepartAirport: result.fields.inboundDepartAirport,
+              inboundArriveAirport: result.fields.inboundArriveAirport,
+              roomType: result.fields.roomType,
+            };
+            
+            console.log("🔍 Mapping input:", mappingInput);
+            
+            // Map text values to IDs using server-side endpoint
+            console.log("🔍 Calling server API to map text values to database IDs...");
+            const idMapping = await jsonMapperApi.mapToIds(mappingInput);
+            console.log("✅ ID mapping result:", idMapping);
+            
+            // Show warnings if any entities weren't found
+            if (idMapping.warnings.length > 0) {
+              console.warn("⚠️ Warnings:", idMapping.warnings);
+              toast({
+                title: idMapping.warnings.some(w => w.startsWith("Created")) ? "Entities created" : "Some values need attention",
+                description: idMapping.warnings.join(", "),
+                variant: "default",
+              });
+            } else {
+              toast({
+                title: "JSON imported successfully",
+                description: "All values mapped to database IDs",
+              });
+            }
+            
             setForm((prev) => {
               const updated = { ...prev };
+              
+              // Apply text field values
               for (const [k, v] of Object.entries(result.fields)) {
                 if (v !== "" && v !== null && v !== undefined) {
                   (updated as Record<string, unknown>)[k] = v;
                 }
               }
+              
+              // Apply resolved IDs
+              if (idMapping.countryId) updated.country = idMapping.countryId;
+              if (idMapping.destinationId) updated.destination = idMapping.destinationId;
+              if (idMapping.resortId) updated.resort = idMapping.resortId;
+              if (idMapping.accommodationId) updated.accommodationId = idMapping.accommodationId;
+              if (idMapping.boardBasisId) updated.boardBasisId = idMapping.boardBasisId;
+              if (idMapping.tourOperatorId) updated.tourOperatorId = idMapping.tourOperatorId;
+              if (idMapping.outboundDepartAirportId) updated.outboundDepartAirportId = idMapping.outboundDepartAirportId;
+              if (idMapping.outboundArriveAirportId) updated.outboundArriveAirportId = idMapping.outboundArriveAirportId;
+              if (idMapping.inboundDepartAirportId) updated.inboundDepartAirportId = idMapping.inboundDepartAirportId;
+              if (idMapping.inboundArriveAirportId) updated.inboundArriveAirportId = idMapping.inboundArriveAirportId;
+              if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
+              
+              console.log("✅ Form updated with IDs:", {
+                country: updated.country,
+                destination: updated.destination,
+                resort: updated.resort,
+                accommodation: updated.accommodationId,
+                boardBasis: updated.boardBasisId,
+                tourOperator: updated.tourOperatorId,
+              });
+              
               return updated;
             });
-          }).catch(() => {});
+          } catch (error) {
+            console.error("❌ Error processing JSON:", error);
+            toast({
+              title: "Error processing JSON",
+              description: error instanceof Error ? error.message : "Failed to map values. Please check the JSON format.",
+              variant: "destructive",
+            });
+          }
           return;
         }
 

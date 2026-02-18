@@ -18,6 +18,7 @@ import favoriteRoutes from "./favorite.routes";
 import adminImportRoutes from "./adminImport.routes";
 import taskRoutes from "./task.routes";
 import lookupRoutes from "./lookup.routes";
+import jsonMapperRoutes from "./json-mapper.routes";
 
 const router = Router();
 
@@ -40,5 +41,6 @@ router.use("/favorites", favoriteRoutes);
 router.use("/admin", adminImportRoutes);
 router.use("/tasks", taskRoutes);
 router.use("/lookup", lookupRoutes);
+router.use("/json-mapper", jsonMapperRoutes);
 
 export default router;
