@@ -111,7 +111,8 @@ export const newQuoteRepository = {
         .leftJoin(departAirport, eq(quote_flights.departing_airport_id, departAirport.id))
         .leftJoin(arriveAirport, eq(quote_flights.arrival_airport_id, arriveAirport.id))
         .leftJoin(flightTourOp, eq(quote_flights.tour_operator_id, flightTourOp.id))
-        .where(eq(quote_flights.quote_id, id)),
+        .where(eq(quote_flights.quote_id, id))
+        .orderBy(quote_flights.leg_order),
 
       db.select({
         accommodation: quote_accomodation,
@@ -327,19 +328,37 @@ export const newQuoteRepository = {
     await db.delete(passengers).where(eq(passengers.id, id));
   },
 
-  async upsertFlightByType(quoteId: string, flightType: string, data: Partial<InsertQuoteFlight>): Promise<QuoteFlight> {
+  async upsertFlightByType(quoteId: string, flightType: string, data: Partial<InsertQuoteFlight>, legOrder: number = 0): Promise<QuoteFlight> {
     const converted = convertFlightDates(data as Record<string, unknown>) as Partial<InsertQuoteFlight>;
     const existing = await db.select().from(quote_flights)
       .where(eq(quote_flights.quote_id, quoteId))
-      .then(rows => rows.find(r => r.flight_type === flightType));
+      .then(rows => rows.find(r => r.flight_type === flightType && r.leg_order === legOrder));
 
     if (existing) {
-      const [result] = await db.update(quote_flights).set(converted).where(eq(quote_flights.id, existing.id)).returning();
+      const [result] = await db.update(quote_flights).set({ ...converted, leg_order: legOrder }).where(eq(quote_flights.id, existing.id)).returning();
       return result;
     } else {
-      const [result] = await db.insert(quote_flights).values({ ...converted, quote_id: quoteId, flight_type: flightType }).returning();
+      const [result] = await db.insert(quote_flights).values({ ...converted, quote_id: quoteId, flight_type: flightType, leg_order: legOrder }).returning();
       return result;
     }
+  },
+
+  async replaceConnectingLegs(quoteId: string, flightType: string, legs: Partial<InsertQuoteFlight>[]): Promise<QuoteFlight[]> {
+    await db.delete(quote_flights)
+      .where(sql`${quote_flights.quote_id} = ${quoteId} AND ${quote_flights.flight_type} = ${flightType} AND ${quote_flights.leg_order} > 0`);
+
+    const results: QuoteFlight[] = [];
+    for (let i = 0; i < legs.length; i++) {
+      const converted = convertFlightDates(legs[i] as Record<string, unknown>) as Partial<InsertQuoteFlight>;
+      const [result] = await db.insert(quote_flights).values({
+        ...converted,
+        quote_id: quoteId,
+        flight_type: flightType,
+        leg_order: i + 1,
+      }).returning();
+      results.push(result);
+    }
+    return results;
   },
 
   async upsertPrimaryAccommodation(quoteId: string, data: Partial<InsertQuoteAccomodation>): Promise<QuoteAccomodation> {

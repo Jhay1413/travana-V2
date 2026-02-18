@@ -18,6 +18,8 @@ import type {
 interface QuoteRelationData {
   outboundFlight?: Partial<InsertQuoteFlight>;
   inboundFlight?: Partial<InsertQuoteFlight>;
+  outboundConnectingLegs?: Partial<InsertQuoteFlight>[];
+  inboundConnectingLegs?: Partial<InsertQuoteFlight>[];
   primaryAccommodation?: Partial<InsertQuoteAccomodation>;
   images?: string[];
 }
@@ -66,7 +68,7 @@ export const newQuoteService = {
 
   async createQuote(data: CreateQuotePayload) {
     const {
-      outboundFlight, inboundFlight, primaryAccommodation, images,
+      outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       ...quoteFields
     } = data;
 
@@ -80,16 +82,21 @@ export const newQuoteService = {
     }
 
     if (outboundFlight) {
-      await newQuoteRepository.upsertFlightByType(q.id, "outbound", outboundFlight);
+      await newQuoteRepository.upsertFlightByType(q.id, "outbound", outboundFlight, 0);
     }
     if (inboundFlight) {
-      await newQuoteRepository.upsertFlightByType(q.id, "inbound", inboundFlight);
+      await newQuoteRepository.upsertFlightByType(q.id, "inbound", inboundFlight, 0);
+    }
+    if (outboundConnectingLegs?.length) {
+      await newQuoteRepository.replaceConnectingLegs(q.id, "outbound", outboundConnectingLegs);
+    }
+    if (inboundConnectingLegs?.length) {
+      await newQuoteRepository.replaceConnectingLegs(q.id, "inbound", inboundConnectingLegs);
     }
     if (primaryAccommodation) {
       await newQuoteRepository.upsertPrimaryAccommodation(q.id, primaryAccommodation);
     }
 
-    // Add images if provided
     if (images && images.length > 0) {
       console.log(`📸 Adding ${images.length} images to new quote ${q.id}`);
       await quoteImageRepository.addImages(q.id, images);
@@ -104,7 +111,7 @@ export const newQuoteService = {
     console.log('📸 QUOTE UPDATE - Images in payload:', data.images, 'Length:', data.images?.length || 0);
     
     const {
-      outboundFlight, inboundFlight, primaryAccommodation,
+      outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType,
       embarkation, debarkation, cruiseExtras, cruiseOnly,
       lead_source,
@@ -139,16 +146,21 @@ export const newQuoteService = {
     }
 
     if (outboundFlight) {
-      await newQuoteRepository.upsertFlightByType(id, "outbound", outboundFlight);
+      await newQuoteRepository.upsertFlightByType(id, "outbound", outboundFlight, 0);
     }
     if (inboundFlight) {
-      await newQuoteRepository.upsertFlightByType(id, "inbound", inboundFlight);
+      await newQuoteRepository.upsertFlightByType(id, "inbound", inboundFlight, 0);
+    }
+    if (outboundConnectingLegs !== undefined) {
+      await newQuoteRepository.replaceConnectingLegs(id, "outbound", outboundConnectingLegs || []);
+    }
+    if (inboundConnectingLegs !== undefined) {
+      await newQuoteRepository.replaceConnectingLegs(id, "inbound", inboundConnectingLegs || []);
     }
     if (primaryAccommodation) {
       await newQuoteRepository.upsertPrimaryAccommodation(id, primaryAccommodation);
     }
 
-    // Add images if provided
     if (images && images.length > 0) {
       console.log(`📸 Adding ${images.length} images to quote ${id}`);
       await quoteImageRepository.addImages(id, images);
