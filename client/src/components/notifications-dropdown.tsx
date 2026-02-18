@@ -52,92 +52,95 @@ export function NotificationsDropdown({ userId }: NotificationsDropdownProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/[0.07]"
+        <Button
+          variant="ghost"
+          size="sm"
+          className="relative h-9 w-9 p-0 rounded-full bg-[#ff000073]"
           data-testid="button-notifications"
-          aria-label="Notifications"
         >
-          <Bell className="h-4 w-4" />
+          <Bell className="h-5 w-5 text-white/70" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+            <span className="absolute -top-0.5 -right-0.5 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-medium">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
-      <PopoverContent className="z-[500] w-80 rounded-2xl border border-black/10 bg-white/95 backdrop-blur-xl p-0 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.15)]" align="end">
+      <PopoverContent className="w-80 p-0" align="end">
         <div className="flex items-center justify-between px-4 py-3 border-b border-black/10">
-          <h3 className="text-sm font-semibold text-black/80">Notifications</h3>
+          <h3 className="font-semibold">Notifications</h3>
           {unreadCount > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => markAllReadMutation.mutate()}
-              className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-medium text-black/50 transition hover:bg-black/5 hover:text-black/70"
+              className="h-8 text-xs gap-1"
               data-testid="button-mark-all-read"
             >
               <CheckCheck className="h-3.5 w-3.5" />
               Mark all read
-            </button>
+            </Button>
           )}
         </div>
-        <div className="max-h-80 overflow-y-auto">
+        <div className="max-h-80 overflow-y-auto scrollbar-none">
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Spinner className="h-5 w-5" />
             </div>
           ) : notifications.length === 0 ? (
-            <div className="py-8 text-center">
-              <Bell className="h-8 w-8 mx-auto mb-2 text-black/20" />
-              <p className="text-xs font-medium text-black/40">No notifications yet</p>
+            <div className="py-8 text-center text-black/50">
+              <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No notifications yet</p>
             </div>
           ) : (
             notifications.map((notification) => (
               <div
                 key={notification.id}
-                className={`flex items-start gap-3 px-4 py-3 border-b border-black/5 cursor-pointer transition-colors hover:bg-black/[0.02] ${
-                  !notification.read ? "bg-blue-50/40" : ""
+                className={`flex items-start gap-3 px-4 py-3 border-b border-black/5 hover:bg-black/[0.02] cursor-pointer transition-colors ${
+                  !notification.read ? "bg-blue-50/50" : ""
                 }`}
                 onClick={() => handleNotificationClick(notification)}
                 data-testid={`notification-${notification.id}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-xs font-semibold text-black/70 truncate">{notification.title}</p>
+                    <p className="font-medium text-sm truncate">{notification.title}</p>
                     {!notification.read && (
                       <span className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
                     )}
                   </div>
-                  <p className="text-[11px] text-black/50 line-clamp-2 mt-0.5 leading-relaxed">
+                  <p className="text-xs text-black/60 line-clamp-2 mt-0.5">
                     {notification.message}
                   </p>
-                  <p className="text-[10px] font-medium text-black/30 mt-1">
+                  <p className="text-xs text-black/40 mt-1">
                     {formatTimeAgo(notification.createdAt)}
                   </p>
                 </div>
-                <div className="flex gap-0.5 flex-shrink-0">
+                <div className="flex gap-1">
                   {!notification.read && (
-                    <button
-                      type="button"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-xl text-black/40 transition hover:bg-black/5 hover:text-black/70"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         markReadMutation.mutate(notification.id);
                       }}
                     >
                       <Check className="h-3.5 w-3.5" />
-                    </button>
+                    </Button>
                   )}
-                  <button
-                    type="button"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-xl text-black/30 transition hover:bg-red-50 hover:text-red-500"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteMutation.mutate(notification.id);
                     }}
                   >
                     <X className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))
