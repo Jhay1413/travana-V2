@@ -34,10 +34,10 @@ export const jsonMapperApi = {
    * Map JSON text values to database IDs
    */
   mapToIds: async (input: JsonMappingInput): Promise<JsonMappingResult> => {
-    const { data } = await axiosClient.post<{ success: boolean; data: JsonMappingResult }>(
+    const { data } = await axiosClient.post<JsonMappingResult>(
       "/api/json-mapper/map-to-ids",
       input
     );
-    return data.data;
+    return data as unknown as JsonMappingResult;
   },
 };

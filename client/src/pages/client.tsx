@@ -2287,10 +2287,16 @@ export default function ClientPage() {
                             if (isScraperFormat) {
                               import("@/lib/scraper-json-parser").then(({ mapScraperJsonToFormFields }) => {
                                 const result = mapScraperJsonToFormFields(data);
+                                const skipFields = new Set([
+                                  'country', 'destination', 'resort', 'accommodation',
+                                  'boardBasis', 'tourOperator', 'roomType',
+                                  'outboundDepartAirport', 'outboundArriveAirport',
+                                  'inboundDepartAirport', 'inboundArriveAirport',
+                                ]);
                                 setNewQuote((prev) => {
                                   const updated = { ...prev, jsonPayload: content };
                                   for (const [k, v] of Object.entries(result.fields)) {
-                                    if (v !== "" && v !== null && v !== undefined) {
+                                    if (v !== "" && v !== null && v !== undefined && !skipFields.has(k)) {
                                       (updated as Record<string, unknown>)[k] = v;
                                     }
                                   }
@@ -2314,31 +2320,31 @@ export default function ClientPage() {
                               passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
                               passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
                               childAges: data.childAges || data.child_ages || data.passengers?.childAges || prev.childAges,
-                              country: data.country || prev.country,
-                              destination: data.destination || prev.destination,
-                              resort: data.resort || prev.resort,
-                              accommodation: data.accommodation || data.hotel || data.property || prev.accommodation,
+                              country: prev.country,
+                              destination: prev.destination,
+                              resort: prev.resort,
+                              accommodation: prev.accommodation,
                               checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
                               checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
                               nights: data.nights || data.duration || prev.nights,
-                              boardBasis: data.boardBasis || data.board_basis || data.board || prev.boardBasis,
-                              roomType: data.roomType || data.room_type || data.room || prev.roomType,
+                              boardBasis: prev.boardBasis,
+                              roomType: prev.roomType,
                               transferType: data.transferType || data.transfer_type || data.transfers || prev.transferType,
                               preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
                               flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
-                              outboundDepartAirport: data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || prev.outboundDepartAirport,
+                              outboundDepartAirport: prev.outboundDepartAirport,
                               outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
                               outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
-                              outboundArriveAirport: data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || prev.outboundArriveAirport,
+                              outboundArriveAirport: prev.outboundArriveAirport,
                               outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
                               outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
-                              inboundDepartAirport: data.flights?.inbound?.departAirport || data.inbound?.from || prev.inboundDepartAirport,
+                              inboundDepartAirport: prev.inboundDepartAirport,
                               inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
                               inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
-                              inboundArriveAirport: data.flights?.inbound?.arriveAirport || data.inbound?.to || prev.inboundArriveAirport,
+                              inboundArriveAirport: prev.inboundArriveAirport,
                               inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
                               inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
-                              tourOperator: data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || prev.tourOperator,
+                              tourOperator: prev.tourOperator,
                               sales: data.commissions?.sales || data.sales || prev.sales,
                               price: data.commissions?.price || data.price || data.total || prev.price,
                               commission: data.commissions?.commission || data.commission || prev.commission,

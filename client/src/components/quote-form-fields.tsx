@@ -164,20 +164,6 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
 
   const destinationsData = form.country ? filteredDestinationsData : allDestinationsData;
 
-  console.log('🔍 QuoteFormFields - form state:', {
-    country: form.country,
-    destination: form.destination,
-    resort: form.resort,
-    accommodation: form.accommodation,
-    accommodationId: form.accommodationId
-  });
-  console.log('🔍 QuoteFormFields - loaded data:', {
-    countriesCount: countriesData?.length || 0,
-    destinationsCount: destinationsData?.length || 0,
-    resortsCount: resortsData?.length || 0,
-    accommodationsCount: accommodationsData?.length || 0
-  });
-
   const packageTypeName = useMemo(() => {
     if (externalPackageTypeName) return externalPackageTypeName;
     if (!form.packageType || !packageTypesData) return form.packageType;

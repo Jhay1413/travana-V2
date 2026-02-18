@@ -1197,8 +1197,6 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
 }
 
 function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisplay {
-  console.log('🔍 Full API Data:', apiData);
-  console.log('🔍 API Data lead_source:', apiData.lead_source);
   const flights = apiData.flights || [];
   const cruises = apiData.cruises || [];
   const outboundFlight = flights.find(f => f.flight_type === "outbound") || flights[0];
@@ -1308,7 +1306,6 @@ function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisp
     supplierRef: ("supplier_ref" in apiData ? apiData.supplier_ref : undefined) || undefined,
   };
   
-  console.log('✅ Transformed quote leadSource:', result.leadSource);
   return result;
 }
 
@@ -2112,12 +2109,9 @@ function EditQuoteDialog({
   const { data: roomTypeData } = useRoomTypes();
 
   const handleJsonUpload = (file: File) => {
-    console.log('🟢 handleJsonUpload called with file:', file.name, file.type, file.size);
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      console.log('🟢 FileReader onload triggered');
       const content = (ev.target?.result as string) || "";
-      console.log('🟢 File content length:', content.length);
       const toIsoDate = (d: string | undefined): string => {
         if (!d) return "";
         const match = d.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
@@ -2137,9 +2131,7 @@ function EditQuoteDialog({
             const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
             const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
             
-            console.log("📋 Parsing scraper JSON format...");
             const result = mapScraperJsonToFormFields(data);
-            console.log("📋 Parsed fields:", result.fields);
             
             // Extract only the fields needed for ID mapping
             const mappingInput = {
@@ -2156,16 +2148,10 @@ function EditQuoteDialog({
               roomType: result.fields.roomType,
             };
             
-            console.log("🔍 Mapping input:", mappingInput);
-            
-            // Map text values to IDs using server-side endpoint
-            console.log("🔍 Calling server API to map text values to database IDs...");
             const idMapping = await jsonMapperApi.mapToIds(mappingInput);
-            console.log("✅ ID mapping result:", idMapping);
             
             // Show warnings if any entities weren't found
             if (idMapping.warnings.length > 0) {
-              console.warn("⚠️ Warnings:", idMapping.warnings);
               toast({
                 title: idMapping.warnings.some(w => w.startsWith("Created")) ? "Entities created" : "Some values need attention",
                 description: idMapping.warnings.join(", "),
@@ -2223,15 +2209,6 @@ function EditQuoteDialog({
               if (idMapping.inboundArriveAirportId) updated.inboundArriveAirportId = idMapping.inboundArriveAirportId;
               if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
               
-              console.log("✅ Form updated with IDs:", {
-                country: updated.country,
-                destination: updated.destination,
-                resort: updated.resort,
-                accommodation: updated.accommodationId,
-                boardBasis: updated.boardBasisId,
-                tourOperator: updated.tourOperatorId,
-              });
-              
               return updated;
             });
           } catch (error) {
@@ -2245,6 +2222,7 @@ function EditQuoteDialog({
           return;
         }
 
+        // Fallback for non-scraper format JSON
         setForm((prev) => ({
           ...prev,
           packageType: data.packageType || data.package_type || prev.packageType,
@@ -2255,31 +2233,24 @@ function EditQuoteDialog({
           passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
           passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
           childAges: data.childAges || data.child_ages || data.passengers?.childAges || prev.childAges,
-          country: data.country || prev.country,
-          destination: data.destination || prev.destination,
-          resort: data.resort || prev.resort,
-          accommodation: data.accommodation || data.hotel || data.property || prev.accommodation,
+          // NOTE: Skipping ID fields (country, destination, resort, accommodation, boardBasis, roomType, airports)
+          // These should only be populated with UUIDs, not text values
           checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
           checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
           nights: data.nights || data.duration || prev.nights,
-          boardBasis: data.boardBasis || data.board_basis || data.board || prev.boardBasis,
-          roomType: data.roomType || data.room_type || data.room || prev.roomType,
           transferType: data.transferType || data.transfer_type || data.transfers || prev.transferType,
           preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
           flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
-          outboundDepartAirport: data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || prev.outboundDepartAirport,
+          // NOTE: Skipping airport ID fields - they should only receive UUIDs
           outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
           outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
-          outboundArriveAirport: data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || prev.outboundArriveAirport,
           outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
           outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
-          inboundDepartAirport: data.flights?.inbound?.departAirport || data.inbound?.from || prev.inboundDepartAirport,
           inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
           inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
-          inboundArriveAirport: data.flights?.inbound?.arriveAirport || data.inbound?.to || prev.inboundArriveAirport,
           inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
           inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
-          tourOperator: data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || prev.tourOperator,
+          // NOTE: Skipping tourOperator ID field
           sales: data.commissions?.sales || data.sales || prev.sales,
           price: data.commissions?.price || data.price || data.total || prev.price,
           commission: data.commissions?.commission || data.commission || prev.commission,
@@ -2304,7 +2275,6 @@ function EditQuoteDialog({
         variant: "destructive",
       });
     };
-    console.log('🟢 About to call reader.readAsText()');
     reader.readAsText(file);
   };
 
