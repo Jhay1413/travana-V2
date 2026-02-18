@@ -2281,6 +2281,28 @@ export default function ClientPage() {
                           };
                           try {
                             const data = JSON.parse(content);
+
+                            const isScraperFormat = Array.isArray(data.flights) || data.sales_price !== undefined || data.departure_airport !== undefined;
+
+                            if (isScraperFormat) {
+                              import("@/lib/scraper-json-parser").then(({ mapScraperJsonToFormFields }) => {
+                                const result = mapScraperJsonToFormFields(data);
+                                setNewQuote((prev) => {
+                                  const updated = { ...prev, jsonPayload: content };
+                                  for (const [k, v] of Object.entries(result.fields)) {
+                                    if (v !== "" && v !== null && v !== undefined) {
+                                      (updated as Record<string, unknown>)[k] = v;
+                                    }
+                                  }
+                                  return updated;
+                                });
+                                if (result.images.length > 0) {
+                                  setQuoteImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
+                                }
+                              }).catch(() => {});
+                              return;
+                            }
+
                             setNewQuote((prev) => ({
                               ...prev,
                               jsonPayload: content,

@@ -2125,6 +2125,25 @@ function EditQuoteDialog({
       };
       try {
         const data = JSON.parse(content);
+
+        const isScraperFormat = Array.isArray(data.flights) || data.sales_price !== undefined || data.departure_airport !== undefined;
+
+        if (isScraperFormat) {
+          import("@/lib/scraper-json-parser").then(({ mapScraperJsonToFormFields }) => {
+            const result = mapScraperJsonToFormFields(data);
+            setForm((prev) => {
+              const updated = { ...prev };
+              for (const [k, v] of Object.entries(result.fields)) {
+                if (v !== "" && v !== null && v !== undefined) {
+                  (updated as Record<string, unknown>)[k] = v;
+                }
+              }
+              return updated;
+            });
+          }).catch(() => {});
+          return;
+        }
+
         setForm((prev) => ({
           ...prev,
           packageType: data.packageType || data.package_type || prev.packageType,
