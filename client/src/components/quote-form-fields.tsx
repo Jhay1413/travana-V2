@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { Anchor, Hotel, PawPrint, Plane } from "lucide-react";
+import { Anchor, Hotel, PawPrint, Plane, Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -8,6 +9,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes } from "@/hooks/queries";
 import type { LookupCountry, LookupDestination, LookupResort, LookupAccommodation, LookupBoardBasis } from "@/api/endpoints/lookup.api";
+
+export interface FlightLeg {
+  departAirportId: string;
+  departAirport: string;
+  arriveAirportId: string;
+  arriveAirport: string;
+  departDate: string;
+  departTime: string;
+  arriveDate: string;
+  arriveTime: string;
+  flightNumber: string;
+}
+
+export const emptyFlightLeg: FlightLeg = {
+  departAirportId: "",
+  departAirport: "",
+  arriveAirportId: "",
+  arriveAirport: "",
+  departDate: "",
+  departTime: "",
+  arriveDate: "",
+  arriveTime: "",
+  flightNumber: "",
+};
 
 export interface QuoteFormState {
   packageType: string;
@@ -52,6 +77,8 @@ export interface QuoteFormState {
   inboundArriveDate: string;
   inboundArriveTime: string;
   inboundFlightNumber: string;
+  outboundConnectingLegs: FlightLeg[];
+  inboundConnectingLegs: FlightLeg[];
   tourOperator: string;
   tourOperatorId: string;
   sales: string | number;
@@ -117,6 +144,8 @@ export const defaultQuoteFormState: QuoteFormState = {
   inboundArriveDate: "",
   inboundArriveTime: "",
   inboundFlightNumber: "",
+  outboundConnectingLegs: [],
+  inboundConnectingLegs: [],
   tourOperator: "",
   tourOperatorId: "",
   sales: "",
@@ -204,6 +233,26 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
   const prefix = mode === "convert" ? "convert" : "edit";
 
   const showFlights = effectivePackageType !== "Hot Tub Break" && !(effectivePackageType === "Cruise Package" && form.cruiseOnly);
+
+  const addConnectingLeg = (direction: "outbound" | "inbound") => {
+    const key = direction === "outbound" ? "outboundConnectingLegs" : "inboundConnectingLegs";
+    const currentLegs = form[key];
+    if (currentLegs.length >= 2) return;
+    setForm(prev => ({ ...prev, [key]: [...prev[key], { ...emptyFlightLeg }] }));
+  };
+
+  const removeConnectingLeg = (direction: "outbound" | "inbound", index: number) => {
+    const key = direction === "outbound" ? "outboundConnectingLegs" : "inboundConnectingLegs";
+    setForm(prev => ({ ...prev, [key]: prev[key].filter((_, i) => i !== index) }));
+  };
+
+  const updateConnectingLeg = (direction: "outbound" | "inbound", index: number, field: keyof FlightLeg, value: string) => {
+    const key = direction === "outbound" ? "outboundConnectingLegs" : "inboundConnectingLegs";
+    setForm(prev => ({
+      ...prev,
+      [key]: prev[key].map((leg, i) => i === index ? { ...leg, [field]: value } : leg),
+    }));
+  };
 
   return (
     <div className="grid gap-6">
@@ -900,6 +949,112 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
                 />
               </div>
             </div>
+
+            {form.outboundConnectingLegs.map((leg, idx) => (
+              <div key={idx} className="mt-3 rounded-xl border border-blue-200/60 bg-blue-50/30 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-blue-700">Connecting Flight {idx + 2}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeConnectingLeg("outbound", idx)}
+                    className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                    data-testid={`${prefix}-remove-outbound-leg-${idx}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                    <SearchableSelect
+                      value={leg.departAirportId}
+                      onValueChange={(v) => updateConnectingLeg("outbound", idx, "departAirportId", v)}
+                      options={airportOptions}
+                      placeholder="Select airport..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid={`${prefix}-select-outbound-leg-${idx}-depart-airport`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                    <DatePicker
+                      value={leg.departDate}
+                      onChange={(v) => updateConnectingLeg("outbound", idx, "departDate", v)}
+                      placeholder="Pick a date"
+                      data-testid={`${prefix}-input-outbound-leg-${idx}-depart-date`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                    <Input
+                      type="time"
+                      value={leg.departTime}
+                      onChange={(e) => updateConnectingLeg("outbound", idx, "departTime", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid={`${prefix}-input-outbound-leg-${idx}-depart-time`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                    <SearchableSelect
+                      value={leg.arriveAirportId}
+                      onValueChange={(v) => updateConnectingLeg("outbound", idx, "arriveAirportId", v)}
+                      options={airportOptions}
+                      placeholder="Select airport..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid={`${prefix}-select-outbound-leg-${idx}-arrive-airport`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                    <DatePicker
+                      value={leg.arriveDate}
+                      onChange={(v) => updateConnectingLeg("outbound", idx, "arriveDate", v)}
+                      placeholder="Pick a date"
+                      data-testid={`${prefix}-input-outbound-leg-${idx}-arrive-date`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                    <Input
+                      type="time"
+                      value={leg.arriveTime}
+                      onChange={(e) => updateConnectingLeg("outbound", idx, "arriveTime", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid={`${prefix}-input-outbound-leg-${idx}-arrive-time`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Flight Number</Label>
+                    <Input
+                      placeholder="e.g. BA789"
+                      value={leg.flightNumber}
+                      onChange={(e) => updateConnectingLeg("outbound", idx, "flightNumber", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid={`${prefix}-input-outbound-leg-${idx}-flight-number`}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {form.outboundConnectingLegs.length < 2 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addConnectingLeg("outbound")}
+                className="mt-3 gap-1.5 rounded-xl border-dashed border-blue-300 text-blue-600 hover:bg-blue-50"
+                data-testid={`${prefix}-add-outbound-connecting`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Connecting Flight
+              </Button>
+            )}
           </div>
 
           <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid={`${prefix}-section-inbound-flights`}>
@@ -981,6 +1136,112 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
                 />
               </div>
             </div>
+
+            {form.inboundConnectingLegs.map((leg, idx) => (
+              <div key={idx} className="mt-3 rounded-xl border border-purple-200/60 bg-purple-50/30 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-purple-700">Connecting Flight {idx + 2}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeConnectingLeg("inbound", idx)}
+                    className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                    data-testid={`${prefix}-remove-inbound-leg-${idx}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                    <SearchableSelect
+                      value={leg.departAirportId}
+                      onValueChange={(v) => updateConnectingLeg("inbound", idx, "departAirportId", v)}
+                      options={airportOptions}
+                      placeholder="Select airport..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid={`${prefix}-select-inbound-leg-${idx}-depart-airport`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                    <DatePicker
+                      value={leg.departDate}
+                      onChange={(v) => updateConnectingLeg("inbound", idx, "departDate", v)}
+                      placeholder="Pick a date"
+                      data-testid={`${prefix}-input-inbound-leg-${idx}-depart-date`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                    <Input
+                      type="time"
+                      value={leg.departTime}
+                      onChange={(e) => updateConnectingLeg("inbound", idx, "departTime", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid={`${prefix}-input-inbound-leg-${idx}-depart-time`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                    <SearchableSelect
+                      value={leg.arriveAirportId}
+                      onValueChange={(v) => updateConnectingLeg("inbound", idx, "arriveAirportId", v)}
+                      options={airportOptions}
+                      placeholder="Select airport..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid={`${prefix}-select-inbound-leg-${idx}-arrive-airport`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                    <DatePicker
+                      value={leg.arriveDate}
+                      onChange={(v) => updateConnectingLeg("inbound", idx, "arriveDate", v)}
+                      placeholder="Pick a date"
+                      data-testid={`${prefix}-input-inbound-leg-${idx}-arrive-date`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                    <Input
+                      type="time"
+                      value={leg.arriveTime}
+                      onChange={(e) => updateConnectingLeg("inbound", idx, "arriveTime", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid={`${prefix}-input-inbound-leg-${idx}-arrive-time`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-black/60">Flight Number</Label>
+                    <Input
+                      placeholder="e.g. BA789"
+                      value={leg.flightNumber}
+                      onChange={(e) => updateConnectingLeg("inbound", idx, "flightNumber", e.target.value)}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                      data-testid={`${prefix}-input-inbound-leg-${idx}-flight-number`}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {form.inboundConnectingLegs.length < 2 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addConnectingLeg("inbound")}
+                className="mt-3 gap-1.5 rounded-xl border-dashed border-purple-300 text-purple-600 hover:bg-purple-50"
+                data-testid={`${prefix}-add-inbound-connecting`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Connecting Flight
+              </Button>
+            )}
           </div>
         </>
       )}

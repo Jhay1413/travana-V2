@@ -594,6 +594,7 @@ export const quote_flights = pgTable('quote_flights', {
   arrival_airport_id: uuid().references(() => airport.id),
   tour_operator_id: uuid().references(() => tour_operator.id),
   flight_type: varchar(),
+  leg_order: integer().default(0).notNull(),
   departure_date_time: timestamp(),
   arrival_date_time: timestamp(),
   is_included_in_package: boolean(),
