@@ -2268,7 +2268,7 @@ export default function ClientPage() {
                       const file = e.target.files?.[0];
                       if (file) {
                         const reader = new FileReader();
-                        reader.onload = (ev) => {
+                        reader.onload = async (ev) => {
                           const content = ev.target?.result as string || "";
                           const toIsoDate = (d: string | undefined): string => {
                             if (!d) return "";
@@ -2284,30 +2284,82 @@ export default function ClientPage() {
 
                             const isScraperFormat = Array.isArray(data.flights) || data.sales_price !== undefined || data.departure_airport !== undefined;
 
-                            if (isScraperFormat) {
-                              import("@/lib/scraper-json-parser").then(({ mapScraperJsonToFormFields }) => {
-                                const result = mapScraperJsonToFormFields(data);
-                                const skipFields = new Set([
-                                  'country', 'destination', 'resort', 'accommodation',
-                                  'boardBasis', 'tourOperator', 'roomType',
-                                  'outboundDepartAirport', 'outboundArriveAirport',
-                                  'inboundDepartAirport', 'inboundArriveAirport',
-                                ]);
+                            const idOnlyFields = new Set([
+                              'country', 'destination', 'resort', 'accommodation',
+                              'boardBasis', 'tourOperator', 'roomType',
+                              'outboundDepartAirport', 'outboundArriveAirport',
+                              'inboundDepartAirport', 'inboundArriveAirport',
+                            ]);
+
+                            const applyMappedIds = async (textFields: Record<string, string | undefined>) => {
+                              try {
+                                const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
+                                const idMapping = await jsonMapperApi.mapToIds(textFields);
                                 setNewQuote((prev) => {
-                                  const updated = { ...prev, jsonPayload: content };
-                                  for (const [k, v] of Object.entries(result.fields)) {
-                                    if (v !== "" && v !== null && v !== undefined && !skipFields.has(k)) {
-                                      (updated as Record<string, unknown>)[k] = v;
-                                    }
-                                  }
+                                  const updated = { ...prev };
+                                  if (idMapping.countryId) updated.country = idMapping.countryId;
+                                  if (idMapping.destinationId) updated.destination = idMapping.destinationId;
+                                  if (idMapping.resortId) updated.resort = idMapping.resortId;
+                                  if (idMapping.accommodationId) updated.accommodation = idMapping.accommodationId;
+                                  if (idMapping.boardBasisId) updated.boardBasis = idMapping.boardBasisId;
+                                  if (idMapping.tourOperatorId) updated.tourOperator = idMapping.tourOperatorId;
+                                  if (idMapping.outboundDepartAirportId) updated.outboundDepartAirport = idMapping.outboundDepartAirportId;
+                                  if (idMapping.outboundArriveAirportId) updated.outboundArriveAirport = idMapping.outboundArriveAirportId;
+                                  if (idMapping.inboundDepartAirportId) updated.inboundDepartAirport = idMapping.inboundDepartAirportId;
+                                  if (idMapping.inboundArriveAirportId) updated.inboundArriveAirport = idMapping.inboundArriveAirportId;
+                                  if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
                                   return updated;
                                 });
-                                if (result.images.length > 0) {
-                                  setQuoteImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
+                                if (idMapping.warnings?.length > 0) {
+                                  toast({ title: "Some values need attention", description: idMapping.warnings.join(", ") });
                                 }
-                              }).catch(() => {});
+                              } catch (err) {
+                                console.error("ID mapping failed:", err);
+                              }
+                            };
+
+                            if (isScraperFormat) {
+                              const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
+                              const result = mapScraperJsonToFormFields(data);
+                              setNewQuote((prev) => {
+                                const updated = { ...prev, jsonPayload: content };
+                                for (const [k, v] of Object.entries(result.fields)) {
+                                  if (v !== "" && v !== null && v !== undefined && !idOnlyFields.has(k)) {
+                                    (updated as Record<string, unknown>)[k] = v;
+                                  }
+                                }
+                                return updated;
+                              });
+                              if (result.images.length > 0) {
+                                setQuoteImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
+                              }
+                              await applyMappedIds({
+                                country: result.fields.country,
+                                destination: result.fields.destination,
+                                resort: result.fields.resort,
+                                accommodation: result.fields.accommodation,
+                                boardBasis: result.fields.boardBasis,
+                                tourOperator: result.fields.tourOperator,
+                                outboundDepartAirport: result.fields.outboundDepartAirport,
+                                outboundArriveAirport: result.fields.outboundArriveAirport,
+                                inboundDepartAirport: result.fields.inboundDepartAirport,
+                                inboundArriveAirport: result.fields.inboundArriveAirport,
+                                roomType: result.fields.roomType,
+                              });
                               return;
                             }
+
+                            const textCountry = data.country || "";
+                            const textDestination = data.destination || "";
+                            const textResort = data.resort || "";
+                            const textAccommodation = data.accommodation || data.hotel || data.property || "";
+                            const textBoardBasis = data.boardBasis || data.board_basis || data.board || "";
+                            const textTourOperator = data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || "";
+                            const textRoomType = data.roomType || data.room_type || data.room || "";
+                            const textOutboundDepart = data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || "";
+                            const textOutboundArrive = data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || "";
+                            const textInboundDepart = data.flights?.inbound?.departAirport || data.inbound?.from || "";
+                            const textInboundArrive = data.flights?.inbound?.arriveAirport || data.inbound?.to || "";
 
                             setNewQuote((prev) => ({
                               ...prev,
@@ -2320,31 +2372,20 @@ export default function ClientPage() {
                               passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
                               passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
                               childAges: data.childAges || data.child_ages || data.passengers?.childAges || prev.childAges,
-                              country: prev.country,
-                              destination: prev.destination,
-                              resort: prev.resort,
-                              accommodation: prev.accommodation,
                               checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
                               checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
                               nights: data.nights || data.duration || prev.nights,
-                              boardBasis: prev.boardBasis,
-                              roomType: prev.roomType,
                               transferType: data.transferType || data.transfer_type || data.transfers || prev.transferType,
                               preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
                               flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
-                              outboundDepartAirport: prev.outboundDepartAirport,
                               outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
                               outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
-                              outboundArriveAirport: prev.outboundArriveAirport,
                               outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
                               outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
-                              inboundDepartAirport: prev.inboundDepartAirport,
                               inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
                               inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
-                              inboundArriveAirport: prev.inboundArriveAirport,
                               inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
                               inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
-                              tourOperator: prev.tourOperator,
                               sales: data.commissions?.sales || data.sales || prev.sales,
                               price: data.commissions?.price || data.price || data.total || prev.price,
                               commission: data.commissions?.commission || data.commission || prev.commission,
@@ -2352,6 +2393,20 @@ export default function ClientPage() {
                               serviceCharge: data.commissions?.serviceCharge || data.serviceCharge || data.service_charge || prev.serviceCharge,
                               pricePerPerson: data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp || prev.pricePerPerson,
                             }));
+
+                            await applyMappedIds({
+                              country: textCountry,
+                              destination: textDestination,
+                              resort: textResort,
+                              accommodation: textAccommodation,
+                              boardBasis: textBoardBasis,
+                              tourOperator: textTourOperator,
+                              outboundDepartAirport: textOutboundDepart,
+                              outboundArriveAirport: textOutboundArrive,
+                              inboundDepartAirport: textInboundDepart,
+                              inboundArriveAirport: textInboundArrive,
+                              roomType: textRoomType,
+                            });
                             const extractedImages: string[] = [];
                             const imageFields = [
                               data.images, data.image, data.photos, data.photo,
