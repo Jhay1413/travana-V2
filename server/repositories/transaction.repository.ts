@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 
@@ -34,7 +34,21 @@ async function enrichTransactions(txns: Transaction[]) {
   const ownerIds = [...quoteIds, ...bookingIds];
   let allImages: any[] = [];
   if (ownerIds.length > 0) {
-    allImages = await db.select().from(deal_images).where(inArray(deal_images.owner_id, ownerIds));
+    const [dealImgs, quoteImgs] = await Promise.all([
+      db.select().from(deal_images).where(inArray(deal_images.owner_id, ownerIds)),
+      quoteIds.length > 0
+        ? db.select().from(quoteImages).where(inArray(quoteImages.quoteId, quoteIds))
+        : Promise.resolve([]),
+    ]);
+    allImages = [
+      ...dealImgs,
+      ...quoteImgs.map(qi => ({
+        id: qi.id,
+        owner_id: qi.quoteId,
+        image_url: qi.url,
+        isPrimary: qi.isPrimary,
+      })),
+    ];
   }
 
   const enquiryMap = new Map<string, any>();

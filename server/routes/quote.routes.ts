@@ -1,5 +1,8 @@
 import { Router } from "express";
 import { quoteController } from "../controllers/quote.controller";
+import { quoteImageController } from "../controllers/quote-image.controller";
+import { validate } from "../middlewares/validation.middleware";
+import { addImagesValidator } from "../validators/quote-image.validator";
 
 const router = Router();
 
@@ -22,5 +25,10 @@ router.delete("/:id/transfers/:transferId", quoteController.removeTransfer);
 
 router.post("/:id/passengers", quoteController.addPassenger);
 router.delete("/:id/passengers/:passengerId", quoteController.removePassenger);
+
+router.post("/:quoteId/images", validate(addImagesValidator), quoteImageController.addImages);
+router.get("/:quoteId/images", quoteImageController.getImages);
+router.delete("/:quoteId/images/:imageId", quoteImageController.deleteImage);
+router.patch("/:quoteId/images/:imageId/primary", quoteImageController.setPrimaryImage);
 
 export default router;

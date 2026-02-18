@@ -3,7 +3,7 @@ import {
   quote, quote_flights, quote_accomodation, quote_transfers, quote_car_hire,
   quote_attraction_ticket, quote_lounge_pass, quote_airport_parking,
   quote_cruise, quote_cruise_item_extra, quote_cruise_itinerary,
-  passengers, deal_images,
+  passengers, deal_images, quoteImages,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type,
 } from "@shared/schema";
@@ -189,9 +189,10 @@ export const newQuoteRepository = {
         .where(eq(quote_cruise.quote_id, id)),
 
       db.select().from(passengers).where(eq(passengers.quote_id, id)),
-      db.select().from(deal_images).where(eq(deal_images.owner_id, id)),
+      db.select().from(quoteImages).where(eq(quoteImages.quoteId, id)),
     ]);
 
+    console.log('🔍 BACKEND - Images fetched:', images.length, images);
     console.log('🔍 BACKEND - First accommodation data:', accommodations[0]);
     console.log('🔍 BACKEND - Location IDs being returned:', {
       country_id: accommodations[0]?.country_id || null,

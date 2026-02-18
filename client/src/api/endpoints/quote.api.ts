@@ -75,4 +75,18 @@ export const quoteApi = {
   removePassenger: async (quoteId: string, passengerId: string): Promise<void> => {
     await axiosClient.delete(`/api/quotes/${quoteId}/passengers/${passengerId}`);
   },
+
+  addImages: async (quoteId: string, imageUrls: string[]): Promise<any> => {
+    const { data } = await axiosClient.post(`/api/quotes/${quoteId}/images`, { images: imageUrls });
+    return data;
+  },
+
+  removeImage: async (quoteId: string, imageId: string): Promise<void> => {
+    await axiosClient.delete(`/api/quotes/${quoteId}/images/${imageId}`);
+  },
+
+  setPrimaryImage: async (quoteId: string, imageId: string): Promise<any> => {
+    const { data } = await axiosClient.patch(`/api/quotes/${quoteId}/images/${imageId}/primary`);
+    return data;
+  },
 };

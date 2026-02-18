@@ -14,8 +14,9 @@ import type {
   InsertBookingAccomodation,
 } from "@shared/schema";
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation, quoteImages } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
 interface EnquiryPassenger {
   type: string;
@@ -35,6 +36,7 @@ interface QuoteRelationPayload extends InsertQuote {
   outboundFlight?: Partial<InsertQuoteFlight>;
   inboundFlight?: Partial<InsertQuoteFlight>;
   primaryAccommodation?: Partial<InsertQuoteAccomodation>;
+  images?: string[];
 }
 
 interface BookingRelationPayload extends InsertBooking {
@@ -140,7 +142,7 @@ export const transactionService = {
   },
 
   async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: QuoteRelationPayload) {
-    const { outboundFlight, inboundFlight, primaryAccommodation, ...quoteFields } = quoteData;
+    const { outboundFlight, inboundFlight, primaryAccommodation, images, ...quoteFields } = quoteData;
 
     return await db.transaction(async (tx) => {
       const [txn] = await tx.insert(transaction).values({
@@ -179,6 +181,17 @@ export const transactionService = {
           quote_id: q.id,
           is_primary: true,
         });
+      }
+
+      if (images && images.length > 0) {
+        await tx.insert(quoteImages).values(
+          images.map((url, index) => ({
+            id: randomUUID(),
+            quoteId: q.id,
+            url,
+            isPrimary: index === 0,
+          }))
+        );
       }
 
       return { transaction: txn, quote: q };

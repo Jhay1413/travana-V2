@@ -1,5 +1,6 @@
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
+import { quoteImageRepository } from "../repositories/quote-image.repository";
 import { AppError } from "../utils/error-handler";
 import type {
   Quote,
@@ -18,6 +19,7 @@ interface QuoteRelationData {
   outboundFlight?: Partial<InsertQuoteFlight>;
   inboundFlight?: Partial<InsertQuoteFlight>;
   primaryAccommodation?: Partial<InsertQuoteAccomodation>;
+  images?: string[];
 }
 
 type CreateQuotePayload = InsertQuote & QuoteRelationData;
@@ -33,6 +35,7 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   cruiseExtras?: string;
   cruiseOnly?: boolean;
   lead_source?: string;
+  images?: string[];
 };
 
 export const newQuoteService = {
@@ -57,12 +60,13 @@ export const newQuoteService = {
   async getQuoteWithDetails(id: string) {
     const q = await newQuoteRepository.findWithDetails(id);
     if (!q) throw new AppError("Quote not found", 404);
+    console.log('🔍 SERVICE - Quote details includes images:', q.images?.length || 0);
     return q;
   },
 
   async createQuote(data: CreateQuotePayload) {
     const {
-      outboundFlight, inboundFlight, primaryAccommodation,
+      outboundFlight, inboundFlight, primaryAccommodation, images,
       ...quoteFields
     } = data;
 
@@ -85,18 +89,26 @@ export const newQuoteService = {
       await newQuoteRepository.upsertPrimaryAccommodation(q.id, primaryAccommodation);
     }
 
+    // Add images if provided
+    if (images && images.length > 0) {
+      console.log(`📸 Adding ${images.length} images to new quote ${q.id}`);
+      await quoteImageRepository.addImages(q.id, images);
+    }
+
     return q;
   },
 
   async updateQuote(id: string, data: UpdateQuotePayload) {
     console.log('🔍 QUOTE UPDATE - ID:', id);
     console.log('🔍 QUOTE UPDATE - Received data:', JSON.stringify(data, null, 2));
+    console.log('📸 QUOTE UPDATE - Images in payload:', data.images, 'Length:', data.images?.length || 0);
     
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType,
       embarkation, debarkation, cruiseExtras, cruiseOnly,
       lead_source,
+      images,
       ...quoteFields
     } = data;
 
@@ -134,6 +146,12 @@ export const newQuoteService = {
     }
     if (primaryAccommodation) {
       await newQuoteRepository.upsertPrimaryAccommodation(id, primaryAccommodation);
+    }
+
+    // Add images if provided
+    if (images && images.length > 0) {
+      console.log(`📸 Adding ${images.length} images to quote ${id}`);
+      await quoteImageRepository.addImages(id, images);
     }
 
     return await newQuoteRepository.findWithDetails(id);

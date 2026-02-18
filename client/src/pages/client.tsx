@@ -3388,6 +3388,7 @@ export default function ClientPage() {
                         outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
                         inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
                         primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
+                        images: quoteImageUrls.length > 0 ? quoteImageUrls : undefined,
                       },
                       {
                         onSuccess: () => {
@@ -3417,6 +3418,7 @@ export default function ClientPage() {
                         quote: {
                           ...quotePayload,
                           quote_status: "NEW_LEAD",
+                          images: quoteImageUrls.length > 0 ? quoteImageUrls : undefined,
                         },
                       },
                       {

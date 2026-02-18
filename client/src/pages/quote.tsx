@@ -2005,14 +2005,29 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
           onOpenChange={setShowEditModal}
           quote={quote}
           quoteData={quoteData}
-          onSave={(updates) => {
+          onSave={async (updates, images) => {
+            console.log('📸 CLIENT - onSave called with images:', images?.length || 0, images);
+            console.log('📸 CLIENT - Updates:', updates);
+            
+            // Include images in the update payload
+            const payload = images && images.length > 0 
+              ? { ...updates, images }
+              : updates;
+            
+            console.log('📸 CLIENT - Final payload:', payload);
+            
             updateQuoteMutation.mutate(
-              { id: quoteId, data: updates },
+              { id: quoteId, data: payload },
               {
                 onSuccess: () => {
                   setShowEditModal(false);
                   queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                  toast({ title: "Quote updated successfully" });
+                  toast({ 
+                    title: "Quote updated successfully",
+                    description: images && images.length > 0 
+                      ? `Updated with ${images.length} image(s)` 
+                      : undefined
+                  });
                 },
                 onError: () => {
                   toast({ title: "Failed to update quote", variant: "destructive" });
@@ -2096,15 +2111,25 @@ function EditQuoteDialog({
   onOpenChange: (v: boolean) => void;
   quote: QuoteDisplay;
   quoteData: EnrichedQuote | EnrichedBooking;
-  onSave: (data: Record<string, unknown>) => void;
+  onSave: (data: Record<string, unknown>, images?: string[]) => void;
   isSaving: boolean;
 }) {
   const [form, setForm] = useState<QuoteFormState>(() => buildEditForm(quote, quoteData));
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) setForm(buildEditForm(quote, quoteData));
+    if (open) {
+      console.log('📸 Dialog opened');
+      setForm(buildEditForm(quote, quoteData));
+    } else {
+      console.log('📸 Dialog closed, pendingImages before close:', pendingImages.length);
+    }
   }, [open, quote, quoteData]);
+
+  useEffect(() => {
+    console.log('📸 pendingImages state changed:', pendingImages, 'Length:', pendingImages.length);
+  }, [pendingImages]);
 
   const { data: roomTypeData } = useRoomTypes();
 
@@ -2149,6 +2174,17 @@ function EditQuoteDialog({
             };
             
             const idMapping = await jsonMapperApi.mapToIds(mappingInput);
+            
+            // Store images for later save
+            if (result.images && result.images.length > 0) {
+              console.log('📸 Found images from JSON:', result.images.length);
+              setPendingImages(result.images);
+              toast({
+                title: "Images imported",
+                description: `${result.images.length} image(s) will be added to the quote`,
+                variant: "default",
+              });
+            }
             
             // Show warnings if any entities weren't found
             if (idMapping.warnings.length > 0) {
@@ -2357,7 +2393,10 @@ function EditQuoteDialog({
       updates.pets = form.pets ? 1 : 0;
     }
 
-    onSave(updates);
+    console.log('📸 handleSave - pendingImages:', pendingImages, 'Length:', pendingImages.length);
+    console.log('📸 handleSave - Will pass images:', pendingImages.length > 0 ? pendingImages : undefined);
+    
+    onSave(updates, pendingImages.length > 0 ? pendingImages : undefined);
   };
 
   return (
