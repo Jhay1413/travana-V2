@@ -216,7 +216,7 @@ export const newQuoteRepository = {
       lead_source: q.lead_source,
       country_id: accommodations[0]?.country_id || null,
       country_name: accommodations[0]?.country_name || null,
-      // destination_id: accommodations[0]?.destination_id || null,
+       destination_id: accommodations[0]?.destination_id || null,
       destination_name: accommodations[0]?.destination_name || null,
       resort_id: accommodations[0]?.resort_id || null,
       resort_name: accommodations[0]?.resort_name || null,
