@@ -2285,21 +2285,83 @@ export default function ClientPage() {
                             const isScraperFormat = Array.isArray(data.flights) || data.sales_price !== undefined || data.departure_airport !== undefined;
 
                             if (isScraperFormat) {
-                              import("@/lib/scraper-json-parser").then(({ mapScraperJsonToFormFields }) => {
-                                const result = mapScraperJsonToFormFields(data);
-                                setNewQuote((prev) => {
-                                  const updated = { ...prev, jsonPayload: content };
-                                  for (const [k, v] of Object.entries(result.fields)) {
-                                    if (v !== "" && v !== null && v !== undefined) {
-                                      (updated as Record<string, unknown>)[k] = v;
-                                    }
+                              (async () => {
+                                try {
+                                  const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
+                                  const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
+
+                                  const result = mapScraperJsonToFormFields(data);
+
+                                  const mappingInput = {
+                                    country: result.fields.country,
+                                    destination: result.fields.destination,
+                                    resort: result.fields.resort,
+                                    accommodation: result.fields.accommodation,
+                                    boardBasis: result.fields.boardBasis,
+                                    tourOperator: result.fields.tourOperator,
+                                    outboundDepartAirport: result.fields.outboundDepartAirport,
+                                    outboundArriveAirport: result.fields.outboundArriveAirport,
+                                    inboundDepartAirport: result.fields.inboundDepartAirport,
+                                    inboundArriveAirport: result.fields.inboundArriveAirport,
+                                    roomType: result.fields.roomType,
+                                  };
+
+                                  const idMapping = await jsonMapperApi.mapToIds(mappingInput);
+
+                                  if (idMapping.warnings.length > 0) {
+                                    toast({
+                                      title: idMapping.warnings.some((w: string) => w.startsWith("Created")) ? "Entities created" : "Some values need attention",
+                                      description: idMapping.warnings.join(", "),
+                                      variant: "default",
+                                    });
+                                  } else {
+                                    toast({
+                                      title: "JSON imported successfully",
+                                      description: "All values mapped to database IDs",
+                                    });
                                   }
-                                  return updated;
-                                });
-                                if (result.images.length > 0) {
-                                  setQuoteImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
+
+                                  const idOnlyFields = new Set([
+                                    'country', 'destination', 'resort', 'accommodation',
+                                    'boardBasis', 'tourOperator',
+                                    'outboundDepartAirport', 'outboundArriveAirport',
+                                    'inboundDepartAirport', 'inboundArriveAirport',
+                                    'roomType',
+                                  ]);
+
+                                  setNewQuote((prev) => {
+                                    const updated = { ...prev, jsonPayload: content };
+                                    for (const [k, v] of Object.entries(result.fields)) {
+                                      if (v !== "" && v !== null && v !== undefined && !idOnlyFields.has(k)) {
+                                        (updated as Record<string, unknown>)[k] = v;
+                                      }
+                                    }
+                                    if (idMapping.countryId) updated.country = idMapping.countryId;
+                                    if (idMapping.destinationId) updated.destination = idMapping.destinationId;
+                                    if (idMapping.resortId) updated.resort = idMapping.resortId;
+                                    if (idMapping.accommodationId) updated.accommodation = idMapping.accommodationId;
+                                    if (idMapping.boardBasisId) updated.boardBasis = idMapping.boardBasisId;
+                                    if (idMapping.tourOperatorId) updated.tourOperator = idMapping.tourOperatorId;
+                                    if (idMapping.outboundDepartAirportId) updated.outboundDepartAirport = idMapping.outboundDepartAirportId;
+                                    if (idMapping.outboundArriveAirportId) updated.outboundArriveAirport = idMapping.outboundArriveAirportId;
+                                    if (idMapping.inboundDepartAirportId) updated.inboundDepartAirport = idMapping.inboundDepartAirportId;
+                                    if (idMapping.inboundArriveAirportId) updated.inboundArriveAirport = idMapping.inboundArriveAirportId;
+                                    if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
+                                    return updated;
+                                  });
+
+                                  if (result.images.length > 0) {
+                                    setQuoteImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
+                                  }
+                                } catch (error) {
+                                  console.error("Error processing scraper JSON:", error);
+                                  toast({
+                                    title: "Error processing JSON",
+                                    description: error instanceof Error ? error.message : "Failed to map values",
+                                    variant: "destructive",
+                                  });
                                 }
-                              }).catch(() => {});
+                              })();
                               return;
                             }
 
