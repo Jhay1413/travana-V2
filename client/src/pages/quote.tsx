@@ -93,6 +93,8 @@ type QuoteDisplay = {
   flights: {
     outbound: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string };
     inbound: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string };
+    outboundConnecting: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string }[];
+    inboundConnecting: { from: string; to: string; carrier: string; flightNo: string; depart: string; arrive: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string }[];
   };
   owner: {
     name: string;
@@ -1008,6 +1010,50 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
           </div>
         ),
       });
+
+      quote.flights.outboundConnecting.forEach((leg, idx) => {
+        if (leg.from || leg.to) {
+          const connSortKey = leg.departDate + "T" + (leg.departTime || "00:01");
+          timelineItems.push({
+            type: "outbound-connecting",
+            sortKey: connSortKey,
+            content: (
+              <div className="flex gap-2.5" data-testid={`timeline-outbound-connecting-${idx}`}>
+                <div className="flex flex-col items-center">
+                  <div className="grid h-7 w-7 place-items-center rounded-full border border-blue-200 bg-blue-50/60 text-blue-500">
+                    <Plane className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="mt-1 h-full w-px bg-black/10" />
+                </div>
+                <div className="flex-1 pb-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-500">Connecting Flight {idx + 2}</div>
+                  <div className="mt-0.5 text-xs font-semibold">{leg.from} → {leg.to}</div>
+                  <div className="mt-1 grid gap-1">
+                    {leg.departDate && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{formatTimelineDate(leg.departDate)}</span>
+                      </div>
+                    )}
+                    {leg.departTime && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>Depart {formatTime24(leg.departTime)}{leg.arriveTime ? ` — Arrive ${formatTime24(leg.arriveTime)}` : ""}</span>
+                      </div>
+                    )}
+                    {leg.flightNo && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Plane className="h-3 w-3 shrink-0" />
+                        <span>{leg.flightNo}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ),
+          });
+        }
+      });
     }
 
     if (isCruise && quote.cruise) {
@@ -1167,6 +1213,50 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
           </div>
         ),
       });
+
+      quote.flights.inboundConnecting.forEach((leg, idx) => {
+        if (leg.from || leg.to) {
+          const connSortKey = leg.departDate + "T" + (leg.departTime || "23:58");
+          timelineItems.push({
+            type: "inbound-connecting",
+            sortKey: connSortKey,
+            content: (
+              <div className="flex gap-2.5" data-testid={`timeline-inbound-connecting-${idx}`}>
+                <div className="flex flex-col items-center">
+                  <div className="grid h-7 w-7 place-items-center rounded-full border border-purple-200 bg-purple-50/60 text-purple-500">
+                    <Plane className="h-3.5 w-3.5 rotate-180" />
+                  </div>
+                  <div className="mt-1 h-full w-px bg-black/10" />
+                </div>
+                <div className="flex-1 pb-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-500">Connecting Flight {idx + 2}</div>
+                  <div className="mt-0.5 text-xs font-semibold">{leg.from} → {leg.to}</div>
+                  <div className="mt-1 grid gap-1">
+                    {leg.departDate && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{formatTimelineDate(leg.departDate)}</span>
+                      </div>
+                    )}
+                    {leg.departTime && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>Depart {formatTime24(leg.departTime)}{leg.arriveTime ? ` — Arrive ${formatTime24(leg.arriveTime)}` : ""}</span>
+                      </div>
+                    )}
+                    {leg.flightNo && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Plane className="h-3 w-3 shrink-0" />
+                        <span>{leg.flightNo}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ),
+          });
+        }
+      });
     }
   }
 
@@ -1199,13 +1289,34 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
 function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisplay {
   const flights = apiData.flights || [];
   const cruises = apiData.cruises || [];
-  const outboundFlight = flights.find(f => f.flight_type === "outbound") || flights[0];
-  const inboundFlight = flights.find(f => f.flight_type === "inbound") || flights[1];
+  const outboundFlights = flights.filter(f => f.flight_type === "outbound").sort((a, b) => (a.leg_order || 0) - (b.leg_order || 0));
+  const inboundFlights = flights.filter(f => f.flight_type === "inbound").sort((a, b) => (a.leg_order || 0) - (b.leg_order || 0));
+  const outboundFlight = outboundFlights[0] || flights[0];
+  const inboundFlight = inboundFlights.length > 0 ? inboundFlights[0] : (flights.length > 1 ? flights[1] : undefined);
 
   const obDepart = splitIsoDateTime(outboundFlight?.departure_date_time || "");
   const obArrive = splitIsoDateTime(outboundFlight?.arrival_date_time || "");
   const ibDepart = splitIsoDateTime(inboundFlight?.departure_date_time || "");
   const ibArrive = splitIsoDateTime(inboundFlight?.arrival_date_time || "");
+
+  const mapConnectingFlight = (f: typeof flights[0]) => {
+    const dep = splitIsoDateTime(f.departure_date_time || "");
+    const arr = splitIsoDateTime(f.arrival_date_time || "");
+    return {
+      from: f.departing_airport_name || "",
+      to: f.arrival_airport_name || "",
+      carrier: "",
+      flightNo: f.flight_number || "",
+      depart: f.departure_date_time || "",
+      arrive: f.arrival_date_time || "",
+      departDate: dep.date,
+      departTime: dep.time,
+      arriveDate: arr.date,
+      arriveTime: arr.time,
+    };
+  };
+  const outboundConnecting = outboundFlights.slice(1).map(mapConnectingFlight);
+  const inboundConnecting = inboundFlights.slice(1).map(mapConnectingFlight);
 
   const accommodations = apiData.accommodations || [];
   const primaryAccom = accommodations.find(a => a.is_primary) || accommodations[0];
@@ -1284,6 +1395,8 @@ function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisp
         arriveDate: ibArrive.date,
         arriveTime: ibArrive.time,
       },
+      outboundConnecting,
+      inboundConnecting,
     },
     owner: {
       name: "Agent",
@@ -2364,6 +2477,20 @@ function EditQuoteDialog({
         arrival_date_time: buildDateTime(form.inboundArriveDate, form.inboundArriveTime),
         flight_number: form.inboundFlightNumber || null,
       };
+      updates.outboundConnectingLegs = form.outboundConnectingLegs.map(leg => ({
+        departing_airport_id: leg.departAirportId || null,
+        arrival_airport_id: leg.arriveAirportId || null,
+        departure_date_time: buildDateTime(leg.departDate, leg.departTime),
+        arrival_date_time: buildDateTime(leg.arriveDate, leg.arriveTime),
+        flight_number: leg.flightNumber || null,
+      }));
+      updates.inboundConnectingLegs = form.inboundConnectingLegs.map(leg => ({
+        departing_airport_id: leg.departAirportId || null,
+        arrival_airport_id: leg.arriveAirportId || null,
+        departure_date_time: buildDateTime(leg.departDate, leg.departTime),
+        arrival_date_time: buildDateTime(leg.arriveDate, leg.arriveTime),
+        flight_number: leg.flightNumber || null,
+      }));
     }
 
     if (form.packageType !== "Hot Tub Break") {
@@ -2451,8 +2578,10 @@ function normalizePackageType(raw: string): string {
 
 function buildEditForm(quote: QuoteDisplay, quoteData: EnrichedQuote | EnrichedBooking): QuoteFormState {
   const flights = quoteData.flights || [];
-  const outboundFlight = flights.find((f) => f.flight_type === "outbound") || flights[0];
-  const inboundFlight = flights.find((f) => f.flight_type === "inbound") || flights[1];
+  const outboundFlights = flights.filter(f => f.flight_type === "outbound").sort((a, b) => (a.leg_order || 0) - (b.leg_order || 0));
+  const inboundFlights = flights.filter(f => f.flight_type === "inbound").sort((a, b) => (a.leg_order || 0) - (b.leg_order || 0));
+  const outboundFlight = outboundFlights[0] || flights[0];
+  const inboundFlight = inboundFlights.length > 0 ? inboundFlights[0] : (flights.length > 1 ? flights[1] : undefined);
   const accommodations = quoteData.accommodations || [];
   const primaryAccom = accommodations.find((a) => a.is_primary) || accommodations[0];
 
@@ -2494,6 +2623,36 @@ function buildEditForm(quote: QuoteDisplay, quoteData: EnrichedQuote | EnrichedB
     inboundArriveDate: quote.flights.inbound.arriveDate,
     inboundArriveTime: quote.flights.inbound.arriveTime,
     inboundFlightNumber: inboundFlight?.flight_number || "",
+    outboundConnectingLegs: outboundFlights.slice(1).map(f => {
+      const dep = splitIsoDateTime(f.departure_date_time || "");
+      const arr = splitIsoDateTime(f.arrival_date_time || "");
+      return {
+        departAirportId: f.departing_airport_id || "",
+        departAirport: "",
+        arriveAirportId: f.arrival_airport_id || "",
+        arriveAirport: "",
+        departDate: dep.date,
+        departTime: dep.time,
+        arriveDate: arr.date,
+        arriveTime: arr.time,
+        flightNumber: f.flight_number || "",
+      };
+    }),
+    inboundConnectingLegs: inboundFlights.slice(1).map(f => {
+      const dep = splitIsoDateTime(f.departure_date_time || "");
+      const arr = splitIsoDateTime(f.arrival_date_time || "");
+      return {
+        departAirportId: f.departing_airport_id || "",
+        departAirport: "",
+        arriveAirportId: f.arrival_airport_id || "",
+        arriveAirport: "",
+        departDate: dep.date,
+        departTime: dep.time,
+        arriveDate: arr.date,
+        arriveTime: arr.time,
+        flightNumber: f.flight_number || "",
+      };
+    }),
     tourOperatorId: quoteData.main_tour_operator_id || "",
     sales: quote.commissions.agentSplitPercent || 50,
     price: quote.commissions.price,
