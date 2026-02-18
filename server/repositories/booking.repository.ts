@@ -86,6 +86,7 @@ export const bookingRepository = {
         holiday_type_name: package_type.name,
         main_tour_operator_name: tour_operator.name,
         lead_source: transaction.lead_source,
+        user_id: transaction.user_id,
       })
       .from(booking)
       .leftJoin(package_type, eq(booking.holiday_type_id, package_type.id))
@@ -193,6 +194,7 @@ export const bookingRepository = {
       holiday_type_name: b.holiday_type_name,
       main_tour_operator_name: b.main_tour_operator_name,
       lead_source: b.lead_source,
+      user_id: b.user_id,
       country_id: accommodations[0]?.country_id || null,
       country_name: accommodations[0]?.country_name || null,
       destination_id: accommodations[0]?.destination_id || null,

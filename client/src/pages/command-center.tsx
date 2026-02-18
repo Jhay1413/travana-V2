@@ -10,6 +10,7 @@ import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, u
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
+import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
 import type { CreateClientData } from "@/types/client";
@@ -800,164 +801,7 @@ function ShellNav({
   );
 }
 
-const sampleNotifications = [
-  {
-    id: 1,
-    type: "booking",
-    title: "New Booking Confirmed",
-    message: "Sarah Johnson's Maldives trip has been confirmed for 15th March 2026",
-    time: "2 minutes ago",
-    read: false,
-  },
-  {
-    id: 2,
-    type: "quote",
-    title: "Quote Expiring Soon",
-    message: "Thompson family's Caribbean cruise quote expires in 24 hours",
-    time: "1 hour ago",
-    read: false,
-  },
-  {
-    id: 3,
-    type: "payment",
-    title: "Payment Received",
-    message: "£2,450 deposit received from Mr. Williams for Bali package",
-    time: "3 hours ago",
-    read: true,
-  },
-  {
-    id: 4,
-    type: "client",
-    title: "New Enquiry",
-    message: "Emma Richards submitted an enquiry for honeymoon destinations",
-    time: "Yesterday",
-    read: true,
-  },
-  {
-    id: 5,
-    type: "reminder",
-    title: "Follow-up Required",
-    message: "Call back scheduled with David Brown regarding safari options",
-    time: "Yesterday",
-    read: true,
-  },
-];
 
-function NotificationsPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<"unread" | "all">("unread");
-  
-  const filteredNotifications = activeTab === "unread" 
-    ? sampleNotifications.filter(n => !n.read)
-    : sampleNotifications;
-
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 350 }}
-            className="fixed right-0 top-0 z-50 h-full w-80 bg-white dark:bg-zinc-900 shadow-2xl border-l border-gray-200 dark:border-zinc-800"
-          >
-            <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 px-4 py-4">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-white">Notifications</h2>
-                <button
-                  onClick={onClose}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-zinc-800"
-                  data-testid="button-close-notifications"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <div className="border-b border-gray-200 dark:border-zinc-800 px-4 py-2">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setActiveTab("unread")}
-                    className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
-                      activeTab === "unread"
-                        ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                        : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-zinc-800"
-                    }`}
-                    data-testid="tab-unread"
-                  >
-                    Unread
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("all")}
-                    className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
-                      activeTab === "all"
-                        ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                        : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-zinc-800"
-                    }`}
-                    data-testid="tab-all"
-                  >
-                    All
-                  </button>
-                </div>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto">
-                {filteredNotifications.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
-                    <Bell className="h-10 w-10 mb-2 opacity-50" />
-                    <p className="text-sm">No notifications</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-100 dark:divide-zinc-800">
-                    {filteredNotifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800/50 cursor-pointer transition"
-                        data-testid={`notification-${notification.id}`}
-                      >
-                        <div className="flex-shrink-0 mt-0.5">
-                          <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
-                            <Bell className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900 dark:text-white">
-                            {notification.message}
-                          </p>
-                        </div>
-                        <div className="flex-shrink-0 flex items-center gap-1">
-                          {!notification.read && (
-                            <span className="h-2 w-2 rounded-full bg-blue-500" />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              <div className="border-t border-gray-200 dark:border-zinc-800 p-3">
-                <button
-                  className="w-full rounded-lg bg-gray-100 dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 transition hover:bg-gray-200 dark:hover:bg-zinc-700"
-                  data-testid="button-clear-notifications"
-                >
-                  Clear Notification
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
 
 function TopBar({
   role,
@@ -988,7 +832,7 @@ function TopBar({
   onRoleChange: (role: Role | null) => void;
   clients?: Array<{ id: string; name: string; email: string; tier: string; stage: string; nextTrip?: string; phone?: string; clientType?: string }>;
 }) {
-  const [showNotifications, setShowNotifications] = useState(false);
+  const { user: currentUser } = useAuth();
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
   const [newClientForm, setNewClientForm] = useState({
@@ -1239,20 +1083,9 @@ function TopBar({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <button
-              onClick={() => setShowNotifications(true)}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-              data-testid="button-notifications"
-              aria-label="Notifications"
-            >
-              <Bell className="h-4 w-4" />
-              {sampleNotifications.filter(n => !n.read).length > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {sampleNotifications.filter(n => !n.read).length}
-                </span>
-              )}
-            </button>
-            <NotificationsPanel isOpen={showNotifications} onClose={() => setShowNotifications(false)} />
+            {currentUser && (
+              <NotificationsDropdown userId={currentUser.id} />
+            )}
 
             <Dialog open={showNewClientDialog} onOpenChange={setShowNewClientDialog}>
               <DialogContent className="sm:max-w-[500px] rounded-2xl z-[300]">

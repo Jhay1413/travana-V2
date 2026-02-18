@@ -4,7 +4,7 @@ import {
   enquiry_board_basis, enquiry_departure_airport, enquiry_departure_port,
   enquiry_cruise_line, enquiry_cruise_destination, enquiry_passenger,
   package_type, destination, resorts, accomodation_list, board_basis, airport,
-  port, cruise_line, cruise_destination,
+  port, cruise_line, cruise_destination, transaction,
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
@@ -43,9 +43,11 @@ export const enquiryTableRepository = {
       .select({
         enquiry: enquiry_table,
         holiday_type_name: package_type.name,
+        user_id: transaction.user_id,
       })
       .from(enquiry_table)
       .leftJoin(package_type, eq(enquiry_table.holiday_type_id, package_type.id))
+      .leftJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
       .where(eq(enquiry_table.id, id))
       .limit(1);
 
@@ -127,6 +129,7 @@ export const enquiryTableRepository = {
     return {
       ...enq.enquiry,
       holiday_type_name: enq.holiday_type_name,
+      user_id: enq.user_id,
       destinations,
       resorts: resortList,
       accommodations,

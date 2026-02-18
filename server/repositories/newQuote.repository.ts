@@ -90,6 +90,7 @@ export const newQuoteRepository = {
         holiday_type_name: package_type.name,
         main_tour_operator_name: tour_operator.name,
         lead_source: transaction.lead_source,
+        user_id: transaction.user_id,
       })
       .from(quote)
       .leftJoin(package_type, eq(quote.holiday_type_id, package_type.id))
@@ -216,6 +217,7 @@ export const newQuoteRepository = {
       holiday_type_name: q.holiday_type_name,
       main_tour_operator_name: q.main_tour_operator_name,
       lead_source: q.lead_source,
+      user_id: q.user_id,
       country_id: accommodations[0]?.country_id || null,
       country_name: accommodations[0]?.country_name || null,
        destination_id: accommodations[0]?.destination_id || null,

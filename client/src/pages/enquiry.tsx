@@ -44,7 +44,8 @@ import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes } from "@/hooks/queries";
 import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations/use-note-mutations";
-import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
+import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
+import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { CreateQuoteData } from "@/types/quote";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -627,9 +629,11 @@ export default function EnquiryPage() {
   const { data: currentUser } = useCurrentUser();
   const createQuoteMutation = useCreateQuote();
   const updateEnquiryMutation = useUpdateEnquiry();
+  const updateTransactionMutation = useUpdateTransaction();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
+  const queryClient = useQueryClient();
   const isEnquiryPinned = useMemo(() => {
     if (!userFavorites || !enquiryId) return false;
     return userFavorites.some((f: any) => f.itemType === "enquiry" && f.itemId === enquiryId);
@@ -961,6 +965,28 @@ export default function EnquiryPage() {
                       <span className={cn("text-xs font-semibold text-black/80", item.color)}>{item.value}</span>
                     </div>
                   ))}
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-black/[0.02] px-3 py-2">
+                    <span className="text-[11px] font-medium text-black/50">Assigned To</span>
+                    <UserReassignSelect
+                      value={enquiry?.user_id || currentUser?.id || ""}
+                      onValueChange={(userId) => {
+                        updateTransactionMutation.mutate(
+                          { id: enquiry.transaction_id, data: { user_id: userId } },
+                          {
+                            onSuccess: () => {
+                              toast({ title: "Enquiry reassigned successfully" });
+                              queryClient.invalidateQueries({ queryKey: ["enquiry", enquiryId] });
+                            },
+                            onError: () => {
+                              toast({ title: "Failed to reassign enquiry", variant: "destructive" });
+                            },
+                          }
+                        );
+                      }}
+                      className="max-w-[200px]"
+                      data-testid="select-enquiry-reassign"
+                    />
+                  </div>
                 </div>
               </Card>
 

@@ -336,6 +336,7 @@ export interface EnrichedQuote extends Quote {
   holiday_type_name?: string;
   main_tour_operator_name?: string;
   lead_source?: string;
+  user_id?: string;
   country_id?: string | null;
   country_name?: string | null;
   destination_id?: string | null;
@@ -351,6 +352,7 @@ export interface EnrichedBooking extends Booking {
   holiday_type_name?: string;
   main_tour_operator_name?: string;
   lead_source?: string;
+  user_id?: string;
   country_id?: string | null;
   country_name?: string | null;
   destination_id?: string | null;

@@ -16,7 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useRoomTypes } from "@/hooks/queries";
-import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
+import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
+import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { QuoteFormFields, defaultQuoteFormState } from "@/components/quote-form-fields";
 import type { QuoteFormState } from "@/components/quote-form-fields";
 import { useCurrentUser } from "@/hooks/queries";
@@ -1474,12 +1475,14 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
     : clientQuery.data;
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: currentUser } = useCurrentUser();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
   const updateQuoteMutation = useUpdateQuote();
+  const updateTransactionMutation = useUpdateTransaction();
   const convertToBookingMutation = useConvertToBooking();
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [convertHaysRef, setConvertHaysRef] = useState("");
@@ -1802,29 +1805,25 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span
-                            className="inline-flex flex-row-reverse items-center justify-end gap-2 rounded-full border border-black/10 bg-white/70 px-1.5 py-1 text-[11px] font-semibold text-black/70"
-                            data-testid="pill-itinerary-owner"
-                          >
-                            <span
-                              className="relative grid h-6 w-6 shrink-0 overflow-hidden rounded-full border border-black/10 bg-white/70 shadow-[0_10px_22px_-18px_rgba(0,0,0,0.35)]"
-                              data-testid="avatar-itinerary-owner"
-                              aria-hidden
-                            >
-                              <img
-                                src="/attached_assets/Avatar3_1769960371403.png"
-                                alt=""
-                                className="h-full w-full object-cover"
-                                data-testid="img-itinerary-owner-avatar"
-                              />
-                              <span className="pointer-events-none absolute inset-0 ring-1 ring-white/40" aria-hidden />
-                            </span>
-
-                            <span className="flex flex-col items-end leading-tight" data-testid="col-itinerary-owner">
-                              <span className="whitespace-nowrap" data-testid="text-itinerary-owner-name">{quote.owner.name}</span>
-                              <span className="whitespace-nowrap text-[10px] font-semibold text-black/50" data-testid="text-itinerary-owner-role">{quote.owner.role}</span>
-                            </span>
-                          </span>
+                          <UserReassignSelect
+                            value={quoteData?.user_id || currentUser?.id || ""}
+                            onValueChange={(userId) => {
+                              updateTransactionMutation.mutate(
+                                { id: quote.transaction_id, data: { user_id: userId } },
+                                {
+                                  onSuccess: () => {
+                                    toast({ title: "Transaction reassigned successfully" });
+                                    queryClient.invalidateQueries({ queryKey: ["quote", quoteId] });
+                                    queryClient.invalidateQueries({ queryKey: ["booking", quoteId] });
+                                  },
+                                  onError: () => {
+                                    toast({ title: "Failed to reassign transaction", variant: "destructive" });
+                                  },
+                                }
+                              );
+                            }}
+                            data-testid="select-itinerary-owner"
+                          />
 
                           <div className="relative" ref={ellipsisRef}>
                             <button
