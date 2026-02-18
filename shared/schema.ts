@@ -1220,7 +1220,7 @@ export type InsertCommission = z.infer<typeof insertCommissionSchema>;
 
 export const quoteImages = pgTable("quote_images", {
   id: varchar("id").primaryKey(),
-  quoteId: varchar("quote_id"),
+  quoteId: uuid("quote_id").references(() => quote.id, { onDelete: 'cascade' }),
   url: text("url"),
   isPrimary: boolean("is_primary"),
 });

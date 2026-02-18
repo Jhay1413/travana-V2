@@ -429,6 +429,23 @@ async function run() {
       )
     `);
 
+    // Drop quote_images table if it exists with wrong foreign key
+    await client.query(`DROP TABLE IF EXISTS "quote_images" CASCADE`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "quote_images" (
+        "id" varchar PRIMARY KEY,
+        "quote_id" uuid,
+        "url" text,
+        "is_primary" boolean,
+        CONSTRAINT "quote_images_quote_id_fkey" FOREIGN KEY ("quote_id") REFERENCES "quote_table"("id") ON DELETE CASCADE
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "quote_images_quote_id_idx" ON "quote_images" ("quote_id")
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS "travel_deal" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
