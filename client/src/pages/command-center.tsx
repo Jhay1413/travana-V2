@@ -817,6 +817,7 @@ function TopBar({
   rolePreview,
   onRoleChange,
   clients,
+  userId,
 }: {
   role: Role;
   active: string;
