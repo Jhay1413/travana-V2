@@ -468,6 +468,8 @@ export default function ClientPage() {
     inboundArriveAirport: "",
     inboundArriveDate: "",
     inboundArriveTime: "",
+    outboundConnectingLegs: [] as { departAirportId: string; departAirport: string; arriveAirportId: string; arriveAirport: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string; flightNumber: string }[],
+    inboundConnectingLegs: [] as { departAirportId: string; departAirport: string; arriveAirportId: string; arriveAirport: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string; flightNumber: string }[],
     tourOperator: "",
     sales: 0,
     price: 0,
@@ -3086,6 +3088,108 @@ export default function ClientPage() {
                       />
                     </div>
                   </div>
+                  {newQuote.outboundConnectingLegs.map((leg, idx) => (
+                    <div key={idx} className="rounded-xl border border-blue-200/60 bg-blue-50/30 p-3 mt-3" data-testid={`outbound-connecting-leg-${idx}`}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-blue-700">Connecting Flight {idx + 2}</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: prev.outboundConnectingLegs.filter((_, i) => i !== idx) }))}
+                          className="text-blue-400 hover:text-red-500 transition-colors"
+                          data-testid={`remove-outbound-connecting-leg-${idx}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                          <SearchableSelect
+                            value={leg.departAirportId}
+                            onValueChange={(v) => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: prev.outboundConnectingLegs.map((l, i) => i === idx ? { ...l, departAirportId: v } : l) }))}
+                            options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                            placeholder="Select airport..."
+                            searchPlaceholder="Search airports..."
+                            emptyMessage="No airports found."
+                            data-testid={`input-outbound-connecting-${idx}-depart-airport`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                          <DatePicker
+                            value={leg.departDate}
+                            onChange={(v) => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: prev.outboundConnectingLegs.map((l, i) => i === idx ? { ...l, departDate: v } : l) }))}
+                            placeholder="Pick a date"
+                            data-testid={`input-outbound-connecting-${idx}-depart-date`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                          <Input
+                            type="time"
+                            value={leg.departTime}
+                            onChange={(e) => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: prev.outboundConnectingLegs.map((l, i) => i === idx ? { ...l, departTime: e.target.value } : l) }))}
+                            className="h-9 rounded-xl border-black/10 bg-white/70"
+                            data-testid={`input-outbound-connecting-${idx}-depart-time`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                          <SearchableSelect
+                            value={leg.arriveAirportId}
+                            onValueChange={(v) => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: prev.outboundConnectingLegs.map((l, i) => i === idx ? { ...l, arriveAirportId: v } : l) }))}
+                            options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                            placeholder="Select airport..."
+                            searchPlaceholder="Search airports..."
+                            emptyMessage="No airports found."
+                            data-testid={`input-outbound-connecting-${idx}-arrive-airport`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                          <DatePicker
+                            value={leg.arriveDate}
+                            onChange={(v) => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: prev.outboundConnectingLegs.map((l, i) => i === idx ? { ...l, arriveDate: v } : l) }))}
+                            placeholder="Pick a date"
+                            data-testid={`input-outbound-connecting-${idx}-arrive-date`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                          <Input
+                            type="time"
+                            value={leg.arriveTime}
+                            onChange={(e) => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: prev.outboundConnectingLegs.map((l, i) => i === idx ? { ...l, arriveTime: e.target.value } : l) }))}
+                            className="h-9 rounded-xl border-black/10 bg-white/70"
+                            data-testid={`input-outbound-connecting-${idx}-arrive-time`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Flight Number</Label>
+                          <Input
+                            value={leg.flightNumber}
+                            onChange={(e) => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: prev.outboundConnectingLegs.map((l, i) => i === idx ? { ...l, flightNumber: e.target.value } : l) }))}
+                            className="h-9 rounded-xl border-black/10 bg-white/70"
+                            placeholder="e.g. BA123"
+                            data-testid={`input-outbound-connecting-${idx}-flight-number`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {newQuote.outboundConnectingLegs.length < 2 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 text-xs gap-1"
+                      onClick={() => setNewQuote(prev => ({ ...prev, outboundConnectingLegs: [...prev.outboundConnectingLegs, { departAirportId: "", departAirport: "", arriveAirportId: "", arriveAirport: "", departDate: "", departTime: "", arriveDate: "", arriveTime: "", flightNumber: "" }] }))}
+                      data-testid="btn-add-outbound-connecting-flight"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Connecting Flight
+                    </Button>
+                  )}
                 </div>
 
                 <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="new-section-inbound-flights">
@@ -3157,6 +3261,108 @@ export default function ClientPage() {
                       />
                     </div>
                   </div>
+                  {newQuote.inboundConnectingLegs.map((leg, idx) => (
+                    <div key={idx} className="rounded-xl border border-purple-200/60 bg-purple-50/30 p-3 mt-3" data-testid={`inbound-connecting-leg-${idx}`}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-purple-700">Connecting Flight {idx + 2}</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: prev.inboundConnectingLegs.filter((_, i) => i !== idx) }))}
+                          className="text-purple-400 hover:text-red-500 transition-colors"
+                          data-testid={`remove-inbound-connecting-leg-${idx}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Departing Airport</Label>
+                          <SearchableSelect
+                            value={leg.departAirportId}
+                            onValueChange={(v) => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: prev.inboundConnectingLegs.map((l, i) => i === idx ? { ...l, departAirportId: v } : l) }))}
+                            options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                            placeholder="Select airport..."
+                            searchPlaceholder="Search airports..."
+                            emptyMessage="No airports found."
+                            data-testid={`input-inbound-connecting-${idx}-depart-airport`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Departure Date</Label>
+                          <DatePicker
+                            value={leg.departDate}
+                            onChange={(v) => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: prev.inboundConnectingLegs.map((l, i) => i === idx ? { ...l, departDate: v } : l) }))}
+                            placeholder="Pick a date"
+                            data-testid={`input-inbound-connecting-${idx}-depart-date`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Departure Time</Label>
+                          <Input
+                            type="time"
+                            value={leg.departTime}
+                            onChange={(e) => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: prev.inboundConnectingLegs.map((l, i) => i === idx ? { ...l, departTime: e.target.value } : l) }))}
+                            className="h-9 rounded-xl border-black/10 bg-white/70"
+                            data-testid={`input-inbound-connecting-${idx}-depart-time`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Arrival Airport</Label>
+                          <SearchableSelect
+                            value={leg.arriveAirportId}
+                            onValueChange={(v) => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: prev.inboundConnectingLegs.map((l, i) => i === idx ? { ...l, arriveAirportId: v } : l) }))}
+                            options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                            placeholder="Select airport..."
+                            searchPlaceholder="Search airports..."
+                            emptyMessage="No airports found."
+                            data-testid={`input-inbound-connecting-${idx}-arrive-airport`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Arrival Date</Label>
+                          <DatePicker
+                            value={leg.arriveDate}
+                            onChange={(v) => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: prev.inboundConnectingLegs.map((l, i) => i === idx ? { ...l, arriveDate: v } : l) }))}
+                            placeholder="Pick a date"
+                            data-testid={`input-inbound-connecting-${idx}-arrive-date`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Arrival Time</Label>
+                          <Input
+                            type="time"
+                            value={leg.arriveTime}
+                            onChange={(e) => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: prev.inboundConnectingLegs.map((l, i) => i === idx ? { ...l, arriveTime: e.target.value } : l) }))}
+                            className="h-9 rounded-xl border-black/10 bg-white/70"
+                            data-testid={`input-inbound-connecting-${idx}-arrive-time`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-black/60">Flight Number</Label>
+                          <Input
+                            value={leg.flightNumber}
+                            onChange={(e) => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: prev.inboundConnectingLegs.map((l, i) => i === idx ? { ...l, flightNumber: e.target.value } : l) }))}
+                            className="h-9 rounded-xl border-black/10 bg-white/70"
+                            placeholder="e.g. BA456"
+                            data-testid={`input-inbound-connecting-${idx}-flight-number`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {newQuote.inboundConnectingLegs.length < 2 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 text-xs gap-1"
+                      onClick={() => setNewQuote(prev => ({ ...prev, inboundConnectingLegs: [...prev.inboundConnectingLegs, { departAirportId: "", departAirport: "", arriveAirportId: "", arriveAirport: "", departDate: "", departTime: "", arriveDate: "", arriveTime: "", flightNumber: "" }] }))}
+                      data-testid="btn-add-inbound-connecting-flight"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Connecting Flight
+                    </Button>
+                  )}
                 </div>
               </>
             )}
@@ -3294,6 +3500,31 @@ export default function ClientPage() {
                     is_included_in_package: true,
                   } : undefined;
 
+                  const outboundConnecting = newQuote.outboundConnectingLegs
+                    .filter(leg => leg.departAirportId || leg.arriveAirportId)
+                    .map(leg => ({
+                      departing_airport_id: leg.departAirportId || undefined,
+                      arrival_airport_id: leg.arriveAirportId || undefined,
+                      departure_date_time: leg.departDate && leg.departTime
+                        ? `${leg.departDate}T${leg.departTime}` : leg.departDate || undefined,
+                      arrival_date_time: leg.arriveDate && leg.arriveTime
+                        ? `${leg.arriveDate}T${leg.arriveTime}` : leg.arriveDate || undefined,
+                      flight_number: leg.flightNumber || undefined,
+                      is_included_in_package: true,
+                    }));
+                  const inboundConnecting = newQuote.inboundConnectingLegs
+                    .filter(leg => leg.departAirportId || leg.arriveAirportId)
+                    .map(leg => ({
+                      departing_airport_id: leg.departAirportId || undefined,
+                      arrival_airport_id: leg.arriveAirportId || undefined,
+                      departure_date_time: leg.departDate && leg.departTime
+                        ? `${leg.departDate}T${leg.departTime}` : leg.departDate || undefined,
+                      arrival_date_time: leg.arriveDate && leg.arriveTime
+                        ? `${leg.arriveDate}T${leg.arriveTime}` : leg.arriveDate || undefined,
+                      flight_number: leg.flightNumber || undefined,
+                      is_included_in_package: true,
+                    }));
+
                   const quotePayload = {
                     holiday_type_id: newQuote.packageType,
                     travel_date: newQuote.travelDate,
@@ -3312,6 +3543,8 @@ export default function ClientPage() {
                     main_tour_operator_id: newQuote.tourOperator || undefined,
                     outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
                     inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
+                    outboundConnectingLegs: packageTypeName === "Package Holiday" && outboundConnecting.length > 0 ? outboundConnecting : undefined,
+                    inboundConnectingLegs: packageTypeName === "Package Holiday" && inboundConnecting.length > 0 ? inboundConnecting : undefined,
                     primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
                   };
 
