@@ -2112,9 +2112,12 @@ function EditQuoteDialog({
   const { data: roomTypeData } = useRoomTypes();
 
   const handleJsonUpload = (file: File) => {
+    console.log('🟢 handleJsonUpload called with file:', file.name, file.type, file.size);
     const reader = new FileReader();
     reader.onload = async (ev) => {
+      console.log('🟢 FileReader onload triggered');
       const content = (ev.target?.result as string) || "";
+      console.log('🟢 File content length:', content.length);
       const toIsoDate = (d: string | undefined): string => {
         if (!d) return "";
         const match = d.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
@@ -2178,14 +2181,36 @@ function EditQuoteDialog({
             setForm((prev) => {
               const updated = { ...prev };
               
-              // Apply text field values
+              // Fields that should only receive IDs, not text values
+              const idOnlyFields = new Set([
+                'country', 
+                'destination', 
+                'resort', 
+                'accommodation',
+                'accommodationId',
+                'boardBasis',
+                'boardBasisId',
+                'tourOperator',
+                'tourOperatorId',
+                'outboundDepartAirport',
+                'outboundDepartAirportId',
+                'outboundArriveAirport',
+                'outboundArriveAirportId',
+                'inboundDepartAirport',
+                'inboundDepartAirportId',
+                'inboundArriveAirport',
+                'inboundArriveAirportId',
+                'roomType',
+              ]);
+              
+              // Apply text field values (skip ID-only fields)
               for (const [k, v] of Object.entries(result.fields)) {
-                if (v !== "" && v !== null && v !== undefined) {
+                if (v !== "" && v !== null && v !== undefined && !idOnlyFields.has(k)) {
                   (updated as Record<string, unknown>)[k] = v;
                 }
               }
               
-              // Apply resolved IDs
+              // Apply resolved IDs (these will overwrite any text values)
               if (idMapping.countryId) updated.country = idMapping.countryId;
               if (idMapping.destinationId) updated.destination = idMapping.destinationId;
               if (idMapping.resortId) updated.resort = idMapping.resortId;
@@ -2262,9 +2287,24 @@ function EditQuoteDialog({
           serviceCharge: data.commissions?.serviceCharge || data.serviceCharge || data.service_charge || prev.serviceCharge,
           pricePerPerson: data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp || prev.pricePerPerson,
         }));
-      } catch {
+      } catch (err) {
+        console.error("❌ Error in handleJsonUpload (outer catch):", err);
+        toast({
+          title: "Error parsing JSON",
+          description: err instanceof Error ? err.message : "Unknown error occurred",
+          variant: "destructive",
+        });
       }
     };
+    reader.onerror = () => {
+      console.error("❌ FileReader error:", reader.error);
+      toast({
+        title: "Error reading file",
+        description: "Failed to read the uploaded file",
+        variant: "destructive",
+      });
+    };
+    console.log('🟢 About to call reader.readAsText()');
     reader.readAsText(file);
   };
 

@@ -294,8 +294,15 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
                 type="file"
                 accept=".json"
                 onChange={(e) => {
+                  console.log('🔵 File input onChange triggered');
                   const file = e.target.files?.[0];
-                  if (file) onJsonUpload(file);
+                  console.log('🔵 Selected file:', file?.name, file?.type, file?.size);
+                  if (file) {
+                    console.log('🔵 Calling onJsonUpload with file:', file.name);
+                    onJsonUpload(file);
+                  } else {
+                    console.log('🔵 No file selected');
+                  }
                 }}
                 className="h-9 rounded-xl border-black/10 bg-white/70"
                 data-testid={`${prefix}-input-json-upload`}
