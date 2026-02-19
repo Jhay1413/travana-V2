@@ -32,6 +32,7 @@ import {
   Shield,
   Sparkles,
   Ticket,
+  Share2,
   Trash2,
   TrendingUp,
   Users,
@@ -98,6 +99,7 @@ function getNavRoute(key: string): string {
     commission: "/",
     payouts: "/",
     hub: "/hub",
+    "social-posts": "/social-posts",
   };
   return routes[key] || "/";
 }
@@ -327,6 +329,7 @@ export function CommandCenterShell({
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
       { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "hub", label: "TheHUB", icon: <Compass className="h-4 w-4" /> },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
@@ -375,6 +378,7 @@ export function CommandCenterShell({
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
               { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+              { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "hub", label: "TheHUB", icon: <Compass className="h-4 w-4" /> },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ],
