@@ -4836,7 +4836,7 @@ export default function CommandCenterPage() {
                   icon={<Ticket className="h-4 w-4" />}
                 />
                 <KpiCard
-                  label="This Week"
+                  label="Live Clients"
                   value={currency.format(totals.openValue)}
                   delta="+2.3% WoW"
                   icon={<Sparkles className="h-4 w-4" />}
