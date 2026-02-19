@@ -103,7 +103,7 @@ function SocialPostCard({ post }: { post: SocialPost }) {
       className="glass ringed grain rounded-2xl overflow-hidden flex flex-col"
       data-testid={`card-social-post-${quote.id}`}
     >
-      <div className="relative h-48 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-950 dark:to-slate-900 overflow-hidden">
+      <div className="relative h-52 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-950 dark:to-slate-900 overflow-hidden">
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -112,8 +112,11 @@ function SocialPostCard({ post }: { post: SocialPost }) {
             data-testid={`img-social-post-${quote.id}`}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Hotel className="w-12 h-12 text-blue-300/50 dark:text-blue-700/50" />
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-sky-100 via-blue-50 to-indigo-100 dark:from-sky-950 dark:via-blue-950 dark:to-indigo-950">
+            <div className="w-16 h-16 rounded-2xl bg-white/60 dark:bg-white/10 border border-black/5 dark:border-white/10 flex items-center justify-center shadow-sm">
+              <Hotel className="w-8 h-8 text-blue-400/70 dark:text-blue-500/60" />
+            </div>
+            <span className="text-[10px] font-medium text-black/30 dark:text-white/30 uppercase tracking-wider">No image uploaded</span>
           </div>
         )}
         {tourOp && (
@@ -126,7 +129,7 @@ function SocialPostCard({ post }: { post: SocialPost }) {
         )}
       </div>
 
-      <div className="p-4 flex-1 flex flex-col gap-3">
+      <div className="p-4 pb-5 flex-1 flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <h3
@@ -208,7 +211,7 @@ function SocialPostCard({ post }: { post: SocialPost }) {
           </div>
         )}
 
-        <div className="mt-auto pt-3 border-t border-black/8 dark:border-white/8 space-y-2">
+        <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 space-y-2">
           <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
             <Button
               variant="outline"
