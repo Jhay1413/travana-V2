@@ -329,8 +329,6 @@ export function CommandCenterShell({
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
       { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
-      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
-      { key: "hub", label: "TheHUB", icon: <Compass className="h-4 w-4" /> },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
@@ -378,8 +376,6 @@ export function CommandCenterShell({
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
               { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
-              { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
-              { key: "hub", label: "TheHUB", icon: <Compass className="h-4 w-4" /> },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ],
           },
@@ -636,24 +632,45 @@ export function CommandCenterShell({
 
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
-              <Link
-                href="/hub"
-                className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 no-underline"
-                data-testid="link-hub"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                    <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold" data-testid="text-support-title">TheHub</div>
-                    <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-support-sub">
-                      Profile, News & Training
+              <div className="grid gap-2">
+                <Link
+                  href="/social-posts"
+                  className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 no-underline"
+                  data-testid="link-social-posts"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      <Share2 className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold" data-testid="text-social-posts-title">Social Posts</div>
+                      <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-social-posts-sub">
+                        Browse & schedule posts
+                      </div>
                     </div>
                   </div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-              </Link>
+                  <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+                </Link>
+
+                <Link
+                  href="/hub"
+                  className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 no-underline"
+                  data-testid="link-hub"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold" data-testid="text-support-title">TheHub</div>
+                      <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-support-sub">
+                        Profile, News & Training
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+                </Link>
+              </div>
 
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
