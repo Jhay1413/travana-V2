@@ -3613,7 +3613,7 @@ export default function ClientPage() {
                       main_tour_operator_id: quotePayload.main_tour_operator_id,
                       lodge_id: quotePayload.lodge_id,
                       pets: quotePayload.pets,
-                      quote_status: "NEW_LEAD",
+                      quote_status: "QUOTE_IN_PROGRESS",
                     };
                     createQuoteMutationHook.mutate(
                       {
@@ -3650,7 +3650,7 @@ export default function ClientPage() {
                         lead_source: newQuote.leadSource || undefined,
                         quote: {
                           ...quotePayload,
-                          quote_status: "NEW_LEAD",
+                          quote_status: "QUOTE_IN_PROGRESS",
                           images: quoteImageUrls.length > 0 ? quoteImageUrls : undefined,
                         },
                       },

@@ -89,4 +89,15 @@ export const quoteApi = {
     const { data } = await axiosClient.patch(`/api/quotes/${quoteId}/images/${imageId}/primary`);
     return data;
   },
+
+  // Tag management
+  updateTags: async (quoteId: string, tags: string[]): Promise<Quote> => {
+    const { data } = await axiosClient.put<Quote>(`/api/quotes/${quoteId}/tags`, { tags });
+    return data;
+  },
+
+  getTags: async (quoteId: string): Promise<string[]> => {
+    const { data } = await axiosClient.get<string[]>(`/api/quotes/${quoteId}/tags`);
+    return data;
+  },
 };

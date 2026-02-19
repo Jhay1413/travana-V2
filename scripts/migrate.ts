@@ -447,6 +447,42 @@ async function run() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS "tags" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "name" text NOT NULL UNIQUE,
+        "usage_count" integer NOT NULL DEFAULT 0,
+        "created_at" timestamp with time zone DEFAULT now(),
+        "last_used_at" timestamp with time zone DEFAULT now()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "tags_name_idx" ON "tags" ("name")
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "quote_tags" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "quote_id" uuid NOT NULL REFERENCES "quote_table"("id") ON DELETE CASCADE,
+        "tag_id" uuid NOT NULL REFERENCES "tags"("id") ON DELETE CASCADE,
+        "created_at" timestamp with time zone DEFAULT now(),
+        UNIQUE("quote_id", "tag_id")
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "quote_tags_quote_id_idx" ON "quote_tags" ("quote_id")
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "quote_tags_tag_id_idx" ON "quote_tags" ("tag_id")
+    `);
+
+    await client.query(`
+      ALTER TABLE "quote_table" DROP COLUMN IF EXISTS "tags"
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS "travel_deal" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         "title" varchar NOT NULL,

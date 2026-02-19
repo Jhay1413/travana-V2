@@ -1229,6 +1229,31 @@ export const insertQuoteImageSchema = createInsertSchema(quoteImages);
 export type QuoteImage = typeof quoteImages.$inferSelect;
 export type InsertQuoteImage = z.infer<typeof insertQuoteImageSchema>;
 
+export const tags = pgTable("tags", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull().unique(),
+  usageCount: integer("usage_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastUsedAt: timestamp("last_used_at").defaultNow(),
+});
+
+export const insertTagSchema = createInsertSchema(tags);
+export type Tag = typeof tags.$inferSelect;
+export type InsertTag = z.infer<typeof insertTagSchema>;
+
+export const quoteTags = pgTable("quote_tags", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  quoteId: uuid("quote_id").notNull().references(() => quote.id, { onDelete: 'cascade' }),
+  tagId: uuid("tag_id").notNull().references(() => tags.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  unique_quote_tag: unique().on(table.quoteId, table.tagId)
+}));
+
+export const insertQuoteTagSchema = createInsertSchema(quoteTags);
+export type QuoteTag = typeof quoteTags.$inferSelect;
+export type InsertQuoteTag = z.infer<typeof insertQuoteTagSchema>;
+
 
 export const tourOperators = pgTable("tour_operators", {
   id: varchar("id").primaryKey(),

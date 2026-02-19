@@ -31,4 +31,8 @@ router.get("/:quoteId/images", quoteImageController.getImages);
 router.delete("/:quoteId/images/:imageId", quoteImageController.deleteImage);
 router.patch("/:quoteId/images/:imageId/primary", quoteImageController.setPrimaryImage);
 
+// Tag management
+router.put("/:id/tags", quoteController.updateQuoteTags);
+router.get("/:id/tags", quoteController.getQuoteTags);
+
 export default router;

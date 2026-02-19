@@ -3,7 +3,7 @@ import {
   quote, quote_flights, quote_accomodation, quote_transfers, quote_car_hire,
   quote_attraction_ticket, quote_lounge_pass, quote_airport_parking,
   quote_cruise, quote_cruise_item_extra, quote_cruise_itinerary,
-  passengers, deal_images, quoteImages,
+  passengers, deal_images, quoteImages, tags, quoteTags,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type,
 } from "@shared/schema";
@@ -101,7 +101,7 @@ export const newQuoteRepository = {
 
     if (!q) return undefined;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list] = await Promise.all([
       db.select({
         flight: quote_flights,
         departing_airport_name: sql<string>`concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')')`,
@@ -192,6 +192,14 @@ export const newQuoteRepository = {
 
       db.select().from(passengers).where(eq(passengers.quote_id, id)),
       db.select().from(quoteImages).where(eq(quoteImages.quoteId, id)),
+      
+      // Fetch tags through junction table
+      db.select({
+        tagName: tags.name,
+      })
+        .from(quoteTags)
+        .innerJoin(tags, eq(quoteTags.tagId, tags.id))
+        .where(eq(quoteTags.quoteId, id)),
     ]);
 
     console.log('🔍 BACKEND - Images fetched:', images.length, images);
@@ -224,6 +232,7 @@ export const newQuoteRepository = {
       destination_name: accommodations[0]?.destination_name || null,
       resort_id: accommodations[0]?.resort_id || null,
       resort_name: accommodations[0]?.resort_name || null,
+      tags: quoteTags_list.map(t => t.tagName), // Extract tag names as array
       flights: flights.map(f => ({ ...f.flight, departing_airport_name: f.departing_airport_name, arrival_airport_name: f.arrival_airport_name, tour_operator_name: f.tour_operator_name })),
       accommodations: accommodations.map(a => ({ 
         ...a.accommodation, 
@@ -244,7 +253,14 @@ export const newQuoteRepository = {
       airportParkings: airportParkings.map(p => ({ ...p.airportParking, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
       cruises: cruises.map(c => ({ ...c.cruise, tour_operator_name: c.tour_operator_name })),
       passengers: passengerList,
-      images,
+      images: images.map(img => ({
+        id: img.id,
+        image_url: img.url, // Map 'url' to 'image_url' for frontend compatibility
+        isPrimary: img.isPrimary,
+        owner_id: id,
+        owner_type: 'quote',
+        s3Key: null,
+      })),
     };
   },
 

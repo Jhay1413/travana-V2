@@ -15,8 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useRoomTypes } from "@/hooks/queries";
-import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
+import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useRoomTypes, useTags } from "@/hooks/queries";
+import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction, useUpdateQuoteTags } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { QuoteFormFields, defaultQuoteFormState } from "@/components/quote-form-fields";
 import type { QuoteFormState } from "@/components/quote-form-fields";
@@ -106,6 +106,9 @@ type QuoteDisplay = {
     price: number;
     commissionPercent: number;
     commissionValue: number;
+    discounts: number;
+    serviceCharge: number;
+    totalCommission: number;
     agentSplitPercent: number;
     agentSplitValue: number;
     netToAgency: number;
@@ -1332,6 +1335,8 @@ function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisp
 
   const salesPrice = parseFloat(apiData.sales_price || "0");
   const packageCommission = parseFloat(apiData.package_commission || "0");
+  const discounts = parseFloat(apiData.discounts || "0");
+  const serviceCharge = parseFloat(apiData.service_charge || "0");
 
   const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");
   console.log(apiData)
@@ -1408,6 +1413,9 @@ function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisp
       price: salesPrice,
       commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
       commissionValue: packageCommission,
+      discounts: discounts,
+      serviceCharge: serviceCharge,
+      totalCommission: packageCommission - discounts + serviceCharge,
       agentSplitPercent: 0,
       agentSplitValue: 0,
       netToAgency: packageCommission,
@@ -1482,6 +1490,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const [showEditModal, setShowEditModal] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
   const updateQuoteMutation = useUpdateQuote();
+  const updateTagsMutation = useUpdateQuoteTags();
   const updateTransactionMutation = useUpdateTransaction();
   const convertToBookingMutation = useConvertToBooking();
   const [showConvertDialog, setShowConvertDialog] = useState(false);
@@ -1491,7 +1500,8 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const tagSuggestionsRef = useRef<HTMLDivElement>(null);
-  const allTags: string[] = [];
+  const { data: allTagsData } = useTags();
+  const allTags = useMemo(() => allTagsData?.map(t => t.name) || [], [allTagsData]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -1683,10 +1693,20 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                             className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-black/35 transition hover:bg-black/[0.06] hover:text-black/60"
                             data-testid={`button-remove-tag-inline-${t}`}
                             onClick={() => {
+                              console.log('🏷️ Removing tag:', t);
                               const updated = quote.tags.filter((tag) => tag !== t);
-                              updateQuoteMutation.mutate(
-                                { id: quoteId, data: { tags: updated } },
-                                { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quotes"] }) }
+                              updateTagsMutation.mutate(
+                                { id: quoteId, tags: updated },
+                                { 
+                                  onSuccess: () => {
+                                    console.log('🏷️ Tag removed successfully');
+                                    queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                                  },
+                                  onError: (error) => {
+                                    console.error('🏷️ Failed to remove tag:', error);
+                                    toast({ title: "Failed to remove tag", variant: "destructive" });
+                                  }
+                                }
                               );
                             }}
                           >
@@ -1712,10 +1732,24 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && newTag.trim()) {
+                              e.preventDefault();
                               const updated = [...quote.tags, newTag.trim()];
-                              updateQuoteMutation.mutate(
-                                { id: quoteId, data: { tags: updated } },
-                                { onSuccess: () => { setNewTag(""); setShowTagSuggestions(false); queryClient.invalidateQueries({ queryKey: ["quotes"] }); queryClient.invalidateQueries({ queryKey: ["quote-tags"] }); } }
+                              console.log('🏷️ Adding tag:', newTag.trim(), 'Updated tags:', updated);
+                              updateTagsMutation.mutate(
+                                { id: quoteId, tags: updated },
+                                { 
+                                  onSuccess: () => { 
+                                    console.log('🏷️ Tag added successfully');
+                                    setNewTag(""); 
+                                    setShowTagSuggestions(false); 
+                                    queryClient.invalidateQueries({ queryKey: ["quotes"] }); 
+                                    queryClient.invalidateQueries({ queryKey: ["tags"] }); 
+                                  },
+                                  onError: (error) => {
+                                    console.error('🏷️ Failed to add tag:', error);
+                                    toast({ title: "Failed to add tag", variant: "destructive" });
+                                  }
+                                }
                               );
                             }
                             if (e.key === "Escape") setShowTagSuggestions(false);
@@ -1739,10 +1773,23 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                                   className="w-full px-2.5 py-1.5 text-left text-[11px] text-black/70 transition hover:bg-black/[0.04]"
                                   data-testid={`button-tag-suggestion-${t}`}
                                   onClick={() => {
+                                    console.log('🏷️ Adding tag from suggestion:', t);
                                     const updated = [...quote.tags, t];
-                                    updateQuoteMutation.mutate(
-                                      { id: quoteId, data: { tags: updated } },
-                                      { onSuccess: () => { setNewTag(""); setShowTagSuggestions(false); queryClient.invalidateQueries({ queryKey: ["quotes"] }); queryClient.invalidateQueries({ queryKey: ["quote-tags"] }); } }
+                                    updateTagsMutation.mutate(
+                                      { id: quoteId, tags: updated },
+                                      { 
+                                        onSuccess: () => { 
+                                          console.log('🏷️ Tag added successfully from suggestion');
+                                          setNewTag(""); 
+                                          setShowTagSuggestions(false); 
+                                          queryClient.invalidateQueries({ queryKey: ["quotes"] }); 
+                                          queryClient.invalidateQueries({ queryKey: ["tags"] }); 
+                                        },
+                                        onError: (error) => {
+                                          console.error('🏷️ Failed to add tag from suggestion:', error);
+                                          toast({ title: "Failed to add tag", variant: "destructive" });
+                                        }
+                                      }
                                     );
                                   }}
                                 >
@@ -2050,7 +2097,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                 <Tabs defaultValue="summary" className="w-full">
                   <TabsList className="mb-3 w-full rounded-2xl border border-black/10 bg-white/70 p-1">
                     <TabsTrigger value="summary" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-summary">Quote Summary</TabsTrigger>
-                    <TabsTrigger value="costings" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-costings">Quote Costings</TabsTrigger>
+                    <TabsTrigger value="costings" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-costings">{pageLabel} Costings</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="summary" className="mt-0">
@@ -2061,7 +2108,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                     <div className="flex items-center justify-between" data-testid="row-quote-summary-header">
                       <div>
                         <div className="text-sm font-semibold" data-testid="text-quote-summary-title">
-                          Financial Summary
+                          {pageLabel} Costings
                         </div>
                         <div className="mt-1 text-xs text-black/55" data-testid="text-quote-summary-subtitle">
                           Commission and charges.
@@ -2072,32 +2119,39 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
                     <div className="mt-3 grid gap-2" data-testid="list-quote-summary-lines">
                       <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-total-price">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">Total Price</div>
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">Total price</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-total-price-value">
                           {currency.format(quote.commissions.price)}
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-commission">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Commission ({quote.commissions.commissionPercent}%)</div>
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Comm</div>
                         <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-commission-value">
                           {currency.format(quote.commissions.commissionValue)}
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-agent-split">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-agent-split-label">Agent Split ({quote.commissions.agentSplitPercent}%)</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-agent-split-value">
-                          {currency.format(quote.commissions.agentSplitValue)}
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-discount">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-discount-label">Discount</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-discount-value">
+                          {currency.format(quote.commissions.discounts)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-service-charge">
+                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-service-charge-label">Service charge</div>
+                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-service-charge-value">
+                          {currency.format(quote.commissions.serviceCharge)}
                         </div>
                       </div>
 
                       <div className="my-1 h-px w-full bg-black/10" data-testid="separator-quote-summary" />
 
                       <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-quote-summary-total-commission">
-                        <div className="text-xs font-semibold text-black/70" data-testid="text-quote-summary-total-commission-label">Net to Agency</div>
+                        <div className="text-xs font-semibold text-black/70" data-testid="text-quote-summary-total-commission-label">Total commission</div>
                         <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-commission-value">
-                          {currency.format(quote.commissions.netToAgency)}
+                          {currency.format(quote.commissions.totalCommission)}
                         </div>
                       </div>
                     </div>
@@ -2234,8 +2288,10 @@ function EditQuoteDialog({
     if (open) {
       console.log('📸 Dialog opened');
       setForm(buildEditForm(quote, quoteData));
+      setPendingImages([]); // Clear pending images when opening dialog
     } else {
       console.log('📸 Dialog closed, pendingImages before close:', pendingImages.length);
+      setPendingImages([]); // Clear pending images when closing dialog
     }
   }, [open, quote, quoteData]);
 
@@ -2542,6 +2598,64 @@ function EditQuoteDialog({
             mode="edit"
             onJsonUpload={handleJsonUpload}
           />
+
+          {/* Display existing and pending images */}
+          {(quoteData.images && quoteData.images.length > 0) || pendingImages.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="section-quote-images">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold">Quote Images</div>
+                  <div className="mt-0.5 text-xs text-black/55">
+                    {quoteData.images?.length || 0} existing, {pendingImages.length} new
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {/* Existing images */}
+                {quoteData.images?.map((img, idx) => (
+                  <div
+                    key={img.id}
+                    className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03]"
+                  >
+                    <img
+                      src={img.image_url || ''}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                    {img.isPrimary && (
+                      <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        <Star className="h-3 w-3 fill-current" /> Primary
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-black/50 px-2 py-1 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
+                      Existing #{idx + 1}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Pending images from JSON upload */}
+                {pendingImages.map((url, idx) => (
+                  <div
+                    key={`pending-${idx}`}
+                    className="group relative aspect-square overflow-hidden rounded-xl border-2 border-dashed border-emerald-500/50 bg-emerald-50"
+                  >
+                    <img
+                      src={url}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                    <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      NEW
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 bg-emerald-600/90 px-2 py-1 text-[10px] font-medium text-white">
+                      Will be added on save
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-6 flex justify-end gap-3">
             <Button

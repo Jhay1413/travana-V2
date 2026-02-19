@@ -62,14 +62,29 @@ export const quoteController = {
 
   addAccommodation: asyncHandler(async (req: Request, res: Response) => {
     const quoteId = req.params.id as string;
-    const accommodation = await newQuoteService.addAccommodation(quoteId, req.body);
-    return successResponse(res, accommodation, "Accommodation added successfully", 201);
+    const accommodation = await newQuoteService.addAccommodation(
+      quoteId,
+      req.body,
+    );
+    return successResponse(
+      res,
+      accommodation,
+      "Accommodation added successfully",
+      201,
+    );
   }),
 
   updateAccommodation: asyncHandler(async (req: Request, res: Response) => {
     const accommodationId = req.params.accommodationId as string;
-    const accommodation = await newQuoteService.updateAccommodation(accommodationId, req.body);
-    return successResponse(res, accommodation, "Accommodation updated successfully");
+    const accommodation = await newQuoteService.updateAccommodation(
+      accommodationId,
+      req.body,
+    );
+    return successResponse(
+      res,
+      accommodation,
+      "Accommodation updated successfully",
+    );
   }),
 
   removeAccommodation: asyncHandler(async (req: Request, res: Response) => {
@@ -100,5 +115,27 @@ export const quoteController = {
     const passengerId = req.params.passengerId as string;
     await newQuoteService.removePassenger(passengerId);
     res.status(204).send();
+  }),
+
+  // Tag management
+  updateQuoteTags: asyncHandler(async (req: Request, res: Response) => {
+    const quoteId = req.params.id as string;
+    const { tags } = req.body; // Array of tag names
+
+    if (!Array.isArray(tags)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Tags must be an array" });
+    }
+
+    await newQuoteService.updateQuoteTags(quoteId, tags);
+    const updatedQuote = await newQuoteService.getQuoteWithDetails(quoteId);
+    return successResponse(res, updatedQuote, "Tags updated successfully");
+  }),
+
+  getQuoteTags: asyncHandler(async (req: Request, res: Response) => {
+    const quoteId = req.params.id as string;
+    const tags = await newQuoteService.getQuoteTags(quoteId);
+    return successResponse(res, tags, "Tags retrieved successfully");
   }),
 };

@@ -711,7 +711,7 @@ export default function EnquiryPage() {
       main_tour_operator_id: convertForm.tourOperator || undefined,
       lodge_id: packageTypeName === "Hot Tub Break" ? (convertForm.lodgeCode || undefined) : undefined,
       pets: packageTypeName === "Hot Tub Break" ? (convertForm.pets ? 1 : 0) : undefined,
-      quote_status: "NEW_LEAD",
+      quote_status: "QUOTE_IN_PROGRESS",
       discounts: convertForm.discount || undefined,
       service_charge: convertForm.serviceCharge || undefined,
       lead_source: convertForm.leadSource || undefined,

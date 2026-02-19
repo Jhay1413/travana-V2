@@ -1,6 +1,7 @@
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
 import { quoteImageRepository } from "../repositories/quote-image.repository";
+import { tagService } from "./tag.service";
 import { AppError } from "../utils/error-handler";
 import type {
   Quote,
@@ -22,6 +23,7 @@ interface QuoteRelationData {
   inboundConnectingLegs?: Partial<InsertQuoteFlight>[];
   primaryAccommodation?: Partial<InsertQuoteAccomodation>;
   images?: string[];
+  tags?: string[];
 }
 
 type CreateQuotePayload = InsertQuote & QuoteRelationData;
@@ -76,6 +78,11 @@ export const newQuoteService = {
     if (!txn) throw new AppError("Transaction not found", 404);
 
     const q = await newQuoteRepository.create(quoteFields);
+
+    // Process tags if provided
+    if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) {
+      await tagService.addQuoteTags(q.id, data.tags);
+    }
 
     if (txn.status !== 'on_quote' && txn.status !== 'on_booking') {
       await transactionRepository.update(txn.id, { status: 'on_quote' });
@@ -139,6 +146,11 @@ export const newQuoteService = {
 
     const q = await newQuoteRepository.update(id, quoteData);
     if (!q) throw new AppError("Quote not found", 404);
+
+    // Process tags if provided
+    if ('tags' in data && Array.isArray(data.tags)) {
+      await tagService.updateQuoteTags(id, data.tags);
+    }
 
     // Update lead_source on the transaction table
     if (lead_source !== undefined && q.transaction_id) {
@@ -243,5 +255,14 @@ export const newQuoteService = {
 
   async removePassenger(passengerId: string) {
     await newQuoteRepository.removePassenger(passengerId);
+  },
+
+  // Tag management
+  async updateQuoteTags(quoteId: string, tagNames: string[]) {
+    await tagService.updateQuoteTags(quoteId, tagNames);
+  },
+
+  async getQuoteTags(quoteId: string) {
+    return await tagService.getQuoteTags(quoteId);
   },
 };

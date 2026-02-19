@@ -35,3 +35,14 @@ export function useDeleteQuote() {
     },
   });
 }
+
+export function useUpdateQuoteTags() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, tags }: { id: string; tags: string[] }) => quoteApi.updateTags(id, tags),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+    },
+  });
+}
