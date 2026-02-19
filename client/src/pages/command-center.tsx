@@ -1438,9 +1438,12 @@ function EmptyState({ title, desc, action }: { title: string; desc: string; acti
 }
 
 export default function CommandCenterPage() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
-  const [active, setActive] = useState<string>("overview");
+  const [active, setActive] = useState<string>(() => {
+    if (location === "/clients") return "clients";
+    return "overview";
+  });
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"whats-on" | "pipeline" | "calendar" | "news">("whats-on");
   const [whatsOnFilter, setWhatsOnFilter] = useState<"today" | "tomorrow" | "this-week" | "custom">("today");
