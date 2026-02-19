@@ -14,6 +14,7 @@ import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
 import type { CreateClientData } from "@/types/client";
+import type { EnrichedQuote } from "@/types/quote";
 import {
   Activity,
   BadgeCheck,
@@ -65,6 +66,10 @@ import {
   Star,
   StickyNote,
   Share2,
+  Hotel,
+  UtensilsCrossed,
+  Eye,
+  CalendarClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1358,6 +1363,56 @@ function TopBar({
   );
 }
 
+function spFormatDate(d: string | null | undefined): string {
+  if (!d) return "—";
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function spFormatPrice(price: string | null | undefined): string {
+  if (!price) return "—";
+  const num = parseFloat(price);
+  if (isNaN(num)) return "—";
+  return `£${num.toFixed(2)}`;
+}
+
+function spIsSameDay(dateStr: string | null | undefined, target: Date): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  return d.getFullYear() === target.getFullYear() && d.getMonth() === target.getMonth() && d.getDate() === target.getDate();
+}
+
+function spGetHotelName(q: EnrichedQuote): string {
+  if (q.accommodations && q.accommodations.length > 0) return q.accommodations[0].accomodation_name || "—";
+  return "—";
+}
+
+function spGetDepartingAirport(q: EnrichedQuote): string {
+  const outbound = q.flights?.find((f) => f.flight_type === "outbound" && (f.leg_order === 0 || f.leg_order === null));
+  return outbound?.departing_airport_name || "—";
+}
+
+function spGetBoardBasis(q: EnrichedQuote): string {
+  if (q.accommodations && q.accommodations.length > 0) return q.accommodations[0].board_basis_name || "—";
+  return "—";
+}
+
+function spGetFirstImage(q: EnrichedQuote): string | null {
+  if (q.images && q.images.length > 0) {
+    const primary = q.images.find((img) => img.isPrimary);
+    return (primary || q.images[0]).image_url || null;
+  }
+  return null;
+}
+
+function spGetSubtitle(q: EnrichedQuote): string {
+  const parts: string[] = [];
+  if (q.country_name) parts.push(q.country_name);
+  if (q.destination_name) parts.push(q.destination_name);
+  return parts.join(" · ") || "—";
+}
+
 function EmptyState({ title, desc, action }: { title: string; desc: string; action: string }) {
   return (
     <div className="grid place-items-center rounded-3xl border border-black/10 bg-black/5 p-10 text-center dark:border-white/10 dark:bg-white/5">
@@ -1443,6 +1498,41 @@ export default function CommandCenterPage() {
 
   const { data: dashboardStats } = useDashboardStats();
   const { data: transactionsData } = useTransactions();
+
+  const overviewSocialPosts = useMemo(() => {
+    if (!transactionsData) return [];
+    const posts: { quote: EnrichedQuote; clientId: string }[] = [];
+    for (const txn of transactionsData) {
+      if (!txn.client_id || !txn.quotes) continue;
+      for (const q of txn.quotes) {
+        if (q.is_active === false) continue;
+        posts.push({ quote: q as EnrichedQuote, clientId: txn.client_id });
+      }
+    }
+    posts.sort((a, b) => {
+      const da = a.quote.date_created ? new Date(a.quote.date_created).getTime() : 0;
+      const db = b.quote.date_created ? new Date(b.quote.date_created).getTime() : 0;
+      return db - da;
+    });
+    return posts;
+  }, [transactionsData]);
+
+  const filteredOverviewSocialPosts = useMemo(() => {
+    let result = overviewSocialPosts;
+    if (socialFilter === "today") {
+      const today = new Date();
+      result = result.filter(({ quote: q }) => spIsSameDay(q.date_created, today));
+    } else if (socialFilter === "tomorrow") {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      result = result.filter(({ quote: q }) => spIsSameDay(q.date_created, tomorrow));
+    } else if (socialFilter === "date" && socialDate) {
+      const target = new Date(socialDate + "T00:00:00");
+      result = result.filter(({ quote: q }) => spIsSameDay(q.date_created, target));
+    }
+    return result;
+  }, [overviewSocialPosts, socialFilter, socialDate]);
+
   const { data: userFavorites } = useFavorites();
   const removeFavoriteMutation = useRemoveFavorite();
   const toggleFavoriteMutation = useToggleFavorite();
@@ -1909,48 +1999,25 @@ export default function CommandCenterPage() {
               </TabsContent>
 
               <TabsContent value="calendar" className="mt-0">
-                <div className="grid gap-3" data-testid="panel-overview-social-posts">
-                  <div className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-3" data-testid="panel-overview-social-posts">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-overview-social-filters">
-                      <button
-                        type="button"
-                        onClick={() => setSocialFilter("today")}
-                        className={
-                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                          (socialFilter === "today"
-                            ? "bg-[#3b82f6] text-white"
-                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
-                        }
-                        data-testid="filter-overview-social-today"
-                      >
-                        Today
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSocialFilter("tomorrow")}
-                        className={
-                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                          (socialFilter === "tomorrow"
-                            ? "bg-[#3b82f6] text-white"
-                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
-                        }
-                        data-testid="filter-overview-social-tomorrow"
-                      >
-                        Tomorrow
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSocialFilter("date")}
-                        className={
-                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                          (socialFilter === "date"
-                            ? "bg-[#3b82f6] text-white"
-                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
-                        }
-                        data-testid="filter-overview-social-date"
-                      >
-                        Date selection
-                      </button>
+                      {(["today", "tomorrow", "date"] as const).map((f) => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setSocialFilter(f)}
+                          className={
+                            "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
+                            (socialFilter === f
+                              ? "bg-[#3b82f6] text-white"
+                              : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
+                          }
+                          data-testid={`filter-overview-social-${f}`}
+                        >
+                          {f === "date" ? "Date selection" : f.charAt(0).toUpperCase() + f.slice(1)}
+                        </button>
+                      ))}
                     </div>
 
                     <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-overview-social-date">
@@ -1966,194 +2033,127 @@ export default function CommandCenterPage() {
                     </div>
                   </div>
 
-                  {([
-                    {
-                      id: "post-001",
-                      title: "Maldives Winter Escape — £2,495pp",
-                      subtitle: "Overwater villa + private transfers",
-                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                      hotel: "Soneva Jani",
-                      departing: "BAA",
-                      nights: 7,
-                      board: "Half Board",
-                      travelDate: "2026-02-18",
-                      createdAt: "2026-02-01",
-                      quoteId: "Q-1082",
-                      liveHref: "/command-center?quote=Q-1082",
-                      audience: "Facebook",
-                      status: "Scheduled",
-                      scheduledAt: "Today 18:00",
-                      time: "Today 18:00",
-                      copy:
-                        "Limited winter availability. Premium overwater villas + transfers included. Reply 'MALDIVES' for a tailored quote.",
-                    },
-                    {
-                      id: "post-002",
-                      title: "Rome & Amalfi — £1,349pp",
-                      subtitle: "Split-stay with private transfers",
-                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                      hotel: "Hotel de la Ville + Il San Pietro",
-                      departing: "LGW",
-                      nights: 5,
-                      board: "B&B",
-                      travelDate: "2026-02-10",
-                      createdAt: "2026-01-31",
-                      quoteId: "Q-1075",
-                      liveHref: "/command-center?quote=Q-1075",
-                      audience: "Facebook",
-                      status: "Draft",
-                      scheduledAt: "Tomorrow 10:30",
-                      time: "Tomorrow 10:30",
-                      copy:
-                        "A classic split-stay: 2 nights Rome, 3 nights Amalfi. Add private transfers and a sunset cruise.",
-                    },
-                    {
-                      id: "post-003",
-                      title: "Dubai Half-Term — £1,199pp",
-                      subtitle: "Family suite + pool access",
-                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                      hotel: "Atlantis The Royal",
-                      departing: "MAN",
-                      nights: 4,
-                      board: "Half Board",
-                      travelDate: "2026-02-15",
-                      createdAt: "2026-01-30",
-                      quoteId: "Q-1069",
-                      liveHref: "/command-center?quote=Q-1069",
-                      audience: "Facebook",
-                      status: "Posted",
-                      scheduledAt: null,
-                      time: "Yesterday",
-                      copy:
-                        "Family-ready luxury with pool access and late checkout options. Ask for our upgrade shortlist.",
-                    },
-                    {
-                      id: "post-004",
-                      title: "New York City Weekend — £899pp",
-                      subtitle: "Premium hotel + Broadway options",
-                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                      hotel: "The Peninsula New York",
-                      departing: "LHR",
-                      nights: 3,
-                      board: "Room Only",
-                      travelDate: "2026-03-01",
-                      createdAt: "2026-01-29",
-                      quoteId: "Q-1058",
-                      liveHref: "/command-center?quote=Q-1058",
-                      audience: "Facebook",
-                      status: "Draft",
-                      scheduledAt: null,
-                      time: "In review",
-                      copy:
-                        "A sharp city break with premium hotel options. Add Broadway tickets and airport lounge access.",
-                    },
-                  ] as const)
-                    .filter((p) => {
-                      if (socialFilter === "today") return p.time.toLowerCase().startsWith("today");
-                      if (socialFilter === "tomorrow") return p.time.toLowerCase().startsWith("tomorrow");
-                      if (socialFilter === "date") return true;
-                      return true;
-                    })
-                    .map((p) => (
-                      <button
-                        key={p.id}
-                        className="group w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                        data-testid={`card-overview-social-post-${p.id}`}
-                      >
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold" data-testid={`text-overview-social-post-title-${p.id}`}>
-                              {p.title}
-                            </div>
-                            <div className="mt-1 flex items-center gap-2 text-xs">
-                              <span className="truncate text-black/60 dark:text-white/60" data-testid={`text-overview-social-post-subtitle-${p.id}`}>
-                                {p.subtitle}
-                              </span>
-                              <span className="text-black/35 dark:text-white/35" data-testid={`text-overview-social-post-time-${p.id}`}>
-                                {p.time}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="shrink-0 text-right space-y-1">
-                            <div className="flex items-center justify-end gap-2">
-                              <span
-                                className={
-                                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
-                                  (p.status === "Posted"
-                                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                    : p.status === "Scheduled"
-                                      ? "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                                      : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300")
-                                }
-                                data-testid={`status-overview-social-post-${p.id}`}
-                              >
-                                {p.status}{p.scheduledAt ? ` · ${p.scheduledAt}` : ""}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-black/55 dark:text-white/55">
-                              <span data-testid={`text-overview-social-post-quote-${p.id}`}>Quote #{p.quoteId}</span>
-                              <span className="text-black/25 dark:text-white/25">•</span>
-                              <span data-testid={`text-overview-social-post-platform-${p.id}`}>{p.audience}</span>
-                            </div>
-                          </div>
-                        </div>
+                  <p className="text-xs text-black/50 dark:text-white/50">
+                    {filteredOverviewSocialPosts.length} {filteredOverviewSocialPosts.length === 1 ? "post" : "posts"} found
+                  </p>
 
-                        <div className="flex items-start gap-3">
-                          <div
-                            className="hidden sm:block relative shrink-0 self-stretch w-36 overflow-hidden rounded-2xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
-                            data-testid={`img-overview-social-post-${p.id}`}
-                          >
-                            {p.imageSrc ? (
-                              <img
-                                src={p.imageSrc}
-                                alt=""
-                                className="h-full w-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : null}
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0 dark:from-black/45" />
-                          </div>
+                  {filteredOverviewSocialPosts.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-black/10 dark:border-white/10 p-8 text-center">
+                      <CalendarClock className="w-10 h-10 mx-auto text-black/15 dark:text-white/15 mb-2" />
+                      <p className="text-sm text-black/50 dark:text-white/50">No posts for this filter</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <AnimatePresence mode="popLayout">
+                        {filteredOverviewSocialPosts.slice(0, 6).map(({ quote, clientId }) => {
+                          const imageUrl = spGetFirstImage(quote);
+                          const tourOp = quote.main_tour_operator_name;
+                          const pricePerPerson = quote.price_per_person
+                            ? `${spFormatPrice(quote.price_per_person)}pp`
+                            : spFormatPrice(quote.sales_price);
+                          return (
+                            <motion.div
+                              key={quote.id}
+                              initial={{ opacity: 0, y: 12 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -12 }}
+                              className="glass ringed grain rounded-2xl overflow-hidden flex flex-col"
+                              data-testid={`card-overview-social-post-${quote.id}`}
+                            >
+                              <div className="relative h-52 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-950 dark:to-slate-900 overflow-hidden">
+                                <img
+                                  src={imageUrl || "/images/default-hotel.jpg"}
+                                  alt={quote.title || "Deal image"}
+                                  className="w-full h-full object-cover"
+                                  data-testid={`img-overview-social-post-${quote.id}`}
+                                />
+                                {tourOp && (
+                                  <Badge
+                                    className="absolute top-3 left-3 bg-orange-500 text-white border-0 shadow-lg text-xs font-semibold px-3 py-1 rounded-full"
+                                    data-testid={`badge-tour-op-overview-${quote.id}`}
+                                  >
+                                    {tourOp}
+                                  </Badge>
+                                )}
+                              </div>
 
-                          <div className="min-w-0 flex-1 grid gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/65 dark:border-white/10 dark:bg-white/5 dark:text-white/65">
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                              <div className="truncate" data-testid={`text-overview-social-post-hotel-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Hotel</span>: {p.hotel}
-                              </div>
-                              <div className="truncate" data-testid={`text-overview-social-post-departing-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Departing</span>: {p.departing}
-                              </div>
-                              <div className="truncate" data-testid={`text-overview-social-post-nights-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Nights</span>: {p.nights}
-                              </div>
-                              <div className="truncate" data-testid={`text-overview-social-post-board-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Board</span>: {p.board}
-                              </div>
-                              <div className="truncate" data-testid={`text-overview-social-post-travel-date-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travel_date}
-                              </div>
-                              <div className="truncate" data-testid={`text-overview-social-post-created-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Date created</span>: {p.createdAt}
-                              </div>
-                            </div>
+                              <div className="p-4 pb-5 flex-1 flex flex-col gap-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <h3 className="text-sm font-bold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-title-${quote.id}`}>
+                                      Title: <span className="font-semibold">{quote.title || "Untitled"}</span>
+                                    </h3>
+                                    <p className="text-xs text-black/55 dark:text-white/55 mt-0.5 truncate" data-testid={`text-overview-subtitle-${quote.id}`}>
+                                      Sub: {spGetSubtitle(quote)}
+                                    </p>
+                                  </div>
+                                  <Badge className="shrink-0 bg-blue-500 text-white border-0 text-xs font-bold px-3 py-1.5 rounded-lg shadow" data-testid={`badge-price-overview-${quote.id}`}>
+                                    {pricePerPerson}
+                                  </Badge>
+                                </div>
 
-                            <div className="flex justify-end pt-1">
-                              <a
-                                href={p.liveHref}
-                                className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/5 px-2 py-1 text-[11px] font-semibold text-black/75 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-                                data-testid={`link-overview-social-post-live-${p.id}`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View live deal
-                                <ChevronRight className="h-3.5 w-3.5" />
-                              </a>
-                            </div>
-                          </div>
-                        </div>
+                                <div className="space-y-1.5 text-xs">
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <Hotel className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Hotel:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-hotel-${quote.id}`}>{spGetHotelName(quote)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <Plane className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Departing:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-departing-${quote.id}`}>{spGetDepartingAirport(quote)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Nights:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-nights-${quote.id}`}>{quote.num_of_nights}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <UtensilsCrossed className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Board:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-board-${quote.id}`}>{spGetBoardBasis(quote)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Date:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-travel-date-${quote.id}`}>{spFormatDate(quote.travel_date)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Date Created:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-created-${quote.id}`}>{spFormatDate(quote.date_created)}</span>
+                                  </div>
+                                </div>
 
-                      </div>
-                    </button>
-                  ))}
+                                <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 space-y-3">
+                                  <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
+                                    <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2" data-testid={`button-view-quote-overview-${quote.id}`}>
+                                      <Eye className="w-4 h-4" />
+                                      View Quote
+                                    </Button>
+                                  </Link>
+                                  <Button className="w-full rounded-xl text-sm font-medium gap-2 bg-blue-500 hover:bg-blue-600 text-white" data-testid={`button-schedule-post-overview-${quote.id}`}>
+                                    <CalendarClock className="w-4 h-4" />
+                                    Schedule Post
+                                  </Button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {filteredOverviewSocialPosts.length > 6 && (
+                    <div className="text-center pt-2">
+                      <Link href="/social-posts">
+                        <Button variant="outline" size="sm" className="rounded-xl text-xs" data-testid="link-view-all-social-posts">
+                          View all {filteredOverviewSocialPosts.length} posts →
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
 
@@ -2617,251 +2617,157 @@ export default function CommandCenterPage() {
               </TabsContent>
 
               <TabsContent value="calendar" className="mt-0">
-                <div className="grid gap-3" data-testid="panel-social-posts">
-                  <div className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-social-filters">
-                      <button
-                        type="button"
-                        onClick={() => setSocialFilter("today")}
-                        className={
-                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                          (socialFilter === "today"
-                            ? "bg-[#3b82f6] text-white"
-                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
-                        }
-                        data-testid="filter-social-today"
-                      >
-                        Today
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSocialFilter("tomorrow")}
-                        className={
-                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                          (socialFilter === "tomorrow"
-                            ? "bg-[#3b82f6] text-white"
-                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
-                        }
-                        data-testid="filter-social-tomorrow"
-                      >
-                        Tomorrow
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSocialFilter("date")}
-                        className={
-                          "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
-                          (socialFilter === "date"
-                            ? "bg-[#3b82f6] text-white"
-                            : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
-                        }
-                        data-testid="filter-social-date"
-                      >
-                        Date selection
-                      </button>
+                <div className="space-y-3" data-testid="panel-social-posts">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-social-filters-2">
+                      {(["today", "tomorrow", "date"] as const).map((f) => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setSocialFilter(f)}
+                          className={
+                            "rounded-xl px-3 py-1.5 text-xs font-semibold transition " +
+                            (socialFilter === f
+                              ? "bg-[#3b82f6] text-white"
+                              : "text-black/70 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10")
+                          }
+                          data-testid={`filter-social-2-${f}`}
+                        >
+                          {f === "date" ? "Date selection" : f.charAt(0).toUpperCase() + f.slice(1)}
+                        </button>
+                      ))}
                     </div>
 
-                    <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-social-date">
+                    <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-social-date-2">
                       <DatePicker
                         value={socialDate}
                         onChange={(v) => setSocialDate(v)}
                         placeholder="Pick a date"
-                        data-testid="input-social-date"
+                        data-testid="input-social-date-2"
                       />
-                      <span className="text-xs text-black/45 dark:text-white/45" data-testid="text-social-date-hint">
+                      <span className="text-xs text-black/45 dark:text-white/45">
                         Showing: {socialDate}
                       </span>
                     </div>
                   </div>
 
-                  {([
-                    {
-                      id: "post-001",
-                      title: "Maldives Winter Escape — £2,495pp",
-                      subtitle: "Overwater villa + private transfers",
-                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                      hotel: "Soneva Jani",
-                      departing: "BAA",
-                      nights: 7,
-                      board: "Half Board",
-                      travelDate: "2026-02-18",
-                      createdAt: "2026-02-01",
-                      quoteId: "Q-1082",
-                      liveHref: "/command-center?quote=Q-1082",
-                      audience: "Facebook",
-                      status: "Scheduled",
-                      scheduledAt: "Today 18:00",
-                      time: "Today 18:00",
-                      copy:
-                        "Limited winter availability. Premium overwater villas + transfers included. Reply ‘MALDIVES’ for a tailored quote.",
-                    },
-                    {
-                      id: "post-002",
-                      title: "Rome & Amalfi — £1,349pp",
-                      subtitle: "Split-stay with private transfers",
-                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                      hotel: "Hotel de la Ville + Il San Pietro",
-                      departing: "LGW",
-                      nights: 5,
-                      board: "B&B",
-                      travelDate: "2026-02-10",
-                      createdAt: "2026-01-31",
-                      quoteId: "Q-1075",
-                      liveHref: "/command-center?quote=Q-1075",
-                      audience: "Facebook",
-                      status: "Draft",
-                      scheduledAt: "Tomorrow 10:30",
-                      time: "Tomorrow 10:30",
-                      copy:
-                        "A classic split-stay: 2 nights Rome, 3 nights Amalfi. Add private transfers and a sunset cruise.",
-                    },
-                    {
-                      id: "post-003",
-                      title: "Dubai Half-Term — £1,199pp",
-                      subtitle: "Family suite + pool access",
-                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                      hotel: "Atlantis The Royal",
-                      departing: "MAN",
-                      nights: 4,
-                      board: "Half Board",
-                      travelDate: "2026-02-15",
-                      createdAt: "2026-01-30",
-                      quoteId: "Q-1069",
-                      liveHref: "/command-center?quote=Q-1069",
-                      audience: "Facebook",
-                      status: "Posted",
-                      scheduledAt: null,
-                      time: "Yesterday",
-                      copy:
-                        "Family-ready luxury with pool access and late checkout options. Ask for our upgrade shortlist.",
-                    },
-                    {
-                      id: "post-004",
-                      title: "New York City Weekend — £899pp",
-                      subtitle: "Premium hotel + Broadway options",
-                      imageSrc: "/attached_assets/Luxury-Coco-Beach-Resort_1769950332124.jpg",
-                      hotel: "The Peninsula New York",
-                      departing: "LHR",
-                      nights: 3,
-                      board: "Room Only",
-                      travelDate: "2026-03-01",
-                      createdAt: "2026-01-29",
-                      quoteId: "Q-1058",
-                      liveHref: "/command-center?quote=Q-1058",
-                      audience: "Facebook",
-                      status: "Draft",
-                      scheduledAt: null,
-                      time: "In review",
-                      copy:
-                        "A sharp city break with premium hotel options. Add Broadway tickets and airport lounge access.",
-                    },
-                  ] as const)
-                    .filter((p) => {
-                      if (socialFilter === "today") return p.time.toLowerCase().startsWith("today");
-                      if (socialFilter === "tomorrow") return p.time.toLowerCase().startsWith("tomorrow");
-                      if (socialFilter === "date") return true;
-                      return true;
-                    })
-                    .map((p) => (
-                      <button
-                        key={p.id}
-                        className="group w-full rounded-3xl border border-black/10 bg-black/5 p-4 text-left transition hover:bg-black/7 active:scale-[0.99] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                        data-testid={`card-social-post-${p.id}`}
-                      >
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold" data-testid={`text-social-post-title-${p.id}`}>
-                              {p.title}
-                            </div>
-                            <div className="mt-1 flex items-center gap-2 text-xs">
-                              <span className="truncate text-black/60 dark:text-white/60" data-testid={`text-social-post-subtitle-${p.id}`}>
-                                {p.subtitle}
-                              </span>
-                              <span className="text-black/35 dark:text-white/35" data-testid={`text-social-post-time-${p.id}`}>
-                                {p.time}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="shrink-0 text-right space-y-1">
-                            <div className="flex items-center justify-end gap-2">
-                              <span
-                                className={
-                                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
-                                  (p.status === "Posted"
-                                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                    : p.status === "Scheduled"
-                                      ? "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                                      : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300")
-                                }
-                                data-testid={`status-social-post-${p.id}`}
-                              >
-                                {p.status}{p.scheduledAt ? ` · ${p.scheduledAt}` : ""}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-black/55 dark:text-white/55">
-                              <span data-testid={`text-social-post-quote-${p.id}`}>Quote #{p.quoteId}</span>
-                              <span className="text-black/25 dark:text-white/25">•</span>
-                              <span data-testid={`text-social-post-platform-${p.id}`}>{p.audience}</span>
-                            </div>
-                          </div>
-                        </div>
+                  <p className="text-xs text-black/50 dark:text-white/50">
+                    {filteredOverviewSocialPosts.length} {filteredOverviewSocialPosts.length === 1 ? "post" : "posts"} found
+                  </p>
 
-                        <div className="flex items-start gap-3">
-                          <div
-                            className="hidden sm:block relative shrink-0 self-stretch w-36 overflow-hidden rounded-2xl border border-black/10 bg-black/5 ring-1 ring-black/5 dark:border-white/10 dark:bg-white/5 dark:ring-white/5"
-                            data-testid={`img-social-post-${p.id}`}
-                          >
-                            {p.imageSrc ? (
-                              <img
-                                src={p.imageSrc}
-                                alt=""
-                                className="h-full w-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : null}
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0 dark:from-black/45" />
-                          </div>
+                  {filteredOverviewSocialPosts.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-black/10 dark:border-white/10 p-8 text-center">
+                      <CalendarClock className="w-10 h-10 mx-auto text-black/15 dark:text-white/15 mb-2" />
+                      <p className="text-sm text-black/50 dark:text-white/50">No posts for this filter</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <AnimatePresence mode="popLayout">
+                        {filteredOverviewSocialPosts.slice(0, 6).map(({ quote, clientId }) => {
+                          const imageUrl = spGetFirstImage(quote);
+                          const tourOp = quote.main_tour_operator_name;
+                          const pricePerPerson = quote.price_per_person
+                            ? `${spFormatPrice(quote.price_per_person)}pp`
+                            : spFormatPrice(quote.sales_price);
+                          return (
+                            <motion.div
+                              key={quote.id}
+                              initial={{ opacity: 0, y: 12 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -12 }}
+                              className="glass ringed grain rounded-2xl overflow-hidden flex flex-col"
+                              data-testid={`card-social-post-2-${quote.id}`}
+                            >
+                              <div className="relative h-52 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-950 dark:to-slate-900 overflow-hidden">
+                                <img
+                                  src={imageUrl || "/images/default-hotel.jpg"}
+                                  alt={quote.title || "Deal image"}
+                                  className="w-full h-full object-cover"
+                                />
+                                {tourOp && (
+                                  <Badge className="absolute top-3 left-3 bg-orange-500 text-white border-0 shadow-lg text-xs font-semibold px-3 py-1 rounded-full">
+                                    {tourOp}
+                                  </Badge>
+                                )}
+                              </div>
 
-                          <div className="min-w-0 flex-1 grid gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/65 dark:border-white/10 dark:bg-white/5 dark:text-white/65">
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                              <div className="truncate" data-testid={`text-social-post-hotel-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Hotel</span>: {p.hotel}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-departing-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Departing</span>: {p.departing}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-nights-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Nights</span>: {p.nights}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-board-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Board</span>: {p.board}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-travel-date-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Travel date</span>: {p.travel_date}
-                              </div>
-                              <div className="truncate" data-testid={`text-social-post-created-${p.id}`}>
-                                <span className="text-black/45 dark:text-white/45">Date created</span>: {p.createdAt}
-                              </div>
-                            </div>
+                              <div className="p-4 pb-5 flex-1 flex flex-col gap-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <h3 className="text-sm font-bold text-black/90 dark:text-white/90 truncate">
+                                      Title: <span className="font-semibold">{quote.title || "Untitled"}</span>
+                                    </h3>
+                                    <p className="text-xs text-black/55 dark:text-white/55 mt-0.5 truncate">
+                                      Sub: {spGetSubtitle(quote)}
+                                    </p>
+                                  </div>
+                                  <Badge className="shrink-0 bg-blue-500 text-white border-0 text-xs font-bold px-3 py-1.5 rounded-lg shadow">
+                                    {pricePerPerson}
+                                  </Badge>
+                                </div>
 
-                            <div className="flex justify-end pt-1">
-                              <a
-                                href={p.liveHref}
-                                className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/5 px-2 py-1 text-[11px] font-semibold text-black/75 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-                                data-testid={`link-social-post-live-${p.id}`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View live deal
-                                <ChevronRight className="h-3.5 w-3.5" />
-                              </a>
-                            </div>
-                          </div>
-                        </div>
+                                <div className="space-y-1.5 text-xs">
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <Hotel className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Hotel:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90 truncate">{spGetHotelName(quote)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <Plane className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Departing:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90 truncate">{spGetDepartingAirport(quote)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Nights:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90">{quote.num_of_nights}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <UtensilsCrossed className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Board:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90 truncate">{spGetBoardBasis(quote)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Date:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90">{spFormatDate(quote.travel_date)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                                    <CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                                    <span>Date Created:</span>
+                                    <span className="font-semibold text-black/90 dark:text-white/90">{spFormatDate(quote.date_created)}</span>
+                                  </div>
+                                </div>
 
-                      </div>
-                    </button>
-                  ))}
+                                <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 space-y-3">
+                                  <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
+                                    <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2">
+                                      <Eye className="w-4 h-4" />
+                                      View Quote
+                                    </Button>
+                                  </Link>
+                                  <Button className="w-full rounded-xl text-sm font-medium gap-2 bg-blue-500 hover:bg-blue-600 text-white">
+                                    <CalendarClock className="w-4 h-4" />
+                                    Schedule Post
+                                  </Button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {filteredOverviewSocialPosts.length > 6 && (
+                    <div className="text-center pt-2">
+                      <Link href="/social-posts">
+                        <Button variant="outline" size="sm" className="rounded-xl text-xs">
+                          View all {filteredOverviewSocialPosts.length} posts →
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
 
