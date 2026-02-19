@@ -112,12 +112,11 @@ function SocialPostCard({ post }: { post: SocialPost }) {
             data-testid={`img-social-post-${quote.id}`}
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-sky-100 via-blue-50 to-indigo-100 dark:from-sky-950 dark:via-blue-950 dark:to-indigo-950">
-            <div className="w-16 h-16 rounded-2xl bg-white/60 dark:bg-white/10 border border-black/5 dark:border-white/10 flex items-center justify-center shadow-sm">
-              <Hotel className="w-8 h-8 text-blue-400/70 dark:text-blue-500/60" />
-            </div>
-            <span className="text-[10px] font-medium text-black/30 dark:text-white/30 uppercase tracking-wider">No image uploaded</span>
-          </div>
+          <img
+            src="/images/default-hotel.jpg"
+            alt="Default hotel"
+            className="w-full h-full object-cover"
+          />
         )}
         {tourOp && (
           <Badge
