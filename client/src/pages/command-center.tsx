@@ -4830,7 +4830,7 @@ export default function CommandCenterPage() {
 
               <section className="grid gap-3 md:grid-cols-4">
                 <KpiCard
-                  label="Today's Profit"
+                  label="Total Customers"
                   value={currency.format(totals.bookedValue)}
                   delta="+4.1% DoD"
                   icon={<Ticket className="h-4 w-4" />}
