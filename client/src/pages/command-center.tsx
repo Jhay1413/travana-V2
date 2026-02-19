@@ -1450,7 +1450,8 @@ export default function CommandCenterPage() {
   const [whatsOnDate, setWhatsOnDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [clientsTab, setClientsTab] = useState<"whats-on" | "pipeline" | "calendar" | "news">("whats-on");
+  const [clientsTab, setClientsTab] = useState<"clients-list" | "pipeline" | "calendar" | "news">("clients-list");
+  const [clientsListPage, setClientsListPage] = useState(1);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const { role, setRole: setRoleFromHook, actualRole } = useRole();
   const rolePreview = role !== actualRole ? role : null;
@@ -1541,7 +1542,9 @@ export default function CommandCenterPage() {
   const removeFavoriteMutation = useRemoveFavorite();
   const toggleFavoriteMutation = useToggleFavorite();
   const [clientsPage, setClientsPage] = useState(1);
+  const [clientsListSearch, setClientsListSearch] = useState("");
   const { data: paginatedNeonClients } = useNeonClients({ page: clientsPage, limit: 10, search: query.trim() || undefined });
+  const { data: clientsListData } = useNeonClients({ page: clientsListPage, limit: 15, search: clientsListSearch.trim() || undefined });
   const { data: allNeonClientsData } = useNeonClients({ page: 1, limit: 500 });
   const { data: apiUsers } = useUsers();
   const updateUserMutation = useUpdateUser();
@@ -2363,8 +2366,8 @@ export default function CommandCenterPage() {
 
               <Tabs value={clientsTab} onValueChange={(v) => setClientsTab(v as any)}>
                 <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-clients">
-                  <TabsTrigger value="whats-on" className="rounded-xl" data-testid="tab-clients-whats-on">
-                    What's On!
+                  <TabsTrigger value="clients-list" className="rounded-xl" data-testid="tab-clients-list">
+                    Clients List
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-clients-pipeline">
                     Pipeline
@@ -2382,152 +2385,95 @@ export default function CommandCenterPage() {
             <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
             <Tabs value={clientsTab}>
-              <TabsContent value="whats-on" className="mt-0">
-                <div className="grid gap-4" data-testid="panel-clients-whats-on">
-                  <div className="flex flex-wrap items-center gap-2" data-testid="clients-whats-on-filters">
-                    {(["today", "tomorrow", "this-week", "custom"] as const).map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => setWhatsOnFilter(f)}
-                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                          whatsOnFilter === f
-                            ? "bg-black text-white dark:bg-white dark:text-black"
-                            : "border border-black/10 bg-black/5 text-black/70 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
-                        }`}
-                        data-testid={`button-clients-whats-on-${f}`}
-                      >
-                        {f === "today" ? "Today" : f === "tomorrow" ? "Tomorrow" : f === "this-week" ? "This Week" : "Select Date"}
-                      </button>
-                    ))}
-                    {whatsOnFilter === "custom" && (
-                      <DatePicker
-                        value={whatsOnDate}
-                        onChange={(v) => setWhatsOnDate(v)}
-                        placeholder="Pick a date"
-                        data-testid="input-clients-whats-on-date"
+              <TabsContent value="clients-list" className="mt-0">
+                <div className="grid gap-4" data-testid="panel-clients-list">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
+                      <input
+                        type="text"
+                        value={clientsListSearch}
+                        onChange={(e) => { setClientsListSearch(e.target.value); setClientsListPage(1); }}
+                        placeholder="Search clients..."
+                        className="w-full rounded-xl border border-black/10 bg-black/5 py-2 pl-9 pr-3 text-sm text-black/90 placeholder:text-black/40 outline-none transition focus:border-blue-500/50 focus:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white/90 dark:placeholder:text-white/40 dark:focus:bg-white/5"
+                        data-testid="input-clients-list-search"
                       />
-                    )}
+                    </div>
+                    <div className="text-xs text-black/50 dark:text-white/50 shrink-0" data-testid="text-clients-list-count">
+                      {clientsListData?.total ?? 0} clients
+                    </div>
                   </div>
 
-                  <div className="grid gap-3">
-                    <div className="flex items-center gap-2">
-                      <ListChecks className="h-4 w-4 text-black/50 dark:text-white/50" />
-                      <div className="text-sm font-semibold" data-testid="text-clients-tasks-title">Tasks ({filteredTasks.length})</div>
-                    </div>
-                    {filteredTasks.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-black/45 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/45" data-testid="empty-clients-tasks">
-                        No tasks due {whatsOnFilter === "today" ? "today" : whatsOnFilter === "tomorrow" ? "tomorrow" : whatsOnFilter === "this-week" ? "this week" : `on ${whatsOnDate}`}
+                  <div className="space-y-1.5">
+                    {(!clientsListData?.clients || clientsListData.clients.length === 0) ? (
+                      <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-8 text-center dark:border-white/10 dark:bg-white/[0.02]" data-testid="empty-clients-list">
+                        <Users className="mx-auto h-8 w-8 text-black/15 dark:text-white/15 mb-2" />
+                        <p className="text-sm text-black/50 dark:text-white/50">
+                          {clientsListSearch ? "No clients match your search" : "No clients found"}
+                        </p>
                       </div>
                     ) : (
-                      filteredTasks.map((task, idx) => {
-                        const taskHref = task.clientId
-                          ? task.transaction_type === "enquiry"
-                            ? `/clients/${task.clientId}/enquiries/${task.deal_id}`
-                            : task.transaction_type === "booking"
-                              ? `/clients/${task.clientId}/bookings/${task.deal_id}`
-                              : task.transaction_type === "quote"
-                                ? `/clients/${task.clientId}/quotes/${task.deal_id}`
-                                : `/clients/${task.clientId}`
-                          : null;
+                      clientsListData.clients.map((client: any, idx: number) => {
+                        const fullName = [client.title && client.title !== "NULL" ? client.title : "", client.firstName, client.surename].filter(Boolean).join(" ") || "Unknown";
                         return (
-                        <motion.button
-                          key={task.id}
-                          type="button"
-                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.status === "completed" ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
-                          data-testid={`card-clients-task-${task.id}`}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
-                          onClick={() => taskHref && navigate(taskHref)}
-                        >
-                          <div className="flex items-start justify-between gap-3">
+                          <motion.button
+                            key={client.id}
+                            type="button"
+                            className="group flex w-full items-center gap-3 rounded-2xl border border-black/10 bg-black/5 px-3 py-2.5 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                            data-testid={`card-clients-list-${client.id}`}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.15, delay: Math.min(idx * 0.02, 0.2) }}
+                            onClick={() => navigate(`/clients/${client.id}`)}
+                          >
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-white/60 text-sm font-bold text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
+                              {(client.firstName?.[0] || "?").toUpperCase()}
+                            </div>
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.due_date || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
-                                <div className={`truncate text-sm font-medium ${task.status === "completed" ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-clients-task-title-${task.id}`}>
-                                  {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
-                                  {task.title}
-                                </div>
-                              </div>
-                              <div className="mt-1 ml-4 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                                {task.tags?.map((tag: string) => (
-                                  <span key={tag} className="inline-flex items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300" data-testid={`pill-clients-task-tag-${task.id}-${tag}`}>
-                                    {tag}
-                                  </span>
-                                ))}
+                              <div className="truncate text-sm font-semibold" data-testid={`text-clients-list-name-${client.id}`}>{fullName}</div>
+                              <div className="flex items-center gap-2 text-[11px] text-black/50 dark:text-white/50">
+                                {client.email && <span className="truncate">{client.email}</span>}
+                                {client.email && client.phoneNumber && <span>·</span>}
+                                {client.phoneNumber && <span className="shrink-0">{client.phoneNumber}</span>}
                               </div>
                             </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.status === "completed" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                                {task.status === "completed" ? "Done" : "Pending"}
+                            {client.badge && (
+                              <span className="shrink-0 inline-flex items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300" data-testid={`badge-clients-list-${client.id}`}>
+                                {client.badge}
                               </span>
-                              {taskHref && <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />}
-                            </div>
-                          </div>
-                        </motion.button>
+                            )}
+                            <ChevronRight className="h-4 w-4 shrink-0 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />
+                          </motion.button>
                         );
                       })
                     )}
                   </div>
 
-                  <Separator className="bg-black/10 dark:bg-white/10" />
-
-                  <div className="grid gap-3">
-                    <div className="flex items-center gap-2">
-                      <LifeBuoy className="h-4 w-4 text-black/50 dark:text-white/50" />
-                      <div className="text-sm font-semibold" data-testid="text-clients-tickets-title">Tickets ({filteredTickets.length})</div>
+                  {clientsListData && clientsListData.totalPages > 1 && (
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        disabled={clientsListPage <= 1}
+                        onClick={() => setClientsListPage((p) => Math.max(1, p - 1))}
+                        className="rounded-xl border border-black/10 bg-black/5 px-3 py-1.5 text-xs font-semibold transition hover:bg-black/10 disabled:opacity-30 disabled:cursor-not-allowed dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                        data-testid="button-clients-list-prev"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-xs text-black/50 dark:text-white/50" data-testid="text-clients-list-page">
+                        Page {clientsListPage} of {clientsListData.totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={clientsListPage >= clientsListData.totalPages}
+                        onClick={() => setClientsListPage((p) => Math.min(clientsListData.totalPages, p + 1))}
+                        className="rounded-xl border border-black/10 bg-black/5 px-3 py-1.5 text-xs font-semibold transition hover:bg-black/10 disabled:opacity-30 disabled:cursor-not-allowed dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                        data-testid="button-clients-list-next"
+                      >
+                        Next
+                      </button>
                     </div>
-                    {filteredTickets.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-black/45 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/45" data-testid="empty-clients-tickets">
-                        No tickets {whatsOnFilter === "today" ? "today" : whatsOnFilter === "tomorrow" ? "tomorrow" : whatsOnFilter === "this-week" ? "this week" : `on ${whatsOnDate}`}
-                      </div>
-                    ) : (
-                      filteredTickets.map((ticket, idx) => (
-                        <motion.button
-                          key={ticket.id}
-                          type="button"
-                          className="group w-full rounded-2xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                          data-testid={`card-clients-ticket-${ticket.id}`}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
-                          onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(ticket.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
-                                <span className="truncate text-sm font-medium" data-testid={`text-clients-ticket-subject-${ticket.id}`}>
-                                  {ticket.subject}
-                                </span>
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                                {ticket.clientName && <span>{ticket.clientName}</span>}
-                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
-                                  ticket.priority === "Urgent" ? "border-red-500/25 bg-red-500/10 text-red-700" :
-                                  ticket.priority === "High" ? "border-amber-500/25 bg-amber-500/10 text-amber-700" :
-                                  "border-black/10 bg-black/[0.03] text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/60"
-                                }`} data-testid={`pill-clients-ticket-priority-${ticket.id}`}>
-                                  {ticket.priority}
-                                </span>
-                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
-                                  ticket.status === "Open" ? "border-red-500/25 bg-red-500/10 text-red-700" :
-                                  ticket.status === "In Progress" ? "border-amber-500/25 bg-amber-500/10 text-amber-700" :
-                                  ticket.status === "Resolved" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" :
-                                  "border-black/10 bg-black/[0.03] text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/60"
-                                }`} data-testid={`pill-clients-ticket-status-${ticket.id}`}>
-                                  {ticket.status}
-                                </span>
-                              </div>
-                            </div>
-                            <ChevronRight className="h-4 w-4 shrink-0 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />
-                          </div>
-                        </motion.button>
-                      ))
-                    )}
-                  </div>
+                  )}
                 </div>
               </TabsContent>
 
