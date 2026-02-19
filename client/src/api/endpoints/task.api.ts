@@ -1,7 +1,7 @@
 import axiosClient from "../client/axios-client";
-import type { Task, InsertTask } from "@shared/schema";
+import type { TaskNew, InsertTaskNew } from "@shared/schema";
 
-export type TaskWithClient = Task & { clientId: string | null; clientName: string | null; tags: string[] };
+export type TaskWithClient = TaskNew & { clientId: string | null; clientName: string | null; tags: string[] };
 
 export const taskApi = {
   getAll: async (): Promise<TaskWithClient[]> => {
@@ -9,23 +9,23 @@ export const taskApi = {
     return data;
   },
 
-  getByEntity: async (entityType: string, entityId: string): Promise<Task[]> => {
-    const { data } = await axiosClient.get<Task[]>(`/api/tasks?entityType=${entityType}&entityId=${entityId}`);
+  getByEntity: async (entityType: string, entityId: string): Promise<TaskNew[]> => {
+    const { data } = await axiosClient.get<TaskNew[]>(`/api/tasks?entityType=${entityType}&entityId=${entityId}`);
     return data;
   },
 
-  getByUser: async (userId: string): Promise<Task[]> => {
-    const { data } = await axiosClient.get<Task[]>(`/api/tasks/user?userId=${userId}`);
+  getByUser: async (userId: string): Promise<TaskNew[]> => {
+    const { data } = await axiosClient.get<TaskNew[]>(`/api/tasks/user?userId=${userId}`);
     return data;
   },
 
-  create: async (taskData: InsertTask): Promise<Task> => {
-    const { data } = await axiosClient.post<Task>("/api/tasks", taskData);
+  create: async (taskData: InsertTaskNew): Promise<TaskNew> => {
+    const { data } = await axiosClient.post<TaskNew>("/api/tasks", taskData);
     return data;
   },
 
-  toggleComplete: async (id: string): Promise<Task> => {
-    const { data } = await axiosClient.put<Task>(`/api/tasks/${id}/toggle`);
+  toggleComplete: async (id: string): Promise<TaskNew> => {
+    const { data } = await axiosClient.put<TaskNew>(`/api/tasks/${id}/toggle`);
     return data;
   },
 

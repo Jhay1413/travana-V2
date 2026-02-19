@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { taskApi } from "@/api/endpoints/task.api";
 import { taskKeys } from "@/hooks/queries/use-task-queries";
-import type { InsertTask } from "@shared/schema";
+import type { InsertTaskNew } from "@shared/schema";
 
 export function useCreateTask(entityType: string, entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: InsertTask) => taskApi.create(data),
+    mutationFn: (data: InsertTaskNew) => taskApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.byEntity(entityType, entityId) });
       queryClient.invalidateQueries({ queryKey: taskKeys.all });

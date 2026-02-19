@@ -74,8 +74,11 @@ export const newQuoteService = {
       ...quoteFields
     } = data;
 
+    console.log('🔍 CREATE QUOTE - outboundConnectingLegs:', JSON.stringify(outboundConnectingLegs));
+    console.log('🔍 CREATE QUOTE - inboundConnectingLegs:', JSON.stringify(inboundConnectingLegs));
+
     const txn = await transactionRepository.findById(quoteFields.transaction_id);
-    if (!txn) throw new AppError("Transaction not found", 404);
+    if (!txn)  throw new AppError("Transaction not found", 404);
 
     const q = await newQuoteRepository.create(quoteFields);
 
@@ -112,6 +115,43 @@ export const newQuoteService = {
     return q;
   },
 
+  async duplicateQuote(sourceQuoteId: string, data: Partial<CreateQuotePayload>) {
+    const sourceQuote = await newQuoteRepository.findById(sourceQuoteId);
+    if (!sourceQuote) {
+      throw new AppError("Quote not found", 404);
+    }
+
+    const sourceImages = await quoteImageRepository.getByQuoteId(sourceQuoteId);
+    const sourceImageUrls = sourceImages
+      .map((image) => image.url)
+      .filter((url): url is string => typeof url === "string" && url.length > 0);
+
+    const requestedImageUrls = Array.isArray(data.images)
+      ? data.images.filter((url): url is string => typeof url === "string" && url.length > 0)
+      : [];
+
+    const mergedImages = [...sourceImageUrls, ...requestedImageUrls].filter(
+      (url, index, arr) => arr.indexOf(url) === index,
+    );
+
+    const {
+      id: _sourceId,
+      date_created: _sourceCreatedAt,
+      transaction_id: _ignoredTransactionId,
+      ...sourceInsertData
+    } = sourceQuote;
+
+    const payload: CreateQuotePayload = {
+      ...(sourceInsertData as InsertQuote),
+      ...(data as Partial<InsertQuote>),
+      transaction_id: sourceQuote.transaction_id,
+      isQuoteCopy: true,
+      images: mergedImages,
+    };
+
+    return await newQuoteService.createQuote(payload);
+  },
+
   async updateQuote(id: string, data: UpdateQuotePayload) {
     console.log('🔍 QUOTE UPDATE - ID:', id);
     console.log('🔍 QUOTE UPDATE - Received data:', JSON.stringify(data, null, 2));
@@ -144,18 +184,15 @@ export const newQuoteService = {
     console.log('🔍 QUOTE UPDATE - Flight updates:', { outboundFlight, inboundFlight });
     console.log('🔍 QUOTE UPDATE - Accommodation update:', primaryAccommodation);
 
+    // Only update quote table if there are fields to update
     let q;
     if (Object.keys(quoteData).length > 0) {
       q = await newQuoteRepository.update(id, quoteData);
       if (!q) throw new AppError("Quote not found", 404);
     } else {
+      // If no quote fields to update, just verify quote exists
       q = await newQuoteRepository.findById(id);
       if (!q) throw new AppError("Quote not found", 404);
-    }
-
-    // Process tags if provided
-    if ('tags' in data && Array.isArray(data.tags)) {
-      await tagService.updateQuoteTags(id, data.tags);
     }
 
     // Update lead_source on the transaction table

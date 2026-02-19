@@ -60,6 +60,18 @@ export interface ScraperJson {
   [key: string]: unknown;
 }
 
+export interface ParsedConnectingLeg {
+  departAirportId: string;
+  departAirport: string;
+  arriveAirportId: string;
+  arriveAirport: string;
+  departDate: string;
+  departTime: string;
+  arriveDate: string;
+  arriveTime: string;
+  flightNumber: string;
+}
+
 function parseDateTimePart(dt: string | undefined | null): { date: string; time: string } {
   if (!dt) return { date: "", time: "" };
   const tIdx = dt.indexOf("T");
@@ -101,19 +113,42 @@ function normalizeFlightType(ft: string | undefined): string {
   return ft.toLowerCase().trim();
 }
 
+function isOutboundFlightType(ft: string | undefined): boolean {
+  const normalized = normalizeFlightType(ft);
+  return normalized === "outbound" || normalized === "departure" || normalized === "out";
+}
+
+function isInboundFlightType(ft: string | undefined): boolean {
+  const normalized = normalizeFlightType(ft);
+  return normalized === "return" || normalized === "inbound" || normalized === "in";
+}
+
+function mapToConnectingLeg(flight: ScraperFlight): ParsedConnectingLeg {
+  const dep = parseDateTimePart(flight.departure_date_time);
+  const arr = parseDateTimePart(flight.arrival_date_time);
+
+  return {
+    departAirportId: "",
+    departAirport: flight.departing_airport || "",
+    arriveAirportId: "",
+    arriveAirport: flight.arrival_airport || "",
+    departDate: dep.date,
+    departTime: dep.time,
+    arriveDate: arr.date,
+    arriveTime: arr.time,
+    flightNumber: flight.flight_number || "",
+  };
+}
+
 export function mapScraperJsonToFormFields(data: ScraperJson) {
-  const outbound = Array.isArray(data.flights)
-    ? data.flights.find((f) => {
-        const ft = normalizeFlightType(f.flight_type);
-        return ft === "outbound" || ft === "departure" || ft === "out";
-      })
-    : undefined;
-  const inbound = Array.isArray(data.flights)
-    ? data.flights.find((f) => {
-        const ft = normalizeFlightType(f.flight_type);
-        return ft === "return" || ft === "inbound" || ft === "in";
-      })
-    : undefined;
+  const flights = Array.isArray(data.flights) ? data.flights : [];
+  const outboundFlights = flights.filter((f) => isOutboundFlightType(f.flight_type));
+  const inboundFlights = flights.filter((f) => isInboundFlightType(f.flight_type));
+
+  const outbound = outboundFlights[0];
+  const inbound = inboundFlights[0];
+  const outboundConnectingLegs = outboundFlights.slice(1).map(mapToConnectingLeg);
+  const inboundConnectingLegs = inboundFlights.slice(1).map(mapToConnectingLeg);
 
   const hotel = Array.isArray(data.hotels) && data.hotels.length > 0 ? data.hotels[0] : undefined;
 
@@ -185,6 +220,8 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
       inboundArriveTime: inArr.time,
       inboundFlightNumber: inbound?.flight_number || "",
     },
+    outboundConnectingLegs,
+    inboundConnectingLegs,
     images: allImages,
   };
 }

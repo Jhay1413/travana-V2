@@ -406,7 +406,7 @@ function formatTaskDue(date: Date | string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
-function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
+function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string; assignedUserId?: string }) {
   const { data: tasksData, isLoading } = useTasks("enquiry", enquiryId);
   const { data: currentUser } = useCurrentUser();
   const createMutation = useCreateTask("enquiry", enquiryId);
@@ -422,15 +422,18 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
   const presets = TASK_PRESETS_BY_ENTITY[taskCategory] || TASK_PRESETS_BY_ENTITY.enquiry;
 
   const handleAdd = () => {
-    if (!newTitle || !newDueDate || !currentUser?.id) return;
+    const userIdForTask = assignedUserId || currentUser?.id;
+    if (!newTitle || !newDueDate || !userIdForTask) return;
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
       {
-        transaction_type: "enquiry",
-        user_id: currentUser.id,
+        entityType: "enquiry",
+        entityId: enquiryId,
+        userId: userIdForTask,
         title: newTitle,
-        due_date: dueDate,
-        status: "pending",
+        dueDate: dueDate,
+        completed: false,
+        notified: false,
       } as any,
       {
         onSuccess: () => {
@@ -445,8 +448,8 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
     );
   };
 
-  const pendingTasks = useMemo(() => (tasksData || []).filter((t) => t.status !== "completed"), [tasksData]);
-  const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.status === "completed"), [tasksData]);
+  const pendingTasks = useMemo(() => (tasksData || []).filter((t) => !t.completed), [tasksData]);
+  const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.completed), [tasksData]);
 
   return (
     <>
@@ -476,7 +479,7 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
           ) : (
             <>
               {pendingTasks.map((task) => {
-                const isOverdue = task.due_date ? new Date(task.due_date) < new Date() : false;
+                const isOverdue = task.dueDate ? new Date(task.dueDate) < new Date() : false;
                 return (
                   <div
                     key={task.id}
@@ -490,7 +493,7 @@ function EnquiryTasksSection({ enquiryId }: { enquiryId: string }) {
                       {task.title}
                     </span>
                     <span className={`shrink-0 text-[10px] font-semibold ${isOverdue ? "text-rose-500" : "text-black/40"}`} data-testid={`text-task-due-${task.id}`}>
-                      {task.due_date ? formatTaskDue(task.due_date) : "—"}
+                      {task.dueDate ? formatTaskDue(task.dueDate) : "—"}
                     </span>
                     <button
                       type="button"
@@ -691,6 +694,26 @@ export default function EnquiryPage() {
     };
 
     const showFlights = packageTypeName !== "Hot Tub Break" && !(packageTypeName === "Cruise Package" && convertForm.cruiseOnly);
+    const outboundConnecting = convertForm.outboundConnectingLegs
+      .filter((leg) => leg.departAirportId || leg.arriveAirportId || leg.departDate || leg.arriveDate || leg.flightNumber)
+      .map((leg) => ({
+        departing_airport_id: leg.departAirportId || null,
+        arrival_airport_id: leg.arriveAirportId || null,
+        departure_date_time: buildDateTime(leg.departDate, leg.departTime),
+        arrival_date_time: buildDateTime(leg.arriveDate, leg.arriveTime),
+        flight_number: leg.flightNumber || null,
+        is_included_in_package: true,
+      }));
+    const inboundConnecting = convertForm.inboundConnectingLegs
+      .filter((leg) => leg.departAirportId || leg.arriveAirportId || leg.departDate || leg.arriveDate || leg.flightNumber)
+      .map((leg) => ({
+        departing_airport_id: leg.departAirportId || null,
+        arrival_airport_id: leg.arriveAirportId || null,
+        departure_date_time: buildDateTime(leg.departDate, leg.departTime),
+        arrival_date_time: buildDateTime(leg.arriveDate, leg.arriveTime),
+        flight_number: leg.flightNumber || null,
+        is_included_in_package: true,
+      }));
 
     const convertPayload: CreateQuoteData = {
       transaction_id: enquiry.transaction_id,
@@ -735,6 +758,8 @@ export default function EnquiryPage() {
         flight_number: convertForm.inboundFlightNumber || null,
         is_included_in_package: true,
       } : undefined,
+      outboundConnectingLegs: showFlights && outboundConnecting.length > 0 ? outboundConnecting : undefined,
+      inboundConnectingLegs: showFlights && inboundConnecting.length > 0 ? inboundConnecting : undefined,
       primaryAccommodation: packageTypeName !== "Hot Tub Break" ? {
         accomodation_id: convertForm.accommodation || null,
         board_basis_id: convertForm.boardBasis || null,
@@ -990,7 +1015,7 @@ export default function EnquiryPage() {
                 </div>
               </Card>
 
-              <EnquiryTasksSection enquiryId={enquiryId} />
+              <EnquiryTasksSection enquiryId={enquiryId} assignedUserId={enquiry.user_id} />
 
               {enquiry.transaction_id && <EnquiryNotesSection transactionId={enquiry.transaction_id} />}
             </div>

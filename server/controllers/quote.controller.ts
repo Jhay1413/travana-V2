@@ -30,6 +30,12 @@ export const quoteController = {
     return successResponse(res, quote, "Quote created successfully", 201);
   }),
 
+  duplicateQuote: asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const quote = await newQuoteService.duplicateQuote(id, req.body ?? {});
+    return successResponse(res, quote, "Quote duplicated successfully", 201);
+  }),
+
   updateQuote: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const quote = await newQuoteService.updateQuote(id, req.body);

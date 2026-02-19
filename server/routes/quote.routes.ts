@@ -9,6 +9,7 @@ const router = Router();
 router.get("/", quoteController.listQuotes);
 router.get("/:id", quoteController.getQuoteById);
 router.post("/", quoteController.createQuote);
+router.post("/:id/duplicate", quoteController.duplicateQuote);
 router.patch("/:id", quoteController.updateQuote);
 router.delete("/:id", quoteController.deleteQuote);
 

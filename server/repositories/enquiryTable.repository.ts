@@ -7,7 +7,7 @@ import {
   port, cruise_line, cruise_destination, transaction,
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 
 export const enquiryTableRepository = {
   async findById(id: string): Promise<EnquiryTable | undefined> {
@@ -21,7 +21,14 @@ export const enquiryTableRepository = {
   },
 
   async findAll(): Promise<EnquiryTable[]> {
-    return await db.select().from(enquiry_table).orderBy(desc(enquiry_table.date_created));
+    const rows = await db
+      .select({ enquiry: enquiry_table })
+      .from(enquiry_table)
+      .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
+      .where(and(eq(transaction.status, "on_enquiry"), eq(transaction.is_active, true)))
+      .orderBy(desc(enquiry_table.date_created));
+
+    return rows.map((r) => r.enquiry);
   },
 
   async create(data: InsertEnquiryTable): Promise<EnquiryTable> {

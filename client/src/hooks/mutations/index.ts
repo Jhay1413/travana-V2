@@ -2,7 +2,7 @@ export { useLogout } from "./use-auth-mutations";
 export { useCreateClient, useUpdateClient } from "./use-client-mutations";
 export { useUpdateNeonClient, useImportNeonClients } from "./use-neon-client-mutations";
 export { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "./use-transaction-mutations";
-export { useCreateQuote, useUpdateQuote, useDeleteQuote, useUpdateQuoteTags } from "./use-quote-mutations";
+export { useCreateQuote, useDuplicateQuote, useUpdateQuote, useDeleteQuote, useUpdateQuoteTags } from "./use-quote-mutations";
 export { useConvertToBooking, useUpdateBooking, useDeleteBooking } from "./use-booking-mutations";
 export { useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "./use-enquiry-mutations";
 export { useCreateNote, useUpdateNote, useDeleteNote } from "./use-note-mutations";

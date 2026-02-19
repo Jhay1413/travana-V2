@@ -21,6 +21,11 @@ export const quoteApi = {
     return data;
   },
 
+  duplicate: async (quoteId: string, quoteData: Partial<CreateQuoteData> & Record<string, any>): Promise<Quote> => {
+    const { data } = await axiosClient.post<Quote>(`/api/quotes/${quoteId}/duplicate`, quoteData);
+    return data;
+  },
+
   update: async (id: string, quoteData: Partial<CreateQuoteData> & Record<string, any>): Promise<Quote> => {
     const { data } = await axiosClient.patch<Quote>(`/api/quotes/${id}`, quoteData);
     return data;

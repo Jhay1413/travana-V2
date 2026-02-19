@@ -88,6 +88,7 @@ export interface EnquiryTable {
   is_active: boolean | null;
   deletion_code: string | null;
   email: string | null;
+  user_id?: string;
   holiday_type_name?: string;
   destinations?: EnquiryDestination[];
   resorts?: EnquiryResort[];
@@ -142,6 +143,7 @@ export interface Quote {
   cruises?: QuoteCruise[];
   passengers?: Passenger[];
   images?: DealImage[];
+  tags?: string[];
 }
 
 export interface QuoteFlight {
@@ -158,6 +160,7 @@ export interface QuoteFlight {
   is_included_in_package: boolean | null;
   cost: string | null;
   commission: string | null;
+  leg_order: number | null;
 }
 
 export interface QuoteAccommodation {
@@ -346,6 +349,7 @@ export interface EnrichedQuote extends Quote {
   flights?: EnrichedQuoteFlight[];
   accommodations?: EnrichedQuoteAccommodation[];
   cruises?: EnrichedQuoteCruise[];
+  tags?: string[];
 }
 
 export interface EnrichedBooking extends Booking {
@@ -358,6 +362,7 @@ export interface EnrichedBooking extends Booking {
   destination_id?: string | null;
   destination_name?: string | null;
   resort_id?: string | null;
+  tags?: string[];
   resort_name?: string | null;
   flights?: EnrichedQuoteFlight[];
   accommodations?: EnrichedQuoteAccommodation[];
@@ -416,6 +421,8 @@ export interface AccommodationRelationData {
 export interface WithRelations {
   outboundFlight?: FlightRelationData;
   inboundFlight?: FlightRelationData;
+  outboundConnectingLegs?: FlightRelationData[];
+  inboundConnectingLegs?: FlightRelationData[];
   primaryAccommodation?: AccommodationRelationData;
 }
 
@@ -470,7 +477,10 @@ export interface CreateQuoteData {
   parkName?: string;
   outboundFlight?: Record<string, unknown>;
   inboundFlight?: Record<string, unknown>;
+  outboundConnectingLegs?: Record<string, unknown>[];
+  inboundConnectingLegs?: Record<string, unknown>[];
   primaryAccommodation?: Record<string, unknown>;
+  images?: string[];
 }
 
 export interface QuoteFilters {

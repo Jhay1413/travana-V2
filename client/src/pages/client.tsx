@@ -8,6 +8,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Clock,
   FileText,
   Filter,
@@ -389,6 +390,7 @@ export default function ClientPage() {
   const [q, setQ] = useState("");
   type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets";
   const [tab, setTab] = useState<ClientTab>("overview");
+  const [expandedCopyGroups, setExpandedCopyGroups] = useState<Record<string, boolean>>({});
   const [showEditClient, setShowEditClient] = useState(false);
   const [editForm, setEditForm] = useState({
     title: "",
@@ -652,17 +654,17 @@ export default function ClientPage() {
           user_id: currentUser?.id || "",
           lead_source: undefined,
           enquiry: {
-            title: data.enquiryTitle || data.title || "",
-            holiday_type_id: data.holidayType || data.holiday_type_id || "",
-            travel_date: data.travelDate || data.travel_date || undefined,
-            adults: data.passengersAdults || data.adults || undefined,
-            children: data.passengersChildren || data.children || undefined,
-            infants: data.passengersInfants || data.infants || undefined,
-            no_of_nights: data.nights || data.no_of_nights || undefined,
+            title: (typeof data.enquiryTitle === 'string' ? data.enquiryTitle : undefined) || (typeof data.title === 'string' ? data.title : undefined) || "",
+            holiday_type_id: (typeof data.holidayType === 'string' ? data.holidayType : undefined) || (typeof data.holiday_type_id === 'string' ? data.holiday_type_id : undefined) || "",
+            travel_date: (typeof data.travelDate === 'string' ? data.travelDate : undefined) || (typeof data.travel_date === 'string' ? data.travel_date : undefined) || undefined,
+            adults: (typeof data.passengersAdults === 'number' ? data.passengersAdults : undefined) || (typeof data.adults === 'number' ? data.adults : undefined) || undefined,
+            children: (typeof data.passengersChildren === 'number' ? data.passengersChildren : undefined) || (typeof data.children === 'number' ? data.children : undefined) || undefined,
+            infants: (typeof data.passengersInfants === 'number' ? data.passengersInfants : undefined) || (typeof data.infants === 'number' ? data.infants : undefined) || undefined,
+            no_of_nights: (typeof data.nights === 'number' ? data.nights : undefined) || (typeof data.no_of_nights === 'number' ? data.no_of_nights : undefined) || undefined,
             budget: data.budget || undefined,
             max_budget: data.max_budget || undefined,
-            budget_type: data.budgetType || data.budget_type || undefined,
-            cabin_type: data.cabinType || data.cabin_type || undefined,
+            budget_type: (typeof data.budgetType === 'string' ? data.budgetType : undefined) || (typeof data.budget_type === 'string' ? data.budget_type : undefined) || undefined,
+            cabin_type: (typeof data.cabinType === 'string' ? data.cabinType : undefined) || (typeof data.cabin_type === 'string' ? data.cabin_type : undefined) || undefined,
             accom_min_star_rating: data.accom_min_star_rating || undefined,
             flexibility_date: data.flexibility_date || undefined,
             flexible_date: data.flexible_date || undefined,
@@ -673,10 +675,10 @@ export default function ClientPage() {
             pre_cruise_stay: data.pre_cruise_stay || undefined,
             post_cruise_stay: data.post_cruise_stay || undefined,
             status: "ACTIVE",
-            destinations: data.destinations || undefined,
-            resorts: data.resorts || undefined,
-            boardBases: data.boardBases || undefined,
-            departureAirports: data.departureAirports || undefined,
+            destinations: Array.isArray(data.destinations) ? data.destinations as any : undefined,
+            resorts: Array.isArray(data.resorts) ? data.resorts as any : undefined,
+            boardBases: Array.isArray(data.boardBases) ? data.boardBases as any : undefined,
+            departureAirports: Array.isArray(data.departureAirports) ? data.departureAirports : undefined,
           },
         },
         {
@@ -1440,7 +1442,7 @@ export default function ClientPage() {
                       {(() => {
                         const activities: Array<{ id: string; type: string; title: string; date: string; status?: string; link: string }> = [];
                         enquiries.slice(0, 3).forEach((e: EnquiryTable) => {
-                          activities.push({ id: `e-${e.id}`, type: "Enquiry", title: e.title || "Enquiry", date: e.date_created || "", status: e.status, link: `/clients/${clientId}/enquiries/${e.id}` });
+                          activities.push({ id: `e-${e.id}`, type: "Enquiry", title: e.title || "Enquiry", date: e.date_created || "", status: e.status ?? undefined, link: `/clients/${clientId}/enquiries/${e.id}` });
                         });
                         quotes.slice(0, 3).forEach((q: QuoteWithJoins) => {
                           activities.push({ id: `q-${q.id}`, type: "Quote", title: q.title || q.holiday_type_name || "Trip", date: q.date_created || "", status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), link: `/clients/${clientId}/quotes/${q.id}` });
@@ -1713,10 +1715,13 @@ export default function ClientPage() {
                               .filter((q: QuoteWithJoins) => !q.quote_status || !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
                               .map((q: QuoteWithJoins) => ({
                                 id: q.id,
+                                transactionId: q.transaction_id,
                                 title: q.title || q.holiday_type_name || "Trip",
+                                isQuoteCopy: Boolean(q.isQuoteCopy),
                                 destination: q.holiday_type_name || q.quote_type || "—",
                                 travelDate: q.travel_date,
                                 createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                                createdAtRaw: q.date_created || "",
                                 status: q.quote_status || "NEW_LEAD",
                                 totalCost: parseFloat(q.sales_price || "0"),
                                 pricePerPerson: parseFloat(q.price_per_person || "0"),
@@ -1732,10 +1737,13 @@ export default function ClientPage() {
                               .filter((q: QuoteWithJoins) => q.quote_status === "WON")
                               .map((q: QuoteWithJoins) => ({
                                 id: q.id,
+                                transactionId: q.transaction_id,
                                 title: q.title || q.holiday_type_name || "Trip",
+                                isQuoteCopy: Boolean(q.isQuoteCopy),
                                 destination: q.holiday_type_name || q.quote_type || "—",
                                 travelDate: q.travel_date,
                                 createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                                createdAtRaw: q.date_created || "",
                                 status: q.quote_status,
                                 totalCost: parseFloat(q.sales_price || "0"),
                                 pricePerPerson: parseFloat(q.price_per_person || "0"),
@@ -1751,10 +1759,13 @@ export default function ClientPage() {
                               .filter((q: QuoteWithJoins) => q.quote_status === "LOST")
                               .map((q: QuoteWithJoins) => ({
                                 id: q.id,
+                                transactionId: q.transaction_id,
                                 title: q.title || q.holiday_type_name || "Trip",
+                                isQuoteCopy: Boolean(q.isQuoteCopy),
                                 destination: q.holiday_type_name || q.quote_type || "—",
                                 travelDate: q.travel_date,
                                 createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                                createdAtRaw: q.date_created || "",
                                 status: q.quote_status,
                                 totalCost: parseFloat(q.sales_price || "0"),
                                 pricePerPerson: parseFloat(q.price_per_person || "0"),
@@ -1763,7 +1774,39 @@ export default function ClientPage() {
                                 nights: q.num_of_nights || 0,
                               })),
                           },
-                        ].map((group) => (
+                        ].map((group) => {
+                          const groupRowsSorted = [...group.rows].sort(
+                            (a, b) => new Date(b.createdAtRaw || 0).getTime() - new Date(a.createdAtRaw || 0).getTime(),
+                          );
+                          const mainRows = groupRowsSorted.filter((row) => !row.isQuoteCopy);
+                          const copyRows = groupRowsSorted.filter((row) => row.isQuoteCopy);
+
+                          const rowsWithToggles: Array<
+                            | { type: "quote"; row: (typeof groupRowsSorted)[number]; isChild: boolean }
+                            | { type: "toggle"; parentId: string; count: number }
+                          > = [];
+
+                          for (const main of mainRows) {
+                            const copies = copyRows.filter((copy) => copy.transactionId === main.transactionId);
+                            rowsWithToggles.push({ type: "quote", row: main, isChild: false });
+                            if (copies.length > 0) {
+                              rowsWithToggles.push({ type: "toggle", parentId: main.id, count: copies.length });
+                              if (expandedCopyGroups[main.id]) {
+                                for (const copy of copies) {
+                                  rowsWithToggles.push({ type: "quote", row: copy, isChild: true });
+                                }
+                              }
+                            }
+                          }
+
+                          const orphanCopyRows = copyRows.filter(
+                            (copy) => !mainRows.some((main) => main.transactionId === copy.transactionId),
+                          );
+                          for (const orphan of orphanCopyRows) {
+                            rowsWithToggles.push({ type: "quote", row: orphan, isChild: true });
+                          }
+
+                          return (
                           <div key={group.id} className="rounded-3xl border border-black/10 bg-white/60 p-2" data-testid={`group-quotes-${group.id}`}>
                             <div className="flex items-center justify-between gap-3 px-2 py-2" data-testid={`row-quotes-group-header-${group.id}`}>
                               <div className="flex items-center gap-2">
@@ -1780,11 +1823,34 @@ export default function ClientPage() {
                             </div>
 
                             <div className="grid gap-2" data-testid={`list-quotes-${group.id}`}>
-                              {group.rows.map((q) => (
+                              {rowsWithToggles.map((item) => {
+                                if (item.type === "toggle") {
+                                  const isExpanded = Boolean(expandedCopyGroups[item.parentId]);
+                                  return (
+                                    <button
+                                      key={`toggle-${item.parentId}`}
+                                      type="button"
+                                      className="ml-6 inline-flex w-fit items-center gap-1 rounded-xl border border-black/10 bg-white/70 px-2 py-1 text-[11px] font-semibold text-black/65 transition hover:bg-black/[0.03]"
+                                      data-testid={`button-toggle-copy-quotes-${item.parentId}`}
+                                      onClick={() =>
+                                        setExpandedCopyGroups((prev) => ({
+                                          ...prev,
+                                          [item.parentId]: !prev[item.parentId],
+                                        }))
+                                      }
+                                    >
+                                      <ChevronDown className={`h-3.5 w-3.5 transition ${isExpanded ? "rotate-180" : ""}`} />
+                                      {isExpanded ? "Hide" : "Show"} {item.count} {item.count === 1 ? "copy" : "copies"}
+                                    </button>
+                                  );
+                                }
+
+                                const q = item.row;
+                                return (
                                 <button
                                   key={q.id}
                                   type="button"
-                                  className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
+                                  className={`group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99] ${item.isChild ? "pl-9 border-sky-500/20 bg-sky-500/[0.04]" : ""}`}
                                   data-testid={`card-quote-intro-${q.id}`}
                                   onClick={() => navigate(`/clients/${clientId}/quotes/${q.id}`)}
                                 >
@@ -1829,6 +1895,17 @@ export default function ClientPage() {
                                                 <span data-testid={`text-quote-nights-${q.id}`}>{q.nights}N</span>
                                               </>
                                             )}
+                                            {q.isQuoteCopy && (
+                                              <>
+                                                <span className="text-black/25">•</span>
+                                                <span
+                                                  className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700"
+                                                  data-testid={`text-quote-copy-${q.id}`}
+                                                >
+                                                  Copy
+                                                </span>
+                                              </>
+                                            )}
                                             <span className="text-black/25">•</span>
                                             <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/60" data-testid={`text-quote-status-${q.id}`}>
                                               {(q.status || "").replace(/_/g, " ")}
@@ -1871,9 +1948,10 @@ export default function ClientPage() {
                                     </div>
                                   </div>
                                 </button>
-                              ))}
+                                );
+                              })}
 
-                              {group.rows.length === 0 ? (
+                              {rowsWithToggles.length === 0 ? (
                                 <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid={`empty-quotes-${group.id}`}>
                                   <div className="text-sm font-semibold" data-testid={`text-empty-quotes-title-${group.id}`}>
                                     No quotes
@@ -1885,7 +1963,8 @@ export default function ClientPage() {
                               ) : null}
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </Card>
 
@@ -1939,7 +2018,7 @@ export default function ClientPage() {
                                   >
                                     {b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url ? (
                                       <img
-                                        src={b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url}
+                                        src={(b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url) ?? ""}
                                         alt=""
                                         className="absolute inset-0 h-full w-full object-cover"
                                       />
@@ -2323,6 +2402,28 @@ export default function ClientPage() {
                             if (isScraperFormat) {
                               const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
                               const result = mapScraperJsonToFormFields(data);
+
+                              const resolveAirportId = (airportText: string | undefined): string => {
+                                if (!airportText || !airportsData) return "";
+                                const needle = airportText.trim().toLowerCase();
+                                if (!needle) return "";
+
+                                const exact = airportsData.find((airport: Airport) => {
+                                  const name = (airport.airport_name || "").trim().toLowerCase();
+                                  const code = (airport.airport_code || "").trim().toLowerCase();
+                                  return needle === name || needle === code;
+                                });
+                                if (exact) return exact.id;
+
+                                const partial = airportsData.find((airport: Airport) => {
+                                  const name = (airport.airport_name || "").trim().toLowerCase();
+                                  const code = (airport.airport_code || "").trim().toLowerCase();
+                                  return name.includes(needle) || needle.includes(name) || (code.length > 0 && (code.includes(needle) || needle.includes(code)));
+                                });
+
+                                return partial?.id || "";
+                              };
+
                               setNewQuote((prev) => {
                                 const updated = { ...prev, jsonPayload: content };
                                 for (const [k, v] of Object.entries(result.fields)) {
@@ -2330,6 +2431,18 @@ export default function ClientPage() {
                                     (updated as Record<string, unknown>)[k] = v;
                                   }
                                 }
+
+                                updated.outboundConnectingLegs = result.outboundConnectingLegs.map((leg) => ({
+                                  ...leg,
+                                  departAirportId: resolveAirportId(leg.departAirport),
+                                  arriveAirportId: resolveAirportId(leg.arriveAirport),
+                                }));
+
+                                updated.inboundConnectingLegs = result.inboundConnectingLegs.map((leg) => ({
+                                  ...leg,
+                                  departAirportId: resolveAirportId(leg.departAirport),
+                                  arriveAirportId: resolveAirportId(leg.arriveAirport),
+                                }));
                                 return updated;
                               });
                               if (result.images.length > 0) {
@@ -3501,7 +3614,14 @@ export default function ClientPage() {
                   } : undefined;
 
                   const outboundConnecting = newQuote.outboundConnectingLegs
-                    .filter(leg => leg.departAirportId || leg.arriveAirportId)
+                    .filter(
+                      (leg) =>
+                        leg.departAirportId ||
+                        leg.arriveAirportId ||
+                        leg.departDate ||
+                        leg.arriveDate ||
+                        leg.flightNumber
+                    )
                     .map(leg => ({
                       departing_airport_id: leg.departAirportId || undefined,
                       arrival_airport_id: leg.arriveAirportId || undefined,
@@ -3513,7 +3633,14 @@ export default function ClientPage() {
                       is_included_in_package: true,
                     }));
                   const inboundConnecting = newQuote.inboundConnectingLegs
-                    .filter(leg => leg.departAirportId || leg.arriveAirportId)
+                    .filter(
+                      (leg) =>
+                        leg.departAirportId ||
+                        leg.arriveAirportId ||
+                        leg.departDate ||
+                        leg.arriveDate ||
+                        leg.flightNumber
+                    )
                     .map(leg => ({
                       departing_airport_id: leg.departAirportId || undefined,
                       arrival_airport_id: leg.arriveAirportId || undefined,
@@ -3524,6 +3651,8 @@ export default function ClientPage() {
                       flight_number: leg.flightNumber || undefined,
                       is_included_in_package: true,
                     }));
+                  const showFlights = packageTypeName !== "Hot Tub Break" && !(packageTypeName === "Cruise Package" && newQuote.cruiseOnly);
+                  const showAccommodation = packageTypeName !== "Hot Tub Break";
 
                   const quotePayload = {
                     holiday_type_id: newQuote.packageType,
@@ -3541,11 +3670,11 @@ export default function ClientPage() {
                     lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
                     pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
                     main_tour_operator_id: newQuote.tourOperator || undefined,
-                    outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
-                    inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
-                    outboundConnectingLegs: packageTypeName === "Package Holiday" && outboundConnecting.length > 0 ? outboundConnecting : undefined,
-                    inboundConnectingLegs: packageTypeName === "Package Holiday" && inboundConnecting.length > 0 ? inboundConnecting : undefined,
-                    primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
+                    outboundFlight: showFlights ? outboundFlight : undefined,
+                    inboundFlight: showFlights ? inboundFlight : undefined,
+                    outboundConnectingLegs: showFlights && outboundConnecting.length > 0 ? outboundConnecting : undefined,
+                    inboundConnectingLegs: showFlights && inboundConnecting.length > 0 ? inboundConnecting : undefined,
+                    primaryAccommodation: showAccommodation ? primaryAccommodation : undefined,
                   };
 
                   if (newQuoteIsBooking) {
@@ -3572,13 +3701,13 @@ export default function ClientPage() {
                           lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
                           pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : 0,
                           main_tour_operator_id: newQuote.tourOperator || undefined,
-                          outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
-                          inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
-                          primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
+                          outboundFlight: showFlights ? outboundFlight : undefined,
+                          inboundFlight: showFlights ? inboundFlight : undefined,
+                          primaryAccommodation: showAccommodation ? primaryAccommodation : undefined,
                         },
                       },
                       {
-                        onSuccess: (result: { transaction?: { id: string }; booking?: { id: string } }) => {
+                        onSuccess: (result: Transaction) => {
                           setShowNewQuoteModal(false);
                           setNewQuoteIsBooking(false);
                           setNewQuote(newQuoteDefaults);
@@ -3618,9 +3747,11 @@ export default function ClientPage() {
                     createQuoteMutationHook.mutate(
                       {
                         ...convertPayload,
-                        outboundFlight: packageTypeName === "Package Holiday" ? outboundFlight : undefined,
-                        inboundFlight: packageTypeName === "Package Holiday" ? inboundFlight : undefined,
-                        primaryAccommodation: packageTypeName === "Package Holiday" ? primaryAccommodation : undefined,
+                        outboundFlight: showFlights ? outboundFlight : undefined,
+                        inboundFlight: showFlights ? inboundFlight : undefined,
+                        outboundConnectingLegs: showFlights && outboundConnecting.length > 0 ? outboundConnecting : undefined,
+                        inboundConnectingLegs: showFlights && inboundConnecting.length > 0 ? inboundConnecting : undefined,
+                        primaryAccommodation: showAccommodation ? primaryAccommodation : undefined,
                         images: quoteImageUrls.length > 0 ? quoteImageUrls : undefined,
                       },
                       {

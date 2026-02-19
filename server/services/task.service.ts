@@ -2,29 +2,29 @@ import { taskRepository, type TaskWithClient } from "../repositories/task.reposi
 import { AppError } from "../utils/error-handler";
 import { tasks } from "@shared/schema";
 
-type LegacyTask = typeof tasks.$inferSelect;
-type InsertLegacyTask = typeof tasks.$inferInsert;
+type TaskNew = typeof tasks.$inferSelect;
+type InsertTaskNew = typeof tasks.$inferInsert;
 
 export const taskService = {
   async listAll(): Promise<TaskWithClient[]> {
     return await taskRepository.findAll();
   },
 
-  async listByEntity(entityType: string, entityId: string): Promise<LegacyTask[]> {
+  async listByEntity(entityType: string, entityId: string): Promise<TaskNew[]> {
     await taskRepository.checkAndNotifyDueTasks();
     return await taskRepository.findByEntity(entityType, entityId);
   },
 
-  async listByUser(userId: string): Promise<LegacyTask[]> {
+  async listByUser(userId: string): Promise<TaskNew[]> {
     await taskRepository.checkAndNotifyDueTasks();
     return await taskRepository.findByUserId(userId);
   },
 
-  async create(data: InsertLegacyTask): Promise<LegacyTask> {
+  async create(data: InsertTaskNew): Promise<TaskNew> {
     return await taskRepository.create(data);
   },
 
-  async toggleComplete(id: string): Promise<LegacyTask> {
+  async toggleComplete(id: string): Promise<TaskNew> {
     const result = await taskRepository.toggleComplete(id);
     if (!result) throw new AppError("Task not found", 404);
     return result;
@@ -32,5 +32,9 @@ export const taskService = {
 
   async remove(id: string): Promise<void> {
     await taskRepository.remove(id);
+  },
+
+  async reassignByEntity(entityType: string, entityId: string, newUserId: string): Promise<void> {
+    await taskRepository.reassignByEntity(entityType, entityId, newUserId);
   },
 };

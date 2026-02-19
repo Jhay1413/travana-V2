@@ -1328,4 +1328,6 @@ export const tasks = pgTable("tasks", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertTasksSchema = createInsertSchema(tasks);
+export const insertTasksSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
+export type TaskNew = typeof tasks.$inferSelect;
+export type InsertTaskNew = typeof tasks.$inferInsert;

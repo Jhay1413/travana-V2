@@ -84,7 +84,7 @@ async function enrichTransactions(txns: Transaction[]) {
   }
 
   return txns.map(txn => {
-    const enquiry = enquiryMap.get(txn.id) || null;
+    const enquiry = txn.status === "on_enquiry" ? (enquiryMap.get(txn.id) || null) : null;
     const quotes = quotesMap.get(txn.id) || [];
     const bookingEntry = bookingMap.get(txn.id) || null;
     const holiday_type_name = enquiry?.holiday_type_name || quotes[0]?.holiday_type_name || bookingEntry?.holiday_type_name || null;

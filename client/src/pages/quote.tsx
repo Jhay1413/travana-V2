@@ -15,8 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useRoomTypes, useTags } from "@/hooks/queries";
-import { useUpdateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction, useUpdateQuoteTags } from "@/hooks/mutations";
+import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useRoomTypes, useTags, useAirports } from "@/hooks/queries";
+import { useUpdateQuote, useDuplicateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction, useUpdateQuoteTags } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { QuoteFormFields, defaultQuoteFormState } from "@/components/quote-form-fields";
 import type { QuoteFormState } from "@/components/quote-form-fields";
@@ -59,6 +59,7 @@ function formatLeadSource(source: string | null | undefined): string {
 type QuoteDisplay = {
   id: string;
   transaction_id: string;
+  isCopyQuote: boolean;
   status: string;
   packageType: string;
   quoteTitle: string;
@@ -561,7 +562,7 @@ function formatTaskDue(date: Date | string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
-function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string; entityType?: "enquiry" | "quote" | "booking" }) {
+function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserId }: { quoteId: string; entityType?: "enquiry" | "quote" | "booking"; assignedUserId?: string }) {
   const taskEntityType = entityType === "booking" ? "quote" : entityType;
   const { data: tasksData, isLoading } = useTasks(taskEntityType, quoteId);
   const { data: currentUser } = useCurrentUser();
@@ -578,16 +579,19 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
   const presets = TASK_PRESETS_BY_ENTITY[taskCategory] || TASK_PRESETS_BY_ENTITY.quote;
 
   const handleAdd = () => {
-    if (!newTitle || !newDueDate || !currentUser?.id) return;
+    const userIdForTask = assignedUserId || currentUser?.id;
+    if (!newTitle || !newDueDate || !userIdForTask) return;
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
       {
-        transaction_id: quoteId,
-        user_id: currentUser.id,
+        entityType: taskEntityType,
+        entityId: quoteId,
+        userId: userIdForTask,
         title: newTitle,
-        due_date: dueDate,
-        status: "pending",
-      },
+        dueDate: dueDate,
+        completed: false,
+        notified: false,
+      } as any,
       {
         onSuccess: () => {
           setShowAddDialog(false);
@@ -601,8 +605,8 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
     );
   };
 
-  const pendingTasks = useMemo(() => (tasksData || []).filter((t) => t.status !== 'completed'), [tasksData]);
-  const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.status === 'completed'), [tasksData]);
+  const pendingTasks = useMemo(() => (tasksData || []).filter((t) => !t.completed), [tasksData]);
+  const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.completed), [tasksData]);
 
   return (
     <>
@@ -632,7 +636,7 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
           ) : (
             <>
               {pendingTasks.map((task) => {
-                const isOverdue = new Date(task.due_date!) < new Date();
+                const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
                 return (
                   <div
                     key={task.id}
@@ -646,7 +650,7 @@ function QuoteTasksSection({ quoteId, entityType = "quote" }: { quoteId: string;
                       {task.title}
                     </span>
                     <span className={`shrink-0 text-[10px] font-semibold ${isOverdue ? "text-rose-500" : "text-black/40"}`} data-testid={`text-task-due-${task.id}`}>
-                      {formatTaskDue(task.due_date!)}
+                      {task.dueDate ? formatTaskDue(task.dueDate) : ""}
                     </span>
                     <button
                       type="button"
@@ -978,7 +982,17 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       ),
     });
   } else {
-    if (quote.flights.outbound.from) {
+    const hasOutboundPrimary = Boolean(
+      quote.flights.outbound.from ||
+      quote.flights.outbound.to ||
+      quote.flights.outbound.departDate ||
+      quote.flights.outbound.flightNo
+    );
+    const hasOutboundConnecting = quote.flights.outboundConnecting.some(
+      (leg) => leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo,
+    );
+
+    if (hasOutboundPrimary) {
       const sortKey = quote.flights.outbound.departDate + "T" + (quote.flights.outbound.departTime || "00:00");
       timelineItems.push({
         type: "outbound",
@@ -1014,9 +1028,11 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
           </div>
         ),
       });
+    }
 
+    if (hasOutboundConnecting) {
       quote.flights.outboundConnecting.forEach((leg, idx) => {
-        if (leg.from || leg.to) {
+        if (leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo) {
           const connSortKey = leg.departDate + "T" + (leg.departTime || "00:01");
           timelineItems.push({
             type: "outbound-connecting",
@@ -1030,7 +1046,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
                   <div className="mt-1 h-full w-px bg-black/10" />
                 </div>
                 <div className="flex-1 pb-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-500">Connecting Flight {idx + 2}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-500">Connecting Flight {hasOutboundPrimary ? idx + 2 : idx + 1}</div>
                   <div className="mt-0.5 text-xs font-semibold">{leg.from} → {leg.to}</div>
                   <div className="mt-1 grid gap-1">
                     {leg.departDate && (
@@ -1176,8 +1192,17 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       });
     }
 
-    const hasInbound = quote.flights.inbound.from || quote.flights.inbound.to || quote.flights.inbound.departDate || quote.returnDate;
-    if (hasInbound) {
+    const hasInboundPrimary = Boolean(
+      quote.flights.inbound.from ||
+      quote.flights.inbound.to ||
+      quote.flights.inbound.departDate ||
+      quote.returnDate
+    );
+    const hasInboundConnecting = quote.flights.inboundConnecting.some(
+      (leg) => leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo,
+    );
+
+    if (hasInboundPrimary) {
       const ibDate = quote.flights.inbound.departDate || quote.returnDate;
       const sortKey = ibDate + "T" + (quote.flights.inbound.departTime || "23:59");
       const ibFrom = quote.flights.inbound.from || quote.flights.outbound.to || "";
@@ -1217,9 +1242,11 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
           </div>
         ),
       });
+    }
 
+    if (hasInboundConnecting) {
       quote.flights.inboundConnecting.forEach((leg, idx) => {
-        if (leg.from || leg.to) {
+        if (leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo) {
           const connSortKey = leg.departDate + "T" + (leg.departTime || "23:58");
           timelineItems.push({
             type: "inbound-connecting",
@@ -1233,7 +1260,7 @@ function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
                   <div className="mt-1 h-full w-px bg-black/10" />
                 </div>
                 <div className="flex-1 pb-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-500">Connecting Flight {idx + 2}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-500">Connecting Flight {hasInboundPrimary ? idx + 2 : idx + 1}</div>
                   <div className="mt-0.5 text-xs font-semibold">{leg.from} → {leg.to}</div>
                   <div className="mt-1 grid gap-1">
                     {leg.departDate && (
@@ -1343,6 +1370,7 @@ function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisp
   const result = {
     id: apiData.id,
     transaction_id: apiData.transaction_id,
+    isCopyQuote: "isQuoteCopy" in apiData ? Boolean(apiData.isQuoteCopy) : false,
     status: ("quote_status" in apiData ? apiData.quote_status : "booking_status" in apiData ? apiData.booking_status : null) || "draft",
     packageType: apiData.holiday_type_name || ("quote_type" in apiData ? apiData.quote_type : null) || "",
     quoteTitle: apiData.title || "",
@@ -1364,7 +1392,7 @@ function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisp
     preBookedSeats: apiData.pre_booked_seats || "",
     flightMeals: apiData.flight_meals ? "Yes" : "",
     leadSource: apiData.lead_source || "",
-    tags: [],
+    tags: apiData.tags || [],
     passengers: {
       adults: apiData.adult || 0,
       children: apiData.child || 0,
@@ -1488,8 +1516,10 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const toggleFavoriteMutation = useToggleFavorite();
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editDialogMode, setEditDialogMode] = useState<"edit" | "duplicate">("edit");
   const ellipsisRef = useRef<HTMLDivElement>(null);
   const updateQuoteMutation = useUpdateQuote();
+  const duplicateQuoteMutation = useDuplicateQuote();
   const updateTagsMutation = useUpdateQuoteTags();
   const updateTransactionMutation = useUpdateTransaction();
   const convertToBookingMutation = useConvertToBooking();
@@ -1583,6 +1613,14 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                   {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                 </div>
                 <StatusPill status={quote.status} />
+                {quote.isCopyQuote && (
+                  <span
+                    className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
+                    data-testid="pill-quote-copy"
+                  >
+                    Copy Quote
+                  </span>
+                )}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
                 <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
@@ -1807,10 +1845,23 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         disabled={!newTag.trim()}
                         onClick={() => {
                           if (!newTag.trim()) return;
+                          console.log('🏷️ Adding tag via button:', newTag.trim());
                           const updated = [...quote.tags, newTag.trim()];
-                          updateQuoteMutation.mutate(
-                            { id: quoteId, data: { tags: updated } },
-                            { onSuccess: () => { setNewTag(""); setShowTagSuggestions(false); queryClient.invalidateQueries({ queryKey: ["quotes"] }); queryClient.invalidateQueries({ queryKey: ["quote-tags"] }); } }
+                          updateTagsMutation.mutate(
+                            { id: quoteId, tags: updated },
+                            { 
+                              onSuccess: () => { 
+                                console.log('🏷️ Tag added successfully via button');
+                                setNewTag(""); 
+                                setShowTagSuggestions(false); 
+                                queryClient.invalidateQueries({ queryKey: ["quotes"] }); 
+                                queryClient.invalidateQueries({ queryKey: ["tags"] }); 
+                              },
+                              onError: (error) => {
+                                console.error('🏷️ Failed to add tag via button:', error);
+                                toast({ title: "Failed to add tag", variant: "destructive" });
+                              }
+                            }
                           );
                         }}
                       >
@@ -1896,11 +1947,13 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                                     onClick={() => {
                                       setShowEllipsisMenu(false);
                                       if (item.id === "edit") {
+                                        setEditDialogMode("edit");
                                         setShowEditModal(true);
                                       } else if (item.id === "convert") {
                                         setShowConvertDialog(true);
                                       } else {
-                                        toast({ title: `${item.label} — coming soon` });
+                                        setEditDialogMode("duplicate");
+                                        setShowEditModal(true);
                                       }
                                     }}
                                   >
@@ -2159,7 +2212,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                 </Tabs>
               </Card>
 
-              <QuoteTasksSection quoteId={quoteId} entityType={pageLabel === "Booking" ? "booking" : "quote"} />
+              <QuoteTasksSection quoteId={quoteId} entityType={pageLabel === "Booking" ? "booking" : "quote"} assignedUserId={quoteData?.user_id} />
 
             </div>
           </div>
@@ -2169,6 +2222,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
         <EditQuoteDialog
           open={showEditModal}
           onOpenChange={setShowEditModal}
+          mode={editDialogMode}
           quote={quote}
           quoteData={quoteData}
           onSave={async (updates, images) => {
@@ -2182,16 +2236,39 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
             
             console.log('📸 CLIENT - Final payload:', payload);
             
+            if (editDialogMode === "duplicate") {
+              duplicateQuoteMutation.mutate(
+                { id: quoteId, data: payload },
+                {
+                  onSuccess: (newQuote) => {
+                    setShowEditModal(false);
+                    queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                    toast({
+                      title: "Quote duplicated successfully",
+                      description: images && images.length > 0
+                        ? `Duplicated with ${images.length} image(s)`
+                        : undefined,
+                    });
+                    setLocation(`/clients/${clientId}/quotes/${newQuote.id}`);
+                  },
+                  onError: () => {
+                    toast({ title: "Failed to duplicate quote", variant: "destructive" });
+                  },
+                }
+              );
+              return;
+            }
+
             updateQuoteMutation.mutate(
               { id: quoteId, data: payload },
               {
                 onSuccess: () => {
                   setShowEditModal(false);
                   queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                  toast({ 
+                  toast({
                     title: "Quote updated successfully",
-                    description: images && images.length > 0 
-                      ? `Updated with ${images.length} image(s)` 
+                    description: images && images.length > 0
+                      ? `Updated with ${images.length} image(s)`
                       : undefined
                   });
                 },
@@ -2201,7 +2278,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               }
             );
           }}
-          isSaving={updateQuoteMutation.isPending}
+          isSaving={editDialogMode === "duplicate" ? duplicateQuoteMutation.isPending : updateQuoteMutation.isPending}
         />
       )}
       <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
@@ -2268,6 +2345,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 function EditQuoteDialog({
   open,
   onOpenChange,
+  mode,
   quote,
   quoteData,
   onSave,
@@ -2275,6 +2353,7 @@ function EditQuoteDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  mode: "edit" | "duplicate";
   quote: QuoteDisplay;
   quoteData: EnrichedQuote | EnrichedBooking;
   onSave: (data: Record<string, unknown>, images?: string[]) => void;
@@ -2283,6 +2362,7 @@ function EditQuoteDialog({
   const [form, setForm] = useState<QuoteFormState>(() => buildEditForm(quote, quoteData));
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const { toast } = useToast();
+  const { data: airportsData } = useAirports();
 
   useEffect(() => {
     if (open) {
@@ -2325,6 +2405,27 @@ function EditQuoteDialog({
             const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
             
             const result = mapScraperJsonToFormFields(data);
+
+            const resolveAirportId = (airportText: string | undefined): string => {
+              if (!airportText || !airportsData) return "";
+              const needle = airportText.trim().toLowerCase();
+              if (!needle) return "";
+
+              const exact = airportsData.find((airport: { id: string; airport_name: string; airport_code?: string | null }) => {
+                const name = (airport.airport_name || "").trim().toLowerCase();
+                const code = (airport.airport_code || "").trim().toLowerCase();
+                return needle === name || needle === code;
+              });
+              if (exact) return exact.id;
+
+              const partial = airportsData.find((airport: { id: string; airport_name: string; airport_code?: string | null }) => {
+                const name = (airport.airport_name || "").trim().toLowerCase();
+                const code = (airport.airport_code || "").trim().toLowerCase();
+                return name.includes(needle) || needle.includes(name) || (code.length > 0 && (code.includes(needle) || needle.includes(code)));
+              });
+
+              return partial?.id || "";
+            };
             
             // Extract only the fields needed for ID mapping
             const mappingInput = {
@@ -2412,6 +2513,18 @@ function EditQuoteDialog({
               if (idMapping.inboundDepartAirportId) updated.inboundDepartAirportId = idMapping.inboundDepartAirportId;
               if (idMapping.inboundArriveAirportId) updated.inboundArriveAirportId = idMapping.inboundArriveAirportId;
               if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
+
+              updated.outboundConnectingLegs = result.outboundConnectingLegs.map((leg) => ({
+                ...leg,
+                departAirportId: resolveAirportId(leg.departAirport),
+                arriveAirportId: resolveAirportId(leg.arriveAirport),
+              }));
+
+              updated.inboundConnectingLegs = result.inboundConnectingLegs.map((leg) => ({
+                ...leg,
+                departAirportId: resolveAirportId(leg.departAirport),
+                arriveAirportId: resolveAirportId(leg.arriveAirport),
+              }));
               
               return updated;
             });
@@ -2585,9 +2698,11 @@ function EditQuoteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">Edit Quote</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">{mode === "duplicate" ? "Duplicate Quote" : "Edit Quote"}</DialogTitle>
           <DialogDescription className="text-sm text-black/55">
-            Update quote details, accommodation, flights, and pricing.
+            {mode === "duplicate"
+              ? "Review and adjust details, then create a duplicate under the same transaction."
+              : "Update quote details, accommodation, flights, and pricing."}
           </DialogDescription>
         </DialogHeader>
 
@@ -2672,7 +2787,7 @@ function EditQuoteDialog({
               disabled={isSaving}
               data-testid="edit-button-save"
             >
-              {isSaving ? "Saving..." : "Save Changes"}
+              {isSaving ? "Saving..." : mode === "duplicate" ? "Create Duplicate" : "Save Changes"}
             </Button>
           </div>
         </div>

@@ -14,6 +14,18 @@ export function useCreateQuote() {
   });
 }
 
+export function useDuplicateQuote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) =>
+      quoteApi.duplicate(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    },
+  });
+}
+
 export function useUpdateQuote() {
   const queryClient = useQueryClient();
   return useMutation({

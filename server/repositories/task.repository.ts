@@ -1,9 +1,10 @@
 import { db } from "../config/database";
 import { tasks, notifications, quotes, enquiries, clientTable } from "@shared/schema";
 import { eq, and, desc, lte, inArray } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
-type LegacyTask = typeof tasks.$inferSelect;
-type InsertLegacyTask = typeof tasks.$inferInsert;
+type TaskNew = typeof tasks.$inferSelect;
+type InsertTaskNew = typeof tasks.$inferInsert;
 
 const entityRouteMap: Record<string, string> = {
   enquiry: "/enquiries",
@@ -16,7 +17,7 @@ function entityLink(entityType: string, entityId: string): string {
   return `${base}/${entityId}`;
 }
 
-export type TaskWithClient = LegacyTask & { clientId: string | null; clientName: string | null; tags: string[] };
+export type TaskWithClient = TaskNew & { clientId: string | null; clientName: string | null; tags: string[] };
 
 export const taskRepository = {
   async findAll(): Promise<TaskWithClient[]> {
@@ -87,7 +88,7 @@ export const taskRepository = {
     });
   },
 
-  async findByEntity(entityType: string, entityId: string): Promise<LegacyTask[]> {
+  async findByEntity(entityType: string, entityId: string): Promise<TaskNew[]> {
     return await db
       .select()
       .from(tasks)
@@ -95,7 +96,7 @@ export const taskRepository = {
       .orderBy(desc(tasks.createdAt));
   },
 
-  async findByUserId(userId: string): Promise<LegacyTask[]> {
+  async findByUserId(userId: string): Promise<TaskNew[]> {
     return await db
       .select()
       .from(tasks)
@@ -103,12 +104,15 @@ export const taskRepository = {
       .orderBy(desc(tasks.createdAt));
   },
 
-  async create(taskData: InsertLegacyTask): Promise<LegacyTask> {
-    const [result] = await db.insert(tasks).values(taskData).returning();
+  async create(taskData: InsertTaskNew): Promise<TaskNew> {
+    const [result] = await db.insert(tasks).values({
+      ...taskData,
+      id: randomUUID(),
+    }).returning();
     return result;
   },
 
-  async toggleComplete(id: string): Promise<LegacyTask | undefined> {
+  async toggleComplete(id: string): Promise<TaskNew | undefined> {
     const [existing] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
     if (!existing) return undefined;
     const [result] = await db
@@ -124,6 +128,19 @@ export const taskRepository = {
 
   async remove(id: string): Promise<void> {
     await db.delete(tasks).where(eq(tasks.id, id));
+  },
+
+  async reassignByEntity(entityType: string, entityId: string, newUserId: string): Promise<void> {
+    await db
+      .update(tasks)
+      .set({ userId: newUserId })
+      .where(
+        and(
+          eq(tasks.entityType, entityType),
+          eq(tasks.entityId, entityId),
+          eq(tasks.completed, false) // Only reassign incomplete tasks
+        )
+      );
   },
 
   async checkAndNotifyDueTasks(): Promise<void> {

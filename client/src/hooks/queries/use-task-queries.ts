@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { taskApi, type TaskWithClient } from "@/api/endpoints/task.api";
-import type { Task } from "@shared/schema";
+import type { TaskNew } from "@shared/schema";
 
 export const taskKeys = {
   all: ["tasks"] as const,
@@ -18,7 +18,7 @@ export function useAllTasks() {
 }
 
 export function useTasks(entityType: string, entityId: string) {
-  return useQuery<Task[]>({
+  return useQuery<TaskNew[]>({
     queryKey: taskKeys.byEntity(entityType, entityId),
     queryFn: () => taskApi.getByEntity(entityType, entityId),
     enabled: !!entityType && !!entityId,
@@ -26,7 +26,7 @@ export function useTasks(entityType: string, entityId: string) {
 }
 
 export function useUserTasks(userId: string) {
-  return useQuery<Task[]>({
+  return useQuery<TaskNew[]>({
     queryKey: taskKeys.byUser(userId),
     queryFn: () => taskApi.getByUser(userId),
     enabled: !!userId,

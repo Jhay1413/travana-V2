@@ -2,6 +2,7 @@ import { transactionRepository } from "../repositories/transaction.repository";
 import { enquiryTableRepository } from "../repositories/enquiryTable.repository";
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { bookingRepository } from "../repositories/booking.repository";
+import { taskService } from "./task.service";
 import { AppError } from "../utils/error-handler";
 import type {
   InsertTransaction,
@@ -35,6 +36,8 @@ interface CreateEnquiryPayload extends InsertEnquiryTable {
 interface QuoteRelationPayload extends InsertQuote {
   outboundFlight?: Partial<InsertQuoteFlight>;
   inboundFlight?: Partial<InsertQuoteFlight>;
+  outboundConnectingLegs?: Partial<InsertQuoteFlight>[];
+  inboundConnectingLegs?: Partial<InsertQuoteFlight>[];
   primaryAccommodation?: Partial<InsertQuoteAccomodation>;
   images?: string[];
 }
@@ -67,6 +70,25 @@ function convertAccommodationDates(accom: Record<string, unknown>): Record<strin
   return {
     ...accom,
     check_in_date_time: toDateOrNull(accom.check_in_date_time),
+  };
+}
+
+function normalizeFlightInput(input: unknown): Partial<InsertQuoteFlight> {
+  if (!input || typeof input !== "object") return {};
+  const leg = input as Record<string, unknown>;
+
+  return {
+    departing_airport_id: (leg.departing_airport_id as string | undefined) || (leg.departAirportId as string | undefined) || null,
+    arrival_airport_id: (leg.arrival_airport_id as string | undefined) || (leg.arriveAirportId as string | undefined) || null,
+    departure_date_time: toDateOrNull((leg.departure_date_time as string | Date | null | undefined) || (leg.departureDateTime as string | Date | null | undefined)),
+    arrival_date_time: toDateOrNull((leg.arrival_date_time as string | Date | null | undefined) || (leg.arrivalDateTime as string | Date | null | undefined)),
+    flight_number: (leg.flight_number as string | undefined) || (leg.flightNumber as string | undefined) || null,
+    is_included_in_package:
+      typeof leg.is_included_in_package === "boolean"
+        ? leg.is_included_in_package
+        : typeof leg.isIncludedInPackage === "boolean"
+          ? (leg.isIncludedInPackage as boolean)
+          : true,
   };
 }
 
@@ -142,7 +164,26 @@ export const transactionService = {
   },
 
   async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: QuoteRelationPayload) {
-    const { outboundFlight, inboundFlight, primaryAccommodation, images, ...quoteFields } = quoteData;
+    const { outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images, ...quoteFields } = quoteData;
+    const quoteDataRecord = quoteData as unknown as Record<string, unknown>;
+
+    console.log('🔍 CREATE TXN+QUOTE - outboundConnectingLegs:', JSON.stringify(outboundConnectingLegs));
+    console.log('🔍 CREATE TXN+QUOTE - inboundConnectingLegs:', JSON.stringify(inboundConnectingLegs));
+
+    const normalizedOutboundFlight = normalizeFlightInput(outboundFlight);
+    const normalizedInboundFlight = normalizeFlightInput(inboundFlight);
+    const outboundConnectingSource = Array.isArray(outboundConnectingLegs)
+      ? outboundConnectingLegs
+      : Array.isArray(quoteDataRecord.outbound_connecting_legs)
+        ? (quoteDataRecord.outbound_connecting_legs as unknown[])
+        : [];
+    const inboundConnectingSource = Array.isArray(inboundConnectingLegs)
+      ? inboundConnectingLegs
+      : Array.isArray(quoteDataRecord.inbound_connecting_legs)
+        ? (quoteDataRecord.inbound_connecting_legs as unknown[])
+        : [];
+    const normalizedOutboundConnecting = outboundConnectingSource.map(normalizeFlightInput);
+    const normalizedInboundConnecting = inboundConnectingSource.map(normalizeFlightInput);
 
     return await db.transaction(async (tx) => {
       const [txn] = await tx.insert(transaction).values({
@@ -158,22 +199,75 @@ export const transactionService = {
       if (quoteValues.deleted_at) quoteValues.deleted_at = toDateOrNull(quoteValues.deleted_at);
       const [q] = await tx.insert(quote).values(quoteValues as InsertQuote).returning();
 
-      if (outboundFlight && (outboundFlight.departing_airport_id || outboundFlight.arrival_airport_id)) {
-        const converted = convertFlightDates(outboundFlight);
+      if (normalizedOutboundFlight && (normalizedOutboundFlight.departing_airport_id || normalizedOutboundFlight.arrival_airport_id || normalizedOutboundFlight.departure_date_time || normalizedOutboundFlight.arrival_date_time || normalizedOutboundFlight.flight_number)) {
+        const converted = convertFlightDates(normalizedOutboundFlight as Record<string, unknown>);
         await tx.insert(quote_flights).values({
           ...converted,
           quote_id: q.id,
           flight_type: 'outbound',
+          leg_order: 0,
         });
       }
-      if (inboundFlight && (inboundFlight.departing_airport_id || inboundFlight.arrival_airport_id)) {
-        const converted = convertFlightDates(inboundFlight);
+      if (normalizedInboundFlight && (normalizedInboundFlight.departing_airport_id || normalizedInboundFlight.arrival_airport_id || normalizedInboundFlight.departure_date_time || normalizedInboundFlight.arrival_date_time || normalizedInboundFlight.flight_number)) {
+        const converted = convertFlightDates(normalizedInboundFlight as Record<string, unknown>);
         await tx.insert(quote_flights).values({
           ...converted,
           quote_id: q.id,
           flight_type: 'inbound',
+          leg_order: 0,
         });
       }
+
+      if (normalizedOutboundConnecting.length) {
+        for (let i = 0; i < normalizedOutboundConnecting.length; i++) {
+          const leg = normalizedOutboundConnecting[i];
+          if (!leg) continue;
+
+          const hasLegData = Boolean(
+            leg.departing_airport_id ||
+            leg.arrival_airport_id ||
+            leg.departure_date_time ||
+            leg.arrival_date_time ||
+            leg.flight_number
+          );
+
+          if (!hasLegData) continue;
+
+          const converted = convertFlightDates(leg as Record<string, unknown>);
+          await tx.insert(quote_flights).values({
+            ...converted,
+            quote_id: q.id,
+            flight_type: 'outbound',
+            leg_order: i + 1,
+          });
+        }
+      }
+
+      if (normalizedInboundConnecting.length) {
+        for (let i = 0; i < normalizedInboundConnecting.length; i++) {
+          const leg = normalizedInboundConnecting[i];
+          if (!leg) continue;
+
+          const hasLegData = Boolean(
+            leg.departing_airport_id ||
+            leg.arrival_airport_id ||
+            leg.departure_date_time ||
+            leg.arrival_date_time ||
+            leg.flight_number
+          );
+
+          if (!hasLegData) continue;
+
+          const converted = convertFlightDates(leg as Record<string, unknown>);
+          await tx.insert(quote_flights).values({
+            ...converted,
+            quote_id: q.id,
+            flight_type: 'inbound',
+            leg_order: i + 1,
+          });
+        }
+      }
+
       if (primaryAccommodation && primaryAccommodation.accomodation_id) {
         const converted = convertAccommodationDates(primaryAccommodation);
         await tx.insert(quote_accomodation).values({
@@ -245,8 +339,33 @@ export const transactionService = {
   },
 
   async updateTransaction(id: string, data: Partial<InsertTransaction>) {
+    // Get the current transaction to check if user_id is changing
+    const oldTxn = await transactionRepository.findById(id);
+    if (!oldTxn) throw new AppError("Transaction not found", 404);
+
+    // Update the transaction
     const txn = await transactionRepository.update(id, data);
     if (!txn) throw new AppError("Transaction not found", 404);
+
+    // If user_id changed, reassign all open tasks
+    if (data.user_id && data.user_id !== oldTxn.user_id) {
+      // Get all quotes/bookings/enquiries for this transaction
+      const quotes = await newQuoteRepository.findByTransactionId(id);
+      const bookings = await bookingRepository.findByTransactionId(id);
+      const enquiries = await enquiryTableRepository.findByTransactionId(id);
+
+      // Reassign tasks for all related entities
+      for (const q of quotes) {
+        await taskService.reassignByEntity("quote", q.id, data.user_id);
+      }
+      for (const b of bookings) {
+        await taskService.reassignByEntity("booking", b.id, data.user_id);
+      }
+      for (const e of enquiries) {
+        await taskService.reassignByEntity("enquiry", e.id, data.user_id);
+      }
+    }
+
     return txn;
   },
 
