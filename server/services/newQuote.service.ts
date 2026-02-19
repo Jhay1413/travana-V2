@@ -144,8 +144,14 @@ export const newQuoteService = {
     console.log('🔍 QUOTE UPDATE - Flight updates:', { outboundFlight, inboundFlight });
     console.log('🔍 QUOTE UPDATE - Accommodation update:', primaryAccommodation);
 
-    const q = await newQuoteRepository.update(id, quoteData);
-    if (!q) throw new AppError("Quote not found", 404);
+    let q;
+    if (Object.keys(quoteData).length > 0) {
+      q = await newQuoteRepository.update(id, quoteData);
+      if (!q) throw new AppError("Quote not found", 404);
+    } else {
+      q = await newQuoteRepository.findById(id);
+      if (!q) throw new AppError("Quote not found", 404);
+    }
 
     // Process tags if provided
     if ('tags' in data && Array.isArray(data.tags)) {
