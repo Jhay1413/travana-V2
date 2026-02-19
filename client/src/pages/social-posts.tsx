@@ -210,7 +210,7 @@ function SocialPostCard({ post }: { post: SocialPost }) {
           </div>
         )}
 
-        <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 space-y-3">
+        <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 space-y-1.5">
           <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
             <Button
               variant="outline"
