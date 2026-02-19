@@ -19,6 +19,7 @@ import BookingPage from "@/pages/booking";
 import PipelinePage from "@/pages/pipeline";
 import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";
+import ClientsDashboardPage from "@/pages/clients-dashboard";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -36,6 +37,7 @@ function AuthenticatedRouter() {
   return (
     <Switch>
       <Route path="/" component={CommandCenterPage} />
+      <Route path="/clients-dashboard" component={ClientsDashboardPage} />
       <Route path="/clients" component={ClientsPage} />
       <Route path="/clients/:clientId" component={ClientPage} />
       <Route path="/clients/:clientId/quotes/:quoteId" component={QuotePage} />

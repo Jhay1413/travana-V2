@@ -100,6 +100,7 @@ function getNavRoute(key: string): string {
     payouts: "/",
     hub: "/hub",
     "social-posts": "/social-posts",
+    "clients-dashboard": "/clients-dashboard",
   };
   return routes[key] || "/";
 }
@@ -324,7 +325,10 @@ export function CommandCenterShell({
   const nav: NavStructure = useMemo(() => {
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" />, children: [
+        { key: "clients", label: "Client List", icon: <Users className="h-4 w-4" /> },
+        { key: "clients-dashboard", label: "Clients Dashboard", icon: <BarChart3 className="h-4 w-4" /> },
+      ] },
       { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
@@ -371,7 +375,10 @@ export function CommandCenterShell({
             icon: <Users className="h-4 w-4" />,
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" />, children: [
+                { key: "clients", label: "Client List", icon: <Users className="h-4 w-4" /> },
+                { key: "clients-dashboard", label: "Clients Dashboard", icon: <BarChart3 className="h-4 w-4" /> },
+              ] },
               { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
