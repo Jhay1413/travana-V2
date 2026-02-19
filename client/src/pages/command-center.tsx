@@ -4837,7 +4837,7 @@ export default function CommandCenterPage() {
                 />
                 <KpiCard
                   label="Live Clients"
-                  value={currency.format(totals.openValue)}
+                  value="26"
                   delta="+2.3% WoW"
                   icon={<Sparkles className="h-4 w-4" />}
                 />
