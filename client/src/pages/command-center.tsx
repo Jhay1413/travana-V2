@@ -2043,7 +2043,7 @@ export default function CommandCenterPage() {
                       <p className="text-sm text-black/50 dark:text-white/50">No posts for this filter</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       <AnimatePresence mode="popLayout">
                         {filteredOverviewSocialPosts.slice(0, 6).map(({ quote, clientId }) => {
                           const imageUrl = spGetFirstImage(quote);
@@ -2661,7 +2661,7 @@ export default function CommandCenterPage() {
                       <p className="text-sm text-black/50 dark:text-white/50">No posts for this filter</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       <AnimatePresence mode="popLayout">
                         {filteredOverviewSocialPosts.slice(0, 6).map(({ quote, clientId }) => {
                           const imageUrl = spGetFirstImage(quote);
