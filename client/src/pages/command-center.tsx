@@ -4829,30 +4829,61 @@ export default function CommandCenterPage() {
               />
 
               <section className="grid gap-3 md:grid-cols-4">
-                <KpiCard
-                  label="Today's Profit"
-                  value={currency.format(totals.bookedValue)}
-                  delta="+4.1% DoD"
-                  icon={<Ticket className="h-4 w-4" />}
-                />
-                <KpiCard
-                  label="This Week"
-                  value={currency.format(totals.openValue)}
-                  delta="+2.3% WoW"
-                  icon={<Sparkles className="h-4 w-4" />}
-                />
-                <KpiCard
-                  label="This Month"
-                  value={currency.format(totals.avgDeal)}
-                  delta="+6.8% MoM"
-                  icon={<Briefcase className="h-4 w-4" />}
-                />
-                <KpiCard
-                  label="Total Sales"
-                  value={currency.format(totals.bookedValue)}
-                  delta={totals.bookedValue >= 15000 ? "Target reached!" : `${currency.format(15000 - totals.bookedValue)} to target`}
-                  icon={<Briefcase className="h-4 w-4" />}
-                />
+                {active === "clients" ? (
+                  <>
+                    <KpiCard
+                      label="Total Clients"
+                      value={(clientsListData?.total ?? 0).toLocaleString()}
+                      delta="All registered"
+                      icon={<Users className="h-4 w-4" />}
+                    />
+                    <KpiCard
+                      label="Live Clients"
+                      value={(() => { const ids = new Set<string>(); if (transactionsData) { for (const t of transactionsData as any[]) { if (t.client_id) ids.add(t.client_id); } } return ids.size.toLocaleString(); })()}
+                      delta="With active transactions"
+                      icon={<Activity className="h-4 w-4" />}
+                    />
+                    <KpiCard
+                      label="This Month"
+                      value={currency.format(totals.avgDeal)}
+                      delta="+6.8% MoM"
+                      icon={<Briefcase className="h-4 w-4" />}
+                    />
+                    <KpiCard
+                      label="Total Sales"
+                      value={currency.format(totals.bookedValue)}
+                      delta={totals.bookedValue >= 15000 ? "Target reached!" : `${currency.format(15000 - totals.bookedValue)} to target`}
+                      icon={<Briefcase className="h-4 w-4" />}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <KpiCard
+                      label="Today's Profit"
+                      value={currency.format(totals.bookedValue)}
+                      delta="+4.1% DoD"
+                      icon={<Ticket className="h-4 w-4" />}
+                    />
+                    <KpiCard
+                      label="This Week"
+                      value={currency.format(totals.openValue)}
+                      delta="+2.3% WoW"
+                      icon={<Sparkles className="h-4 w-4" />}
+                    />
+                    <KpiCard
+                      label="This Month"
+                      value={currency.format(totals.avgDeal)}
+                      delta="+6.8% MoM"
+                      icon={<Briefcase className="h-4 w-4" />}
+                    />
+                    <KpiCard
+                      label="Total Sales"
+                      value={currency.format(totals.bookedValue)}
+                      delta={totals.bookedValue >= 15000 ? "Target reached!" : `${currency.format(15000 - totals.bookedValue)} to target`}
+                      icon={<Briefcase className="h-4 w-4" />}
+                    />
+                  </>
+                )}
               </section>
 
               <div className="pr-1" data-testid="panel-scroll">
