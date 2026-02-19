@@ -4838,7 +4838,7 @@ export default function CommandCenterPage() {
                       icon={<Users className="h-4 w-4" />}
                     />
                     <KpiCard
-                      label="Live Clients"
+                      label="Active"
                       value={(() => { const ids = new Set<string>(); if (transactionsData) { for (const t of transactionsData as any[]) { if (t.client_id) ids.add(t.client_id); } } return ids.size.toLocaleString(); })()}
                       delta="With active transactions"
                       icon={<Activity className="h-4 w-4" />}
