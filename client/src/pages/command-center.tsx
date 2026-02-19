@@ -4839,7 +4839,7 @@ export default function CommandCenterPage() {
                   label="Live Clients"
                   value="26"
                   delta="+2.3% WoW"
-                  icon={<Sparkles className="h-4 w-4" />}
+                  icon={<Users className="h-4 w-4" />}
                 />
                 <KpiCard
                   label="This Month"
