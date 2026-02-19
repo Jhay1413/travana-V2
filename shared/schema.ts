@@ -251,6 +251,28 @@ export const deal_images = pgTable('deal_images', {
 export type DealImage = typeof deal_images.$inferSelect;
 export type InsertDealImage = typeof deal_images.$inferInsert;
 
+export const accommodation_images = pgTable('accommodation_images', {
+  id: uuid().defaultRandom().primaryKey(),
+  accommodation_id: uuid().notNull().references(() => accomodation_list.id, { onDelete: "cascade" }),
+  image_url: varchar().notNull(),
+  isPrimary: boolean().default(false),
+}, (table) => ({
+  accommodation_image_unique: unique().on(table.accommodation_id, table.image_url),
+}));
+export type AccommodationImage = typeof accommodation_images.$inferSelect;
+export type InsertAccommodationImage = typeof accommodation_images.$inferInsert;
+
+export const lodge_images = pgTable('lodge_images', {
+  id: uuid().defaultRandom().primaryKey(),
+  lodge_id: uuid().notNull().references(() => lodges.id, { onDelete: "cascade" }),
+  image_url: varchar().notNull(),
+  isPrimary: boolean().default(false),
+}, (table) => ({
+  lodge_image_unique: unique().on(table.lodge_id, table.image_url),
+}));
+export type LodgeImage = typeof lodge_images.$inferSelect;
+export type InsertLodgeImage = typeof lodge_images.$inferInsert;
+
 export const forwardsReport = pgTable('forwards_report', {
   id: uuid().defaultRandom().primaryKey(),
   month: integer().notNull(),

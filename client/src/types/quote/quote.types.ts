@@ -424,6 +424,7 @@ export interface WithRelations {
   outboundConnectingLegs?: FlightRelationData[];
   inboundConnectingLegs?: FlightRelationData[];
   primaryAccommodation?: AccommodationRelationData;
+  images?: string[];
 }
 
 export interface CreateTransactionData {

@@ -3,6 +3,9 @@ import { transactionRepository } from "../repositories/transaction.repository";
 import { quoteImageRepository } from "../repositories/quote-image.repository";
 import { tagService } from "./tag.service";
 import { AppError } from "../utils/error-handler";
+import { db } from "../config/database";
+import { accommodation_images, lodge_images } from "@shared/schema";
+import { randomUUID } from "crypto";
 import type {
   Quote,
   InsertQuote,
@@ -41,6 +44,14 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   lead_source?: string;
   images?: string[];
 };
+
+function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
+  if (!Array.isArray(images)) return [];
+  return images
+    .map((url) => (typeof url === "string" ? url.trim() : ""))
+    .filter((url) => url.length > 0)
+    .filter((url, index, arr) => arr.indexOf(url) === index);
+}
 
 export const newQuoteService = {
   async listQuotes() {
@@ -107,9 +118,43 @@ export const newQuoteService = {
       await newQuoteRepository.upsertPrimaryAccommodation(q.id, primaryAccommodation);
     }
 
-    if (images && images.length > 0) {
-      console.log(`📸 Adding ${images.length} images to new quote ${q.id}`);
-      await quoteImageRepository.addImages(q.id, images);
+    const normalizedImages = normalizeUniqueImageUrls(images);
+
+    if (normalizedImages.length > 0) {
+      console.log(`📸 Adding ${normalizedImages.length} images to new quote ${q.id}`);
+      await quoteImageRepository.addImages(q.id, normalizedImages);
+
+      if (primaryAccommodation?.accomodation_id) {
+        await db
+          .insert(accommodation_images)
+          .values(
+            normalizedImages.map((imageUrl, index) => ({
+              id: randomUUID(),
+              accommodation_id: primaryAccommodation.accomodation_id as string,
+              image_url: imageUrl,
+              isPrimary: index === 0,
+            })),
+          )
+          .onConflictDoNothing({
+            target: [accommodation_images.accommodation_id, accommodation_images.image_url],
+          });
+      }
+
+      if (quoteFields.lodge_id) {
+        await db
+          .insert(lodge_images)
+          .values(
+            normalizedImages.map((imageUrl, index) => ({
+              id: randomUUID(),
+              lodge_id: quoteFields.lodge_id as string,
+              image_url: imageUrl,
+              isPrimary: index === 0,
+            })),
+          )
+          .onConflictDoNothing({
+            target: [lodge_images.lodge_id, lodge_images.image_url],
+          });
+      }
     }
 
     return q;
