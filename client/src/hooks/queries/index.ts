@@ -16,4 +16,4 @@ export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries"
 export { useAirports, airportKeys } from "./use-airport-queries";
 export { useAllTasks, useTasks, useUserTasks, taskKeys } from "./use-task-queries";
 export { useTags, useSearchTags, tagKeys } from "./use-tags";
-export { usePackageTypes, useCountries, useDestinations, useResorts, useAccommodations, useAccommodationTypes, useBoardBasis, useParks, useLodges, useDefaultImages, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, lookupKeys } from "./use-lookup-queries";
+export { usePackageTypes, useCountries, useDestinations, useResorts, useAccommodations, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, lookupKeys } from "./use-lookup-queries";

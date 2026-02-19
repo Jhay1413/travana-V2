@@ -15,7 +15,7 @@ import type {
   InsertBookingAccomodation,
 } from "@shared/schema";
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation, quoteImages, deal_images, accommodation_images, lodge_images } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation, quoteImages, deal_images } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -318,38 +318,6 @@ export const transactionService = {
             isPrimary: index === 0,
           }))
         );
-
-        if (primaryAccommodation?.accomodation_id) {
-          await tx
-            .insert(accommodation_images)
-            .values(
-              normalizedImages.map((imageUrl, index) => ({
-                id: randomUUID(),
-                accommodation_id: primaryAccommodation.accomodation_id as string,
-                image_url: imageUrl,
-                isPrimary: index === 0,
-              })),
-            )
-            .onConflictDoNothing({
-              target: [accommodation_images.accommodation_id, accommodation_images.image_url],
-            });
-        }
-
-        if (quoteFields.lodge_id) {
-          await tx
-            .insert(lodge_images)
-            .values(
-              normalizedImages.map((imageUrl, index) => ({
-                id: randomUUID(),
-                lodge_id: quoteFields.lodge_id as string,
-                image_url: imageUrl,
-                isPrimary: index === 0,
-              })),
-            )
-            .onConflictDoNothing({
-              target: [lodge_images.lodge_id, lodge_images.image_url],
-            });
-        }
       }
 
       return { transaction: txn, quote: q };
@@ -471,38 +439,6 @@ export const transactionService = {
             isPrimary: index === 0,
           }))
         );
-
-        if (primaryAccommodation?.accomodation_id) {
-          await tx
-            .insert(accommodation_images)
-            .values(
-              normalizedImages.map((imageUrl, index) => ({
-                id: randomUUID(),
-                accommodation_id: primaryAccommodation.accomodation_id as string,
-                image_url: imageUrl,
-                isPrimary: index === 0,
-              })),
-            )
-            .onConflictDoNothing({
-              target: [accommodation_images.accommodation_id, accommodation_images.image_url],
-            });
-        }
-
-        if (bookingFields.lodge_id) {
-          await tx
-            .insert(lodge_images)
-            .values(
-              normalizedImages.map((imageUrl, index) => ({
-                id: randomUUID(),
-                lodge_id: bookingFields.lodge_id as string,
-                image_url: imageUrl,
-                isPrimary: index === 0,
-              })),
-            )
-            .onConflictDoNothing({
-              target: [lodge_images.lodge_id, lodge_images.image_url],
-            });
-        }
       }
 
       return { transaction: txn, booking: b };

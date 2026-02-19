@@ -46,7 +46,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
-import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useDefaultImages, useCottages, useAirports, useTourOperators, usePackageTypes, useRoomTypes } from "@/hooks/queries";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAirports, useTourOperators, usePackageTypes, useRoomTypes } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -498,7 +498,6 @@ export default function ClientPage() {
   const [newQuote, setNewQuote] = useState(newQuoteDefaults);
   const [quoteImageFiles, setQuoteImageFiles] = useState<File[]>([]);
   const [quoteImageUrls, setQuoteImageUrls] = useState<string[]>([]);
-  const autoDefaultImagesRef = useRef<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const clientId = params?.clientId ?? "";
 
@@ -528,35 +527,12 @@ export default function ClientPage() {
   }, [newQuote.packageType, packageTypesData]);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(newQuote.parkName);
-  const selectedDefaultAccommodationId = showNewQuoteModal && packageTypeName !== "Hot Tub Break"
-    ? (newQuote.accommodation || undefined)
-    : undefined;
-  const selectedDefaultLodgeId = showNewQuoteModal && packageTypeName === "Hot Tub Break"
-    ? (newQuote.lodgeCode || undefined)
-    : undefined;
-  const { data: defaultImageUrls } = useDefaultImages(selectedDefaultAccommodationId, selectedDefaultLodgeId);
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const isClientPinned = useMemo(() => {
     if (!userFavorites || !clientId) return false;
     return userFavorites.some((f: Favorite) => f.itemType === "client" && f.itemId === clientId);
   }, [userFavorites, clientId]);
-
-  useEffect(() => {
-    if (!showNewQuoteModal || !defaultImageUrls) return;
-
-    const nextDefaults = defaultImageUrls.filter((url) => typeof url === "string" && url.trim().length > 0);
-
-    setQuoteImageUrls((prev) => {
-      const prevWasAutoDefaults = prev.length === 0 || prev.every((url) => autoDefaultImagesRef.current.includes(url));
-      if (!prevWasAutoDefaults) {
-        return prev;
-      }
-
-      autoDefaultImagesRef.current = nextDefaults;
-      return nextDefaults;
-    });
-  }, [showNewQuoteModal, defaultImageUrls]);
 
   const updateClientMutationHook = useUpdateClient();
   const updateClientMutation = {

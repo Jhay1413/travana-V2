@@ -14,7 +14,6 @@ export const lookupKeys = {
   boardBasis: ["lookup", "board-basis"] as const,
   parks: ["lookup", "parks"] as const,
   lodges: (parkId?: string) => ["lookup", "lodges", parkId] as const,
-  defaultImages: (accommodationId?: string, lodgeId?: string) => ["lookup", "default-images", accommodationId, lodgeId] as const,
   cottages: ["lookup", "cottages"] as const,
   roomTypes: ["lookup", "room-types"] as const,
 };
@@ -84,15 +83,6 @@ export function useLodges(parkId?: string) {
     queryFn: () => lookupApi.getLodges(parkId),
     enabled: !!parkId,
     staleTime: 1000 * 60 * 30,
-  });
-}
-
-export function useDefaultImages(accommodationId?: string, lodgeId?: string) {
-  return useQuery({
-    queryKey: lookupKeys.defaultImages(accommodationId, lodgeId),
-    queryFn: () => lookupApi.getDefaultImages({ accommodationId, lodgeId }),
-    enabled: !!accommodationId || !!lodgeId,
-    staleTime: 1000 * 60 * 10,
   });
 }
 
