@@ -2125,7 +2125,7 @@ export default function CommandCenterPage() {
                                   </div>
                                 </div>
 
-                                <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 space-y-3">
+                                <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 flex flex-col gap-3">
                                   <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
                                     <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2" data-testid={`button-view-quote-overview-${quote.id}`}>
                                       <Eye className="w-4 h-4" />
@@ -2739,7 +2739,7 @@ export default function CommandCenterPage() {
                                   </div>
                                 </div>
 
-                                <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 space-y-3">
+                                <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 flex flex-col gap-3">
                                   <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
                                     <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2">
                                       <Eye className="w-4 h-4" />
