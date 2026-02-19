@@ -4844,10 +4844,10 @@ export default function CommandCenterPage() {
                       icon={<Activity className="h-4 w-4" />}
                     />
                     <KpiCard
-                      label="This Month"
-                      value={currency.format(totals.avgDeal)}
-                      delta="+6.8% MoM"
-                      icon={<Briefcase className="h-4 w-4" />}
+                      label="Tour Operator Ranking"
+                      value={(() => { const opCounts: Record<string, number> = {}; if (transactionsData) { for (const t of transactionsData as any[]) { for (const q of (t.quotes || [])) { const name = q.tour_operator_name || "Unknown"; opCounts[name] = (opCounts[name] || 0) + 1; } } } const top = Object.entries(opCounts).sort((a, b) => b[1] - a[1])[0]; return top ? top[0] : "—"; })()}
+                      delta={(() => { const opCounts: Record<string, number> = {}; if (transactionsData) { for (const t of transactionsData as any[]) { for (const q of (t.quotes || [])) { const name = q.tour_operator_name || "Unknown"; opCounts[name] = (opCounts[name] || 0) + 1; } } } const top = Object.entries(opCounts).sort((a, b) => b[1] - a[1])[0]; return top ? `${top[1]} bookings` : "No data"; })()}
+                      icon={<Star className="h-4 w-4" />}
                     />
                     <KpiCard
                       label="Total Sales"
