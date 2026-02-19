@@ -210,7 +210,7 @@ function SocialPostCard({ post }: { post: SocialPost }) {
           </div>
         )}
 
-        <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 space-y-3">
+        <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
           <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
             <Button
               variant="outline"
@@ -221,6 +221,7 @@ function SocialPostCard({ post }: { post: SocialPost }) {
               View Quote
             </Button>
           </Link>
+          <div className="mt-4" />
           <Button
             className="w-full rounded-xl text-sm font-medium gap-2 bg-blue-500 hover:bg-blue-600 text-white"
             data-testid={`button-schedule-post-${quote.id}`}
