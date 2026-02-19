@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { lookupApi } from "@/api/endpoints/lookup.api";
+import type { AccommodationImage, LodgeImage } from "@/api/endpoints/lookup.api";
 
 export const lookupKeys = {
   packageTypes: ["lookup", "package-types"] as const,
@@ -15,6 +16,8 @@ export const lookupKeys = {
   parks: ["lookup", "parks"] as const,
   lodges: (parkId?: string) => ["lookup", "lodges", parkId] as const,
   cottages: ["lookup", "cottages"] as const,
+  accommodationImages: (accommodationId?: string) => ["lookup", "accommodation-images", accommodationId] as const,
+  lodgeImages: (lodgeId?: string) => ["lookup", "lodge-images", lodgeId] as const,
   roomTypes: ["lookup", "room-types"] as const,
 };
 
@@ -131,5 +134,23 @@ export function useRoomTypes() {
     queryKey: lookupKeys.roomTypes,
     queryFn: () => lookupApi.getRoomTypes(),
     staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useAccommodationImages(accommodationId?: string) {
+  return useQuery<AccommodationImage[]>({
+    queryKey: lookupKeys.accommodationImages(accommodationId),
+    queryFn: () => lookupApi.getAccommodationImages(accommodationId),
+    enabled: !!accommodationId,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useLodgeImages(lodgeId?: string) {
+  return useQuery<LodgeImage[]>({
+    queryKey: lookupKeys.lodgeImages(lodgeId),
+    queryFn: () => lookupApi.getLodgeImages(lodgeId),
+    enabled: !!lodgeId,
+    staleTime: 1000 * 60 * 5,
   });
 }

@@ -120,6 +120,19 @@ export const newQuoteService = {
     if (normalizedImages.length > 0) {
       console.log(`📸 Adding ${normalizedImages.length} images to new quote ${q.id}`);
       await quoteImageRepository.addImages(q.id, normalizedImages);
+
+      // Persist images to accommodation_images table for default image lookup
+      if (primaryAccommodation?.accomodation_id) {
+        await newQuoteRepository.saveImagesToAccommodation(
+          primaryAccommodation.accomodation_id as string,
+          normalizedImages
+        );
+      }
+
+      // Persist images to lodge_images table for default image lookup
+      if (quoteFields.lodge_id) {
+        await newQuoteRepository.saveImagesToLodge(quoteFields.lodge_id, normalizedImages);
+      }
     }
 
     return q;
@@ -227,8 +240,23 @@ export const newQuoteService = {
     }
 
     if (images && images.length > 0) {
-      console.log(`📸 Adding ${images.length} images to quote ${id}`);
-      await quoteImageRepository.addImages(id, images);
+      const normalizedUpdateImages = normalizeUniqueImageUrls(images);
+      console.log(`📸 Adding ${normalizedUpdateImages.length} images to quote ${id}`);
+      await quoteImageRepository.addImages(id, normalizedUpdateImages);
+
+      // Persist images to accommodation_images if accommodation is known
+      if (primaryAccommodation?.accomodation_id) {
+        await newQuoteRepository.saveImagesToAccommodation(
+          primaryAccommodation.accomodation_id as string,
+          normalizedUpdateImages
+        );
+      }
+
+      // Persist images to lodge_images using the quote's current lodge_id
+      const lodgeId = (quoteData.lodge_id as string | undefined) || (q?.lodge_id as string | undefined);
+      if (lodgeId) {
+        await newQuoteRepository.saveImagesToLodge(lodgeId, normalizedUpdateImages);
+      }
     }
 
     return await newQuoteRepository.findWithDetails(id);

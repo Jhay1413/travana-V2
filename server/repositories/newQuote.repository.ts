@@ -4,6 +4,7 @@ import {
   quote_attraction_ticket, quote_lounge_pass, quote_airport_parking,
   quote_cruise, quote_cruise_item_extra, quote_cruise_itinerary,
   passengers, deal_images, quoteImages, tags, quoteTags,
+  accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type,
 } from "@shared/schema";
@@ -12,7 +13,7 @@ import type {
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -101,7 +102,7 @@ export const newQuoteRepository = {
 
     if (!q) return undefined;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list, accommodationImgs, lodgeImgs] = await Promise.all([
       db.select({
         flight: quote_flights,
         departing_airport_name: sql<string>`CASE WHEN ${departAirport.airport_code} IS NOT NULL AND ${departAirport.airport_code} <> '' THEN concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')') ELSE ${departAirport.airport_name} END`,
@@ -200,6 +201,32 @@ export const newQuoteRepository = {
         .from(quoteTags)
         .innerJoin(tags, eq(quoteTags.tagId, tags.id))
         .where(eq(quoteTags.quoteId, id)),
+
+      // Fetch accommodation images through quote_accomodation junction
+      db.select({
+        id: accommodation_images.id,
+        accommodation_id: accommodation_images.accommodation_id,
+        image_url: accommodation_images.image_url,
+        isPrimary: accommodation_images.isPrimary,
+      })
+        .from(accommodation_images)
+        .innerJoin(
+          quote_accomodation,
+          and(
+            eq(quote_accomodation.accomodation_id, accommodation_images.accommodation_id),
+            eq(quote_accomodation.quote_id, id)
+          )
+        ),
+
+      // Fetch lodge images if quote has a lodge
+      q.quote.lodge_id
+        ? db.select({
+            id: lodge_images.id,
+            lodge_id: lodge_images.lodge_id,
+            image_url: lodge_images.image_url,
+            isPrimary: lodge_images.isPrimary,
+          }).from(lodge_images).where(eq(lodge_images.lodge_id, q.quote.lodge_id))
+        : Promise.resolve([]),
     ]);
 
     console.log('🔍 BACKEND - Images fetched:', images.length, images);
@@ -253,14 +280,23 @@ export const newQuoteRepository = {
       airportParkings: airportParkings.map(p => ({ ...p.airportParking, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
       cruises: cruises.map(c => ({ ...c.cruise, tour_operator_name: c.tour_operator_name })),
       passengers: passengerList,
-      images: images.map(img => ({
-        id: img.id,
-        image_url: img.url, // Map 'url' to 'image_url' for frontend compatibility
-        isPrimary: img.isPrimary,
-        owner_id: id,
-        owner_type: 'quote',
-        s3Key: null,
-      })),
+      images: (() => {
+        const seen = new Set<string>();
+        const result: Array<{ id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; owner_type: string; s3Key: null }> = [];
+        for (const img of images) {
+          const url = img.url || '';
+          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: id, owner_type: 'quote', s3Key: null }); }
+        }
+        for (const img of accommodationImgs) {
+          const url = img.image_url || '';
+          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.accommodation_id, owner_type: 'accommodation', s3Key: null }); }
+        }
+        for (const img of (lodgeImgs as Array<{ id: string; lodge_id: string; image_url: string; isPrimary: boolean | null }>)) {
+          const url = img.image_url || '';
+          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.lodge_id, owner_type: 'lodge', s3Key: null }); }
+        }
+        return result;
+      })(),
     };
   },
 
@@ -400,5 +436,21 @@ export const newQuoteRepository = {
 
   async removeAccommodationsByQuote(quoteId: string): Promise<void> {
     await db.delete(quote_accomodation).where(eq(quote_accomodation.quote_id, quoteId));
+  },
+
+  async saveImagesToAccommodation(accommodationId: string, imageUrls: string[]): Promise<void> {
+    for (const url of imageUrls) {
+      await db.insert(accommodation_images)
+        .values({ accommodation_id: accommodationId, image_url: url })
+        .onConflictDoNothing();
+    }
+  },
+
+  async saveImagesToLodge(lodgeId: string, imageUrls: string[]): Promise<void> {
+    for (const url of imageUrls) {
+      await db.insert(lodge_images)
+        .values({ lodge_id: lodgeId, image_url: url })
+        .onConflictDoNothing();
+    }
   },
 };

@@ -80,6 +80,20 @@ export interface LookupRoomType {
   name: string | null;
 }
 
+export interface AccommodationImage {
+  id: string;
+  accommodation_id: string;
+  image_url: string;
+  isPrimary: boolean | null;
+}
+
+export interface LodgeImage {
+  id: string;
+  lodge_id: string;
+  image_url: string;
+  isPrimary: boolean | null;
+}
+
 export const lookupApi = {
   getPackageTypes: async (): Promise<LookupPackageType[]> => {
     const { data } = await axios.get<LookupPackageType[]>("/api/lookup/package-types");
@@ -123,6 +137,16 @@ export const lookupApi = {
   },
   getRoomTypes: async (): Promise<LookupRoomType[]> => {
     const { data } = await axios.get<LookupRoomType[]>("/api/lookup/room-types");
+    return data;
+  },
+  getAccommodationImages: async (accommodationId?: string): Promise<AccommodationImage[]> => {
+    if (!accommodationId) return [];
+    const { data } = await axios.get<AccommodationImage[]>("/api/lookup/accommodation-images", { params: { accommodationId } });
+    return data;
+  },
+  getLodgeImages: async (lodgeId?: string): Promise<LodgeImage[]> => {
+    if (!lodgeId) return [];
+    const { data } = await axios.get<LodgeImage[]>("/api/lookup/lodge-images", { params: { lodgeId } });
     return data;
   },
 };

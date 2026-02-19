@@ -46,7 +46,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
-import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAirports, useTourOperators, usePackageTypes, useRoomTypes } from "@/hooks/queries";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useCottages, useAirports, useTourOperators, usePackageTypes, useRoomTypes, useAccommodationImages, useLodgeImages } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateTicket, useUpdateTicket, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -527,6 +527,34 @@ export default function ClientPage() {
   }, [newQuote.packageType, packageTypesData]);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(newQuote.parkName);
+
+  // Load default images when accommodation or lodge is selected
+  const { data: accommodationImagesData } = useAccommodationImages(newQuote.accommodation || undefined);
+  const { data: lodgeImagesData } = useLodgeImages(newQuote.lodgeCode || undefined);
+
+  // Auto-prefill images when accommodation is selected
+  useEffect(() => {
+    if (!accommodationImagesData?.length) return;
+    const newUrls = accommodationImagesData.map((img) => img.image_url).filter(Boolean) as string[];
+    if (!newUrls.length) return;
+    setQuoteImageUrls((prev) => {
+      const merged = [...prev];
+      for (const url of newUrls) { if (!merged.includes(url)) merged.push(url); }
+      return merged;
+    });
+  }, [accommodationImagesData]);
+
+  // Auto-prefill images when lodge is selected
+  useEffect(() => {
+    if (!lodgeImagesData?.length) return;
+    const newUrls = lodgeImagesData.map((img) => img.image_url).filter(Boolean) as string[];
+    if (!newUrls.length) return;
+    setQuoteImageUrls((prev) => {
+      const merged = [...prev];
+      for (const url of newUrls) { if (!merged.includes(url)) merged.push(url); }
+      return merged;
+    });
+  }, [lodgeImagesData]);
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const isClientPinned = useMemo(() => {

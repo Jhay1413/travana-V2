@@ -12,6 +12,8 @@ import {
   cottages,
   package_type,
   room_type,
+  accommodation_images,
+  lodge_images,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -132,6 +134,28 @@ router.get("/cottages", async (_req, res) => {
 router.get("/room-types", async (_req, res) => {
   try {
     const rows = await db.select().from(room_type).orderBy(room_type.name);
+    res.json({ success: true, data: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/accommodation-images", async (req, res) => {
+  try {
+    const accommodationId = req.query.accommodationId as string | undefined;
+    if (!accommodationId) return res.json({ success: true, data: [] });
+    const rows = await db.select().from(accommodation_images).where(eq(accommodation_images.accommodation_id, accommodationId));
+    res.json({ success: true, data: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/lodge-images", async (req, res) => {
+  try {
+    const lodgeId = req.query.lodgeId as string | undefined;
+    if (!lodgeId) return res.json({ success: true, data: [] });
+    const rows = await db.select().from(lodge_images).where(eq(lodge_images.lodge_id, lodgeId));
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

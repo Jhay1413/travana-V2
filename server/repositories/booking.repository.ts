@@ -3,7 +3,7 @@ import {
   booking, booking_flights, booking_accomodation, booking_transfers,
   booking_car_hire, booking_attraction_ticket, booking_lounge_pass,
   booking_airport_parking, booking_cruise, booking_cruise_item_extra,
-  booking_cruise_itinerary, passengers, deal_images,
+  booking_cruise_itinerary, passengers, deal_images, accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type,
 } from "@shared/schema";
@@ -11,7 +11,7 @@ import type {
   Booking, InsertBooking, InsertBookingFlight, BookingFlight,
   InsertBookingAccomodation, BookingAccomodation, InsertBookingTransfer,
 } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -97,7 +97,7 @@ export const bookingRepository = {
 
     if (!b) return undefined;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, accommodationImgs, lodgeImgs] = await Promise.all([
       db.select({
         flight: booking_flights,
         departing_airport_name: sql<string>`concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')')`,
@@ -187,6 +187,32 @@ export const bookingRepository = {
 
       db.select().from(passengers).where(eq(passengers.booking_id, id)),
       db.select().from(deal_images).where(eq(deal_images.owner_id, id)),
+
+      // Fetch accommodation images through booking_accomodation junction
+      db.select({
+        id: accommodation_images.id,
+        accommodation_id: accommodation_images.accommodation_id,
+        image_url: accommodation_images.image_url,
+        isPrimary: accommodation_images.isPrimary,
+      })
+        .from(accommodation_images)
+        .innerJoin(
+          booking_accomodation,
+          and(
+            eq(booking_accomodation.accomodation_id, accommodation_images.accommodation_id),
+            eq(booking_accomodation.booking_id, id)
+          )
+        ),
+
+      // Fetch lodge images if booking has a lodge
+      b.booking.lodge_id
+        ? db.select({
+            id: lodge_images.id,
+            lodge_id: lodge_images.lodge_id,
+            image_url: lodge_images.image_url,
+            isPrimary: lodge_images.isPrimary,
+          }).from(lodge_images).where(eq(lodge_images.lodge_id, b.booking.lodge_id))
+        : Promise.resolve([]),
     ]);
 
     return {
@@ -220,7 +246,23 @@ export const bookingRepository = {
       airportParkings: airportParkings.map(p => ({ ...p.airportParking, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
       cruises: cruises.map(c => ({ ...c.cruise, tour_operator_name: c.tour_operator_name })),
       passengers: passengerList,
-      images,
+      images: (() => {
+        const seen = new Set<string>();
+        const result: any[] = [];
+        for (const img of images) {
+          const url = img.image_url || '';
+          if (url && !seen.has(url)) { seen.add(url); result.push(img); }
+        }
+        for (const img of accommodationImgs) {
+          const url = img.image_url || '';
+          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.accommodation_id, s3Key: null }); }
+        }
+        for (const img of (lodgeImgs as Array<{ id: string; lodge_id: string; image_url: string; isPrimary: boolean | null }>)) {
+          const url = img.image_url || '';
+          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.lodge_id, s3Key: null }); }
+        }
+        return result;
+      })(),
     };
   },
 

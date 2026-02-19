@@ -15,7 +15,7 @@ import type {
   InsertBookingAccomodation,
 } from "@shared/schema";
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation, quoteImages, deal_images } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation, quoteImages, deal_images, accommodation_images, lodge_images } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -318,6 +318,24 @@ export const transactionService = {
             isPrimary: index === 0,
           }))
         );
+
+        // Also persist to accommodation_images (for default image lookup), ignore duplicates
+        if (primaryAccommodation?.accomodation_id) {
+          for (const url of normalizedImages) {
+            await tx.insert(accommodation_images)
+              .values({ accommodation_id: primaryAccommodation.accomodation_id as string, image_url: url })
+              .onConflictDoNothing();
+          }
+        }
+
+        // Also persist to lodge_images if quote has a lodge, ignore duplicates
+        if (quoteFields.lodge_id) {
+          for (const url of normalizedImages) {
+            await tx.insert(lodge_images)
+              .values({ lodge_id: quoteFields.lodge_id, image_url: url })
+              .onConflictDoNothing();
+          }
+        }
       }
 
       return { transaction: txn, quote: q };
@@ -439,6 +457,24 @@ export const transactionService = {
             isPrimary: index === 0,
           }))
         );
+
+        // Also persist to accommodation_images (for default image lookup), ignore duplicates
+        if (primaryAccommodation?.accomodation_id) {
+          for (const imageUrl of normalizedImages) {
+            await tx.insert(accommodation_images)
+              .values({ accommodation_id: primaryAccommodation.accomodation_id as string, image_url: imageUrl })
+              .onConflictDoNothing();
+          }
+        }
+
+        // Also persist to lodge_images if booking has a lodge, ignore duplicates
+        if (bookingFields.lodge_id) {
+          for (const imageUrl of normalizedImages) {
+            await tx.insert(lodge_images)
+              .values({ lodge_id: bookingFields.lodge_id, image_url: imageUrl })
+              .onConflictDoNothing();
+          }
+        }
       }
 
       return { transaction: txn, booking: b };
