@@ -355,7 +355,6 @@ function ShellNav({
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
-      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
       { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
       { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
       { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
@@ -402,7 +401,6 @@ function ShellNav({
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
-              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
               { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
               { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
               { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
@@ -2343,7 +2341,7 @@ export default function CommandCenterPage() {
     }
     
     // Show Agent workspace for Agents, or for Admins when viewing agent sections
-    const agentSections = ["clients", "enquiries", "quotes", "bookings"];
+    const agentSections = ["enquiries", "quotes", "bookings"];
     const showAgentContent = (role === "Agent" && agentSections.includes(active)) || 
                              (role === "Admin" && agentSections.includes(active));
     
