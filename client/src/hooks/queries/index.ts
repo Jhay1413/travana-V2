@@ -11,7 +11,7 @@ export { useTickets, useTicket, useTicketsByClient, useTicketsByUser, ticketKeys
 export { useAttachments, attachmentKeys, getAttachmentDownloadUrl } from "./use-attachment-queries";
 export { useReplies, replyKeys } from "./use-reply-queries";
 export { useNotifications, useUnreadNotifications, notificationKeys } from "./use-notification-queries";
-export { useDashboardStats, useClientKPIs, useRebookingDashboard, useVIPDashboard, useBehaviourDashboard, useClientDashboardList, dashboardKeys } from "./use-dashboard-queries";
+export { useDashboardStats, dashboardKeys } from "./use-dashboard-queries";
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";
 export { useAirports, airportKeys } from "./use-airport-queries";
 export { useAllTasks, useTasks, useUserTasks, taskKeys } from "./use-task-queries";
