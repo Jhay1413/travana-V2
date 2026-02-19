@@ -1,6 +1,6 @@
 import { db } from "../config/database";
-import { clientTable, type NeonClient, type InsertClientTable } from "@shared/schema";
-import { eq, desc, sql, count, or, ilike } from "drizzle-orm";
+import { clientTable, transaction, type NeonClient, type InsertClientTable } from "@shared/schema";
+import { eq, desc, sql, count, or, ilike, getTableColumns } from "drizzle-orm";
 
 export type NeonClientWithId = InsertClientTable & { id: string };
 
@@ -52,10 +52,27 @@ export const neonClientRepository = {
         )
       : undefined;
 
+    const latestTransaction = db
+      .select({
+        clientId: transaction.client_id,
+        latestActivity: sql<string>`MAX(${transaction.created_at})`.as("latest_activity"),
+      })
+      .from(transaction)
+      .groupBy(transaction.client_id)
+      .as("latest_tx");
+
+    const clientColumns = getTableColumns(clientTable);
+
     const [clients, totalResult] = await Promise.all([
-      db.select().from(clientTable)
+      db.select({ ...clientColumns })
+        .from(clientTable)
+        .leftJoin(latestTransaction, eq(clientTable.id, latestTransaction.clientId))
         .where(whereClause)
-        .orderBy(desc(clientTable.createdAt))
+        .orderBy(
+          sql`${latestTransaction.latestActivity} IS NULL ASC`,
+          desc(sql`${latestTransaction.latestActivity}`),
+          desc(clientTable.createdAt)
+        )
         .limit(limit)
         .offset(offset),
       db.select({ total: count() }).from(clientTable)
