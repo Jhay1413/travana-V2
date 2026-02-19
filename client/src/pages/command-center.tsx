@@ -4843,56 +4843,18 @@ export default function CommandCenterPage() {
                       delta="Active"
                       icon={<Activity className="h-4 w-4" />}
                     />
-                    <div className="glass ringed grain rounded-3xl p-4 md:col-span-2" data-testid="tour-operator-rankings">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Star className="h-4 w-4 text-amber-500" />
-                        <span className="text-sm font-semibold">Tour Operator Rankings</span>
-                        <span className="ml-auto text-[10px] text-black/40 dark:text-white/40">This Month</span>
-                      </div>
-                      {(() => {
-                        const now = new Date();
-                        const currentMonth = now.getMonth();
-                        const currentYear = now.getFullYear();
-                        const opCounts: Record<string, number> = {};
-                        if (transactionsData) {
-                          for (const t of transactionsData as any[]) {
-                            if (t.status !== "on_booking") continue;
-                            const booking = t.booking;
-                            if (!booking) continue;
-                            const createdAt = new Date(booking.created_at || t.created_at);
-                            if (createdAt.getMonth() === currentMonth && createdAt.getFullYear() === currentYear) {
-                              for (const q of (t.quotes || [])) {
-                                const name = q.tour_operator_name || "Unknown";
-                                opCounts[name] = (opCounts[name] || 0) + 1;
-                              }
-                            }
-                          }
-                        }
-                        const sorted = Object.entries(opCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-                        const maxCount = sorted[0]?.[1] || 1;
-                        if (sorted.length === 0) {
-                          return <div className="text-xs text-black/40 dark:text-white/40">No bookings this month</div>;
-                        }
-                        return (
-                          <div className="space-y-2">
-                            {sorted.map(([name, count], i) => (
-                              <div key={name} className="flex items-center gap-3">
-                                <span className="w-5 text-xs font-bold text-black/40 dark:text-white/40">{i + 1}</span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between mb-0.5">
-                                    <span className="text-xs font-medium truncate">{name}</span>
-                                    <span className="text-[10px] font-semibold text-black/60 dark:text-white/60 ml-2">{count}</span>
-                                  </div>
-                                  <div className="h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
-                                    <div className="h-full rounded-full bg-amber-500" style={{ width: `${(count / maxCount) * 100}%` }} />
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </div>
+                    <KpiCard
+                      label="Tour Operator Ranking"
+                      value={(() => { const opCounts: Record<string, number> = {}; if (transactionsData) { for (const t of transactionsData as any[]) { for (const q of (t.quotes || [])) { const name = q.tour_operator_name || "Unknown"; opCounts[name] = (opCounts[name] || 0) + 1; } } } const top = Object.entries(opCounts).sort((a, b) => b[1] - a[1])[0]; return top ? top[0] : "—"; })()}
+                      delta={(() => { const opCounts: Record<string, number> = {}; if (transactionsData) { for (const t of transactionsData as any[]) { for (const q of (t.quotes || [])) { const name = q.tour_operator_name || "Unknown"; opCounts[name] = (opCounts[name] || 0) + 1; } } } const top = Object.entries(opCounts).sort((a, b) => b[1] - a[1])[0]; return top ? `${top[1]} bookings` : "No data"; })()}
+                      icon={<Star className="h-4 w-4" />}
+                    />
+                    <KpiCard
+                      label="Total Sales"
+                      value={currency.format(totals.bookedValue)}
+                      delta={totals.bookedValue >= 15000 ? "Target reached!" : `${currency.format(15000 - totals.bookedValue)} to target`}
+                      icon={<Briefcase className="h-4 w-4" />}
+                    />
                   </>
                 ) : (
                   <>
