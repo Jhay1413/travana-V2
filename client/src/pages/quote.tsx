@@ -2396,6 +2396,8 @@ function EditQuoteDialog({
       };
       try {
         const data = JSON.parse(content);
+        console.log("📋 RAW JSON KEYS:", Object.keys(data));
+        console.log("📋 RAW LODGE FIELDS:", { lodge_type: data.lodge_type, lodge_code: data.lodge_code, lodge_id: data.lodge_id, lodge_park_name: data.lodge_park_name, cottage_id: data.cottage_id, hot_tub: data.hot_tub, pets: data.pets, accommodation: data.accommodation, resort: data.resort });
 
         const isScraperFormat = Array.isArray(data.flights) ||
           data.sales_price !== undefined ||
