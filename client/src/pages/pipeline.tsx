@@ -6,6 +6,7 @@ import { useRole } from "@/hooks/use-role";
 import {
   Calendar,
   ChevronRight,
+  Filter,
   GripVertical,
   PoundSterling,
   TrendingUp,
@@ -405,6 +406,7 @@ export default function PipelinePage() {
   const [, navigate] = useLocation();
 
   const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("all");
 
   const [dragState, setDragState] = useState<{
     active: boolean;
@@ -426,11 +428,22 @@ export default function PipelinePage() {
 
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
-    if (selectedAgentId === "all") return transactions;
-    return transactions.filter(
-      (t) => t.agent_id === selectedAgentId || t.user_id === selectedAgentId
-    );
-  }, [transactions, selectedAgentId]);
+    let result = transactions;
+    if (selectedAgentId !== "all") {
+      result = result.filter(
+        (t) => t.agent_id === selectedAgentId || t.user_id === selectedAgentId
+      );
+    }
+    if (quoteStatusFilter !== "all") {
+      result = result.filter((t) => {
+        if (t.quotes && t.quotes.length > 0) {
+          return t.quotes.some((q: any) => q.quote_status === quoteStatusFilter);
+        }
+        return false;
+      });
+    }
+    return result;
+  }, [transactions, selectedAgentId, quoteStatusFilter]);
 
   const pipeline = useMemo(() => {
     const stages: Record<PipelineStage, Transaction[]> = {
@@ -525,26 +538,52 @@ export default function PipelinePage() {
 
   const totalPipelineProfit = STAGES.reduce((sum, stage) => sum + stageTotals[stage].profit, 0);
 
-  const agentSelectDropdown = (
-    <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-      <SelectTrigger
-        className="h-10 w-[180px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
-        data-testid="select-agent-filter"
-      >
-        <UserCircle className="mr-2 h-4 w-4 shrink-0 opacity-60" />
-        <SelectValue placeholder="Select Agent" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" data-testid="select-agent-all">All Agents</SelectItem>
-        {(users || []).map((u) => (
-          <SelectItem key={u.id} value={u.id} data-testid={`select-agent-${u.id}`}>
-            {u.firstName && u.lastName
-              ? `${u.firstName} ${u.lastName}`
-              : u.name || u.email}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+  const QUOTE_STATUS_OPTIONS = [
+    { value: "all", label: "All Statuses" },
+    { value: "QUOTE_IN_PROGRESS", label: "Quote in Progress" },
+    { value: "QUOTE_CALL", label: "Quote Call" },
+    { value: "AWAITING_DECISION", label: "Awaiting Decision" },
+    { value: "HOT_QUOTE", label: "Hot Quote" },
+  ];
+
+  const pipelineFilterSlot = (
+    <>
+      <Select value={quoteStatusFilter} onValueChange={setQuoteStatusFilter}>
+        <SelectTrigger
+          className="h-10 w-[200px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+          data-testid="select-quote-status"
+        >
+          <Filter className="mr-2 h-4 w-4 shrink-0 opacity-60" />
+          <SelectValue placeholder="Quote Status" />
+        </SelectTrigger>
+        <SelectContent>
+          {QUOTE_STATUS_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} data-testid={`select-quote-status-${opt.value}`}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+        <SelectTrigger
+          className="h-10 w-[180px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+          data-testid="select-agent-filter"
+        >
+          <UserCircle className="mr-2 h-4 w-4 shrink-0 opacity-60" />
+          <SelectValue placeholder="Select Agent" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all" data-testid="select-agent-all">All Agents</SelectItem>
+          {(users || []).map((u) => (
+            <SelectItem key={u.id} value={u.id} data-testid={`select-agent-${u.id}`}>
+              {u.firstName && u.lastName
+                ? `${u.firstName} ${u.lastName}`
+                : u.name || u.email}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </>
   );
 
   return (
@@ -554,7 +593,7 @@ export default function PipelinePage() {
       subtitle="Sales pipeline overview"
       role={role}
       onRoleChange={setRole}
-      filterSlot={agentSelectDropdown}
+      filterSlot={pipelineFilterSlot}
     >
       <motion.div
         initial={{ opacity: 0, y: 10 }}
