@@ -16,6 +16,7 @@ interface JsonMappingInput {
   lodgeName?: string;
   parkName?: string;
   parkCode?: string | null;
+  isLodgeQuote?: boolean;
 }
 
 interface JsonMappingResult {
@@ -56,8 +57,21 @@ export const jsonMapperService = {
     let lodgeId = "";
     let parkId = "";
 
+    // For lodge quotes: treat resort as park, accommodation as lodge
+    // Override parkName/lodgeName from resort/accommodation when isLodgeQuote is true
+    if (input.isLodgeQuote) {
+      console.log("🏠 Lodge quote detected! Treating resort as park, accommodation as lodge");
+      if (!input.parkName && input.resort) {
+        input.parkName = input.resort;
+      }
+      if (!input.lodgeName && input.accommodation) {
+        input.lodgeName = input.accommodation;
+      }
+    }
+
     // Strategy 1: Check if accommodation exists first (most efficient)
-    if (input.accommodation) {
+    // Skip this for lodge quotes - they use the park/lodge path instead
+    if (input.accommodation && !input.isLodgeQuote) {
       console.log(`  → Searching for accommodation: "${input.accommodation}"`);
       const existingAccom = await jsonMapperRepository.findAccommodationByName(input.accommodation);
       

@@ -2437,30 +2437,24 @@ function EditQuoteDialog({
               return partial?.id || "";
             };
             
-            // Detect lodge quote directly from raw JSON data (not from parser)
-            // If lodge_park_name, lodge_type, lodge_id, lodge_code, cottage_id, hot_tub, or pets has a value → lodge quote
-            const isLodgeQuote = !!(
+            // Detect lodge quote from raw JSON or from the current form's package type
+            const hasLodgeFieldsInJson = !!(
               data.lodge_type || data.lodge_code || data.lodge_id || data.lodge_park_name ||
               Array.isArray(data.lodge_images) ||
               data.cottage_id !== undefined || data.hot_tub !== undefined || data.pets !== undefined ||
               'lodge_type' in data || 'lodge_code' in data || 'lodge_id' in data || 'lodge_park_name' in data
             );
+            const isCurrentFormLodge = form.packageType === "Hot Tub Break";
+            const isLodgeQuote = hasLodgeFieldsInJson || isCurrentFormLodge;
 
-            // For lodge quotes, derive park/lodge names from raw data
             const lodgeParkName = data.lodge_park_name || data.resort || result.fields.resort || "";
-            const lodgeCode = data.lodge_code || null;
+            const lodgeCodeVal = data.lodge_code || null;
             const lodgeName = data.accommodation || result.fields.accommodation || "";
             const lodgeType = data.lodge_type || "";
             const parkCode = data.lodge_id || null;
 
-            const mappingInput = isLodgeQuote ? {
-              boardBasis: result.fields.boardBasis,
-              tourOperator: result.fields.tourOperator,
-              lodgeCode: lodgeCode,
-              lodgeName: lodgeName || undefined,
-              parkName: lodgeParkName || undefined,
-              parkCode: parkCode,
-            } : {
+            // ALWAYS send all fields to server - server determines the path
+            const mappingInput: Record<string, unknown> = {
               country: result.fields.country,
               destination: result.fields.destination,
               resort: result.fields.resort,
@@ -2472,6 +2466,11 @@ function EditQuoteDialog({
               inboundDepartAirport: result.fields.inboundDepartAirport,
               inboundArriveAirport: result.fields.inboundArriveAirport,
               roomType: result.fields.roomType,
+              isLodgeQuote: isLodgeQuote,
+              lodgeCode: lodgeCodeVal,
+              lodgeName: isLodgeQuote ? (lodgeName || undefined) : undefined,
+              parkName: isLodgeQuote ? (lodgeParkName || undefined) : undefined,
+              parkCode: parkCode,
             };
             
             const idMapping = await jsonMapperApi.mapToIds(mappingInput);
