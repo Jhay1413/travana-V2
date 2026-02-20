@@ -2452,7 +2452,7 @@ function EditQuoteDialog({
             const isLodgeQuote = hasLodgeFieldsInJson || isCurrentFormLodge || isLodgeTourOperator;
 
             const lodgeParkName = data.lodge_park_name || data.resort || result.fields.resort || "";
-            const lodgeCodeVal = data.lodge_code || null;
+            const lodgeCodeVal = data.lodge_code || data.cottage_id || null;
             const lodgeName = data.accommodation || result.fields.accommodation || "";
             const lodgeType = data.lodge_type || "";
             const parkCode = data.lodge_id || null;

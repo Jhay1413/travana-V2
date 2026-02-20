@@ -91,6 +91,8 @@ function getFirstImage(q: EnrichedQuote): string | null {
 
 function SocialPostCard({ post }: { post: SocialPost }) {
   const { quote, clientId } = post;
+  console.log(post)
+  console.log(clientId, "Rendering SocialPostCard for quote ID:", quote.id);
   const imageUrl = getFirstImage(quote);
   const tourOp = quote.main_tour_operator_name;
   const pricePerPerson = quote.price_per_person
@@ -280,7 +282,7 @@ export default function SocialPostsPage() {
     const allQuotes: SocialPost[] = [];
     
     data.pages.forEach((page) => {
-      page.quotes.forEach((quote: any) => {
+      page.quotes.forEach((quote) => {
         allQuotes.push({
           quote: quote as EnrichedQuote,
           clientId: quote.client_id || "",
@@ -290,7 +292,7 @@ export default function SocialPostsPage() {
     
     return allQuotes;
   }, [data]);
-
+  
   const filteredPosts = useMemo(() => {
     let result = socialPosts;
 

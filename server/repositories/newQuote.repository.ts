@@ -221,6 +221,7 @@ export const newQuoteRepository = {
 
     // Debug: log departing airport data for first result
     const firstResult = results[0];
+    console.log('client Id for first result:', firstResult?.client_id);
     console.log('🛫 DEBUG findFreeQuotesPaginated - first row departing_airport_name:', firstResult?.departing_airport_name);
     console.log('🛫 DEBUG findFreeQuotesPaginated - first row flight_id:', firstResult?.flight_id);
     console.log('🛫 DEBUG findFreeQuotesPaginated - first row flight_type:', firstResult?.flight_type);

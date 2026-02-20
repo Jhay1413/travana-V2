@@ -70,6 +70,7 @@ import {
   UtensilsCrossed,
   Eye,
   CalendarClock,
+  Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -301,11 +302,13 @@ function KpiCard({
   value,
   delta,
   icon,
+  targetValue,
 }: {
   label: string;
   value: string;
   delta: string;
   icon: React.ReactNode;
+  targetValue?: string;
 }) {
   const id = label.toLowerCase().replace(/\s+/g, "-");
   return (
@@ -320,6 +323,7 @@ function KpiCard({
           </div>
           <div className="text-2xl font-semibold tracking-tight" data-testid={`text-kpi-value-${id}`}>
             {value}
+            {targetValue && <span className="text-lg font-normal text-muted-foreground"> / {targetValue}</span>}
           </div>
         </div>
         <div
@@ -4850,10 +4854,11 @@ export default function CommandCenterPage() {
                       icon={<Star className="h-4 w-4" />}
                     />
                     <KpiCard
-                      label="Total Sales"
-                      value={currency.format(totals.bookedValue)}
-                      delta={totals.bookedValue >= 15000 ? "Target reached!" : `${currency.format(15000 - totals.bookedValue)} to target`}
-                      icon={<Briefcase className="h-4 w-4" />}
+                      label="Sales Target"
+                      value="£3,106"
+                      delta="£5,250"
+                      icon={<Target className="h-4 w-4" />}
+                      targetValue="£5,250"
                     />
                   </>
                 ) : (
@@ -4877,10 +4882,11 @@ export default function CommandCenterPage() {
                       icon={<Briefcase className="h-4 w-4" />}
                     />
                     <KpiCard
-                      label="Total Sales"
-                      value={currency.format(totals.bookedValue)}
-                      delta={totals.bookedValue >= 15000 ? "Target reached!" : `${currency.format(15000 - totals.bookedValue)} to target`}
-                      icon={<Briefcase className="h-4 w-4" />}
+                      label="Sales Target"
+                      value="£3,106"
+                      delta="£5,250"
+                      icon={<Target className="h-4 w-4" />}
+                      targetValue="£5,250"
                     />
                   </>
                 )}
