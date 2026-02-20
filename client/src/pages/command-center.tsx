@@ -2788,6 +2788,7 @@ export default function CommandCenterPage() {
                               {lc.phone && <span className="shrink-0">{lc.phone}</span>}
                               {lc.phone && lc.latestTitle && <span>·</span>}
                               <span className="truncate">{lc.latestTitle}</span>
+                              {lc.agentName && <><span>·</span><span className="shrink-0 font-medium text-purple-600 dark:text-purple-400" data-testid={`text-live-client-agent-${lc.clientId}`}>{lc.agentName}</span></>}
                             </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
