@@ -52,6 +52,11 @@ export const chatRepository = {
     return results[0];
   },
 
+  async isParticipant(conversationId: string, userId: string): Promise<boolean> {
+    const rows = await db.select({ id: chatParticipants.id }).from(chatParticipants).where(and(eq(chatParticipants.conversationId, conversationId), eq(chatParticipants.userId, userId))).limit(1);
+    return rows.length > 0;
+  },
+
   async updateLastRead(conversationId: string, userId: string) {
     await db.update(chatParticipants).set({ lastReadAt: new Date() }).where(and(eq(chatParticipants.conversationId, conversationId), eq(chatParticipants.userId, userId)));
   },

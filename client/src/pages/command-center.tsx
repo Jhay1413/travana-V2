@@ -5,8 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@/api/client/axios-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
-import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useTickets } from "@/hooks/queries";
-import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask } from "@/hooks/mutations";
+import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useTickets, useChatConversations, useChatMessages } from "@/hooks/queries";
+import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
@@ -71,6 +71,7 @@ import {
   Eye,
   CalendarClock,
   Target,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1496,6 +1497,9 @@ export default function CommandCenterPage() {
   const { toast } = useToast();
   const dashCreateTaskMutation = useCreateTask("quote", "");
   const dashTaskPresets = TASK_PRESETS_BY_ENTITY[dashTaskCategory] || TASK_PRESETS_BY_ENTITY.general;
+  const [chatSelectedConversation, setChatSelectedConversation] = useState<string | null>(null);
+  const [chatMessageInput, setChatMessageInput] = useState("");
+  const [chatNewChatUserId, setChatNewChatUserId] = useState<string | null>(null);
 
   const handleDashAddTask = () => {
     if (!dashNewTitle || !dashNewDueDate || !currentUser?.id) return;
@@ -1581,6 +1585,10 @@ export default function CommandCenterPage() {
   const { data: airportsList } = useAirports();
   const createAirportMutation = useCreateAirport();
   const deleteAirportMutation = useDeleteAirport();
+  const { data: chatConversations } = useChatConversations();
+  const { data: chatMessages } = useChatMessages(chatSelectedConversation || "");
+  const sendMessageMutation = useSendMessage();
+  const startDirectChatMutation = useStartDirectChat();
   const { data: countriesData } = useQuery({
     queryKey: ["admin", "data", "country"],
     queryFn: async () => {
@@ -2565,6 +2573,208 @@ export default function CommandCenterPage() {
       );
     }
     
+    if (active === "connect-internal-chat") {
+      const currentUserId = currentUser?.id;
+      return (
+        <section className="grid h-[calc(100vh-12rem)] gap-4 lg:grid-cols-[320px_1fr]" data-testid="section-live-chat">
+          <Card className="glass ringed grain flex flex-col rounded-3xl p-0 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-black/10 px-4 py-3 dark:border-white/10">
+              <div className="space-y-0.5">
+                <div className="text-sm font-semibold" data-testid="text-chat-title">Conversations</div>
+                <div className="text-xs text-muted-foreground">{(chatConversations || []).length} chats</div>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="rounded-xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" data-testid="button-new-chat">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-2xl">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Start new chat with</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {(apiUsers || []).filter((u: any) => u.id !== currentUserId).map((u: any) => (
+                    <DropdownMenuItem
+                      key={u.id}
+                      onClick={() => {
+                        startDirectChatMutation.mutate(u.id, {
+                          onSuccess: (data) => setChatSelectedConversation(data.conversationId),
+                        });
+                      }}
+                      className="rounded-xl"
+                      data-testid={`chat-user-${u.id}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[#3b82f6] text-xs font-semibold">
+                          {(u.name || "?").charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm">{u.name}</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="flex-1 overflow-y-auto" data-testid="chat-conversation-list">
+              {(chatConversations || []).length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <MessageSquare className="h-10 w-10 text-black/20 dark:text-white/20 mb-3" />
+                  <div className="text-sm font-medium text-black/50 dark:text-white/50">No conversations yet</div>
+                  <div className="text-xs text-black/40 dark:text-white/40 mt-1">Start a new chat with a team member</div>
+                </div>
+              ) : (
+                (chatConversations || []).map((conv: any) => {
+                  const otherParticipants = (conv.participants || []).filter((p: any) => p.userId !== currentUserId);
+                  const displayName = conv.type === "group" ? (conv.name || "Group Chat") : (otherParticipants[0]?.userName || "Unknown");
+                  const initials = displayName.split(" ").map((w: string) => w[0]).join("").substring(0, 2).toUpperCase();
+                  const isSelected = chatSelectedConversation === conv.id;
+                  const lastMsg = conv.lastMessage;
+                  return (
+                    <button
+                      key={conv.id}
+                      onClick={() => setChatSelectedConversation(conv.id)}
+                      className={`flex w-full items-center gap-3 border-b border-black/5 px-4 py-3 text-left transition dark:border-white/5 ${
+                        isSelected ? "bg-[#3b82f6]/5 dark:bg-[#3b82f6]/10" : "hover:bg-black/3 dark:hover:bg-white/3"
+                      }`}
+                      data-testid={`chat-conv-${conv.id}`}
+                    >
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                        isSelected ? "bg-[#3b82f6] text-white" : "bg-black/10 text-black/60 dark:bg-white/10 dark:text-white/60"
+                      }`}>
+                        {initials}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="truncate text-sm font-medium">{displayName}</span>
+                          {lastMsg && (
+                            <span className="shrink-0 text-[10px] text-black/40 dark:text-white/40">
+                              {new Date(lastMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="truncate text-xs text-black/50 dark:text-white/50">
+                            {lastMsg ? lastMsg.content : "No messages yet"}
+                          </span>
+                          {(conv.unreadCount || 0) > 0 && (
+                            <span className="ml-2 inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-[#3b82f6] px-1.5 text-[10px] font-bold text-white" data-testid={`chat-unread-${conv.id}`}>
+                              {conv.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </Card>
+
+          <Card className="glass ringed grain flex flex-col rounded-3xl p-0 overflow-hidden">
+            {!chatSelectedConversation ? (
+              <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-[#3b82f6]/10">
+                  <MessageSquare className="h-8 w-8 text-[#3b82f6]" />
+                </div>
+                <div className="text-lg font-semibold" data-testid="text-chat-empty">Live Chat</div>
+                <div className="mt-1 text-sm text-muted-foreground">Select a conversation or start a new one</div>
+              </div>
+            ) : (
+              <>
+                {(() => {
+                  const conv = (chatConversations || []).find((c: any) => c.id === chatSelectedConversation);
+                  const otherParticipants = (conv?.participants || []).filter((p: any) => p.userId !== currentUserId);
+                  const displayName = conv?.type === "group" ? (conv.name || "Group Chat") : (otherParticipants[0]?.userName || "Unknown");
+                  return (
+                    <div className="flex items-center gap-3 border-b border-black/10 px-4 py-3 dark:border-white/10">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#3b82f6] text-sm font-semibold text-white">
+                        {displayName.split(" ").map((w: string) => w[0]).join("").substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold truncate" data-testid="text-chat-header-name">{displayName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {conv?.type === "group" ? `${(conv.participants || []).length} members` : "Direct message"}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setChatSelectedConversation(null)}
+                        className="rounded-xl"
+                        data-testid="button-close-chat"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })()}
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3" data-testid="chat-messages-area">
+                  {(chatMessages || []).length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <div className="text-sm text-black/40 dark:text-white/40">No messages yet. Say hello!</div>
+                    </div>
+                  ) : (
+                    (chatMessages || []).map((msg: any) => {
+                      const isOwn = msg.senderId === currentUserId;
+                      return (
+                        <div key={msg.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`} data-testid={`chat-msg-${msg.id}`}>
+                          <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
+                            isOwn
+                              ? "bg-[#3b82f6] text-white"
+                              : "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                          }`}>
+                            {!isOwn && (
+                              <div className="mb-0.5 text-[11px] font-semibold text-[#3b82f6]">{msg.senderName || "Unknown"}</div>
+                            )}
+                            <div className="text-sm whitespace-pre-wrap break-words">{msg.content}</div>
+                            <div className={`mt-1 text-[10px] ${isOwn ? "text-white/60" : "text-black/40 dark:text-white/40"}`}>
+                              {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="border-t border-black/10 p-3 dark:border-white/10">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!chatMessageInput.trim() || !chatSelectedConversation) return;
+                      sendMessageMutation.mutate(
+                        { conversationId: chatSelectedConversation, content: chatMessageInput },
+                        { onSuccess: () => setChatMessageInput("") }
+                      );
+                    }}
+                    className="flex gap-2"
+                    data-testid="form-chat-send"
+                  >
+                    <Input
+                      value={chatMessageInput}
+                      onChange={(e) => setChatMessageInput(e.target.value)}
+                      placeholder="Type a message..."
+                      className="flex-1 rounded-xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                      data-testid="input-chat-message"
+                    />
+                    <Button
+                      type="submit"
+                      disabled={!chatMessageInput.trim() || sendMessageMutation.isPending}
+                      className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                      data-testid="button-chat-send"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </form>
+                </div>
+              </>
+            )}
+          </Card>
+        </section>
+      );
+    }
+
     // Clients section - UI-only copy of Overview for separate customization
     if (active === "clients") {
       return (

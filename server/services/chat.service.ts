@@ -37,7 +37,13 @@ export const chatService = {
     return conv;
   },
 
+  async verifyMembership(conversationId: string, userId: string) {
+    const isMember = await chatRepository.isParticipant(conversationId, userId);
+    if (!isMember) throw new AppError("You are not a participant of this conversation", 403);
+  },
+
   async getMessages(conversationId: string, userId: string) {
+    await this.verifyMembership(conversationId, userId);
     await chatRepository.updateLastRead(conversationId, userId);
     const messages = await chatRepository.findMessagesByConversation(conversationId);
     return messages.reverse();
@@ -45,10 +51,12 @@ export const chatService = {
 
   async sendMessage(conversationId: string, senderId: string, content: string) {
     if (!content.trim()) throw new AppError("Message cannot be empty", 400);
+    await this.verifyMembership(conversationId, senderId);
     return await chatRepository.createMessage({ conversationId, senderId, content: content.trim() });
   },
 
   async markRead(conversationId: string, userId: string) {
+    await this.verifyMembership(conversationId, userId);
     await chatRepository.updateLastRead(conversationId, userId);
   },
 };
