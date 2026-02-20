@@ -2403,7 +2403,9 @@ function EditQuoteDialog({
           data.lodge_id !== undefined ||
           data.lodge_type !== undefined ||
           data.lodge_code !== undefined ||
-          data.lodge_park_name !== undefined;
+          data.lodge_park_name !== undefined ||
+          data.cottage_id !== undefined ||
+          data.board_basis_name !== undefined;
 
         if (isScraperFormat) {
           try {

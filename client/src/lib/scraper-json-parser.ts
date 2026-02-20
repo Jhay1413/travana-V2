@@ -57,12 +57,16 @@ export interface ScraperJson {
   car_hire?: unknown[];
   airport_parking?: unknown[];
   lounge_pass?: unknown[];
+  board_basis_name?: string;
   // Lodge-specific fields
   lodge_id?: string | null;
   lodge_type?: string | null;
   lodge_code?: string | null;
   lodge_images?: string[];
   lodge_park_name?: string | null;
+  cottage_id?: string | null;
+  hot_tub?: boolean | null;
+  pets?: number | null;
   [key: string]: unknown;
 }
 
@@ -215,7 +219,7 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
       destination: data.destination || hotel?.destination || "",
       resort: data.resort || hotel?.resort || "",
       accommodation: data.accommodation || hotel?.accommodation || "",
-      boardBasis: data.board_basis || hotel?.board_basis || "",
+      boardBasis: data.board_basis || data.board_basis_name || hotel?.board_basis || "",
       roomType: data.room_type || hotel?.room_type || "",
       checkInDate: checkInDate,
       checkInTime: checkInTime,
