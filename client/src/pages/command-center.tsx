@@ -1464,6 +1464,9 @@ export default function CommandCenterPage() {
   const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [clientsTab, setClientsTab] = useState<"clients-list" | "pipeline" | "calendar" | "news">("clients-list");
+  const [liveClientsDateRange, setLiveClientsDateRange] = useState<"this-month" | "last-month" | "this-week" | "last-7" | "last-30" | "last-90" | "this-year" | "all-time">("this-month");
+  const [liveClientsSearch, setLiveClientsSearch] = useState("");
+  const [liveClientsStatusFilter, setLiveClientsStatusFilter] = useState<"all" | "enquiry" | "quote">("all");
   const [clientsListPage, setClientsListPage] = useState(1);
   const [topClientsFilter, setTopClientsFilter] = useState<"total_spend" | "profit" | "bookings">("total_spend");
   const [opportunitiesTab, setOpportunitiesTab] = useState<"enquiries" | "quotes" | "bookings">("enquiries");
@@ -1862,6 +1865,90 @@ export default function CommandCenterPage() {
     for (const item of src) { if (item.agentName) agents.add(item.agentName); }
     return Array.from(agents).sort();
   }, [opportunitiesTab, opportunitiesData]);
+
+  const liveClientsData = useMemo(() => {
+    if (!transactionsData || !allNeonClientsData?.clients) return [];
+    const neonMap = new Map<string, { name: string; phone: string; email: string }>();
+    for (const c of allNeonClientsData.clients) {
+      const title = c.title && c.title !== "NULL" ? c.title : "";
+      neonMap.set(c.id, { name: [title, c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown", phone: c.phoneNumber || "", email: c.email || "" });
+    }
+    const agentMap = new Map<string, string>();
+    if (apiUsers) {
+      for (const u of apiUsers as any[]) {
+        agentMap.set(u.id, u.firstName || u.name || u.email || "Agent");
+      }
+    }
+    const clientMap = new Map<string, { clientId: string; clientName: string; phone: string; email: string; agentName: string; enquiries: number; quotes: number; totalValue: number; latestDate: string; latestTitle: string; status: "enquiry" | "quote" }>();
+    for (const t of transactionsData as any[]) {
+      if (t.status === "on_booking" || t.booking) continue;
+      const clientInfo = t.client_id ? neonMap.get(t.client_id) : null;
+      if (!clientInfo) continue;
+      const agentName = (t.agent_id && agentMap.get(t.agent_id)) || (t.user_id && agentMap.get(t.user_id)) || "";
+      const hasQuotes = t.quotes && t.quotes.length > 0 && t.quotes.some((q: any) => q.is_active !== false);
+      const hasEnquiry = !!t.enquiry;
+      if (!hasQuotes && !hasEnquiry) continue;
+      const dateCreated = t.enquiry?.date_created || t.quotes?.[0]?.date_created || t.created_at;
+      const existing = clientMap.get(t.client_id);
+      const quoteValue = hasQuotes ? t.quotes.filter((q: any) => q.is_active !== false).reduce((s: number, q: any) => s + (parseFloat(q.sales_price) || 0), 0) : 0;
+      const enquiryCount = hasEnquiry ? 1 : 0;
+      const quoteCount = hasQuotes ? t.quotes.filter((q: any) => q.is_active !== false).length : 0;
+      const txnTitle = hasQuotes ? (t.quotes[0]?.title || t.enquiry?.title || "Untitled") : (t.enquiry?.title || "Untitled");
+      const txnStatus: "enquiry" | "quote" = hasQuotes ? "quote" : "enquiry";
+      if (existing) {
+        existing.enquiries += enquiryCount;
+        existing.quotes += quoteCount;
+        existing.totalValue += quoteValue;
+        if (new Date(dateCreated || 0).getTime() > new Date(existing.latestDate || 0).getTime()) {
+          existing.latestDate = dateCreated;
+          existing.latestTitle = txnTitle;
+          existing.status = txnStatus;
+        }
+      } else {
+        clientMap.set(t.client_id, { clientId: t.client_id, clientName: clientInfo.name, phone: clientInfo.phone, email: clientInfo.email, agentName, enquiries: enquiryCount, quotes: quoteCount, totalValue: quoteValue, latestDate: dateCreated, latestTitle: txnTitle, status: txnStatus });
+      }
+    }
+    return Array.from(clientMap.values());
+  }, [transactionsData, allNeonClientsData, apiUsers]);
+
+  const filteredLiveClients = useMemo(() => {
+    let result = liveClientsData;
+    if (liveClientsDateRange !== "all-time") {
+      const now = new Date();
+      let rangeStart: Date;
+      let rangeEnd: Date | null = null;
+      if (liveClientsDateRange === "this-month") {
+        rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (liveClientsDateRange === "last-month") {
+        rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      } else if (liveClientsDateRange === "this-week") {
+        const day = now.getDay();
+        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); rangeStart.setHours(0, 0, 0, 0);
+      } else if (liveClientsDateRange === "last-7") {
+        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 7); rangeStart.setHours(0, 0, 0, 0);
+      } else if (liveClientsDateRange === "last-30") {
+        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 30); rangeStart.setHours(0, 0, 0, 0);
+      } else if (liveClientsDateRange === "last-90") {
+        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 90); rangeStart.setHours(0, 0, 0, 0);
+      } else {
+        rangeStart = new Date(now.getFullYear(), 0, 1);
+      }
+      result = result.filter((item) => {
+        const d = new Date(item.latestDate || 0);
+        return d >= rangeStart && (rangeEnd ? d <= rangeEnd : true);
+      });
+    }
+    if (liveClientsStatusFilter !== "all") {
+      result = result.filter((item) => item.status === liveClientsStatusFilter);
+    }
+    if (liveClientsSearch.trim()) {
+      const q = liveClientsSearch.toLowerCase().trim();
+      result = result.filter((item) => item.clientName.toLowerCase().includes(q) || item.phone.includes(q) || item.email.toLowerCase().includes(q) || item.latestTitle.toLowerCase().includes(q));
+    }
+    result = [...result].sort((a, b) => new Date(b.latestDate || 0).getTime() - new Date(a.latestDate || 0).getTime());
+    return result;
+  }, [liveClientsData, liveClientsDateRange, liveClientsStatusFilter, liveClientsSearch]);
 
   const totals = useMemo(() => {
     if (dashboardStats) {
@@ -2605,87 +2692,126 @@ export default function CommandCenterPage() {
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-0">
-                <div className="grid gap-3 md:grid-cols-3">
-                  {([
-                    { stage: "New Lead" as const, hint: "No commission yet", color: "blue" },
-                    { stage: "In Play" as const, hint: "Commission added", color: "amber" },
-                    { stage: "Booked" as const, hint: "Confirmed", color: "emerald" },
-                  ] as const).map((col) => {
-                    const items = pipelineStages[col.stage] || [];
-                    const sum = items.reduce((s: number, q: any) => s + getQuoteProfit(q), 0);
-                    const dotColor = col.color === "blue" ? "bg-blue-500" : col.color === "amber" ? "bg-amber-500" : "bg-emerald-500";
-                    const textColor = col.color === "blue" ? "text-blue-700" : col.color === "amber" ? "text-amber-700" : "text-emerald-700";
-                    return (
-                      <div key={col.stage} className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <div className={`h-2 w-2 rounded-full ${dotColor}`} />
-                              <div className={`text-sm font-semibold ${textColor}`}>
-                                {col.stage}
-                              </div>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {col.hint} · {items.length} quotes
-                            </div>
-                          </div>
-                          <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                            {currency.format(sum)}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          {items.slice(0, 5).map((q: any) => (
-                            <button
-                              key={q.id}
-                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.transaction_id}/bookings/${q.booking?.id || q.id}` : col.stage === "In Play" ? `/clients/${q.transaction_id}/quotes/${q.quotes?.[0]?.id || q.id}` : `/clients/${q.transaction_id}/enquiries/${q.enquiry?.id || q.id}`)}
-                              className="w-full rounded-2xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                              data-testid={`card-clients-pipeline-${col.stage}-${q.id}`}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="truncate text-sm font-semibold" data-testid={`text-clients-pipeline-name-${q.id}`}>
-                                    {q.title}
-                                  </div>
-                                  <div className="mt-0.5 truncate text-xs text-black/55 dark:text-white/55">
-                                    {pipelineClientNames.get(q.transaction_id) || "Client"}
-                                  </div>
-                                  <div className="mt-0.5 truncate text-xs text-black/40 dark:text-white/40">
-                                    {new Date(q.travel_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
-                                  </div>
-                                </div>
-                                <div className="text-xs font-semibold text-emerald-700" data-testid={`text-clients-pipeline-value-${q.id}`}>
-                                  {getQuoteProfit(q) > 0 ? currency.format(getQuoteProfit(q)) : "TBC"}
-                                </div>
-                              </div>
-                            </button>
-                          ))}
-                          {items.length > 5 && (
-                            <button
-                              onClick={() => navigate("/pipeline")}
-                              className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
-                            >
-                              +{items.length - 5} more · View full pipeline
-                            </button>
-                          )}
-                          {items.length === 0 && (
-                            <div className="rounded-2xl border border-dashed border-black/10 p-3 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45">
-                              No quotes
-                            </div>
-                          )}
-                        </div>
+                <div className="space-y-3" data-testid="panel-live-clients">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 min-w-[180px]">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
+                        <input
+                          type="text"
+                          value={liveClientsSearch}
+                          onChange={(e) => setLiveClientsSearch(e.target.value)}
+                          placeholder="Search live clients..."
+                          className="w-full rounded-xl border border-black/10 bg-black/5 py-2 pl-9 pr-3 text-sm text-black/90 placeholder:text-black/40 outline-none transition focus:border-blue-500/50 focus:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white/90 dark:placeholder:text-white/40 dark:focus:bg-white/5"
+                          data-testid="input-live-clients-search"
+                        />
                       </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 text-center">
-                  <button
-                    onClick={() => navigate("/pipeline")}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                    data-testid="link-clients-view-full-pipeline"
-                  >
-                    View full pipeline →
-                  </button>
+                      <div className="text-xs text-black/50 dark:text-white/50 shrink-0" data-testid="text-live-clients-count">
+                        {filteredLiveClients.length} live
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {([
+                      { value: "this-month", label: "This Month" },
+                      { value: "last-month", label: "Last Month" },
+                      { value: "this-week", label: "This Week" },
+                      { value: "last-7", label: "Last 7 Days" },
+                      { value: "last-30", label: "Last 30 Days" },
+                      { value: "last-90", label: "Last 90 Days" },
+                      { value: "this-year", label: "This Year" },
+                      { value: "all-time", label: "All Time" },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setLiveClientsDateRange(opt.value)}
+                        className={
+                          "rounded-full px-3 py-1 text-xs font-medium transition " +
+                          (liveClientsDateRange === opt.value
+                            ? "bg-[#3b82f6] text-white"
+                            : "bg-black/5 text-black/60 hover:bg-black/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10")
+                        }
+                        data-testid={`filter-live-clients-date-${opt.value}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                    <span className="mx-1 text-black/20 dark:text-white/20">|</span>
+                    {([
+                      { value: "all", label: "All" },
+                      { value: "enquiry", label: "Enquiries" },
+                      { value: "quote", label: "Quotes" },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setLiveClientsStatusFilter(opt.value)}
+                        className={
+                          "rounded-full px-3 py-1 text-xs font-medium transition " +
+                          (liveClientsStatusFilter === opt.value
+                            ? "bg-[#3b82f6] text-white"
+                            : "bg-black/5 text-black/60 hover:bg-black/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10")
+                        }
+                        data-testid={`filter-live-clients-status-${opt.value}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {filteredLiveClients.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-8 text-center dark:border-white/10 dark:bg-white/[0.02]" data-testid="empty-live-clients">
+                        <Users className="mx-auto h-8 w-8 text-black/15 dark:text-white/15 mb-2" />
+                        <p className="text-sm text-black/50 dark:text-white/50">
+                          {liveClientsSearch ? "No live clients match your search" : "No live clients in this period"}
+                        </p>
+                      </div>
+                    ) : (
+                      filteredLiveClients.map((lc, idx) => (
+                        <motion.button
+                          key={lc.clientId}
+                          type="button"
+                          className="group flex w-full items-center gap-3 rounded-2xl border border-black/10 bg-black/5 px-3 py-2.5 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                          data-testid={`card-live-client-${lc.clientId}`}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.15, delay: Math.min(idx * 0.02, 0.3) }}
+                          onClick={() => navigate(`/clients/${lc.clientId}`)}
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-white/60 text-sm font-bold text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
+                            {(lc.clientName?.[0] || "?").toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold" data-testid={`text-live-client-name-${lc.clientId}`}>{lc.clientName}</div>
+                            <div className="flex items-center gap-2 text-[11px] text-black/50 dark:text-white/50">
+                              {lc.phone && <span className="shrink-0">{lc.phone}</span>}
+                              {lc.phone && lc.latestTitle && <span>·</span>}
+                              <span className="truncate">{lc.latestTitle}</span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {lc.enquiries > 0 && (
+                              <span className="inline-flex items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300" data-testid={`badge-live-client-enq-${lc.clientId}`}>
+                                {lc.enquiries} enq
+                              </span>
+                            )}
+                            {lc.quotes > 0 && (
+                              <span className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300" data-testid={`badge-live-client-qt-${lc.clientId}`}>
+                                {lc.quotes} qt
+                              </span>
+                            )}
+                            {lc.totalValue > 0 && (
+                              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400" data-testid={`text-live-client-value-${lc.clientId}`}>
+                                {currency.format(lc.totalValue)}
+                              </span>
+                            )}
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />
+                        </motion.button>
+                      ))
+                    )}
+                  </div>
                 </div>
               </TabsContent>
 
