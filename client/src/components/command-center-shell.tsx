@@ -270,6 +270,7 @@ export function CommandCenterShell({
   theme = "light",
   onToggleTheme,
   headerExtra,
+  filterSlot,
 }: {
   children: React.ReactNode;
   active?: string;
@@ -282,6 +283,7 @@ export function CommandCenterShell({
   theme?: "light" | "dark";
   onToggleTheme?: () => void;
   headerExtra?: React.ReactNode;
+  filterSlot?: React.ReactNode;
 }) {
   const [, navigate] = useLocation();
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -834,14 +836,16 @@ export function CommandCenterShell({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-10 rounded-2xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
-                      data-testid="button-filter"
-                    >
-                      <Filter className="mr-2 h-4 w-4" />
-                      Filters
-                    </Button>
+                    {filterSlot || (
+                      <Button
+                        variant="outline"
+                        className="h-10 rounded-2xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                        data-testid="button-filter"
+                      >
+                        <Filter className="mr-2 h-4 w-4" />
+                        Filters
+                      </Button>
+                    )}
 
                     <Button
                       className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"

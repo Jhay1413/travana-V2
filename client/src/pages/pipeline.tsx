@@ -10,11 +10,19 @@ import {
   PoundSterling,
   TrendingUp,
   Users,
+  UserCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useTransactions, useNeonClients } from "@/hooks/queries";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useTransactions, useNeonClients, useUsers } from "@/hooks/queries";
 import { useUpdateTransaction } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction } from "@/types/quote";
@@ -391,9 +399,12 @@ export default function PipelinePage() {
   const { role, setRole } = useRole();
   const { data: transactions, isLoading: transactionsLoading } = useTransactions();
   const { data: neonClientsData } = useNeonClients({ page: 1, limit: 200 });
+  const { data: users } = useUsers();
   const updateTransactionMutation = useUpdateTransaction();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
 
   const [dragState, setDragState] = useState<{
     active: boolean;
@@ -413,6 +424,14 @@ export default function PipelinePage() {
     return map;
   }, [neonClientsData]);
 
+  const filteredTransactions = useMemo(() => {
+    if (!transactions) return [];
+    if (selectedAgentId === "all") return transactions;
+    return transactions.filter(
+      (t) => t.agent_id === selectedAgentId || t.user_id === selectedAgentId
+    );
+  }, [transactions, selectedAgentId]);
+
   const pipeline = useMemo(() => {
     const stages: Record<PipelineStage, Transaction[]> = {
       "Enquiry": [],
@@ -420,15 +439,13 @@ export default function PipelinePage() {
       "Booked": [],
     };
 
-    if (!transactions) return stages;
-
-    for (const transaction of transactions) {
+    for (const transaction of filteredTransactions) {
       const stage = classifyTransaction(transaction);
       stages[stage].push(transaction);
     }
 
     return stages;
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   const stageTotals = useMemo(() => {
     const totals: Record<PipelineStage, { count: number; profit: number; value: number }> = {
@@ -508,6 +525,28 @@ export default function PipelinePage() {
 
   const totalPipelineProfit = STAGES.reduce((sum, stage) => sum + stageTotals[stage].profit, 0);
 
+  const agentSelectDropdown = (
+    <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+      <SelectTrigger
+        className="h-10 w-[180px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+        data-testid="select-agent-filter"
+      >
+        <UserCircle className="mr-2 h-4 w-4 shrink-0 opacity-60" />
+        <SelectValue placeholder="Select Agent" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all" data-testid="select-agent-all">All Agents</SelectItem>
+        {(users || []).map((u) => (
+          <SelectItem key={u.id} value={u.id} data-testid={`select-agent-${u.id}`}>
+            {u.firstName && u.lastName
+              ? `${u.firstName} ${u.lastName}`
+              : u.name || u.email}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
   return (
     <CommandCenterShell
       active="pipeline"
@@ -515,6 +554,7 @@ export default function PipelinePage() {
       subtitle="Sales pipeline overview"
       role={role}
       onRoleChange={setRole}
+      filterSlot={agentSelectDropdown}
     >
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -552,7 +592,7 @@ export default function PipelinePage() {
               <div>
                 <p className="text-sm font-medium text-black/60">Total Pipeline</p>
                 <p className="text-lg font-bold text-black/80">
-                  {transactions?.length || 0} transactions
+                  {filteredTransactions.length} transactions
                 </p>
               </div>
             </div>

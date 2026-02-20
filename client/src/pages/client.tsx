@@ -34,6 +34,7 @@ import {
   Hotel,
   Plus,
   ArrowRightLeft,
+  Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -183,7 +184,7 @@ function formatTicketDate(dateString: string): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
+
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays}d ago`;
@@ -491,7 +492,8 @@ export default function ClientPage() {
     debarkation: "",
     cruiseExtras: "",
     cruiseOnly: false,
-    lodgeCode: "",
+    lodgeId: "",
+    parkId: "",
     parkName: "",
     pets: false,
   };
@@ -526,11 +528,11 @@ export default function ClientPage() {
     return pt?.name || "";
   }, [newQuote.packageType, packageTypesData]);
   const { data: parksData } = useParks();
-  const { data: lodgesData } = useLodges(newQuote.parkName);
+  const { data: lodgesData } = useLodges(newQuote.parkId);
 
   // Load default images when accommodation or lodge is selected
   const { data: accommodationImagesData } = useAccommodationImages(newQuote.accommodation || undefined);
-  const { data: lodgeImagesData } = useLodgeImages(newQuote.lodgeCode || undefined);
+  const { data: lodgeImagesData } = useLodgeImages(newQuote.lodgeId || undefined);
 
   // Auto-prefill images when accommodation is selected
   useEffect(() => {
@@ -802,7 +804,7 @@ export default function ClientPage() {
         query={q}
         onQuery={setQ}
         theme="light"
-        onToggleTheme={() => {}}
+        onToggleTheme={() => { }}
       >
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-client">
           <Spinner className="h-8 w-8" />
@@ -821,7 +823,7 @@ export default function ClientPage() {
         query={q}
         onQuery={setQ}
         theme="light"
-        onToggleTheme={() => {}}
+        onToggleTheme={() => { }}
       >
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-client">
           <div className="text-center">
@@ -849,7 +851,7 @@ export default function ClientPage() {
       query={q}
       onQuery={setQ}
       theme="light"
-      onToggleTheme={() => {}}
+      onToggleTheme={() => { }}
       headerExtra={
         <Select
           value={clientData?.badge || "New Client"}
@@ -1069,7 +1071,7 @@ export default function ClientPage() {
                           variant="secondary"
                           className="h-9 rounded-2xl border border-black/10 bg-black/[0.03] px-3 text-black hover:bg-black/[0.05]"
                           data-testid="button-client-edit-tags"
-                          onClick={() => {}}
+                          onClick={() => { }}
                         >
                           <BadgeCheck className="mr-2 h-4 w-4" />
                           Edit
@@ -1226,7 +1228,7 @@ export default function ClientPage() {
                   size="sm"
                   className="h-9 rounded-2xl bg-[#ff2f00e6] px-3 text-white hover:bg-[#ff2f00e6]/90"
                   data-testid="button-client-new-task"
-                  onClick={() => {}}
+                  onClick={() => { }}
                 >
                   <Calendar className="mr-2 h-4 w-4" />
                   Add task
@@ -1235,7 +1237,7 @@ export default function ClientPage() {
                   size="sm"
                   className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
                   data-testid="button-client-new-item"
-                  onClick={() => {}}
+                  onClick={() => { }}
                 >
                   <Sparkles className="mr-2 h-4 w-4" />
                   New
@@ -1505,12 +1507,11 @@ export default function ClientPage() {
                                 onClick={() => { if (a.link !== "#") navigate(a.link); }}
                               >
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                    a.type === "Enquiry" ? "border-violet-500/25 bg-violet-500/10 text-violet-700" :
-                                    a.type === "Quote" ? "border-sky-500/25 bg-sky-500/10 text-sky-700" :
-                                    a.type === "Booking" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" :
-                                    "border-amber-500/25 bg-amber-500/10 text-amber-700"
-                                  }`}>
+                                  <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${a.type === "Enquiry" ? "border-violet-500/25 bg-violet-500/10 text-violet-700" :
+                                      a.type === "Quote" ? "border-sky-500/25 bg-sky-500/10 text-sky-700" :
+                                        a.type === "Booking" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" :
+                                          "border-amber-500/25 bg-amber-500/10 text-amber-700"
+                                    }`}>
                                     {a.type}
                                   </span>
                                   <span className="truncate text-xs font-medium text-black/75">{a.title}</span>
@@ -1835,162 +1836,162 @@ export default function ClientPage() {
                           }
 
                           return (
-                          <div key={group.id} className="rounded-3xl border border-black/10 bg-white/60 p-2" data-testid={`group-quotes-${group.id}`}>
-                            <div className="flex items-center justify-between gap-3 px-2 py-2" data-testid={`row-quotes-group-header-${group.id}`}>
-                              <div className="flex items-center gap-2">
-                                <div className="text-xs font-semibold text-black/80" data-testid={`text-quotes-group-title-${group.id}`}>
-                                  {group.title}
+                            <div key={group.id} className="rounded-3xl border border-black/10 bg-white/60 p-2" data-testid={`group-quotes-${group.id}`}>
+                              <div className="flex items-center justify-between gap-3 px-2 py-2" data-testid={`row-quotes-group-header-${group.id}`}>
+                                <div className="flex items-center gap-2">
+                                  <div className="text-xs font-semibold text-black/80" data-testid={`text-quotes-group-title-${group.id}`}>
+                                    {group.title}
+                                  </div>
+                                  <span
+                                    className="rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/60"
+                                    data-testid={`pill-quotes-group-count-${group.id}`}
+                                  >
+                                    {group.rows.length}
+                                  </span>
                                 </div>
-                                <span
-                                  className="rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/60"
-                                  data-testid={`pill-quotes-group-count-${group.id}`}
-                                >
-                                  {group.rows.length}
-                                </span>
                               </div>
-                            </div>
 
-                            <div className="grid gap-2" data-testid={`list-quotes-${group.id}`}>
-                              {rowsWithToggles.map((item) => {
-                                if (item.type === "toggle") {
-                                  const isExpanded = Boolean(expandedCopyGroups[item.parentId]);
+                              <div className="grid gap-2" data-testid={`list-quotes-${group.id}`}>
+                                {rowsWithToggles.map((item) => {
+                                  if (item.type === "toggle") {
+                                    const isExpanded = Boolean(expandedCopyGroups[item.parentId]);
+                                    return (
+                                      <button
+                                        key={`toggle-${item.parentId}`}
+                                        type="button"
+                                        className="ml-6 inline-flex w-fit items-center gap-1 rounded-xl border border-black/10 bg-white/70 px-2 py-1 text-[11px] font-semibold text-black/65 transition hover:bg-black/[0.03]"
+                                        data-testid={`button-toggle-copy-quotes-${item.parentId}`}
+                                        onClick={() =>
+                                          setExpandedCopyGroups((prev) => ({
+                                            ...prev,
+                                            [item.parentId]: !prev[item.parentId],
+                                          }))
+                                        }
+                                      >
+                                        <ChevronDown className={`h-3.5 w-3.5 transition ${isExpanded ? "rotate-180" : ""}`} />
+                                        {isExpanded ? "Hide" : "Show"} {item.count} {item.count === 1 ? "copy" : "copies"}
+                                      </button>
+                                    );
+                                  }
+
+                                  const q = item.row;
                                   return (
                                     <button
-                                      key={`toggle-${item.parentId}`}
+                                      key={q.id}
                                       type="button"
-                                      className="ml-6 inline-flex w-fit items-center gap-1 rounded-xl border border-black/10 bg-white/70 px-2 py-1 text-[11px] font-semibold text-black/65 transition hover:bg-black/[0.03]"
-                                      data-testid={`button-toggle-copy-quotes-${item.parentId}`}
-                                      onClick={() =>
-                                        setExpandedCopyGroups((prev) => ({
-                                          ...prev,
-                                          [item.parentId]: !prev[item.parentId],
-                                        }))
-                                      }
+                                      className={`group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99] ${item.isChild ? "pl-9 border-sky-500/20 bg-sky-500/[0.04]" : ""}`}
+                                      data-testid={`card-quote-intro-${q.id}`}
+                                      onClick={() => navigate(`/clients/${clientId}/quotes/${q.id}`)}
                                     >
-                                      <ChevronDown className={`h-3.5 w-3.5 transition ${isExpanded ? "rotate-180" : ""}`} />
-                                      {isExpanded ? "Hide" : "Show"} {item.count} {item.count === 1 ? "copy" : "copies"}
-                                    </button>
-                                  );
-                                }
-
-                                const q = item.row;
-                                return (
-                                <button
-                                  key={q.id}
-                                  type="button"
-                                  className={`group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99] ${item.isChild ? "pl-9 border-sky-500/20 bg-sky-500/[0.04]" : ""}`}
-                                  data-testid={`card-quote-intro-${q.id}`}
-                                  onClick={() => navigate(`/clients/${clientId}/quotes/${q.id}`)}
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <div
-                                      className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
-                                      data-testid={`img-quote-${q.id}`}
-                                      aria-hidden
-                                    >
-                                      {q.imageUrl ? (
-                                        <img
-                                          src={q.imageUrl}
-                                          alt=""
-                                          className="absolute inset-0 h-full w-full object-cover"
-                                          data-testid={`img-quote-photo-${q.id}`}
-                                        />
-                                      ) : (
-                                        <div className="flex h-full w-full items-center justify-center text-black/20">
-                                          <ImagePlus className="h-6 w-6" />
+                                      <div className="flex items-start gap-3">
+                                        <div
+                                          className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
+                                          data-testid={`img-quote-${q.id}`}
+                                          aria-hidden
+                                        >
+                                          {q.imageUrl ? (
+                                            <img
+                                              src={q.imageUrl}
+                                              alt=""
+                                              className="absolute inset-0 h-full w-full object-cover"
+                                              data-testid={`img-quote-photo-${q.id}`}
+                                            />
+                                          ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-black/20">
+                                              <ImagePlus className="h-6 w-6" />
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
-                                    </div>
 
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                          <div className="truncate text-sm font-semibold" data-testid={`text-quote-title-${q.id}`}>
-                                            {q.title}
-                                          </div>
-                                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                            <span data-testid={`text-quote-destination-${q.id}`}>{q.destination || "—"}</span>
-                                            <span className="text-black/25">•</span>
-                                            <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
-                                            <span className="text-black/25">•</span>
-                                            <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt || "—"}</span>
-                                          </div>
-                                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                            <span data-testid={`text-quote-pax-${q.id}`}>{q.pax}</span>
-                                            {q.nights > 0 && (
-                                              <>
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                              <div className="truncate text-sm font-semibold" data-testid={`text-quote-title-${q.id}`}>
+                                                {q.title}
+                                              </div>
+                                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
+                                                <span data-testid={`text-quote-destination-${q.id}`}>{q.destination || "—"}</span>
                                                 <span className="text-black/25">•</span>
-                                                <span data-testid={`text-quote-nights-${q.id}`}>{q.nights}N</span>
-                                              </>
-                                            )}
-                                            {q.isQuoteCopy && (
-                                              <>
+                                                <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
                                                 <span className="text-black/25">•</span>
-                                                <span
-                                                  className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700"
-                                                  data-testid={`text-quote-copy-${q.id}`}
-                                                >
-                                                  Copy
+                                                <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt || "—"}</span>
+                                              </div>
+                                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
+                                                <span data-testid={`text-quote-pax-${q.id}`}>{q.pax}</span>
+                                                {q.nights > 0 && (
+                                                  <>
+                                                    <span className="text-black/25">•</span>
+                                                    <span data-testid={`text-quote-nights-${q.id}`}>{q.nights}N</span>
+                                                  </>
+                                                )}
+                                                {q.isQuoteCopy && (
+                                                  <>
+                                                    <span className="text-black/25">•</span>
+                                                    <span
+                                                      className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700"
+                                                      data-testid={`text-quote-copy-${q.id}`}
+                                                    >
+                                                      Copy
+                                                    </span>
+                                                  </>
+                                                )}
+                                                <span className="text-black/25">•</span>
+                                                <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/60" data-testid={`text-quote-status-${q.id}`}>
+                                                  {(q.status || "").replace(/_/g, " ")}
                                                 </span>
-                                              </>
-                                            )}
-                                            <span className="text-black/25">•</span>
-                                            <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/60" data-testid={`text-quote-status-${q.id}`}>
-                                              {(q.status || "").replace(/_/g, " ")}
-                                            </span>
-                                          </div>
-                                        </div>
+                                              </div>
+                                            </div>
 
-                                        <div className="shrink-0 text-right">
-                                          <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
-                                            {q.pricePerPerson > 0 && (
-                                              <span data-testid={`text-quote-pp-${q.id}`} className="font-normal">{currency.format(q.pricePerPerson)} pp / </span>
-                                            )}
-                                            {currency.format(q.totalCost)}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-end justify-between gap-3">
-                                          <div></div>
-                                          <div className="flex items-center gap-1">
-                                            <span
-                                              role="button"
-                                              tabIndex={0}
-                                              className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === q.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
-                                              data-testid={`button-pin-quote-${q.id}`}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                                toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title || "Quote", subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
-                                              }}
-                                              title={userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
-                                            >
-                                              <Pin className="h-3.5 w-3.5" />
-                                            </span>
-                                            <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
-                                              View
-                                              <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                                            <div className="shrink-0 text-right">
+                                              <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
+                                                {q.pricePerPerson > 0 && (
+                                                  <span data-testid={`text-quote-pp-${q.id}`} className="font-normal">{currency.format(q.pricePerPerson)} pp / </span>
+                                                )}
+                                                {currency.format(q.totalCost)}
+                                              </div>
+                                            </div>
+                                            <div className="flex items-end justify-between gap-3">
+                                              <div></div>
+                                              <div className="flex items-center gap-1">
+                                                <span
+                                                  role="button"
+                                                  tabIndex={0}
+                                                  className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === q.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
+                                                  data-testid={`button-pin-quote-${q.id}`}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title || "Quote", subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
+                                                  }}
+                                                  title={userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
+                                                >
+                                                  <Pin className="h-3.5 w-3.5" />
+                                                </span>
+                                                <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
+                                                  View
+                                                  <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                                                </div>
+                                              </div>
                                             </div>
                                           </div>
                                         </div>
                                       </div>
+                                    </button>
+                                  );
+                                })}
+
+                                {rowsWithToggles.length === 0 ? (
+                                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid={`empty-quotes-${group.id}`}>
+                                    <div className="text-sm font-semibold" data-testid={`text-empty-quotes-title-${group.id}`}>
+                                      No quotes
+                                    </div>
+                                    <div className="mt-1 text-xs text-black/55" data-testid={`text-empty-quotes-subtitle-${group.id}`}>
+                                      Nothing in {group.title.toLowerCase()} yet.
                                     </div>
                                   </div>
-                                </button>
-                                );
-                              })}
-
-                              {rowsWithToggles.length === 0 ? (
-                                <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid={`empty-quotes-${group.id}`}>
-                                  <div className="text-sm font-semibold" data-testid={`text-empty-quotes-title-${group.id}`}>
-                                    No quotes
-                                  </div>
-                                  <div className="mt-1 text-xs text-black/55" data-testid={`text-empty-quotes-subtitle-${group.id}`}>
-                                    Nothing in {group.title.toLowerCase()} yet.
-                                  </div>
-                                </div>
-                              ) : null}
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
                           );
                         })}
                       </div>
@@ -2032,104 +2033,104 @@ export default function ClientPage() {
                           </div>
                         ) : (
                           bookings.map((b: BookingWithJoins) => (
-                              <button
-                                key={b.id}
-                                type="button"
-                                className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
-                                data-testid={`card-booking-${b.id}`}
-                                onClick={() => navigate(`/clients/${clientId}/bookings/${b.id}`)}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div
-                                    className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
-                                    aria-hidden
-                                  >
-                                    {b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url ? (
-                                      <img
-                                        src={(b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url) ?? ""}
-                                        alt=""
-                                        className="absolute inset-0 h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-black/20">
-                                        <ImagePlus className="h-6 w-6" />
-                                      </div>
-                                    )}
-                                  </div>
+                            <button
+                              key={b.id}
+                              type="button"
+                              className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
+                              data-testid={`card-booking-${b.id}`}
+                              onClick={() => navigate(`/clients/${clientId}/bookings/${b.id}`)}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
+                                  aria-hidden
+                                >
+                                  {b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url ? (
+                                    <img
+                                      src={(b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url) ?? ""}
+                                      alt=""
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-black/20">
+                                      <ImagePlus className="h-6 w-6" />
+                                    </div>
+                                  )}
+                                </div>
 
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <div className="truncate text-sm font-semibold" data-testid={`text-booking-title-${b.id}`}>
-                                            {b.title || b.holiday_type_name || "Booking"}
-                                          </div>
-                                          <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                            {b.booking_status || "BOOKED"}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <div className="truncate text-sm font-semibold" data-testid={`text-booking-title-${b.id}`}>
+                                          {b.title || b.holiday_type_name || "Booking"}
+                                        </div>
+                                        <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                          {b.booking_status || "BOOKED"}
+                                        </span>
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
+                                        <span data-testid={`text-booking-type-${b.id}`}>{b.holiday_type_name || "—"}</span>
+                                        <span className="text-black/25">•</span>
+                                        <span data-testid={`text-booking-traveldate-${b.id}`}>{formatUKDate(b.travel_date)}</span>
+                                        <span className="text-black/25">•</span>
+                                        <span data-testid={`text-booking-created-${b.id}`}>Created {b.date_created ? new Date(b.date_created).toLocaleDateString("en-GB") : "—"}</span>
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
+                                        <span data-testid={`text-booking-pax-${b.id}`}>{b.adult || 0}A{(b.child || 0) > 0 ? ` ${b.child}C` : ""}{(b.infant || 0) > 0 ? ` ${b.infant}I` : ""}</span>
+                                        {b.num_of_nights > 0 && (
+                                          <>
+                                            <span className="text-black/25">•</span>
+                                            <span data-testid={`text-booking-nights-${b.id}`}>{b.num_of_nights}N</span>
+                                          </>
+                                        )}
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-black/60">
+                                        {b.hays_ref && (
+                                          <span data-testid={`text-booking-hays-${b.id}`}>
+                                            HAYS Ref: <span className="font-semibold text-black/80">{b.hays_ref}</span>
                                           </span>
-                                        </div>
-                                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                          <span data-testid={`text-booking-type-${b.id}`}>{b.holiday_type_name || "—"}</span>
-                                          <span className="text-black/25">•</span>
-                                          <span data-testid={`text-booking-traveldate-${b.id}`}>{formatUKDate(b.travel_date)}</span>
-                                          <span className="text-black/25">•</span>
-                                          <span data-testid={`text-booking-created-${b.id}`}>Created {b.date_created ? new Date(b.date_created).toLocaleDateString("en-GB") : "—"}</span>
-                                        </div>
-                                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                          <span data-testid={`text-booking-pax-${b.id}`}>{b.adult || 0}A{(b.child || 0) > 0 ? ` ${b.child}C` : ""}{(b.infant || 0) > 0 ? ` ${b.infant}I` : ""}</span>
-                                          {b.num_of_nights > 0 && (
-                                            <>
-                                              <span className="text-black/25">•</span>
-                                              <span data-testid={`text-booking-nights-${b.id}`}>{b.num_of_nights}N</span>
-                                            </>
-                                          )}
-                                        </div>
-                                        <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-black/60">
-                                          {b.hays_ref && (
-                                            <span data-testid={`text-booking-hays-${b.id}`}>
-                                              HAYS Ref: <span className="font-semibold text-black/80">{b.hays_ref}</span>
-                                            </span>
-                                          )}
-                                          {b.supplier_ref && (
-                                            <span data-testid={`text-booking-supplier-${b.id}`}>
-                                              Supplier Ref: <span className="font-semibold text-black/80">{b.supplier_ref}</span>
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      <div className="shrink-0 text-right">
-                                        <div className="text-xs font-semibold text-black/85" data-testid={`text-booking-total-${b.id}`}>
-                                          {b.sales_price && parseFloat(b.sales_price) > 0 ? currency.format(parseFloat(b.sales_price)) : "—"}
-                                        </div>
+                                        )}
+                                        {b.supplier_ref && (
+                                          <span data-testid={`text-booking-supplier-${b.id}`}>
+                                            Supplier Ref: <span className="font-semibold text-black/80">{b.supplier_ref}</span>
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
-                                    <div className="mt-1 flex items-end justify-end gap-3">
-                                      <div className="flex items-center gap-1">
-                                        <span
-                                          role="button"
-                                          tabIndex={0}
-                                          className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "booking" && f.itemId === b.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
-                                          data-testid={`button-pin-booking-${b.id}`}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            toggleFavoriteMutation.mutate({ itemType: "booking", itemId: b.id, label: b.title || "Booking", subtitle: `${client?.name || ""}` });
-                                          }}
-                                          title={userFavorites?.some((f: Favorite) => f.itemType === "booking" && f.itemId === b.id) ? "Unpin" : "Pin to dashboard"}
-                                        >
-                                          <Pin className="h-3.5 w-3.5" />
-                                        </span>
-                                        <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-booking-${b.id}`}>
-                                          View
-                                          <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                                        </div>
+
+                                    <div className="shrink-0 text-right">
+                                      <div className="text-xs font-semibold text-black/85" data-testid={`text-booking-total-${b.id}`}>
+                                        {b.sales_price && parseFloat(b.sales_price) > 0 ? currency.format(parseFloat(b.sales_price)) : "—"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="mt-1 flex items-end justify-end gap-3">
+                                    <div className="flex items-center gap-1">
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "booking" && f.itemId === b.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
+                                        data-testid={`button-pin-booking-${b.id}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          toggleFavoriteMutation.mutate({ itemType: "booking", itemId: b.id, label: b.title || "Booking", subtitle: `${client?.name || ""}` });
+                                        }}
+                                        title={userFavorites?.some((f: Favorite) => f.itemType === "booking" && f.itemId === b.id) ? "Unpin" : "Pin to dashboard"}
+                                      >
+                                        <Pin className="h-3.5 w-3.5" />
+                                      </span>
+                                      <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-booking-${b.id}`}>
+                                        View
+                                        <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                                       </div>
                                     </div>
                                   </div>
                                 </div>
-                              </button>
-                            ))
+                              </div>
+                            </button>
+                          ))
                         )}
                       </div>
                     </Card>
@@ -2215,7 +2216,7 @@ export default function ClientPage() {
                             {role === "Admin" && (
                               <button
                                 type="button"
-                                onClick={() => {}}
+                                onClick={() => { }}
                                 className="rounded-xl border border-red-500/20 bg-red-500/10 p-1.5 text-red-600 transition hover:bg-red-500/20"
                                 data-testid={`button-delete-file-wide-${f.id}`}
                               >
@@ -2368,222 +2369,227 @@ export default function ClientPage() {
                     </div>
                   </>
                 )}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-black/60">JSON Upload</Label>
-                  <Input
-                    type="file"
-                    accept=".json"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = async (ev) => {
-                          const content = ev.target?.result as string || "";
-                          const toIsoDate = (d: string | undefined): string => {
-                            if (!d) return "";
-                            const match = d.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
-                            if (match) {
-                              const [, day, month, year] = match;
-                              return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-                            }
-                            return d;
-                          };
-                          try {
-                            const data = JSON.parse(content);
-
-                            const isScraperFormat = Array.isArray(data.flights) || data.sales_price !== undefined || data.departure_airport !== undefined;
-
-                            const idOnlyFields = new Set([
-                              'country', 'destination', 'resort', 'accommodation',
-                              'boardBasis', 'tourOperator', 'roomType',
-                              'outboundDepartAirport', 'outboundArriveAirport',
-                              'inboundDepartAirport', 'inboundArriveAirport',
-                            ]);
-
-                            const applyMappedIds = async (textFields: Record<string, string | undefined>) => {
-                              try {
-                                const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
-                                const idMapping = await jsonMapperApi.mapToIds(textFields);
-                                setNewQuote((prev) => {
-                                  const updated = { ...prev };
-                                  if (idMapping.countryId) updated.country = idMapping.countryId;
-                                  if (idMapping.destinationId) updated.destination = idMapping.destinationId;
-                                  if (idMapping.resortId) updated.resort = idMapping.resortId;
-                                  if (idMapping.accommodationId) updated.accommodation = idMapping.accommodationId;
-                                  if (idMapping.boardBasisId) updated.boardBasis = idMapping.boardBasisId;
-                                  if (idMapping.tourOperatorId) updated.tourOperator = idMapping.tourOperatorId;
-                                  if (idMapping.outboundDepartAirportId) updated.outboundDepartAirport = idMapping.outboundDepartAirportId;
-                                  if (idMapping.outboundArriveAirportId) updated.outboundArriveAirport = idMapping.outboundArriveAirportId;
-                                  if (idMapping.inboundDepartAirportId) updated.inboundDepartAirport = idMapping.inboundDepartAirportId;
-                                  if (idMapping.inboundArriveAirportId) updated.inboundArriveAirport = idMapping.inboundArriveAirportId;
-                                  if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
-                                  return updated;
-                                });
-                                if (idMapping.warnings?.length > 0) {
-                                  toast({ title: "Some values need attention", description: idMapping.warnings.join(", ") });
-                                }
-                              } catch (err) {
-                                console.error("ID mapping failed:", err);
+                <div className="flex items-center ">
+                  <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
+                    <Upload className="h-3.5 w-3.5" />
+                    Import JSON
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      data-testid="input-json-upload"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = async (ev) => {
+                            const content = ev.target?.result as string || "";
+                            const toIsoDate = (d: string | undefined): string => {
+                              if (!d) return "";
+                              const match = d.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+                              if (match) {
+                                const [, day, month, year] = match;
+                                return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
                               }
+                              return d;
                             };
+                            try {
+                              const data = JSON.parse(content);
 
-                            if (isScraperFormat) {
-                              const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
-                              const result = mapScraperJsonToFormFields(data);
+                              const isScraperFormat = Array.isArray(data.flights) || data.sales_price !== undefined || data.departure_airport !== undefined;
 
-                              const resolveAirportId = (airportText: string | undefined): string => {
-                                if (!airportText || !airportsData) return "";
-                                const needle = airportText.trim().toLowerCase();
-                                if (!needle) return "";
+                              const idOnlyFields = new Set([
+                                'country', 'destination', 'resort', 'accommodation',
+                                'boardBasis', 'tourOperator', 'roomType',
+                                'outboundDepartAirport', 'outboundArriveAirport',
+                                'inboundDepartAirport', 'inboundArriveAirport',
+                              ]);
 
-                                const exact = airportsData.find((airport: Airport) => {
-                                  const name = (airport.airport_name || "").trim().toLowerCase();
-                                  const code = (airport.airport_code || "").trim().toLowerCase();
-                                  return needle === name || needle === code;
-                                });
-                                if (exact) return exact.id;
-
-                                const partial = airportsData.find((airport: Airport) => {
-                                  const name = (airport.airport_name || "").trim().toLowerCase();
-                                  const code = (airport.airport_code || "").trim().toLowerCase();
-                                  return name.includes(needle) || needle.includes(name) || (code.length > 0 && (code.includes(needle) || needle.includes(code)));
-                                });
-
-                                return partial?.id || "";
+                              const applyMappedIds = async (textFields: Record<string, string | undefined>) => {
+                                try {
+                                  const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
+                                  const idMapping = await jsonMapperApi.mapToIds(textFields);
+                                  setNewQuote((prev) => {
+                                    const updated = { ...prev };
+                                    if (idMapping.countryId) updated.country = idMapping.countryId;
+                                    if (idMapping.parkId) updated.parkId = idMapping.parkId;
+                                    if (idMapping.destinationId) updated.destination = idMapping.destinationId;
+                                    if (idMapping.resortId) updated.resort = idMapping.resortId;
+                                    if (idMapping.accommodationId) updated.accommodation = idMapping.accommodationId;
+                                    if (idMapping.boardBasisId) updated.boardBasis = idMapping.boardBasisId;
+                                    if (idMapping.tourOperatorId) updated.tourOperator = idMapping.tourOperatorId;
+                                    if (idMapping.outboundDepartAirportId) updated.outboundDepartAirport = idMapping.outboundDepartAirportId;
+                                    if (idMapping.outboundArriveAirportId) updated.outboundArriveAirport = idMapping.outboundArriveAirportId;
+                                    if (idMapping.inboundDepartAirportId) updated.inboundDepartAirport = idMapping.inboundDepartAirportId;
+                                    if (idMapping.inboundArriveAirportId) updated.inboundArriveAirport = idMapping.inboundArriveAirportId;
+                                    if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
+                                    return updated;
+                                  });
+                                  if (idMapping.warnings?.length > 0) {
+                                    toast({ title: "Some values need attention", description: idMapping.warnings.join(", ") });
+                                  }
+                                } catch (err) {
+                                  console.error("ID mapping failed:", err);
+                                }
                               };
 
-                              setNewQuote((prev) => {
-                                const updated = { ...prev, jsonPayload: content };
-                                for (const [k, v] of Object.entries(result.fields)) {
-                                  if (v !== "" && v !== null && v !== undefined && !idOnlyFields.has(k)) {
-                                    (updated as Record<string, unknown>)[k] = v;
+                              if (isScraperFormat) {
+                                const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
+                                const result = mapScraperJsonToFormFields(data);
+
+                                const resolveAirportId = (airportText: string | undefined): string => {
+                                  if (!airportText || !airportsData) return "";
+                                  const needle = airportText.trim().toLowerCase();
+                                  if (!needle) return "";
+
+                                  const exact = airportsData.find((airport: Airport) => {
+                                    const name = (airport.airport_name || "").trim().toLowerCase();
+                                    const code = (airport.airport_code || "").trim().toLowerCase();
+                                    return needle === name || needle === code;
+                                  });
+                                  if (exact) return exact.id;
+
+                                  const partial = airportsData.find((airport: Airport) => {
+                                    const name = (airport.airport_name || "").trim().toLowerCase();
+                                    const code = (airport.airport_code || "").trim().toLowerCase();
+                                    return name.includes(needle) || needle.includes(name) || (code.length > 0 && (code.includes(needle) || needle.includes(code)));
+                                  });
+
+                                  return partial?.id || "";
+                                };
+
+                                setNewQuote((prev) => {
+                                  const updated = { ...prev, jsonPayload: content };
+                                  for (const [k, v] of Object.entries(result.fields)) {
+                                    if (v !== "" && v !== null && v !== undefined && !idOnlyFields.has(k)) {
+                                      (updated as Record<string, unknown>)[k] = v;
+                                    }
                                   }
+
+                                  updated.outboundConnectingLegs = result.outboundConnectingLegs.map((leg) => ({
+                                    ...leg,
+                                    departAirportId: resolveAirportId(leg.departAirport),
+                                    arriveAirportId: resolveAirportId(leg.arriveAirport),
+                                  }));
+
+                                  updated.inboundConnectingLegs = result.inboundConnectingLegs.map((leg) => ({
+                                    ...leg,
+                                    departAirportId: resolveAirportId(leg.departAirport),
+                                    arriveAirportId: resolveAirportId(leg.arriveAirport),
+                                  }));
+                                  return updated;
+                                });
+                                if (result.images.length > 0) {
+                                  setQuoteImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
                                 }
-
-                                updated.outboundConnectingLegs = result.outboundConnectingLegs.map((leg) => ({
-                                  ...leg,
-                                  departAirportId: resolveAirportId(leg.departAirport),
-                                  arriveAirportId: resolveAirportId(leg.arriveAirport),
-                                }));
-
-                                updated.inboundConnectingLegs = result.inboundConnectingLegs.map((leg) => ({
-                                  ...leg,
-                                  departAirportId: resolveAirportId(leg.departAirport),
-                                  arriveAirportId: resolveAirportId(leg.arriveAirport),
-                                }));
-                                return updated;
-                              });
-                              if (result.images.length > 0) {
-                                setQuoteImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
+                                await applyMappedIds({
+                                  country: result.fields.country,
+                                  destination: result.fields.destination,
+                                  resort: result.fields.resort,
+                                  accommodation: result.fields.accommodation,
+                                  boardBasis: result.fields.boardBasis,
+                                  tourOperator: result.fields.tourOperator,
+                                  outboundDepartAirport: result.fields.outboundDepartAirport,
+                                  outboundArriveAirport: result.fields.outboundArriveAirport,
+                                  inboundDepartAirport: result.fields.inboundDepartAirport,
+                                  inboundArriveAirport: result.fields.inboundArriveAirport,
+                                  roomType: result.fields.roomType,
+                                });
+                                return;
                               }
+
+                              const textCountry = data.country || "";
+                              const textDestination = data.destination || "";
+                              const textResort = data.resort || "";
+                              const textAccommodation = data.accommodation || data.hotel || data.property || "";
+                              const textBoardBasis = data.boardBasis || data.board_basis || data.board || "";
+                              const textTourOperator = data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || "";
+                              const textRoomType = data.roomType || data.room_type || data.room || "";
+                              const textOutboundDepart = data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || "";
+                              const textOutboundArrive = data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || "";
+                              const textInboundDepart = data.flights?.inbound?.departAirport || data.inbound?.from || "";
+                              const textInboundArrive = data.flights?.inbound?.arriveAirport || data.inbound?.to || "";
+
+                              setNewQuote((prev) => ({
+                                ...prev,
+                                jsonPayload: content,
+                                packageType: data.packageType || data.package_type || prev.packageType,
+                                quoteTitle: data.quoteTitle || data.quote_title || data.title || prev.quoteTitle,
+                                quoteLink: data.quoteLink || data.quote_link || data.link || prev.quoteLink,
+                                travelDate: toIsoDate(data.travelDate || data.travel_date || data.departureDate) || prev.travelDate,
+                                passengersAdults: data.passengers?.adults || data.adults || data.passengersAdults || prev.passengersAdults,
+                                passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
+                                passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
+                                childAges: data.childAges || data.child_ages || data.passengers?.childAges || prev.childAges,
+                                checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
+                                checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
+                                nights: data.nights || data.duration || prev.nights,
+                                transferType: data.transferType || data.transfer_type || data.transfers || prev.transferType,
+                                preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
+                                flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
+                                outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
+                                outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
+                                outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
+                                outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
+                                inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
+                                inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
+                                inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
+                                inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
+                                sales: data.commissions?.sales || data.sales || prev.sales,
+                                price: data.commissions?.price || data.price || data.total || prev.price,
+                                commission: data.commissions?.commission || data.commission || prev.commission,
+                                discount: data.commissions?.discount || data.discount || prev.discount,
+                                serviceCharge: data.commissions?.serviceCharge || data.serviceCharge || data.service_charge || prev.serviceCharge,
+                                pricePerPerson: data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp || prev.pricePerPerson,
+                              }));
+
                               await applyMappedIds({
-                                country: result.fields.country,
-                                destination: result.fields.destination,
-                                resort: result.fields.resort,
-                                accommodation: result.fields.accommodation,
-                                boardBasis: result.fields.boardBasis,
-                                tourOperator: result.fields.tourOperator,
-                                outboundDepartAirport: result.fields.outboundDepartAirport,
-                                outboundArriveAirport: result.fields.outboundArriveAirport,
-                                inboundDepartAirport: result.fields.inboundDepartAirport,
-                                inboundArriveAirport: result.fields.inboundArriveAirport,
-                                roomType: result.fields.roomType,
+                                country: textCountry,
+                                destination: textDestination,
+                                resort: textResort,
+                                accommodation: textAccommodation,
+                                boardBasis: textBoardBasis,
+                                tourOperator: textTourOperator,
+                                outboundDepartAirport: textOutboundDepart,
+                                outboundArriveAirport: textOutboundArrive,
+                                inboundDepartAirport: textInboundDepart,
+                                inboundArriveAirport: textInboundArrive,
+                                roomType: textRoomType,
                               });
-                              return;
-                            }
-
-                            const textCountry = data.country || "";
-                            const textDestination = data.destination || "";
-                            const textResort = data.resort || "";
-                            const textAccommodation = data.accommodation || data.hotel || data.property || "";
-                            const textBoardBasis = data.boardBasis || data.board_basis || data.board || "";
-                            const textTourOperator = data.commissions?.tourOperator || data.tourOperator || data.tour_operator || data.operator || "";
-                            const textRoomType = data.roomType || data.room_type || data.room || "";
-                            const textOutboundDepart = data.flights?.outbound?.departAirport || data.outbound?.from || data.departureAirport || "";
-                            const textOutboundArrive = data.flights?.outbound?.arriveAirport || data.outbound?.to || data.arrivalAirport || "";
-                            const textInboundDepart = data.flights?.inbound?.departAirport || data.inbound?.from || "";
-                            const textInboundArrive = data.flights?.inbound?.arriveAirport || data.inbound?.to || "";
-
-                            setNewQuote((prev) => ({
-                              ...prev,
-                              jsonPayload: content,
-                              packageType: data.packageType || data.package_type || prev.packageType,
-                              quoteTitle: data.quoteTitle || data.quote_title || data.title || prev.quoteTitle,
-                              quoteLink: data.quoteLink || data.quote_link || data.link || prev.quoteLink,
-                              travelDate: toIsoDate(data.travelDate || data.travel_date || data.departureDate) || prev.travelDate,
-                              passengersAdults: data.passengers?.adults || data.adults || data.passengersAdults || prev.passengersAdults,
-                              passengersChildren: data.passengers?.children || data.children || data.passengersChildren || prev.passengersChildren,
-                              passengersInfants: data.passengers?.infants || data.infants || data.passengersInfants || prev.passengersInfants,
-                              childAges: data.childAges || data.child_ages || data.passengers?.childAges || prev.childAges,
-                              checkInDate: toIsoDate(data.checkInDate || data.check_in_date || data.checkin) || prev.checkInDate,
-                              checkInTime: data.checkInTime || data.check_in_time || prev.checkInTime,
-                              nights: data.nights || data.duration || prev.nights,
-                              transferType: data.transferType || data.transfer_type || data.transfers || prev.transferType,
-                              preBookedSeats: data.preBookedSeats || data.pre_booked_seats || data.seats || prev.preBookedSeats,
-                              flightMeals: data.flightMeals || data.flight_meals || data.meals || prev.flightMeals,
-                              outboundDepartDate: toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date) || prev.outboundDepartDate,
-                              outboundDepartTime: data.flights?.outbound?.departTime || data.outbound?.time || prev.outboundDepartTime,
-                              outboundArriveDate: toIsoDate(data.flights?.outbound?.arriveDate) || prev.outboundArriveDate,
-                              outboundArriveTime: data.flights?.outbound?.arriveTime || prev.outboundArriveTime,
-                              inboundDepartDate: toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date) || prev.inboundDepartDate,
-                              inboundDepartTime: data.flights?.inbound?.departTime || data.inbound?.time || prev.inboundDepartTime,
-                              inboundArriveDate: toIsoDate(data.flights?.inbound?.arriveDate) || prev.inboundArriveDate,
-                              inboundArriveTime: data.flights?.inbound?.arriveTime || prev.inboundArriveTime,
-                              sales: data.commissions?.sales || data.sales || prev.sales,
-                              price: data.commissions?.price || data.price || data.total || prev.price,
-                              commission: data.commissions?.commission || data.commission || prev.commission,
-                              discount: data.commissions?.discount || data.discount || prev.discount,
-                              serviceCharge: data.commissions?.serviceCharge || data.serviceCharge || data.service_charge || prev.serviceCharge,
-                              pricePerPerson: data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp || prev.pricePerPerson,
-                            }));
-
-                            await applyMappedIds({
-                              country: textCountry,
-                              destination: textDestination,
-                              resort: textResort,
-                              accommodation: textAccommodation,
-                              boardBasis: textBoardBasis,
-                              tourOperator: textTourOperator,
-                              outboundDepartAirport: textOutboundDepart,
-                              outboundArriveAirport: textOutboundArrive,
-                              inboundDepartAirport: textInboundDepart,
-                              inboundArriveAirport: textInboundArrive,
-                              roomType: textRoomType,
-                            });
-                            const extractedImages: string[] = [];
-                            const imageFields = [
-                              data.images, data.image, data.photos, data.photo,
-                              data.imageUrl, data.image_url, data.imageUrls, data.image_urls,
-                              data.thumbnails, data.thumbnail, data.gallery,
-                              data.accommodation?.image, data.accommodation?.imageUrl,
-                              data.hotel?.image, data.hotel?.imageUrl,
-                            ];
-                            for (const field of imageFields) {
-                              if (typeof field === "string" && field.startsWith("http")) {
-                                extractedImages.push(field);
-                              } else if (Array.isArray(field)) {
-                                for (const item of field) {
-                                  if (typeof item === "string" && item.startsWith("http")) {
-                                    extractedImages.push(item);
-                                  } else if (item?.url && typeof item.url === "string") {
-                                    extractedImages.push(item.url);
+                              const extractedImages: string[] = [];
+                              const imageFields = [
+                                data.images, data.image, data.photos, data.photo,
+                                data.imageUrl, data.image_url, data.imageUrls, data.image_urls,
+                                data.thumbnails, data.thumbnail, data.gallery,
+                                data.accommodation?.image, data.accommodation?.imageUrl,
+                                data.hotel?.image, data.hotel?.imageUrl,
+                              ];
+                              for (const field of imageFields) {
+                                if (typeof field === "string" && field.startsWith("http")) {
+                                  extractedImages.push(field);
+                                } else if (Array.isArray(field)) {
+                                  for (const item of field) {
+                                    if (typeof item === "string" && item.startsWith("http")) {
+                                      extractedImages.push(item);
+                                    } else if (item?.url && typeof item.url === "string") {
+                                      extractedImages.push(item.url);
+                                    }
                                   }
                                 }
                               }
+                              if (extractedImages.length > 0) {
+                                setQuoteImageUrls((prev) => [...prev, ...extractedImages.filter((u) => !prev.includes(u))]);
+                              }
+                            } catch {
+                              setNewQuote((prev) => ({ ...prev, jsonPayload: content }));
                             }
-                            if (extractedImages.length > 0) {
-                              setQuoteImageUrls((prev) => [...prev, ...extractedImages.filter((u) => !prev.includes(u))]);
-                            }
-                          } catch {
-                            setNewQuote((prev) => ({ ...prev, jsonPayload: content }));
-                          }
-                        };
-                        reader.readAsText(file);
-                      }
-                    }}
-                    className="h-9 rounded-xl border-black/10 bg-white/70"
-                    data-testid="input-json-upload"
-                  />
+                          };
+                          reader.readAsText(file);
+                        }
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
                 </div>
               </div>
             </div>
@@ -2883,7 +2889,7 @@ export default function ClientPage() {
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Park Name</Label>
-                    <Select value={newQuote.parkName} onValueChange={(v) => setNewQuote({ ...newQuote, parkName: v, lodgeCode: "" })}>
+                    <Select value={newQuote.parkId} onValueChange={(v) => setNewQuote({ ...newQuote, parkId: v, lodgeId: "" })}>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-park-name">
                         <SelectValue placeholder="Select park..." />
                       </SelectTrigger>
@@ -2896,7 +2902,7 @@ export default function ClientPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Lodge Code</Label>
-                    <Select value={newQuote.lodgeCode} onValueChange={(v) => setNewQuote({ ...newQuote, lodgeCode: v })} disabled={!newQuote.parkName}>
+                    <Select value={newQuote.lodgeId}  onValueChange={(v) => setNewQuote({ ...newQuote, lodgeId: v })} disabled={!newQuote.parkId}>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-lodge-code">
                         <SelectValue placeholder="Select lodge..." />
                       </SelectTrigger>
@@ -3695,7 +3701,7 @@ export default function ClientPage() {
                     title: newQuote.quoteTitle,
                     price_per_person: newQuote.pricePerPerson ? String(newQuote.pricePerPerson) : undefined,
                     transfer_type: newQuote.transferType || undefined,
-                    lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
+                    lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeId || undefined) : undefined,
                     pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
                     main_tour_operator_id: newQuote.tourOperator || undefined,
                     outboundFlight: showFlights ? outboundFlight : undefined,
@@ -3726,7 +3732,7 @@ export default function ClientPage() {
                           discounts: newQuote.discount ? String(newQuote.discount) : undefined,
                           service_charge: newQuote.serviceCharge ? String(newQuote.serviceCharge) : undefined,
                           transfer_type: newQuote.transferType || undefined,
-                          lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeCode || undefined) : undefined,
+                          lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeId || undefined) : undefined,
                           pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : 0,
                           main_tour_operator_id: newQuote.tourOperator || undefined,
                           outboundFlight: showFlights ? outboundFlight : undefined,
