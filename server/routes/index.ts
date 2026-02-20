@@ -20,6 +20,7 @@ import taskRoutes from "./task.routes";
 import lookupRoutes from "./lookup.routes";
 import jsonMapperRoutes from "./json-mapper.routes";
 import tagRoutes from "./tag.routes";
+import chatRoutes from "./chat.routes";
 
 const router = Router();
 
@@ -44,5 +45,6 @@ router.use("/tasks", taskRoutes);
 router.use("/lookup", lookupRoutes);
 router.use("/json-mapper", jsonMapperRoutes);
 router.use("/tags", tagRoutes);
+router.use("/chat", chatRoutes);
 
 export default router;

@@ -1353,3 +1353,40 @@ export const tasks = pgTable("tasks", {
 export const insertTasksSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
 export type TaskNew = typeof tasks.$inferSelect;
 export type InsertTaskNew = typeof tasks.$inferInsert;
+
+export const chatConversations = pgTable("chat_conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull().default("direct"),
+  name: text("name"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertChatConversationSchema = createInsertSchema(chatConversations).omit({ id: true, createdAt: true, updatedAt: true });
+export type ChatConversation = typeof chatConversations.$inferSelect;
+export type InsertChatConversation = z.infer<typeof insertChatConversationSchema>;
+
+export const chatParticipants = pgTable("chat_participants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull(),
+  userId: text("user_id").notNull(),
+  joinedAt: timestamp("joined_at").defaultNow(),
+  lastReadAt: timestamp("last_read_at"),
+});
+
+export const insertChatParticipantSchema = createInsertSchema(chatParticipants).omit({ id: true, joinedAt: true });
+export type ChatParticipant = typeof chatParticipants.$inferSelect;
+export type InsertChatParticipant = z.infer<typeof insertChatParticipantSchema>;
+
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull(),
+  senderId: text("sender_id").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
