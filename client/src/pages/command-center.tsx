@@ -3586,7 +3586,7 @@ export default function CommandCenterPage() {
             </div>
 
             <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); setOpportunitiesAgentFilter("all"); }}>
-              <div className="mb-3">
+              <div className="flex items-center gap-3 mb-3">
                 <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-opportunities">
                   <TabsTrigger value="enquiries" className="rounded-xl gap-1.5" data-testid="tab-opportunities-enquiries">
                     <ClipboardList className="h-3.5 w-3.5" /> Enquiries
@@ -3601,9 +3601,7 @@ export default function CommandCenterPage() {
                     <Badge variant="secondary" className="ml-1 rounded-full text-[10px] px-1.5 py-0">{opportunitiesData.bookings.length}</Badge>
                   </TabsTrigger>
                 </TabsList>
-              </div>
 
-              <div className="flex items-center gap-2 mb-3">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-black/40 dark:text-white/40" />
                   <Input
