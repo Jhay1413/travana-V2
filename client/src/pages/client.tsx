@@ -2413,6 +2413,7 @@ export default function ClientPage() {
                                     const updated = { ...prev };
                                     if (idMapping.countryId) updated.country = idMapping.countryId;
                                     if (idMapping.parkId) updated.parkId = idMapping.parkId;
+                                    if (idMapping.lodgeId) updated.lodgeId = idMapping.lodgeId;
                                     if (idMapping.destinationId) updated.destination = idMapping.destinationId;
                                     if (idMapping.resortId) updated.resort = idMapping.resortId;
                                     if (idMapping.accommodationId) updated.accommodation = idMapping.accommodationId;
