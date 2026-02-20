@@ -79,9 +79,14 @@ router.get("/board-basis", async (_req, res) => {
   }
 });
 
-router.get("/parks", async (_req, res) => {
+router.get("/parks", async (req, res) => {
   try {
-    const rows = await db.select().from(park).orderBy(park.name);
+    const parkId = req.query.parkId as string | undefined;
+    let query = db.select().from(park);
+    if (parkId) {
+      query = query.where(eq(park.id, parkId)) as any;
+    }
+    const rows = await query.orderBy(park.name);
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

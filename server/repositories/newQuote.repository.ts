@@ -107,7 +107,14 @@ export const newQuoteRepository = {
         flight_arrival_date: quote_flights.arrival_date_time,
         flight_type: quote_flights.flight_type,
         flight_leg_order: quote_flights.leg_order,
-        departing_airport_name: sql<string>`CASE WHEN ${departAirport.airport_code} IS NOT NULL AND ${departAirport.airport_code} <> '' THEN concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')') ELSE ${departAirport.airport_name} END`,
+        departing_airport_name: sql<string>`(
+          SELECT airport_table.airport_name
+          FROM quote_flights
+          LEFT JOIN airport_table ON quote_flights.departing_airport_id = airport_table.id
+          WHERE quote_flights.quote_id = quote_table.id
+          ORDER BY quote_flights.departure_date_time ASC
+          LIMIT 1
+        )`,
         arrival_airport_name: sql<string>`CASE WHEN ${arriveAirport.airport_code} IS NOT NULL AND ${arriveAirport.airport_code} <> '' THEN concat(${arriveAirport.airport_name}, ' (', ${arriveAirport.airport_code}, ')') ELSE ${arriveAirport.airport_name} END`,
         
         // Accommodation data (only primary)
@@ -134,7 +141,6 @@ export const newQuoteRepository = {
       
       // LEFT JOIN for flights
       .leftJoin(quote_flights, eq(quote_flights.quote_id, quote.id))
-      .leftJoin(departAirport, eq(quote_flights.departing_airport_id, departAirport.id))
       .leftJoin(arriveAirport, eq(quote_flights.arrival_airport_id, arriveAirport.id))
       
       // LEFT JOIN for primary accommodation
@@ -172,6 +178,7 @@ export const newQuoteRepository = {
           country_name: row.country_name,
           destination_id: row.destination_id,
           destination_name: row.destination_name,
+          departing_airport_name: row.departing_airport_name,
           flights: [],
           accommodations: row.accommodation_id ? [{
             id: row.accommodation_id,
@@ -211,6 +218,13 @@ export const newQuoteRepository = {
         });
       }
     }
+
+    // Debug: log departing airport data for first result
+    const firstResult = results[0];
+    console.log('🛫 DEBUG findFreeQuotesPaginated - first row departing_airport_name:', firstResult?.departing_airport_name);
+    console.log('🛫 DEBUG findFreeQuotesPaginated - first row flight_id:', firstResult?.flight_id);
+    console.log('🛫 DEBUG findFreeQuotesPaginated - first row flight_type:', firstResult?.flight_type);
+    console.log('🛫 DEBUG findFreeQuotesPaginated - first quote in map:', JSON.stringify(Array.from(quoteMap.values())[0]?.departing_airport_name));
 
     // Return quotes in the original order
     return ids.map(id => quoteMap.get(id)).filter(Boolean);

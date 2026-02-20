@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useRoomTypes, useTags, useAirports } from "@/hooks/queries";
+import { useQuote, useBooking, useNotes, useTasks, useClient, useNeonClient, useRoomTypes, useTags, useAirports, lookupKeys } from "@/hooks/queries";
 import { useUpdateQuote, useDuplicateQuote, useConvertToBooking, useCreateNote, useUpdateNote, useDeleteNote, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction, useUpdateQuoteTags } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { QuoteFormFields, defaultQuoteFormState } from "@/components/quote-form-fields";
@@ -2397,7 +2397,13 @@ function EditQuoteDialog({
       try {
         const data = JSON.parse(content);
 
-        const isScraperFormat = Array.isArray(data.flights) || data.sales_price !== undefined || data.departure_airport !== undefined;
+        const isScraperFormat = Array.isArray(data.flights) ||
+          data.sales_price !== undefined ||
+          data.departure_airport !== undefined ||
+          data.lodge_id !== undefined ||
+          data.lodge_type !== undefined ||
+          data.lodge_code !== undefined ||
+          data.lodge_park_name !== undefined;
 
         if (isScraperFormat) {
           try {
@@ -2427,8 +2433,18 @@ function EditQuoteDialog({
               return partial?.id || "";
             };
             
-            // Extract only the fields needed for ID mapping
-            const mappingInput = {
+            const isLodgeQuote = !!result.lodgeData;
+
+            // Completely separate mapping paths for lodge (Hot Tub Break) vs hotel (Package Holiday)
+            // Lodge quotes must NOT send country/destination/resort/accommodation/roomType to avoid unwanted DB entries
+            const mappingInput = isLodgeQuote ? {
+              boardBasis: result.fields.boardBasis,
+              tourOperator: result.fields.tourOperator,
+              lodgeCode: result.lodgeData!.code ?? null,
+              lodgeName: result.fields.accommodation || undefined,
+              parkName: result.lodgeData!.parkName || undefined,
+              parkCode: (data as Record<string, unknown>).lodge_id as string | null ?? null,
+            } : {
               country: result.fields.country,
               destination: result.fields.destination,
               resort: result.fields.resort,
@@ -2514,6 +2530,20 @@ function EditQuoteDialog({
               if (idMapping.inboundArriveAirportId) updated.inboundArriveAirportId = idMapping.inboundArriveAirportId;
               if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
 
+              // Apply lodge data
+              if (isLodgeQuote && result.lodgeData) {
+                // Ensure the form switches to Hot Tub Break mode so the Lodge Details section renders
+                updated.packageType = "Hot Tub Break";
+                // parkName stores the park UUID (drives useLodges); lodgeCode stores the lodge UUID
+                if (idMapping.parkId) updated.parkName = idMapping.parkId;
+                if (idMapping.lodgeId) updated.lodgeCode = idMapping.lodgeId;
+                updated.lodge = {
+                  name: result.fields.accommodation || result.lodgeData.parkName || "",
+                  type: result.lodgeData.type || "",
+                  code: result.lodgeData.code || "",
+                };
+              }
+
               updated.outboundConnectingLegs = result.outboundConnectingLegs.map((leg) => ({
                 ...leg,
                 departAirportId: resolveAirportId(leg.departAirport),
@@ -2528,6 +2558,12 @@ function EditQuoteDialog({
               
               return updated;
             });
+
+            // Invalidate parks/lodges cache so newly created parks appear in the dropdown
+            if (isLodgeQuote && idMapping.parkId) {
+              queryClient.invalidateQueries({ queryKey: lookupKeys.parks });
+              queryClient.invalidateQueries({ queryKey: lookupKeys.lodges(idMapping.parkId) });
+            }
           } catch (error) {
             console.error("❌ Error processing JSON:", error);
             toast({
@@ -2684,7 +2720,7 @@ function EditQuoteDialog({
     }
 
     if (form.packageType === "Hot Tub Break") {
-      updates.lodge_type = form.lodgeCode;
+      updates.lodge_id = form.lodgeCode || null;
       updates.pets = form.pets ? 1 : 0;
     }
 

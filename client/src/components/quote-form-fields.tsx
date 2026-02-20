@@ -7,7 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes } from "@/hooks/queries";
+import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes, useParks, useLodges } from "@/hooks/queries";
 import type { LookupCountry, LookupDestination, LookupResort, LookupAccommodation, LookupBoardBasis } from "@/api/endpoints/lookup.api";
 
 export interface FlightLeg {
@@ -190,6 +190,8 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
   const { data: filteredDestinationsData } = useDestinations(form.country || undefined);
   const { data: allDestinationsData } = useAllDestinations();
   const { data: resortsData } = useResorts(form.destination || undefined);
+  const { data: parksData } = useParks();
+  const { data: lodgesData } = useLodges(form.parkName || undefined);
 
   const destinationsData = form.country ? filteredDestinationsData : allDestinationsData;
 
@@ -583,23 +585,23 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Lodge Code</Label>
-              <Input
-                placeholder="e.g. HT-2451"
-                value={form.lodgeCode}
-                onChange={(e) => set("lodgeCode", e.target.value)}
-                className="h-9 rounded-xl border-black/10 bg-white/70"
-                data-testid={`${prefix}-input-lodge-code`}
+              <Label className="text-xs font-medium text-black/60">Park</Label>
+              <SearchableSelect
+                options={(parksData ?? []).map((p: { id: string; name: string | null }) => ({ value: p.id, label: p.name || p.id }))}
+                value={form.parkName}
+                onValueChange={(v) => { set("parkName", v); set("lodgeCode", ""); }}
+                placeholder="Select park..."
+                data-testid={`${prefix}-input-park-name`}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Park Name</Label>
-              <Input
-                placeholder="e.g. Forest Holidays"
-                value={form.parkName}
-                onChange={(e) => set("parkName", e.target.value)}
-                className="h-9 rounded-xl border-black/10 bg-white/70"
-                data-testid={`${prefix}-input-park-name`}
+              <Label className="text-xs font-medium text-black/60">Lodge</Label>
+              <SearchableSelect
+                options={(lodgesData ?? []).map((l: { id: string; lodge_name: string | null; lodge_code: string | null }) => ({ value: l.id, label: l.lodge_name || l.lodge_code || l.id }))}
+                value={form.lodgeCode}
+                onValueChange={(v) => set("lodgeCode", v)}
+                placeholder={form.parkName ? "Select lodge..." : "Select a park first"}
+                data-testid={`${prefix}-input-lodge-code`}
               />
             </div>
             <div className="space-y-1.5">

@@ -12,6 +12,10 @@ export interface JsonMappingInput {
   inboundDepartAirport?: string;
   inboundArriveAirport?: string;
   roomType?: string;
+  lodgeCode?: string | null;
+  lodgeName?: string;
+  parkName?: string;
+  parkCode?: string | null;
 }
 
 export interface JsonMappingResult {
@@ -26,6 +30,8 @@ export interface JsonMappingResult {
   inboundDepartAirportId: string;
   inboundArriveAirportId: string;
   roomTypeId: string;
+  lodgeId: string;
+  parkId: string;
   warnings: string[];
 }
 

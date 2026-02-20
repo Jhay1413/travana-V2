@@ -1,15 +1,17 @@
 import { db } from "../config/database";
-import { 
-  country, 
-  destination, 
-  resorts, 
-  accomodation_list, 
-  board_basis, 
-  tour_operator, 
+import {
+  country,
+  destination,
+  resorts,
+  accomodation_list,
+  board_basis,
+  tour_operator,
   airport,
-  room_type 
+  room_type,
+  lodges,
+  park,
 } from "@shared/schema";
-import { ilike, and, eq, or } from "drizzle-orm";
+import { ilike, and, eq } from "drizzle-orm";
 
 export const jsonMapperRepository = {
   /**
@@ -272,7 +274,85 @@ export const jsonMapperRepository = {
       .insert(airport)
       .values({ airport_name: name, airport_code: code })
       .returning();
-    
+
+    return results[0];
+  },
+
+  /**
+   * Find lodge by lodge_code
+   */
+  async findLodgeByCode(code: string) {
+    if (!code) return null;
+    const results = await db
+      .select()
+      .from(lodges)
+      .where(ilike(lodges.lodge_code, code.trim()))
+      .limit(1);
+    return results[0] || null;
+  },
+
+  /**
+   * Find lodge by name (case-insensitive)
+   */
+  async findLodgeByName(name: string) {
+    if (!name) return null;
+    const results = await db
+      .select()
+      .from(lodges)
+      .where(ilike(lodges.lodge_name, `%${name.trim()}%`))
+      .limit(1);
+    return results[0] || null;
+  },
+
+  /**
+   * Find park by name (case-insensitive)
+   */
+  async findParkByName(name: string) {
+    if (!name) return null;
+    const results = await db
+      .select()
+      .from(park)
+      .where(ilike(park.name, `%${name.trim()}%`))
+      .limit(1);
+    return results[0] || null;
+  },
+
+  /**
+   * Find park by code
+   */
+  async findParkByCode(code: string) {
+    if (!code) return null;
+    const results = await db
+      .select()
+      .from(park)
+      .where(ilike(park.code, code.trim()))
+      .limit(1);
+    return results[0] || null;
+  },
+
+  /**
+   * Create park
+   */
+  async createPark(name: string, code?: string) {
+    const results = await db
+      .insert(park)
+      .values({ name, code: code || null })
+      .returning();
+    return results[0];
+  },
+
+  /**
+   * Create lodge
+   */
+  async createLodge(parkId: string, lodgeCode?: string | null, lodgeName?: string | null) {
+    const results = await db
+      .insert(lodges)
+      .values({
+        park_id: parkId,
+        lodge_code: lodgeCode || null,
+        lodge_name: lodgeName || null,
+      })
+      .returning();
     return results[0];
   },
 };

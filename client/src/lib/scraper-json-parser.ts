@@ -57,6 +57,12 @@ export interface ScraperJson {
   car_hire?: unknown[];
   airport_parking?: unknown[];
   lounge_pass?: unknown[];
+  // Lodge-specific fields
+  lodge_id?: string | null;
+  lodge_type?: string | null;
+  lodge_code?: string | null;
+  lodge_images?: string[];
+  lodge_park_name?: string | null;
   [key: string]: unknown;
 }
 
@@ -174,7 +180,7 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
   }
 
   const allImages: string[] = [];
-  for (const src of [data.hotel_images, hotel?.hotel_images, data.room_images, hotel?.room_images]) {
+  for (const src of [data.hotel_images, hotel?.hotel_images, data.room_images, hotel?.room_images, data.lodge_images]) {
     if (Array.isArray(src)) {
       for (const img of src) {
         if (typeof img === "string" && img.startsWith("http") && !allImages.includes(img)) {
@@ -183,6 +189,14 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
       }
     }
   }
+
+  const lodgeData = (data.lodge_type || data.lodge_code || data.lodge_id || data.lodge_park_name || Array.isArray(data.lodge_images))
+    ? {
+        type: data.lodge_type || "",
+        code: data.lodge_code || null,
+        parkName: data.lodge_park_name || "",
+      }
+    : null;
 
   const salesAmount = toAmount(data.sales_price || hotel?.cost);
 
@@ -223,5 +237,6 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
     outboundConnectingLegs,
     inboundConnectingLegs,
     images: allImages,
+    lodgeData,
   };
 }

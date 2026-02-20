@@ -13,5 +13,9 @@ export const mapToIdsValidator = z.object({
     inboundDepartAirport: z.string().optional(),
     inboundArriveAirport: z.string().optional(),
     roomType: z.string().optional(),
+    lodgeCode: z.string().nullable().optional(),
+    lodgeName: z.string().optional(),
+    parkName: z.string().optional(),
+    parkCode: z.string().nullable().optional(),
   }),
 });

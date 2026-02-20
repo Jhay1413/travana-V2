@@ -119,8 +119,8 @@ export const lookupApi = {
     const { data } = await axios.get<LookupBoardBasis[]>("/api/lookup/board-basis");
     return data;
   },
-  getParks: async (): Promise<LookupPark[]> => {
-    const { data } = await axios.get<LookupPark[]>("/api/lookup/parks");
+  getParks: async (parkId?: string): Promise<LookupPark[]> => {
+    const { data } = await axios.get<LookupPark[]>("/api/lookup/parks", { params: parkId ? { parkId } : {} });
     return data;
   },
   getLodges: async (parkId?: string): Promise<LookupLodge[]> => {

@@ -72,10 +72,10 @@ export function useBoardBasis() {
   });
 }
 
-export function useParks() {
+export function useParks(parkId?: string) {
   return useQuery({
-    queryKey: lookupKeys.parks,
-    queryFn: () => lookupApi.getParks(),
+    queryKey: parkId ? [...lookupKeys.parks, parkId] : lookupKeys.parks,
+    queryFn: () => lookupApi.getParks(parkId),
     staleTime: 1000 * 60 * 30,
   });
 }

@@ -12,6 +12,10 @@ interface JsonMappingInput {
   inboundDepartAirport?: string;
   inboundArriveAirport?: string;
   roomType?: string;
+  lodgeCode?: string | null;
+  lodgeName?: string;
+  parkName?: string;
+  parkCode?: string | null;
 }
 
 interface JsonMappingResult {
@@ -26,6 +30,8 @@ interface JsonMappingResult {
   inboundDepartAirportId: string;
   inboundArriveAirportId: string;
   roomTypeId: string;
+  lodgeId: string;
+  parkId: string;
   warnings: string[];
 }
 
@@ -47,6 +53,8 @@ export const jsonMapperService = {
     let boardBasisId = "";
     let tourOperatorId = "";
     let roomTypeId = "";
+    let lodgeId = "";
+    let parkId = "";
 
     // Strategy 1: Check if accommodation exists first (most efficient)
     if (input.accommodation) {
@@ -208,6 +216,46 @@ export const jsonMapperService = {
       roomTypeId = room.id;
     }
 
+    // Map park: find by name, create if missing (using parkCode as the park's code field)
+    if (input.parkName) {
+      let parkRecord = await jsonMapperRepository.findParkByName(input.parkName);
+      if (!parkRecord && input.parkCode) {
+        parkRecord = await jsonMapperRepository.findParkByCode(input.parkCode);
+      }
+      if (parkRecord) {
+        parkId = parkRecord.id;
+        console.log(`✅ Found park: ${input.parkName}`);
+      } else {
+        console.log(`  → Creating park: ${input.parkName}`);
+        parkRecord = await jsonMapperRepository.createPark(input.parkName, input.parkCode || undefined);
+        parkId = parkRecord.id;
+        warnings.push(`Created new park: "${input.parkName}"`);
+      }
+    }
+
+    // Map lodge: try by code first, then by name, create if not found
+    if (input.lodgeCode) {
+      const lodge = await jsonMapperRepository.findLodgeByCode(input.lodgeCode);
+      if (lodge) {
+        lodgeId = lodge.id;
+        console.log(`✅ Found lodge by code: ${input.lodgeCode}`);
+      }
+    }
+    if (!lodgeId && input.lodgeName) {
+      const lodge = await jsonMapperRepository.findLodgeByName(input.lodgeName);
+      if (lodge) {
+        lodgeId = lodge.id;
+        console.log(`✅ Found lodge by name: ${input.lodgeName}`);
+      }
+    }
+    // Auto-create lodge if not found and we have a park
+    if (!lodgeId && parkId && (input.lodgeCode || input.lodgeName)) {
+      console.log(`  → Creating lodge: code=${input.lodgeCode}, name=${input.lodgeName}, parkId=${parkId}`);
+      const newLodge = await jsonMapperRepository.createLodge(parkId, input.lodgeCode, input.lodgeName);
+      lodgeId = newLodge.id;
+      warnings.push(`Created new lodge: "${input.lodgeName || input.lodgeCode}"`);
+    }
+
     console.log("📊 Final mapping result:", {
       countryId,
       destinationId,
@@ -220,6 +268,8 @@ export const jsonMapperService = {
       inboundDepartAirportId,
       inboundArriveAirportId,
       roomTypeId,
+      lodgeId,
+      parkId,
       warnings,
     });
 
@@ -235,6 +285,8 @@ export const jsonMapperService = {
       inboundDepartAirportId,
       inboundArriveAirportId,
       roomTypeId,
+      lodgeId,
+      parkId,
       warnings,
     };
   },
