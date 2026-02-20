@@ -1456,6 +1456,9 @@ export default function CommandCenterPage() {
   const [opportunitiesTab, setOpportunitiesTab] = useState<"enquiries" | "quotes" | "bookings">("enquiries");
   const [opportunitiesSearch, setOpportunitiesSearch] = useState("");
   const [opportunitiesStatusFilter, setOpportunitiesStatusFilter] = useState("all");
+  const [opportunitiesDateRange, setOpportunitiesDateRange] = useState<"this-month" | "last-month" | "this-week" | "last-7" | "last-30" | "last-90" | "this-year" | "all-time">("this-month");
+  const [opportunitiesSortBy, setOpportunitiesSortBy] = useState<"newest" | "oldest" | "price-high" | "price-low">("newest");
+  const [opportunitiesAgentFilter, setOpportunitiesAgentFilter] = useState("all");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const { role, setRole: setRoleFromHook, actualRole } = useRole();
   const rolePreview = role !== actualRole ? role : null;
@@ -1795,15 +1798,57 @@ export default function CommandCenterPage() {
   const filteredOpportunities = useMemo(() => {
     const src = opportunitiesTab === "enquiries" ? opportunitiesData.enquiries : opportunitiesTab === "quotes" ? opportunitiesData.quotes : opportunitiesData.bookings;
     let result = src;
+    if (opportunitiesDateRange !== "all-time") {
+      const now = new Date();
+      let rangeStart: Date;
+      if (opportunitiesDateRange === "this-month") {
+        rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (opportunitiesDateRange === "last-month") {
+        rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        result = result.filter((item: any) => { const d = new Date(item.dateCreated || 0); return d >= rangeStart && d <= rangeEnd; });
+      } else if (opportunitiesDateRange === "this-week") {
+        const day = now.getDay();
+        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); rangeStart.setHours(0, 0, 0, 0);
+      } else if (opportunitiesDateRange === "last-7") {
+        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 7); rangeStart.setHours(0, 0, 0, 0);
+      } else if (opportunitiesDateRange === "last-30") {
+        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 30); rangeStart.setHours(0, 0, 0, 0);
+      } else if (opportunitiesDateRange === "last-90") {
+        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 90); rangeStart.setHours(0, 0, 0, 0);
+      } else {
+        rangeStart = new Date(now.getFullYear(), 0, 1);
+      }
+      if (opportunitiesDateRange !== "last-month") {
+        result = result.filter((item: any) => new Date(item.dateCreated || 0) >= rangeStart);
+      }
+    }
     if (opportunitiesStatusFilter !== "all") {
       result = result.filter((item: any) => item.status === opportunitiesStatusFilter);
+    }
+    if (opportunitiesAgentFilter !== "all") {
+      result = result.filter((item: any) => item.agentName === opportunitiesAgentFilter);
     }
     if (opportunitiesSearch.trim()) {
       const q = opportunitiesSearch.toLowerCase().trim();
       result = result.filter((item: any) => item.clientName.toLowerCase().includes(q) || item.title.toLowerCase().includes(q) || (item.haysRef && item.haysRef.toLowerCase().includes(q)));
     }
+    if (opportunitiesSortBy === "oldest") {
+      result = [...result].sort((a, b) => new Date(a.dateCreated || 0).getTime() - new Date(b.dateCreated || 0).getTime());
+    } else if (opportunitiesSortBy === "price-high") {
+      result = [...result].sort((a, b) => (b.salesPrice || b.budget || 0) - (a.salesPrice || a.budget || 0));
+    } else if (opportunitiesSortBy === "price-low") {
+      result = [...result].sort((a, b) => (a.salesPrice || a.budget || 0) - (b.salesPrice || b.budget || 0));
+    }
     return result;
-  }, [opportunitiesTab, opportunitiesData, opportunitiesStatusFilter, opportunitiesSearch]);
+  }, [opportunitiesTab, opportunitiesData, opportunitiesStatusFilter, opportunitiesSearch, opportunitiesDateRange, opportunitiesSortBy, opportunitiesAgentFilter]);
+
+  const opportunitiesAgentList = useMemo(() => {
+    const src = opportunitiesTab === "enquiries" ? opportunitiesData.enquiries : opportunitiesTab === "quotes" ? opportunitiesData.quotes : opportunitiesData.bookings;
+    const agents = new Set<string>();
+    for (const item of src) { if (item.agentName) agents.add(item.agentName); }
+    return Array.from(agents).sort();
+  }, [opportunitiesTab, opportunitiesData]);
 
   const totals = useMemo(() => {
     if (dashboardStats) {
@@ -3540,8 +3585,8 @@ export default function CommandCenterPage() {
               </div>
             </div>
 
-            <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); }}>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+            <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); setOpportunitiesAgentFilter("all"); }}>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
                 <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-opportunities">
                   <TabsTrigger value="enquiries" className="rounded-xl gap-1.5" data-testid="tab-opportunities-enquiries">
                     <ClipboardList className="h-3.5 w-3.5" /> Enquiries
@@ -3557,25 +3602,71 @@ export default function CommandCenterPage() {
                   </TabsTrigger>
                 </TabsList>
 
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-black/40 dark:text-white/40" />
-                    <Input
-                      value={opportunitiesSearch}
-                      onChange={(e) => setOpportunitiesSearch(e.target.value)}
-                      placeholder="Search client or title..."
-                      className="h-8 pl-8 pr-3 text-xs rounded-xl w-48 bg-black/5 border-0 dark:bg-white/5"
-                      data-testid="input-opportunities-search"
-                    />
-                  </div>
-                  <select
-                    value={opportunitiesStatusFilter}
-                    onChange={(e) => setOpportunitiesStatusFilter(e.target.value)}
-                    className="h-8 rounded-xl border-0 bg-black/5 px-2.5 text-xs dark:bg-white/5 focus:ring-1 focus:ring-black/20"
-                    data-testid="select-opportunities-status"
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+                  <Input
+                    value={opportunitiesSearch}
+                    onChange={(e) => setOpportunitiesSearch(e.target.value)}
+                    placeholder="Search client or title..."
+                    className="h-8 pl-8 pr-3 text-xs rounded-xl w-56 bg-black/5 border-0 dark:bg-white/5"
+                    data-testid="input-opportunities-search"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <div className="flex items-center gap-1 mr-1">
+                  <Calendar className="h-3 w-3 text-black/40 dark:text-white/40" />
+                  <span className="text-[10px] font-semibold text-black/40 dark:text-white/40 uppercase tracking-wider">Period</span>
+                </div>
+                {([["this-month", "This Month"], ["last-month", "Last Month"], ["this-week", "This Week"], ["last-7", "Last 7 Days"], ["last-30", "Last 30 Days"], ["last-90", "Last 90 Days"], ["this-year", "This Year"], ["all-time", "All Time"]] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setOpportunitiesDateRange(val)}
+                    className={`rounded-xl px-2.5 py-1 text-[10px] font-medium transition ${opportunitiesDateRange === val ? "bg-black text-white dark:bg-white dark:text-black" : "bg-black/5 text-black/60 hover:bg-black/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"}`}
+                    data-testid={`button-opportunities-date-${val}`}
                   >
-                    {statusOptions.map((s) => <option key={s} value={s}>{formatStatus(s)}</option>)}
+                    {label}
+                  </button>
+                ))}
+
+                <div className="w-px h-5 bg-black/10 dark:bg-white/10 mx-1" />
+
+                <select
+                  value={opportunitiesStatusFilter}
+                  onChange={(e) => setOpportunitiesStatusFilter(e.target.value)}
+                  className="h-7 rounded-xl border-0 bg-black/5 px-2 text-[11px] dark:bg-white/5 focus:ring-1 focus:ring-black/20"
+                  data-testid="select-opportunities-status"
+                >
+                  {statusOptions.map((s) => <option key={s} value={s}>{formatStatus(s)}</option>)}
+                </select>
+
+                {opportunitiesAgentList.length > 1 && (
+                  <select
+                    value={opportunitiesAgentFilter}
+                    onChange={(e) => setOpportunitiesAgentFilter(e.target.value)}
+                    className="h-7 rounded-xl border-0 bg-black/5 px-2 text-[11px] dark:bg-white/5 focus:ring-1 focus:ring-black/20"
+                    data-testid="select-opportunities-agent"
+                  >
+                    <option value="all">All Agents</option>
+                    {opportunitiesAgentList.map((a) => <option key={a} value={a}>{a}</option>)}
                   </select>
+                )}
+
+                <select
+                  value={opportunitiesSortBy}
+                  onChange={(e) => setOpportunitiesSortBy(e.target.value as any)}
+                  className="h-7 rounded-xl border-0 bg-black/5 px-2 text-[11px] dark:bg-white/5 focus:ring-1 focus:ring-black/20"
+                  data-testid="select-opportunities-sort"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="price-high">Price: High to Low</option>
+                  <option value="price-low">Price: Low to High</option>
+                </select>
+
+                <div className="ml-auto text-[10px] text-black/40 dark:text-white/40 tabular-nums">
+                  {filteredOpportunities.length} result{filteredOpportunities.length !== 1 ? "s" : ""}
                 </div>
               </div>
 
