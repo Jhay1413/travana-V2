@@ -2533,10 +2533,9 @@ function EditQuoteDialog({
               if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
 
               // Apply lodge data
+              console.log("🏠 Lodge import debug:", { isLodgeQuote, lodgeData: result.lodgeData, parkId: idMapping.parkId, lodgeId: idMapping.lodgeId });
               if (isLodgeQuote && result.lodgeData) {
-                // Ensure the form switches to Hot Tub Break mode so the Lodge Details section renders
                 updated.packageType = "Hot Tub Break";
-                // parkName stores the park UUID (drives useLodges); lodgeCode stores the lodge UUID
                 if (idMapping.parkId) updated.parkName = idMapping.parkId;
                 if (idMapping.lodgeId) updated.lodgeCode = idMapping.lodgeId;
                 updated.lodge = {
@@ -2544,6 +2543,7 @@ function EditQuoteDialog({
                   type: result.lodgeData.type || "",
                   code: result.lodgeData.code || "",
                 };
+                console.log("🏠 Lodge form update:", { packageType: updated.packageType, parkName: updated.parkName, lodgeCode: updated.lodgeCode, lodge: updated.lodge });
               }
 
               updated.outboundConnectingLegs = result.outboundConnectingLegs.map((leg) => ({
