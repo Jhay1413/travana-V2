@@ -6,6 +6,7 @@ import { addImagesValidator } from "../validators/quote-image.validator";
 
 const router = Router();
 
+router.get("/free", quoteController.listFreeQuotes);
 router.get("/", quoteController.listQuotes);
 router.get("/:id", quoteController.getQuoteById);
 router.post("/", quoteController.createQuote);

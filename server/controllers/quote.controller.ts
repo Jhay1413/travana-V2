@@ -19,6 +19,20 @@ export const quoteController = {
     return successResponse(res, quotes, "Quotes retrieved successfully");
   }),
 
+  listFreeQuotes: asyncHandler(async (req: Request, res: Response) => {
+    const page = parseInt(req.query.page as string) || 0;
+    const pageSize = parseInt(req.query.pageSize as string) || 12;
+
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize);
+    
+    return successResponse(res, {
+      quotes,
+      page,
+      pageSize,
+      hasMore: quotes.length === pageSize,
+    }, "Free quotes retrieved successfully");
+  }),
+
   getQuoteById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const quote = await newQuoteService.getQuoteWithDetails(id);

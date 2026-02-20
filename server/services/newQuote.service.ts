@@ -63,6 +63,10 @@ export const newQuoteService = {
     return await newQuoteRepository.findByStatus(status);
   },
 
+  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12) {
+    return await newQuoteRepository.findFreeQuotesPaginated(page, pageSize);
+  },
+
   async getQuoteById(id: string) {
     const q = await newQuoteRepository.findById(id);
     if (!q) throw new AppError("Quote not found", 404);

@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
-import { useTransactions } from "@/hooks/queries";
+import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -241,28 +241,53 @@ export default function SocialPostsPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDate, setCustomDate] = useState("");
 
-  const { data: transactions, isLoading, isError } = useTransactions();
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useFreeQuotesInfinite(12);
 
+  // Ref for infinite scroll observer
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Setup intersection observer for infinite scroll
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(loadMoreRef.current);
+
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Flatten all pages into a single array of social posts
   const socialPosts = useMemo<SocialPost[]>(() => {
-    if (!transactions) return [];
-    const posts: SocialPost[] = [];
-    for (const txn of transactions) {
-      if (!txn.client_id || !txn.quotes) continue;
-      for (const q of txn.quotes) {
-        if (q.is_active === false) continue;
-        posts.push({
-          quote: q as EnrichedQuote,
-          clientId: txn.client_id,
+    if (!data?.pages) return [];
+    
+    const allQuotes: SocialPost[] = [];
+    
+    data.pages.forEach((page) => {
+      page.quotes.forEach((quote: any) => {
+        allQuotes.push({
+          quote: quote as EnrichedQuote,
+          clientId: quote.client_id || "",
         });
-      }
-    }
-    posts.sort((a, b) => {
-      const da = a.quote.date_created ? new Date(a.quote.date_created).getTime() : 0;
-      const db = b.quote.date_created ? new Date(b.quote.date_created).getTime() : 0;
-      return db - da;
+      });
     });
-    return posts;
-  }, [transactions]);
+    
+    return allQuotes;
+  }, [data]);
 
   const filteredPosts = useMemo(() => {
     let result = socialPosts;
@@ -400,6 +425,26 @@ export default function SocialPostsPage() {
                 <SocialPostCard key={post.quote.id} post={post} />
               ))}
             </AnimatePresence>
+          </div>
+        )}
+
+        {/* Infinite scroll trigger */}
+        {!isError && !isLoading && filteredPosts.length > 0 && (
+          <div 
+            ref={loadMoreRef} 
+            className="flex items-center justify-center py-8"
+          >
+            {isFetchingNextPage && (
+              <div className="flex items-center gap-2 text-sm text-black/60 dark:text-white/60">
+                <Spinner className="w-5 h-5" />
+                <span>Loading more posts...</span>
+              </div>
+            )}
+            {!hasNextPage && filteredPosts.length > 0 && (
+              <p className="text-sm text-black/40 dark:text-white/40">
+                No more posts to load
+              </p>
+            )}
           </div>
         )}
       </div>

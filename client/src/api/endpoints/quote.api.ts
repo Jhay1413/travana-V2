@@ -1,6 +1,13 @@
 import axiosClient from "../client/axios-client";
 import type { Quote, CreateQuoteData, QuoteFilters } from "@/types/quote";
 
+interface FreeQuotesResponse {
+  quotes: any[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
 export const quoteApi = {
   getAll: async (filters?: QuoteFilters): Promise<Quote[]> => {
     const params = new URLSearchParams();
@@ -8,6 +15,13 @@ export const quoteApi = {
     if (filters?.transactionId) params.append("transactionId", filters.transactionId);
     const query = params.toString();
     const { data } = await axiosClient.get<Quote[]>(`/api/quotes${query ? `?${query}` : ""}`);
+    return data;
+  },
+
+  getFreeQuotes: async (page: number = 0, pageSize: number = 12): Promise<FreeQuotesResponse> => {
+    const { data } = await axiosClient.get<FreeQuotesResponse>(
+      `/api/quotes/free?page=${page}&pageSize=${pageSize}`
+    );
     return data;
   },
 

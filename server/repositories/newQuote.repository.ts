@@ -13,7 +13,7 @@ import type {
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -68,6 +68,152 @@ export const newQuoteRepository = {
 
   async findByStatus(status: Quote['quote_status']): Promise<Quote[]> {
     return await db.select().from(quote).where(sql`${quote.quote_status} = ${status}`).orderBy(desc(quote.date_created));
+  },
+
+  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12) {
+    const offset = page * pageSize;
+    
+    // Step 1: Get paginated quote IDs first
+    const quoteIds = await db
+      .select({ id: quote.id })
+      .from(quote)
+      .where(and(
+        eq(quote.isFreeQuote, true),
+        eq(quote.is_active, true)
+      ))
+      .orderBy(desc(quote.date_created))
+      .limit(pageSize)
+      .offset(offset);
+
+    if (quoteIds.length === 0) {
+      return [];
+    }
+
+    const ids = quoteIds.map(q => q.id);
+
+    // Step 2: Fetch all data for these specific quotes using JOINs
+    const results = await db
+      .select({
+        // Quote data
+        quote: quote,
+        holiday_type_name: package_type.name,
+        main_tour_operator_name: tour_operator.name,
+        client_id: transaction.client_id,
+        
+        // Flight data (only outbound, leg 0)
+        flight_id: quote_flights.id,
+        flight_number: quote_flights.flight_number,
+        flight_departure_date: quote_flights.departure_date_time,
+        flight_arrival_date: quote_flights.arrival_date_time,
+        flight_type: quote_flights.flight_type,
+        flight_leg_order: quote_flights.leg_order,
+        departing_airport_name: sql<string>`CASE WHEN ${departAirport.airport_code} IS NOT NULL AND ${departAirport.airport_code} <> '' THEN concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')') ELSE ${departAirport.airport_name} END`,
+        arrival_airport_name: sql<string>`CASE WHEN ${arriveAirport.airport_code} IS NOT NULL AND ${arriveAirport.airport_code} <> '' THEN concat(${arriveAirport.airport_name}, ' (', ${arriveAirport.airport_code}, ')') ELSE ${arriveAirport.airport_name} END`,
+        
+        // Accommodation data (only primary)
+        accommodation_id: quote_accomodation.id,
+        accommodation_name: accomodation_list.name,
+        board_basis_name: board_basis.type,
+        room_type: quote_accomodation.room_type,
+        check_in_date: quote_accomodation.check_in_date_time,
+        country_id: country.id,
+        country_name: country.country_name,
+        destination_id: destination.id,
+        destination_name: destination.name,
+        
+        // Image data
+        image_id: quoteImages.id,
+        image_url: quoteImages.url,
+        image_is_primary: quoteImages.isPrimary,
+      })
+      .from(quote)
+      .where(inArray(quote.id, ids))
+      .leftJoin(package_type, eq(quote.holiday_type_id, package_type.id))
+      .leftJoin(tour_operator, eq(quote.main_tour_operator_id, tour_operator.id))
+      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      
+      // LEFT JOIN for flights
+      .leftJoin(quote_flights, eq(quote_flights.quote_id, quote.id))
+      .leftJoin(departAirport, eq(quote_flights.departing_airport_id, departAirport.id))
+      .leftJoin(arriveAirport, eq(quote_flights.arrival_airport_id, arriveAirport.id))
+      
+      // LEFT JOIN for primary accommodation
+      .leftJoin(
+        quote_accomodation,
+        and(
+          eq(quote_accomodation.quote_id, quote.id),
+          eq(quote_accomodation.is_primary, true)
+        )
+      )
+      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .leftJoin(destination, eq(resorts.destination_id, destination.id))
+      .leftJoin(country, eq(destination.country_id, country.id))
+      .leftJoin(board_basis, eq(quote_accomodation.board_basis_id, board_basis.id))
+      
+      // LEFT JOIN for images
+      .leftJoin(quoteImages, eq(quoteImages.quoteId, quote.id))
+      
+      .orderBy(desc(quote.date_created), desc(quoteImages.isPrimary));
+
+    // Group results by quote ID
+    const quoteMap = new Map<string, any>();
+    
+    for (const row of results) {
+      const quoteId = row.quote.id;
+      
+      if (!quoteMap.has(quoteId)) {
+        quoteMap.set(quoteId, {
+          ...row.quote,
+          holiday_type_name: row.holiday_type_name,
+          main_tour_operator_name: row.main_tour_operator_name,
+          client_id: row.client_id,
+          country_id: row.country_id,
+          country_name: row.country_name,
+          destination_id: row.destination_id,
+          destination_name: row.destination_name,
+          flights: [],
+          accommodations: row.accommodation_id ? [{
+            id: row.accommodation_id,
+            accomodation_name: row.accommodation_name,
+            board_basis_name: row.board_basis_name,
+            room_type: row.room_type,
+            check_in_date_time: row.check_in_date,
+          }] : [],
+          images: [],
+        });
+      }
+      
+      // Add flight if it's outbound and leg 0 (or null)
+      const existingQuote = quoteMap.get(quoteId)!;
+      if (row.flight_id && 
+          row.flight_type === 'outbound' && 
+          (row.flight_leg_order === 0 || row.flight_leg_order === null) &&
+          existingQuote.flights.length === 0) {
+        existingQuote.flights.push({
+          id: row.flight_id,
+          flight_number: row.flight_number,
+          flight_type: row.flight_type,
+          leg_order: row.flight_leg_order,
+          departure_date_time: row.flight_departure_date,
+          arrival_date_time: row.flight_arrival_date,
+          departing_airport_name: row.departing_airport_name,
+          arrival_airport_name: row.arrival_airport_name,
+        });
+      }
+      
+      // Add image (prefer primary, only take first one)
+      if (row.image_id && existingQuote.images.length === 0) {
+        existingQuote.images.push({
+          id: row.image_id,
+          image_url: row.image_url,
+          isPrimary: row.image_is_primary,
+        });
+      }
+    }
+
+    // Return quotes in the original order
+    return ids.map(id => quoteMap.get(id)).filter(Boolean);
   },
 
   async create(data: InsertQuote): Promise<Quote> {
