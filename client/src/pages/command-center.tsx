@@ -2497,7 +2497,7 @@ export default function CommandCenterPage() {
                     Clients List
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-clients-pipeline">
-                    Pipeline
+                    Live Clients
                   </TabsTrigger>
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-clients-social">
                     Social Posts
