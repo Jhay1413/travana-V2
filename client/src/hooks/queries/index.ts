@@ -17,3 +17,4 @@ export { useAirports, airportKeys } from "./use-airport-queries";
 export { useAllTasks, useTasks, useUserTasks, taskKeys } from "./use-task-queries";
 export { useTags, useSearchTags, tagKeys } from "./use-tags";
 export { usePackageTypes, useCountries, useDestinations, useResorts, useAccommodations, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, useAccommodationImages, useLodgeImages, lookupKeys } from "./use-lookup-queries";
+export { useChatConversations, useChatMessages, chatKeys } from "./use-chat-queries";
