@@ -3586,7 +3586,18 @@ export default function CommandCenterPage() {
             </div>
 
             <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); setOpportunitiesAgentFilter("all"); }}>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center mb-3">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+                  <Input
+                    value={opportunitiesSearch}
+                    onChange={(e) => setOpportunitiesSearch(e.target.value)}
+                    placeholder="Search client or title..."
+                    className="h-8 pl-8 pr-3 text-xs rounded-xl w-56 bg-black/5 border-0 dark:bg-white/5"
+                    data-testid="input-opportunities-search"
+                  />
+                </div>
+
                 <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-opportunities">
                   <TabsTrigger value="enquiries" className="rounded-xl gap-1.5" data-testid="tab-opportunities-enquiries">
                     <ClipboardList className="h-3.5 w-3.5" /> Enquiries
@@ -3601,17 +3612,6 @@ export default function CommandCenterPage() {
                     <Badge variant="secondary" className="ml-1 rounded-full text-[10px] px-1.5 py-0">{opportunitiesData.bookings.length}</Badge>
                   </TabsTrigger>
                 </TabsList>
-
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-black/40 dark:text-white/40" />
-                  <Input
-                    value={opportunitiesSearch}
-                    onChange={(e) => setOpportunitiesSearch(e.target.value)}
-                    placeholder="Search client or title..."
-                    className="h-8 pl-8 pr-3 text-xs rounded-xl w-56 bg-black/5 border-0 dark:bg-white/5"
-                    data-testid="input-opportunities-search"
-                  />
-                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 mb-4">
