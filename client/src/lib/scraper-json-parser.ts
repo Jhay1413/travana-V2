@@ -194,11 +194,19 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
     }
   }
 
-  const lodgeData = (data.lodge_type || data.lodge_code || data.lodge_id || data.lodge_park_name || Array.isArray(data.lodge_images))
+  const hasLodgeFields = !!(data.lodge_type || data.lodge_code || data.lodge_id || data.lodge_park_name || Array.isArray(data.lodge_images));
+  const hasLodgeIndicators = data.cottage_id !== undefined || data.hot_tub !== undefined || data.pets !== undefined;
+  const hasLodgeKeysPresent = 'lodge_type' in data || 'lodge_code' in data || 'lodge_id' in data || 'lodge_park_name' in data;
+  const isLodge = hasLodgeFields || hasLodgeIndicators || hasLodgeKeysPresent;
+
+  const lodgeData = isLodge
     ? {
         type: data.lodge_type || "",
         code: data.lodge_code || null,
-        parkName: data.lodge_park_name || "",
+        parkName: data.lodge_park_name || data.resort || hotel?.resort || "",
+        cottageId: data.cottage_id || null,
+        hotTub: data.hot_tub ?? null,
+        pets: data.pets ?? null,
       }
     : null;
 

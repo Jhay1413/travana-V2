@@ -2436,9 +2436,8 @@ function EditQuoteDialog({
             };
             
             const isLodgeQuote = !!result.lodgeData;
+            console.log("🏠 Lodge detection:", { isLodgeQuote, lodgeData: result.lodgeData, rawLodgeFields: { lodge_type: data.lodge_type, lodge_code: data.lodge_code, lodge_id: data.lodge_id, lodge_park_name: data.lodge_park_name, cottage_id: data.cottage_id, hot_tub: data.hot_tub, pets: data.pets } });
 
-            // Completely separate mapping paths for lodge (Hot Tub Break) vs hotel (Package Holiday)
-            // Lodge quotes must NOT send country/destination/resort/accommodation/roomType to avoid unwanted DB entries
             const mappingInput = isLodgeQuote ? {
               boardBasis: result.fields.boardBasis,
               tourOperator: result.fields.tourOperator,
@@ -2543,6 +2542,11 @@ function EditQuoteDialog({
                   type: result.lodgeData.type || "",
                   code: result.lodgeData.code || "",
                 };
+                // Clear hotel-path fields that shouldn't be set for lodge quotes
+                updated.country = "";
+                updated.destination = "";
+                updated.resort = "";
+                updated.accommodationId = "";
                 console.log("🏠 Lodge form update:", { packageType: updated.packageType, parkName: updated.parkName, lodgeCode: updated.lodgeCode, lodge: updated.lodge });
               }
 
