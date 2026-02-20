@@ -360,9 +360,7 @@ function ShellNav({
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
       { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
-      { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
-      { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
-      { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+      { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
@@ -407,9 +405,7 @@ function ShellNav({
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
               { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
-              { key: "enquiries", label: "Enquiries", icon: <ClipboardList className="h-4 w-4" /> },
-              { key: "quotes", label: "Quotes", icon: <Sparkles className="h-4 w-4" /> },
-              { key: "bookings", label: "Bookings", icon: <Ticket className="h-4 w-4" /> },
+              { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ] as NavItem[],
           },
@@ -1457,6 +1453,9 @@ export default function CommandCenterPage() {
   const [clientsTab, setClientsTab] = useState<"clients-list" | "pipeline" | "calendar" | "news">("clients-list");
   const [clientsListPage, setClientsListPage] = useState(1);
   const [topClientsFilter, setTopClientsFilter] = useState<"total_spend" | "profit" | "bookings">("total_spend");
+  const [opportunitiesTab, setOpportunitiesTab] = useState<"enquiries" | "quotes" | "bookings">("enquiries");
+  const [opportunitiesSearch, setOpportunitiesSearch] = useState("");
+  const [opportunitiesStatusFilter, setOpportunitiesStatusFilter] = useState("all");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const { role, setRole: setRoleFromHook, actualRole } = useRole();
   const rolePreview = role !== actualRole ? role : null;
@@ -1752,6 +1751,59 @@ export default function CommandCenterPage() {
     else arr.sort((a, b) => b.totalSpend - a.totalSpend);
     return arr.slice(0, 10);
   }, [transactionsData, allNeonClientsData, topClientsFilter]);
+
+  const opportunitiesData = useMemo(() => {
+    if (!transactionsData || !allNeonClientsData?.clients) return { enquiries: [] as any[], quotes: [] as any[], bookings: [] as any[] };
+    const neonMap = new Map<string, { name: string; phone: string }>();
+    for (const c of allNeonClientsData.clients) {
+      const title = c.title && c.title !== "NULL" ? c.title : "";
+      neonMap.set(c.id, { name: [title, c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown", phone: c.phoneNumber || "" });
+    }
+    const agentMap = new Map<string, string>();
+    if (apiUsers) {
+      for (const u of apiUsers as any[]) {
+        agentMap.set(u.id, u.firstName || u.name || u.email || "Agent");
+      }
+    }
+    const enquiries: any[] = [];
+    const quotes: any[] = [];
+    const bookings: any[] = [];
+    for (const t of transactionsData as any[]) {
+      const clientInfo = t.client_id ? neonMap.get(t.client_id) : null;
+      const clientName = clientInfo?.name || "Unknown";
+      const clientPhone = clientInfo?.phone || "";
+      const agentName = (t.agent_id && agentMap.get(t.agent_id)) || (t.user_id && agentMap.get(t.user_id)) || "";
+      if (t.enquiry) {
+        enquiries.push({ id: t.enquiry.id, transactionId: t.id, clientId: t.client_id, clientName, clientPhone, agentName, title: t.enquiry.title || "Untitled", status: t.enquiry.status || "NEW_LEAD", travelDate: t.enquiry.travel_date, dateCreated: t.enquiry.date_created, adults: t.enquiry.adults || 0, children: t.enquiry.children || 0, budget: parseFloat(t.enquiry.budget) || 0, nights: t.enquiry.no_of_nights || 0 });
+      }
+      if (t.quotes) {
+        for (const q of t.quotes) {
+          if (q.is_active === false) continue;
+          quotes.push({ id: q.id, transactionId: t.id, clientId: t.client_id, clientName, clientPhone, agentName, title: q.title || "Untitled", status: q.quote_status || "NEW_LEAD", travelDate: q.travel_date, dateCreated: q.date_created, salesPrice: parseFloat(q.sales_price) || 0, commission: parseFloat(q.package_commission) || 0, nights: q.num_of_nights || 0, adults: q.adult || 0, children: q.child || 0 });
+        }
+      }
+      if (t.booking) {
+        bookings.push({ id: t.booking.id, transactionId: t.id, clientId: t.client_id, clientName, clientPhone, agentName, title: t.booking.title || "Untitled", status: t.booking.booking_status || "BOOKED", travelDate: t.booking.travel_date, dateCreated: t.booking.date_created, salesPrice: parseFloat(t.booking.sales_price) || 0, commission: parseFloat(t.booking.package_commission) || 0, nights: t.booking.num_of_nights || 0, adults: t.booking.adult || 0, children: t.booking.child || 0, haysRef: t.booking.hays_ref, supplierRef: t.booking.supplier_ref });
+      }
+    }
+    enquiries.sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
+    quotes.sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
+    bookings.sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
+    return { enquiries, quotes, bookings };
+  }, [transactionsData, allNeonClientsData, apiUsers]);
+
+  const filteredOpportunities = useMemo(() => {
+    const src = opportunitiesTab === "enquiries" ? opportunitiesData.enquiries : opportunitiesTab === "quotes" ? opportunitiesData.quotes : opportunitiesData.bookings;
+    let result = src;
+    if (opportunitiesStatusFilter !== "all") {
+      result = result.filter((item: any) => item.status === opportunitiesStatusFilter);
+    }
+    if (opportunitiesSearch.trim()) {
+      const q = opportunitiesSearch.toLowerCase().trim();
+      result = result.filter((item: any) => item.clientName.toLowerCase().includes(q) || item.title.toLowerCase().includes(q) || (item.haysRef && item.haysRef.toLowerCase().includes(q)));
+    }
+    return result;
+  }, [opportunitiesTab, opportunitiesData, opportunitiesStatusFilter, opportunitiesSearch]);
 
   const totals = useMemo(() => {
     if (dashboardStats) {
@@ -3467,6 +3519,172 @@ export default function CommandCenterPage() {
               </div>
             </div>
           </div>
+        </section>
+      );
+    }
+
+    if (active === "opportunities") {
+      const enquiryStatuses = ["all", "NEW_LEAD", "ACTIVE", "LOST", "INACTIVE", "EXPIRED"];
+      const quoteStatuses = ["all", "NEW_LEAD", "QUOTE_IN_PROGRESS", "QUOTE_CALL", "QUOTE_READY", "AWAITING_DECISION", "REQUOTE", "WON", "ARCHIVED", "LOST", "INACTIVE", "EXPIRED"];
+      const bookingStatuses = ["all", "BOOKED", "LOST"];
+      const statusOptions = opportunitiesTab === "enquiries" ? enquiryStatuses : opportunitiesTab === "quotes" ? quoteStatuses : bookingStatuses;
+      const formatStatus = (s: string) => s === "all" ? "All Statuses" : s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bIn\b/i, "in").replace(/\bin\b/, "In");
+      const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) : "—";
+      return (
+        <section data-testid="section-opportunities">
+          <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
+              <div className="space-y-1">
+                <div className="text-sm font-medium">Opportunities</div>
+                <div className="text-xs text-muted-foreground">View and manage all enquiries, quotes, and bookings.</div>
+              </div>
+            </div>
+
+            <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); }}>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+                <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-opportunities">
+                  <TabsTrigger value="enquiries" className="rounded-xl gap-1.5" data-testid="tab-opportunities-enquiries">
+                    <ClipboardList className="h-3.5 w-3.5" /> Enquiries
+                    <Badge variant="secondary" className="ml-1 rounded-full text-[10px] px-1.5 py-0">{opportunitiesData.enquiries.length}</Badge>
+                  </TabsTrigger>
+                  <TabsTrigger value="quotes" className="rounded-xl gap-1.5" data-testid="tab-opportunities-quotes">
+                    <Sparkles className="h-3.5 w-3.5" /> Quotes
+                    <Badge variant="secondary" className="ml-1 rounded-full text-[10px] px-1.5 py-0">{opportunitiesData.quotes.length}</Badge>
+                  </TabsTrigger>
+                  <TabsTrigger value="bookings" className="rounded-xl gap-1.5" data-testid="tab-opportunities-bookings">
+                    <Ticket className="h-3.5 w-3.5" /> Bookings
+                    <Badge variant="secondary" className="ml-1 rounded-full text-[10px] px-1.5 py-0">{opportunitiesData.bookings.length}</Badge>
+                  </TabsTrigger>
+                </TabsList>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+                    <Input
+                      value={opportunitiesSearch}
+                      onChange={(e) => setOpportunitiesSearch(e.target.value)}
+                      placeholder="Search client or title..."
+                      className="h-8 pl-8 pr-3 text-xs rounded-xl w-48 bg-black/5 border-0 dark:bg-white/5"
+                      data-testid="input-opportunities-search"
+                    />
+                  </div>
+                  <select
+                    value={opportunitiesStatusFilter}
+                    onChange={(e) => setOpportunitiesStatusFilter(e.target.value)}
+                    className="h-8 rounded-xl border-0 bg-black/5 px-2.5 text-xs dark:bg-white/5 focus:ring-1 focus:ring-black/20"
+                    data-testid="select-opportunities-status"
+                  >
+                    {statusOptions.map((s) => <option key={s} value={s}>{formatStatus(s)}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <TabsContent value="enquiries" className="mt-0">
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden">
+                  <div className="grid grid-cols-[1.5fr_1fr_.8fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] text-[10px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">
+                    <div>Client</div><div>Title</div><div>Status</div><div>Travel Date</div><div>Guests</div><div>Budget</div><div>Created</div>
+                  </div>
+                  {filteredOpportunities.length > 0 ? (
+                    <div className="divide-y divide-black/5 dark:divide-white/5 max-h-[60vh] overflow-y-auto">
+                      {filteredOpportunities.map((item: any) => (
+                        <div
+                          key={item.id}
+                          className="grid grid-cols-[1.5fr_1fr_.8fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition cursor-pointer items-center"
+                          onClick={() => item.clientId && navigate(`/clients/${item.clientId}`)}
+                          data-testid={`row-opportunity-enquiry-${item.id}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium">{item.clientName}</div>
+                            {item.clientPhone && <div className="truncate text-[10px] text-black/40 dark:text-white/40 flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" />{item.clientPhone}</div>}
+                          </div>
+                          <div className="truncate text-xs">{item.title}</div>
+                          <div><Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-lg">{formatStatus(item.status)}</Badge></div>
+                          <div className="text-xs tabular-nums">{formatDate(item.travelDate)}</div>
+                          <div className="text-xs tabular-nums">{item.adults}A {item.children > 0 ? `${item.children}C` : ""}</div>
+                          <div className="text-xs tabular-nums font-medium">{item.budget > 0 ? currency.format(item.budget) : "—"}</div>
+                          <div className="text-[10px] text-black/40 dark:text-white/40 tabular-nums">{formatDate(item.dateCreated)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-8 text-center text-xs text-black/40 dark:text-white/40">No enquiries found.</div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="quotes" className="mt-0">
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden">
+                  <div className="grid grid-cols-[1.3fr_1fr_.8fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] text-[10px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">
+                    <div>Client</div><div>Title</div><div>Status</div><div>Travel Date</div><div>Guests</div><div>Price</div><div>Commission</div><div>Created</div>
+                  </div>
+                  {filteredOpportunities.length > 0 ? (
+                    <div className="divide-y divide-black/5 dark:divide-white/5 max-h-[60vh] overflow-y-auto">
+                      {filteredOpportunities.map((item: any) => (
+                        <div
+                          key={item.id}
+                          className="grid grid-cols-[1.3fr_1fr_.8fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition cursor-pointer items-center"
+                          onClick={() => navigate(`/clients/${item.clientId || "_"}/quotes/${item.id}`)}
+                          data-testid={`row-opportunity-quote-${item.id}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium">{item.clientName}</div>
+                            {item.agentName && <div className="truncate text-[10px] text-black/40 dark:text-white/40">{item.agentName}</div>}
+                          </div>
+                          <div className="truncate text-xs">{item.title}</div>
+                          <div><Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-lg">{formatStatus(item.status)}</Badge></div>
+                          <div className="text-xs tabular-nums">{formatDate(item.travelDate)}</div>
+                          <div className="text-xs tabular-nums">{item.adults}A {item.children > 0 ? `${item.children}C` : ""}</div>
+                          <div className="text-xs tabular-nums font-medium">{item.salesPrice > 0 ? currency.format(item.salesPrice) : "—"}</div>
+                          <div className="text-xs tabular-nums text-emerald-600">{item.commission > 0 ? currency.format(item.commission) : "—"}</div>
+                          <div className="text-[10px] text-black/40 dark:text-white/40 tabular-nums">{formatDate(item.dateCreated)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-8 text-center text-xs text-black/40 dark:text-white/40">No quotes found.</div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="bookings" className="mt-0">
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden">
+                  <div className="grid grid-cols-[1.2fr_1fr_.7fr_.6fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] text-[10px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">
+                    <div>Client</div><div>Title</div><div>Status</div><div>Travel Date</div><div>Guests</div><div>Price</div><div>Commission</div><div>Refs</div><div>Created</div>
+                  </div>
+                  {filteredOpportunities.length > 0 ? (
+                    <div className="divide-y divide-black/5 dark:divide-white/5 max-h-[60vh] overflow-y-auto">
+                      {filteredOpportunities.map((item: any) => (
+                        <div
+                          key={item.id}
+                          className="grid grid-cols-[1.2fr_1fr_.7fr_.6fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition cursor-pointer items-center"
+                          onClick={() => item.clientId && navigate(`/clients/${item.clientId}`)}
+                          data-testid={`row-opportunity-booking-${item.id}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium">{item.clientName}</div>
+                            {item.agentName && <div className="truncate text-[10px] text-black/40 dark:text-white/40">{item.agentName}</div>}
+                          </div>
+                          <div className="truncate text-xs">{item.title}</div>
+                          <div><Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-lg">{formatStatus(item.status)}</Badge></div>
+                          <div className="text-xs tabular-nums">{formatDate(item.travelDate)}</div>
+                          <div className="text-xs tabular-nums">{item.adults}A {item.children > 0 ? `${item.children}C` : ""}</div>
+                          <div className="text-xs tabular-nums font-medium">{item.salesPrice > 0 ? currency.format(item.salesPrice) : "—"}</div>
+                          <div className="text-xs tabular-nums text-emerald-600">{item.commission > 0 ? currency.format(item.commission) : "—"}</div>
+                          <div className="min-w-0">
+                            {item.haysRef && <div className="truncate text-[10px]">{item.haysRef}</div>}
+                            {item.supplierRef && <div className="truncate text-[10px] text-black/40 dark:text-white/40">{item.supplierRef}</div>}
+                          </div>
+                          <div className="text-[10px] text-black/40 dark:text-white/40 tabular-nums">{formatDate(item.dateCreated)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-8 text-center text-xs text-black/40 dark:text-white/40">No bookings found.</div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </Card>
         </section>
       );
     }
