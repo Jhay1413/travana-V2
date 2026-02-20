@@ -65,8 +65,8 @@ export const quoteFormSchema = z.object({
   inboundConnectingLegs: z.array(flightLegSchema).default([]),
 
   // Lodge (Hot Tub Break)
-  parkName: z.string().default(""),
-  lodgeCode: z.string().default(""),
+  lodgeId: z.string().default(""),
+  parkId: z.string().default(""),
   pets: z.boolean().default(false),
 
   // Cruise
@@ -135,8 +135,8 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   inboundArriveTime: "",
   inboundFlightNumber: "",
   inboundConnectingLegs: [],
-  parkName: "",
-  lodgeCode: "",
+  parkId: "",
+  lodgeId: "",
   pets: false,
   cruiseTitle: "",
   cruiseLine: "",

@@ -46,6 +46,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -258,6 +265,14 @@ function DidYouKnowPopup() {
   );
 }
 
+const QUOTE_STATUS_OPTIONS = [
+  { value: "all", label: "All Statuses" },
+  { value: "QUOTE_IN_PROGRESS", label: "Quote in Progress" },
+  { value: "QUOTE_CALL", label: "Quote Call" },
+  { value: "AWAITING_DECISION", label: "Awaiting Decision" },
+  { value: "HOT_QUOTE", label: "Hot Quote" },
+];
+
 export function CommandCenterShell({
   children,
   active = "overview",
@@ -271,6 +286,8 @@ export function CommandCenterShell({
   onToggleTheme,
   headerExtra,
   filterSlot,
+  quoteStatusFilter,
+  onQuoteStatusFilterChange,
 }: {
   children: React.ReactNode;
   active?: string;
@@ -284,6 +301,8 @@ export function CommandCenterShell({
   onToggleTheme?: () => void;
   headerExtra?: React.ReactNode;
   filterSlot?: React.ReactNode;
+  quoteStatusFilter?: string;
+  onQuoteStatusFilterChange?: (v: string) => void;
 }) {
   const [, navigate] = useLocation();
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -837,14 +856,25 @@ export function CommandCenterShell({
 
                   <div className="flex items-center gap-2">
                     {filterSlot || (
-                      <Button
-                        variant="outline"
-                        className="h-10 rounded-2xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
-                        data-testid="button-filter"
+                      <Select
+                        value={quoteStatusFilter || "all"}
+                        onValueChange={(v) => onQuoteStatusFilterChange?.(v)}
                       >
-                        <Filter className="mr-2 h-4 w-4" />
-                        Filters
-                      </Button>
+                        <SelectTrigger
+                          className="h-10 w-[200px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+                          data-testid="select-quote-status"
+                        >
+                          <Filter className="mr-2 h-4 w-4 shrink-0 opacity-60" />
+                          <SelectValue placeholder="Quote Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {QUOTE_STATUS_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} data-testid={`select-quote-status-${opt.value}`}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
 
                     <Button

@@ -112,6 +112,7 @@ export interface Quote {
   pets: number;
   cottage_id: string | null;
   lodge_id: string | null;
+  park_id: string | null;
   quote_type: string;
   deal_type: string | null;
   pre_booked_seats: string | null;

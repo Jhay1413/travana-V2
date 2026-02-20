@@ -90,7 +90,7 @@ export function QuoteRHFForm({
   const country = watch("country");
   const destination = watch("destination");
   const resort = watch("resort");
-  const parkName = watch("parkName");
+  const parkId = watch("parkId");
   const passengersChildren = watch("passengersChildren");
   const cruiseOnly = watch("cruiseOnly");
 
@@ -106,7 +106,7 @@ export function QuoteRHFForm({
   const { data: resortsData } = useResorts(destination || undefined);
   const { data: accommodationsData } = useAccommodations(resort || undefined);
   const { data: parksData } = useParks();
-  const { data: lodgesData } = useLodges(parkName || undefined);
+  const { data: lodgesData } = useLodges(parkId || undefined);
 
   const destinationsData = country ? filteredDestinationsData : allDestinationsData;
 
@@ -156,8 +156,8 @@ export function QuoteRHFForm({
       isParkFirstRender.current = false;
       return;
     }
-    setValue("lodgeCode", "");
-  }, [parkName]); // eslint-disable-line react-hooks/exhaustive-deps
+    setValue("lodgeId", "");
+  }, [parkId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Child ages sync ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -337,8 +337,8 @@ export function QuoteRHFForm({
                 (p: { id: string; name: string }) => p.name === "Hot Tub Break"
               );
               if (hotTubPackage) setValue("packageType", hotTubPackage.id);
-              if (idMapping.parkId) setValue("parkName", idMapping.parkId);
-              if (idMapping.lodgeId) setValue("lodgeCode", idMapping.lodgeId);
+              if (idMapping.parkId) setValue("parkId", idMapping.parkId);
+              if (idMapping.lodgeId) setValue("lodgeId", idMapping.lodgeId);
               setValue("country", "");
               setValue("destination", "");
               setValue("resort", "");
@@ -823,7 +823,7 @@ export function QuoteRHFForm({
               {/* Park */}
               <FormField
                 control={control}
-                name="parkName"
+                name="parkId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs font-medium text-black/60">Park</FormLabel>
@@ -848,7 +848,7 @@ export function QuoteRHFForm({
               {/* Lodge */}
               <FormField
                 control={control}
-                name="lodgeCode"
+                name="lodgeId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs font-medium text-black/60">Lodge</FormLabel>
@@ -862,7 +862,7 @@ export function QuoteRHFForm({
                         )}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
-                        placeholder={parkName ? "Select lodge..." : "Select a park first"}
+                        placeholder={parkId ? "Select lodge..." : "Select a park first"}
                       />
                     </FormControl>
                     <FormMessage />

@@ -75,6 +75,7 @@ export const newQuoteService = {
 
   async getQuoteWithDetails(id: string) {
     const q = await newQuoteRepository.findWithDetails(id);
+    console.log(q)
     if (!q) throw new AppError("Quote not found", 404);
     console.log('🔍 SERVICE - Quote details includes images:', q.images?.length || 0);
     return q;

@@ -102,6 +102,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     checkInDate: checkIn.date,
     checkInTime: checkIn.time,
     roomType: primaryAccom?.room_type || "",
+   
 
     // Outbound flight
     outboundDepartAirportId: outbound?.departing_airport_id || "",
@@ -152,8 +153,8 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     }),
 
     // Lodge
-    parkName: "",
-    lodgeCode: quoteData.lodge_id || "",
+    parkId: quoteData.park_id || "",
+    lodgeId: quoteData.lodge_id || "",
     pets: (quoteData.pets ?? 0) > 0,
 
     // Pricing
@@ -249,7 +250,7 @@ function buildUpdatePayload(
   }
 
   if (isHotTubBreak) {
-    payload.lodge_id = values.lodgeCode || null;
+    payload.lodge_id = values.lodgeId || null;
     payload.pets = values.pets ? 1 : 0;
   }
 
@@ -280,7 +281,7 @@ export function QuoteEditDialog({
   const updateQuote = useUpdateQuote();
   const { data: packageTypesData } = usePackageTypes();
   const { data: quoteData, isLoading, isError } = useQuote(quoteId);
-
+  console.log(quoteData)
   const defaultValues = quoteData ? buildDefaultValues(quoteData) : undefined;
 
   const handleSubmit = async (values: QuoteFormValues) => {
@@ -303,7 +304,6 @@ export function QuoteEditDialog({
       }
     );
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">

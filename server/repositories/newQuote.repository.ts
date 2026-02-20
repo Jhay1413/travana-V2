@@ -7,6 +7,8 @@ import {
   accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type,
+  lodges,
+  park,
 } from "@shared/schema";
 import type {
   Quote, InsertQuote, QuoteFlight, InsertQuoteFlight, QuoteAccomodation, InsertQuoteAccomodation,
@@ -253,11 +255,15 @@ export const newQuoteRepository = {
         main_tour_operator_name: tour_operator.name,
         lead_source: transaction.lead_source,
         user_id: transaction.user_id,
+        lodge_id: quote.lodge_id,
+        park_id: lodges.park_id,
       })
       .from(quote)
       .leftJoin(package_type, eq(quote.holiday_type_id, package_type.id))
       .leftJoin(tour_operator, eq(quote.main_tour_operator_id, tour_operator.id))
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(lodges, eq(quote.lodge_id, lodges.id))
+      .leftJoin(park, eq(lodges.park_id, park.id))
       .where(eq(quote.id, id))
       .limit(1);
 
@@ -410,6 +416,7 @@ export const newQuoteRepository = {
 
     return {
       ...q.quote,
+      park_id: q.park_id,
       holiday_type_name: q.holiday_type_name,
       main_tour_operator_name: q.main_tour_operator_name,
       lead_source: q.lead_source,
