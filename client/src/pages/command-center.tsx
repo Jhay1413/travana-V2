@@ -1456,6 +1456,7 @@ export default function CommandCenterPage() {
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [clientsTab, setClientsTab] = useState<"clients-list" | "pipeline" | "calendar" | "news">("clients-list");
   const [clientsListPage, setClientsListPage] = useState(1);
+  const [topClientsFilter, setTopClientsFilter] = useState<"total_spend" | "profit" | "bookings">("total_spend");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const { role, setRole: setRoleFromHook, actualRole } = useRole();
   const rolePreview = role !== actualRole ? role : null;
@@ -1709,6 +1710,48 @@ export default function CommandCenterPage() {
     if (salesPrice > 0) return salesPrice * 0.1;
     return 0;
   };
+
+  const topClients = useMemo(() => {
+    if (!transactionsData || !allNeonClientsData?.clients) return [];
+    const clientMap = new Map<string, { id: string; name: string; phone: string; totalSpend: number; profit: number; bookings: number; lastBookingDate: string | null }>();
+    const neonMap = new Map<string, { name: string; phone: string }>();
+    for (const c of allNeonClientsData.clients) {
+      const title = c.title && c.title !== "NULL" ? c.title : "";
+      neonMap.set(c.id, {
+        name: [title, c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown",
+        phone: c.phoneNumber || "",
+      });
+    }
+    for (const t of transactionsData as any[]) {
+      if (!t.client_id) continue;
+      const info = neonMap.get(t.client_id);
+      if (!info) continue;
+      if (!clientMap.has(t.client_id)) {
+        clientMap.set(t.client_id, { id: t.client_id, name: info.name, phone: info.phone, totalSpend: 0, profit: 0, bookings: 0, lastBookingDate: null });
+      }
+      const entry = clientMap.get(t.client_id)!;
+      if (t.quotes) {
+        for (const q of t.quotes) {
+          if (q.is_active === false) continue;
+          const sp = parseFloat(q.sales_price) || 0;
+          entry.totalSpend += sp;
+          entry.profit += getQuoteProfit(q);
+        }
+      }
+      if (t.booking) {
+        entry.bookings += 1;
+        const bd = t.booking.date_created || t.booking.createdAt;
+        if (bd && (!entry.lastBookingDate || new Date(bd) > new Date(entry.lastBookingDate))) {
+          entry.lastBookingDate = bd;
+        }
+      }
+    }
+    const arr = Array.from(clientMap.values());
+    if (topClientsFilter === "profit") arr.sort((a, b) => b.profit - a.profit);
+    else if (topClientsFilter === "bookings") arr.sort((a, b) => b.bookings - a.bookings);
+    else arr.sort((a, b) => b.totalSpend - a.totalSpend);
+    return arr.slice(0, 10);
+  }, [transactionsData, allNeonClientsData, topClientsFilter]);
 
   const totals = useMemo(() => {
     if (dashboardStats) {
@@ -2751,73 +2794,70 @@ export default function CommandCenterPage() {
           </Card>
 
           <div className="flex flex-col gap-4">
-              <Card className="glass ringed grain rounded-3xl p-4" data-testid="card-clients-pinned-section">
+              <Card className="glass ringed grain rounded-3xl p-4" data-testid="card-top-clients-section">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/10">
-                      <Star className="h-3.5 w-3.5 text-amber-600" />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-500/10">
+                      <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
                     </div>
                     <div>
-                      <div className="text-xs font-semibold text-black/80 dark:text-white/80">Pinned</div>
+                      <div className="text-xs font-semibold text-black/80 dark:text-white/80">Top Clients</div>
                       <div className="text-[10px] text-black/45 dark:text-white/45">
-                        {userFavorites && userFavorites.length > 0
-                          ? `${userFavorites.length} item${userFavorites.length !== 1 ? "s" : ""}`
-                          : "No items pinned yet"}
+                        {topClients.length > 0 ? `${topClients.length} clients` : "No data yet"}
                       </div>
                     </div>
                   </div>
+                  <div className="flex gap-1">
+                    {([["total_spend", "Spend"], ["profit", "Profit"], ["bookings", "Bookings"]] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        onClick={() => setTopClientsFilter(val)}
+                        className={`rounded-xl px-2.5 py-1 text-[10px] font-medium transition ${topClientsFilter === val ? "bg-emerald-600 text-white" : "bg-black/5 text-black/60 hover:bg-black/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"}`}
+                        data-testid={`button-top-clients-filter-${val}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {userFavorites && userFavorites.length > 0 ? (
+                {topClients.length > 0 ? (
                   <div className="space-y-1.5">
-                    {userFavorites.map((fav: any) => {
-                      const icon = fav.itemType === "client" ? <UserRound className="h-3.5 w-3.5" /> : fav.itemType === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : fav.itemType === "note" ? <StickyNote className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />;
-                      const noteQuoteId = fav.itemType === "note" && fav.subtitle?.startsWith("quoteId:") ? fav.subtitle.split("|")[0].replace("quoteId:", "") : null;
-                      const href = fav.itemType === "client" ? `/clients/${fav.itemId}` : fav.itemType === "quote" ? `/clients/_/quotes/${fav.itemId}` : fav.itemType === "enquiry" ? `/clients/_/enquiries/${fav.itemId}` : noteQuoteId ? `/clients/_/quotes/${noteQuoteId}` : "#";
-                      const resolvedClientName = (fav.itemType === "quote" || fav.itemType === "note") ? pinnedClientNameMap.get(fav.itemType === "note" ? (noteQuoteId || "") : fav.itemId) : null;
-                      let displaySubtitle = fav.itemType === "note" && fav.subtitle?.includes("|") ? fav.subtitle.split("|").slice(1).join("|") : fav.subtitle;
-                      if (fav.itemType !== "client" && resolvedClientName && !displaySubtitle?.includes(resolvedClientName)) {
-                        displaySubtitle = resolvedClientName + (displaySubtitle ? " · " + displaySubtitle : "");
-                      }
-                      return (
-                        <motion.div
-                          key={fav.id}
-                          className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          data-testid={`card-clients-pinned-${fav.id}`}
-                        >
-                          <button
-                            type="button"
-                            className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-                            onClick={() => navigate(fav.itemType === "client" ? `/clients/${fav.itemId}` : href)}
-                            data-testid={`link-clients-pinned-${fav.id}`}
-                          >
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-white/60 text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
-                              {icon}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-xs font-semibold">{fav.label}</div>
-                              {displaySubtitle && <div className="truncate text-[10px] text-black/50 dark:text-white/50">{displaySubtitle}</div>}
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-black/30 opacity-0 transition hover:bg-black/[0.06] hover:text-black/60 group-hover:opacity-100 dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white/60"
-                            onClick={() => removeFavoriteMutation.mutate(fav.id)}
-                            title="Unpin"
-                            data-testid={`button-clients-unpin-${fav.id}`}
-                          >
-                            <PinOff className="h-3 w-3" />
-                          </button>
-                        </motion.div>
-                      );
-                    })}
+                    {topClients.map((tc, idx) => (
+                      <motion.div
+                        key={tc.id}
+                        className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 cursor-pointer"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        onClick={() => navigate(`/clients/${tc.id}`)}
+                        data-testid={`card-top-client-${tc.id}`}
+                      >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-white/60 text-[10px] font-bold text-black/50 dark:border-white/10 dark:bg-white/5 dark:text-white/50">
+                          {idx + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-semibold">{tc.name}</div>
+                          <div className="flex items-center gap-2 text-[10px] text-black/50 dark:text-white/50">
+                            {tc.phone && <span className="flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" />{tc.phone}</span>}
+                            {tc.lastBookingDate && <span>Last: {new Date(tc.lastBookingDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}</span>}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-xs font-semibold tabular-nums">
+                            {topClientsFilter === "bookings" ? tc.bookings : currency.format(topClientsFilter === "profit" ? tc.profit : tc.totalSpend)}
+                          </div>
+                          <div className="text-[10px] text-black/40 dark:text-white/40">
+                            {topClientsFilter === "total_spend" ? "spend" : topClientsFilter === "profit" ? "profit" : "bookings"}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-3 py-4 text-center dark:border-white/10 dark:bg-white/[0.02]">
-                    <Pin className="mx-auto h-5 w-5 text-black/20 dark:text-white/20 mb-1.5" />
+                    <TrendingUp className="mx-auto h-5 w-5 text-black/20 dark:text-white/20 mb-1.5" />
                     <div className="text-[11px] text-black/40 dark:text-white/40">
-                      Pin clients, quotes, or enquiries for quick access. Use the pin icon on any client card.
+                      Top clients will appear here once transactions are recorded.
                     </div>
                   </div>
                 )}
