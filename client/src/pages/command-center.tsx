@@ -2863,36 +2863,6 @@ export default function CommandCenterPage() {
                 )}
               </Card>
 
-            <Card className="glass ringed grain rounded-3xl p-4 cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition" onClick={() => navigate("/pipeline")}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-black/70 dark:text-white/70">Pipeline</div>
-                  <div className="title-serif text-2xl font-bold tabular-nums" data-testid="text-clients-pipeline-total">
-                    {currency.format(
-                      (pipelineStages["New Lead"] || []).reduce((s: number, q: any) => s + getQuoteProfit(q), 0) +
-                      (pipelineStages["In Play"] || []).reduce((s: number, q: any) => s + getQuoteProfit(q), 0) +
-                      (pipelineStages["Booked"] || []).reduce((s: number, q: any) => s + getQuoteProfit(q), 0)
-                    )}
-                  </div>
-                </div>
-                <CircleDollarSign className="h-6 w-6 text-black/40 dark:text-white/40" />
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                <div className="rounded-2xl border border-blue-200/50 bg-blue-50/50 px-3 py-2 dark:border-blue-800/30 dark:bg-blue-900/20">
-                  <div className="text-blue-700/70 dark:text-blue-400/70">New Lead</div>
-                  <div className="font-medium text-blue-800 dark:text-blue-300">{(pipelineStages["New Lead"] || []).length}</div>
-                </div>
-                <div className="rounded-2xl border border-amber-200/50 bg-amber-50/50 px-3 py-2 dark:border-amber-800/30 dark:bg-amber-900/20">
-                  <div className="text-amber-700/70 dark:text-amber-400/70">In Play</div>
-                  <div className="font-medium text-amber-800 dark:text-amber-300">{(pipelineStages["In Play"] || []).length}</div>
-                </div>
-                <div className="rounded-2xl border border-emerald-200/50 bg-emerald-50/50 px-3 py-2 dark:border-emerald-800/30 dark:bg-emerald-900/20">
-                  <div className="text-emerald-700/70 dark:text-emerald-400/70">Booked</div>
-                  <div className="font-medium text-emerald-800 dark:text-emerald-300">{(pipelineStages["Booked"] || []).length}</div>
-                </div>
-              </div>
-            </Card>
-
             <Card className="glass ringed grain rounded-3xl p-4">
               <div className="space-y-1">
                 <div className="text-xs text-black/70 dark:text-white/70">Activity</div>
