@@ -2437,16 +2437,29 @@ function EditQuoteDialog({
               return partial?.id || "";
             };
             
-            const isLodgeQuote = !!result.lodgeData;
-            console.log("🏠 Lodge detection:", { isLodgeQuote, lodgeData: result.lodgeData, rawLodgeFields: { lodge_type: data.lodge_type, lodge_code: data.lodge_code, lodge_id: data.lodge_id, lodge_park_name: data.lodge_park_name, cottage_id: data.cottage_id, hot_tub: data.hot_tub, pets: data.pets } });
+            // Detect lodge quote directly from raw JSON data (not from parser)
+            // If lodge_park_name, lodge_type, lodge_id, lodge_code, cottage_id, hot_tub, or pets has a value → lodge quote
+            const isLodgeQuote = !!(
+              data.lodge_type || data.lodge_code || data.lodge_id || data.lodge_park_name ||
+              Array.isArray(data.lodge_images) ||
+              data.cottage_id !== undefined || data.hot_tub !== undefined || data.pets !== undefined ||
+              'lodge_type' in data || 'lodge_code' in data || 'lodge_id' in data || 'lodge_park_name' in data
+            );
+
+            // For lodge quotes, derive park/lodge names from raw data
+            const lodgeParkName = data.lodge_park_name || data.resort || result.fields.resort || "";
+            const lodgeCode = data.lodge_code || null;
+            const lodgeName = data.accommodation || result.fields.accommodation || "";
+            const lodgeType = data.lodge_type || "";
+            const parkCode = data.lodge_id || null;
 
             const mappingInput = isLodgeQuote ? {
               boardBasis: result.fields.boardBasis,
               tourOperator: result.fields.tourOperator,
-              lodgeCode: result.lodgeData!.code ?? null,
-              lodgeName: result.fields.accommodation || undefined,
-              parkName: result.lodgeData!.parkName || undefined,
-              parkCode: (data as Record<string, unknown>).lodge_id as string | null ?? null,
+              lodgeCode: lodgeCode,
+              lodgeName: lodgeName || undefined,
+              parkName: lodgeParkName || undefined,
+              parkCode: parkCode,
             } : {
               country: result.fields.country,
               destination: result.fields.destination,
@@ -2534,22 +2547,19 @@ function EditQuoteDialog({
               if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
 
               // Apply lodge data
-              console.log("🏠 Lodge import debug:", { isLodgeQuote, lodgeData: result.lodgeData, parkId: idMapping.parkId, lodgeId: idMapping.lodgeId });
-              if (isLodgeQuote && result.lodgeData) {
+              if (isLodgeQuote) {
                 updated.packageType = "Hot Tub Break";
                 if (idMapping.parkId) updated.parkName = idMapping.parkId;
                 if (idMapping.lodgeId) updated.lodgeCode = idMapping.lodgeId;
                 updated.lodge = {
-                  name: result.fields.accommodation || result.lodgeData.parkName || "",
-                  type: result.lodgeData.type || "",
-                  code: result.lodgeData.code || "",
+                  name: lodgeName || lodgeParkName || "",
+                  type: lodgeType || "",
+                  code: lodgeCode || "",
                 };
-                // Clear hotel-path fields that shouldn't be set for lodge quotes
                 updated.country = "";
                 updated.destination = "";
                 updated.resort = "";
                 updated.accommodationId = "";
-                console.log("🏠 Lodge form update:", { packageType: updated.packageType, parkName: updated.parkName, lodgeCode: updated.lodgeCode, lodge: updated.lodge });
               }
 
               updated.outboundConnectingLegs = result.outboundConnectingLegs.map((leg) => ({
@@ -2567,10 +2577,11 @@ function EditQuoteDialog({
               return updated;
             });
 
-            // Invalidate parks/lodges cache so newly created parks appear in the dropdown
-            if (isLodgeQuote && idMapping.parkId) {
+            if (isLodgeQuote) {
               queryClient.invalidateQueries({ queryKey: lookupKeys.parks });
-              queryClient.invalidateQueries({ queryKey: lookupKeys.lodges(idMapping.parkId) });
+              if (idMapping.parkId) {
+                queryClient.invalidateQueries({ queryKey: lookupKeys.lodges(idMapping.parkId) });
+              }
             }
           } catch (error) {
             console.error("❌ Error processing JSON:", error);
