@@ -359,7 +359,7 @@ function ShellNav({
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-      { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
+      { key: "pipeline", label: "Live Clients", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
@@ -405,7 +405,7 @@ function ShellNav({
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-              { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
+              { key: "pipeline", label: "Live Clients", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
@@ -1913,7 +1913,7 @@ export default function CommandCenterPage() {
                     What's On!
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-overview-pipeline">
-                    Pipeline
+                    Live Clients
                   </TabsTrigger>
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-overview-social">
                     Social Posts
@@ -2138,7 +2138,7 @@ export default function CommandCenterPage() {
                               onClick={() => navigate("/pipeline")}
                               className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
                             >
-                              +{items.length - 5} more · View full pipeline
+                              +{items.length - 5} more · View all live clients
                             </button>
                           )}
                           {items.length === 0 && (
@@ -2157,7 +2157,7 @@ export default function CommandCenterPage() {
                     className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                     data-testid="link-view-full-pipeline"
                   >
-                    View full pipeline →
+                    View all live clients →
                   </button>
                 </div>
               </TabsContent>
@@ -2497,7 +2497,7 @@ export default function CommandCenterPage() {
                     Clients List
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-clients-pipeline">
-                    Pipeline
+                    Live Clients
                   </TabsTrigger>
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-clients-social">
                     Social Posts
@@ -2665,7 +2665,7 @@ export default function CommandCenterPage() {
                               onClick={() => navigate("/pipeline")}
                               className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
                             >
-                              +{items.length - 5} more · View full pipeline
+                              +{items.length - 5} more · View all live clients
                             </button>
                           )}
                           {items.length === 0 && (
@@ -2684,7 +2684,7 @@ export default function CommandCenterPage() {
                     className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                     data-testid="link-clients-view-full-pipeline"
                   >
-                    View full pipeline →
+                    View all live clients →
                   </button>
                 </div>
               </TabsContent>
@@ -3025,7 +3025,7 @@ export default function CommandCenterPage() {
                     What's On!
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-pipeline">
-                    Pipeline
+                    Live Clients
                   </TabsTrigger>
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-social-posts">
                     Social Posts
@@ -3250,7 +3250,7 @@ export default function CommandCenterPage() {
                               onClick={() => navigate("/pipeline")}
                               className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
                             >
-                              +{items.length - 5} more · View full pipeline
+                              +{items.length - 5} more · View all live clients
                             </button>
                           )}
                           {items.length === 0 && (
@@ -3269,7 +3269,7 @@ export default function CommandCenterPage() {
                     className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                     data-testid="link-view-full-pipeline-workspace"
                   >
-                    View full pipeline →
+                    View all live clients →
                   </button>
                 </div>
               </TabsContent>
