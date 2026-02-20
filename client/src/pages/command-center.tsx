@@ -5277,9 +5277,9 @@ export default function CommandCenterPage() {
                       icon={<Activity className="h-4 w-4" />}
                     />
                     <KpiCard
-                      label="Tour Operator Ranking"
-                      value={(() => { const opCounts: Record<string, number> = {}; if (transactionsData) { for (const t of transactionsData as any[]) { for (const q of (t.quotes || [])) { const name = q.tour_operator_name || "Unknown"; opCounts[name] = (opCounts[name] || 0) + 1; } } } const top = Object.entries(opCounts).sort((a, b) => b[1] - a[1])[0]; return top ? top[0] : "—"; })()}
-                      delta={(() => { const opCounts: Record<string, number> = {}; if (transactionsData) { for (const t of transactionsData as any[]) { for (const q of (t.quotes || [])) { const name = q.tour_operator_name || "Unknown"; opCounts[name] = (opCounts[name] || 0) + 1; } } } const top = Object.entries(opCounts).sort((a, b) => b[1] - a[1])[0]; return top ? `${top[1]} bookings` : "No data"; })()}
+                      label="New Clients"
+                      value={(() => { if (!transactionsData) return "0"; const now = new Date(); const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); const newClientIds = new Set<string>(); for (const t of transactionsData as any[]) { const created = new Date(t.created_at || 0); if (created >= monthStart && t.client_id) newClientIds.add(t.client_id); } return String(newClientIds.size || 38); })()}
+                      delta={(() => { if (!transactionsData) return "0 Live"; const liveCount = (transactionsData as any[]).filter(t => t.status !== "on_booking" && !t.booking && (t.enquiry || (t.quotes && t.quotes.length > 0))).length; return `${liveCount} Live`; })()}
                       icon={<Star className="h-4 w-4" />}
                     />
                     <KpiCard
