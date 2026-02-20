@@ -1561,7 +1561,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   if (isLoading) {
     return (
-      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
+      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}} filterSlot={<></>}>
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-quote">
           <Spinner className="h-8 w-8" />
         </div>
@@ -1571,7 +1571,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   if (error || !quote) {
     return (
-      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
+      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}} filterSlot={<></>}>
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-quote">
           <div className="text-center">
             <p className="text-sm text-black/70">Failed to load {pageLabel.toLowerCase()}</p>
@@ -1590,7 +1590,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   }
 
   return (
-    <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
+    <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}} filterSlot={<></>}>
       <div className="px-5 pb-8 pt-5" data-testid="page-quote">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
           <div className="flex items-start gap-3">
