@@ -353,7 +353,7 @@ function NoteCard({
       className="group"
       data-testid={`note-card-${note.id}`}
     >
-      <div className="rounded-xl border border-black/10 bg-white/60 p-2">
+      <div className="rounded-xl border border-black/10 bg-white/60 p-2 text-[20px]">
         <div className="flex items-start justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]" data-testid={`note-avatar-${note.id}`}>
