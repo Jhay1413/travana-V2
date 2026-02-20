@@ -361,9 +361,8 @@ function ShellNav({
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
       { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
-      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: [
-        { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
-      ] as NavItem[] },
+      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
+      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
     if (role === "Admin") {
