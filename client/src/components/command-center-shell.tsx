@@ -348,7 +348,7 @@ export function CommandCenterShell({
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-      { key: "pipeline", label: "Live Clients", icon: <TrendingUp className="h-4 w-4" /> },
+      { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
@@ -394,7 +394,7 @@ export function CommandCenterShell({
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-              { key: "pipeline", label: "Live Clients", icon: <TrendingUp className="h-4 w-4" /> },
+              { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },

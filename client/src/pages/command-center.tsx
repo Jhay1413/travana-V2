@@ -359,7 +359,7 @@ function ShellNav({
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-      { key: "pipeline", label: "Live Clients", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
+      { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
@@ -405,7 +405,7 @@ function ShellNav({
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-              { key: "pipeline", label: "Live Clients", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
+              { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
@@ -1706,59 +1706,6 @@ export default function CommandCenterPage() {
   }, [paginatedNeonClients, allNeonClientsData]);
   const pipelineClientNames = allClientNames;
 
-  const liveClientsRows = useMemo(() => {
-    if (!transactionsData) return [];
-    const userMap = new Map<string, string>();
-    if (apiUsers) {
-      for (const u of apiUsers) {
-        const name = u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.name || u.email || "Unknown";
-        userMap.set(u.id, name);
-      }
-    }
-    return transactionsData
-      .filter((t: any) => t.status === "on_enquiry" || t.status === "on_quote")
-      .map((t: any) => {
-        const clientInfo = allClientNames.get(t.client_id || "");
-        const agentId = t.agent_id || t.user_id || "";
-        const title = t.enquiry?.title || t.quotes?.[0]?.title || `#${t.id.slice(0, 8)}`;
-        const travelDate = t.enquiry?.travel_date || t.quotes?.[0]?.travel_date || t.created_at;
-        const value = t.quotes?.[0] ? parseFloat(t.quotes[0].sales_price || "0") || 0 : 0;
-        let guests = "";
-        if (t.enquiry) {
-          const parts: string[] = [];
-          if (t.enquiry.adults) parts.push(`${t.enquiry.adults}A`);
-          if (t.enquiry.children) parts.push(`${t.enquiry.children}C`);
-          if (t.enquiry.infants) parts.push(`${t.enquiry.infants}I`);
-          guests = parts.join(" ") || "—";
-        } else if (t.quotes?.[0]) {
-          const q = t.quotes[0];
-          const parts: string[] = [];
-          if (q.adult) parts.push(`${q.adult}A`);
-          if (q.child) parts.push(`${q.child}C`);
-          if (q.infant) parts.push(`${q.infant}I`);
-          guests = parts.join(" ") || "—";
-        } else {
-          guests = "—";
-        }
-        const quoteStatus = t.quotes?.[0]?.quote_status
-          ? t.quotes[0].quote_status.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
-          : t.status === "on_enquiry" ? "Enquiry" : "Quoted";
-        return {
-          id: t.id,
-          clientId: t.client_id,
-          clientName: clientInfo || "Unknown",
-          agentName: userMap.get(agentId) || "Unassigned",
-          title,
-          travelDate,
-          value,
-          guests,
-          status: t.status === "on_quote" ? "Quoted" as const : "Enquiry" as const,
-          quoteStatus,
-        };
-      })
-      .sort((a: any, b: any) => new Date(b.travelDate || 0).getTime() - new Date(a.travelDate || 0).getTime());
-  }, [transactionsData, allClientNames, apiUsers]);
-
   const pinnedClientNameMap = useMemo(() => {
     const map = new Map<string, string>();
     if (transactionsData) {
@@ -1966,7 +1913,7 @@ export default function CommandCenterPage() {
                     What's On!
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-overview-pipeline">
-                    Live Clients
+                    Pipeline
                   </TabsTrigger>
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-overview-social">
                     Social Posts
@@ -2131,57 +2078,87 @@ export default function CommandCenterPage() {
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-0">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 rounded-xl bg-blue-500/10 px-3 py-1.5">
-                      <div className="h-2 w-2 rounded-full bg-blue-500" />
-                      <span className="text-xs font-semibold text-blue-700">{liveClientsRows.filter((r: any) => r.status === "Enquiry").length} Enquiries</span>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-1.5">
-                      <div className="h-2 w-2 rounded-full bg-amber-500" />
-                      <span className="text-xs font-semibold text-amber-700">{liveClientsRows.filter((r: any) => r.status === "Quoted").length} Quoted</span>
-                    </div>
-                    <span className="text-xs text-black/40 dark:text-white/40">{liveClientsRows.length} total live</span>
-                  </div>
-                  <div className="overflow-x-auto rounded-2xl border border-black/10 dark:border-white/10">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-black/10 bg-black/[0.03] dark:border-white/10 dark:bg-white/[0.03]">
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Agent</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Client</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Trip</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Travel Date</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Guests</th>
-                          <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Value</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-black/5 dark:divide-white/5">
-                        {liveClientsRows.length === 0 ? (
-                          <tr><td colSpan={7} className="px-3 py-8 text-center text-xs text-black/40 dark:text-white/40">No live clients</td></tr>
-                        ) : liveClientsRows.slice(0, 10).map((row: any) => (
-                          <tr key={row.id} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => row.clientId && navigate(`/clients/${row.clientId}`)} data-testid={`row-live-overview-${row.id}`}>
-                            <td className="px-3 py-2.5 text-xs text-black/60 dark:text-white/60">{row.agentName}</td>
-                            <td className="px-3 py-2.5 text-xs font-medium text-black/80 dark:text-white/80">{row.clientName}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/60 dark:text-white/60 truncate max-w-[150px]">{row.title}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/50 dark:text-white/50">{row.travelDate ? new Date(row.travelDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/50 dark:text-white/50">{row.guests}</td>
-                            <td className="px-3 py-2.5 text-right text-xs font-semibold text-emerald-700">{row.value > 0 ? currency.format(row.value) : "—"}</td>
-                            <td className="px-3 py-2.5">
-                              <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${row.status === "Enquiry" ? "bg-blue-500/10 text-blue-700" : "bg-amber-500/10 text-amber-700"}`}>{row.status}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {liveClientsRows.length > 10 && (
-                    <div className="text-center">
-                      <button onClick={() => navigate("/pipeline")} className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors" data-testid="link-view-all-live">
-                        +{liveClientsRows.length - 10} more · View all live clients →
-                      </button>
-                    </div>
-                  )}
+                <div className="grid gap-3 md:grid-cols-3">
+                  {([
+                    { stage: "New Lead" as const, hint: "No commission yet", color: "blue" },
+                    { stage: "In Play" as const, hint: "Commission added", color: "amber" },
+                    { stage: "Booked" as const, hint: "Confirmed", color: "emerald" },
+                  ] as const).map((col) => {
+                    const items = pipelineStages[col.stage] || [];
+                    const sum = items.reduce((s: number, q: any) => s + getQuoteProfit(q), 0);
+                    const dotColor = col.color === "blue" ? "bg-blue-500" : col.color === "amber" ? "bg-amber-500" : "bg-emerald-500";
+                    const textColor = col.color === "blue" ? "text-blue-700" : col.color === "amber" ? "text-amber-700" : "text-emerald-700";
+                    return (
+                      <div key={col.stage} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <div className={`h-2 w-2 rounded-full ${dotColor}`} />
+                              <div className={`text-sm font-semibold ${textColor}`}>
+                                {col.stage}
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {col.hint} · {items.length} quotes
+                            </div>
+                          </div>
+                          <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                            {currency.format(sum)}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {items.slice(0, 5).map((q: any) => (
+                            <button
+                              key={q.id}
+                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.transaction_id}/bookings/${q.booking?.id || q.id}` : col.stage === "In Play" ? `/clients/${q.transaction_id}/quotes/${q.quotes?.[0]?.id || q.id}` : `/clients/${q.transaction_id}/enquiries/${q.enquiry?.id || q.id}`)}
+                              className="w-full rounded-2xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                              data-testid={`card-pipeline-${col.stage}-${q.id}`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-semibold" data-testid={`text-pipeline-name-${q.id}`}>
+                                    {q.title}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/55 dark:text-white/55">
+                                    {pipelineClientNames.get(q.transaction_id) || "Client"}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/40 dark:text-white/40">
+                                    {new Date(q.travel_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                                  </div>
+                                </div>
+                                <div className="text-xs font-semibold text-emerald-700" data-testid={`text-pipeline-value-${q.id}`}>
+                                  {getQuoteProfit(q) > 0 ? currency.format(getQuoteProfit(q)) : "TBC"}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                          {items.length > 5 && (
+                            <button
+                              onClick={() => navigate("/pipeline")}
+                              className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
+                            >
+                              +{items.length - 5} more · View full pipeline
+                            </button>
+                          )}
+                          {items.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-black/10 p-3 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45">
+                              No quotes
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => navigate("/pipeline")}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    data-testid="link-view-full-pipeline"
+                  >
+                    View full pipeline →
+                  </button>
                 </div>
               </TabsContent>
 
@@ -2520,7 +2497,7 @@ export default function CommandCenterPage() {
                     Clients List
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-clients-pipeline">
-                    Live Clients
+                    Pipeline
                   </TabsTrigger>
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-clients-social">
                     Social Posts
@@ -2628,57 +2605,87 @@ export default function CommandCenterPage() {
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-0">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 rounded-xl bg-blue-500/10 px-3 py-1.5">
-                      <div className="h-2 w-2 rounded-full bg-blue-500" />
-                      <span className="text-xs font-semibold text-blue-700">{liveClientsRows.filter((r: any) => r.status === "Enquiry").length} Enquiries</span>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-1.5">
-                      <div className="h-2 w-2 rounded-full bg-amber-500" />
-                      <span className="text-xs font-semibold text-amber-700">{liveClientsRows.filter((r: any) => r.status === "Quoted").length} Quoted</span>
-                    </div>
-                    <span className="text-xs text-black/40 dark:text-white/40">{liveClientsRows.length} total live</span>
-                  </div>
-                  <div className="overflow-x-auto rounded-2xl border border-black/10 dark:border-white/10">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-black/10 bg-black/[0.03] dark:border-white/10 dark:bg-white/[0.03]">
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Agent</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Client</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Trip</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Travel Date</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Guests</th>
-                          <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Value</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-black/5 dark:divide-white/5">
-                        {liveClientsRows.length === 0 ? (
-                          <tr><td colSpan={7} className="px-3 py-8 text-center text-xs text-black/40 dark:text-white/40">No live clients</td></tr>
-                        ) : liveClientsRows.slice(0, 10).map((row: any) => (
-                          <tr key={row.id} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => row.clientId && navigate(`/clients/${row.clientId}`)} data-testid={`row-live-clients-${row.id}`}>
-                            <td className="px-3 py-2.5 text-xs text-black/60 dark:text-white/60">{row.agentName}</td>
-                            <td className="px-3 py-2.5 text-xs font-medium text-black/80 dark:text-white/80">{row.clientName}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/60 dark:text-white/60 truncate max-w-[150px]">{row.title}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/50 dark:text-white/50">{row.travelDate ? new Date(row.travelDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/50 dark:text-white/50">{row.guests}</td>
-                            <td className="px-3 py-2.5 text-right text-xs font-semibold text-emerald-700">{row.value > 0 ? currency.format(row.value) : "—"}</td>
-                            <td className="px-3 py-2.5">
-                              <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${row.status === "Enquiry" ? "bg-blue-500/10 text-blue-700" : "bg-amber-500/10 text-amber-700"}`}>{row.status}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {liveClientsRows.length > 10 && (
-                    <div className="text-center">
-                      <button onClick={() => navigate("/pipeline")} className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors" data-testid="link-clients-view-all-live">
-                        +{liveClientsRows.length - 10} more · View all live clients →
-                      </button>
-                    </div>
-                  )}
+                <div className="grid gap-3 md:grid-cols-3">
+                  {([
+                    { stage: "New Lead" as const, hint: "No commission yet", color: "blue" },
+                    { stage: "In Play" as const, hint: "Commission added", color: "amber" },
+                    { stage: "Booked" as const, hint: "Confirmed", color: "emerald" },
+                  ] as const).map((col) => {
+                    const items = pipelineStages[col.stage] || [];
+                    const sum = items.reduce((s: number, q: any) => s + getQuoteProfit(q), 0);
+                    const dotColor = col.color === "blue" ? "bg-blue-500" : col.color === "amber" ? "bg-amber-500" : "bg-emerald-500";
+                    const textColor = col.color === "blue" ? "text-blue-700" : col.color === "amber" ? "text-amber-700" : "text-emerald-700";
+                    return (
+                      <div key={col.stage} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <div className={`h-2 w-2 rounded-full ${dotColor}`} />
+                              <div className={`text-sm font-semibold ${textColor}`}>
+                                {col.stage}
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {col.hint} · {items.length} quotes
+                            </div>
+                          </div>
+                          <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                            {currency.format(sum)}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {items.slice(0, 5).map((q: any) => (
+                            <button
+                              key={q.id}
+                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.transaction_id}/bookings/${q.booking?.id || q.id}` : col.stage === "In Play" ? `/clients/${q.transaction_id}/quotes/${q.quotes?.[0]?.id || q.id}` : `/clients/${q.transaction_id}/enquiries/${q.enquiry?.id || q.id}`)}
+                              className="w-full rounded-2xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                              data-testid={`card-clients-pipeline-${col.stage}-${q.id}`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-semibold" data-testid={`text-clients-pipeline-name-${q.id}`}>
+                                    {q.title}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/55 dark:text-white/55">
+                                    {pipelineClientNames.get(q.transaction_id) || "Client"}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/40 dark:text-white/40">
+                                    {new Date(q.travel_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                                  </div>
+                                </div>
+                                <div className="text-xs font-semibold text-emerald-700" data-testid={`text-clients-pipeline-value-${q.id}`}>
+                                  {getQuoteProfit(q) > 0 ? currency.format(getQuoteProfit(q)) : "TBC"}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                          {items.length > 5 && (
+                            <button
+                              onClick={() => navigate("/pipeline")}
+                              className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
+                            >
+                              +{items.length - 5} more · View full pipeline
+                            </button>
+                          )}
+                          {items.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-black/10 p-3 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45">
+                              No quotes
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => navigate("/pipeline")}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    data-testid="link-clients-view-full-pipeline"
+                  >
+                    View full pipeline →
+                  </button>
                 </div>
               </TabsContent>
 
@@ -3018,7 +3025,7 @@ export default function CommandCenterPage() {
                     What's On!
                   </TabsTrigger>
                   <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-pipeline">
-                    Live Clients
+                    Pipeline
                   </TabsTrigger>
                   <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-social-posts">
                     Social Posts
@@ -3183,57 +3190,87 @@ export default function CommandCenterPage() {
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-0">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 rounded-xl bg-blue-500/10 px-3 py-1.5">
-                      <div className="h-2 w-2 rounded-full bg-blue-500" />
-                      <span className="text-xs font-semibold text-blue-700">{liveClientsRows.filter((r: any) => r.status === "Enquiry").length} Enquiries</span>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-1.5">
-                      <div className="h-2 w-2 rounded-full bg-amber-500" />
-                      <span className="text-xs font-semibold text-amber-700">{liveClientsRows.filter((r: any) => r.status === "Quoted").length} Quoted</span>
-                    </div>
-                    <span className="text-xs text-black/40 dark:text-white/40">{liveClientsRows.length} total live</span>
-                  </div>
-                  <div className="overflow-x-auto rounded-2xl border border-black/10 dark:border-white/10">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-black/10 bg-black/[0.03] dark:border-white/10 dark:bg-white/[0.03]">
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Agent</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Client</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Trip</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Travel Date</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Guests</th>
-                          <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Value</th>
-                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-black/5 dark:divide-white/5">
-                        {liveClientsRows.length === 0 ? (
-                          <tr><td colSpan={7} className="px-3 py-8 text-center text-xs text-black/40 dark:text-white/40">No live clients</td></tr>
-                        ) : liveClientsRows.slice(0, 10).map((row: any) => (
-                          <tr key={row.id} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => row.clientId && navigate(`/clients/${row.clientId}`)} data-testid={`row-live-workspace-${row.id}`}>
-                            <td className="px-3 py-2.5 text-xs text-black/60 dark:text-white/60">{row.agentName}</td>
-                            <td className="px-3 py-2.5 text-xs font-medium text-black/80 dark:text-white/80">{row.clientName}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/60 dark:text-white/60 truncate max-w-[150px]">{row.title}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/50 dark:text-white/50">{row.travelDate ? new Date(row.travelDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
-                            <td className="px-3 py-2.5 text-xs text-black/50 dark:text-white/50">{row.guests}</td>
-                            <td className="px-3 py-2.5 text-right text-xs font-semibold text-emerald-700">{row.value > 0 ? currency.format(row.value) : "—"}</td>
-                            <td className="px-3 py-2.5">
-                              <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${row.status === "Enquiry" ? "bg-blue-500/10 text-blue-700" : "bg-amber-500/10 text-amber-700"}`}>{row.status}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {liveClientsRows.length > 10 && (
-                    <div className="text-center">
-                      <button onClick={() => navigate("/pipeline")} className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors" data-testid="link-workspace-view-all-live">
-                        +{liveClientsRows.length - 10} more · View all live clients →
-                      </button>
-                    </div>
-                  )}
+                <div className="grid gap-3 md:grid-cols-3">
+                  {([
+                    { stage: "New Lead" as const, hint: "No commission yet", color: "blue" },
+                    { stage: "In Play" as const, hint: "Commission added", color: "amber" },
+                    { stage: "Booked" as const, hint: "Confirmed", color: "emerald" },
+                  ] as const).map((col) => {
+                    const items = pipelineStages[col.stage] || [];
+                    const sum = items.reduce((s: number, q: any) => s + getQuoteProfit(q), 0);
+                    const dotColor = col.color === "blue" ? "bg-blue-500" : col.color === "amber" ? "bg-amber-500" : "bg-emerald-500";
+                    const textColor = col.color === "blue" ? "text-blue-700" : col.color === "amber" ? "text-amber-700" : "text-emerald-700";
+                    return (
+                      <div key={col.stage} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <div className={`h-2 w-2 rounded-full ${dotColor}`} />
+                              <div className={`text-sm font-semibold ${textColor}`} data-testid={`text-pipeline-stage-${col.stage}`}>
+                                {col.stage}
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground" data-testid={`text-pipeline-hint-${col.stage}`}>
+                              {col.hint} · {items.length} quotes
+                            </div>
+                          </div>
+                          <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400" data-testid={`text-pipeline-sum-${col.stage}`}>
+                            {currency.format(sum)}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {items.slice(0, 5).map((q: any) => (
+                            <button
+                              key={q.id}
+                              onClick={() => navigate(col.stage === "Booked" ? `/clients/${q.transaction_id}/bookings/${q.booking?.id || q.id}` : col.stage === "In Play" ? `/clients/${q.transaction_id}/quotes/${q.quotes?.[0]?.id || q.id}` : `/clients/${q.transaction_id}/enquiries/${q.enquiry?.id || q.id}`)}
+                              className="w-full rounded-3xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                              data-testid={`card-pipeline-${col.stage}-${q.id}`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-semibold" data-testid={`text-pipeline-name-${q.id}`}>
+                                    {q.title}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/55 dark:text-white/55">
+                                    {pipelineClientNames.get(q.transaction_id) || "Client"}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-black/40 dark:text-white/40" data-testid={`text-pipeline-trip-${q.id}`}>
+                                    {new Date(q.travel_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                                  </div>
+                                </div>
+                                <div className="text-xs font-semibold text-emerald-700" data-testid={`text-pipeline-value-${q.id}`}>
+                                  {getQuoteProfit(q) > 0 ? currency.format(getQuoteProfit(q)) : "TBC"}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                          {items.length > 5 && (
+                            <button
+                              onClick={() => navigate("/pipeline")}
+                              className="w-full rounded-2xl border border-dashed border-black/10 p-2 text-center text-xs text-black/50 hover:bg-black/5 dark:border-white/10 dark:text-white/50 dark:hover:bg-white/5"
+                            >
+                              +{items.length - 5} more · View full pipeline
+                            </button>
+                          )}
+                          {items.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-black/10 p-3 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45">
+                              No quotes
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => navigate("/pipeline")}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    data-testid="link-view-full-pipeline-workspace"
+                  >
+                    View full pipeline →
+                  </button>
                 </div>
               </TabsContent>
 
