@@ -2549,15 +2549,16 @@ function EditQuoteDialog({
               if (idMapping.inboundArriveAirportId) updated.inboundArriveAirportId = idMapping.inboundArriveAirportId;
               if (idMapping.roomTypeId) updated.roomType = idMapping.roomTypeId;
 
-              // Apply lodge data
-              if (isLodgeQuote) {
+              // Apply lodge data - use server's isLodge detection as fallback
+              const serverDetectedLodge = (idMapping as Record<string, unknown>).isLodge === true;
+              if (isLodgeQuote || serverDetectedLodge) {
                 updated.packageType = "Hot Tub Break";
                 if (idMapping.parkId) updated.parkName = idMapping.parkId;
                 if (idMapping.lodgeId) updated.lodgeCode = idMapping.lodgeId;
                 updated.lodge = {
                   name: lodgeName || lodgeParkName || "",
                   type: lodgeType || "",
-                  code: lodgeCode || "",
+                  code: lodgeCodeVal || "",
                 };
                 updated.country = "";
                 updated.destination = "";
@@ -2580,7 +2581,8 @@ function EditQuoteDialog({
               return updated;
             });
 
-            if (isLodgeQuote) {
+            const finalIsLodge = isLodgeQuote || (idMapping as Record<string, unknown>).isLodge === true;
+            if (finalIsLodge) {
               queryClient.invalidateQueries({ queryKey: lookupKeys.parks });
               if (idMapping.parkId) {
                 queryClient.invalidateQueries({ queryKey: lookupKeys.lodges(idMapping.parkId) });

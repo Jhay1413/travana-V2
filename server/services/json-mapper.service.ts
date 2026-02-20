@@ -31,6 +31,7 @@ interface JsonMappingResult {
   inboundDepartAirportId: string;
   inboundArriveAirportId: string;
   roomTypeId: string;
+  isLodge: boolean;
   lodgeId: string;
   parkId: string;
   warnings: string[];
@@ -57,10 +58,18 @@ export const jsonMapperService = {
     let lodgeId = "";
     let parkId = "";
 
-    // For lodge quotes: treat resort as park, accommodation as lodge
-    // Override parkName/lodgeName from resort/accommodation when isLodgeQuote is true
-    if (input.isLodgeQuote) {
+    // Detect lodge quotes from multiple signals:
+    // 1. Explicit isLodgeQuote flag from frontend
+    // 2. Lodge-specific fields present (parkName, lodgeCode, lodgeName)
+    // 3. Tour operator is a known lodge operator
+    const knownLodgeOperators = ["hoseasons", "haven", "parkdean", "park dean", "butlins", "center parcs", "centre parcs", "away resorts", "park holidays"];
+    const tourOpLower = (input.tourOperator || "").toLowerCase().trim();
+    const isLodgeTourOperator = knownLodgeOperators.some(op => tourOpLower.includes(op));
+    const isLodge = input.isLodgeQuote || !!input.parkName || !!input.lodgeName || isLodgeTourOperator;
+
+    if (isLodge) {
       console.log("🏠 Lodge quote detected! Treating resort as park, accommodation as lodge");
+      console.log("🏠 Detection signals:", { isLodgeQuote: input.isLodgeQuote, hasParkName: !!input.parkName, hasLodgeName: !!input.lodgeName, isLodgeTourOperator, tourOperator: input.tourOperator });
       if (!input.parkName && input.resort) {
         input.parkName = input.resort;
       }
@@ -71,7 +80,7 @@ export const jsonMapperService = {
 
     // Strategy 1: Check if accommodation exists first (most efficient)
     // Skip this for lodge quotes - they use the park/lodge path instead
-    if (input.accommodation && !input.isLodgeQuote) {
+    if (input.accommodation && !isLodge) {
       console.log(`  → Searching for accommodation: "${input.accommodation}"`);
       const existingAccom = await jsonMapperRepository.findAccommodationByName(input.accommodation);
       
@@ -299,6 +308,7 @@ export const jsonMapperService = {
       inboundDepartAirportId,
       inboundArriveAirportId,
       roomTypeId,
+      isLodge,
       lodgeId,
       parkId,
       warnings,
