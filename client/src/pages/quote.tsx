@@ -2445,7 +2445,11 @@ function EditQuoteDialog({
               'lodge_type' in data || 'lodge_code' in data || 'lodge_id' in data || 'lodge_park_name' in data
             );
             const isCurrentFormLodge = form.packageType === "Hot Tub Break";
-            const isLodgeQuote = hasLodgeFieldsInJson || isCurrentFormLodge;
+            // Also detect lodge by known lodge tour operators (Hoseasons, Haven, etc.)
+            const tourOp = (data.tour_operator || result.fields.tourOperator || "").toLowerCase().trim();
+            const lodgeTourOperators = ["hoseasons", "haven", "parkdean", "park dean", "butlins", "center parcs", "centre parcs", "away resorts", "park holidays"];
+            const isLodgeTourOperator = lodgeTourOperators.some(op => tourOp.includes(op));
+            const isLodgeQuote = hasLodgeFieldsInJson || isCurrentFormLodge || isLodgeTourOperator;
 
             const lodgeParkName = data.lodge_park_name || data.resort || result.fields.resort || "";
             const lodgeCodeVal = data.lodge_code || null;
