@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare, Pin, PinOff, CheckSquare, Circle, Plus, Anchor, PawPrint } from "lucide-react";
+import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, Plane, RefreshCw, Star, Tag, X, Hotel, Bus, Clock, MapPin, Calendar, Send, Reply, Trash2, Check, SmilePlus, Bold, Italic, List, ListOrdered, Link as LinkIcon, Undo, Redo, MessageSquare, Pin, PinOff, CheckSquare, Circle, Plus, Anchor, PawPrint } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
@@ -1901,6 +1901,24 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           )}
                         </div>
                         <div className="flex items-center gap-2">
+                          <Select
+                            value={quote.status || "QUOTE_IN_PROGRESS"}
+                            onValueChange={() => {}}
+                          >
+                            <SelectTrigger
+                              className="h-8 w-[180px] rounded-full border-black/10 bg-white/70 text-[11px] font-semibold text-black/70"
+                              data-testid="select-quote-status"
+                            >
+                              <Filter className="mr-1.5 h-3.5 w-3.5 shrink-0 opacity-60" />
+                              <SelectValue placeholder="Quote Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="QUOTE_IN_PROGRESS">Quote in Progress</SelectItem>
+                              <SelectItem value="QUOTE_CALL">Quote Call</SelectItem>
+                              <SelectItem value="AWAITING_DECISION">Awaiting Decision</SelectItem>
+                              <SelectItem value="HOT_QUOTE">Hot Quote</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <UserReassignSelect
                             value={quoteData?.user_id || currentUser?.id || ""}
                             onValueChange={(userId) => {
