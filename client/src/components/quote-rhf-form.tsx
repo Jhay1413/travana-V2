@@ -85,6 +85,7 @@ export function QuoteRHFForm({
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const skipLodgeResetRef = useRef(false);
 
   const { watch, setValue, control } = form;
   const { toast } = useToast();
@@ -158,6 +159,10 @@ export function QuoteRHFForm({
   useEffect(() => {
     if (isParkFirstRender.current) {
       isParkFirstRender.current = false;
+      return;
+    }
+    if (skipLodgeResetRef.current) {
+      skipLodgeResetRef.current = false;
       return;
     }
     setValue("lodgeId", "");
@@ -321,7 +326,6 @@ export function QuoteRHFForm({
               }
             }
 
-            // Apply resolved IDs
             if (idMapping.countryId) setValue("country", idMapping.countryId);
             if (idMapping.destinationId) setValue("destination", idMapping.destinationId);
             if (idMapping.resortId) setValue("resort", idMapping.resortId);
@@ -334,13 +338,15 @@ export function QuoteRHFForm({
             if (idMapping.inboundArriveAirportId) setValue("inboundArriveAirportId", idMapping.inboundArriveAirportId);
             if (idMapping.roomTypeId) setValue("roomType", idMapping.roomTypeId);
 
-            // Apply lodge fields
             const serverDetectedLodge = (idMapping as unknown as Record<string, unknown>).isLodge === true;
             if (isLodgeQuote || serverDetectedLodge) {
               const hotTubPackage = packageTypesData?.find(
                 (p: { id: string; name: string }) => p.name === "Hot Tub Break"
               );
               if (hotTubPackage) setValue("packageType", hotTubPackage.id);
+              if (idMapping.parkId && idMapping.lodgeId) {
+                skipLodgeResetRef.current = true;
+              }
               if (idMapping.parkId) setValue("parkId", idMapping.parkId);
               if (idMapping.lodgeId) setValue("lodgeId", idMapping.lodgeId);
               setValue("country", "");
