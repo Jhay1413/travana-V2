@@ -105,6 +105,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Spinner } from "@/components/ui/spinner";
 import { useCurrentUser } from "@/hooks/queries";
@@ -163,6 +164,50 @@ const currency = new Intl.NumberFormat(undefined, {
   currency: "GBP",
   maximumFractionDigits: 0,
 });
+
+const currencyFull = new Intl.NumberFormat(undefined, {
+  style: "currency",
+  currency: "GBP",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function StatBox({
+  label,
+  value,
+  icon: Icon,
+  color,
+  subtext,
+}: {
+  label: string;
+  value: string;
+  icon: React.ElementType;
+  color: string;
+  subtext?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Card className="glass ringed grain rounded-2xl p-4" data-testid={`stat-box-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}>
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className="text-2xl font-bold tracking-tight" data-testid={`stat-value-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}>{value}</p>
+            {subtext && (
+              <p className="text-[10px] text-muted-foreground">{subtext}</p>
+            )}
+          </div>
+          <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", color)}>
+            <Icon className="h-5 w-5 text-white" />
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
 
 function stagePill(stage: Stage) {
   if (stage === "Booked")
@@ -1982,6 +2027,50 @@ export default function CommandCenterPage() {
     };
   }, [dashboardStats, allClients]);
 
+  const profitStats = useMemo(() => {
+    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget: 150000, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0 };
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayOfWeek = now.getDay() || 7;
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    let todayProfit = 0, weekProfit = 0, monthProfit = 0, totalBookingValue = 0, bookingsCount = 0, totalOpenQuotesValue = 0, quotesCount = 0;
+    for (const t of transactionsData as any[]) {
+      if (t.booking) {
+        const profit = getQuoteProfit(t.booking);
+        const created = new Date(t.booking.date_created || t.created_at);
+        totalBookingValue += profit;
+        bookingsCount += 1;
+        if (created >= todayStart) todayProfit += profit;
+        if (created >= weekStart) weekProfit += profit;
+        if (created >= monthStart) monthProfit += profit;
+      }
+      if (t.quotes) {
+        for (const q of t.quotes) {
+          if (q.is_active === false) continue;
+          const qStatus = (q.quote_status || "").toUpperCase();
+          if (qStatus !== "BOOKED" && qStatus !== "BOOKING_CONFIRMED") {
+            totalOpenQuotesValue += getQuoteProfit(q);
+            quotesCount += 1;
+          }
+        }
+      }
+    }
+    return { todayProfit, weekProfit, monthProfit, salesTarget: 150000, avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0, totalOpenQuotesValue, bookingsCount, quotesCount };
+  }, [transactionsData]);
+
+  const targetPct = profitStats.salesTarget > 0 ? Math.round((profitStats.monthProfit / profitStats.salesTarget) * 100) : 0;
+
+  const profitStatBoxes = (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <StatBox label="Today's Total Profit" value={currency.format(profitStats.todayProfit)} icon={CircleDollarSign} color="bg-emerald-500" subtext="Profit from today's bookings" />
+      <StatBox label="This Week's Total" value={currency.format(profitStats.weekProfit)} icon={TrendingUp} color="bg-blue-500" subtext="Mon – Sun rolling total" />
+      <StatBox label="This Month's Total" value={currency.format(profitStats.monthProfit)} icon={BarChart3} color="bg-purple-500" subtext={`${targetPct}% of sales target`} />
+      <StatBox label="Agency Sales Target" value={currency.format(profitStats.salesTarget)} icon={Target} color="bg-amber-500" subtext={`${currency.format(profitStats.monthProfit)} achieved`} />
+    </div>
+  );
+
   const content = useMemo(() => {
     if (role === "Admin" && active === "overview") {
       return (
@@ -1998,7 +2087,9 @@ export default function CommandCenterPage() {
     
     if (isAgentOverview) {
       return (
-        <section className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
+        <section className="space-y-4">
+          {profitStatBoxes}
+          <div className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
           <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
@@ -2575,6 +2666,7 @@ export default function CommandCenterPage() {
               </div>
             </div>
           </div>
+          </div>
         </section>
       );
     }
@@ -2784,7 +2876,9 @@ export default function CommandCenterPage() {
     // Clients section - UI-only copy of Overview for separate customization
     if (active === "clients") {
       return (
-        <section className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
+        <section className="space-y-4">
+          {profitStatBoxes}
+          <div className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
           <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
@@ -3338,6 +3432,7 @@ export default function CommandCenterPage() {
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </section>
       );
