@@ -6,7 +6,9 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  Calendar,
   CircleDollarSign,
+  Filter,
   Globe,
   Minus,
   Percent,
@@ -25,6 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useTourOperators } from "@/hooks/queries";
+import { Input } from "@/components/ui/input";
 
 const currency = new Intl.NumberFormat(undefined, {
   style: "currency",
@@ -102,9 +105,16 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
   );
 }
 
+type TOTimePeriod = "all" | "week" | "month" | "custom";
+type TOSortMode = "profit" | "bookings" | "most-profitable";
+
 export default function AdminOverview({ transactionsData, apiUsers }: AdminOverviewProps) {
   const [tab, setTab] = useState("agent-performance");
   const { data: tourOperators } = useTourOperators();
+  const [toTimePeriod, setToTimePeriod] = useState<TOTimePeriod>("all");
+  const [toSortMode, setToSortMode] = useState<TOSortMode>("profit");
+  const [toDateFrom, setToDateFrom] = useState("");
+  const [toDateTo, setToDateTo] = useState("");
 
   const agentMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -319,6 +329,27 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
       });
   }, [transactionsData]);
 
+  const toDateRange = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (toTimePeriod === "week") {
+      const dayOfWeek = now.getDay() || 7;
+      const weekStart = new Date(todayStart);
+      weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
+      return { from: weekStart, to: null };
+    }
+    if (toTimePeriod === "month") {
+      return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: null };
+    }
+    if (toTimePeriod === "custom") {
+      return {
+        from: toDateFrom ? new Date(toDateFrom) : null,
+        to: toDateTo ? new Date(new Date(toDateTo).getTime() + 86400000 - 1) : null,
+      };
+    }
+    return { from: null, to: null };
+  }, [toTimePeriod, toDateFrom, toDateTo]);
+
   const tourOperatorAnalytics = useMemo(() => {
     if (!transactionsData) return [];
     const toMap = new Map<string, { id: string; name: string; revenue: number; bookings: number; commission: number; quotes: number }>();
@@ -330,52 +361,58 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
       }
     }
 
+    const inRange = (dateStr: string | null | undefined) => {
+      if (!dateStr) return toTimePeriod === "all";
+      const d = new Date(dateStr);
+      if (toDateRange.from && d < toDateRange.from) return false;
+      if (toDateRange.to && d > toDateRange.to) return false;
+      return true;
+    };
+
     for (const t of transactionsData) {
-      const items = [
-        ...(t.quotes || []).filter((q: any) => q.is_active !== false),
-        ...(t.booking ? [t.booking] : []),
-      ];
-
-      for (const item of items) {
-        const toId = item.main_tour_operator_id;
-        if (!toId) continue;
-        const name = toNameMap.get(toId) || toId;
-
-        if (!toMap.has(toId)) {
-          toMap.set(toId, { id: toId, name, revenue: 0, bookings: 0, commission: 0, quotes: 0 });
-        }
-        const entry = toMap.get(toId)!;
-        const sp = parseFloat(item.sales_price) || 0;
-        const profit = getProfit(item);
-
-        if (item === t.booking) {
-          entry.revenue += sp;
-          entry.commission += profit;
+      if (t.booking) {
+        const toId = t.booking.main_tour_operator_id;
+        if (toId && inRange(t.booking.date_created || t.created_at)) {
+          const name = toNameMap.get(toId) || toId;
+          if (!toMap.has(toId)) toMap.set(toId, { id: toId, name, revenue: 0, bookings: 0, commission: 0, quotes: 0 });
+          const entry = toMap.get(toId)!;
+          entry.revenue += parseFloat(t.booking.sales_price) || 0;
+          entry.commission += getProfit(t.booking);
           entry.bookings += 1;
-        } else {
-          entry.quotes += 1;
+        }
+      }
+
+      for (const q of (t.quotes || []).filter((q: any) => q.is_active !== false)) {
+        const toId = q.main_tour_operator_id;
+        if (toId && inRange(q.date_created || t.created_at)) {
+          const name = toNameMap.get(toId) || toId;
+          if (!toMap.has(toId)) toMap.set(toId, { id: toId, name, revenue: 0, bookings: 0, commission: 0, quotes: 0 });
+          toMap.get(toId)!.quotes += 1;
         }
       }
     }
 
-    const preferredOrder = [
-      "Tui", "Jet2 Holidays", "EasyJet Holidays", "Vista",
-      "Hoeseasons", "Stuba", "Disneyland Paris", "Royal Caribbean", "MSC Cruises",
-    ];
-
     const all = Array.from(toMap.values());
-    const ordered: typeof all = [];
-    for (const pName of preferredOrder) {
-      const match = all.find(t => t.name.toLowerCase() === pName.toLowerCase());
-      if (match) ordered.push(match);
-    }
-    const remaining = all
-      .filter(t => !ordered.includes(t))
-      .sort((a, b) => b.revenue - a.revenue);
-    return [...ordered, ...remaining].slice(0, 10);
-  }, [transactionsData, tourOperators]);
 
-  const maxTORevenue = tourOperatorAnalytics.length > 0 ? Math.max(...tourOperatorAnalytics.map(t => t.revenue), 1) : 1;
+    if (toSortMode === "profit") {
+      all.sort((a, b) => b.commission - a.commission);
+    } else if (toSortMode === "bookings") {
+      all.sort((a, b) => b.bookings - a.bookings || b.commission - a.commission);
+    } else {
+      all.sort((a, b) => {
+        const ratioA = a.bookings > 0 ? a.commission / a.bookings : 0;
+        const ratioB = b.bookings > 0 ? b.commission / b.bookings : 0;
+        return ratioB - ratioA;
+      });
+    }
+
+    return all.slice(0, 10);
+  }, [transactionsData, tourOperators, toSortMode, toDateRange, toTimePeriod]);
+
+  const toBarMetric = toSortMode === "bookings" ? "bookings" : "commission";
+  const maxTOBar = tourOperatorAnalytics.length > 0
+    ? Math.max(...tourOperatorAnalytics.map(t => toBarMetric === "bookings" ? t.bookings : t.commission), 1)
+    : 1;
 
   const topDestinations = destinationRevenue.slice(0, 5);
   const topDestination = topDestinations[0];
@@ -701,22 +738,98 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
 
           <TabsContent value="tour-operators" className="mt-0">
             <div className="space-y-5" data-testid="panel-tour-operators">
-              <h3 className="flex items-center gap-2 text-sm font-semibold">
-                <Plane className="h-4 w-4 text-blue-500" />
-                Top 10 Tour Operators
-              </h3>
-              <p className="text-xs text-muted-foreground -mt-3">
-                Ranked by booking revenue
-              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-semibold">
+                    <Plane className="h-4 w-4 text-blue-500" />
+                    Top 10 Tour Operators
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Ranked by {toSortMode === "profit" ? "profit" : toSortMode === "bookings" ? "booking count" : "profit per booking"}
+                    {toTimePeriod !== "all" && ` · ${toTimePeriod === "week" ? "This Week" : toTimePeriod === "month" ? "This Month" : "Custom Range"}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 rounded-xl bg-black/5 p-0.5 dark:bg-white/5">
+                  <span className="pl-2 text-[10px] font-medium text-muted-foreground"><Calendar className="inline h-3 w-3 mr-0.5 -mt-px" />Period:</span>
+                  {(["all", "week", "month", "custom"] as TOTimePeriod[]).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setToTimePeriod(p)}
+                      className={cn(
+                        "rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors",
+                        toTimePeriod === p
+                          ? "bg-white shadow-sm dark:bg-white/10 text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      data-testid={`btn-to-period-${p}`}
+                    >
+                      {p === "all" ? "All Time" : p === "week" ? "This Week" : p === "month" ? "This Month" : "Custom"}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1 rounded-xl bg-black/5 p-0.5 dark:bg-white/5">
+                  <span className="pl-2 text-[10px] font-medium text-muted-foreground"><Filter className="inline h-3 w-3 mr-0.5 -mt-px" />Rank:</span>
+                  {([
+                    { value: "profit" as TOSortMode, label: "By Profit" },
+                    { value: "bookings" as TOSortMode, label: "By Bookings" },
+                    { value: "most-profitable" as TOSortMode, label: "Most Profitable" },
+                  ]).map(s => (
+                    <button
+                      key={s.value}
+                      onClick={() => setToSortMode(s.value)}
+                      className={cn(
+                        "rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors",
+                        toSortMode === s.value
+                          ? "bg-white shadow-sm dark:bg-white/10 text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      data-testid={`btn-to-sort-${s.value}`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {toTimePeriod === "custom" && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] text-muted-foreground font-medium">From</label>
+                    <Input
+                      type="date"
+                      value={toDateFrom}
+                      onChange={e => setToDateFrom(e.target.value)}
+                      className="h-7 w-36 rounded-lg text-xs"
+                      data-testid="input-to-date-from"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] text-muted-foreground font-medium">To</label>
+                    <Input
+                      type="date"
+                      value={toDateTo}
+                      onChange={e => setToDateTo(e.target.value)}
+                      className="h-7 w-36 rounded-lg text-xs"
+                      data-testid="input-to-date-to"
+                    />
+                  </div>
+                </div>
+              )}
 
               {tourOperatorAnalytics.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-muted-foreground dark:border-white/10">
-                  No tour operator data available
+                  No tour operator data for this period
                 </div>
               ) : (
                 <div className="space-y-3" data-testid="list-tour-operator-analytics">
                   {tourOperatorAnalytics.map((to, i) => {
                     const medalColors = ["text-amber-500", "text-slate-400", "text-amber-700"];
+                    const profitPerBooking = to.bookings > 0 ? to.commission / to.bookings : 0;
+                    const barValue = toBarMetric === "bookings" ? to.bookings : to.commission;
                     return (
                       <motion.div
                         key={to.id}
@@ -740,10 +853,12 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <span className="truncate text-sm font-semibold">{to.name}</span>
-                              <span className="shrink-0 text-sm font-bold tabular-nums">{currency.format(to.revenue)}</span>
+                              <span className="shrink-0 text-sm font-bold tabular-nums">
+                                {toSortMode === "bookings" ? `${to.bookings} booking${to.bookings !== 1 ? "s" : ""}` : currency.format(to.commission)}
+                              </span>
                             </div>
                             <div className="mt-1.5">
-                              <ProgressBar value={to.revenue} max={maxTORevenue} color={
+                              <ProgressBar value={barValue} max={maxTOBar} color={
                                 i === 0 ? "bg-gradient-to-r from-amber-500 to-yellow-400" :
                                 i === 1 ? "bg-gradient-to-r from-slate-400 to-slate-300" :
                                 i === 2 ? "bg-gradient-to-r from-amber-700 to-amber-500" :
@@ -753,7 +868,13 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                             <div className="mt-1.5 flex items-center gap-3 text-[10px] text-muted-foreground">
                               <span>{to.bookings} booking{to.bookings !== 1 ? "s" : ""}</span>
                               <span>{to.quotes} quote{to.quotes !== 1 ? "s" : ""}</span>
-                              <span className="text-emerald-600 dark:text-emerald-400">Commission: {currency.format(to.commission)}</span>
+                              <span className="text-emerald-600 dark:text-emerald-400">Profit: {currency.format(to.commission)}</span>
+                              {toSortMode === "most-profitable" && to.bookings > 0 && (
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400">
+                                  {currency.format(profitPerBooking)}/booking
+                                </Badge>
+                              )}
+                              <span className="text-muted-foreground/60">Rev: {currency.format(to.revenue)}</span>
                             </div>
                           </div>
                         </div>
