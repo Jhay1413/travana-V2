@@ -8,7 +8,7 @@ export function useCreateQuote() {
   return useMutation({
     mutationFn: (data: CreateQuoteData) => quoteApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });

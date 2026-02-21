@@ -143,24 +143,43 @@ export const newQuoteService = {
 
     // Automatically create a free quote copy (no client, no agent) for every new quote
     if (!quoteFields.isFreeQuote) {
-      const freeTxn = await transactionRepository.create({
-        status: 'on_quote',
-        user_id: txn.user_id,
-      } as InsertTransaction);
+      try {
+        const freeTxn = await transactionRepository.create({
+          status: 'on_quote',
+          user_id: txn.user_id,
+        } as InsertTransaction);
 
-      await newQuoteService.createQuote({
-        ...quoteFields,
-        transaction_id: freeTxn.id,
-        isFreeQuote: true,
-        isQuoteCopy: false,
-        outboundFlight,
-        inboundFlight,
-        outboundConnectingLegs,
-        inboundConnectingLegs,
-        primaryAccommodation,
-        images,
-        tags: data.tags,
-      });
+        const freeQ = await newQuoteRepository.create({
+          ...quoteFields,
+          transaction_id: freeTxn.id,
+          isFreeQuote: true,
+          isQuoteCopy: false,
+        });
+
+        if (outboundFlight) {
+          await newQuoteRepository.upsertFlightByType(freeQ.id, "outbound", outboundFlight, 0);
+        }
+        if (inboundFlight) {
+          await newQuoteRepository.upsertFlightByType(freeQ.id, "inbound", inboundFlight, 0);
+        }
+        if (outboundConnectingLegs?.length) {
+          await newQuoteRepository.replaceConnectingLegs(freeQ.id, "outbound", outboundConnectingLegs);
+        }
+        if (inboundConnectingLegs?.length) {
+          await newQuoteRepository.replaceConnectingLegs(freeQ.id, "inbound", inboundConnectingLegs);
+        }
+        if (primaryAccommodation) {
+          await newQuoteRepository.upsertPrimaryAccommodation(freeQ.id, primaryAccommodation);
+        }
+        if (normalizedImages.length > 0) {
+          await quoteImageRepository.addImages(freeQ.id, normalizedImages);
+        }
+        if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) {
+          await tagService.addQuoteTags(freeQ.id, data.tags);
+        }
+      } catch (err) {
+        console.error('🆓 FREE QUOTE (newQuote.service) - error:', err);
+      }
     }
 
     return q;

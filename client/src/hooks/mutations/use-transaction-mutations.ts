@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { transactionApi } from "@/api";
-import { transactionKeys } from "@/hooks/queries";
+import { transactionKeys, quoteKeys } from "@/hooks/queries";
 import type { CreateTransactionData } from "@/types/quote";
 
 export function useCreateTransaction() {
@@ -9,6 +9,7 @@ export function useCreateTransaction() {
     mutationFn: (data: CreateTransactionData) => transactionApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transactionKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
     },
   });
 }

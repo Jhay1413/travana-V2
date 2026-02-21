@@ -342,26 +342,27 @@ export const transactionService = {
       return { transaction: txn, quote: q };
     });
 
-    // After the main transaction commits, create a free quote copy (no client, no agent)
     const { transaction: mainTxn } = result;
-    if (!quoteFields.isFreeQuote) {
+    try {
       const freeTxn = await transactionRepository.create({
         status: 'on_quote',
         user_id: mainTxn.user_id,
       } as InsertTransaction);
 
       await newQuoteService.createQuote({
-        ...(quoteFields as InsertQuote),
+        ...quoteFields,
         transaction_id: freeTxn.id,
         isFreeQuote: true,
         isQuoteCopy: false,
-        outboundFlight,
-        inboundFlight,
-        outboundConnectingLegs,
-        inboundConnectingLegs,
-        primaryAccommodation,
-        images,
-      });
+        outboundFlight: normalizedOutboundFlight,
+        inboundFlight: normalizedInboundFlight,
+        outboundConnectingLegs: normalizedOutboundConnecting,
+        inboundConnectingLegs: normalizedInboundConnecting,
+        primaryAccommodation: primaryAccommodation || undefined,
+        images: normalizeUniqueImageUrls(images),
+      } as any);
+    } catch (err) {
+      console.error('🆓 FREE QUOTE - error creating free quote:', err);
     }
 
     return result;
