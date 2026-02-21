@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen } from "lucide-react";
@@ -518,7 +518,21 @@ export function BookingRHFForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs font-medium text-black/60">Package Type *</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      const currentOperatorId = form.getValues("tourOperatorId");
+                      if (currentOperatorId) {
+                        const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
+                        const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === value);
+                        if (commission?.percentage_commission != null) {
+                          const currentPrice = form.getValues("price");
+                          setValue("commission", parseFloat(((currentPrice * parseFloat(commission.percentage_commission)) / 100).toFixed(2)));
+                        }
+                      }
+                    }}
+                  >
                     <FormControl>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
                         <SelectValue placeholder="Select package type..." />
@@ -569,7 +583,18 @@ export function BookingRHFForm({
                         label: op.name || op.id,
                       }))}
                       value={field.value ?? ""}
-                      onValueChange={field.onChange}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        const currentPackageType = form.getValues("packageType");
+                        if (currentPackageType) {
+                          const op = tourOperatorsData?.find((o: { id: string }) => o.id === value);
+                          const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === currentPackageType);
+                          if (commission?.percentage_commission != null) {
+                            const currentPrice = form.getValues("price");
+                            setValue("commission", parseFloat(((currentPrice * parseFloat(commission.percentage_commission)) / 100).toFixed(2)));
+                          }
+                        }
+                      }}
                       placeholder="Select operator..."
                     />
                   </FormControl>
@@ -1443,7 +1468,7 @@ export function BookingRHFForm({
             {(
               [
                 { name: "price" as const, label: "Total Price (£)" },
-                { name: "commission" as const, label: "Commission (%)" },
+                { name: "commission" as const, label: "Commission (£)" },
                 { name: "discount" as const, label: "Discount (£)" },
                 { name: "serviceCharge" as const, label: "Service Charge (£)" },
                 { name: "pricePerPerson" as const, label: "Price Per Person (£)" },
@@ -1461,6 +1486,21 @@ export function BookingRHFForm({
                         type="number"
                         step="0.01"
                         {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          if (name === "price") {
+                            const newPrice = parseFloat(e.target.value) || 0;
+                            const currentOperatorId = form.getValues("tourOperatorId");
+                            const currentPackageType = form.getValues("packageType");
+                            if (currentOperatorId && currentPackageType) {
+                              const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
+                              const comm = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === currentPackageType);
+                              if (comm?.percentage_commission != null) {
+                                setValue("commission", parseFloat(((newPrice * parseFloat(comm.percentage_commission)) / 100).toFixed(2)));
+                              }
+                            }
+                          }
+                        }}
                         className="h-9 rounded-xl border-black/10 bg-white/70"
                         min={0}
                       />

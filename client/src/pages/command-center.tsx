@@ -3207,6 +3207,36 @@ export default function CommandCenterPage() {
           </Card>
 
           <div className="flex flex-col gap-4">
+            <Card className="glass ringed grain rounded-3xl p-4">
+              <div className="space-y-1">
+                <div className="text-xs text-black/70 dark:text-white/70">Activity</div>
+                <div className="title-serif text-lg font-semibold">Recent</div>
+              </div>
+              <div className="mt-3 space-y-2">
+                {[
+                  { id: 1, action: "Quote sent", client: "Ava Harrington", meta: "2h ago" },
+                  { id: 2, action: "Booking confirmed", client: "James Whitmore", meta: "Yesterday" },
+                  { id: 3, action: "New enquiry", client: "Emma Richardson", meta: "2d ago" },
+                ].map((a) => (
+                  <button
+                    key={a.id}
+                    className="flex w-full items-start gap-3 rounded-2xl border border-black/10 bg-black/5 p-3 text-left hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                  >
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                      <Activity className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-sm font-medium">{a.action}</div>
+                        <div className="shrink-0 text-xs text-black/45 dark:text-white/45">{a.meta}</div>
+                      </div>
+                      <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55">{a.client}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </Card>
+
               <Card className="glass ringed grain rounded-3xl p-4" data-testid="card-top-clients-section">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2">
@@ -3275,36 +3305,6 @@ export default function CommandCenterPage() {
                   </div>
                 )}
               </Card>
-
-            <Card className="glass ringed grain rounded-3xl p-4">
-              <div className="space-y-1">
-                <div className="text-xs text-black/70 dark:text-white/70">Activity</div>
-                <div className="title-serif text-lg font-semibold">Recent</div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {[
-                  { id: 1, action: "Quote sent", client: "Ava Harrington", meta: "2h ago" },
-                  { id: 2, action: "Booking confirmed", client: "James Whitmore", meta: "Yesterday" },
-                  { id: 3, action: "New enquiry", client: "Emma Richardson", meta: "2d ago" },
-                ].map((a) => (
-                  <button
-                    key={a.id}
-                    className="flex w-full items-start gap-3 rounded-2xl border border-black/10 bg-black/5 p-3 text-left hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                  >
-                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                      <Activity className="h-4 w-4 text-black/70 dark:text-white/80" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="truncate text-sm font-medium">{a.action}</div>
-                        <div className="shrink-0 text-xs text-black/45 dark:text-white/45">{a.meta}</div>
-                      </div>
-                      <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55">{a.client}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Card>
 
             <div className="rounded-3xl border border-black/10 bg-black/5 p-4 ringed dark:border-white/10 dark:bg-white/5">
               <div className="flex items-start justify-between gap-3">

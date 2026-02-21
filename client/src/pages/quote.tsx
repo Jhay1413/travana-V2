@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuote, useBooking, useClient, useNeonClient, useTags } from "@/hooks/queries";
-import { useDuplicateQuote, useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags } from "@/hooks/mutations";
+import { useDuplicateQuote, useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,7 +33,8 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const [, setLocation] = useLocation();
   const [, quoteParams] = useRoute("/clients/:clientId/quotes/:quoteId");
   const [, bookingParams] = useRoute("/clients/:clientId/bookings/:quoteId");
-  const params = isBooking ? bookingParams : quoteParams;
+  const [, freeQuoteParams] = useRoute("/quotes/:quoteId");
+  const params = isBooking ? bookingParams : (quoteParams ?? freeQuoteParams);
 
   const { role } = useRole();
   const clientId = params?.clientId ?? "";
@@ -60,6 +61,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const updateTagsMutation = useUpdateQuoteTags();
   const updateTransactionMutation = useUpdateTransaction();
   const convertToBookingMutation = useConvertToBooking();
+  const updateQuoteMutation = useUpdateQuote();
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [convertHaysRef, setConvertHaysRef] = useState("");
   const [convertTourRef, setConvertTourRef] = useState("");
@@ -138,7 +140,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               variant="outline"
               className="h-9 rounded-2xl border-black/10 bg-white/70"
               data-testid="button-back-client"
-              onClick={() => setLocation(`/clients/${clientId}`)}
+              onClick={() => setLocation(clientId ? `/clients/${clientId}` : "/social-posts")}
             >
               <ChevronLeft className="mr-2 h-4 w-4" />
               Client
@@ -442,7 +444,37 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         <div className="flex items-center gap-2">
                           <Select
                             value={quote.status || "QUOTE_IN_PROGRESS"}
-                            onValueChange={() => {}}
+                            onValueChange={(value) => {
+                              if (value === "WON") {
+                                setShowConvertDialog(true);
+                              } else if (value === "LOST") {
+                                updateQuoteMutation.mutate(
+                                  { id: quoteId, data: { quote_status: "LOST" } },
+                                  {
+                                    onSuccess: () => {
+                                      queryClient.invalidateQueries({ queryKey: ["quote", quoteId] });
+                                      toast({ title: "Quote marked as lost" });
+                                    },
+                                    onError: () => {
+                                      toast({ title: "Failed to update status", variant: "destructive" });
+                                    },
+                                  }
+                                );
+                              } else {
+                                updateQuoteMutation.mutate(
+                                  { id: quoteId, data: { quote_status: value } },
+                                  {
+                                    onSuccess: () => {
+                                      queryClient.invalidateQueries({ queryKey: ["quote", quoteId] });
+                                      toast({ title: "Quote status updated" });
+                                    },
+                                    onError: () => {
+                                      toast({ title: "Failed to update status", variant: "destructive" });
+                                    },
+                                  }
+                                );
+                              }
+                            }}
                           >
                             <SelectTrigger
                               className="h-8 w-[180px] rounded-full border-black/10 bg-white/70 text-[11px] font-semibold text-black/70"
@@ -456,6 +488,8 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                               <SelectItem value="QUOTE_CALL">Quote Call</SelectItem>
                               <SelectItem value="AWAITING_DECISION">Awaiting Decision</SelectItem>
                               <SelectItem value="HOT_QUOTE">Hot Quote</SelectItem>
+                              <SelectItem value="WON">Won</SelectItem>
+                              <SelectItem value="LOST">Lost</SelectItem>
                             </SelectContent>
                           </Select>
                           <UserReassignSelect
@@ -512,7 +546,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                                             onSuccess: (newQuote) => {
                                               queryClient.invalidateQueries({ queryKey: ["quotes"] });
                                               toast({ title: "Quote duplicated successfully" });
-                                              setLocation(`/clients/${clientId}/quotes/${newQuote.id}`);
+                                              setLocation(clientId ? `/clients/${clientId}/quotes/${newQuote.id}` : `/quotes/${newQuote.id}`);
                                             },
                                             onError: () => {
                                               toast({ title: "Failed to duplicate quote", variant: "destructive" });

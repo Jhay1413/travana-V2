@@ -6,6 +6,7 @@ import { AppError } from "../utils/error-handler";
 import type {
   Quote,
   InsertQuote,
+  InsertTransaction,
   InsertQuoteFlight,
   InsertQuoteAccomodation,
   InsertQuoteTransfer,
@@ -138,6 +139,28 @@ export const newQuoteService = {
       if (quoteFields.lodge_id) {
         await newQuoteRepository.saveImagesToLodge(quoteFields.lodge_id, normalizedImages);
       }
+    }
+
+    // Automatically create a free quote copy (no client, no agent) for every new quote
+    if (!quoteFields.isFreeQuote) {
+      const freeTxn = await transactionRepository.create({
+        status: 'on_quote',
+        user_id: txn.user_id,
+      } as InsertTransaction);
+
+      await newQuoteService.createQuote({
+        ...quoteFields,
+        transaction_id: freeTxn.id,
+        isFreeQuote: true,
+        isQuoteCopy: false,
+        outboundFlight,
+        inboundFlight,
+        outboundConnectingLegs,
+        inboundConnectingLegs,
+        primaryAccommodation,
+        images,
+        tags: data.tags,
+      });
     }
 
     return q;

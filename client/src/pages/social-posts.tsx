@@ -215,7 +215,7 @@ function SocialPostCard({ post }: { post: SocialPost }) {
         )}
 
         <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
-          <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
+          <Link href={`/quotes/${quote.id}`}>
             <Button
               variant="outline"
               className="w-full rounded-xl text-sm font-medium gap-2"

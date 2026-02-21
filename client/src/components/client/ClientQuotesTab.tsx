@@ -103,28 +103,6 @@ export function ClientQuotesTab({
                   nights: q.num_of_nights || 0,
                 })),
             },
-            {
-              id: "lost",
-              title: "Lost",
-              rows: quotes
-                .filter((q: QuoteWithJoins) => q.quote_status === "LOST")
-                .map((q: QuoteWithJoins) => ({
-                  id: q.id,
-                  transactionId: q.transaction_id,
-                  title: q.title || q.holiday_type_name || "Trip",
-                  isQuoteCopy: Boolean(q.isQuoteCopy),
-                  destination: q.holiday_type_name || q.quote_type || "—",
-                  travelDate: q.travel_date,
-                  createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
-                  createdAtRaw: q.date_created || "",
-                  status: q.quote_status,
-                  totalCost: parseFloat(q.sales_price || "0"),
-                  pricePerPerson: parseFloat(q.price_per_person || "0"),
-                  imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
-                  pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
-                  nights: q.num_of_nights || 0,
-                })),
-            },
           ].map((group) => {
             const groupRowsSorted = [...group.rows].sort(
               (a, b) => new Date(b.createdAtRaw || 0).getTime() - new Date(a.createdAtRaw || 0).getTime(),

@@ -3,6 +3,7 @@ import { enquiryTableRepository } from "../repositories/enquiryTable.repository"
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { bookingRepository } from "../repositories/booking.repository";
 import { taskService } from "./task.service";
+import { newQuoteService } from "./newQuote.service";
 import { AppError } from "../utils/error-handler";
 import type {
   InsertTransaction,
@@ -215,7 +216,7 @@ export const transactionService = {
     const normalizedOutboundConnecting = outboundConnectingSource.map(normalizeFlightInput);
     const normalizedInboundConnecting = inboundConnectingSource.map(normalizeFlightInput);
 
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [txn] = await tx.insert(transaction).values({
         ...transactionData,
         status: 'on_quote',
@@ -340,6 +341,30 @@ export const transactionService = {
 
       return { transaction: txn, quote: q };
     });
+
+    // After the main transaction commits, create a free quote copy (no client, no agent)
+    const { transaction: mainTxn } = result;
+    if (!quoteFields.isFreeQuote) {
+      const freeTxn = await transactionRepository.create({
+        status: 'on_quote',
+        user_id: mainTxn.user_id,
+      } as InsertTransaction);
+
+      await newQuoteService.createQuote({
+        ...(quoteFields as InsertQuote),
+        transaction_id: freeTxn.id,
+        isFreeQuote: true,
+        isQuoteCopy: false,
+        outboundFlight,
+        inboundFlight,
+        outboundConnectingLegs,
+        inboundConnectingLegs,
+        primaryAccommodation,
+        images,
+      });
+    }
+
+    return result;
   },
 
   async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: BookingRelationPayload) {

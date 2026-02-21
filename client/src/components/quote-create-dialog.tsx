@@ -29,8 +29,7 @@ function buildQuotePayload(
   const isCruise = packageTypeName === "Cruise Package";
   const showFlights = !isHotTubBreak && !(isCruise && values.cruiseOnly);
 
-  const commissionValue =
-    ((Number(values.commission) || 0) / 100) * (Number(values.price) || 0);
+  const commissionValue = Number(values.commission) || 0;
 
   const payload: any = {
     holiday_type_id: values.packageType,

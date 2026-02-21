@@ -40,6 +40,7 @@ function AuthenticatedRouter() {
       <Route path="/clients" component={CommandCenterPage} />
       <Route path="/clients/:clientId" component={ClientPage} />
       <Route path="/clients/:clientId/quotes/:quoteId" component={QuotePage} />
+      <Route path="/quotes/:quoteId" component={QuotePage} />
       <Route path="/clients/:clientId/bookings/:quoteId" component={BookingPage} />
       <Route path="/clients/:clientId/enquiries/:enquiryId" component={EnquiryPage} />
       <Route path="/pipeline" component={PipelinePage} />

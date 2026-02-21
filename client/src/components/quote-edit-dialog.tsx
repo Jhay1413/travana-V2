@@ -71,7 +71,6 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
   const discounts = parseFloat(String(quoteData.discounts || 0)) || 0;
   const serviceCharge = parseFloat(String(quoteData.service_charge || 0)) || 0;
   const pricePerPerson = parseFloat(String(quoteData.price_per_person || 0)) || 0;
-  const commissionPct = salesPrice > 0 ? (commission / salesPrice) * 100 : 0;
 
   return {
     ...defaultQuoteFormValues,
@@ -159,7 +158,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
 
     // Pricing
     price: salesPrice,
-    commission: Math.round(commissionPct * 100) / 100,
+    commission: commission,
     discount: discounts,
     serviceCharge: serviceCharge,
     pricePerPerson: pricePerPerson,
@@ -181,7 +180,7 @@ function buildUpdatePayload(
     return time ? `${date}T${time}:00` : `${date}T00:00:00`;
   };
 
-  const commissionValue = ((Number(values.commission) || 0) / 100) * (Number(values.price) || 0);
+  const commissionValue = Number(values.commission) || 0;
 
   const payload: Record<string, unknown> = {
     holiday_type_id: values.packageType || null,

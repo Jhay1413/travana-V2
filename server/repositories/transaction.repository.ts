@@ -9,7 +9,7 @@ async function enrichTransactions(txns: Transaction[]) {
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes] = await Promise.all([
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
-    db.select().from(quote).where(inArray(quote.transaction_id, txnIds)),
+    db.select().from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`)),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
     db.select().from(package_type),
   ]);
