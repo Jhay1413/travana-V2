@@ -72,6 +72,7 @@ export default function ClientPage() {
     badge: "",
   });
   const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
+  const [quoteCreateTxnId, setQuoteCreateTxnId] = useState<string | null>(null);
   const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
@@ -264,9 +265,29 @@ export default function ClientPage() {
     });
   };
 
+  const handleNewQuote = () => {
+    createTransactionMutation.mutate(
+      {
+        client_id: clientId,
+        user_id: currentUser?.id || "",
+        lead_source: undefined,
+      },
+      {
+        onSuccess: (txn) => {
+          setQuoteCreateTxnId(txn.id);
+          setShowQuoteCreateDialog(true);
+        },
+        onError: () => {
+          toast({ title: "Failed to create transaction", variant: "destructive" });
+        },
+      }
+    );
+  };
+
   const handleConvertEnquiryToQuote = (enq: EnquiryTable) => {
     setConvertingFromEnquiryTxnId(enq.transaction_id);
     setConvertingEnquiryId(enq.id);
+    setQuoteCreateTxnId(enq.transaction_id);
     setShowQuoteCreateDialog(true);
   };
 
@@ -859,7 +880,7 @@ export default function ClientPage() {
                     quotes={quotes}
                     clientId={clientId}
                     navigate={navigate}
-                    onNewQuote={() => setShowQuoteCreateDialog(true)}
+                    onNewQuote={handleNewQuote}
                     expandedCopyGroups={expandedCopyGroups}
                     setExpandedCopyGroups={setExpandedCopyGroups}
                     client={client}
@@ -903,11 +924,12 @@ export default function ClientPage() {
         </div>
       </div>
       <QuoteCreateDialog
-        transactionId={convertingFromEnquiryTxnId || ""}
-        open={showQuoteCreateDialog && !!convertingFromEnquiryTxnId}
+        transactionId={quoteCreateTxnId || ""}
+        open={showQuoteCreateDialog && !!quoteCreateTxnId}
         onOpenChange={(open) => {
           if (!open) {
             setShowQuoteCreateDialog(false);
+            setQuoteCreateTxnId(null);
             setConvertingFromEnquiryTxnId(null);
             setConvertingEnquiryId(null);
           }
