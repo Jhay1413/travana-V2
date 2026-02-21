@@ -1467,7 +1467,7 @@ export default function CommandCenterPage() {
   const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [clientsTab, setClientsTab] = useState<"clients-list" | "pipeline" | "calendar" | "news">("clients-list");
-  const [liveClientsDateRange, setLiveClientsDateRange] = useState<"this-month" | "last-month" | "this-week" | "last-7" | "last-30" | "last-90" | "this-year" | "all-time">("this-month");
+  const [liveClientsDateRange, setLiveClientsDateRange] = useState<"today" | "this-week" | "this-month" | "last-month" | "last-7" | "this-year">("this-month");
   const [liveClientsSearch, setLiveClientsSearch] = useState("");
   const [liveClientsStatusFilter, setLiveClientsStatusFilter] = useState<"all" | "enquiry" | "quote">("all");
   const [clientsListPage, setClientsListPage] = useState(1);
@@ -1923,32 +1923,28 @@ export default function CommandCenterPage() {
 
   const filteredLiveClients = useMemo(() => {
     let result = liveClientsData;
-    if (liveClientsDateRange !== "all-time") {
-      const now = new Date();
-      let rangeStart: Date;
-      let rangeEnd: Date | null = null;
-      if (liveClientsDateRange === "this-month") {
-        rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else if (liveClientsDateRange === "last-month") {
-        rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-      } else if (liveClientsDateRange === "this-week") {
-        const day = now.getDay();
-        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); rangeStart.setHours(0, 0, 0, 0);
-      } else if (liveClientsDateRange === "last-7") {
-        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 7); rangeStart.setHours(0, 0, 0, 0);
-      } else if (liveClientsDateRange === "last-30") {
-        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 30); rangeStart.setHours(0, 0, 0, 0);
-      } else if (liveClientsDateRange === "last-90") {
-        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 90); rangeStart.setHours(0, 0, 0, 0);
-      } else {
-        rangeStart = new Date(now.getFullYear(), 0, 1);
-      }
-      result = result.filter((item) => {
-        const d = new Date(item.latestDate || 0);
-        return d >= rangeStart && (rangeEnd ? d <= rangeEnd : true);
-      });
+    const now = new Date();
+    let rangeStart: Date;
+    let rangeEnd: Date | null = null;
+    if (liveClientsDateRange === "today") {
+      rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (liveClientsDateRange === "this-month") {
+      rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (liveClientsDateRange === "last-month") {
+      rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    } else if (liveClientsDateRange === "this-week") {
+      const day = now.getDay();
+      rangeStart = new Date(now); rangeStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); rangeStart.setHours(0, 0, 0, 0);
+    } else if (liveClientsDateRange === "last-7") {
+      rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 7); rangeStart.setHours(0, 0, 0, 0);
+    } else {
+      rangeStart = new Date(now.getFullYear(), 0, 1);
     }
+    result = result.filter((item) => {
+      const d = new Date(item.latestDate || 0);
+      return d >= rangeStart && (rangeEnd ? d <= rangeEnd : true);
+    });
     if (liveClientsStatusFilter !== "all") {
       result = result.filter((item) => item.status === liveClientsStatusFilter);
     }
@@ -2926,14 +2922,12 @@ export default function CommandCenterPage() {
 
                   <div className="flex flex-wrap items-center gap-1.5">
                     {([
+                      { value: "today", label: "Today" },
+                      { value: "this-week", label: "This Week" },
                       { value: "this-month", label: "This Month" },
                       { value: "last-month", label: "Last Month" },
-                      { value: "this-week", label: "This Week" },
                       { value: "last-7", label: "Last 7 Days" },
-                      { value: "last-30", label: "Last 30 Days" },
-                      { value: "last-90", label: "Last 90 Days" },
                       { value: "this-year", label: "This Year" },
-                      { value: "all-time", label: "All Time" },
                     ] as const).map((opt) => (
                       <button
                         key={opt.value}
