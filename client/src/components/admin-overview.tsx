@@ -406,7 +406,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                       <thead>
                         <tr className="border-b border-black/10 text-left text-xs font-medium text-muted-foreground dark:border-white/10">
                           <th className="pb-2 pr-4">Agent</th>
-                          <th className="pb-2 pr-4 text-right">Revenue</th>
+                          <th className="pb-2 pr-4 text-right">Total Sales</th>
                           <th className="pb-2 pr-4 text-right">Commission</th>
                           <th className="pb-2 pr-4 text-right">Close Rate</th>
                           <th className="pb-2 text-right">Avg Booking</th>
