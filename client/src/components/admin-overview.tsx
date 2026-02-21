@@ -135,7 +135,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
         const profit = getProfit(t.booking);
         const sp = parseFloat(t.booking.sales_price) || 0;
         const created = new Date(t.booking.date_created || t.created_at);
-        totalBookingValue += sp;
+        totalBookingValue += profit;
         bookingsCount += 1;
 
         if (created >= todayStart) todayProfit += profit;
