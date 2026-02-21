@@ -318,37 +318,6 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
 
   return (
     <section className="space-y-4" data-testid="page-admin-overview">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatBox
-          label="Today's Total Profit"
-          value={currency.format(stats.todayProfit)}
-          icon={CircleDollarSign}
-          color="bg-emerald-500"
-          subtext="Profit from today's bookings"
-        />
-        <StatBox
-          label="This Week's Total"
-          value={currency.format(stats.weekProfit)}
-          icon={TrendingUp}
-          color="bg-blue-500"
-          subtext="Mon – Sun rolling total"
-        />
-        <StatBox
-          label="This Month's Total"
-          value={currency.format(stats.monthProfit)}
-          icon={BarChart3}
-          color="bg-purple-500"
-          subtext={`${targetPct}% of sales target`}
-        />
-        <StatBox
-          label="Agency Sales Target"
-          value={currency.format(stats.salesTarget)}
-          icon={Target}
-          color="bg-amber-500"
-          subtext={`${currency.format(stats.monthProfit)} achieved`}
-        />
-      </div>
-
       <Card className="glass ringed grain rounded-3xl p-4 md:p-5" data-testid="card-admin-module">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
