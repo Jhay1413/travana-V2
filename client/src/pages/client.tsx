@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -8,30 +7,14 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  Clock,
   FileText,
-  Filter,
-  Globe,
-  Home,
-  Mail,
-  MapPin,
   Pencil,
   Phone,
-  Plane,
-  Search,
   Sparkles,
   Ticket,
-  ImagePlus,
-  TrendingUp,
-  Trash2,
   UserRound,
-  X,
   Pin,
   PinOff,
-  Plus,
-  ArrowRightLeft,
-  Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,28 +23,32 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useCountries, useDestinations, useResorts, useAccommodations, useBoardBasis, useParks, useLodges, useAirports, useTourOperators, usePackageTypes, useRoomTypes, useAccommodationImages, useLodgeImages } from "@/hooks/queries";
-import { useUpdateClient, useUpdateNeonClient, useCreateQuote, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
+import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
+import { useUpdateClient, useUpdateNeonClient, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { Favorite } from "@/api/endpoints/favorite.api";
-import type { CreateQuoteData, Transaction, EnquiryTable, DealImage } from "@/types/quote";
+import type { Transaction, EnquiryTable } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
 
-import { NewQuoteFormState, currency, tierPill, stagePill, transformNeonClientData, transformTicket, formatTicketDate, ticketStatusPill, ticketTypePill, filesFor, formatPax, computePaxTotal, formatUKDate, BookingWithJoins, QuoteWithJoins, TicketItem } from "@/components/client/client-types";
+import { tierPill, transformNeonClientData, transformTicket, formatTicketDate, ticketStatusPill, ticketTypePill, filesFor } from "@/components/client/client-types";
 import { EditClientDialog } from "@/components/client/EditClientDialog";
 import { UploadFileDialog } from "@/components/client/UploadFileDialog";
-import { NewQuoteDialog } from "@/components/client/NewQuoteDialog";
 import type { Client as ApiClient } from "@/types/client";
 import { QuoteCreateDialog } from "@/components/quote-create-dialog";
+import { BookingCreateDialog } from "@/components/booking-create-dialog";
+import { ClientOverviewTab } from "@/components/client/ClientOverviewTab";
+import { ClientEnquiriesTab } from "@/components/client/ClientEnquiriesTab";
+import { ClientQuotesTab } from "@/components/client/ClientQuotesTab";
+import { ClientBookedTab } from "@/components/client/ClientBookedTab";
+import { ClientFilesTab } from "@/components/client/ClientFilesTab";
+import { ClientTicketsTab } from "@/components/client/ClientTicketsTab";
 
 export default function ClientPage() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/clients/:clientId");
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const { role, setRole } = useRole();
   const [active] = useState<string>("clients");
@@ -84,8 +71,8 @@ export default function ClientPage() {
     post_code: "",
     badge: "",
   });
-  const [showNewQuoteModal, setShowNewQuoteModal] = useState(false);
-  const [newQuoteIsBooking, setNewQuoteIsBooking] = useState(false);
+  const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
+  const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
@@ -113,70 +100,6 @@ export default function ClientPage() {
     updated: string;
     url: string;
   }[]>([]);
-  const newQuoteDefaults = {
-    packageType: "",
-    quoteTitle: "",
-    quoteLink: "",
-    jsonPayload: "",
-    travelDate: "",
-    passengersAdults: 2,
-    passengersChildren: 0,
-    passengersInfants: 0,
-    childAges: [] as number[],
-    country: "",
-    destination: "",
-    resort: "",
-    accommodation: "",
-    checkInDate: "",
-    checkInTime: "",
-    nights: 7,
-    boardBasis: "",
-    roomType: "",
-    transferType: "",
-    preBookedSeats: "",
-    flightMeals: "",
-    leadSource: "",
-    outboundDepartAirport: "",
-    outboundDepartDate: "",
-    outboundDepartTime: "",
-    outboundArriveAirport: "",
-    outboundArriveDate: "",
-    outboundArriveTime: "",
-    inboundDepartAirport: "",
-    inboundDepartDate: "",
-    inboundDepartTime: "",
-    inboundArriveAirport: "",
-    inboundArriveDate: "",
-    inboundArriveTime: "",
-    outboundConnectingLegs: [] as { departAirportId: string; departAirport: string; arriveAirportId: string; arriveAirport: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string; flightNumber: string }[],
-    inboundConnectingLegs: [] as { departAirportId: string; departAirport: string; arriveAirportId: string; arriveAirport: string; departDate: string; departTime: string; arriveDate: string; arriveTime: string; flightNumber: string }[],
-    tourOperator: "",
-    sales: 0,
-    price: 0,
-    commission: 0,
-    discount: 0,
-    serviceCharge: 0,
-    pricePerPerson: 0,
-    returnDate: "",
-    haysReference: "",
-    tourReference: "",
-    cruiseTitle: "",
-    cruiseLine: "",
-    shipName: "",
-    cruiseDate: "",
-    cabinType: "",
-    embarkation: "",
-    debarkation: "",
-    cruiseExtras: "",
-    cruiseOnly: false,
-    lodgeId: "",
-    parkId: "",
-    parkName: "",
-    pets: false,
-  };
-  const [newQuote, setNewQuote] = useState<NewQuoteFormState>(newQuoteDefaults as NewQuoteFormState);
-  const [quoteImageFiles, setQuoteImageFiles] = useState<File[]>([]);
-  const [quoteImageUrls, setQuoteImageUrls] = useState<string[]>([]);
   const clientId = params?.clientId ?? "";
 
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
@@ -189,50 +112,6 @@ export default function ClientPage() {
 
   const { data: currentUser } = useCurrentUser();
 
-  const { data: countriesData } = useCountries();
-  const { data: destinationsData } = useDestinations(newQuote.country);
-  const { data: resortsData } = useResorts(newQuote.destination);
-  const { data: accommodationsData } = useAccommodations(newQuote.resort);
-  const { data: boardBasisData } = useBoardBasis();
-  const { data: roomTypeData } = useRoomTypes();
-  const { data: airportsData } = useAirports();
-  const { data: tourOperatorsData } = useTourOperators();
-  const { data: packageTypesData } = usePackageTypes();
-  const packageTypeName = useMemo(() => {
-    if (!newQuote.packageType || !packageTypesData) return "";
-    const pt = packageTypesData?.find((p) => p.id === newQuote.packageType);
-    return pt?.name || "";
-  }, [newQuote.packageType, packageTypesData]);
-  const { data: parksData } = useParks();
-  const { data: lodgesData } = useLodges(newQuote.parkId);
-
-  // Load default images when accommodation or lodge is selected
-  const { data: accommodationImagesData } = useAccommodationImages(newQuote.accommodation || undefined);
-  const { data: lodgeImagesData } = useLodgeImages(newQuote.lodgeId || undefined);
-
-  // Auto-prefill images when accommodation is selected
-  useEffect(() => {
-    if (!accommodationImagesData?.length) return;
-    const newUrls = accommodationImagesData.map((img) => img.image_url).filter(Boolean) as string[];
-    if (!newUrls.length) return;
-    setQuoteImageUrls((prev) => {
-      const merged = [...prev];
-      for (const url of newUrls) { if (!merged.includes(url)) merged.push(url); }
-      return merged;
-    });
-  }, [accommodationImagesData]);
-
-  // Auto-prefill images when lodge is selected
-  useEffect(() => {
-    if (!lodgeImagesData?.length) return;
-    const newUrls = lodgeImagesData.map((img) => img.image_url).filter(Boolean) as string[];
-    if (!newUrls.length) return;
-    setQuoteImageUrls((prev) => {
-      const merged = [...prev];
-      for (const url of newUrls) { if (!merged.includes(url)) merged.push(url); }
-      return merged;
-    });
-  }, [lodgeImagesData]);
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const isClientPinned = useMemo(() => {
@@ -303,32 +182,6 @@ export default function ClientPage() {
         },
       }
     );
-  };
-
-  const createQuoteMutationHook = useCreateQuote();
-  const createQuoteMutation = {
-    mutate: async (data: CreateQuoteData) => {
-      createQuoteMutationHook.mutate(data, {
-        onSuccess: (createdQuote) => {
-          if (quoteImageFiles.length > 0 || quoteImageUrls.length > 0) {
-            queryClient.invalidateQueries({ queryKey: ["quotes"] });
-          }
-          setQuoteImageFiles([]);
-          setQuoteImageUrls([]);
-          const wasBooking = newQuoteIsBooking;
-          setShowNewQuoteModal(false);
-          setNewQuoteIsBooking(false);
-          setNewQuote(newQuoteDefaults);
-          toast({ title: wasBooking ? "Booking created successfully" : "Quote created successfully" });
-          if (wasBooking) {
-            navigate(`/clients/${clientId}/bookings/${createdQuote.id}`);
-          }
-        },
-        onError: (error: Error) => {
-          toast({ title: error.message || "Failed to create quote", variant: "destructive" });
-        },
-      });
-    },
   };
 
   const [showEnquiryWizard, setShowEnquiryWizard] = useState(false);
@@ -412,249 +265,9 @@ export default function ClientPage() {
   };
 
   const handleConvertEnquiryToQuote = (enq: EnquiryTable) => {
-    const firstDestination = enq.destinations?.[0];
-    const firstResort = enq.resorts?.[0];
-    const firstAirport = enq.airports?.[0];
-    const firstBoardBasis = enq.boardBases?.[0];
-
-    setNewQuote({
-      ...newQuoteDefaults,
-      packageType: enq.holiday_type_id || "",
-      quoteTitle: enq.title || "",
-      travelDate: enq.travel_date || "",
-      passengersAdults: enq.adults || 2,
-      passengersChildren: enq.children || 0,
-      passengersInfants: enq.infants || 0,
-      nights: enq.no_of_nights || 7,
-      destination: firstDestination?.destination_id || "",
-      resort: firstResort?.resort_id || "",
-      boardBasis: firstBoardBasis?.board_basis_id || "",
-      outboundDepartAirport: firstAirport?.airport_id || "",
-      cabinType: enq.cabin_type || "",
-      pets: (enq.no_of_pets && enq.no_of_pets > 0) ? true : false,
-    });
     setConvertingFromEnquiryTxnId(enq.transaction_id);
     setConvertingEnquiryId(enq.id);
-    setShowNewQuoteModal(true);
-  };
-
-  const handleCreateQuoteOrBooking = () => {
-    if (!clientId || !currentUser?.id) {
-      toast({ title: "Please wait, loading user info...", variant: "destructive" });
-      return;
-    }
-    if (!newQuote.packageType || !newQuote.quoteTitle || !newQuote.travelDate) {
-      toast({ title: "Please fill in Package Type, Quote Title and Travel Date", variant: "destructive" });
-      return;
-    }
-
-    const showFlights = packageTypeName !== "Hot Tub Break" && !(packageTypeName === "Cruise Package" && newQuote.cruiseOnly);
-    const showAccommodation = packageTypeName !== "Hot Tub Break";
-
-    const outboundFlight = (newQuote.outboundDepartAirport || newQuote.outboundArriveAirport) ? {
-      departing_airport_id: newQuote.outboundDepartAirport || undefined,
-      arrival_airport_id: newQuote.outboundArriveAirport || undefined,
-      departure_date_time: newQuote.outboundDepartDate && newQuote.outboundDepartTime
-        ? `${newQuote.outboundDepartDate}T${newQuote.outboundDepartTime}` : newQuote.outboundDepartDate || undefined,
-      arrival_date_time: newQuote.outboundArriveDate && newQuote.outboundArriveTime
-        ? `${newQuote.outboundArriveDate}T${newQuote.outboundArriveTime}` : newQuote.outboundArriveDate || undefined,
-      is_included_in_package: true,
-    } : undefined;
-
-    const inboundFlight = (newQuote.inboundDepartAirport || newQuote.inboundArriveAirport) ? {
-      departing_airport_id: newQuote.inboundDepartAirport || undefined,
-      arrival_airport_id: newQuote.inboundArriveAirport || undefined,
-      departure_date_time: newQuote.inboundDepartDate && newQuote.inboundDepartTime
-        ? `${newQuote.inboundDepartDate}T${newQuote.inboundDepartTime}` : newQuote.inboundDepartDate || undefined,
-      arrival_date_time: newQuote.inboundArriveDate && newQuote.inboundArriveTime
-        ? `${newQuote.inboundArriveDate}T${newQuote.inboundArriveTime}` : newQuote.inboundArriveDate || undefined,
-      is_included_in_package: true,
-    } : undefined;
-
-    const primaryAccommodation = newQuote.accommodation ? {
-      accomodation_id: newQuote.accommodation,
-      board_basis_id: newQuote.boardBasis || undefined,
-      room_type: newQuote.roomType || undefined,
-      no_of_nights: newQuote.nights || 0,
-      check_in_date_time: newQuote.checkInDate || undefined,
-      is_included_in_package: true,
-    } : undefined;
-
-    const outboundConnecting = newQuote.outboundConnectingLegs
-      .filter((leg) => leg.departAirportId || leg.arriveAirportId || leg.departDate || leg.arriveDate || leg.flightNumber)
-      .map(leg => ({
-        departing_airport_id: leg.departAirportId || undefined,
-        arrival_airport_id: leg.arriveAirportId || undefined,
-        departure_date_time: leg.departDate && leg.departTime ? `${leg.departDate}T${leg.departTime}` : leg.departDate || undefined,
-        arrival_date_time: leg.arriveDate && leg.arriveTime ? `${leg.arriveDate}T${leg.arriveTime}` : leg.arriveDate || undefined,
-        flight_number: leg.flightNumber || undefined,
-        is_included_in_package: true,
-      }));
-
-    const inboundConnecting = newQuote.inboundConnectingLegs
-      .filter((leg) => leg.departAirportId || leg.arriveAirportId || leg.departDate || leg.arriveDate || leg.flightNumber)
-      .map(leg => ({
-        departing_airport_id: leg.departAirportId || undefined,
-        arrival_airport_id: leg.arriveAirportId || undefined,
-        departure_date_time: leg.departDate && leg.departTime ? `${leg.departDate}T${leg.departTime}` : leg.departDate || undefined,
-        arrival_date_time: leg.arriveDate && leg.arriveTime ? `${leg.arriveDate}T${leg.arriveTime}` : leg.arriveDate || undefined,
-        flight_number: leg.flightNumber || undefined,
-        is_included_in_package: true,
-      }));
-
-    const quotePayload = {
-      holiday_type_id: newQuote.packageType,
-      travel_date: newQuote.travelDate,
-      quote_type: packageTypeName || newQuote.packageType,
-      num_of_nights: newQuote.nights || undefined,
-      adult: newQuote.passengersAdults,
-      child: newQuote.passengersChildren,
-      infant: newQuote.passengersInfants,
-      sales_price: newQuote.sales ? String(newQuote.sales) : undefined,
-      package_commission: newQuote.commission ? String(newQuote.commission) : undefined,
-      discounts: newQuote.discount ? String(newQuote.discount) : undefined,
-      service_charge: newQuote.serviceCharge ? String(newQuote.serviceCharge) : undefined,
-      sales_price_override: newQuote.price ? String(newQuote.price) : undefined,
-      sales_price_total: newQuote.price ? String(newQuote.price) : undefined,
-      title: newQuote.quoteTitle,
-      price_per_person: newQuote.pricePerPerson ? String(newQuote.pricePerPerson) : undefined,
-      transfer_type: newQuote.transferType || undefined,
-      lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeId || undefined) : undefined,
-      pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : undefined,
-      main_tour_operator_id: newQuote.tourOperator || undefined,
-      outboundFlight: showFlights ? outboundFlight : undefined,
-      inboundFlight: showFlights ? inboundFlight : undefined,
-      outboundConnectingLegs: showFlights && outboundConnecting.length > 0 ? outboundConnecting : undefined,
-      inboundConnectingLegs: showFlights && inboundConnecting.length > 0 ? inboundConnecting : undefined,
-      primaryAccommodation: showAccommodation ? primaryAccommodation : undefined,
-    };
-
-    if (newQuoteIsBooking) {
-      createTransactionMutation.mutate(
-        {
-          client_id: clientId,
-          user_id: currentUser.id,
-          lead_source: newQuote.leadSource || undefined,
-          booking: {
-            holiday_type_id: newQuote.packageType,
-            hays_ref: newQuote.haysReference || "",
-            supplier_ref: newQuote.tourReference || "",
-            travel_date: newQuote.travelDate,
-            title: newQuote.quoteTitle,
-            num_of_nights: newQuote.nights || 0,
-            adult: newQuote.passengersAdults || 0,
-            child: newQuote.passengersChildren || 0,
-            infant: newQuote.passengersInfants || 0,
-            sales_price: newQuote.price ? String(newQuote.price) : undefined,
-            package_commission: newQuote.commission ? String(newQuote.commission) : undefined,
-            discounts: newQuote.discount ? String(newQuote.discount) : undefined,
-            service_charge: newQuote.serviceCharge ? String(newQuote.serviceCharge) : undefined,
-            transfer_type: newQuote.transferType || undefined,
-            lodge_id: packageTypeName === "Hot Tub Break" ? (newQuote.lodgeId || undefined) : undefined,
-            pets: packageTypeName === "Hot Tub Break" ? (newQuote.pets ? 1 : 0) : 0,
-            main_tour_operator_id: newQuote.tourOperator || undefined,
-            outboundFlight: showFlights ? outboundFlight : undefined,
-            inboundFlight: showFlights ? inboundFlight : undefined,
-            outboundConnectingLegs: showFlights && outboundConnecting.length > 0 ? outboundConnecting : undefined,
-            inboundConnectingLegs: showFlights && inboundConnecting.length > 0 ? inboundConnecting : undefined,
-            primaryAccommodation: showAccommodation ? primaryAccommodation : undefined,
-            images: quoteImageUrls.length > 0 ? quoteImageUrls : undefined,
-          },
-        },
-        {
-          onSuccess: (result: Transaction) => {
-            setShowNewQuoteModal(false);
-            setNewQuoteIsBooking(false);
-            setNewQuote(newQuoteDefaults);
-            setQuoteImageFiles([]);
-            setQuoteImageUrls([]);
-            toast({ title: "Booking created successfully" });
-            const bookingId = result?.booking?.id;
-            if (bookingId) {
-              navigate(`/clients/${clientId}/bookings/${bookingId}`);
-            }
-          },
-          onError: () => {
-            toast({ title: "Failed to create booking", variant: "destructive" });
-          },
-        }
-      );
-    } else if (convertingFromEnquiryTxnId) {
-      const convertPayload: CreateQuoteData = {
-        transaction_id: convertingFromEnquiryTxnId,
-        holiday_type_id: quotePayload.holiday_type_id,
-        travel_date: quotePayload.travel_date,
-        quote_type: quotePayload.quote_type,
-        num_of_nights: quotePayload.num_of_nights,
-        adult: quotePayload.adult,
-        child: quotePayload.child,
-        infant: quotePayload.infant,
-        sales_price: quotePayload.sales_price,
-        package_commission: quotePayload.package_commission,
-        title: quotePayload.title,
-        price_per_person: quotePayload.price_per_person,
-        transfer_type: quotePayload.transfer_type,
-        main_tour_operator_id: quotePayload.main_tour_operator_id,
-        lodge_id: quotePayload.lodge_id,
-        pets: quotePayload.pets,
-        quote_status: "QUOTE_IN_PROGRESS",
-      };
-      createQuoteMutationHook.mutate(
-        {
-          ...convertPayload,
-          outboundFlight: showFlights ? outboundFlight : undefined,
-          inboundFlight: showFlights ? inboundFlight : undefined,
-          outboundConnectingLegs: showFlights && outboundConnecting.length > 0 ? outboundConnecting : undefined,
-          inboundConnectingLegs: showFlights && inboundConnecting.length > 0 ? inboundConnecting : undefined,
-          primaryAccommodation: showAccommodation ? primaryAccommodation : undefined,
-          images: quoteImageUrls.length > 0 ? quoteImageUrls : undefined,
-        },
-        {
-          onSuccess: () => {
-            if (convertingEnquiryId) {
-              updateEnquiryMutation.mutate({ id: convertingEnquiryId, data: { status: "Converted" } as Partial<EnquiryTable> });
-            }
-            setShowNewQuoteModal(false);
-            setNewQuoteIsBooking(false);
-            setNewQuote(newQuoteDefaults);
-            setQuoteImageFiles([]);
-            setQuoteImageUrls([]);
-            setConvertingFromEnquiryTxnId(null);
-            setConvertingEnquiryId(null);
-            toast({ title: "Enquiry converted to quote!" });
-          },
-          onError: () => {
-            toast({ title: "Failed to convert enquiry to quote", variant: "destructive" });
-          },
-        }
-      );
-    } else {
-      createTransactionMutation.mutate(
-        {
-          client_id: clientId,
-          user_id: currentUser.id,
-          lead_source: newQuote.leadSource || undefined,
-          quote: {
-            ...quotePayload,
-            quote_status: "QUOTE_IN_PROGRESS",
-            images: quoteImageUrls.length > 0 ? quoteImageUrls : undefined,
-          },
-        },
-        {
-          onSuccess: () => {
-            setShowNewQuoteModal(false);
-            setNewQuoteIsBooking(false);
-            setNewQuote(newQuoteDefaults);
-            setQuoteImageFiles([]);
-            setQuoteImageUrls([]);
-            toast({ title: "Quote created successfully" });
-          },
-          onError: () => {
-            toast({ title: "Failed to create quote", variant: "destructive" });
-          },
-        }
-      );
-    }
+    setShowQuoteCreateDialog(true);
   };
 
   const handleUploadFile = () => {
@@ -689,6 +302,26 @@ export default function ClientPage() {
   const quotes = useMemo(() => transactions.flatMap((t: Transaction) => t.quotes || []), [transactions]);
   const enquiries = useMemo(() => transactions.map((t: Transaction) => t.enquiry).filter(Boolean) as EnquiryTable[], [transactions]);
   const bookings = useMemo(() => transactions.map((t: Transaction) => t.booking).filter((b): b is NonNullable<Transaction["booking"]> => Boolean(b)), [transactions]);
+
+  const convertingEnquiryInitialValues = useMemo(() => {
+    if (!convertingFromEnquiryTxnId) return undefined;
+    const txn = transactions.find((t: Transaction) => t.id === convertingFromEnquiryTxnId);
+    const enq = txn?.enquiry;
+    if (!enq) return undefined;
+    return {
+      packageType: enq.holiday_type_id || "",
+      quoteTitle: enq.title || "",
+      travelDate: enq.travel_date || "",
+      passengersAdults: enq.adults || 2,
+      passengersChildren: enq.children || 0,
+      passengersInfants: enq.infants || 0,
+      nights: enq.no_of_nights || 7,
+      destination: enq.destinations?.[0]?.destination_id || "",
+      resort: enq.resorts?.[0]?.resort_id || "",
+      boardBasisId: enq.boardBases?.[0]?.board_basis_id || "",
+      outboundDepartAirportId: enq.airports?.[0]?.airport_id || "",
+    };
+  }, [convertingFromEnquiryTxnId, transactions]);
 
   const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
   const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
@@ -1187,1015 +820,81 @@ export default function ClientPage() {
                 </TabsList>
 
                 <TabsContent value="overview" className="mt-3">
-                  <div className="grid gap-3" data-testid="panel-overview">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="overview-stats">
-                      <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-enquiries">
-                        <div className="text-2xl font-bold text-black/85">{enquiries.length}</div>
-                        <div className="mt-0.5 text-[11px] font-semibold text-black/50">Enquiries</div>
-                      </div>
-                      <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-quotes">
-                        <div className="text-2xl font-bold text-black/85">{quotes.length}</div>
-                        <div className="mt-0.5 text-[11px] font-semibold text-black/50">Quotes</div>
-                      </div>
-                      <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-bookings">
-                        <div className="text-2xl font-bold text-emerald-600">{bookings.length}</div>
-                        <div className="mt-0.5 text-[11px] font-semibold text-black/50">Bookings</div>
-                      </div>
-                      <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-total-value">
-                        <div className="text-2xl font-bold text-black/85">
-                          {currency.format(
-                            quotes.reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0) +
-                            bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.sales_price || "0"), 0)
-                          )}
-                        </div>
-                        <div className="mt-0.5 text-[11px] font-semibold text-black/50">Total Value</div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2 md:grid-cols-2" data-testid="overview-details">
-                      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-contact">
-                        <div className="mb-3 text-xs font-semibold text-black/80">Contact Details</div>
-                        <div className="grid gap-2.5">
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                              <UserRound className="h-3.5 w-3.5 text-black/50" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold text-black/45">Full Name</div>
-                              <div className="truncate text-sm text-black/85" data-testid="overview-name">
-                                {[clientData?.title, clientData?.firstName, clientData?.surename].filter(Boolean).join(" ") || "—"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                              <Phone className="h-3.5 w-3.5 text-black/50" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold text-black/45">Phone</div>
-                              <div className="truncate text-sm text-black/85" data-testid="overview-phone">
-                                {clientData?.phoneNumber || "—"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                              <Mail className="h-3.5 w-3.5 text-black/50" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold text-black/45">Email</div>
-                              <div className="truncate text-sm text-black/85" data-testid="overview-email">
-                                {clientData?.email || "—"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                              <Calendar className="h-3.5 w-3.5 text-black/50" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold text-black/45">Date of Birth</div>
-                              <div className="truncate text-sm text-black/85" data-testid="overview-dob">
-                                {clientData?.DOB ? new Date(clientData.DOB).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "—"}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-address">
-                        <div className="mb-3 text-xs font-semibold text-black/80">Address</div>
-                        <div className="grid gap-2.5">
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                              <Home className="h-3.5 w-3.5 text-black/50" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold text-black/45">Street</div>
-                              <div className="truncate text-sm text-black/85" data-testid="overview-street">
-                                {[clientData?.houseNumber, clientData?.street].filter(Boolean).join(" ") || "—"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                              <MapPin className="h-3.5 w-3.5 text-black/50" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold text-black/45">City</div>
-                              <div className="truncate text-sm text-black/85" data-testid="overview-city">
-                                {clientData?.city || "—"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                              <Globe className="h-3.5 w-3.5 text-black/50" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold text-black/45">Country</div>
-                              <div className="truncate text-sm text-black/85" data-testid="overview-country">
-                                {clientData?.country || "—"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                              <Mail className="h-3.5 w-3.5 text-black/50" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold text-black/45">Postcode</div>
-                              <div className="truncate text-sm text-black/85" data-testid="overview-postcode">
-                                {clientData?.post_code || "—"}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-upcoming">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Plane className="h-4 w-4 text-black/50" />
-                        <div className="text-xs font-semibold text-black/80">Upcoming Trips</div>
-                      </div>
-                      {(() => {
-                        const upcomingItems: Array<{ id: string; title: string; type: string; travelDate: string; status: string; isBooking: boolean }> = [];
-                        quotes.forEach((q: QuoteWithJoins) => {
-                          if (!q.travel_date) return;
-                          const td = new Date(q.travel_date);
-                          if (td >= new Date() && !["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status || "")) {
-                            upcomingItems.push({ id: q.id, title: q.title || q.holiday_type_name || "Trip", type: q.holiday_type_name || q.quote_type || "—", travelDate: q.travel_date, status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), isBooking: false });
-                          }
-                        });
-                        bookings.forEach((b: BookingWithJoins) => {
-                          if (!b.travel_date) return;
-                          const td = new Date(b.travel_date);
-                          if (td >= new Date()) {
-                            upcomingItems.push({ id: b.id, title: b.title || b.holiday_type_name || "Booking", type: b.holiday_type_name || "—", travelDate: b.travel_date, status: "BOOKED", isBooking: true });
-                          }
-                        });
-                        upcomingItems.sort((a, b) => new Date(a.travelDate).getTime() - new Date(b.travelDate).getTime());
-                        const upcoming = upcomingItems.slice(0, 3);
-                        if (upcoming.length === 0) {
-                          return (
-                            <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-4 text-center text-xs text-black/45" data-testid="empty-upcoming">
-                              No upcoming trips scheduled
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="grid gap-2">
-                            {upcoming.map((item) => (
-                              <button
-                                key={item.id}
-                                type="button"
-                                className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
-                                data-testid={`upcoming-trip-${item.id}`}
-                                onClick={() => navigate(`/clients/${clientId}/${item.isBooking ? "bookings" : "quotes"}/${item.id}`)}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
-                                    <Plane className="h-4 w-4 text-black/50" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-black/85" data-testid={`upcoming-title-${item.id}`}>
-                                      {item.title}
-                                    </div>
-                                    <div className="mt-0.5 flex items-center gap-2 text-xs text-black/55">
-                                      <span>{item.type}</span>
-                                      <span className="text-black/25">&middot;</span>
-                                      <span>{new Date(item.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${item.isBooking ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                                    {item.status}
-                                  </span>
-                                  <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-activity">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-black/50" />
-                        <div className="text-xs font-semibold text-black/80">Recent Activity</div>
-                      </div>
-                      {(() => {
-                        const activities: Array<{ id: string; type: string; title: string; date: string; status?: string; link: string }> = [];
-                        enquiries.slice(0, 3).forEach((e: EnquiryTable) => {
-                          activities.push({ id: `e-${e.id}`, type: "Enquiry", title: e.title || "Enquiry", date: e.date_created || "", status: e.status ?? undefined, link: `/clients/${clientId}/enquiries/${e.id}` });
-                        });
-                        quotes.slice(0, 3).forEach((q: QuoteWithJoins) => {
-                          activities.push({ id: `q-${q.id}`, type: "Quote", title: q.title || q.holiday_type_name || "Trip", date: q.date_created || "", status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), link: `/clients/${clientId}/quotes/${q.id}` });
-                        });
-                        bookings.slice(0, 3).forEach((b: BookingWithJoins) => {
-                          activities.push({ id: `b-${b.id}`, type: "Booking", title: b.title || b.holiday_type_name || "Booking", date: b.date_created || "", status: b.booking_status || "BOOKED", link: `/clients/${clientId}/bookings/${b.id}` });
-                        });
-                        tickets.slice(0, 2).forEach((t: TicketItem) => {
-                          activities.push({ id: `t-${t.id}`, type: "Ticket", title: t.subject, date: t.createdAt || "", status: t.status, link: "#" });
-                        });
-                        activities.sort((a, b) => {
-                          if (!a.date) return 1;
-                          if (!b.date) return -1;
-                          return new Date(b.date).getTime() - new Date(a.date).getTime();
-                        });
-                        const recent = activities.slice(0, 5);
-                        if (recent.length === 0) {
-                          return (
-                            <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-4 text-center text-xs text-black/45" data-testid="empty-activity">
-                              No activity yet
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="grid gap-1.5">
-                            {recent.map((a) => (
-                              <button
-                                key={a.id}
-                                type="button"
-                                className="group flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-black/[0.03]"
-                                data-testid={`activity-${a.id}`}
-                                onClick={() => { if (a.link !== "#") navigate(a.link); }}
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${a.type === "Enquiry" ? "border-violet-500/25 bg-violet-500/10 text-violet-700" :
-                                    a.type === "Quote" ? "border-sky-500/25 bg-sky-500/10 text-sky-700" :
-                                      a.type === "Booking" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" :
-                                        "border-amber-500/25 bg-amber-500/10 text-amber-700"
-                                    }`}>
-                                    {a.type}
-                                  </span>
-                                  <span className="truncate text-xs font-medium text-black/75">{a.title}</span>
-                                </div>
-                                <span className="shrink-0 text-[10px] text-black/40">
-                                  {a.date ? formatTicketDate(a.date) : ""}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-preferences">
-                        <div className="mb-3 flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-black/50" />
-                          <div className="text-xs font-semibold text-black/80">Commission Summary</div>
-                        </div>
-                        <div className="grid gap-2">
-                          <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
-                            <span className="text-xs text-black/60">In Play value</span>
-                            <span className="text-xs font-semibold text-black/85" data-testid="overview-inplay-value">
-                              {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status && !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status)).reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
-                            <span className="text-xs text-black/60">Won value</span>
-                            <span className="text-xs font-semibold text-black/85" data-testid="overview-won-value">
-                              {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status === "WON").reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                            <span className="text-xs font-medium text-emerald-700">Booked value</span>
-                            <span className="text-xs font-bold text-emerald-700" data-testid="overview-booked-value">
-                              {currency.format(bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.sales_price || "0"), 0))}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-tags-section">
-                        <div className="mb-3 flex items-center gap-2">
-                          <BadgeCheck className="h-4 w-4 text-black/50" />
-                          <div className="text-xs font-semibold text-black/80">Tags &amp; Status</div>
-                        </div>
-                        <div className="grid gap-3">
-                          <div>
-                            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-black/40">Client Type</div>
-                            <span className="inline-flex items-center rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/10 px-2.5 py-0.5 text-xs font-semibold text-[#3b82f6]" data-testid="overview-client-type">
-                              {clientData?.badge || "New Client"}
-                            </span>
-                          </div>
-                          {(client?.tags ?? []).length > 0 && (
-                            <div>
-                              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-black/40">Tags</div>
-                              <div className="flex flex-wrap gap-1.5" data-testid="overview-tags-list">
-                                {(client?.tags ?? []).map((t, i) => (
-                                  <span
-                                    key={t + i}
-                                    className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70"
-                                    data-testid={`overview-tag-${i}`}
-                                  >
-                                    {t}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          <div>
-                            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-black/40">Open Tickets</div>
-                            <span className="text-sm font-semibold text-black/85" data-testid="overview-open-tickets">
-                              {tickets.filter((t) => t.status === "Open" || t.status === "In Progress").length}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <ClientOverviewTab
+                    clientData={clientData}
+                    client={client}
+                    enquiries={enquiries}
+                    quotes={quotes}
+                    bookings={bookings}
+                    tickets={tickets}
+                    clientId={clientId}
+                    navigate={navigate}
+                  />
                 </TabsContent>
 
                 <TabsContent value="enquiries" className="mt-3">
-                  <div className="grid gap-3" data-testid="list-enquiries">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold">Enquiries</div>
-                      <Button
-                        size="sm"
-                        className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
-                        data-testid="button-new-enquiry"
-                        onClick={() => {
-                          setEditingEnquiry(null);
-                          setShowEnquiryWizard(true);
-                        }}
-                      >
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        New Enquiry
-                      </Button>
-                    </div>
-                    {isLoadingTransactions ? (
-                      <div className="flex justify-center py-8"><Spinner /></div>
-                    ) : enquiries.length === 0 ? (
-                      <div className="rounded-3xl border border-dashed border-black/10 bg-white/40 p-8 text-center text-sm text-black/50" data-testid="empty-enquiries">
-                        No enquiries yet. Create one to get started.
-                      </div>
-                    ) : (
-                      enquiries.map((enq: EnquiryTable, idx: number) => (
-                        <motion.div
-                          key={enq.id}
-                          className="group cursor-pointer rounded-3xl border border-black/10 bg-white/70 p-4 transition hover:bg-black/[0.02] active:scale-[0.99]"
-                          data-testid={`card-enquiry-${idx}`}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.18) }}
-                          onClick={() => navigate(`/clients/${clientId}/enquiries/${enq.id}`)}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <div className="text-sm font-semibold" data-testid={`text-enquiry-title-${idx}`}>
-                                  {enq.title}
-                                </div>
-                                {enq.status === "Converted" && (
-                                  <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Converted</span>
-                                )}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid={`text-enquiry-meta-${idx}`}>
-                                <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70">
-                                  {enq.holiday_type_name || enq.holiday_type_id}
-                                </span>
-                                {enq.destinations?.[0] && <span>{enq.destinations[0]?.name || enq.destinations[0]?.destination_id || "—"}</span>}
-                                {enq.travel_date && <span>· {new Date(enq.travel_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
-                                <span>· {enq.adults || 0}A{(enq.children || 0) > 0 ? ` ${enq.children}C` : ""}{(enq.infants || 0) > 0 ? ` ${enq.infants}I` : ""}</span>
-                                {enq.no_of_nights && <span>· {enq.no_of_nights}N</span>}
-                                {enq.budget && <span>· £{parseFloat(enq.budget).toLocaleString()} {enq.budget_type?.toLowerCase()}</span>}
-                              </div>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-1">
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "enquiry" && f.itemId === enq.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
-                                data-testid={`button-pin-enquiry-${idx}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.title || "", subtitle: `${client?.name || ""}${enq.destinations?.[0] ? " · " + (enq.destinations[0]?.name || enq.destinations[0]?.destination_id) : enq.holiday_type_name ? " · " + enq.holiday_type_name : ""}` });
-                                }}
-                                title={userFavorites?.some((f: Favorite) => f.itemType === "enquiry" && f.itemId === enq.id) ? "Unpin" : "Pin to dashboard"}
-                              >
-                                <Pin className="h-3.5 w-3.5" />
-                              </span>
-                              {enq.status !== "Converted" && (
-                                <button
-                                  type="button"
-                                  className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-emerald-50 hover:text-emerald-600"
-                                  data-testid={`button-convert-enquiry-${idx}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    handleConvertEnquiryToQuote(enq);
-                                  }}
-                                  title="Convert to Quote"
-                                >
-                                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-black/[0.05] hover:text-black/70"
-                                data-testid={`button-edit-enquiry-${idx}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingEnquiry(enq);
-                                  setShowEnquiryWizard(true);
-                                }}
-                                title="Edit enquiry"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                className="grid h-7 w-7 place-items-center rounded-full text-black/40 transition hover:bg-red-50 hover:text-red-500"
-                                data-testid={`button-delete-enquiry-${idx}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteEnquiry(enq.id);
-                                }}
-                                title="Delete enquiry"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                              <ChevronRight className="ml-1 h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))
-                    )}
-                  </div>
+                  <ClientEnquiriesTab
+                    enquiries={enquiries}
+                    isLoadingTransactions={isLoadingTransactions}
+                    clientId={clientId}
+                    navigate={navigate}
+                    client={client}
+                    userFavorites={userFavorites}
+                    toggleFavoriteMutation={toggleFavoriteMutation}
+                    onConvertEnquiryToQuote={handleConvertEnquiryToQuote}
+                    onEditEnquiry={(enq) => {
+                      setEditingEnquiry(enq);
+                      setShowEnquiryWizard(true);
+                    }}
+                    onNewEnquiry={() => {
+                      setEditingEnquiry(null);
+                      setShowEnquiryWizard(true);
+                    }}
+                    onDeleteEnquiry={handleDeleteEnquiry}
+                  />
                 </TabsContent>
 
                 <TabsContent value="quotes" className="mt-3">
-                  <div className="grid gap-3" data-testid="layout-quotes">
-                    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quotes-list">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold" data-testid="text-quotes-title">
-                            Quotes
-                          </div>
-                          <div className="mt-1 text-xs text-black/55" data-testid="text-quotes-subtitle">
-                            Quick view of recent quotes for this client.
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
-                          data-testid="button-quotes-new"
-                          onClick={() => setShowNewQuoteModal(true)}
-                        >
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          New quote
-                        </Button>
-                      </div>
-
-                      <div className="mt-4 space-y-2" data-testid="section-quotes-groups">
-                        {[
-                          {
-                            id: "in-play",
-                            title: "In Play",
-                            rows: quotes
-                              .filter((q: QuoteWithJoins) => !q.quote_status || !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
-                              .map((q: QuoteWithJoins) => ({
-                                id: q.id,
-                                transactionId: q.transaction_id,
-                                title: q.title || q.holiday_type_name || "Trip",
-                                isQuoteCopy: Boolean(q.isQuoteCopy),
-                                destination: q.holiday_type_name || q.quote_type || "—",
-                                travelDate: q.travel_date,
-                                createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
-                                createdAtRaw: q.date_created || "",
-                                status: q.quote_status || "NEW_LEAD",
-                                totalCost: parseFloat(q.sales_price || "0"),
-                                pricePerPerson: parseFloat(q.price_per_person || "0"),
-                                imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
-                                pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
-                                nights: q.num_of_nights || 0,
-                              })),
-                          },
-                          {
-                            id: "won",
-                            title: "Won",
-                            rows: quotes
-                              .filter((q: QuoteWithJoins) => q.quote_status === "WON")
-                              .map((q: QuoteWithJoins) => ({
-                                id: q.id,
-                                transactionId: q.transaction_id,
-                                title: q.title || q.holiday_type_name || "Trip",
-                                isQuoteCopy: Boolean(q.isQuoteCopy),
-                                destination: q.holiday_type_name || q.quote_type || "—",
-                                travelDate: q.travel_date,
-                                createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
-                                createdAtRaw: q.date_created || "",
-                                status: q.quote_status,
-                                totalCost: parseFloat(q.sales_price || "0"),
-                                pricePerPerson: parseFloat(q.price_per_person || "0"),
-                                imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
-                                pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
-                                nights: q.num_of_nights || 0,
-                              })),
-                          },
-                          {
-                            id: "lost",
-                            title: "Lost",
-                            rows: quotes
-                              .filter((q: QuoteWithJoins) => q.quote_status === "LOST")
-                              .map((q: QuoteWithJoins) => ({
-                                id: q.id,
-                                transactionId: q.transaction_id,
-                                title: q.title || q.holiday_type_name || "Trip",
-                                isQuoteCopy: Boolean(q.isQuoteCopy),
-                                destination: q.holiday_type_name || q.quote_type || "—",
-                                travelDate: q.travel_date,
-                                createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
-                                createdAtRaw: q.date_created || "",
-                                status: q.quote_status,
-                                totalCost: parseFloat(q.sales_price || "0"),
-                                pricePerPerson: parseFloat(q.price_per_person || "0"),
-                                imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
-                                pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
-                                nights: q.num_of_nights || 0,
-                              })),
-                          },
-                        ].map((group) => {
-                          const groupRowsSorted = [...group.rows].sort(
-                            (a, b) => new Date(b.createdAtRaw || 0).getTime() - new Date(a.createdAtRaw || 0).getTime(),
-                          );
-                          const mainRows = groupRowsSorted.filter((row) => !row.isQuoteCopy);
-                          const copyRows = groupRowsSorted.filter((row) => row.isQuoteCopy);
-
-                          const rowsWithToggles: Array<
-                            | { type: "quote"; row: (typeof groupRowsSorted)[number]; isChild: boolean }
-                            | { type: "toggle"; parentId: string; count: number }
-                          > = [];
-
-                          for (const main of mainRows) {
-                            const copies = copyRows.filter((copy) => copy.transactionId === main.transactionId);
-                            rowsWithToggles.push({ type: "quote", row: main, isChild: false });
-                            if (copies.length > 0) {
-                              rowsWithToggles.push({ type: "toggle", parentId: main.id, count: copies.length });
-                              if (expandedCopyGroups[main.id]) {
-                                for (const copy of copies) {
-                                  rowsWithToggles.push({ type: "quote", row: copy, isChild: true });
-                                }
-                              }
-                            }
-                          }
-
-                          const orphanCopyRows = copyRows.filter(
-                            (copy) => !mainRows.some((main) => main.transactionId === copy.transactionId),
-                          );
-                          for (const orphan of orphanCopyRows) {
-                            rowsWithToggles.push({ type: "quote", row: orphan, isChild: true });
-                          }
-
-                          return (
-                            <div key={group.id} className="rounded-3xl border border-black/10 bg-white/60 p-2" data-testid={`group-quotes-${group.id}`}>
-                              <div className="flex items-center justify-between gap-3 px-2 py-2" data-testid={`row-quotes-group-header-${group.id}`}>
-                                <div className="flex items-center gap-2">
-                                  <div className="text-xs font-semibold text-black/80" data-testid={`text-quotes-group-title-${group.id}`}>
-                                    {group.title}
-                                  </div>
-                                  <span
-                                    className="rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/60"
-                                    data-testid={`pill-quotes-group-count-${group.id}`}
-                                  >
-                                    {group.rows.length}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="grid gap-2" data-testid={`list-quotes-${group.id}`}>
-                                {rowsWithToggles.map((item) => {
-                                  if (item.type === "toggle") {
-                                    const isExpanded = Boolean(expandedCopyGroups[item.parentId]);
-                                    return (
-                                      <button
-                                        key={`toggle-${item.parentId}`}
-                                        type="button"
-                                        className="ml-6 inline-flex w-fit items-center gap-1 rounded-xl border border-black/10 bg-white/70 px-2 py-1 text-[11px] font-semibold text-black/65 transition hover:bg-black/[0.03]"
-                                        data-testid={`button-toggle-copy-quotes-${item.parentId}`}
-                                        onClick={() =>
-                                          setExpandedCopyGroups((prev) => ({
-                                            ...prev,
-                                            [item.parentId]: !prev[item.parentId],
-                                          }))
-                                        }
-                                      >
-                                        <ChevronDown className={`h-3.5 w-3.5 transition ${isExpanded ? "rotate-180" : ""}`} />
-                                        {isExpanded ? "Hide" : "Show"} {item.count} {item.count === 1 ? "copy" : "copies"}
-                                      </button>
-                                    );
-                                  }
-
-                                  const q = item.row;
-                                  return (
-                                    <button
-                                      key={q.id}
-                                      type="button"
-                                      className={`group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99] ${item.isChild ? "pl-9 border-sky-500/20 bg-sky-500/[0.04]" : ""}`}
-                                      data-testid={`card-quote-intro-${q.id}`}
-                                      onClick={() => navigate(`/clients/${clientId}/quotes/${q.id}`)}
-                                    >
-                                      <div className="flex items-start gap-3">
-                                        <div
-                                          className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
-                                          data-testid={`img-quote-${q.id}`}
-                                          aria-hidden
-                                        >
-                                          {q.imageUrl ? (
-                                            <img
-                                              src={q.imageUrl}
-                                              alt=""
-                                              className="absolute inset-0 h-full w-full object-cover"
-                                              data-testid={`img-quote-photo-${q.id}`}
-                                            />
-                                          ) : (
-                                            <div className="flex h-full w-full items-center justify-center text-black/20">
-                                              <ImagePlus className="h-6 w-6" />
-                                            </div>
-                                          )}
-                                        </div>
-
-                                        <div className="min-w-0 flex-1">
-                                          <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                              <div className="truncate text-sm font-semibold" data-testid={`text-quote-title-${q.id}`}>
-                                                {q.title}
-                                              </div>
-                                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                                <span data-testid={`text-quote-destination-${q.id}`}>{q.destination || "—"}</span>
-                                                <span className="text-black/25">•</span>
-                                                <span data-testid={`text-quote-traveldate-${q.id}`}>{formatUKDate(q.travelDate)}</span>
-                                                <span className="text-black/25">•</span>
-                                                <span data-testid={`text-quote-created-${q.id}`}>Created {q.createdAt || "—"}</span>
-                                              </div>
-                                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                                <span data-testid={`text-quote-pax-${q.id}`}>{q.pax}</span>
-                                                {q.nights > 0 && (
-                                                  <>
-                                                    <span className="text-black/25">•</span>
-                                                    <span data-testid={`text-quote-nights-${q.id}`}>{q.nights}N</span>
-                                                  </>
-                                                )}
-                                                {q.isQuoteCopy && (
-                                                  <>
-                                                    <span className="text-black/25">•</span>
-                                                    <span
-                                                      className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700"
-                                                      data-testid={`text-quote-copy-${q.id}`}
-                                                    >
-                                                      Copy
-                                                    </span>
-                                                  </>
-                                                )}
-                                                <span className="text-black/25">•</span>
-                                                <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/60" data-testid={`text-quote-status-${q.id}`}>
-                                                  {(q.status || "").replace(/_/g, " ")}
-                                                </span>
-                                              </div>
-                                            </div>
-
-                                            <div className="shrink-0 text-right">
-                                              <div className="text-xs font-semibold text-black/85" data-testid={`text-quote-total-${q.id}`}>
-                                                {q.pricePerPerson > 0 && (
-                                                  <span data-testid={`text-quote-pp-${q.id}`} className="font-normal">{currency.format(q.pricePerPerson)} pp / </span>
-                                                )}
-                                                {currency.format(q.totalCost)}
-                                              </div>
-                                            </div>
-                                            <div className="flex items-end justify-between gap-3">
-                                              <div></div>
-                                              <div className="flex items-center gap-1">
-                                                <span
-                                                  role="button"
-                                                  tabIndex={0}
-                                                  className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === q.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
-                                                  data-testid={`button-pin-quote-${q.id}`}
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    e.preventDefault();
-                                                    toggleFavoriteMutation.mutate({ itemType: "quote", itemId: q.id, label: q.title || "Quote", subtitle: `${client?.name || ""}${q.destination ? " · " + q.destination : ""}` });
-                                                  }}
-                                                  title={userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === q.id) ? "Unpin" : "Pin to dashboard"}
-                                                >
-                                                  <Pin className="h-3.5 w-3.5" />
-                                                </span>
-                                                <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-quote-${q.id}`}>
-                                                  View
-                                                  <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </button>
-                                  );
-                                })}
-
-                                {rowsWithToggles.length === 0 ? (
-                                  <div className="rounded-3xl border border-black/10 bg-white/70 p-4" data-testid={`empty-quotes-${group.id}`}>
-                                    <div className="text-sm font-semibold" data-testid={`text-empty-quotes-title-${group.id}`}>
-                                      No quotes
-                                    </div>
-                                    <div className="mt-1 text-xs text-black/55" data-testid={`text-empty-quotes-subtitle-${group.id}`}>
-                                      Nothing in {group.title.toLowerCase()} yet.
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </Card>
-
-                  </div>
+                  <ClientQuotesTab
+                    quotes={quotes}
+                    clientId={clientId}
+                    navigate={navigate}
+                    onNewQuote={() => setShowQuoteCreateDialog(true)}
+                    expandedCopyGroups={expandedCopyGroups}
+                    setExpandedCopyGroups={setExpandedCopyGroups}
+                    client={client}
+                    userFavorites={userFavorites}
+                    toggleFavoriteMutation={toggleFavoriteMutation}
+                  />
                 </TabsContent>
 
                 <TabsContent value="booked" className="mt-3">
-                  <div className="grid gap-3" data-testid="list-booked">
-                    <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-bookings-list">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold" data-testid="text-bookings-title">
-                            Booked Packages
-                          </div>
-                          <div className="mt-1 text-xs text-black/55" data-testid="text-bookings-subtitle">
-                            Confirmed bookings for this client.
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
-                          data-testid="button-add-booking"
-                          onClick={() => {
-                            setNewQuoteIsBooking(true);
-                            setShowNewQuoteModal(true);
-                          }}
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add Booking
-                        </Button>
-                      </div>
-
-                      <div className="mt-4 grid gap-2" data-testid="section-bookings">
-                        {bookings.length === 0 ? (
-                          <div className="rounded-3xl border border-dashed border-black/10 bg-white/40 p-8 text-center text-sm text-black/50" data-testid="empty-bookings">
-                            No bookings yet. Add a booking or convert a quote.
-                          </div>
-                        ) : (
-                          bookings.map((b: BookingWithJoins) => (
-                            <button
-                              key={b.id}
-                              type="button"
-                              className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
-                              data-testid={`card-booking-${b.id}`}
-                              onClick={() => navigate(`/clients/${clientId}/bookings/${b.id}`)}
-                            >
-                              <div className="flex items-start gap-3">
-                                <div
-                                  className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent"
-                                  aria-hidden
-                                >
-                                  {b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url ? (
-                                    <img
-                                      src={(b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url) ?? ""}
-                                      alt=""
-                                      className="absolute inset-0 h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-black/20">
-                                      <ImagePlus className="h-6 w-6" />
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-2">
-                                        <div className="truncate text-sm font-semibold" data-testid={`text-booking-title-${b.id}`}>
-                                          {b.title || b.holiday_type_name || "Booking"}
-                                        </div>
-                                        <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                          {b.booking_status || "BOOKED"}
-                                        </span>
-                                      </div>
-                                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                        <span data-testid={`text-booking-type-${b.id}`}>{b.holiday_type_name || "—"}</span>
-                                        <span className="text-black/25">•</span>
-                                        <span data-testid={`text-booking-traveldate-${b.id}`}>{formatUKDate(b.travel_date)}</span>
-                                        <span className="text-black/25">•</span>
-                                        <span data-testid={`text-booking-created-${b.id}`}>Created {b.date_created ? new Date(b.date_created).toLocaleDateString("en-GB") : "—"}</span>
-                                      </div>
-                                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
-                                        <span data-testid={`text-booking-pax-${b.id}`}>{b.adult || 0}A{(b.child || 0) > 0 ? ` ${b.child}C` : ""}{(b.infant || 0) > 0 ? ` ${b.infant}I` : ""}</span>
-                                        {b.num_of_nights > 0 && (
-                                          <>
-                                            <span className="text-black/25">•</span>
-                                            <span data-testid={`text-booking-nights-${b.id}`}>{b.num_of_nights}N</span>
-                                          </>
-                                        )}
-                                      </div>
-                                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-black/60">
-                                        {b.hays_ref && (
-                                          <span data-testid={`text-booking-hays-${b.id}`}>
-                                            HAYS Ref: <span className="font-semibold text-black/80">{b.hays_ref}</span>
-                                          </span>
-                                        )}
-                                        {b.supplier_ref && (
-                                          <span data-testid={`text-booking-supplier-${b.id}`}>
-                                            Supplier Ref: <span className="font-semibold text-black/80">{b.supplier_ref}</span>
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="shrink-0 text-right">
-                                      <div className="text-xs font-semibold text-black/85" data-testid={`text-booking-total-${b.id}`}>
-                                        {b.sales_price && parseFloat(b.sales_price) > 0 ? currency.format(parseFloat(b.sales_price)) : "—"}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="mt-1 flex items-end justify-end gap-3">
-                                    <div className="flex items-center gap-1">
-                                      <span
-                                        role="button"
-                                        tabIndex={0}
-                                        className={`grid h-7 w-7 place-items-center rounded-full transition ${userFavorites?.some((f: Favorite) => f.itemType === "booking" && f.itemId === b.id) ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/[0.05] hover:text-black/70"}`}
-                                        data-testid={`button-pin-booking-${b.id}`}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          e.preventDefault();
-                                          toggleFavoriteMutation.mutate({ itemType: "booking", itemId: b.id, label: b.title || "Booking", subtitle: `${client?.name || ""}` });
-                                        }}
-                                        title={userFavorites?.some((f: Favorite) => f.itemType === "booking" && f.itemId === b.id) ? "Unpin" : "Pin to dashboard"}
-                                      >
-                                        <Pin className="h-3.5 w-3.5" />
-                                      </span>
-                                      <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60" data-testid={`button-view-booking-${b.id}`}>
-                                        View
-                                        <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </Card>
-                  </div>
+                  <ClientBookedTab
+                    bookings={bookings}
+                    clientId={clientId}
+                    navigate={navigate}
+                    onAddBooking={() => setShowBookingCreateDialog(true)}
+                    client={client}
+                    userFavorites={userFavorites}
+                    toggleFavoriteMutation={toggleFavoriteMutation}
+                  />
                 </TabsContent>
 
                 <TabsContent value="files" className="mt-3">
-                  <Card className="rounded-3xl border-black/10 bg-white/70 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold" data-testid="text-files-title">
-                          Files
-                        </div>
-                        <div className="mt-1 text-xs text-black/55" data-testid="text-files-subtitle">
-                          Upload and manage client documents.
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
-                        data-testid="button-files-upload"
-                        onClick={() => setShowUploadFileModal(true)}
-                      >
-                        <FileText className="mr-2 h-4 w-4" />
-                        Upload File
-                      </Button>
-                    </div>
-
-                    <div className="mt-4 grid gap-3" data-testid="list-files">
-                      {uploadedFiles.map((f) => (
-                        <div
-                          key={f.id}
-                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
-                          data-testid={`row-file-uploaded-${f.id}`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => window.open(f.url, '_blank')}
-                            className="min-w-0 flex-1 text-left"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
-                                {f.title}
-                              </div>
-                              <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                {f.category}
-                              </span>
-                            </div>
-                            <div className="mt-1 text-xs text-black/55" data-testid={`text-file-uploaded-meta-${f.id}`}>
-                              {f.type} · {f.name} · {f.allocationType !== "None" ? `${f.allocationType}` : "Client level"} · {f.updated}
-                            </div>
-                          </button>
-                          <div className="flex items-center gap-2">
-                            {role === "Admin" && (
-                              <button
-                                type="button"
-                                onClick={() => setUploadedFiles((prev) => prev.filter((file) => file.id !== f.id))}
-                                className="rounded-xl border border-red-500/20 bg-red-500/10 p-1.5 text-red-600 transition hover:bg-red-500/20"
-                                data-testid={`button-delete-file-${f.id}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                            <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
-                          </div>
-                        </div>
-                      ))}
-                      {filteredFiles.map((f) => (
-                        <div
-                          key={f.id}
-                          className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3"
-                          data-testid={`row-file-wide-${f.id}`}
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold" data-testid={`text-file-wide-name-${f.id}`}>
-                              {f.name}
-                            </div>
-                            <div className="mt-1 text-xs text-black/55" data-testid={`text-file-wide-meta-${f.id}`}>
-                              {f.type} · Updated {f.updated}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {role === "Admin" && (
-                              <button
-                                type="button"
-                                onClick={() => { }}
-                                className="rounded-xl border border-red-500/20 bg-red-500/10 p-1.5 text-red-600 transition hover:bg-red-500/20"
-                                data-testid={`button-delete-file-wide-${f.id}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                            <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
-                          </div>
-                        </div>
-                      ))}
-                      {filteredFiles.length === 0 && uploadedFiles.length === 0 && (
-                        <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center">
-                          <div className="text-sm text-black/55">No files uploaded yet.</div>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
+                  <ClientFilesTab
+                    uploadedFiles={uploadedFiles}
+                    setUploadedFiles={setUploadedFiles}
+                    filteredFiles={filteredFiles}
+                    onUploadFile={() => setShowUploadFileModal(true)}
+                    role={role}
+                  />
                 </TabsContent>
 
                 <TabsContent value="tickets" className="mt-3">
-                  <div className="grid gap-3" data-testid="list-tickets">
-                    {filteredTickets.length === 0 ? (
-                      <div className="rounded-3xl border border-black/10 bg-white/60 p-6 text-center">
-                        <div className="text-sm text-black/55">No tickets for this client.</div>
-                        <p className="text-xs text-black/40 mt-1">Create a ticket from the Tickets page.</p>
-                      </div>
-                    ) : (
-                      filteredTickets.map((t) => (
-                        <div
-                          key={t.id}
-                          className="rounded-3xl border border-black/10 bg-white/70 p-4"
-                          data-testid={`card-ticket-wide-${t.id}`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${ticketTypePill(t.type)}`}>
-                                  {t.type}
-                                </span>
-                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${ticketStatusPill(t.status)}`}>
-                                  {t.status}
-                                </span>
-                                <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-medium text-black/60">
-                                  {t.priority}
-                                </span>
-                              </div>
-                              <div className="text-sm font-semibold truncate" data-testid={`text-ticket-wide-title-${t.id}`}>
-                                {t.subject}
-                              </div>
-                              {t.description && (
-                                <div className="mt-1 text-xs text-black/60 line-clamp-2">{t.description}</div>
-                              )}
-                              <div className="mt-2 text-xs text-black/50" data-testid={`text-ticket-wide-meta-${t.id}`}>
-                                Assigned to {getUserName(t.userId)} · {formatTicketDate(t.createdAt)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  <ClientTicketsTab
+                    filteredTickets={filteredTickets}
+                    getUserName={getUserName}
+                  />
                 </TabsContent>
 
               </Tabs>
@@ -2204,46 +903,29 @@ export default function ClientPage() {
         </div>
       </div>
       <QuoteCreateDialog
-        transactionId={quoteData.transaction_id}
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        />
-      <NewQuoteDialog
-        open={showNewQuoteModal}
+        transactionId={convertingFromEnquiryTxnId || ""}
+        open={showQuoteCreateDialog && !!convertingFromEnquiryTxnId}
         onOpenChange={(open) => {
-          setShowNewQuoteModal(open);
           if (!open) {
-            setNewQuoteIsBooking(false);
-            setNewQuote(newQuoteDefaults);
-            setQuoteImageFiles([]);
-            setQuoteImageUrls([]);
+            setShowQuoteCreateDialog(false);
             setConvertingFromEnquiryTxnId(null);
             setConvertingEnquiryId(null);
           }
         }}
-        clientName={client?.name || "this client"}
-        isBooking={newQuoteIsBooking}
-        convertingFromEnquiryTxnId={convertingFromEnquiryTxnId}
-        newQuote={newQuote}
-        setNewQuote={setNewQuote}
-        quoteImageFiles={quoteImageFiles}
-        setQuoteImageFiles={setQuoteImageFiles}
-        quoteImageUrls={quoteImageUrls}
-        setQuoteImageUrls={setQuoteImageUrls}
-        packageTypesData={packageTypesData}
-        packageTypeName={packageTypeName}
-        airportsData={airportsData}
-        tourOperatorsData={tourOperatorsData}
-        countriesData={countriesData}
-        destinationsData={destinationsData}
-        resortsData={resortsData}
-        accommodationsData={accommodationsData}
-        boardBasisData={boardBasisData}
-        roomTypeData={roomTypeData}
-        parksData={parksData}
-        lodgesData={lodgesData}
-        onSubmit={handleCreateQuoteOrBooking}
-        isPending={createTransactionMutation.isPending || createQuoteMutationHook.isPending}
+        onSuccess={() => {
+          if (convertingEnquiryId) {
+            updateEnquiryMutation.mutate({ id: convertingEnquiryId, data: { status: "Converted" } });
+          }
+        }}
+        initialValues={convertingEnquiryInitialValues}
+      />
+      <BookingCreateDialog
+        clientId={clientId}
+        open={showBookingCreateDialog}
+        onOpenChange={setShowBookingCreateDialog}
+        onSuccess={(bookingId) => {
+          navigate(`/clients/${clientId}/bookings/${bookingId}`);
+        }}
       />
       <UploadFileDialog
         open={showUploadFileModal}
