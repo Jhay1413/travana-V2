@@ -148,7 +148,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
           const sp = parseFloat(q.sales_price) || 0;
           const qStatus = (q.quote_status || "").toUpperCase();
           if (qStatus !== "BOOKED" && qStatus !== "BOOKING_CONFIRMED") {
-            totalOpenQuotesValue += sp;
+            totalOpenQuotesValue += getProfit(q);
             quotesCount += 1;
           }
         }
