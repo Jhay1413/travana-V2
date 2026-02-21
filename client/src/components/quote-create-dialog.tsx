@@ -1,18 +1,3 @@
-/**
- * QuoteCreateDialog
- *
- * A Dialog that wraps QuoteRHFForm for creating a new quote under
- * a given transaction.
- *
- * Usage:
- *   <QuoteCreateDialog
- *     transactionId={txnId}
- *     open={open}
- *     onOpenChange={setOpen}
- *     onSuccess={(newQuoteId) => navigate(`/quotes/${newQuoteId}`)}
- *   />
- */
-
 import {
   Dialog,
   DialogContent,
@@ -22,26 +7,22 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateQuote } from "@/hooks/mutations";
+import { useCreateQuote, useCreateTransaction } from "@/hooks/mutations";
 import { usePackageTypes } from "@/hooks/queries";
 import { QuoteRHFForm } from "./quote-rhf-form";
 import type { QuoteFormValues, QuoteCreateDialogProps } from "@/types/quote";
 import { defaultQuoteFormValues } from "@/types/quote";
 import type { CreateQuoteData } from "@/types/quote";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function buildDateTime(date: string, time: string): string | null {
   if (!date) return null;
   return time ? `${date}T${time}:00` : `${date}T00:00:00`;
 }
 
-/** Convert QuoteFormValues → CreateQuoteData API payload */
-function buildCreatePayload(
+function buildQuotePayload(
   values: QuoteFormValues,
-  transactionId: string,
   packageTypesData: { id: string; name: string }[] | undefined
-): CreateQuoteData {
+): Omit<CreateQuoteData, "transaction_id"> & { transaction_id?: string } {
   const packageTypeName =
     packageTypesData?.find((p) => p.id === values.packageType)?.name || values.packageType;
   const isHotTubBreak = packageTypeName === "Hot Tub Break";
@@ -51,8 +32,7 @@ function buildCreatePayload(
   const commissionValue =
     ((Number(values.commission) || 0) / 100) * (Number(values.price) || 0);
 
-  const payload: CreateQuoteData = {
-    transaction_id: transactionId,
+  const payload: any = {
     holiday_type_id: values.packageType,
     travel_date: values.travelDate || "",
     quote_type: "manual",
@@ -120,7 +100,7 @@ function buildCreatePayload(
   }
 
   if (isHotTubBreak) {
-    payload.lodge_id = values.lodgeCode || undefined;
+    payload.lodge_id = values.lodgeId || undefined;
     payload.pets = values.pets ? 1 : 0;
   }
 
@@ -139,10 +119,10 @@ function buildCreatePayload(
   return payload;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
-
 export function QuoteCreateDialog({
   transactionId,
+  clientId,
+  userId,
   open,
   onOpenChange,
   onSuccess,
@@ -150,6 +130,7 @@ export function QuoteCreateDialog({
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
   const createQuote = useCreateQuote();
+  const createTransaction = useCreateTransaction();
   const { data: packageTypesData } = usePackageTypes();
 
   const defaultValues: Partial<QuoteFormValues> = {
@@ -157,22 +138,61 @@ export function QuoteCreateDialog({
     ...initialValues,
   };
 
+  const isSubmitting = createQuote.isPending || createTransaction.isPending;
+
   const handleSubmit = async (values: QuoteFormValues) => {
-    const payload = buildCreatePayload(values, transactionId, packageTypesData);
-    createQuote.mutate(payload, {
-      onSuccess: (newQuote) => {
-        toast({ title: "Quote created", description: "New quote has been created." });
-        onOpenChange(false);
-        onSuccess?.(newQuote.id);
-      },
-      onError: (err) => {
-        toast({
-          title: "Failed to create quote",
-          description: err instanceof Error ? err.message : "Something went wrong.",
-          variant: "destructive",
-        });
-      },
-    });
+    const quotePayload = buildQuotePayload(values, packageTypesData);
+
+    if (transactionId) {
+      const payload: CreateQuoteData = {
+        ...quotePayload,
+        transaction_id: transactionId,
+      } as CreateQuoteData;
+
+      createQuote.mutate(payload, {
+        onSuccess: (newQuote) => {
+          toast({ title: "Quote created", description: "New quote has been created." });
+          onOpenChange(false);
+          onSuccess?.(newQuote.id);
+        },
+        onError: (err) => {
+          toast({
+            title: "Failed to create quote",
+            description: err instanceof Error ? err.message : "Something went wrong.",
+            variant: "destructive",
+          });
+        },
+      });
+    } else if (clientId && userId) {
+      createTransaction.mutate(
+        {
+          client_id: clientId,
+          user_id: userId,
+          lead_source: values.leadSource || undefined,
+          quote: {
+            ...quotePayload,
+            quote_status: values.status || "QUOTE_IN_PROGRESS",
+          },
+        },
+        {
+          onSuccess: (txn) => {
+            toast({ title: "Quote created", description: "New quote has been created." });
+            onOpenChange(false);
+            const newQuoteId = txn.quotes?.[0]?.id;
+            if (newQuoteId) {
+              onSuccess?.(newQuoteId);
+            }
+          },
+          onError: (err) => {
+            toast({
+              title: "Failed to create quote",
+              description: err instanceof Error ? err.message : "Something went wrong.",
+              variant: "destructive",
+            });
+          },
+        }
+      );
+    }
   };
 
   return (
@@ -188,10 +208,10 @@ export function QuoteCreateDialog({
         <ScrollArea className="max-h-[calc(90vh-100px)]">
           <div className="px-6 pb-6">
             <QuoteRHFForm
-              key={transactionId + open}   // re-mount on each open to get a fresh form
+              key={(transactionId || clientId || "") + open}
               defaultValues={defaultValues}
               onSubmit={handleSubmit}
-              isLoading={createQuote.isPending}
+              isLoading={isSubmitting}
               submitLabel="Create Quote"
               onCancel={() => onOpenChange(false)}
             />

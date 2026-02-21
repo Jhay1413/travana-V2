@@ -172,7 +172,9 @@ export interface QuoteEditDialogProps {
 }
 
 export interface QuoteCreateDialogProps {
-  transactionId: string;
+  transactionId?: string;
+  clientId?: string;
+  userId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: (quoteId: string) => void;
