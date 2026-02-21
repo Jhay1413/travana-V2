@@ -158,7 +158,7 @@ export const defaultQuoteFormValues: QuoteFormValues = {
 
 export interface QuoteRHFFormProps {
   defaultValues?: Partial<QuoteFormValues>;
-  onSubmit: (values: QuoteFormValues) => Promise<void> | void;
+  onSubmit: (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => Promise<void> | void;
   isLoading?: boolean;
   submitLabel?: string;
   onCancel?: () => void;

@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, ImagePlus } from "lucide-react";
 import { quoteFormSchema, defaultQuoteFormValues } from "@/types/quote";
 import type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/types/quote";
 
@@ -81,6 +81,10 @@ export function QuoteRHFForm({
     resolver: zodResolver(quoteFormSchema),
     defaultValues: { ...defaultQuoteFormValues, ...defaultValues },
   });
+
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const { watch, setValue, control } = form;
   const { toast } = useToast();
@@ -331,7 +335,7 @@ export function QuoteRHFForm({
             if (idMapping.roomTypeId) setValue("roomType", idMapping.roomTypeId);
 
             // Apply lodge fields
-            const serverDetectedLodge = (idMapping as Record<string, unknown>).isLodge === true;
+            const serverDetectedLodge = (idMapping as unknown as Record<string, unknown>).isLodge === true;
             if (isLodgeQuote || serverDetectedLodge) {
               const hotTubPackage = packageTypesData?.find(
                 (p: { id: string; name: string }) => p.name === "Hot Tub Break"
@@ -357,7 +361,7 @@ export function QuoteRHFForm({
                 ...leg,
                 departAirportId: resolveAirportId(leg.departAirport),
                 arriveAirportId: resolveAirportId(leg.arriveAirport),
-              }))
+              })) as any
             );
             setValue(
               "inboundConnectingLegs",
@@ -365,8 +369,12 @@ export function QuoteRHFForm({
                 ...leg,
                 departAirportId: resolveAirportId(leg.departAirport),
                 arriveAirportId: resolveAirportId(leg.arriveAirport),
-              }))
+              })) as any
             );
+
+            if (result.images && result.images.length > 0) {
+              setImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
+            }
           } catch (error) {
             toast({
               title: "Error processing JSON",
@@ -378,8 +386,8 @@ export function QuoteRHFForm({
         }
 
         // Fallback for non-scraper JSON
-        const setIfPresent = <K extends keyof QuoteFormValues>(key: K, val: unknown) => {
-          if (val !== undefined && val !== null && val !== "") setValue(key, val as QuoteFormValues[K]);
+        const setIfPresent = (key: keyof QuoteFormValues, val: unknown) => {
+          if (val !== undefined && val !== null && val !== "") setValue(key, val as any);
         };
         setIfPresent("packageType", data.packageType || data.package_type);
         setIfPresent("quoteTitle", data.quoteTitle || data.quote_title || data.title);
@@ -407,6 +415,30 @@ export function QuoteRHFForm({
         setIfPresent("discount", data.commissions?.discount || data.discount);
         setIfPresent("serviceCharge", data.commissions?.serviceCharge || data.serviceCharge || data.service_charge);
         setIfPresent("pricePerPerson", data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp);
+        const extractedImages: string[] = [];
+        const imageFields = [
+          data.images, data.image, data.photos, data.photo,
+          data.imageUrl, data.image_url, data.imageUrls, data.image_urls,
+          data.thumbnails, data.thumbnail, data.gallery,
+          data.accommodation?.image, data.accommodation?.imageUrl,
+          data.hotel?.image, data.hotel?.imageUrl,
+        ];
+        for (const field of imageFields) {
+          if (typeof field === "string" && field.startsWith("http")) {
+            extractedImages.push(field);
+          } else if (Array.isArray(field)) {
+            for (const item of field) {
+              if (typeof item === "string" && item.startsWith("http")) {
+                extractedImages.push(item);
+              } else if (item?.url && typeof item.url === "string") {
+                extractedImages.push(item.url);
+              }
+            }
+          }
+        }
+        if (extractedImages.length > 0) {
+          setImageUrls((prev) => [...prev, ...extractedImages.filter((u) => !prev.includes(u))]);
+        }
         toast({ title: "JSON imported", description: "Form populated from JSON." });
       } catch (err) {
         toast({
@@ -438,7 +470,7 @@ export function QuoteRHFForm({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit((values) => onSubmit(values, { files: imageFiles, urls: imageUrls }))} className="space-y-4">
 
         {/* ── JSON IMPORT ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-end">
@@ -456,6 +488,90 @@ export function QuoteRHFForm({
               }}
             />
           </label>
+        </div>
+
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <SectionHeader icon={ImagePlus} title="Quote Images" />
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 0) {
+                    setImageFiles((prev) => [...prev, ...files]);
+                  }
+                  if (imageInputRef.current) imageInputRef.current.value = "";
+                }}
+                className="hidden"
+                data-testid="input-quote-images"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-full rounded-xl border-black/10 bg-white/70 text-sm"
+                onClick={() => imageInputRef.current?.click()}
+                data-testid="button-add-images"
+              >
+                <ImagePlus className="mr-2 h-4 w-4" />
+                Add images
+              </Button>
+            </div>
+
+            {(imageFiles.length > 0 || imageUrls.length > 0) && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                {imageFiles.map((file, idx) => (
+                  <div key={`file-${idx}`} className="group relative overflow-hidden rounded-xl border border-black/10">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={file.name}
+                      className="h-20 w-full object-cover"
+                      data-testid={`img-quote-preview-file-${idx}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setImageFiles((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                      data-testid={`button-remove-image-file-${idx}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white truncate">
+                      {file.name}
+                    </div>
+                  </div>
+                ))}
+                {imageUrls.map((url, idx) => (
+                  <div key={`url-${idx}`} className="group relative overflow-hidden rounded-xl border border-black/10">
+                    <img
+                      src={url}
+                      alt={`Image ${idx + 1}`}
+                      className="h-20 w-full object-cover"
+                      data-testid={`img-quote-preview-url-${idx}`}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "";
+                        (e.target as HTMLImageElement).alt = "Failed to load";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setImageUrls((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                      data-testid={`button-remove-image-url-${idx}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white">
+                      From JSON
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}

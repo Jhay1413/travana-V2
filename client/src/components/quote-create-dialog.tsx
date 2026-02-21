@@ -140,14 +140,18 @@ export function QuoteCreateDialog({
 
   const isSubmitting = createQuote.isPending || createTransaction.isPending;
 
-  const handleSubmit = async (values: QuoteFormValues) => {
+  const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
     const quotePayload = buildQuotePayload(values, packageTypesData);
+    const imageUrls = images?.urls || [];
 
     if (transactionId) {
       const payload: CreateQuoteData = {
         ...quotePayload,
         transaction_id: transactionId,
       } as CreateQuoteData;
+      if (imageUrls.length > 0) {
+        (payload as any).images = imageUrls;
+      }
 
       createQuote.mutate(payload, {
         onSuccess: (newQuote) => {
@@ -172,6 +176,7 @@ export function QuoteCreateDialog({
           quote: {
             ...quotePayload,
             quote_status: values.status || "QUOTE_IN_PROGRESS",
+            images: imageUrls.length > 0 ? imageUrls : undefined,
           },
         },
         {
