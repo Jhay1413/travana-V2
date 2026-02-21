@@ -767,96 +767,93 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                 </Button>
               </div>
 
-              {toFiltersOpen && (
-                <motion.div
-                  className="space-y-3 rounded-2xl border border-black/10 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.02]"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                >
-                  <div>
-                    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                      <Calendar className="h-3 w-3" /> Period
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {([
-                        { value: "all" as TOTimePeriod, label: "All Time" },
-                        { value: "week" as TOTimePeriod, label: "This Week" },
-                        { value: "month" as TOTimePeriod, label: "This Month" },
-                        { value: "custom" as TOTimePeriod, label: "Custom Range" },
-                      ]).map(p => (
-                        <button
-                          key={p.value}
-                          onClick={() => setToTimePeriod(p.value)}
-                          className={cn(
-                            "rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",
-                            toTimePeriod === p.value
-                              ? "bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10 text-foreground"
-                              : "bg-black/5 text-muted-foreground hover:text-foreground dark:bg-white/5"
-                          )}
-                          data-testid={`btn-to-period-${p.value}`}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
+              <div
+                style={{ display: toFiltersOpen ? "block" : "none" }}
+                className="space-y-3 rounded-2xl border border-black/10 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.02]"
+                data-testid="panel-to-filters"
+              >
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                    <Calendar className="h-3 w-3" /> Period
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {([
+                      { value: "all" as TOTimePeriod, label: "All Time" },
+                      { value: "week" as TOTimePeriod, label: "This Week" },
+                      { value: "month" as TOTimePeriod, label: "This Month" },
+                      { value: "custom" as TOTimePeriod, label: "Custom Range" },
+                    ]).map(p => (
+                      <button
+                        key={p.value}
+                        onClick={() => setToTimePeriod(p.value)}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",
+                          toTimePeriod === p.value
+                            ? "bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10 text-foreground"
+                            : "bg-black/5 text-muted-foreground hover:text-foreground dark:bg-white/5"
+                        )}
+                        data-testid={`btn-to-period-${p.value}`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {toTimePeriod === "custom" && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[10px] text-muted-foreground font-medium">From</label>
+                      <DatePicker
+                        value={toDateFrom}
+                        onChange={setToDateFrom}
+                        placeholder="Start date"
+                        className="h-8 w-40 text-xs"
+                        data-testid="input-to-date-from"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[10px] text-muted-foreground font-medium">To</label>
+                      <DatePicker
+                        value={toDateTo}
+                        onChange={setToDateTo}
+                        placeholder="End date"
+                        className="h-8 w-40 text-xs"
+                        data-testid="input-to-date-to"
+                      />
                     </div>
                   </div>
+                )}
 
-                  {toTimePeriod === "custom" && (
-                    <div className="flex items-center gap-3 pt-1">
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-[10px] text-muted-foreground font-medium">From</label>
-                        <DatePicker
-                          value={toDateFrom}
-                          onChange={setToDateFrom}
-                          placeholder="Start date"
-                          className="h-8 w-40 text-xs"
-                          data-testid="input-to-date-from"
-                        />
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-[10px] text-muted-foreground font-medium">To</label>
-                        <DatePicker
-                          value={toDateTo}
-                          onChange={setToDateTo}
-                          placeholder="End date"
-                          className="h-8 w-40 text-xs"
-                          data-testid="input-to-date-to"
-                        />
-                      </div>
-                    </div>
-                  )}
+                <Separator className="bg-black/10 dark:bg-white/10" />
 
-                  <Separator className="bg-black/10 dark:bg-white/10" />
-
-                  <div>
-                    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                      <BarChart3 className="h-3 w-3" /> Rank By
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {([
-                        { value: "profit" as TOSortMode, label: "By Profit" },
-                        { value: "bookings" as TOSortMode, label: "By Bookings" },
-                        { value: "most-profitable" as TOSortMode, label: "Most Profitable" },
-                      ]).map(s => (
-                        <button
-                          key={s.value}
-                          onClick={() => setToSortMode(s.value)}
-                          className={cn(
-                            "rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",
-                            toSortMode === s.value
-                              ? "bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10 text-foreground"
-                              : "bg-black/5 text-muted-foreground hover:text-foreground dark:bg-white/5"
-                          )}
-                          data-testid={`btn-to-sort-${s.value}`}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                    <BarChart3 className="h-3 w-3" /> Rank By
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {([
+                      { value: "profit" as TOSortMode, label: "By Profit" },
+                      { value: "bookings" as TOSortMode, label: "By Bookings" },
+                      { value: "most-profitable" as TOSortMode, label: "Most Profitable" },
+                    ]).map(s => (
+                      <button
+                        key={s.value}
+                        onClick={() => setToSortMode(s.value)}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",
+                          toSortMode === s.value
+                            ? "bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10 text-foreground"
+                            : "bg-black/5 text-muted-foreground hover:text-foreground dark:bg-white/5"
+                        )}
+                        data-testid={`btn-to-sort-${s.value}`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
                   </div>
-                </motion.div>
-              )}
+                </div>
+              </div>
 
               {tourOperatorAnalytics.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-muted-foreground dark:border-white/10">
