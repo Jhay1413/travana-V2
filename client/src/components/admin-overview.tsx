@@ -7,7 +7,6 @@ import {
   Briefcase,
   Building2,
   Calendar,
-  Check,
   CircleDollarSign,
   Globe,
   Minus,
@@ -29,15 +28,6 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useTourOperators } from "@/hooks/queries";
 import { DatePicker } from "@/components/ui/date-picker";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 
 const currency = new Intl.NumberFormat(undefined, {
@@ -126,6 +116,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
   const [toSortMode, setToSortMode] = useState<TOSortMode>("profit");
   const [toDateFrom, setToDateFrom] = useState("");
   const [toDateTo, setToDateTo] = useState("");
+  const [toFiltersOpen, setToFiltersOpen] = useState(false);
 
   const agentMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -762,80 +753,109 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                   </p>
                 </div>
 
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-xl border-black/10 dark:border-white/10" data-testid="btn-to-settings">
-                      <Settings2 className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuLabel className="flex items-center gap-1.5 text-xs">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8 shrink-0 rounded-xl border-black/10 transition-colors dark:border-white/10",
+                    toFiltersOpen && "bg-black/5 dark:bg-white/10"
+                  )}
+                  onClick={() => setToFiltersOpen(prev => !prev)}
+                  data-testid="btn-to-settings"
+                >
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {toFiltersOpen && (
+                <motion.div
+                  className="space-y-3 rounded-2xl border border-black/10 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.02]"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <div>
+                    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
                       <Calendar className="h-3 w-3" /> Period
-                    </DropdownMenuLabel>
-                    <DropdownMenuGroup>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {([
                         { value: "all" as TOTimePeriod, label: "All Time" },
                         { value: "week" as TOTimePeriod, label: "This Week" },
                         { value: "month" as TOTimePeriod, label: "This Month" },
                         { value: "custom" as TOTimePeriod, label: "Custom Range" },
                       ]).map(p => (
-                        <DropdownMenuItem
+                        <button
                           key={p.value}
                           onClick={() => setToTimePeriod(p.value)}
+                          className={cn(
+                            "rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",
+                            toTimePeriod === p.value
+                              ? "bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10 text-foreground"
+                              : "bg-black/5 text-muted-foreground hover:text-foreground dark:bg-white/5"
+                          )}
                           data-testid={`btn-to-period-${p.value}`}
                         >
-                          <span className="flex-1">{p.label}</span>
-                          {toTimePeriod === p.value && <Check className="h-3.5 w-3.5 text-primary" />}
-                        </DropdownMenuItem>
+                          {p.label}
+                        </button>
                       ))}
-                    </DropdownMenuGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="flex items-center gap-1.5 text-xs">
+                    </div>
+                  </div>
+
+                  {toTimePeriod === "custom" && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-[10px] text-muted-foreground font-medium">From</label>
+                        <DatePicker
+                          value={toDateFrom}
+                          onChange={setToDateFrom}
+                          placeholder="Start date"
+                          className="h-8 w-40 text-xs"
+                          data-testid="input-to-date-from"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-[10px] text-muted-foreground font-medium">To</label>
+                        <DatePicker
+                          value={toDateTo}
+                          onChange={setToDateTo}
+                          placeholder="End date"
+                          className="h-8 w-40 text-xs"
+                          data-testid="input-to-date-to"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <Separator className="bg-black/10 dark:bg-white/10" />
+
+                  <div>
+                    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
                       <BarChart3 className="h-3 w-3" /> Rank By
-                    </DropdownMenuLabel>
-                    <DropdownMenuGroup>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {([
                         { value: "profit" as TOSortMode, label: "By Profit" },
                         { value: "bookings" as TOSortMode, label: "By Bookings" },
                         { value: "most-profitable" as TOSortMode, label: "Most Profitable" },
                       ]).map(s => (
-                        <DropdownMenuItem
+                        <button
                           key={s.value}
                           onClick={() => setToSortMode(s.value)}
+                          className={cn(
+                            "rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",
+                            toSortMode === s.value
+                              ? "bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10 text-foreground"
+                              : "bg-black/5 text-muted-foreground hover:text-foreground dark:bg-white/5"
+                          )}
                           data-testid={`btn-to-sort-${s.value}`}
                         >
-                          <span className="flex-1">{s.label}</span>
-                          {toSortMode === s.value && <Check className="h-3.5 w-3.5 text-primary" />}
-                        </DropdownMenuItem>
+                          {s.label}
+                        </button>
                       ))}
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              {toTimePeriod === "custom" && (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-[10px] text-muted-foreground font-medium">From</label>
-                    <DatePicker
-                      value={toDateFrom}
-                      onChange={setToDateFrom}
-                      placeholder="Start date"
-                      className="h-8 w-40 text-xs"
-                      data-testid="input-to-date-from"
-                    />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-[10px] text-muted-foreground font-medium">To</label>
-                    <DatePicker
-                      value={toDateTo}
-                      onChange={setToDateTo}
-                      placeholder="End date"
-                      className="h-8 w-40 text-xs"
-                      data-testid="input-to-date-to"
-                    />
-                  </div>
-                </div>
+                </motion.div>
               )}
 
               {tourOperatorAnalytics.length === 0 ? (
