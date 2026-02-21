@@ -27,7 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useTourOperators } from "@/hooks/queries";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const currency = new Intl.NumberFormat(undefined, {
   style: "currency",
@@ -796,24 +796,24 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
               </div>
 
               {toTimePeriod === "custom" && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
                     <label className="text-[10px] text-muted-foreground font-medium">From</label>
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={toDateFrom}
-                      onChange={e => setToDateFrom(e.target.value)}
-                      className="h-7 w-36 rounded-lg text-xs"
+                      onChange={setToDateFrom}
+                      placeholder="Start date"
+                      className="h-8 w-40 text-xs"
                       data-testid="input-to-date-from"
                     />
                   </div>
                   <div className="flex items-center gap-1.5">
                     <label className="text-[10px] text-muted-foreground font-medium">To</label>
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={toDateTo}
-                      onChange={e => setToDateTo(e.target.value)}
-                      className="h-7 w-36 rounded-lg text-xs"
+                      onChange={setToDateTo}
+                      placeholder="End date"
+                      className="h-8 w-40 text-xs"
                       data-testid="input-to-date-to"
                     />
                   </div>
