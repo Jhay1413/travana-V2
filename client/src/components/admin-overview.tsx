@@ -126,7 +126,6 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
   const [toSortMode, setToSortMode] = useState<TOSortMode>("profit");
   const [toDateFrom, setToDateFrom] = useState("");
   const [toDateTo, setToDateTo] = useState("");
-  const [toSettingsOpen, setToSettingsOpen] = useState(false);
 
   const agentMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -763,7 +762,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                   </p>
                 </div>
 
-                <DropdownMenu open={toSettingsOpen} onOpenChange={setToSettingsOpen}>
+                <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-xl border-black/10 dark:border-white/10" data-testid="btn-to-settings">
                       <Settings2 className="h-4 w-4" />
@@ -782,7 +781,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                       ]).map(p => (
                         <DropdownMenuItem
                           key={p.value}
-                          onClick={() => { setToTimePeriod(p.value); setToSettingsOpen(false); }}
+                          onClick={() => setToTimePeriod(p.value)}
                           data-testid={`btn-to-period-${p.value}`}
                         >
                           <span className="flex-1">{p.label}</span>
@@ -802,7 +801,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                       ]).map(s => (
                         <DropdownMenuItem
                           key={s.value}
-                          onClick={() => { setToSortMode(s.value); setToSettingsOpen(false); }}
+                          onClick={() => setToSortMode(s.value)}
                           data-testid={`btn-to-sort-${s.value}`}
                         >
                           <span className="flex-1">{s.label}</span>
