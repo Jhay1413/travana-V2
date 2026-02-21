@@ -5477,66 +5477,6 @@ export default function CommandCenterPage() {
                 clients={clients}
               />
 
-              <section className="grid gap-3 md:grid-cols-4">
-                {active === "clients" ? (
-                  <>
-                    <KpiCard
-                      label="Total Clients"
-                      value={(clientsListData?.total ?? 0).toLocaleString()}
-                      delta="All registered"
-                      icon={<Users className="h-4 w-4" />}
-                    />
-                    <KpiCard
-                      label="Active"
-                      value={(() => { const ids = new Set<string>(); if (transactionsData) { for (const t of transactionsData as any[]) { if (t.client_id) ids.add(t.client_id); } } return ids.size.toLocaleString(); })()}
-                      delta="Active"
-                      icon={<Activity className="h-4 w-4" />}
-                    />
-                    <KpiCard
-                      label="New Clients"
-                      value={(() => { if (!transactionsData) return "0"; const now = new Date(); const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); const newClientIds = new Set<string>(); for (const t of transactionsData as any[]) { const created = new Date(t.created_at || 0); if (created >= monthStart && t.client_id) newClientIds.add(t.client_id); } return String(newClientIds.size || 38); })()}
-                      delta={(() => { if (!transactionsData) return "0 Live"; const liveCount = (transactionsData as any[]).filter(t => t.status !== "on_booking" && !t.booking && (t.enquiry || (t.quotes && t.quotes.length > 0))).length; return `${liveCount} Live`; })()}
-                      icon={<Star className="h-4 w-4" />}
-                    />
-                    <KpiCard
-                      label="Sales Target"
-                      value="£3,106"
-                      delta="£5,250"
-                      icon={<Target className="h-4 w-4" />}
-                      targetValue="£5,250"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <KpiCard
-                      label="Today's Profit"
-                      value={currency.format(totals.bookedValue)}
-                      delta="+4.1% DoD"
-                      icon={<Ticket className="h-4 w-4" />}
-                    />
-                    <KpiCard
-                      label="This Week"
-                      value={currency.format(totals.openValue)}
-                      delta="+2.3% WoW"
-                      icon={<Sparkles className="h-4 w-4" />}
-                    />
-                    <KpiCard
-                      label="This Month"
-                      value={currency.format(totals.avgDeal)}
-                      delta="+6.8% MoM"
-                      icon={<Briefcase className="h-4 w-4" />}
-                    />
-                    <KpiCard
-                      label="Sales Target"
-                      value="£3,106"
-                      delta="£5,250"
-                      icon={<Target className="h-4 w-4" />}
-                      targetValue="£5,250"
-                    />
-                  </>
-                )}
-              </section>
-
               <div className="pr-1" data-testid="panel-scroll">
                 {content}
 
