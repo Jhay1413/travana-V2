@@ -4,15 +4,11 @@ import { socialPostRepository } from "../repositories/social-post.repository";
 import { AppError } from "../utils/error-handler";
 import type { TravelDeal } from "@shared/schema";
 
-let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new AppError("OpenAI API key is not configured", 500);
-    }
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!process.env.OPENAI_API_KEY) {
+    throw new AppError("OpenAI API key is not configured", 500);
   }
-  return _openai;
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
 const EMOJI_POOLS = {
