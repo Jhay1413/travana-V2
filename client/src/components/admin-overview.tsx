@@ -348,7 +348,6 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
           subtext={`${currency.format(stats.monthProfit)} achieved`}
         />
       </div>
-
       <Card className="glass ringed grain rounded-3xl p-4 md:p-5" data-testid="card-admin-module">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
@@ -380,7 +379,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
             <div className="space-y-5" data-testid="panel-agent-performance">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
-                  <p className="text-xs font-medium text-muted-foreground">Average Booking Value</p>
+                  <p className="text-xs font-medium text-muted-foreground">Average Booking Profit</p>
                   <p className="mt-1 text-xl font-bold" data-testid="stat-avg-booking-value">
                     {currencyFull.format(stats.avgBookingValue)}
                   </p>
