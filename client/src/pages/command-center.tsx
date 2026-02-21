@@ -10,6 +10,7 @@ import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, u
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
+import AdminOverview from "@/components/admin-overview";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
@@ -1982,6 +1983,15 @@ export default function CommandCenterPage() {
   }, [dashboardStats, allClients]);
 
   const content = useMemo(() => {
+    if (role === "Admin" && active === "overview") {
+      return (
+        <AdminOverview
+          transactionsData={transactionsData as any[] | undefined}
+          apiUsers={apiUsers as any[] | undefined}
+        />
+      );
+    }
+
     // Agent Overview - dashboard for agent users
     const isAgentOverview = (role === "Agent" && active === "overview") || 
                             (role === "Admin" && active === "agent-overview");
