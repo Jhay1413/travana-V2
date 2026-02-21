@@ -303,8 +303,16 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
       }
     }
 
+    const order = ["Package Holiday", "Cruise Packages", "Hot Tub Breaks"];
     return Array.from(htMap.values())
-      .sort((a, b) => b.revenue - a.revenue);
+      .sort((a, b) => {
+        const ai = order.indexOf(a.name);
+        const bi = order.indexOf(b.name);
+        if (ai !== -1 && bi !== -1) return ai - bi;
+        if (ai !== -1) return -1;
+        if (bi !== -1) return 1;
+        return b.revenue - a.revenue;
+      });
   }, [transactionsData]);
 
   const topDestinations = destinationRevenue.slice(0, 5);
