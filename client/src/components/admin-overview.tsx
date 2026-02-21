@@ -498,7 +498,7 @@ export default function AdminOverview({ transactionsData, apiUsers }: AdminOverv
                 <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
                   <p className="text-xs font-medium text-muted-foreground">Total Profit Value of Open Quotes</p>
                   <p className="mt-1 text-xl font-bold" data-testid="stat-open-quotes-value">
-                    {currency.format(stats.totalOpenQuotesValue)}
+                    {currencyFull.format(stats.totalOpenQuotesValue)}
                   </p>
                   <p className="text-[10px] text-muted-foreground">{stats.quotesCount} open quotes</p>
                 </div>
