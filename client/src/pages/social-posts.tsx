@@ -4,6 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
+import { useTravelDeal } from "@/hooks/queries/use-social-post-queries";
+import { useGeneratePost } from "@/hooks/mutations/use-social-post-mutations";
+import { useToast } from "@/hooks/use-toast";
+import { SocialPostPreviewDialog } from "@/components/social-post-preview-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,8 +21,11 @@ import {
   Hotel,
   Moon,
   UtensilsCrossed,
+  Sparkles,
+  FileText,
 } from "lucide-react";
 import type { EnrichedQuote } from "@/types/quote";
+import type { TravelDeal } from "@/api/endpoints/social-post.api";
 
 type DateFilter = "all" | "today" | "tomorrow" | "custom";
 
@@ -89,15 +96,25 @@ function getFirstImage(q: EnrichedQuote): string | null {
   return null;
 }
 
-function SocialPostCard({ post }: { post: SocialPost }) {
-  const { quote, clientId } = post;
-  console.log(post)
-  console.log(clientId, "Rendering SocialPostCard for quote ID:", quote.id);
+function SocialPostCard({
+  post,
+  onGeneratePost,
+  onViewPost,
+  isGenerating,
+}: {
+  post: SocialPost;
+  onGeneratePost: (quote: EnrichedQuote) => void;
+  onViewPost: (quote: EnrichedQuote) => void;
+  isGenerating: boolean;
+}) {
+  const { quote } = post;
   const imageUrl = getFirstImage(quote);
   const tourOp = quote.main_tour_operator_name;
   const pricePerPerson = quote.price_per_person
     ? `${formatPrice(quote.price_per_person)}pp`
     : formatPrice(quote.sales_price);
+
+  const { data: existingDeal } = useTravelDeal(quote.id);
 
   return (
     <motion.div
@@ -226,13 +243,30 @@ function SocialPostCard({ post }: { post: SocialPost }) {
             </Button>
           </Link>
           <div className="mt-4" />
-          <Button
-            className="w-full rounded-xl text-sm font-medium gap-2 bg-blue-500 hover:bg-blue-600 text-white"
-            data-testid={`button-schedule-post-${quote.id}`}
-          >
-            <CalendarClock className="w-4 h-4" />
-            Schedule Post
-          </Button>
+          {existingDeal ? (
+            <Button
+              onClick={() => onViewPost(quote)}
+              className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white"
+              data-testid={`button-view-post-${quote.id}`}
+            >
+              <FileText className="w-4 h-4" />
+              View Post
+            </Button>
+          ) : (
+            <Button
+              onClick={() => onGeneratePost(quote)}
+              disabled={isGenerating}
+              className="w-full rounded-xl text-sm font-medium gap-2 bg-blue-500 hover:bg-blue-600 text-white"
+              data-testid={`button-generate-post-${quote.id}`}
+            >
+              {isGenerating ? (
+                <Spinner className="w-4 h-4" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+              Generate Post
+            </Button>
+          )}
         </div>
       </div>
     </motion.div>
@@ -241,9 +275,15 @@ function SocialPostCard({ post }: { post: SocialPost }) {
 
 export default function SocialPostsPage() {
   const { role, setRole } = useRole();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDate, setCustomDate] = useState("");
+  const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
+  const [previewDeal, setPreviewDeal] = useState<TravelDeal | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+
+  const generatePost = useGeneratePost();
 
   const {
     data,
@@ -254,10 +294,8 @@ export default function SocialPostsPage() {
     isFetchingNextPage,
   } = useFreeQuotesInfinite(12);
 
-  // Ref for infinite scroll observer
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  // Setup intersection observer for infinite scroll
   useEffect(() => {
     if (!loadMoreRef.current || !hasNextPage || isFetchingNextPage) return;
 
@@ -275,7 +313,6 @@ export default function SocialPostsPage() {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Flatten all pages into a single array of social posts
   const socialPosts = useMemo<SocialPost[]>(() => {
     if (!data?.pages) return [];
     
@@ -328,6 +365,51 @@ export default function SocialPostsPage() {
 
     return result;
   }, [socialPosts, searchQuery, dateFilter, customDate]);
+
+  const handleGeneratePost = async (quote: EnrichedQuote) => {
+    const imageUrl = getFirstImage(quote);
+    setPreviewQuoteId(quote.id);
+    setPreviewImageUrl(imageUrl);
+    setPreviewDeal(null);
+
+    try {
+      const destination = [quote.country_name, quote.destination_name]
+        .filter(Boolean)
+        .join(", ") || "Unknown";
+
+      const deal = await generatePost.mutateAsync({
+        quoteId: quote.id,
+        title: quote.title || "Untitled Deal",
+        destination,
+        nights: quote.num_of_nights,
+        boardBasis: getBoardBasis(quote) !== "—" ? getBoardBasis(quote) : undefined,
+        departureAirport: getDepartingAirport(quote) !== "—" ? getDepartingAirport(quote) : undefined,
+        transferType: quote.transfer_type || undefined,
+        salesPrice: quote.sales_price || undefined,
+        pricePerPerson: quote.price_per_person || undefined,
+        travelDate: quote.travel_date,
+      });
+      setPreviewDeal(deal);
+    } catch {
+      toast({ title: "Failed to generate post", variant: "destructive" });
+      setPreviewQuoteId(null);
+    }
+  };
+
+  const handleViewPost = (quote: EnrichedQuote) => {
+    const imageUrl = getFirstImage(quote);
+    setPreviewQuoteId(quote.id);
+    setPreviewImageUrl(imageUrl);
+    setPreviewDeal(null);
+
+    import("@/api/endpoints/social-post.api").then(({ socialPostApi }) => {
+      socialPostApi.getByQuoteId(quote.id).then((deal) => {
+        if (deal) {
+          setPreviewDeal(deal);
+        }
+      });
+    });
+  };
 
   const dateButtons: { label: string; value: DateFilter }[] = [
     { label: "All", value: "all" },
@@ -426,13 +508,18 @@ export default function SocialPostsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <AnimatePresence mode="popLayout">
               {filteredPosts.map((post) => (
-                <SocialPostCard key={post.quote.id} post={post} />
+                <SocialPostCard
+                  key={post.quote.id}
+                  post={post}
+                  onGeneratePost={handleGeneratePost}
+                  onViewPost={handleViewPost}
+                  isGenerating={generatePost.isPending && previewQuoteId === post.quote.id}
+                />
               ))}
             </AnimatePresence>
           </div>
         )}
 
-        {/* Infinite scroll trigger */}
         {!isError && !isLoading && filteredPosts.length > 0 && (
           <div 
             ref={loadMoreRef} 
@@ -452,6 +539,20 @@ export default function SocialPostsPage() {
           </div>
         )}
       </div>
+
+      <SocialPostPreviewDialog
+        open={!!previewQuoteId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewQuoteId(null);
+            setPreviewDeal(null);
+            setPreviewImageUrl(null);
+          }
+        }}
+        travelDeal={previewDeal}
+        quoteImageUrl={previewImageUrl}
+        isGenerating={generatePost.isPending}
+      />
     </CommandCenterShell>
   );
 }

@@ -18,3 +18,4 @@ export { taskApi } from "./endpoints/task.api";
 export { lookupApi } from "./endpoints/lookup.api";
 export { tagApi } from "./endpoints/tag.api";
 export { chatApi } from "./endpoints/chat.api";
+export { socialPostApi } from "./endpoints/social-post.api";
