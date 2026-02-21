@@ -111,7 +111,7 @@ type TOSortMode = "profit" | "bookings" | "most-profitable";
 export default function AdminOverview({ transactionsData, apiUsers }: AdminOverviewProps) {
   const [tab, setTab] = useState("agent-performance");
   const { data: tourOperators } = useTourOperators();
-  const [toTimePeriod, setToTimePeriod] = useState<TOTimePeriod>("all");
+  const [toTimePeriod, setToTimePeriod] = useState<TOTimePeriod>("month");
   const [toSortMode, setToSortMode] = useState<TOSortMode>("profit");
   const [toDateFrom, setToDateFrom] = useState("");
   const [toDateTo, setToDateTo] = useState("");
