@@ -124,6 +124,10 @@ export const transactionService = {
     return await transactionRepository.findAll();
   },
 
+  async listTransactionsLightweight() {
+    return await transactionRepository.findAllLightweight();
+  },
+
   async listTransactionsByClient(clientId: string) {
     return await transactionRepository.findByClientId(clientId);
   },

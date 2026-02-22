@@ -4,6 +4,7 @@ import { transactionController } from "../controllers/transaction.controller";
 const router = Router();
 
 router.get("/", transactionController.listTransactions);
+router.get("/pipeline", transactionController.listTransactionsLightweight);
 router.get("/stats", transactionController.getStats);
 router.get("/:id", transactionController.getTransactionById);
 router.post("/", transactionController.createTransaction);

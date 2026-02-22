@@ -30,6 +30,11 @@ export const transactionApi = {
     await axiosClient.delete(`/api/transactions/${id}`);
   },
 
+  getPipeline: async (): Promise<Transaction[]> => {
+    const { data } = await axiosClient.get<Transaction[]>("/api/transactions/pipeline");
+    return data;
+  },
+
   getStats: async () => {
     const { data } = await axiosClient.get("/api/transactions/stats");
     return data;

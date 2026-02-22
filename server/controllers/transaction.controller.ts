@@ -106,6 +106,11 @@ export const transactionController = {
     return successResponse(res, transactions, "Transactions retrieved successfully");
   }),
 
+  listTransactionsLightweight: asyncHandler(async (_req: Request, res: Response) => {
+    const transactions = await transactionService.listTransactionsLightweight();
+    return successResponse(res, transactions, "Pipeline transactions retrieved successfully");
+  }),
+
   getTransactionById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const txn = await transactionService.getTransactionWithDetails(id);

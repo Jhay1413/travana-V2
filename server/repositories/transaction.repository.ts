@@ -150,6 +150,93 @@ async function enrichTransactions(txns: Transaction[]) {
   });
 }
 
+async function enrichTransactionsLightweight(txns: Transaction[]) {
+  if (txns.length === 0) return [];
+  const txnIds = txns.map(t => t.id);
+
+  const [allEnquiries, allQuotes, allBookings, allPackageTypes] = await Promise.all([
+    db.select({
+      id: enquiry_table.id,
+      transaction_id: enquiry_table.transaction_id,
+      title: enquiry_table.title,
+      travel_date: enquiry_table.travel_date,
+      adults: enquiry_table.adults,
+      children: enquiry_table.children,
+      infants: enquiry_table.infants,
+      holiday_type_id: enquiry_table.holiday_type_id,
+      status: enquiry_table.status,
+    }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    db.select({
+      id: quote.id,
+      transaction_id: quote.transaction_id,
+      title: quote.title,
+      travel_date: quote.travel_date,
+      adult: quote.adult,
+      child: quote.child,
+      infant: quote.infant,
+      sales_price: quote.sales_price,
+      package_commission: quote.package_commission,
+      holiday_type_id: quote.holiday_type_id,
+      quote_status: quote.quote_status,
+    }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`)),
+    db.select({
+      id: booking.id,
+      transaction_id: booking.transaction_id,
+      title: booking.title,
+      travel_date: booking.travel_date,
+      adult: booking.adult,
+      child: booking.child,
+      infant: booking.infant,
+      sales_price: booking.sales_price,
+      package_commission: booking.package_commission,
+      holiday_type_id: booking.holiday_type_id,
+    }).from(booking).where(inArray(booking.transaction_id, txnIds)),
+    db.select().from(package_type),
+  ]);
+
+  const packageTypeMap = new Map(allPackageTypes.map(pt => [pt.id, pt.name]));
+
+  const enquiryMap = new Map<string, any>();
+  for (const enq of allEnquiries) {
+    enquiryMap.set(enq.transaction_id, {
+      ...enq,
+      holiday_type_name: packageTypeMap.get(enq.holiday_type_id) || null,
+    });
+  }
+
+  const quotesMap = new Map<string, any[]>();
+  for (const q of allQuotes) {
+    const entry = {
+      ...q,
+      holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
+    };
+    if (!quotesMap.has(q.transaction_id)) quotesMap.set(q.transaction_id, []);
+    quotesMap.get(q.transaction_id)!.push(entry);
+  }
+
+  const bookingMap = new Map<string, any>();
+  for (const b of allBookings) {
+    bookingMap.set(b.transaction_id, {
+      ...b,
+      holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id,
+    });
+  }
+
+  return txns.map(txn => {
+    const enquiry = txn.status === "on_enquiry" ? (enquiryMap.get(txn.id) || null) : null;
+    const quotes = quotesMap.get(txn.id) || [];
+    const bookingEntry = bookingMap.get(txn.id) || null;
+    const holiday_type_name = enquiry?.holiday_type_name || quotes[0]?.holiday_type_name || bookingEntry?.holiday_type_name || null;
+    return {
+      ...txn,
+      holiday_type_name,
+      enquiry,
+      quotes,
+      booking: bookingEntry,
+    };
+  });
+}
+
 export const transactionRepository = {
   async findById(id: string): Promise<Transaction | undefined> {
     const [result] = await db.select().from(transaction).where(eq(transaction.id, id)).limit(1);
@@ -159,6 +246,11 @@ export const transactionRepository = {
   async findAll() {
     const txns = await db.select().from(transaction).orderBy(desc(transaction.created_at));
     return enrichTransactions(txns);
+  },
+
+  async findAllLightweight() {
+    const txns = await db.select().from(transaction).orderBy(desc(transaction.created_at));
+    return enrichTransactionsLightweight(txns);
   },
 
   async findByClientId(clientId: string) {

@@ -98,7 +98,7 @@ export const chatRepository = {
       SELECT DISTINCT ON (cm.conversation_id) cm.conversation_id, cm.content, cm.created_at, cm.sender_id, u.name as sender_name
       FROM chat_messages cm
       LEFT JOIN "user" u ON cm.sender_id = u.id
-      WHERE cm.conversation_id = ANY(${conversationIds})
+      WHERE cm.conversation_id IN (${sql.join(conversationIds.map(id => sql`${id}`), sql`, `)})
       ORDER BY cm.conversation_id, cm.created_at DESC
     `);
     return result.rows as Array<{ conversation_id: string; content: string; created_at: string; sender_id: string; sender_name: string }>;

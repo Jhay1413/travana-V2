@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useTransactions, useNeonClients, useCurrentUser, transactionKeys } from "@/hooks/queries";
+import { usePipelineTransactions, useNeonClients, useCurrentUser, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction, useConvertToBooking } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -440,7 +440,7 @@ function PipelineColumn({ stage, transactions: stageTransactions, getClientName,
 
 export default function PipelinePage() {
   const { role, setRole } = useRole();
-  const { data: transactions, isLoading: transactionsLoading } = useTransactions();
+  const { data: transactions, isLoading: transactionsLoading } = usePipelineTransactions();
   const { data: neonClientsData } = useNeonClients({ page: 1, limit: 200 });
   const { data: currentUser } = useCurrentUser();
   const updateTransactionMutation = useUpdateTransaction();

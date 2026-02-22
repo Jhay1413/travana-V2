@@ -26,6 +26,13 @@ export function useTransaction(id: string) {
   });
 }
 
+export function usePipelineTransactions() {
+  return useQuery<Transaction[]>({
+    queryKey: [...transactionKeys.all, "pipeline"] as const,
+    queryFn: () => transactionApi.getPipeline(),
+  });
+}
+
 export function useTransactionStats() {
   return useQuery({
     queryKey: transactionKeys.stats(),
