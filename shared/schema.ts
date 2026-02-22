@@ -36,6 +36,7 @@ export const user = pgTable("user", {
   phoneNumber: text("phoneNumber").notNull(),
   orgName: text("orgName"),
   percentageCommission: integer("percentageCommission"),
+  password: text("password"),
 });
 
 export const insertUserSchema = createInsertSchema(user).omit({ createdAt: true, updatedAt: true });
