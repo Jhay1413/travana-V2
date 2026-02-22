@@ -47,7 +47,7 @@ export function buildQuotePayload(
     title: values.quoteTitle || undefined,
     quote_link: values.quoteLink || undefined,
     lead_source: values.leadSource || undefined,
-    quote_status: values.status,
+    quote_status: values.status && values.status !== "draft" ? values.status : "QUOTE_IN_PROGRESS",
     main_tour_operator_id: values.tourOperatorId || undefined,
     transfer_type: values.transferType || undefined,
     pre_booked_seats: values.preBookedSeats || undefined,
