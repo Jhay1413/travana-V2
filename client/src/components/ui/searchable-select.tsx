@@ -21,6 +21,12 @@ interface SearchableSelectProps {
   emptyMessage?: string;
   className?: string;
   "data-testid"?: string;
+  /** Called with the typed search string — enables server-side search (disables client-side filtering) */
+  onSearch?: (search: string) => void;
+  /** Show a loading indicator in the dropdown while fetching */
+  isLoading?: boolean;
+  /** Label to display for the selected value when it may not be present in current options */
+  selectedLabel?: string;
 }
 
 export function SearchableSelect({
@@ -32,10 +38,13 @@ export function SearchableSelect({
   emptyMessage = "No results found.",
   className,
   "data-testid": dataTestId,
+  onSearch,
+  isLoading,
+  selectedLabel,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
 
-  const selectedLabel = options.find((opt) => opt.value === value)?.label;
+  const resolvedLabel = selectedLabel || options.find((opt) => opt.value === value)?.label;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -51,15 +60,23 @@ export function SearchableSelect({
           )}
           data-testid={dataTestId}
         >
-          <span className="truncate">{selectedLabel || placeholder}</span>
+          <span className="truncate">{resolvedLabel || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="z-[500] w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command filter={(value, search) => value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0}>
-          <CommandInput placeholder={searchPlaceholder} />
+        <Command
+          {...(onSearch
+            ? { shouldFilter: false }
+            : { filter: (val, search) => val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0 }
+          )}
+        >
+          <CommandInput
+            placeholder={searchPlaceholder}
+            {...(onSearch ? { onValueChange: onSearch } : {})}
+          />
           <CommandList>
-            <CommandEmpty>{emptyMessage}</CommandEmpty>
+            <CommandEmpty>{isLoading ? "Searching…" : emptyMessage}</CommandEmpty>
             <CommandGroup>
               {options.map((opt) => (
                 <CommandItem

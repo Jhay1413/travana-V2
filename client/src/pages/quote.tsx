@@ -11,7 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuote, useBooking, useClient, useNeonClient, useTags } from "@/hooks/queries";
+import { useQuote, useBooking, useClient, useNeonClient, useTags, quoteKeys, bookingKeys } from "@/hooks/queries";
 import { useDuplicateQuote, useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
@@ -78,7 +78,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
         setShowEllipsisMenu(false);
       }
       if (tagSuggestionsRef.current && !tagSuggestionsRef.current.contains(e.target as Node) &&
-          tagInputRef.current && !tagInputRef.current.contains(e.target as Node)) {
+        tagInputRef.current && !tagInputRef.current.contains(e.target as Node)) {
         setShowTagSuggestions(false);
       }
     };
@@ -102,7 +102,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   if (isLoading) {
     return (
-      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}} filterSlot={<></>}>
+      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => { }} filterSlot={<></>}>
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-quote">
           <Spinner className="h-8 w-8" />
         </div>
@@ -112,7 +112,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   if (error || !quote) {
     return (
-      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}} filterSlot={<></>}>
+      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => { }} filterSlot={<></>}>
         <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-quote">
           <div className="text-center">
             <p className="text-sm text-black/70">Failed to load {pageLabel.toLowerCase()}</p>
@@ -131,7 +131,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   }
 
   return (
-    <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}} filterSlot={<></>}>
+    <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => { }} filterSlot={<></>}>
       <div className="px-5 pb-8 pt-5" data-testid="page-quote">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
           <div className="flex items-start gap-3">
@@ -198,7 +198,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               <Copy className="mr-2 h-4 w-4" />
               Copy
             </Button>
-            <Button size="sm" className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90" data-testid="button-export-quote" onClick={() => {}}>
+            <Button size="sm" className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90" data-testid="button-export-quote" onClick={() => { }}>
               <FileText className="mr-2 h-4 w-4" />
               Export
             </Button>
@@ -239,7 +239,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           type="button"
                           className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
                           data-testid={`button-gallery-image-${idx}`}
-                          onClick={() => {}}
+                          onClick={() => { }}
                           title="Click to set as main image"
                         >
                           <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
@@ -274,7 +274,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                               const updated = quote.tags.filter((tag) => tag !== t);
                               updateTagsMutation.mutate(
                                 { id: quoteId, tags: updated },
-                                { 
+                                {
                                   onSuccess: () => {
                                     console.log('🏷️ Tag removed successfully');
                                     queryClient.invalidateQueries({ queryKey: ["quotes"] });
@@ -314,13 +314,13 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                               console.log('🏷️ Adding tag:', newTag.trim(), 'Updated tags:', updated);
                               updateTagsMutation.mutate(
                                 { id: quoteId, tags: updated },
-                                { 
-                                  onSuccess: () => { 
+                                {
+                                  onSuccess: () => {
                                     console.log('🏷️ Tag added successfully');
-                                    setNewTag(""); 
-                                    setShowTagSuggestions(false); 
-                                    queryClient.invalidateQueries({ queryKey: ["quotes"] }); 
-                                    queryClient.invalidateQueries({ queryKey: ["tags"] }); 
+                                    setNewTag("");
+                                    setShowTagSuggestions(false);
+                                    queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                                    queryClient.invalidateQueries({ queryKey: ["tags"] });
                                   },
                                   onError: (error) => {
                                     console.error('🏷️ Failed to add tag:', error);
@@ -354,13 +354,13 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                                     const updated = [...quote.tags, t];
                                     updateTagsMutation.mutate(
                                       { id: quoteId, tags: updated },
-                                      { 
-                                        onSuccess: () => { 
+                                      {
+                                        onSuccess: () => {
                                           console.log('🏷️ Tag added successfully from suggestion');
-                                          setNewTag(""); 
-                                          setShowTagSuggestions(false); 
-                                          queryClient.invalidateQueries({ queryKey: ["quotes"] }); 
-                                          queryClient.invalidateQueries({ queryKey: ["tags"] }); 
+                                          setNewTag("");
+                                          setShowTagSuggestions(false);
+                                          queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                                          queryClient.invalidateQueries({ queryKey: ["tags"] });
                                         },
                                         onError: (error) => {
                                           console.error('🏷️ Failed to add tag from suggestion:', error);
@@ -388,13 +388,13 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                           const updated = [...quote.tags, newTag.trim()];
                           updateTagsMutation.mutate(
                             { id: quoteId, tags: updated },
-                            { 
-                              onSuccess: () => { 
+                            {
+                              onSuccess: () => {
                                 console.log('🏷️ Tag added successfully via button');
-                                setNewTag(""); 
-                                setShowTagSuggestions(false); 
-                                queryClient.invalidateQueries({ queryKey: ["quotes"] }); 
-                                queryClient.invalidateQueries({ queryKey: ["tags"] }); 
+                                setNewTag("");
+                                setShowTagSuggestions(false);
+                                queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                                queryClient.invalidateQueries({ queryKey: ["tags"] });
                               },
                               onError: (error) => {
                                 console.error('🏷️ Failed to add tag via button:', error);
@@ -453,7 +453,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                                   { id: quoteId, data: { quote_status: "LOST" } },
                                   {
                                     onSuccess: () => {
-                                      queryClient.invalidateQueries({ queryKey: ["quote", quoteId] });
+                                      queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
                                       toast({ title: "Quote marked as lost" });
                                     },
                                     onError: () => {
@@ -466,7 +466,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                                   { id: quoteId, data: { quote_status: value } },
                                   {
                                     onSuccess: () => {
-                                      queryClient.invalidateQueries({ queryKey: ["quote", quoteId] });
+                                      queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
                                       toast({ title: "Quote status updated" });
                                     },
                                     onError: () => {
@@ -501,8 +501,8 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                                 {
                                   onSuccess: () => {
                                     toast({ title: "Transaction reassigned successfully" });
-                                    queryClient.invalidateQueries({ queryKey: ["quote", quoteId] });
-                                    queryClient.invalidateQueries({ queryKey: ["booking", quoteId] });
+                                    queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+                                    queryClient.invalidateQueries({ queryKey: bookingKeys.detail(quoteId) });
                                   },
                                   onError: () => {
                                     toast({ title: "Failed to reassign transaction", variant: "destructive" });
@@ -742,24 +742,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
                   <QuoteNotesSection transactionId={quote.transaction_id} />
 
-                  {images.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2" data-testid="grid-quote-images">
-                      {images.map((img: { id: string; url: string; isPrimary: boolean | null }, idx: number) => (
-                        <div
-                          key={img.id}
-                          className="relative h-24 w-24 flex-none overflow-hidden rounded-xl border border-black/10 bg-black/[0.03]"
-                          data-testid={`img-quote-${idx}`}
-                        >
-                          <img src={img.url} alt="" className="h-full w-full object-cover" />
-                          {img.isPrimary && (
-                            <div className="absolute left-1 top-1 flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-semibold text-white" data-testid="badge-primary-image">
-                              <Star className="h-2.5 w-2.5 fill-current" /> Main
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+
                 </div>
               </div>
             </Card>

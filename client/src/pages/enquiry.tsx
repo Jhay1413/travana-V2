@@ -42,7 +42,7 @@ import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes } from "@/hooks/queries";
+import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes, enquiryKeys } from "@/hooks/queries";
 import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations/use-note-mutations";
 import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
@@ -763,13 +763,13 @@ export default function EnquiryPage() {
   const isHotTub = holidayTypeName.toLowerCase().includes("hot tub");
   const isCruise = holidayTypeName.toLowerCase().includes("cruise");
 
-  const destinationNames = enquiry.destinations?.map((d: any) => d.destination_name || d.name || d).filter(Boolean).join(", ") || null;
-  const resortNames = enquiry.resorts?.map((r: any) => r.resort_name || r.name || r).filter(Boolean).join(", ") || null;
-  const airportNames = enquiry.airports?.map((a: any) => a.airport_name || a.name || a).filter(Boolean).join(", ") || null;
-  const boardBaseNames = enquiry.boardBases?.map((b: any) => b.board_basis_name || b.name || b).filter(Boolean).join(", ") || null;
-  const portNames = (enquiry as any).ports?.map((p: any) => p.port_name || p.name || p).filter(Boolean).join(", ") || null;
-  const cruiseLineNames = (enquiry as any).cruiseLines?.map((c: any) => c.cruise_line_name || c.name || c).filter(Boolean).join(", ") || null;
-  const cruiseDestinationNames = (enquiry as any).cruiseDestinations?.map((c: any) => c.cruise_destination_name || c.name || c).filter(Boolean).join(", ") || null;
+  const destinationNames = enquiry.destinations?.map((d: any) => d.destination_name || d.name || null).filter(Boolean).join(", ") || null;
+  const resortNames = enquiry.resorts?.map((r: any) => r.resort_name || r.name || null).filter(Boolean).join(", ") || null;
+  const airportNames = enquiry.airports?.map((a: any) => a.airport_name || a.name || null).filter(Boolean).join(", ") || null;
+  const boardBaseNames = enquiry.boardBases?.map((b: any) => b.board_basis_name || b.name || null).filter(Boolean).join(", ") || null;
+  const portNames = (enquiry as any).ports?.map((p: any) => p.port_name || p.name || null).filter(Boolean).join(", ") || null;
+  const cruiseLineNames = (enquiry as any).cruiseLines?.map((c: any) => c.cruise_line_name || c.name || null).filter(Boolean).join(", ") || null;
+  const cruiseDestinationNames = (enquiry as any).cruiseDestinations?.map((c: any) => c.cruise_destination_name || c.name || null).filter(Boolean).join(", ") || null;
 
   return (
     <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
@@ -914,7 +914,7 @@ export default function EnquiryPage() {
                           {
                             onSuccess: () => {
                               toast({ title: "Enquiry reassigned successfully" });
-                              queryClient.invalidateQueries({ queryKey: ["enquiry", enquiryId] });
+                              queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
                             },
                             onError: () => {
                               toast({ title: "Failed to reassign enquiry", variant: "destructive" });

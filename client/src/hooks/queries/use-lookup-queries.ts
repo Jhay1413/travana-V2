@@ -7,6 +7,7 @@ export const lookupKeys = {
   countries: ["lookup", "countries"] as const,
   destinations: (countryId?: string) => ["lookup", "destinations", countryId] as const,
   allDestinations: ["lookup", "destinations", "all"] as const,
+  destinationSearch: (search: string, countryId?: string) => ["lookup", "destinations", "search", search, countryId] as const,
   resorts: (destinationId?: string) => ["lookup", "resorts", destinationId] as const,
   allResorts: ["lookup", "resorts", "all"] as const,
   accommodations: (resortId?: string) => ["lookup", "accommodations", resortId] as const,
@@ -105,6 +106,14 @@ export function useAllDestinations() {
     queryKey: lookupKeys.allDestinations,
     queryFn: () => lookupApi.getDestinations(),
     staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useDestinationSearch(search: string, countryId?: string) {
+  return useQuery({
+    queryKey: lookupKeys.destinationSearch(search, countryId),
+    queryFn: () => lookupApi.getDestinations(countryId, search || undefined, 10),
+    staleTime: 1000 * 60 * 5,
   });
 }
 

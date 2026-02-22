@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 
@@ -22,10 +22,11 @@ async function enrichTransactions(txns: Transaction[]) {
     allDestinations = await db.select({
       enquiry_id: enquiry_destination.enquiry_id,
       destination_id: enquiry_destination.destination_id,
-      name: destination.name,
+      name: sql<string>`COALESCE(${destination.name}, ${park.name})`,
       country_id: destination.country_id,
     }).from(enquiry_destination)
       .leftJoin(destination, eq(enquiry_destination.destination_id, destination.id))
+      .leftJoin(park, eq(enquiry_destination.destination_id, park.id))
       .where(inArray(enquiry_destination.enquiry_id, enquiryIds));
   }
 
@@ -86,7 +87,7 @@ async function enrichTransactions(txns: Transaction[]) {
     enquiryMap.set(enq.transaction_id, {
       ...enq,
       destinations,
-      holiday_type_name: packageTypeMap.get(enq.holiday_type_id) || enq.holiday_type_id,
+      holiday_type_name: packageTypeMap.get(enq.holiday_type_id) || null,
     });
   }
 

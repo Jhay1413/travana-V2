@@ -4,7 +4,7 @@ import {
   enquiry_board_basis, enquiry_departure_airport, enquiry_departure_port,
   enquiry_cruise_line, enquiry_cruise_destination, enquiry_passenger,
   package_type, destination, resorts, accomodation_list, board_basis, airport,
-  port, cruise_line, cruise_destination, transaction,
+  port, cruise_line, cruise_destination, transaction, park, lodges,
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
@@ -64,20 +64,22 @@ export const enquiryTableRepository = {
       db.select({
         enquiry_id: enquiry_destination.enquiry_id,
         destination_id: enquiry_destination.destination_id,
-        destination_name: destination.name,
+        destination_name: sql<string>`COALESCE(${destination.name}, ${park.name})`,
         country_id: destination.country_id,
       })
         .from(enquiry_destination)
         .leftJoin(destination, eq(enquiry_destination.destination_id, destination.id))
+        .leftJoin(park, eq(enquiry_destination.destination_id, park.id))
         .where(eq(enquiry_destination.enquiry_id, id)),
 
       db.select({
         enquiry_id: enquiry_resorts.enquiry_id,
         resorts_id: enquiry_resorts.resorts_id,
-        resort_name: resorts.name,
+        resort_name: sql<string>`COALESCE(${resorts.name}, ${lodges.lodge_name})`,
       })
         .from(enquiry_resorts)
         .leftJoin(resorts, eq(enquiry_resorts.resorts_id, resorts.id))
+        .leftJoin(lodges, eq(enquiry_resorts.resorts_id, lodges.id))
         .where(eq(enquiry_resorts.enquiry_id, id)),
 
       db.select({

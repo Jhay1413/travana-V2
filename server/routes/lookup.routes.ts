@@ -18,7 +18,7 @@ import {
   cruise_ship,
   cruise_itenary,
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, ilike, and } from "drizzle-orm";
 
 const router = Router();
 
@@ -34,11 +34,22 @@ router.get("/countries", async (_req, res) => {
 router.get("/destinations", async (req, res) => {
   try {
     const countryId = req.query.countryId as string | undefined;
+    const search = req.query.search as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+
+    const conditions = [
+      ...(countryId ? [eq(destination.country_id, countryId)] : []),
+      ...(search ? [ilike(destination.name, `%${search}%`)] : []),
+    ];
+
     let query = db.select().from(destination);
-    if (countryId) {
-      query = query.where(eq(destination.country_id, countryId)) as any;
-    }
-    const rows = await query.orderBy(destination.name);
+    if (conditions.length === 1) query = query.where(conditions[0]) as any;
+    else if (conditions.length > 1) query = query.where(and(...conditions)) as any;
+
+    let ordered = query.orderBy(destination.name) as any;
+    if (limit) ordered = ordered.limit(limit);
+
+    const rows = await ordered;
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

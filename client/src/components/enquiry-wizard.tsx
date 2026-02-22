@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
-import { usePackageTypes, useCountries, useDestinations, useResorts, useParks, useLodges, useBoardBasis, useAirports, useAccommodationTypes, useAllDestinations } from "@/hooks/queries";
+import { usePackageTypes, useCountries, useResorts, useBoardBasis, useAirports, useAccommodationTypes, useDestinationSearch } from "@/hooks/queries";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 const FLEXIBILITY_OPTIONS = [
   "Exact Date",
@@ -83,6 +84,7 @@ interface EnquiryForm {
   cabinType: string;
   preCruiseStayDays: string;
   postCruiseStayDays: string;
+  destinationLabel: string;
 }
 
 const defaultForm: EnquiryForm = {
@@ -116,6 +118,7 @@ const defaultForm: EnquiryForm = {
   cabinType: "",
   preCruiseStayDays: "",
   postCruiseStayDays: "",
+  destinationLabel: "",
 };
 
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
@@ -125,6 +128,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
   const airportRecord = (enquiry.airports as any)?.[0];
 
   const destinationId = destRecord?.destination_id || destRecord?.destination || "";
+  const destinationLabel = destRecord?.destination_name || destRecord?.name || "";
   const countryId = destRecord?.country_id || "";
   const resortId = resortRecord?.resorts_id || resortRecord?.resort || "";
   const boardBasisId = bbRecord?.board_basis_id || bbRecord?.board_basis || "";
@@ -161,6 +165,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     cabinType: enquiry.cabin_type || "",
     preCruiseStayDays: enquiry.pre_cruise_stay ? String(enquiry.pre_cruise_stay) : "",
     postCruiseStayDays: enquiry.post_cruise_stay ? String(enquiry.post_cruise_stay) : "",
+    destinationLabel,
   };
 }
 
@@ -203,17 +208,15 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<EnquiryForm>(defaultForm);
   const [direction, setDirection] = useState(1);
+  const [destSearch, setDestSearch] = useState("");
 
   const { data: countriesData } = useCountries();
-  const { data: destinationsData } = useDestinations(form.country);
+  const { data: destinationsData, isFetching: isDestFetching } = useDestinationSearch(destSearch, form.country || undefined);
   const { data: resortsData } = useResorts(form.destination);
   const { data: boardBasisData } = useBoardBasis();
-  const { data: parksData } = useParks();
-  const { data: lodgesData } = useLodges(form.destination);
   const { data: airportsData } = useAirports();
   const { data: packageTypesData } = usePackageTypes();
   const { data: accommodationTypesData } = useAccommodationTypes();
-  const { data: allDestinationsData } = useAllDestinations();
 
   const holidayTypeName = useMemo(() => {
     if (!form.holidayType || !packageTypesData) return "";
@@ -420,33 +423,21 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-black/60">Park</Label>
-                          <Select value={form.destination} onValueChange={(v) => setForm(prev => ({ ...prev, destination: v, resort: "" }))}>
-                            <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-park">
-                              <SelectValue placeholder="Select park..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(parksData || []).map((p) => (
-                                <SelectItem key={p.id} value={p.id}>{p.name || "Unnamed Park"}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-black/60">Lodge</Label>
-                          <Select value={form.resort} onValueChange={(v) => set("resort", v)} disabled={!form.destination}>
-                            <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-lodge">
-                              <SelectValue placeholder={form.destination ? "Select lodge..." : "Select park first"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(lodgesData || []).map((l) => (
-                                <SelectItem key={l.id} value={l.id}>{l.lodge_name || "Unnamed"} {l.lodge_code ? `(${l.lodge_code})` : ""}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-black/60">Destination</Label>
+                        <SearchableSelect
+                          value={form.destination}
+                          onValueChange={(v) => {
+                            const label = (destinationsData || []).find((d) => d.id === v)?.name || "";
+                            setForm((prev) => ({ ...prev, destination: v, destinationLabel: label }));
+                          }}
+                          selectedLabel={form.destinationLabel}
+                          options={(destinationsData || []).map((d) => ({ value: d.id, label: d.name }))}
+                          onSearch={setDestSearch}
+                          isLoading={isDestFetching}
+                          placeholder="Search destinations..."
+                          data-testid="select-enquiry-destination"
+                        />
                       </div>
                     </>
                   )}
@@ -455,16 +446,19 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                     <>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Cruise Destination</Label>
-                        <Select value={form.cruiseDestination} onValueChange={(v) => set("cruiseDestination", v)}>
-                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-cruise-destination">
-                            <SelectValue placeholder="Select destination..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(allDestinationsData || []).map((d: any) => (
-                              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={form.cruiseDestination}
+                          onValueChange={(v) => {
+                            const label = (destinationsData || []).find((d) => d.id === v)?.name || "";
+                            setForm((prev) => ({ ...prev, cruiseDestination: v, destinationLabel: label }));
+                          }}
+                          selectedLabel={form.destinationLabel}
+                          options={(destinationsData || []).map((d) => ({ value: d.id, label: d.name }))}
+                          onSearch={setDestSearch}
+                          isLoading={isDestFetching}
+                          placeholder="Search destinations..."
+                          data-testid="select-cruise-destination"
+                        />
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
@@ -523,16 +517,19 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Destination</Label>
-                        <Select value={form.destination} onValueChange={(v) => setForm(prev => ({ ...prev, destination: v, resort: "" }))} disabled={!form.country}>
-                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-destination">
-                            <SelectValue placeholder={form.country ? "Select destination..." : "Select country first"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(destinationsData || []).map((d) => (
-                              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={form.destination}
+                          onValueChange={(v) => {
+                            const label = (destinationsData || []).find((d) => d.id === v)?.name || "";
+                            setForm((prev) => ({ ...prev, destination: v, resort: "", destinationLabel: label }));
+                          }}
+                          selectedLabel={form.destinationLabel}
+                          options={(destinationsData || []).map((d) => ({ value: d.id, label: d.name }))}
+                          onSearch={setDestSearch}
+                          isLoading={isDestFetching}
+                          placeholder={form.country ? "Search destinations..." : "Select country first"}
+                          data-testid="select-enquiry-destination"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Resort</Label>

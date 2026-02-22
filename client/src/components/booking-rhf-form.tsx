@@ -29,8 +29,7 @@ import {
   useBoardBasis,
   useAccommodations,
   useCountries,
-  useDestinations,
-  useAllDestinations,
+  useDestinationSearch,
   useResorts,
   usePackageTypes,
   useRoomTypes,
@@ -83,6 +82,8 @@ export function BookingRHFForm({
   });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [destSearch, setDestSearch] = useState("");
+  const [destLabel, setDestLabel] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const skipLodgeResetRef = useRef(false);
   
@@ -106,17 +107,11 @@ export function BookingRHFForm({
   const { data: boardBasisData } = useBoardBasis();
   const { data: roomTypeData } = useRoomTypes();
   const { data: countriesData } = useCountries();
-  const { data: filteredDestinationsData } = useDestinations(country || undefined);
-  const { data: allDestinationsData } = useAllDestinations();
+  const { data: destinationsData, isFetching: isDestFetching } = useDestinationSearch(destSearch, country || undefined);
   const { data: resortsData } = useResorts(destination || undefined);
   const { data: accommodationsData } = useAccommodations(resort || undefined);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(parkId || undefined);
-
-
-
-
-  const destinationsData = country ? filteredDestinationsData : allDestinationsData;
 
   const packageTypeName =
     packageTypesData?.find((p: { id: string; name: string }) => p.id === packageType)?.name ||
@@ -984,8 +979,15 @@ export function BookingRHFForm({
                           })
                         )}
                         value={field.value ?? ""}
-                        onValueChange={field.onChange}
-                        placeholder="Select destination..."
+                        onValueChange={(value) => {
+                          const label = (destinationsData || []).find((d) => d.id === value)?.name || "";
+                          setDestLabel(label);
+                          field.onChange(value);
+                        }}
+                        selectedLabel={destLabel}
+                        onSearch={setDestSearch}
+                        isLoading={isDestFetching}
+                        placeholder="Search destinations..."
                       />
                     </FormControl>
                     <FormMessage />

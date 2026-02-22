@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import { CommandCenterShell } from "@/components/command-center-shell";
@@ -11,11 +11,14 @@ import {
   PoundSterling,
   TrendingUp,
   Users,
-  UserCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -23,9 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useTransactions, useNeonClients, useUsers } from "@/hooks/queries";
-import { useUpdateTransaction } from "@/hooks/mutations";
+import { useTransactions, useNeonClients, useCurrentUser, transactionKeys } from "@/hooks/queries";
+import { useUpdateTransaction, useConvertToBooking } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import { QuoteCreateDialog } from "@/components/quote-create-dialog";
 import type { Transaction } from "@/types/quote";
 
 type PipelineStage = "Enquiry" | "Quoted" | "Booked";
@@ -316,10 +322,37 @@ interface PipelineColumnProps {
   dragFromStage: PipelineStage | null;
 }
 
+const COLUMN_PAGE_SIZE = 10;
+
 function PipelineColumn({ stage, transactions: stageTransactions, getClientName, onDragStart, onDrop, isDragActive, dragFromStage }: PipelineColumnProps) {
   const [isOver, setIsOver] = useState(false);
+  const [displayCount, setDisplayCount] = useState(COLUMN_PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const colors = stageColor(stage);
   const isValidTarget = isDragActive && dragFromStage !== stage;
+
+  // Reset display count when the transaction list changes (e.g. filter applied)
+  useEffect(() => {
+    setDisplayCount(COLUMN_PAGE_SIZE);
+  }, [stageTransactions]);
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && displayCount < stageTransactions.length) {
+          setDisplayCount((prev) => Math.min(prev + COLUMN_PAGE_SIZE, stageTransactions.length));
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [displayCount, stageTransactions.length]);
+
+  const visibleTransactions = stageTransactions.slice(0, displayCount);
 
   const handleDragOver = (e: React.DragEvent) => {
     if (!isValidTarget) return;
@@ -381,15 +414,24 @@ function PipelineColumn({ stage, transactions: stageTransactions, getClientName,
             </p>
           </div>
         ) : (
-          stageTransactions.map((transaction) => (
-            <PipelineCard
-              key={transaction.id}
-              transaction={transaction}
-              stage={stage}
-              clientName={getClientName(transaction.client_id)}
-              onDragStart={onDragStart}
-            />
-          ))
+          <>
+            {visibleTransactions.map((transaction) => (
+              <PipelineCard
+                key={transaction.id}
+                transaction={transaction}
+                stage={stage}
+                clientName={getClientName(transaction.client_id)}
+                onDragStart={onDragStart}
+              />
+            ))}
+            {/* Sentinel for infinite scroll */}
+            <div ref={sentinelRef} className="h-1" />
+            {displayCount < stageTransactions.length && (
+              <p className="text-center text-[10px] text-black/30 py-1">
+                Showing {displayCount} of {stageTransactions.length}
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -400,13 +442,28 @@ export default function PipelinePage() {
   const { role, setRole } = useRole();
   const { data: transactions, isLoading: transactionsLoading } = useTransactions();
   const { data: neonClientsData } = useNeonClients({ page: 1, limit: 200 });
-  const { data: users } = useUsers();
+  const { data: currentUser } = useCurrentUser();
   const updateTransactionMutation = useUpdateTransaction();
+  const convertToBookingMutation = useConvertToBooking();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [, navigate] = useLocation();
 
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("all");
+
+  // Conversion dialogs
+  const [quoteDialog, setQuoteDialog] = useState<{ transactionId: string; clientId: string; userId: string } | null>(null);
+  const [bookingDialog, setBookingDialog] = useState<{ quoteId: string } | null>(null);
+  const [haysRef, setHaysRef] = useState("");
+  const [tourRef, setTourRef] = useState("");
+
+  // Default to current user once loaded
+  useEffect(() => {
+    if (currentUser?.id && !selectedAgentId) {
+      setSelectedAgentId(currentUser.id);
+    }
+  }, [currentUser?.id]);
 
   const [dragState, setDragState] = useState<{
     active: boolean;
@@ -426,10 +483,29 @@ export default function PipelinePage() {
     return map;
   }, [neonClientsData]);
 
+  const ACTIVE_QUOTE_STATUSES = new Set([
+    "QUOTE_IN_PROGRESS",
+    "QUOTE_CALL",
+    "AWAITING_DECISION",
+    "HOT_QUOTE",
+    "QUOTE_READY",
+    "REQUOTE",
+    "NEW_LEAD",
+  ]);
+
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
     let result = transactions;
-    if (selectedAgentId !== "all") {
+
+    // Quoted column: only show active, non-free-quote transactions
+    result = result.filter((t) => {
+      if (t.status !== "on_quote") return true;
+      const nonFreeQuotes = (t.quotes || []).filter((q: any) => !q.isFreeQuote);
+      if (nonFreeQuotes.length === 0) return false;
+      return nonFreeQuotes.some((q: any) => ACTIVE_QUOTE_STATUSES.has(q.quote_status));
+    });
+
+    if (selectedAgentId && selectedAgentId !== "all") {
       result = result.filter(
         (t) => t.agent_id === selectedAgentId || t.user_id === selectedAgentId
       );
@@ -495,6 +571,30 @@ export default function PipelinePage() {
     const transaction = allTransactions.find((t) => t.id === transactionId);
     if (!transaction) return;
 
+    // Enquiry → Quoted: open create-quote dialog
+    if (fromStage === "Enquiry" && toStage === "Quoted") {
+      setQuoteDialog({
+        transactionId,
+        clientId: transaction.client_id || "",
+        userId: transaction.user_id || currentUser?.id || "",
+      });
+      return;
+    }
+
+    // Quoted → Booked: open convert-to-booking dialog
+    if (fromStage === "Quoted" && toStage === "Booked") {
+      const activeQuote = (transaction.quotes || []).find((q: any) => !q.isFreeQuote);
+      if (!activeQuote) {
+        toast({ title: "No quote found on this transaction", variant: "destructive" });
+        return;
+      }
+      setHaysRef("");
+      setTourRef("");
+      setBookingDialog({ quoteId: activeQuote.id });
+      return;
+    }
+
+    // All other moves: update status directly
     const newStatus = STAGE_TO_STATUS[toStage];
     updateTransactionMutation.mutate(
       { id: transactionId, data: { status: newStatus } as any },
@@ -514,7 +614,7 @@ export default function PipelinePage() {
         },
       }
     );
-  }, [transactions, updateTransactionMutation, toast]);
+  }, [transactions, updateTransactionMutation, currentUser, toast]);
 
   const handleDragEnd = useCallback(() => {
     setDragState({ active: false, fromStage: null, transactionId: null });
@@ -564,29 +664,21 @@ export default function PipelinePage() {
           ))}
         </SelectContent>
       </Select>
-      <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-        <SelectTrigger
-          className="h-10 w-[180px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+      {selectedAgentId && (
+        <UserReassignSelect
+          value={selectedAgentId}
+          onValueChange={setSelectedAgentId}
+          allowAll
+          allLabel="All Agents"
+          className="w-[190px]"
           data-testid="select-agent-filter"
-        >
-          <UserCircle className="mr-2 h-4 w-4 shrink-0 opacity-60" />
-          <SelectValue placeholder="Select Agent" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all" data-testid="select-agent-all">All Agents</SelectItem>
-          {(users || []).map((u) => (
-            <SelectItem key={u.id} value={u.id} data-testid={`select-agent-${u.id}`}>
-              {u.firstName && u.lastName
-                ? `${u.firstName} ${u.lastName}`
-                : u.name || u.email}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        />
+      )}
     </>
   );
 
   return (
+    <>
     <CommandCenterShell
       active="pipeline"
       title="Pipeline"
@@ -666,5 +758,82 @@ export default function PipelinePage() {
         )}
       </motion.div>
     </CommandCenterShell>
+
+    {quoteDialog && (
+      <QuoteCreateDialog
+        transactionId={quoteDialog.transactionId}
+        clientId={quoteDialog.clientId}
+        userId={quoteDialog.userId}
+        open={!!quoteDialog}
+        onOpenChange={(open) => { if (!open) setQuoteDialog(null); }}
+        onSuccess={() => {
+          setQuoteDialog(null);
+          queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+          toast({ title: "Quote created", description: "Transaction moved to Quoted." });
+        }}
+      />
+    )}
+
+    {/* Quoted → Booked: convert to booking */}
+    <Dialog
+      open={!!bookingDialog}
+      onOpenChange={(open) => {
+        if (!open) { setBookingDialog(null); setHaysRef(""); setTourRef(""); }
+      }}
+    >
+      <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl">
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold">Convert to Booking</DialogTitle>
+          <DialogDescription className="text-xs text-black/55">
+            Enter the booking references to confirm this conversion.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-3 grid gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-black/60">HAYS Reference</Label>
+            <Input
+              value={haysRef}
+              onChange={(e) => setHaysRef(e.target.value)}
+              placeholder="e.g. HAYS-12345"
+              className="h-9 rounded-xl border-black/10 bg-white/70"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-black/60">Tour Reference</Label>
+            <Input
+              value={tourRef}
+              onChange={(e) => setTourRef(e.target.value)}
+              placeholder="e.g. TOUR-67890"
+              className="h-9 rounded-xl border-black/10 bg-white/70"
+            />
+          </div>
+          <Button
+            className="h-9 w-full rounded-xl bg-emerald-600 text-white hover:bg-emerald-600/90"
+            disabled={convertToBookingMutation.isPending}
+            onClick={() => {
+              if (!bookingDialog) return;
+              convertToBookingMutation.mutate(
+                { quoteId: bookingDialog.quoteId, haysRef, supplierRef: tourRef },
+                {
+                  onSuccess: () => {
+                    setBookingDialog(null);
+                    setHaysRef("");
+                    setTourRef("");
+                    queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+                    toast({ title: "Quote converted to booking" });
+                  },
+                  onError: () => {
+                    toast({ title: "Failed to convert", variant: "destructive" });
+                  },
+                }
+              );
+            }}
+          >
+            {convertToBookingMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Convert to Booking"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

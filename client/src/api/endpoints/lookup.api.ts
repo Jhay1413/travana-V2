@@ -122,8 +122,12 @@ export const lookupApi = {
     const { data } = await axios.get<LookupCountry[]>("/api/lookup/countries");
     return data;
   },
-  getDestinations: async (countryId?: string): Promise<LookupDestination[]> => {
-    const { data } = await axios.get<LookupDestination[]>("/api/lookup/destinations", { params: countryId ? { countryId } : {} });
+  getDestinations: async (countryId?: string, search?: string, limit?: number): Promise<LookupDestination[]> => {
+    const params: Record<string, any> = {};
+    if (countryId) params.countryId = countryId;
+    if (search) params.search = search;
+    if (limit) params.limit = limit;
+    const { data } = await axios.get<LookupDestination[]>("/api/lookup/destinations", { params });
     return data;
   },
   getResorts: async (destinationId?: string): Promise<LookupResort[]> => {

@@ -82,10 +82,12 @@ export function ClientEnquiriesTab({
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid={`text-enquiry-meta-${idx}`}>
-                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70">
-                    {enq.holiday_type_name || enq.holiday_type_id}
-                  </span>
-                  {enq.destinations?.[0] && <span>{enq.destinations[0]?.name || enq.destinations[0]?.destination_id || "—"}</span>}
+                  {enq.holiday_type_name && (
+                    <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70">
+                      {enq.holiday_type_name}
+                    </span>
+                  )}
+                  {enq.destinations?.[0]?.name && <span>{enq.destinations[0].name}</span>}
                   {enq.travel_date && <span>· {new Date(enq.travel_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
                   <span>· {enq.adults || 0}A{(enq.children || 0) > 0 ? ` ${enq.children}C` : ""}{(enq.infants || 0) > 0 ? ` ${enq.infants}I` : ""}</span>
                   {enq.no_of_nights && <span>· {enq.no_of_nights}N</span>}
@@ -100,7 +102,7 @@ export function ClientEnquiriesTab({
                   data-testid={`button-pin-enquiry-${idx}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.title || "", subtitle: `${client?.name || ""}${enq.destinations?.[0] ? " · " + (enq.destinations[0]?.name || enq.destinations[0]?.destination_id) : enq.holiday_type_name ? " · " + enq.holiday_type_name : ""}` });
+                    toggleFavoriteMutation.mutate({ itemType: "enquiry", itemId: enq.id, label: enq.title || "", subtitle: `${client?.name || ""}${enq.destinations?.[0]?.name ? " · " + enq.destinations[0].name : enq.holiday_type_name ? " · " + enq.holiday_type_name : ""}` });
                   }}
                   title={userFavorites?.some((f: Favorite) => f.itemType === "enquiry" && f.itemId === enq.id) ? "Unpin" : "Pin to dashboard"}
                 >
