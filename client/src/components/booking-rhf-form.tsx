@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus } from "lucide-react";
+import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
 import type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/types/booking";
 
@@ -35,6 +36,9 @@ import {
   useRoomTypes,
   useParks,
   useLodges,
+  useCruiseLines,
+  useShips,
+  useCruiseItineraries,
   lookupKeys,
 } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
@@ -103,6 +107,14 @@ export function BookingRHFForm({
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(parkId || undefined);
 
+  const { data: cruiseLinesData } = useCruiseLines();
+  const selectedCruiseLineId = cruiseLinesData?.find((l) => l.name === watch("cruiseLine"))?.id;
+  const { data: shipsData } = useShips(selectedCruiseLineId);
+  const selectedShipId = shipsData?.find((s) => s.name === watch("shipName"))?.id;
+  const { data: cruiseItineraries, isFetching: isFetchingCruiseDates } = useCruiseItineraries(selectedShipId);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const destinationsData = country ? filteredDestinationsData : allDestinationsData;
 
   const packageTypeName =
@@ -169,243 +181,19 @@ export function BookingRHFForm({
   );
 
   const handleJsonUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const content = (ev.target?.result as string) || "";
-      const toIsoDate = (d: string | undefined): string => {
-        if (!d) return "";
-        const match = d.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
-        if (match) {
-          const [, day, month, year] = match;
-          return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-        }
-        return d;
-      };
-      try {
-        const data = JSON.parse(content);
-
-        const isScraperFormat =
-          Array.isArray(data.flights) ||
-          data.sales_price !== undefined ||
-          data.departure_airport !== undefined ||
-          data.lodge_id !== undefined ||
-          data.lodge_type !== undefined ||
-          data.lodge_code !== undefined ||
-          data.lodge_park_name !== undefined ||
-          data.cottage_id !== undefined ||
-          data.hot_tub !== undefined ||
-          data.pets !== undefined ||
-          Array.isArray(data.lodge_images) ||
-          data.board_basis_name !== undefined;
-
-        if (isScraperFormat) {
-          try {
-            const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
-            const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
-
-            const result = mapScraperJsonToFormFields(data);
-
-            const resolveAirportId = (airportText: string | undefined): string => {
-              if (!airportText || !airportsData) return "";
-              const needle = airportText.trim().toLowerCase();
-              if (!needle) return "";
-              const exact = airportsData.find(
-                (a: { id: string; airport_name: string; airport_code?: string | null }) =>
-                  (a.airport_name || "").trim().toLowerCase() === needle ||
-                  (a.airport_code || "").trim().toLowerCase() === needle
-              );
-              if (exact) return exact.id;
-              const partial = airportsData.find(
-                (a: { id: string; airport_name: string; airport_code?: string | null }) => {
-                  const name = (a.airport_name || "").trim().toLowerCase();
-                  const code = (a.airport_code || "").trim().toLowerCase();
-                  return (
-                    name.includes(needle) ||
-                    needle.includes(name) ||
-                    (code.length > 0 && (code.includes(needle) || needle.includes(code)))
-                  );
-                }
-              );
-              return partial?.id || "";
-            };
-
-            const hasLodgeFieldsInJson = !!(
-              data.lodge_type ||
-              data.lodge_code ||
-              data.lodge_id ||
-              data.lodge_park_name ||
-              Array.isArray(data.lodge_images) ||
-              data.cottage_id !== undefined ||
-              data.hot_tub !== undefined ||
-              data.pets !== undefined
-            );
-            const currentPackageType = form.getValues("packageType");
-            const currentPackageName =
-              packageTypesData?.find(
-                (p: { id: string; name: string }) => p.id === currentPackageType
-              )?.name || currentPackageType;
-            const isCurrentFormLodge = currentPackageName === "Hot Tub Break";
-            const tourOp = (data.tour_operator || result.fields.tourOperator || "").toLowerCase().trim();
-            const lodgeTourOperators = [
-              "hoseasons", "haven", "parkdean", "park dean", "butlins",
-              "center parcs", "centre parcs", "away resorts", "park holidays",
-            ];
-            const isLodgeTourOperator = lodgeTourOperators.some((op) => tourOp.includes(op));
-            const isLodgeQuote = hasLodgeFieldsInJson || isCurrentFormLodge || isLodgeTourOperator;
-
-            const lodgeParkName = data.lodge_park_name || data.resort || result.fields.resort || "";
-            const lodgeCodeVal = data.lodge_code || data.cottage_id || null;
-            const lodgeName = data.accommodation || result.fields.accommodation || "";
-            const lodgeType = data.lodge_type || "";
-            const parkCode = data.lodge_id || null;
-
-            const mappingInput: Record<string, unknown> = {
-              country: result.fields.country,
-              destination: result.fields.destination,
-              resort: result.fields.resort,
-              accommodation: result.fields.accommodation,
-              boardBasis: result.fields.boardBasis,
-              tourOperator: result.fields.tourOperator,
-              outboundDepartAirport: result.fields.outboundDepartAirport,
-              outboundArriveAirport: result.fields.outboundArriveAirport,
-              inboundDepartAirport: result.fields.inboundDepartAirport,
-              inboundArriveAirport: result.fields.inboundArriveAirport,
-              roomType: result.fields.roomType,
-              isLodgeQuote,
-              lodgeCode: lodgeCodeVal,
-              lodgeName: isLodgeQuote ? (lodgeName || undefined) : undefined,
-              parkName: isLodgeQuote ? (lodgeParkName || undefined) : undefined,
-              parkCode,
-            };
-
-            const idMapping = await jsonMapperApi.mapToIds(mappingInput);
-
-            if (idMapping.warnings.length > 0) {
-              toast({
-                title: idMapping.warnings.some((w: string) => w.startsWith("Created"))
-                  ? "Entities created"
-                  : "Some values need attention",
-                description: idMapping.warnings.join(", "),
-              });
-            } else {
-              toast({ title: "JSON imported successfully", description: "All values mapped to database IDs" });
-            }
-
-            const idOnlyFields = new Set([
-              "country", "destination", "resort", "accommodation", "accommodationId",
-              "boardBasis", "boardBasisId", "tourOperator", "tourOperatorId",
-              "outboundDepartAirport", "outboundDepartAirportId",
-              "outboundArriveAirport", "outboundArriveAirportId",
-              "inboundDepartAirport", "inboundDepartAirportId",
-              "inboundArriveAirport", "inboundArriveAirportId",
-              "roomType",
-            ]);
-            for (const [k, v] of Object.entries(result.fields)) {
-              if (v !== "" && v !== null && v !== undefined && !idOnlyFields.has(k)) {
-                setValue(k as keyof BookingFormValues, v as never);
-              }
-            }
-
-            if (idMapping.countryId) setValue("country", idMapping.countryId);
-            if (idMapping.destinationId) setValue("destination", idMapping.destinationId);
-            if (idMapping.resortId) setValue("resort", idMapping.resortId);
-            if (idMapping.accommodationId) setValue("accommodationId", idMapping.accommodationId);
-            if (idMapping.boardBasisId) setValue("boardBasisId", idMapping.boardBasisId);
-            if (idMapping.tourOperatorId) setValue("tourOperatorId", idMapping.tourOperatorId);
-            if (idMapping.outboundDepartAirportId) setValue("outboundDepartAirportId", idMapping.outboundDepartAirportId);
-            if (idMapping.outboundArriveAirportId) setValue("outboundArriveAirportId", idMapping.outboundArriveAirportId);
-            if (idMapping.inboundDepartAirportId) setValue("inboundDepartAirportId", idMapping.inboundDepartAirportId);
-            if (idMapping.inboundArriveAirportId) setValue("inboundArriveAirportId", idMapping.inboundArriveAirportId);
-            if (idMapping.roomTypeId) setValue("roomType", idMapping.roomTypeId);
-
-            const serverDetectedLodge = (idMapping as unknown as Record<string, unknown>).isLodge === true;
-            if (isLodgeQuote || serverDetectedLodge) {
-              const hotTubPackage = packageTypesData?.find(
-                (p: { id: string; name: string }) => p.name === "Hot Tub Break"
-              );
-              if (hotTubPackage) setValue("packageType", hotTubPackage.id);
-              if (idMapping.parkId) setValue("parkId", idMapping.parkId);
-              if (idMapping.lodgeId) setValue("lodgeId", idMapping.lodgeId);
-              setValue("country", "");
-              setValue("destination", "");
-              setValue("resort", "");
-              setValue("accommodationId", "");
-
-              queryClient.invalidateQueries({ queryKey: lookupKeys.parks });
-              if (idMapping.parkId) {
-                queryClient.invalidateQueries({ queryKey: lookupKeys.lodges(idMapping.parkId as string) });
-              }
-            }
-
-            setValue(
-              "outboundConnectingLegs",
-              result.outboundConnectingLegs.map((leg) => ({
-                ...leg,
-                departAirportId: resolveAirportId(leg.departAirport),
-                arriveAirportId: resolveAirportId(leg.arriveAirport),
-              }))
-            );
-            setValue(
-              "inboundConnectingLegs",
-              result.inboundConnectingLegs.map((leg) => ({
-                ...leg,
-                departAirportId: resolveAirportId(leg.departAirport),
-                arriveAirportId: resolveAirportId(leg.arriveAirport),
-              }))
-            );
-          } catch (error) {
-            toast({
-              title: "Error processing JSON",
-              description: error instanceof Error ? error.message : "Failed to map values.",
-              variant: "destructive",
-            });
-          }
-          return;
-        }
-
-        const setIfPresent = <K extends keyof BookingFormValues>(key: K, val: unknown) => {
-          if (val !== undefined && val !== null && val !== "") setValue(key, val as BookingFormValues[K]);
-        };
-        setIfPresent("packageType", data.packageType || data.package_type);
-        setIfPresent("quoteTitle", data.quoteTitle || data.quote_title || data.title);
-        setIfPresent("travelDate", toIsoDate(data.travelDate || data.travel_date || data.departureDate));
-        setIfPresent("passengersAdults", data.passengers?.adults || data.adults || data.passengersAdults);
-        setIfPresent("passengersChildren", data.passengers?.children || data.children || data.passengersChildren);
-        setIfPresent("passengersInfants", data.passengers?.infants || data.infants || data.passengersInfants);
-        setIfPresent("checkInDate", toIsoDate(data.checkInDate || data.check_in_date || data.checkin));
-        setIfPresent("checkInTime", data.checkInTime || data.check_in_time);
-        setIfPresent("nights", data.nights || data.duration);
-        setIfPresent("transferType", data.transferType || data.transfer_type || data.transfers);
-        setIfPresent("preBookedSeats", data.preBookedSeats || data.pre_booked_seats || data.seats);
-        setIfPresent("flightMeals", data.flightMeals || data.flight_meals || data.meals);
-        setIfPresent("outboundDepartDate", toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date));
-        setIfPresent("outboundDepartTime", data.flights?.outbound?.departTime || data.outbound?.time);
-        setIfPresent("outboundArriveDate", toIsoDate(data.flights?.outbound?.arriveDate));
-        setIfPresent("outboundArriveTime", data.flights?.outbound?.arriveTime);
-        setIfPresent("inboundDepartDate", toIsoDate(data.flights?.inbound?.departDate || data.inbound?.date));
-        setIfPresent("inboundDepartTime", data.flights?.inbound?.departTime || data.inbound?.time);
-        setIfPresent("inboundArriveDate", toIsoDate(data.flights?.inbound?.arriveDate));
-        setIfPresent("inboundArriveTime", data.flights?.inbound?.arriveTime);
-        setIfPresent("price", data.commissions?.price || data.price || data.total);
-        setIfPresent("commission", data.commissions?.commission || data.commission);
-        setIfPresent("discount", data.commissions?.discount || data.discount);
-        setIfPresent("serviceCharge", data.commissions?.serviceCharge || data.serviceCharge || data.service_charge);
-        setIfPresent("pricePerPerson", data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp);
+    handleJsonUploadUtil(file, {
+      form,
+      airportsData,
+      packageTypesData,
+      queryClient,
+      lookupKeys,
+      toast,
+      setImageUrls,
+      fallbackFieldMapper: (data, setIfPresent) => {
         setIfPresent("haysRef", data.haysRef || data.hays_ref);
         setIfPresent("supplierRef", data.supplierRef || data.supplier_ref);
-        toast({ title: "JSON imported", description: "Form populated from JSON." });
-      } catch (err) {
-        toast({
-          title: "Error parsing JSON",
-          description: err instanceof Error ? err.message : "Unknown error occurred",
-          variant: "destructive",
-        });
-      }
-    };
-    reader.onerror = () => {
-      toast({ title: "Error reading file", description: "Could not read the file.", variant: "destructive" });
-    };
-    reader.readAsText(file);
+      },
+    });
   };
 
   const {
@@ -629,7 +417,89 @@ export function BookingRHFForm({
             />
           </div>
         </div>
+        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+          <SectionHeader icon={ImagePlus} title="Quote Images" />
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 0) {
+                    setImageFiles((prev) => [...prev, ...files]);
+                  }
+                  if (imageInputRef.current) imageInputRef.current.value = "";
+                }}
+                className="hidden"
+                data-testid="input-quote-images"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-full rounded-xl border-black/10 bg-white/70 text-sm"
+                onClick={() => imageInputRef.current?.click()}
+                data-testid="button-add-images"
+              >
+                <ImagePlus className="mr-2 h-4 w-4" />
+                Add images
+              </Button>
+            </div>
 
+            {(imageFiles.length > 0 || imageUrls.length > 0) && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                {imageFiles.map((file, idx) => (
+                  <div key={`file-${idx}`} className="group relative overflow-hidden rounded-xl border border-black/10">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={file.name}
+                      className="h-20 w-full object-cover"
+                      data-testid={`img-quote-preview-file-${idx}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setImageFiles((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                      data-testid={`button-remove-image-file-${idx}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white truncate">
+                      {file.name}
+                    </div>
+                  </div>
+                ))}
+                {imageUrls.map((url, idx) => (
+                  <div key={`url-${idx}`} className="group relative overflow-hidden rounded-xl border border-black/10">
+                    <img
+                      src={url}
+                      alt={`Image ${idx + 1}`}
+                      className="h-20 w-full object-cover"
+                      data-testid={`img-quote-preview-url-${idx}`}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "";
+                        (e.target as HTMLImageElement).alt = "Failed to load";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setImageUrls((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                      data-testid={`button-remove-image-url-${idx}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white">
+                      From JSON
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
           <SectionHeader icon={Users} title="Travel Details" />
           <div className="grid gap-3 md:grid-cols-3">
@@ -956,8 +826,6 @@ export function BookingRHFForm({
             <div className="grid gap-3 md:grid-cols-2">
               {[
                 { name: "cruiseTitle" as const, label: "Cruise Title" },
-                { name: "cruiseLine" as const, label: "Cruise Line" },
-                { name: "shipName" as const, label: "Ship Name" },
                 { name: "cabinType" as const, label: "Cabin Type" },
                 { name: "embarkation" as const, label: "Embarkation Port" },
                 { name: "debarkation" as const, label: "Debarkation Port" },
@@ -984,12 +852,82 @@ export function BookingRHFForm({
 
               <FormField
                 control={control}
+                name="cruiseLine"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-medium text-black/60">Cruise Line</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        options={(cruiseLinesData || []).map((l) => ({ value: l.name ?? "", label: l.name ?? "" }))}
+                        value={field.value ?? ""}
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          setValue("shipName", "");
+                          setValue("cruiseDate", "");
+                        }}
+                        placeholder="Select cruise line..."
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={control}
+                name="shipName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-medium text-black/60">Ship Name</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        options={(shipsData || []).map((s) => ({ value: s.name ?? "", label: s.name ?? "" }))}
+                        value={field.value ?? ""}
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          setValue("cruiseDate", "");
+                        }}
+                        placeholder={!selectedCruiseLineId ? "Select a cruise line first" : "Select ship..."}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={control}
                 name="cruiseDate"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs font-medium text-black/60">Cruise Date</FormLabel>
                     <FormControl>
-                      <DatePicker value={field.value ?? ""} onChange={field.onChange} />
+                      <Select
+                        disabled={!cruiseItineraries?.length}
+                        value={field.value ?? ""}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
+                          <SelectValue
+                            placeholder={
+                              !selectedCruiseLineId
+                                ? "Select a cruise line first"
+                                : !selectedShipId
+                                  ? "Select a ship first"
+                                  : isFetchingCruiseDates
+                                    ? "Loading..."
+                                    : "No voyages available for this ship"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(cruiseItineraries || []).map((it) => (
+                            <SelectItem key={it.id} value={it.date}>
+                              {it.date}{it.departure_port ? ` — ${it.departure_port}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1018,7 +956,7 @@ export function BookingRHFForm({
           </div>
         )}
 
-        {!isHotTubBreak && (
+        {!isHotTubBreak && !isCruise && (
           <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
             <SectionHeader icon={MapPin} title="Destination & Accommodation" />
             <div className="grid gap-3 md:grid-cols-2">

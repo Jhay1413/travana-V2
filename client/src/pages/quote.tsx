@@ -90,8 +90,6 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
     const imgs = quoteData?.images || [];
     return imgs.map((img: DealImage) => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary }));
   }, [quoteData]);
-  const primaryImage = useMemo(() => images.find((img: { isPrimary: boolean | null }) => img.isPrimary) || images[0], [images]);
-  const galleryImages = useMemo(() => images.filter((img: { id: string }) => img.id !== primaryImage?.id), [images, primaryImage]);
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
@@ -208,51 +206,9 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
         <div className="mt-4" data-testid="layout-quote-body">
           <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-itinerary">
-              <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
+              <div className="flex flex-col gap-4" data-testid="layout-itinerary-hero">
                 <div className="grid content-start gap-1.5" data-testid="col-itinerary-media">
-                  <div className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
-                    {primaryImage ? (
-                      <>
-                        <img
-                          src={primaryImage.url}
-                          alt=""
-                          className="absolute inset-0 h-full w-full object-cover"
-                          data-testid="img-itinerary-hero-photo"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0" aria-hidden />
-                        <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white" data-testid="badge-main-image">
-                          <Star className="h-3 w-3 fill-current" /> Main
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-xs text-black/40" data-testid="placeholder-no-hero">
-                        No images
-                      </div>
-                    )}
-                  </div>
-
-                  {galleryImages.length > 0 && (
-                    <div className="grid grid-cols-3 gap-1.5" data-testid="grid-itinerary-gallery">
-                      {galleryImages.map((img: { id: string; url: string; isPrimary: boolean | null }, idx: number) => (
-                        <button
-                          key={img.id}
-                          type="button"
-                          className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
-                          data-testid={`button-gallery-image-${idx}`}
-                          onClick={() => {}}
-                          title="Click to set as main image"
-                        >
-                          <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100" aria-hidden />
-                          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 bg-black/50 py-0.5 text-[8px] font-semibold text-white opacity-0 transition group-hover:opacity-100" data-testid={`label-set-main-${idx}`}>
-                            <Star className="h-2.5 w-2.5" /> Set as main
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-3 rounded-2xl border border-black/10 bg-white/60 p-2.5" data-testid="card-quote-tags-inline">
+                  <div className="rounded-2xl border border-black/10 bg-white/60 p-2.5" data-testid="card-quote-tags-inline">
                     <div className="flex items-center justify-between">
                       <div className="text-[11px] font-semibold" data-testid="text-tags-title-inline">Tags</div>
                       <Tag className="h-3 w-3 text-black/35" aria-hidden />
@@ -408,6 +364,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                       </Button>
                     </div>
                   </div>
+
                 </div>
 
                 <div className="min-w-0" data-testid="section-itinerary-summary">
@@ -740,6 +697,25 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                   )}
 
                   <QuoteNotesSection transactionId={quote.transaction_id} />
+
+                  {images.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2" data-testid="grid-quote-images">
+                      {images.map((img: { id: string; url: string; isPrimary: boolean | null }, idx: number) => (
+                        <div
+                          key={img.id}
+                          className="relative h-24 w-24 flex-none overflow-hidden rounded-xl border border-black/10 bg-black/[0.03]"
+                          data-testid={`img-quote-${idx}`}
+                        >
+                          <img src={img.url} alt="" className="h-full w-full object-cover" />
+                          {img.isPrimary && (
+                            <div className="absolute left-1 top-1 flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-semibold text-white" data-testid="badge-primary-image">
+                              <Star className="h-2.5 w-2.5 fill-current" /> Main
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>

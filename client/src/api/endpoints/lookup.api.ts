@@ -80,6 +80,25 @@ export interface LookupRoomType {
   name: string | null;
 }
 
+export interface LookupCruiseLine {
+  id: string;
+  name: string | null;
+}
+
+export interface LookupCruiseShip {
+  id: string;
+  name: string | null;
+  cruise_line_id: string | null;
+}
+
+export interface LookupCruiseItinerary {
+  id: string;
+  ship_id: string | null;
+  itenary: string | null;
+  departure_port: string;
+  date: string;
+}
+
 export interface AccommodationImage {
   id: string;
   accommodation_id: string;
@@ -147,6 +166,19 @@ export const lookupApi = {
   getLodgeImages: async (lodgeId?: string): Promise<LodgeImage[]> => {
     if (!lodgeId) return [];
     const { data } = await axios.get<LodgeImage[]>("/api/lookup/lodge-images", { params: { lodgeId } });
+    return data;
+  },
+  getCruiseLines: async (): Promise<LookupCruiseLine[]> => {
+    const { data } = await axios.get<LookupCruiseLine[]>("/api/lookup/cruise-lines");
+    return data;
+  },
+  getShips: async (cruiseLineId?: string): Promise<LookupCruiseShip[]> => {
+    const { data } = await axios.get<LookupCruiseShip[]>("/api/lookup/ships", { params: cruiseLineId ? { cruiseLineId } : {} });
+    return data;
+  },
+  getCruiseItineraries: async (shipId?: string): Promise<LookupCruiseItinerary[]> => {
+    if (!shipId) return [];
+    const { data } = await axios.get<LookupCruiseItinerary[]>("/api/lookup/cruise-itineraries", { params: { shipId } });
     return data;
   },
 };

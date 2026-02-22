@@ -7,7 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes, useParks, useLodges } from "@/hooks/queries";
+import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes, useParks, useLodges, useCruiseLines, useShips, useCruiseItineraries } from "@/hooks/queries";
 import type { LookupCountry, LookupDestination, LookupResort, LookupAccommodation, LookupBoardBasis } from "@/api/endpoints/lookup.api";
 
 export interface FlightLeg {
@@ -192,6 +192,11 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
   const { data: resortsData } = useResorts(form.destination || undefined);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(form.parkName || undefined);
+  const { data: cruiseLinesData } = useCruiseLines();
+  const selectedCruiseLineId = cruiseLinesData?.find(l => l.name === form.cruiseLine)?.id;
+  const { data: shipsData } = useShips(selectedCruiseLineId);
+  const selectedShipId = shipsData?.find(s => s.name === form.shipName)?.id;
+  const { data: cruiseItineraries, isFetching: isFetchingCruiseDates } = useCruiseItineraries(selectedShipId);
 
   const destinationsData = form.country ? filteredDestinationsData : allDestinationsData;
 
@@ -490,32 +495,57 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Cruise Line</Label>
-              <Input
-                placeholder="e.g. Royal Caribbean"
+              <SearchableSelect
+                options={(cruiseLinesData || []).map(l => ({ value: l.name ?? l.id, label: l.name ?? l.id }))}
                 value={form.cruiseLine}
-                onChange={(e) => set("cruiseLine", e.target.value)}
-                className="h-9 rounded-xl border-black/10 bg-white/70"
+                onValueChange={(name) => {
+                  set("cruiseLine", name);
+                  set("shipName", "");
+                  set("cruiseDate", "");
+                }}
+                placeholder="Select cruise line..."
                 data-testid={`${prefix}-input-cruise-line`}
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Ship Name</Label>
-              <Input
-                placeholder="e.g. Harmony of the Seas"
+              <SearchableSelect
+                options={(shipsData || []).map(s => ({ value: s.name ?? s.id, label: s.name ?? s.id }))}
                 value={form.shipName}
-                onChange={(e) => set("shipName", e.target.value)}
-                className="h-9 rounded-xl border-black/10 bg-white/70"
+                onValueChange={(name) => {
+                  set("shipName", name);
+                  set("cruiseDate", "");
+                }}
+                placeholder={selectedCruiseLineId ? "Select ship..." : "Select cruise line first"}
                 data-testid={`${prefix}-input-ship-name`}
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Cruise Date</Label>
-              <DatePicker
+              <Select
                 value={form.cruiseDate}
-                onChange={(v) => set("cruiseDate", v)}
-                placeholder="Pick a date"
-                data-testid={`${prefix}-input-cruise-date`}
-              />
+                onValueChange={(v) => set("cruiseDate", v)}
+                disabled={!cruiseItineraries?.length}
+              >
+                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid={`${prefix}-input-cruise-date`}>
+                  <SelectValue placeholder={
+                    !selectedCruiseLineId
+                      ? "Select a cruise line first"
+                      : !selectedShipId
+                        ? "Select a ship first"
+                        : isFetchingCruiseDates
+                          ? "Loading..."
+                          : "No voyages available for this ship"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {(cruiseItineraries || []).map(it => (
+                    <SelectItem key={it.id} value={it.date}>
+                      {it.date}{it.departure_port ? ` — ${it.departure_port}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Cabin Type</Label>

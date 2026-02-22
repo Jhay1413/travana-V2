@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 
@@ -31,25 +31,54 @@ async function enrichTransactions(txns: Transaction[]) {
 
   const quoteIds = allQuotes.map(q => q.id);
   const bookingIds = allBookings.map(b => b.id);
+  const lodgeIds = allBookings.map(b => b.lodge_id).filter((id): id is string => id !== null);
   const ownerIds = [...quoteIds, ...bookingIds];
-  let allImages: any[] = [];
+  let allDealImages: any[] = [];
+  let allQuoteImages: any[] = [];
+  let allAccomImages: any[] = [];
+  let allLodgeImages: any[] = [];
+  const fetchPromises: Promise<any>[] = [];
   if (ownerIds.length > 0) {
-    const [dealImgs, quoteImgs] = await Promise.all([
-      db.select().from(deal_images).where(inArray(deal_images.owner_id, ownerIds)),
-      quoteIds.length > 0
-        ? db.select().from(quoteImages).where(inArray(quoteImages.quoteId, quoteIds))
-        : Promise.resolve([]),
-    ]);
-    allImages = [
-      ...dealImgs,
-      ...quoteImgs.map(qi => ({
-        id: qi.id,
-        owner_id: qi.quoteId,
-        image_url: qi.url,
-        isPrimary: qi.isPrimary,
-      })),
-    ];
+    fetchPromises.push(
+      db.select().from(deal_images).where(inArray(deal_images.owner_id, ownerIds)).then(r => { allDealImages = r; }),
+    );
   }
+  if (quoteIds.length > 0) {
+    fetchPromises.push(
+      db.select().from(quoteImages).where(inArray(quoteImages.quoteId, quoteIds)).then(r => { allQuoteImages = r; }),
+    );
+  }
+  if (bookingIds.length > 0) {
+    fetchPromises.push(
+      db.select({
+        booking_id: booking_accomodation.booking_id,
+        id: accommodation_images.id,
+        accommodation_id: accommodation_images.accommodation_id,
+        image_url: accommodation_images.image_url,
+        isPrimary: accommodation_images.isPrimary,
+      })
+        .from(accommodation_images)
+        .innerJoin(
+          booking_accomodation,
+          and(
+            eq(booking_accomodation.accomodation_id, accommodation_images.accommodation_id),
+            inArray(booking_accomodation.booking_id, bookingIds)
+          )
+        )
+        .then(r => { allAccomImages = r; }),
+    );
+  }
+  if (lodgeIds.length > 0) {
+    fetchPromises.push(
+      db.select({
+        id: lodge_images.id,
+        lodge_id: lodge_images.lodge_id,
+        image_url: lodge_images.image_url,
+        isPrimary: lodge_images.isPrimary,
+      }).from(lodge_images).where(inArray(lodge_images.lodge_id, lodgeIds)).then(r => { allLodgeImages = r; }),
+    );
+  }
+  await Promise.all(fetchPromises);
 
   const enquiryMap = new Map<string, any>();
   for (const enq of allEnquiries) {
@@ -63,7 +92,14 @@ async function enrichTransactions(txns: Transaction[]) {
 
   const quotesMap = new Map<string, any[]>();
   for (const q of allQuotes) {
-    const images = allImages.filter(img => img.owner_id === q.id);
+    const dealImgs = allDealImages.filter(img => img.owner_id === q.id);
+    const quoteImgs = allQuoteImages.filter(qi => qi.quoteId === q.id).map((qi: any) => ({
+      id: qi.id,
+      owner_id: qi.quoteId,
+      image_url: qi.url,
+      isPrimary: qi.isPrimary,
+    }));
+    const images = [...dealImgs, ...quoteImgs];
     const entry = {
       ...q,
       holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
@@ -75,7 +111,22 @@ async function enrichTransactions(txns: Transaction[]) {
 
   const bookingMap = new Map<string, any>();
   for (const b of allBookings) {
-    const images = allImages.filter(img => img.owner_id === b.id);
+    const seen = new Set<string>();
+    const images: any[] = [];
+    for (const img of allDealImages.filter(img => img.owner_id === b.id)) {
+      const url = img.image_url || '';
+      if (url && !seen.has(url)) { seen.add(url); images.push(img); }
+    }
+    for (const img of allAccomImages.filter(img => img.booking_id === b.id)) {
+      const url = img.image_url || '';
+      if (url && !seen.has(url)) { seen.add(url); images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.accommodation_id, s3Key: null }); }
+    }
+    if (b.lodge_id) {
+      for (const img of allLodgeImages.filter((img: any) => img.lodge_id === b.lodge_id)) {
+        const url = img.image_url || '';
+        if (url && !seen.has(url)) { seen.add(url); images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.lodge_id, s3Key: null }); }
+      }
+    }
     bookingMap.set(b.transaction_id, {
       ...b,
       holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id,

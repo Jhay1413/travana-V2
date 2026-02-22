@@ -14,6 +14,9 @@ import {
   room_type,
   accommodation_images,
   lodge_images,
+  cruise_line,
+  cruise_ship,
+  cruise_itenary,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -161,6 +164,40 @@ router.get("/lodge-images", async (req, res) => {
     const lodgeId = req.query.lodgeId as string | undefined;
     if (!lodgeId) return res.json({ success: true, data: [] });
     const rows = await db.select().from(lodge_images).where(eq(lodge_images.lodge_id, lodgeId));
+    res.json({ success: true, data: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/cruise-lines", async (_req, res) => {
+  try {
+    const rows = await db.select().from(cruise_line).orderBy(cruise_line.name);
+    res.json({ success: true, data: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/ships", async (req, res) => {
+  try {
+    const cruiseLineId = req.query.cruiseLineId as string | undefined;
+    let query = db.select().from(cruise_ship);
+    if (cruiseLineId) {
+      query = query.where(eq(cruise_ship.cruise_line_id, cruiseLineId)) as any;
+    }
+    const rows = await query.orderBy(cruise_ship.name);
+    res.json({ success: true, data: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/cruise-itineraries", async (req, res) => {
+  try {
+    const shipId = req.query.shipId as string | undefined;
+    if (!shipId) return res.json({ success: true, data: [] });
+    const rows = await db.select().from(cruise_itenary).where(eq(cruise_itenary.ship_id, shipId)).orderBy(cruise_itenary.date);
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { lookupApi } from "@/api/endpoints/lookup.api";
-import type { AccommodationImage, LodgeImage } from "@/api/endpoints/lookup.api";
+import type { AccommodationImage, LodgeImage, LookupCruiseLine, LookupCruiseShip, LookupCruiseItinerary } from "@/api/endpoints/lookup.api";
 
 export const lookupKeys = {
   packageTypes: ["lookup", "package-types"] as const,
@@ -19,6 +19,9 @@ export const lookupKeys = {
   accommodationImages: (accommodationId?: string) => ["lookup", "accommodation-images", accommodationId] as const,
   lodgeImages: (lodgeId?: string) => ["lookup", "lodge-images", lodgeId] as const,
   roomTypes: ["lookup", "room-types"] as const,
+  cruiseLines: ["lookup", "cruise-lines"] as const,
+  ships: (cruiseLineId?: string) => ["lookup", "ships", cruiseLineId] as const,
+  cruiseItineraries: (shipId?: string) => ["lookup", "cruise-itineraries", shipId] as const,
 };
 
 export function usePackageTypes() {
@@ -152,5 +155,31 @@ export function useLodgeImages(lodgeId?: string) {
     queryFn: () => lookupApi.getLodgeImages(lodgeId),
     enabled: !!lodgeId,
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useCruiseLines() {
+  return useQuery<LookupCruiseLine[]>({
+    queryKey: lookupKeys.cruiseLines,
+    queryFn: () => lookupApi.getCruiseLines(),
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useShips(cruiseLineId?: string) {
+  return useQuery<LookupCruiseShip[]>({
+    queryKey: lookupKeys.ships(cruiseLineId),
+    queryFn: () => lookupApi.getShips(cruiseLineId),
+    enabled: !!cruiseLineId,
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useCruiseItineraries(shipId?: string) {
+  return useQuery<LookupCruiseItinerary[]>({
+    queryKey: lookupKeys.cruiseItineraries(shipId),
+    queryFn: () => lookupApi.getCruiseItineraries(shipId),
+    enabled: !!shipId,
+    staleTime: 1000 * 60 * 30,
   });
 }

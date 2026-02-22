@@ -396,23 +396,16 @@ export const newQuoteRepository = {
         : Promise.resolve([]),
     ]);
 
-    console.log('🔍 BACKEND - Images fetched:', images.length, images);
-    console.log('🔍 BACKEND - First accommodation data:', accommodations[0]);
-    console.log('🔍 BACKEND - Location IDs being returned:', {
-      country_id: accommodations[0]?.country_id || null,
-      destination_id: accommodations[0]?.destination_id || null,
-      resort_id: accommodations[0]?.resort_id || null,
-    });
-    console.log('🔍 BACKEND - Location NAMES being returned:', {
-      country_name: accommodations[0]?.country_name || null,
-      destination_name: accommodations[0]?.destination_name || null,
-      resort_name: accommodations[0]?.resort_name || null,
-    });
-    console.log('🔍 BACKEND - Accommodation chain:', {
-      has_accommodation: !!accommodations[0]?.accommodation,
-      accomodation_id: accommodations[0]?.accommodation?.accomodation_id || null,
-    });
-    console.log('🔍 BACKEND - Total accommodations found:', accommodations.length);
+    // Fetch cruise extras and itineraries (depend on cruise IDs from above)
+    const cruiseIds = cruises.map(c => c.cruise.id);
+    let cruiseItemExtras: { id: string; cruise_extra_id: string | null; quote_cruise_id: string | null }[] = [];
+    let cruiseItineraries: { id: string; quote_cruise_id: string | null; day_number: number | null; description: string | null }[] = [];
+    if (cruiseIds.length > 0) {
+      [cruiseItemExtras, cruiseItineraries] = await Promise.all([
+        db.select().from(quote_cruise_item_extra).where(inArray(quote_cruise_item_extra.quote_cruise_id, cruiseIds)),
+        db.select().from(quote_cruise_itinerary).where(inArray(quote_cruise_itinerary.quote_cruise_id, cruiseIds)),
+      ]);
+    }
 
     return {
       ...q.quote,
@@ -446,7 +439,14 @@ export const newQuoteRepository = {
       attractionTickets: attractionTickets.map(t => ({ ...t.attractionTicket, tour_operator_name: t.tour_operator_name })),
       loungePasses: loungePasses.map(p => ({ ...p.loungePass, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
       airportParkings: airportParkings.map(p => ({ ...p.airportParking, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
-      cruises: cruises.map(c => ({ ...c.cruise, tour_operator_name: c.tour_operator_name })),
+      cruises: cruises.map(c => ({
+        ...c.cruise,
+        tour_operator_name: c.tour_operator_name,
+        extras: cruiseItemExtras.filter(e => e.quote_cruise_id === c.cruise.id),
+        itinerary: cruiseItineraries
+          .filter(i => i.quote_cruise_id === c.cruise.id)
+          .sort((a, b) => (a.day_number || 0) - (b.day_number || 0)),
+      })),
       passengers: passengerList,
       images: (() => {
         const seen = new Set<string>();

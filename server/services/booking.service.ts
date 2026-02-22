@@ -6,6 +6,14 @@ import type {
   InsertBooking,
   InsertBookingFlight,
   InsertBookingAccomodation,
+  InsertBookingTransfer,
+  InsertBookingCarHire,
+  InsertBookingAttractionTicket,
+  InsertBookingLoungePass,
+  InsertBookingAirportParking,
+  InsertBookingCruise,
+  InsertBookingCruiseItemExtra,
+  InsertBookingCruiseItinerary,
 } from "@shared/schema";
 
 interface BookingRelationData {
@@ -18,7 +26,7 @@ type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
 
 export const bookingService = {
   async listBookings() {
-    return await bookingRepository.findAll();
+    return await bookingRepository.findAllWithImages();
   },
 
   async getBookingById(id: string) {
@@ -89,7 +97,7 @@ export const bookingService = {
           is_included_in_package: f.is_included_in_package,
           cost: f.cost,
           commission: f.commission,
-        });
+        } as InsertBookingFlight);
       }
       for (const a of quoteDetails.accommodations || []) {
         await bookingRepository.addAccommodation({
@@ -106,7 +114,109 @@ export const bookingService = {
           cost: a.cost,
           commission: a.commission,
           accomodation_id: a.accomodation_id,
-        });
+        } as InsertBookingAccomodation);
+      }
+      for (const t of quoteDetails.transfers || []) {
+        await bookingRepository.addTransfer({
+          booking_id: b.id,
+          booking_ref: t.booking_ref,
+          tour_operator_id: t.tour_operator_id,
+          pick_up_location: t.pick_up_location,
+          drop_off_location: t.drop_off_location,
+          pick_up_time: t.pick_up_time,
+          drop_off_time: t.drop_off_time,
+          is_included_in_package: t.is_included_in_package,
+          cost: t.cost,
+          commission: t.commission,
+          note: t.note,
+        } as InsertBookingTransfer);
+      }
+      for (const c of quoteDetails.carHires || []) {
+        await bookingRepository.addCarHire({
+          booking_id: b.id,
+          booking_ref: c.booking_ref,
+          tour_operator_id: c.tour_operator_id,
+          pick_up_location: c.pick_up_location,
+          drop_off_location: c.drop_off_location,
+          pick_up_time: c.pick_up_time,
+          drop_off_time: c.drop_off_time,
+          no_of_days: c.no_of_days,
+          driver_age: c.driver_age,
+          is_included_in_package: c.is_included_in_package,
+          cost: c.cost,
+          commission: c.commission,
+        } as InsertBookingCarHire);
+      }
+      for (const t of quoteDetails.attractionTickets || []) {
+        await bookingRepository.addAttractionTicket({
+          booking_id: b.id,
+          booking_ref: t.booking_ref,
+          tour_operator_id: t.tour_operator_id,
+          ticket_type: t.ticket_type,
+          date_of_visit: t.date_of_visit,
+          cost: t.cost,
+          commission: t.commission,
+          number_of_tickets: t.number_of_tickets,
+          is_included_in_package: t.is_included_in_package,
+        } as InsertBookingAttractionTicket);
+      }
+      for (const p of quoteDetails.loungePasses || []) {
+        await bookingRepository.addLoungePass({
+          booking_id: b.id,
+          booking_ref: p.booking_ref,
+          terminal: p.terminal,
+          airport_id: p.airport_id,
+          date_of_usage: p.date_of_usage,
+          tour_operator_id: p.tour_operator_id,
+          cost: p.cost,
+          commission: p.commission,
+          is_included_in_package: p.is_included_in_package,
+          note: p.note,
+        } as InsertBookingLoungePass);
+      }
+      for (const p of quoteDetails.airportParkings || []) {
+        await bookingRepository.addAirportParking({
+          booking_id: b.id,
+          booking_ref: p.booking_ref,
+          airport_id: p.airport_id,
+          parking_type: p.parking_type,
+          parking_date: p.parking_date,
+          car_make: p.car_make,
+          car_model: p.car_model,
+          colour: p.colour,
+          car_reg_number: p.car_reg_number,
+          duration: p.duration,
+          tour_operator_id: p.tour_operator_id,
+          is_included_in_package: p.is_included_in_package,
+          cost: p.cost,
+          commission: p.commission,
+        } as InsertBookingAirportParking);
+      }
+      for (const c of quoteDetails.cruises || []) {
+        const bookingCruise = await bookingRepository.addCruise({
+          booking_id: b.id,
+          tour_operator_id: c.tour_operator_id,
+          cruise_line: c.cruise_line,
+          ship: c.ship,
+          cruise_date: c.cruise_date,
+          cabin_type: c.cabin_type,
+          cruise_name: c.cruise_name,
+          pre_cruise_stay: c.pre_cruise_stay,
+          post_cruise_stay: c.post_cruise_stay,
+        } as InsertBookingCruise);
+        for (const extra of c.extras || []) {
+          await bookingRepository.addCruiseItemExtra({
+            booking_cruise_id: bookingCruise.id,
+            cruise_extra_id: extra.cruise_extra_id,
+          } as InsertBookingCruiseItemExtra);
+        }
+        for (const item of c.itinerary || []) {
+          await bookingRepository.addCruiseItinerary({
+            booking_cruise_id: bookingCruise.id,
+            day_number: item.day_number,
+            description: item.description,
+          } as InsertBookingCruiseItinerary);
+        }
       }
     }
 

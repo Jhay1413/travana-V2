@@ -10,8 +10,11 @@ import {
 import type {
   Booking, InsertBooking, InsertBookingFlight, BookingFlight,
   InsertBookingAccomodation, BookingAccomodation, InsertBookingTransfer,
+  InsertBookingCarHire, InsertBookingAttractionTicket, InsertBookingLoungePass,
+  InsertBookingAirportParking, InsertBookingCruise, InsertBookingCruiseItemExtra,
+  InsertBookingCruiseItinerary,
 } from "@shared/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -63,6 +66,86 @@ export const bookingRepository = {
 
   async findAll(): Promise<Booking[]> {
     return await db.select().from(booking).orderBy(desc(booking.date_created));
+  },
+
+  async findAllWithImages() {
+    const bookings = await db.select().from(booking).orderBy(desc(booking.date_created));
+    if (bookings.length === 0) return [];
+
+    const bookingIds = bookings.map(b => b.id);
+    const lodgeIds = bookings.map(b => b.lodge_id).filter((id): id is string => id !== null);
+
+    const [dealImgs, accommodationImgs, lodgeImgs] = await Promise.all([
+      db.select().from(deal_images).where(inArray(deal_images.owner_id, bookingIds)),
+
+      db.select({
+        booking_id: booking_accomodation.booking_id,
+        id: accommodation_images.id,
+        accommodation_id: accommodation_images.accommodation_id,
+        image_url: accommodation_images.image_url,
+        isPrimary: accommodation_images.isPrimary,
+      })
+        .from(accommodation_images)
+        .innerJoin(
+          booking_accomodation,
+          and(
+            eq(booking_accomodation.accomodation_id, accommodation_images.accommodation_id),
+            inArray(booking_accomodation.booking_id, bookingIds)
+          )
+        ),
+
+      lodgeIds.length > 0
+        ? db.select({
+            id: lodge_images.id,
+            lodge_id: lodge_images.lodge_id,
+            image_url: lodge_images.image_url,
+            isPrimary: lodge_images.isPrimary,
+          }).from(lodge_images).where(inArray(lodge_images.lodge_id, lodgeIds))
+        : Promise.resolve([]),
+    ]);
+
+    const dealImgsByBookingId = new Map<string, typeof dealImgs>();
+    for (const img of dealImgs) {
+      const list = dealImgsByBookingId.get(img.owner_id) ?? [];
+      list.push(img);
+      dealImgsByBookingId.set(img.owner_id, list);
+    }
+
+    const accomImgsByBookingId = new Map<string, (typeof accommodationImgs)[number][]>();
+    for (const img of accommodationImgs) {
+      const list = accomImgsByBookingId.get(img.booking_id) ?? [];
+      list.push(img);
+      accomImgsByBookingId.set(img.booking_id, list);
+    }
+
+    const lodgeImgsByLodgeId = new Map<string, (typeof lodgeImgs)[number][]>();
+    for (const img of lodgeImgs) {
+      const list = lodgeImgsByLodgeId.get(img.lodge_id) ?? [];
+      list.push(img);
+      lodgeImgsByLodgeId.set(img.lodge_id, list);
+    }
+
+    return bookings.map(b => {
+      const seen = new Set<string>();
+      const images: { id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; s3Key: null }[] = [];
+
+      for (const img of dealImgsByBookingId.get(b.id) ?? []) {
+        const url = img.image_url || '';
+        if (url && !seen.has(url)) { seen.add(url); images.push(img); }
+      }
+      for (const img of accomImgsByBookingId.get(b.id) ?? []) {
+        const url = img.image_url || '';
+        if (url && !seen.has(url)) { seen.add(url); images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.accommodation_id, s3Key: null }); }
+      }
+      if (b.lodge_id) {
+        for (const img of lodgeImgsByLodgeId.get(b.lodge_id) ?? []) {
+          const url = img.image_url || '';
+          if (url && !seen.has(url)) { seen.add(url); images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.lodge_id, s3Key: null }); }
+        }
+      }
+
+      return { ...b, images };
+    });
   },
 
   async create(data: InsertBooking): Promise<Booking> {
@@ -291,6 +374,41 @@ export const bookingRepository = {
 
   async removeTransfer(id: string): Promise<void> {
     await db.delete(booking_transfers).where(eq(booking_transfers.id, id));
+  },
+
+  async addCarHire(data: InsertBookingCarHire) {
+    const [result] = await db.insert(booking_car_hire).values(data).returning();
+    return result;
+  },
+
+  async addAttractionTicket(data: InsertBookingAttractionTicket) {
+    const [result] = await db.insert(booking_attraction_ticket).values(data).returning();
+    return result;
+  },
+
+  async addLoungePass(data: InsertBookingLoungePass) {
+    const [result] = await db.insert(booking_lounge_pass).values(data).returning();
+    return result;
+  },
+
+  async addAirportParking(data: InsertBookingAirportParking) {
+    const [result] = await db.insert(booking_airport_parking).values(data).returning();
+    return result;
+  },
+
+  async addCruise(data: InsertBookingCruise) {
+    const [result] = await db.insert(booking_cruise).values(data).returning();
+    return result;
+  },
+
+  async addCruiseItemExtra(data: InsertBookingCruiseItemExtra) {
+    const [result] = await db.insert(booking_cruise_item_extra).values(data).returning();
+    return result;
+  },
+
+  async addCruiseItinerary(data: InsertBookingCruiseItinerary) {
+    const [result] = await db.insert(booking_cruise_itinerary).values(data).returning();
+    return result;
   },
 
   async upsertFlightByType(bookingId: string, flightType: string, data: Partial<InsertBookingFlight>): Promise<BookingFlight> {
