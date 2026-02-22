@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Filter,
   GripVertical,
+  Loader2,
   PoundSterling,
   TrendingUp,
   Users,
@@ -26,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePipelineTransactions, useNeonClients, useCurrentUser, transactionKeys } from "@/hooks/queries";
+import { usePipelineColumn, useNeonClients, useCurrentUser, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction, useConvertToBooking } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -42,6 +43,12 @@ const STAGE_TO_STATUS: Record<PipelineStage, string> = {
   "Enquiry": "on_enquiry",
   "Quoted": "on_quote",
   "Booked": "on_booking",
+};
+
+const STAGE_TO_API: Record<PipelineStage, string> = {
+  "Enquiry": "enquiry",
+  "Quoted": "quote",
+  "Booked": "booking",
 };
 
 const STATUS_TO_STAGE: Record<string, PipelineStage> = {
@@ -172,11 +179,6 @@ function getTransactionPassengers(transaction: Transaction): { adults: number; c
     };
   }
   return { adults: 0, children: 0, infants: 0 };
-}
-
-function classifyTransaction(transaction: Transaction): PipelineStage {
-  const status = transaction.status || "on_enquiry";
-  return STATUS_TO_STAGE[status] || "Enquiry";
 }
 
 interface PipelineCardProps {
@@ -315,44 +317,52 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
 interface PipelineColumnProps {
   stage: PipelineStage;
   transactions: Transaction[];
+  total: number;
   getClientName: (clientId: string | null) => string;
   onDragStart: (transaction: Transaction, stage: PipelineStage) => void;
   onDrop: (transactionId: string, fromStage: PipelineStage, toStage: PipelineStage) => void;
   isDragActive: boolean;
   dragFromStage: PipelineStage | null;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  fetchNextPage: () => void;
+  isLoading: boolean;
 }
 
-const COLUMN_PAGE_SIZE = 10;
-
-function PipelineColumn({ stage, transactions: stageTransactions, getClientName, onDragStart, onDrop, isDragActive, dragFromStage }: PipelineColumnProps) {
+function PipelineColumn({
+  stage,
+  transactions: stageTransactions,
+  total,
+  getClientName,
+  onDragStart,
+  onDrop,
+  isDragActive,
+  dragFromStage,
+  hasNextPage,
+  isFetchingNextPage,
+  fetchNextPage,
+  isLoading,
+}: PipelineColumnProps) {
   const [isOver, setIsOver] = useState(false);
-  const [displayCount, setDisplayCount] = useState(COLUMN_PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const colors = stageColor(stage);
   const isValidTarget = isDragActive && dragFromStage !== stage;
 
-  // Reset display count when the transaction list changes (e.g. filter applied)
-  useEffect(() => {
-    setDisplayCount(COLUMN_PAGE_SIZE);
-  }, [stageTransactions]);
-
-  // Infinite scroll via IntersectionObserver
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && displayCount < stageTransactions.length) {
-          setDisplayCount((prev) => Math.min(prev + COLUMN_PAGE_SIZE, stageTransactions.length));
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1, root: scrollContainerRef.current }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [displayCount, stageTransactions.length]);
-
-  const visibleTransactions = stageTransactions.slice(0, displayCount);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleDragOver = (e: React.DragEvent) => {
     if (!isValidTarget) return;
@@ -378,24 +388,26 @@ function PipelineColumn({ stage, transactions: stageTransactions, getClientName,
   };
 
   return (
-    <div className="flex flex-col" data-testid={`pipeline-column-${stage.toLowerCase()}`}>
+    <div className="flex flex-col min-h-0" data-testid={`pipeline-column-${stage.toLowerCase()}`}>
       <div className={`rounded-t-2xl border ${colors.header} p-3 flex items-center justify-between`}>
         <div className="flex items-center gap-2">
           <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
           <h3 className={`text-sm font-semibold ${colors.text}`}>{stage}</h3>
         </div>
         <Badge className={`rounded-full text-[10px] ${colors.bg} ${colors.text} ${colors.border}`}>
-          {stageTransactions.length}
+          {total}
         </Badge>
       </div>
       <div
-        className={`flex-1 rounded-b-2xl border border-t-0 p-2 space-y-2 min-h-[200px] transition-all duration-200 ${
+        ref={scrollContainerRef}
+        className={`flex-1 rounded-b-2xl border border-t-0 p-2 space-y-2 overflow-y-auto transition-all duration-200 ${
           isOver
             ? colors.dropHighlight
             : isValidTarget
             ? "border-black/20 bg-black/[0.03]"
             : "border-black/10 bg-black/[0.015]"
         }`}
+        style={{ maxHeight: "calc(100vh - 340px)", minHeight: "200px" }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -407,7 +419,11 @@ function PipelineColumn({ stage, transactions: stageTransactions, getClientName,
             </p>
           </div>
         )}
-        {stageTransactions.length === 0 && !isOver ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full min-h-[180px]">
+            <Spinner />
+          </div>
+        ) : stageTransactions.length === 0 && !isOver ? (
           <div className="flex items-center justify-center h-full min-h-[180px]">
             <p className="text-xs text-black/30">
               {isDragActive && isValidTarget ? `Drop here` : "No transactions"}
@@ -415,7 +431,7 @@ function PipelineColumn({ stage, transactions: stageTransactions, getClientName,
           </div>
         ) : (
           <>
-            {visibleTransactions.map((transaction) => (
+            {stageTransactions.map((transaction) => (
               <PipelineCard
                 key={transaction.id}
                 transaction={transaction}
@@ -424,11 +440,15 @@ function PipelineColumn({ stage, transactions: stageTransactions, getClientName,
                 onDragStart={onDragStart}
               />
             ))}
-            {/* Sentinel for infinite scroll */}
             <div ref={sentinelRef} className="h-1" />
-            {displayCount < stageTransactions.length && (
+            {isFetchingNextPage && (
+              <div className="flex justify-center py-2">
+                <Loader2 className="h-4 w-4 animate-spin text-black/30" />
+              </div>
+            )}
+            {!hasNextPage && stageTransactions.length > 0 && (
               <p className="text-center text-[10px] text-black/30 py-1">
-                Showing {displayCount} of {stageTransactions.length}
+                Showing all {stageTransactions.length}
               </p>
             )}
           </>
@@ -438,9 +458,10 @@ function PipelineColumn({ stage, transactions: stageTransactions, getClientName,
   );
 }
 
+const PIPELINE_PAGE_SIZE = 10;
+
 export default function PipelinePage() {
   const { role, setRole } = useRole();
-  const { data: transactions, isLoading: transactionsLoading } = usePipelineTransactions();
   const { data: neonClientsData } = useNeonClients({ page: 1, limit: 200 });
   const { data: currentUser } = useCurrentUser();
   const updateTransactionMutation = useUpdateTransaction();
@@ -452,18 +473,36 @@ export default function PipelinePage() {
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("all");
 
-  // Conversion dialogs
   const [quoteDialog, setQuoteDialog] = useState<{ transactionId: string; clientId: string; userId: string } | null>(null);
   const [bookingDialog, setBookingDialog] = useState<{ quoteId: string } | null>(null);
   const [haysRef, setHaysRef] = useState("");
   const [tourRef, setTourRef] = useState("");
 
-  // Default to current user once loaded
   useEffect(() => {
     if (currentUser?.id && !selectedAgentId) {
       setSelectedAgentId(currentUser.id);
     }
   }, [currentUser?.id]);
+
+  const agentFilter = selectedAgentId && selectedAgentId !== "all" ? selectedAgentId : undefined;
+  const quoteStatusParam = quoteStatusFilter !== "all" ? quoteStatusFilter : undefined;
+
+  const enquiryQuery = usePipelineColumn("enquiry", PIPELINE_PAGE_SIZE, agentFilter);
+  const quoteQuery = usePipelineColumn("quote", PIPELINE_PAGE_SIZE, agentFilter, quoteStatusParam);
+  const bookingQuery = usePipelineColumn("booking", PIPELINE_PAGE_SIZE, agentFilter);
+
+  const flattenPages = (query: typeof enquiryQuery): { items: Transaction[]; total: number; totalProfit: number; totalValue: number } => {
+    if (!query.data?.pages) return { items: [], total: 0, totalProfit: 0, totalValue: 0 };
+    const items = query.data.pages.flatMap((p) => p.items);
+    const total = query.data.pages[0]?.total || 0;
+    const totalProfit = query.data.pages[0]?.totalProfit || 0;
+    const totalValue = query.data.pages[0]?.totalValue || 0;
+    return { items, total, totalProfit, totalValue };
+  };
+
+  const enquiryData = flattenPages(enquiryQuery);
+  const quoteData = flattenPages(quoteQuery);
+  const bookingData = flattenPages(bookingQuery);
 
   const [dragState, setDragState] = useState<{
     active: boolean;
@@ -483,75 +522,13 @@ export default function PipelinePage() {
     return map;
   }, [neonClientsData]);
 
-  const ACTIVE_QUOTE_STATUSES = new Set([
-    "QUOTE_IN_PROGRESS",
-    "QUOTE_CALL",
-    "AWAITING_DECISION",
-    "HOT_QUOTE",
-    "QUOTE_READY",
-    "REQUOTE",
-    "NEW_LEAD",
-  ]);
-
-  const filteredTransactions = useMemo(() => {
-    if (!transactions) return [];
-    let result = transactions;
-
-    // Quoted column: only show active, non-free-quote transactions
-    result = result.filter((t) => {
-      if (t.status !== "on_quote") return true;
-      const nonFreeQuotes = (t.quotes || []).filter((q: any) => !q.isFreeQuote);
-      if (nonFreeQuotes.length === 0) return false;
-      return nonFreeQuotes.some((q: any) => ACTIVE_QUOTE_STATUSES.has(q.quote_status));
-    });
-
-    if (selectedAgentId && selectedAgentId !== "all") {
-      result = result.filter(
-        (t) => t.agent_id === selectedAgentId || t.user_id === selectedAgentId
-      );
-    }
-    if (quoteStatusFilter !== "all") {
-      result = result.filter((t) => {
-        if (t.quotes && t.quotes.length > 0) {
-          return t.quotes.some((q: any) => q.quote_status === quoteStatusFilter);
-        }
-        return false;
-      });
-    }
-    return result;
-  }, [transactions, selectedAgentId, quoteStatusFilter]);
-
-  const pipeline = useMemo(() => {
-    const stages: Record<PipelineStage, Transaction[]> = {
-      "Enquiry": [],
-      "Quoted": [],
-      "Booked": [],
-    };
-
-    for (const transaction of filteredTransactions) {
-      const stage = classifyTransaction(transaction);
-      stages[stage].push(transaction);
-    }
-
-    return stages;
-  }, [filteredTransactions]);
-
   const stageTotals = useMemo(() => {
-    const totals: Record<PipelineStage, { count: number; profit: number; value: number }> = {
-      "Enquiry": { count: 0, profit: 0, value: 0 },
-      "Quoted": { count: 0, profit: 0, value: 0 },
-      "Booked": { count: 0, profit: 0, value: 0 },
+    return {
+      Enquiry: { count: enquiryData.total, profit: enquiryData.totalProfit },
+      Quoted: { count: quoteData.total, profit: quoteData.totalProfit },
+      Booked: { count: bookingData.total, profit: bookingData.totalProfit },
     };
-
-    for (const stage of STAGES) {
-      const stageTransactions = pipeline[stage];
-      totals[stage].count = stageTransactions.length;
-      totals[stage].profit = stageTransactions.reduce((sum, t) => sum + getTransactionProfit(t), 0);
-      totals[stage].value = stageTransactions.reduce((sum, t) => sum + getTransactionValue(t), 0);
-    }
-
-    return totals;
-  }, [pipeline]);
+  }, [enquiryData, quoteData, bookingData]);
 
   const getClientName = (clientId: string | null) => {
     if (!clientId) return "Unknown Client";
@@ -562,16 +539,20 @@ export default function PipelinePage() {
     setDragState({ active: true, fromStage: stage, transactionId: transaction.id });
   }, []);
 
+  const allLoadedTransactions = useMemo(() => [
+    ...enquiryData.items,
+    ...quoteData.items,
+    ...bookingData.items,
+  ], [enquiryData.items, quoteData.items, bookingData.items]);
+
   const handleDrop = useCallback((transactionId: string, fromStage: PipelineStage, toStage: PipelineStage) => {
     setDragState({ active: false, fromStage: null, transactionId: null });
 
     if (fromStage === toStage) return;
 
-    const allTransactions = transactions || [];
-    const transaction = allTransactions.find((t) => t.id === transactionId);
+    const transaction = allLoadedTransactions.find((t) => t.id === transactionId);
     if (!transaction) return;
 
-    // Enquiry → Quoted: open create-quote dialog
     if (fromStage === "Enquiry" && toStage === "Quoted") {
       setQuoteDialog({
         transactionId,
@@ -581,7 +562,6 @@ export default function PipelinePage() {
       return;
     }
 
-    // Quoted → Booked: open convert-to-booking dialog
     if (fromStage === "Quoted" && toStage === "Booked") {
       const activeQuote = (transaction.quotes || []).find((q: any) => !q.isFreeQuote);
       if (!activeQuote) {
@@ -594,7 +574,6 @@ export default function PipelinePage() {
       return;
     }
 
-    // All other moves: update status directly
     const newStatus = STAGE_TO_STATUS[toStage];
     updateTransactionMutation.mutate(
       { id: transactionId, data: { status: newStatus } as any },
@@ -604,6 +583,7 @@ export default function PipelinePage() {
             title: `Moved to ${toStage}`,
             description: `${getTransactionTitle(transaction)} has been updated.`,
           });
+          invalidateAllPipeline();
         },
         onError: () => {
           toast({
@@ -614,13 +594,19 @@ export default function PipelinePage() {
         },
       }
     );
-  }, [transactions, updateTransactionMutation, currentUser, toast]);
+  }, [allLoadedTransactions, updateTransactionMutation, currentUser, toast]);
 
   const handleDragEnd = useCallback(() => {
     setDragState({ active: false, fromStage: null, transactionId: null });
   }, []);
 
-  if (transactionsLoading) {
+  const invalidateAllPipeline = () => {
+    queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+  };
+
+  const isInitialLoading = enquiryQuery.isLoading && quoteQuery.isLoading && bookingQuery.isLoading;
+
+  if (isInitialLoading) {
     return (
       <CommandCenterShell
         active="pipeline"
@@ -636,7 +622,10 @@ export default function PipelinePage() {
     );
   }
 
-  const totalPipelineProfit = STAGES.reduce((sum, stage) => sum + stageTotals[stage].profit, 0);
+  const totalPipelineProfit =
+    stageTotals.Enquiry.profit + stageTotals.Quoted.profit + stageTotals.Booked.profit;
+  const totalTransactions =
+    stageTotals.Enquiry.count + stageTotals.Quoted.count + stageTotals.Booked.count;
 
   const QUOTE_STATUS_OPTIONS = [
     { value: "all", label: "All Statuses" },
@@ -676,6 +665,18 @@ export default function PipelinePage() {
       )}
     </>
   );
+
+  const stageQueryMap: Record<PipelineStage, typeof enquiryQuery> = {
+    Enquiry: enquiryQuery,
+    Quoted: quoteQuery,
+    Booked: bookingQuery,
+  };
+
+  const stageDataMap: Record<PipelineStage, { items: Transaction[]; total: number }> = {
+    Enquiry: enquiryData,
+    Quoted: quoteData,
+    Booked: bookingData,
+  };
 
   return (
     <>
@@ -723,7 +724,7 @@ export default function PipelinePage() {
               <div>
                 <p className="text-sm font-medium text-black/60">Total Pipeline</p>
                 <p className="text-lg font-bold text-black/80">
-                  {filteredTransactions.length} transactions
+                  {totalTransactions} transactions
                 </p>
               </div>
             </div>
@@ -737,18 +738,27 @@ export default function PipelinePage() {
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {STAGES.map((stage) => (
-            <PipelineColumn
-              key={stage}
-              stage={stage}
-              transactions={pipeline[stage]}
-              getClientName={getClientName}
-              onDragStart={handleDragStart}
-              onDrop={handleDrop}
-              isDragActive={dragState.active}
-              dragFromStage={dragState.fromStage}
-            />
-          ))}
+          {STAGES.map((stage) => {
+            const query = stageQueryMap[stage];
+            const data = stageDataMap[stage];
+            return (
+              <PipelineColumn
+                key={stage}
+                stage={stage}
+                transactions={data.items}
+                total={data.total}
+                getClientName={getClientName}
+                onDragStart={handleDragStart}
+                onDrop={handleDrop}
+                isDragActive={dragState.active}
+                dragFromStage={dragState.fromStage}
+                hasNextPage={!!query.hasNextPage}
+                isFetchingNextPage={query.isFetchingNextPage}
+                fetchNextPage={query.fetchNextPage}
+                isLoading={query.isLoading}
+              />
+            );
+          })}
         </div>
 
         {dragState.active && (
@@ -768,13 +778,12 @@ export default function PipelinePage() {
         onOpenChange={(open) => { if (!open) setQuoteDialog(null); }}
         onSuccess={() => {
           setQuoteDialog(null);
-          queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+          invalidateAllPipeline();
           toast({ title: "Quote created", description: "Transaction moved to Quoted." });
         }}
       />
     )}
 
-    {/* Quoted → Booked: convert to booking */}
     <Dialog
       open={!!bookingDialog}
       onOpenChange={(open) => {
@@ -819,7 +828,7 @@ export default function PipelinePage() {
                     setBookingDialog(null);
                     setHaysRef("");
                     setTourRef("");
-                    queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+                    invalidateAllPipeline();
                     toast({ title: "Quote converted to booking" });
                   },
                   onError: () => {

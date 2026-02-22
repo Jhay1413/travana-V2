@@ -1,7 +1,7 @@
 import { db } from "../config/database";
 import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
-import { eq, desc, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, count } from "drizzle-orm";
 
 async function enrichTransactions(txns: Transaction[]) {
   if (txns.length === 0) return [];
@@ -251,6 +251,92 @@ export const transactionRepository = {
   async findAllLightweight() {
     const txns = await db.select().from(transaction).orderBy(desc(transaction.created_at));
     return enrichTransactionsLightweight(txns);
+  },
+
+  async findPipelineByStatus(
+    status: string,
+    page: number,
+    limit: number,
+    agentId?: string,
+    quoteStatusFilter?: string,
+  ): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
+    const conditions = [eq(transaction.status, status)];
+    if (agentId) {
+      conditions.push(sql`(${transaction.agent_id} = ${agentId} OR ${transaction.user_id} = ${agentId})`);
+    }
+
+    if (status === "on_quote") {
+      const ACTIVE_STATUSES = [
+        "QUOTE_IN_PROGRESS", "QUOTE_CALL", "AWAITING_DECISION",
+        "QUOTE_READY", "REQUOTE", "NEW_LEAD",
+      ];
+      conditions.push(
+        sql`${transaction.id} IN (
+          SELECT ${quote.transaction_id} FROM ${quote}
+          WHERE ${quote.isFreeQuote} IS NOT TRUE
+          AND ${quote.quote_status}::text IN (${sql.join(ACTIVE_STATUSES.map(s => sql`${s}`), sql`, `)})
+        )`
+      );
+      if (quoteStatusFilter) {
+        conditions.push(
+          sql`${transaction.id} IN (
+            SELECT ${quote.transaction_id} FROM ${quote}
+            WHERE ${quote.quote_status}::text = ${quoteStatusFilter}
+          )`
+        );
+      }
+    }
+
+    const where = and(...conditions);
+
+    const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
+    const total = countResult?.total || 0;
+
+    const allIds = await db.select({ id: transaction.id }).from(transaction).where(where);
+    const allTxnIds = allIds.map(r => r.id);
+
+    let totalProfit = 0;
+    let totalValue = 0;
+    if (allTxnIds.length > 0) {
+      if (status === "on_quote") {
+        const [agg] = await db.select({
+          totalValue: sql<number>`COALESCE(SUM(CAST(${quote.sales_price} AS NUMERIC)), 0)`,
+          totalCommission: sql<number>`COALESCE(SUM(CAST(${quote.package_commission} AS NUMERIC)), 0)`,
+          totalFallback: sql<number>`COALESCE(SUM(CASE WHEN CAST(${quote.package_commission} AS NUMERIC) <= 0 THEN CAST(${quote.sales_price} AS NUMERIC) * 0.1 ELSE 0 END), 0)`,
+        }).from(quote).where(and(
+          inArray(quote.transaction_id, allTxnIds),
+          sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+        ));
+        totalValue = Number(agg?.totalValue || 0);
+        totalProfit = Number(agg?.totalCommission || 0) + Number(agg?.totalFallback || 0);
+      } else if (status === "on_booking") {
+        const [agg] = await db.select({
+          totalValue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS NUMERIC)), 0)`,
+          totalCommission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS NUMERIC)), 0)`,
+          totalFallback: sql<number>`COALESCE(SUM(CASE WHEN CAST(${booking.package_commission} AS NUMERIC) <= 0 THEN CAST(${booking.sales_price} AS NUMERIC) * 0.1 ELSE 0 END), 0)`,
+        }).from(booking).where(inArray(booking.transaction_id, allTxnIds));
+        totalValue = Number(agg?.totalValue || 0);
+        totalProfit = Number(agg?.totalCommission || 0) + Number(agg?.totalFallback || 0);
+      }
+    }
+
+    const txns = await db
+      .select()
+      .from(transaction)
+      .where(where)
+      .orderBy(desc(transaction.created_at))
+      .limit(limit)
+      .offset((page - 1) * limit);
+
+    const enriched = await enrichTransactionsLightweight(txns);
+    return {
+      items: enriched,
+      total,
+      page,
+      hasMore: page * limit < total,
+      totalProfit,
+      totalValue,
+    };
   },
 
   async findByClientId(clientId: string) {

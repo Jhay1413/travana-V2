@@ -128,6 +128,10 @@ export const transactionService = {
     return await transactionRepository.findAllLightweight();
   },
 
+  async listPipelineByStatus(status: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string) {
+    return await transactionRepository.findPipelineByStatus(status, page, limit, agentId, quoteStatusFilter);
+  },
+
   async listTransactionsByClient(clientId: string) {
     return await transactionRepository.findByClientId(clientId);
   },

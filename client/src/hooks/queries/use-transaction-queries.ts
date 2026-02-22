@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { transactionApi } from "@/api";
 import type { Transaction } from "@/types/quote";
 
@@ -9,6 +9,7 @@ export const transactionKeys = {
   details: () => [...transactionKeys.all, "detail"] as const,
   detail: (id: string) => [...transactionKeys.details(), id] as const,
   stats: () => [...transactionKeys.all, "stats"] as const,
+  pipeline: (status: string, agentId?: string, quoteStatus?: string) => [...transactionKeys.all, "pipeline", status, agentId, quoteStatus] as const,
 };
 
 export function useTransactions(filters?: { clientId?: string; agentId?: string }) {
@@ -30,6 +31,16 @@ export function usePipelineTransactions() {
   return useQuery<Transaction[]>({
     queryKey: [...transactionKeys.all, "pipeline"] as const,
     queryFn: () => transactionApi.getPipeline(),
+  });
+}
+
+export function usePipelineColumn(status: string, limit: number = 10, agentId?: string, quoteStatus?: string) {
+  return useInfiniteQuery({
+    queryKey: transactionKeys.pipeline(status, agentId, quoteStatus),
+    queryFn: ({ pageParam = 1 }) =>
+      transactionApi.getPipelineByStatus(status, pageParam as number, limit, agentId, quoteStatus),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.page + 1 : undefined,
   });
 }
 

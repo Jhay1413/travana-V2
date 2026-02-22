@@ -111,6 +111,25 @@ export const transactionController = {
     return successResponse(res, transactions, "Pipeline transactions retrieved successfully");
   }),
 
+  listPipelineByStatus: asyncHandler(async (req: Request, res: Response) => {
+    const status = req.params.status as string;
+    const validStatuses: Record<string, string> = {
+      enquiry: "on_enquiry",
+      quote: "on_quote",
+      booking: "on_booking",
+    };
+    const dbStatus = validStatuses[status];
+    if (!dbStatus) {
+      return res.status(400).json({ success: false, message: "Invalid pipeline status" });
+    }
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
+    const agentId = req.query.agentId as string | undefined;
+    const quoteStatusFilter = req.query.quoteStatus as string | undefined;
+    const result = await transactionService.listPipelineByStatus(dbStatus, page, limit, agentId || undefined, quoteStatusFilter || undefined);
+    return successResponse(res, result, "Pipeline data retrieved");
+  }),
+
   getTransactionById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const txn = await transactionService.getTransactionWithDetails(id);

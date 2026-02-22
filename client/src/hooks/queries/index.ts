@@ -1,7 +1,7 @@
 export { useCurrentUser, authKeys } from "./use-auth-queries";
 export { useClients, useClient, clientKeys } from "./use-client-queries";
 export { useNeonClients, useNeonClient, neonClientKeys } from "./use-neon-client-queries";
-export { useTransactions, usePipelineTransactions, useTransaction, useTransactionStats, transactionKeys } from "./use-transaction-queries";
+export { useTransactions, usePipelineTransactions, usePipelineColumn, useTransaction, useTransactionStats, transactionKeys } from "./use-transaction-queries";
 export { useQuotes, useQuote, quoteKeys } from "./use-quote-queries";
 export { useBookings, useBooking, useBookingByTransaction, bookingKeys } from "./use-booking-queries";
 export { useEnquiries, useEnquiry, useEnquiryByTransaction, enquiryKeys } from "./use-enquiry-queries";

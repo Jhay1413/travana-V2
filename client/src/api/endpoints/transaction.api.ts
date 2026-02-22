@@ -35,6 +35,20 @@ export const transactionApi = {
     return data;
   },
 
+  getPipelineByStatus: async (
+    status: string,
+    page: number,
+    limit: number,
+    agentId?: string,
+    quoteStatus?: string,
+  ): Promise<{ items: Transaction[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (agentId) params.append("agentId", agentId);
+    if (quoteStatus) params.append("quoteStatus", quoteStatus);
+    const { data } = await axiosClient.get(`/api/transactions/pipeline/${status}?${params.toString()}`);
+    return data as { items: Transaction[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number };
+  },
+
   getStats: async () => {
     const { data } = await axiosClient.get("/api/transactions/stats");
     return data;
