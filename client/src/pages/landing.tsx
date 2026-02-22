@@ -1,8 +1,22 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Plane, Users, FileText, TrendingUp, Shield, Zap } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Plane, Users, FileText, TrendingUp, Shield, Zap, Loader2, Eye, EyeOff } from "lucide-react";
+import { useLogin } from "@/hooks/mutations";
 
 export default function LandingPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const loginMutation = useLogin();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loginMutation.mutate({ email, password });
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-black/70 border-b border-white/10">
@@ -13,48 +27,112 @@ export default function LandingPage() {
             </div>
             <span className="text-xl font-semibold tracking-tight">TravelHub</span>
           </div>
-          <Button
-            asChild
-            className="rounded-full bg-white text-black hover:bg-white/90 px-6"
-            data-testid="button-login-nav"
-          >
-            <a href="/api/login">Sign In</a>
-          </Button>
         </div>
       </nav>
 
       <main className="pt-32 pb-24">
         <div className="max-w-7xl mx-auto px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center max-w-4xl mx-auto mb-20"
-          >
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
-              Travel Agency
-              <br />
-              Command Center
-            </h1>
-            <p className="text-xl md:text-2xl text-white/60 mb-10 max-w-2xl mx-auto">
-              The premium CRM for travel professionals. Manage clients, quotes, and commissions with elegance.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                asChild
-                size="lg"
-                className="rounded-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-lg px-8 py-6"
-                data-testid="button-get-started"
-              >
-                <a href="/api/login">Get Started</a>
-              </Button>
-            </div>
-          </motion.div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start mb-24">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
+                Travel Agency
+                <br />
+                Command Center
+              </h1>
+              <p className="text-xl md:text-2xl text-white/60 mb-10 max-w-2xl">
+                The premium CRM for travel professionals. Manage clients, quotes, and commissions with elegance.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="w-full max-w-md mx-auto lg:mx-0"
+            >
+              <div className="rounded-3xl bg-white/5 border border-white/10 p-8 backdrop-blur-xl">
+                <h2 className="text-2xl font-semibold mb-6">Sign In</h2>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-white/70">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-blue-500/50 rounded-xl h-12"
+                      data-testid="input-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-white/70">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-blue-500/50 rounded-xl h-12 pr-12"
+                        data-testid="input-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
+                        data-testid="button-toggle-password"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {loginMutation.isError && (
+                    <p className="text-red-400 text-sm" data-testid="text-login-error">
+                      {loginMutation.error?.message || "Invalid email or password"}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={loginMutation.isPending}
+                    className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 h-12 text-base font-medium"
+                    data-testid="button-login"
+                  >
+                    {loginMutation.isPending ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      "Sign In"
+                    )}
+                  </Button>
+                </form>
+
+                <div className="mt-6 pt-6 border-t border-white/10">
+                  <p className="text-white/40 text-sm text-center mb-4">Or continue with</p>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full rounded-xl border-white/10 bg-white/5 text-white hover:bg-white/10 h-12"
+                    data-testid="button-login-replit"
+                  >
+                    <a href="/api/login">Sign in with Replit</a>
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
 
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-24"
           >
             {[
@@ -93,7 +171,7 @@ export default function LandingPage() {
                 key={feature.title}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 + i * 0.1 }}
+                transition={{ duration: 0.5, delay: 0.5 + i * 0.1 }}
                 className="group p-8 rounded-3xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300"
                 data-testid={`card-feature-${i}`}
               >
@@ -109,7 +187,7 @@ export default function LandingPage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 0.8 }}
+            transition={{ duration: 1, delay: 1 }}
             className="text-center"
           >
             <p className="text-white/40 text-sm">

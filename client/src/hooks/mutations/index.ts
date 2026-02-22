@@ -1,4 +1,4 @@
-export { useLogout } from "./use-auth-mutations";
+export { useLogin, useLogout } from "./use-auth-mutations";
 export { useCreateClient, useUpdateClient } from "./use-client-mutations";
 export { useUpdateNeonClient, useImportNeonClients } from "./use-neon-client-mutations";
 export { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "./use-transaction-mutations";

@@ -4,12 +4,18 @@ import { eq } from "drizzle-orm";
 
 export interface IAuthStorage {
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
 }
 
 class AuthStorage implements IAuthStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [result] = await db.select().from(user).where(eq(user.id, id));
+    return result;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [result] = await db.select().from(user).where(eq(user.email, email));
     return result;
   }
 

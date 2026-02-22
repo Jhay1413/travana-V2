@@ -23,7 +23,7 @@ axiosClient.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       const url = error.config?.url || "";
-      if (!url.includes("/api/auth/user")) {
+      if (!url.includes("/api/auth/")) {
         window.location.href = "/";
       }
     }

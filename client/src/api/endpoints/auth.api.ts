@@ -11,6 +11,11 @@ export const authApi = {
     }
   },
 
+  login: async (email: string, password: string): Promise<AuthUser> => {
+    const { data } = await axiosClient.post<AuthUser>("/api/auth/login", { email, password });
+    return data;
+  },
+
   logout: (): void => {
     window.location.href = "/api/logout";
   },
