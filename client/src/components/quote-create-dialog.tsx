@@ -19,7 +19,7 @@ function buildDateTime(date: string, time: string): string | null {
   return time ? `${date}T${time}:00` : `${date}T00:00:00`;
 }
 
-function buildQuotePayload(
+export function buildQuotePayload(
   values: QuoteFormValues,
   packageTypesData: { id: string; name: string }[] | undefined
 ): Omit<CreateQuoteData, "transaction_id"> & { transaction_id?: string } {

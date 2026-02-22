@@ -81,7 +81,11 @@ export function BookingRHFForm({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: { ...defaultBookingFormValues, ...defaultValues },
   });
-
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const skipLodgeResetRef = useRef(false);
+  
   const { watch, setValue, control } = form;
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -94,6 +98,8 @@ export function BookingRHFForm({
   const passengersChildren = watch("passengersChildren");
   const cruiseOnly = watch("cruiseOnly");
 
+
+  // ── Lookup data ──────────────────────────────────────────────────────────
   const { data: packageTypesData } = usePackageTypes();
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
@@ -107,63 +113,42 @@ export function BookingRHFForm({
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(parkId || undefined);
 
-  const { data: cruiseLinesData } = useCruiseLines();
-  const selectedCruiseLineId = cruiseLinesData?.find((l) => l.name === watch("cruiseLine"))?.id;
-  const { data: shipsData } = useShips(selectedCruiseLineId);
-  const selectedShipId = shipsData?.find((s) => s.name === watch("shipName"))?.id;
-  const { data: cruiseItineraries, isFetching: isFetchingCruiseDates } = useCruiseItineraries(selectedShipId);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+
+
+
   const destinationsData = country ? filteredDestinationsData : allDestinationsData;
 
   const packageTypeName =
     packageTypesData?.find((p: { id: string; name: string }) => p.id === packageType)?.name ||
     packageType;
 
+
   const isHotTubBreak = packageTypeName === "Hot Tub Break";
   const isCruise = packageTypeName === "Cruise Package";
   const showFlights = !isHotTubBreak && !(isCruise && cruiseOnly);
 
-  const isFirstRender = useRef(true);
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    setValue("destination", "");
-    setValue("resort", "");
-    setValue("accommodationId", "");
-  }, [country]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Cruise cascade ────────────────────────────────────────────────────────
+  const { data: cruiseLinesData } = useCruiseLines();
+  const selectedCruiseLineId = cruiseLinesData?.find(l => l.name === watch('cruiseLine'))?.id;
+  const { data: shipsData } = useShips(selectedCruiseLineId);
+  const selectedShipId = shipsData?.find(s => s.name === watch('shipName'))?.id;
+  const { data: cruiseItineraries, isFetching: isFetchingCruiseDates } = useCruiseItineraries(selectedShipId);
 
-  const isDestFirstRender = useRef(true);
-  useEffect(() => {
-    if (isDestFirstRender.current) {
-      isDestFirstRender.current = false;
-      return;
-    }
-    setValue("resort", "");
-    setValue("accommodationId", "");
-  }, [destination]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isResortFirstRender = useRef(true);
-  useEffect(() => {
-    if (isResortFirstRender.current) {
-      isResortFirstRender.current = false;
-      return;
-    }
-    setValue("accommodationId", "");
-  }, [resort]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  // ── Lodge park reset ─────────────────────────────────────────────────────
   const isParkFirstRender = useRef(true);
   useEffect(() => {
     if (isParkFirstRender.current) {
       isParkFirstRender.current = false;
       return;
     }
+    if (skipLodgeResetRef.current) {
+      skipLodgeResetRef.current = false;
+      return;
+    }
     setValue("lodgeId", "");
   }, [parkId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Child ages sync ───────────────────────────────────────────────────────
   useEffect(() => {
     const currentAges = form.getValues("childAges");
     const count = Number(passengersChildren) || 0;
@@ -173,13 +158,13 @@ export function BookingRHFForm({
     }
   }, [passengersChildren, setValue, form]);
 
+  // ── Options ───────────────────────────────────────────────────────────────
   const airportOptions = (airportsData || []).map(
     (a: { id: string; airport_name: string; airport_code?: string | null }) => ({
       value: a.id,
       label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
     })
   );
-
   const handleJsonUpload = (file: File) => {
     handleJsonUploadUtil(file, {
       form,

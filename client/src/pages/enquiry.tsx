@@ -64,8 +64,11 @@ import TiptapLink from "@tiptap/extension-link";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
-import { QuoteFormFields, defaultQuoteFormState } from "@/components/quote-form-fields";
-import type { QuoteFormState } from "@/components/quote-form-fields";
+import { QuoteRHFForm } from "@/components/quote-rhf-form";
+import { buildQuotePayload } from "@/components/quote-create-dialog";
+import type { QuoteFormValues } from "@/types/quote";
+import { defaultQuoteFormValues } from "@/types/quote";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Enquiry } from "@/types/enquiry";
 import type { TransactionNote } from "@/types/quote";
 import type { CreateNoteData } from "@/api/endpoints/note.api";
@@ -647,23 +650,15 @@ export default function EnquiryPage() {
 
   const { data: packageTypesData } = usePackageTypes();
 
-  const [convertForm, setConvertForm] = useState<QuoteFormState>({ ...defaultQuoteFormState });
-
-  const packageTypeName = useMemo(() => {
-    if (!convertForm.packageType || !packageTypesData) return "";
-    const pt = packageTypesData.find((p: { id: string; name: string }) => p.id === convertForm.packageType);
-    return pt?.name || "";
-  }, [convertForm.packageType, packageTypesData]);
-
-  const handleConvertToQuote = () => {
-    if (!enquiry) return;
+  const convertDefaultValues = useMemo<Partial<QuoteFormValues>>(() => {
+    if (!enquiry) return {};
     const firstDestination = enquiry.destinations?.[0];
     const firstResort = enquiry.resorts?.[0];
     const firstAirport = enquiry.airports?.[0];
     const firstBoardBasis = enquiry.boardBases?.[0];
 
-    setConvertForm({
-      ...defaultQuoteFormState,
+    return {
+      ...defaultQuoteFormValues,
       packageType: enquiry.holiday_type_id || "",
       quoteTitle: enquiry.title || "",
       travelDate: enquiry.travel_date || "",
@@ -673,113 +668,32 @@ export default function EnquiryPage() {
       nights: enquiry.no_of_nights || 7,
       destination: firstDestination?.destination_id || "",
       resort: firstResort?.resort_id || (firstResort as unknown as { resorts_id?: string })?.resorts_id || "",
-      boardBasis: firstBoardBasis?.board_basis_id || "",
-      outboundDepartAirport: firstAirport?.airport_id || "",
+      boardBasisId: firstBoardBasis?.board_basis_id || "",
+      outboundDepartAirportId: firstAirport?.airport_id || "",
       cabinType: enquiry.cabin_type || "",
-      pets: (enquiry.no_of_pets && enquiry.no_of_pets > 0) ? true : false,
-    });
+      pets: !!(enquiry.no_of_pets && enquiry.no_of_pets > 0),
+      status: "QUOTE_IN_PROGRESS",
+    };
+  }, [enquiry]);
+
+  const handleConvertToQuote = () => {
+    if (!enquiry) return;
     setShowConvertModal(true);
   };
 
-  const handleConvertSubmit = () => {
+  const handleConvertSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
     if (!enquiry) return;
-    if (!convertForm.packageType || !convertForm.quoteTitle || !convertForm.travelDate) {
-      toast({ title: "Please fill in Package Type, Quote Title and Travel Date", variant: "destructive" });
-      return;
-    }
-
-    const buildDateTime = (date: string, time: string) => {
-      if (!date) return null;
-      return time ? `${date}T${time}:00` : `${date}T00:00:00`;
-    };
-
-    const showFlights = packageTypeName !== "Hot Tub Break" && !(packageTypeName === "Cruise Package" && convertForm.cruiseOnly);
-    const outboundConnecting = convertForm.outboundConnectingLegs
-      .filter((leg) => leg.departAirportId || leg.arriveAirportId || leg.departDate || leg.arriveDate || leg.flightNumber)
-      .map((leg) => ({
-        departing_airport_id: leg.departAirportId || null,
-        arrival_airport_id: leg.arriveAirportId || null,
-        departure_date_time: buildDateTime(leg.departDate, leg.departTime),
-        arrival_date_time: buildDateTime(leg.arriveDate, leg.arriveTime),
-        flight_number: leg.flightNumber || null,
-        is_included_in_package: true,
-      }));
-    const inboundConnecting = convertForm.inboundConnectingLegs
-      .filter((leg) => leg.departAirportId || leg.arriveAirportId || leg.departDate || leg.arriveDate || leg.flightNumber)
-      .map((leg) => ({
-        departing_airport_id: leg.departAirportId || null,
-        arrival_airport_id: leg.arriveAirportId || null,
-        departure_date_time: buildDateTime(leg.departDate, leg.departTime),
-        arrival_date_time: buildDateTime(leg.arriveDate, leg.arriveTime),
-        flight_number: leg.flightNumber || null,
-        is_included_in_package: true,
-      }));
+    const quotePayload = buildQuotePayload(values, packageTypesData);
+    const imageUrls = images?.urls || [];
 
     const convertPayload: CreateQuoteData = {
+      ...quotePayload,
       transaction_id: enquiry.transaction_id,
-      holiday_type_id: convertForm.packageType,
-      travel_date: convertForm.travelDate,
-      quote_type: packageTypeName || convertForm.packageType,
-      num_of_nights: convertForm.nights || undefined,
-      adult: convertForm.passengersAdults,
-      child: convertForm.passengersChildren,
-      infant: convertForm.passengersInfants,
-      sales_price: convertForm.price || undefined,
-      package_commission: convertForm.commission || undefined,
-      title: convertForm.quoteTitle,
-      price_per_person: convertForm.pricePerPerson || undefined,
-      transfer_type: convertForm.transferType || undefined,
-      pre_booked_seats: convertForm.preBookedSeats || undefined,
-      flight_meals: convertForm.flightMeals === "Yes" || undefined,
-      main_tour_operator_id: convertForm.tourOperator || undefined,
-      lodge_id: packageTypeName === "Hot Tub Break" ? (convertForm.lodgeCode || undefined) : undefined,
-      pets: packageTypeName === "Hot Tub Break" ? (convertForm.pets ? 1 : 0) : undefined,
-      quote_status: "QUOTE_IN_PROGRESS",
-      discounts: convertForm.discount || undefined,
-      service_charge: convertForm.serviceCharge || undefined,
-      lead_source: convertForm.leadSource || undefined,
-      quote_link: convertForm.quoteLink || undefined,
-      country: convertForm.country || undefined,
-      destination: convertForm.destination || undefined,
-      resort: convertForm.resort || undefined,
-      outboundFlight: showFlights ? {
-        departing_airport_id: convertForm.outboundDepartAirport || null,
-        arrival_airport_id: convertForm.outboundArriveAirport || null,
-        departure_date_time: buildDateTime(convertForm.outboundDepartDate, convertForm.outboundDepartTime),
-        arrival_date_time: buildDateTime(convertForm.outboundArriveDate, convertForm.outboundArriveTime),
-        flight_number: convertForm.outboundFlightNumber || null,
-        is_included_in_package: true,
-      } : undefined,
-      inboundFlight: showFlights ? {
-        departing_airport_id: convertForm.inboundDepartAirport || null,
-        arrival_airport_id: convertForm.inboundArriveAirport || null,
-        departure_date_time: buildDateTime(convertForm.inboundDepartDate, convertForm.inboundDepartTime),
-        arrival_date_time: buildDateTime(convertForm.inboundArriveDate, convertForm.inboundArriveTime),
-        flight_number: convertForm.inboundFlightNumber || null,
-        is_included_in_package: true,
-      } : undefined,
-      outboundConnectingLegs: showFlights && outboundConnecting.length > 0 ? outboundConnecting : undefined,
-      inboundConnectingLegs: showFlights && inboundConnecting.length > 0 ? inboundConnecting : undefined,
-      primaryAccommodation: packageTypeName !== "Hot Tub Break" ? {
-        accomodation_id: convertForm.accommodation || null,
-        board_basis_id: convertForm.boardBasis || null,
-        room_type: convertForm.roomType || null,
-        no_of_nights: convertForm.nights || 0,
-        check_in_date_time: convertForm.checkInDate ? (convertForm.checkInTime ? `${convertForm.checkInDate}T${convertForm.checkInTime}:00` : `${convertForm.checkInDate}T00:00:00`) : null,
-        is_included_in_package: true,
-      } : undefined,
-      cruiseTitle: packageTypeName === "Cruise Package" ? convertForm.cruiseTitle : undefined,
-      cruiseLine: packageTypeName === "Cruise Package" ? convertForm.cruiseLine : undefined,
-      shipName: packageTypeName === "Cruise Package" ? convertForm.shipName : undefined,
-      cruiseDate: packageTypeName === "Cruise Package" ? convertForm.cruiseDate : undefined,
-      cabinType: packageTypeName === "Cruise Package" ? convertForm.cabinType : undefined,
-      embarkation: packageTypeName === "Cruise Package" ? convertForm.embarkation : undefined,
-      debarkation: packageTypeName === "Cruise Package" ? convertForm.debarkation : undefined,
-      cruiseExtras: packageTypeName === "Cruise Package" ? convertForm.cruiseExtras : undefined,
-      cruiseOnly: packageTypeName === "Cruise Package" ? convertForm.cruiseOnly : undefined,
-      lodge_type: packageTypeName === "Hot Tub Break" ? convertForm.lodgeCode : undefined,
-      parkName: packageTypeName === "Hot Tub Break" ? convertForm.parkName : undefined,
-    };
+    } as CreateQuoteData;
+
+    if (imageUrls.length > 0) {
+      (convertPayload as any).images = imageUrls;
+    }
 
     createQuoteMutation.mutate(
       convertPayload,
@@ -787,7 +701,6 @@ export default function EnquiryPage() {
         onSuccess: (newQuote: { id: string }) => {
           updateEnquiryMutation.mutate({ id: enquiry.id, data: { status: "Converted" } });
           setShowConvertModal(false);
-          setConvertForm({ ...defaultQuoteFormState });
           toast({ title: "Enquiry converted to quote!" });
           navigate(`/clients/${clientId}/quotes/${newQuote.id}`);
         },
@@ -1031,42 +944,27 @@ export default function EnquiryPage() {
         isSaving={updateEnquiryMutation.isPending}
       />
 
-      <Dialog open={showConvertModal} onOpenChange={(open) => { setShowConvertModal(open); if (!open) setConvertForm({ ...defaultQuoteFormState }); }}>
-        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl">
-          <DialogHeader>
+      <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
+        <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle className="text-lg font-semibold">Convert Enquiry to Quote</DialogTitle>
             <DialogDescription className="text-sm text-black/55">
               Review and adjust the details from the enquiry, then create the quote.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4">
-            <QuoteFormFields
-              form={convertForm}
-              setForm={setConvertForm}
-              mode="convert"
-              packageTypeName={packageTypeName}
-            />
-
-            <div className="mt-6 flex justify-end gap-3">
-              <Button
-                variant="outline"
-                className="h-9 rounded-2xl border-black/10 px-4"
-                onClick={() => setShowConvertModal(false)}
-                data-testid="convert-button-cancel"
-              >
-                Cancel
-              </Button>
-              <Button
-                className="h-9 rounded-2xl bg-black px-4 text-white hover:bg-black/90"
-                disabled={createQuoteMutation.isPending}
-                onClick={handleConvertSubmit}
-                data-testid="convert-button-submit"
-              >
-                {createQuoteMutation.isPending ? "Converting..." : "Convert to Quote"}
-              </Button>
+          <ScrollArea className="max-h-[calc(90vh-100px)]">
+            <div className="px-6 pb-6">
+              <QuoteRHFForm
+                key={enquiryId + showConvertModal}
+                defaultValues={convertDefaultValues}
+                onSubmit={handleConvertSubmit}
+                isLoading={createQuoteMutation.isPending}
+                submitLabel="Convert to Quote"
+                onCancel={() => setShowConvertModal(false)}
+              />
             </div>
-          </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </CommandCenterShell>
