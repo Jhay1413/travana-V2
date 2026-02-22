@@ -65,6 +65,7 @@ export const enquiryTableRepository = {
         enquiry_id: enquiry_destination.enquiry_id,
         destination_id: enquiry_destination.destination_id,
         destination_name: destination.name,
+        country_id: destination.country_id,
       })
         .from(enquiry_destination)
         .leftJoin(destination, eq(enquiry_destination.destination_id, destination.id))

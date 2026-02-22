@@ -666,6 +666,7 @@ export default function EnquiryPage() {
       passengersChildren: enquiry.children || 0,
       passengersInfants: enquiry.infants || 0,
       nights: enquiry.no_of_nights || 7,
+      country: (firstDestination as any)?.country_id || "",
       destination: firstDestination?.destination_id || "",
       resort: firstResort?.resort_id || (firstResort as unknown as { resorts_id?: string })?.resorts_id || "",
       boardBasisId: firstBoardBasis?.board_basis_id || "",
