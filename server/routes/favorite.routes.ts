@@ -1,13 +1,9 @@
 import { Router, Request, Response } from "express";
 import { favoriteService } from "../services/favorite.service";
 import { isAuthenticated } from "../replit_integrations/auth";
+import { getUserId } from "../utils/get-user-id";
 
 const router = Router();
-
-function getUserId(req: Request): string | null {
-  const user = (req as any).user;
-  return user?.claims?.sub || null;
-}
 
 router.get("/", isAuthenticated, async (req: Request, res: Response) => {
   try {

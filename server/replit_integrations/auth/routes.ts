@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { authStorage } from "./storage";
 import { isAuthenticated } from "./replitAuth";
+import { getUserId } from "../../utils/get-user-id";
 import bcrypt from "bcryptjs";
 
 export function registerAuthRoutes(app: Express): void {
@@ -41,11 +42,9 @@ export function registerAuthRoutes(app: Express): void {
 
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
-      let userId: string;
-      if (req.user.authType === "password") {
-        userId = req.user.userId;
-      } else {
-        userId = req.user.claims.sub;
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
       }
       const foundUser = await authStorage.getUser(userId);
       if (!foundUser) {

@@ -3,16 +3,21 @@ import { userService } from "../services/user.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 
+function stripPassword<T extends { password?: string | null }>(user: T): Omit<T, "password"> {
+  const { password, ...rest } = user;
+  return rest;
+}
+
 export const userController = {
   listUsers: asyncHandler(async (_req: Request, res: Response) => {
     const users = await userService.listUsers();
-    return successResponse(res, users, "Users retrieved successfully");
+    return successResponse(res, users.map(stripPassword), "Users retrieved successfully");
   }),
 
   getUserById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const user = await userService.getUserById(id);
-    return successResponse(res, user, "User retrieved successfully");
+    return successResponse(res, stripPassword(user), "User retrieved successfully");
   }),
 
   createUser: asyncHandler(async (req: Request, res: Response) => {

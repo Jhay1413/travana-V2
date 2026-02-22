@@ -2,17 +2,18 @@ import { Request, Response } from "express";
 import { chatService } from "../services/chat.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
+import { getUserId } from "../utils/get-user-id";
 
 export const chatController = {
   getConversations: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.claims?.sub || (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const conversations = await chatService.getConversations(userId);
     return successResponse(res, conversations, "Conversations retrieved");
   }),
 
   getMessages: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.claims?.sub || (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { conversationId } = req.params;
     const messages = await chatService.getMessages(conversationId, userId);
@@ -20,7 +21,7 @@ export const chatController = {
   }),
 
   sendMessage: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.claims?.sub || (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { conversationId } = req.params;
     const { content } = req.body;
@@ -29,7 +30,7 @@ export const chatController = {
   }),
 
   startDirectChat: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.claims?.sub || (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { targetUserId } = req.body;
     const conversationId = await chatService.getOrCreateDirectConversation(userId, targetUserId);
@@ -37,7 +38,7 @@ export const chatController = {
   }),
 
   createGroupChat: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.claims?.sub || (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { name, participantIds } = req.body;
     const allIds = Array.from(new Set([userId, ...participantIds]));
@@ -46,7 +47,7 @@ export const chatController = {
   }),
 
   markRead: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.claims?.sub || (req as any).user?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { conversationId } = req.params;
     await chatService.markRead(conversationId, userId);
