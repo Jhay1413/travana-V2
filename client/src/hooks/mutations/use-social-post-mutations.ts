@@ -34,3 +34,14 @@ export function useScheduleOnOnlySocials() {
     },
   });
 }
+
+export function useRescheduleOnOnlySocials() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, postSchedule, images }: { id: string; postSchedule: string; images?: number[] }) =>
+      socialPostApi.rescheduleOnOnlySocials(id, postSchedule, images),
+    onSuccess: (deal) => {
+      queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
+    },
+  });
+}

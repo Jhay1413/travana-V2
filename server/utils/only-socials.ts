@@ -97,8 +97,11 @@ export const scheduleOnlySocialsPost = async (
     const data = (await response.json()) as { id: string; uuid: string; name: string; hexColor: string };
 
     if (!response.ok) {
+      console.error("[OnlySocials] create post failed:", JSON.stringify(data));
       throw new AppError(`OnlySocials create error: ${JSON.stringify(data)}`, response.status);
     }
+
+    console.log("[OnlySocials] post created:", data.id, data.uuid);
 
     const scheduled = await fetch(`${baseUrl}/schedule/${data.uuid}`, {
       method: "POST",
@@ -108,8 +111,11 @@ export const scheduleOnlySocialsPost = async (
 
     if (!scheduled.ok) {
       const schedData = await scheduled.json();
+      console.error("[OnlySocials] schedule confirm failed:", JSON.stringify(schedData));
       throw new AppError(`OnlySocials schedule confirm error: ${JSON.stringify(schedData)}`, scheduled.status);
     }
+
+    console.log("[OnlySocials] post scheduled successfully");
 
     return data;
   } catch (error) {
@@ -161,8 +167,11 @@ export const rescheduleOnlySocialsPost = async (
     const data = (await response.json()) as { id: string; uuid: string; name: string; hexColor: string };
 
     if (!response.ok) {
+      console.error("[OnlySocials] reschedule failed:", JSON.stringify(data));
       throw new AppError(`OnlySocials reschedule error: ${JSON.stringify(data)}`, response.status);
     }
+
+    console.log("[OnlySocials] post rescheduled successfully:", data.id);
 
     return data;
   } catch (error) {

@@ -196,7 +196,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     const result = await scheduleOnlySocialsPost(postSchedule, deal.post, images);
 
     return await socialPostRepository.update(id, {
-      onlySocialsId: String(result.id),
+      onlySocialsId: result.uuid,
       postSchedule: new Date(postSchedule),
     });
   },
@@ -214,7 +214,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     );
 
     return await socialPostRepository.update(id, {
-      onlySocialsId: String(result.id),
+      onlySocialsId: result.uuid,
       postSchedule: new Date(newPostSchedule),
     });
   },

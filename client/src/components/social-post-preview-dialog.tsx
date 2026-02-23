@@ -9,11 +9,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { useSavePost, useScheduleOnOnlySocials } from "@/hooks/mutations/use-social-post-mutations";
+import {
+  useSavePost,
+  useScheduleOnOnlySocials,
+  useRescheduleOnOnlySocials,
+} from "@/hooks/mutations/use-social-post-mutations";
 import { useToast } from "@/hooks/use-toast";
 import {
   Copy,
-  Save,
   CalendarClock,
   Sparkles,
   Hash,
@@ -42,20 +45,23 @@ export function SocialPostPreviewDialog({
   const { toast } = useToast();
   const savePost = useSavePost();
   const scheduleOnOnlySocials = useScheduleOnOnlySocials();
+  const rescheduleOnOnlySocials = useRescheduleOnOnlySocials();
   const postRef = useRef<HTMLDivElement>(null);
   const [subtitle, setSubtitle] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
-  const [postHtml, setPostHtml] = useState("");
   const [copied, setCopied] = useState(false);
 
   const isScheduled = !!travelDeal?.onlySocialsId;
+  const isBusy = savePost.isPending || scheduleOnOnlySocials.isPending || rescheduleOnOnlySocials.isPending;
 
   useEffect(() => {
     if (travelDeal) {
       setSubtitle(travelDeal.subtitle || "");
       setHashtags((travelDeal.hashtags || []).join(" "));
-      setPostHtml(travelDeal.post || "");
+      if (postRef.current) {
+        postRef.current.innerHTML = travelDeal.post || "";
+      }
       if (travelDeal.postSchedule) {
         const d = new Date(travelDeal.postSchedule);
         if (!isNaN(d.getTime())) {
@@ -72,9 +78,17 @@ export function SocialPostPreviewDialog({
     }
   }, [travelDeal]);
 
-  const handleSave = async () => {
+  const handleSaveAndSchedule = async () => {
     if (!travelDeal) return;
-    const currentHtml = postRef.current?.innerHTML || postHtml;
+    if (!scheduleDate) {
+      toast({ title: "Please select a schedule date and time", variant: "destructive" });
+      return;
+    }
+
+    const currentHtml = postRef.current?.innerHTML ?? "";
+    const postScheduleIso = new Date(scheduleDate).toISOString();
+
+    // Step 1: save content to DB
     try {
       await savePost.mutateAsync({
         id: travelDeal.id,
@@ -84,31 +98,29 @@ export function SocialPostPreviewDialog({
           hashtags: hashtags.split(/\s+/).filter((h) => h.startsWith("#")),
         },
       });
-      toast({ title: "Post saved successfully" });
-    } catch {
-      toast({ title: "Failed to save post", variant: "destructive" });
-    }
-  };
-
-  const handleSchedule = async () => {
-    if (!travelDeal) return;
-    if (!scheduleDate) {
-      toast({ title: "Please select a schedule date and time", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to save post";
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
       return;
     }
+
+    // Step 2: push to OnlySocials
     try {
-      await scheduleOnOnlySocials.mutateAsync({
-        id: travelDeal.id,
-        postSchedule: new Date(scheduleDate).toISOString(),
-      });
-      toast({ title: "Post scheduled on OnlySocials successfully" });
-    } catch {
-      toast({ title: "Failed to schedule post on OnlySocials", variant: "destructive" });
+      if (isScheduled) {
+        await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, postSchedule: postScheduleIso });
+        toast({ title: "Post updated and rescheduled on OnlySocials" });
+      } else {
+        await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, postSchedule: postScheduleIso });
+        toast({ title: "Post saved and scheduled on OnlySocials" });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to push to OnlySocials";
+      toast({ title: "OnlySocials error", description: msg, variant: "destructive" });
     }
   };
 
   const handleCopy = () => {
-    const currentHtml = postRef.current?.innerHTML || postHtml;
+    const currentHtml = postRef.current?.innerHTML ?? "";
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = currentHtml;
     const plainText = tempDiv.textContent || tempDiv.innerText || "";
@@ -139,7 +151,7 @@ export function SocialPostPreviewDialog({
                   ? "AI is crafting your travel post"
                   : isScheduled
                   ? "Post is scheduled on OnlySocials"
-                  : "Edit your post content, then save or schedule"}
+                  : "Edit your post, pick a time, then save & schedule"}
               </DialogDescription>
             </div>
             {isScheduled && (
@@ -171,6 +183,7 @@ export function SocialPostPreviewDialog({
         ) : travelDeal ? (
           <div className="px-6 pb-6 pt-4">
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              {/* Left: live preview */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="rounded-2xl overflow-hidden bg-white dark:bg-slate-800 shadow-lg border border-black/5 dark:border-white/5">
                   <div className="flex items-center gap-2.5 px-4 py-3 border-b border-black/5 dark:border-white/5">
@@ -210,9 +223,7 @@ export function SocialPostPreviewDialog({
                       {travelDeal.title}
                     </p>
                     {subtitle && (
-                      <p className="text-[11px] text-black/55 dark:text-white/55 italic">
-                        {subtitle}
-                      </p>
+                      <p className="text-[11px] text-black/55 dark:text-white/55 italic">{subtitle}</p>
                     )}
                     <div className="flex flex-wrap gap-1 pt-1">
                       {hashtags
@@ -220,10 +231,7 @@ export function SocialPostPreviewDialog({
                         .filter(Boolean)
                         .slice(0, 6)
                         .map((tag, i) => (
-                          <span
-                            key={i}
-                            className="text-[10px] text-blue-500 dark:text-blue-400 font-medium"
-                          >
+                          <span key={i} className="text-[10px] text-blue-500 dark:text-blue-400 font-medium">
                             {tag}
                           </span>
                         ))}
@@ -241,6 +249,7 @@ export function SocialPostPreviewDialog({
                 </p>
               </div>
 
+              {/* Right: editor */}
               <div className="lg:col-span-3 space-y-4">
                 <div className="space-y-1.5">
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
@@ -265,12 +274,6 @@ export function SocialPostPreviewDialog({
                     ref={postRef}
                     contentEditable
                     suppressContentEditableWarning
-                    dangerouslySetInnerHTML={{ __html: postHtml }}
-                    onInput={() => {
-                      if (postRef.current) {
-                        setPostHtml(postRef.current.innerHTML);
-                      }
-                    }}
                     className="min-h-[240px] max-h-[380px] overflow-y-auto rounded-xl px-4 py-3 text-[13px] leading-[1.7] bg-white dark:bg-slate-800 border border-black/8 dark:border-white/8 shadow-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-shadow"
                     data-testid="editor-post-content"
                   />
@@ -290,37 +293,7 @@ export function SocialPostPreviewDialog({
                   />
                 </div>
 
-                {/* Save content row */}
-                <div className="flex gap-3">
-                  <Button
-                    onClick={handleSave}
-                    disabled={savePost.isPending}
-                    className="flex-1 h-11 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-semibold gap-2 shadow-lg shadow-blue-500/20 transition-all"
-                    data-testid="button-save-post"
-                  >
-                    {savePost.isPending ? (
-                      <Spinner className="w-4 h-4" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    Save
-                  </Button>
-                  <Button
-                    onClick={handleCopy}
-                    variant="outline"
-                    className="h-11 rounded-xl text-sm font-medium gap-2 border-black/8 dark:border-white/8 hover:bg-black/3 dark:hover:bg-white/5 transition-all"
-                    data-testid="button-copy-post"
-                  >
-                    {copied ? (
-                      <Check className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                    {copied ? "Copied!" : "Copy"}
-                  </Button>
-                </div>
-
-                {/* Schedule section */}
+                {/* Schedule date + combined save & schedule button */}
                 <div className="rounded-xl bg-white dark:bg-slate-800 border border-black/6 dark:border-white/6 shadow-sm p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <CalendarClock className="w-4 h-4 text-orange-500" />
@@ -340,19 +313,34 @@ export function SocialPostPreviewDialog({
                     className="rounded-xl bg-slate-50 dark:bg-slate-900 border-black/6 dark:border-white/6"
                     data-testid="input-schedule-date"
                   />
-                  <Button
-                    onClick={handleSchedule}
-                    disabled={scheduleOnOnlySocials.isPending || !scheduleDate}
-                    className="w-full h-10 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-semibold gap-2 shadow-md shadow-orange-500/20 transition-all disabled:opacity-50"
-                    data-testid="button-schedule-post"
-                  >
-                    {scheduleOnOnlySocials.isPending ? (
-                      <Spinner className="w-4 h-4" />
-                    ) : (
-                      <Clock className="w-4 h-4" />
-                    )}
-                    {isScheduled ? "Reschedule Post" : "Schedule Post"}
-                  </Button>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={handleSaveAndSchedule}
+                      disabled={isBusy || !scheduleDate}
+                      className="flex-1 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-semibold gap-2 shadow-md shadow-orange-500/20 transition-all disabled:opacity-50"
+                      data-testid="button-save-and-schedule"
+                    >
+                      {isBusy ? (
+                        <Spinner className="w-4 h-4" />
+                      ) : (
+                        <Clock className="w-4 h-4" />
+                      )}
+                      {isScheduled ? "Save & Reschedule" : "Save & Schedule"}
+                    </Button>
+                    <Button
+                      onClick={handleCopy}
+                      variant="outline"
+                      className="h-10 rounded-xl text-sm font-medium gap-2 border-black/8 dark:border-white/8 hover:bg-black/3 dark:hover:bg-white/5 transition-all"
+                      data-testid="button-copy-post"
+                    >
+                      {copied ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                      {copied ? "Copied!" : "Copy"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

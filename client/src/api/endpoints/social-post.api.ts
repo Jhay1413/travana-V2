@@ -57,4 +57,12 @@ export const socialPostApi = {
     });
     return res;
   },
+
+  rescheduleOnOnlySocials: async (id: string, postSchedule: string, images: number[] = []): Promise<TravelDeal> => {
+    const { data: res } = await axiosClient.put<TravelDeal>(`/api/social-posts/${id}/reschedule`, {
+      postSchedule,
+      images,
+    });
+    return res;
+  },
 };
