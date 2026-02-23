@@ -22,8 +22,8 @@ router.get("/quote/:quoteId", socialPostController.getByQuoteId);
 router.patch("/:id", socialPostController.update);
 
 router.post("/media/upload", upload.array("files", 10), socialPostController.uploadMedia);
-router.post("/:id/schedule", socialPostController.schedulePost);
-router.put("/:id/reschedule", socialPostController.reschedulePost);
+router.post("/:id/schedule", upload.array("files", 10), socialPostController.schedulePost);
+router.put("/:id/reschedule", upload.array("files", 10), socialPostController.reschedulePost);
 router.delete("/:id/schedule", socialPostController.deleteScheduledPost);
 router.get("/:id/media", socialPostController.getPostMedia);
 

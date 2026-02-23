@@ -57,19 +57,21 @@ export const socialPostApi = {
     return res;
   },
 
-  scheduleOnOnlySocials: async (id: string, postSchedule: string, images: number[] = []): Promise<TravelDeal> => {
-    const { data: res } = await axiosClient.post<TravelDeal>(`/api/social-posts/${id}/schedule`, {
-      postSchedule,
-      images,
-    });
+  scheduleOnOnlySocials: async (id: string, formData: FormData): Promise<TravelDeal> => {
+    const { data: res } = await axiosClient.post<TravelDeal>(
+      `/api/social-posts/${id}/schedule`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
     return res;
   },
 
-  rescheduleOnOnlySocials: async (id: string, postSchedule: string, images: number[] = []): Promise<TravelDeal> => {
-    const { data: res } = await axiosClient.put<TravelDeal>(`/api/social-posts/${id}/reschedule`, {
-      postSchedule,
-      images,
-    });
+  rescheduleOnOnlySocials: async (id: string, formData: FormData): Promise<TravelDeal> => {
+    const { data: res } = await axiosClient.put<TravelDeal>(
+      `/api/social-posts/${id}/reschedule`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
     return res;
   },
 

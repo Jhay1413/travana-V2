@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Reorder } from "framer-motion";
 import {
   Dialog,
@@ -14,7 +14,6 @@ import {
   useSavePost,
   useScheduleOnOnlySocials,
   useRescheduleOnOnlySocials,
-  useUploadMedia,
 } from "@/hooks/mutations/use-social-post-mutations";
 import { usePostMedia } from "@/hooks/queries/use-social-post-queries";
 import { useToast } from "@/hooks/use-toast";
@@ -28,10 +27,27 @@ import {
   Check,
   Clock,
   ImagePlus,
-  X,
   GripVertical,
+  X,
 } from "lucide-react";
-import type { TravelDeal, UploadedMedia } from "@/api/endpoints/social-post.api";
+import type { TravelDeal } from "@/api/endpoints/social-post.api";
+
+interface LocalImage {
+  localId: string;
+  file: File;
+  previewUrl: string;
+}
+
+interface ExistingImage {
+  id: number;
+  url: string;
+  thumb_url: string;
+  name: string;
+}
+
+type ImageItem =
+  | { type: "existing"; data: ExistingImage; sortKey: string }
+  | { type: "local"; data: LocalImage; sortKey: string };
 
 interface SocialPostPreviewDialogProps {
   open: boolean;
@@ -52,22 +68,22 @@ export function SocialPostPreviewDialog({
   const savePost = useSavePost();
   const scheduleOnOnlySocials = useScheduleOnOnlySocials();
   const rescheduleOnOnlySocials = useRescheduleOnOnlySocials();
-  const uploadMedia = useUploadMedia();
   const postRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [subtitle, setSubtitle] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [copied, setCopied] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>([]);
+  const [existingImages, setExistingImages] = useState<ExistingImage[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<LocalImage[]>([]);
+  const [imageOrder, setImageOrder] = useState<ImageItem[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const isScheduled = !!travelDeal?.onlySocialsId;
   const isBusy =
     savePost.isPending ||
     scheduleOnOnlySocials.isPending ||
-    rescheduleOnOnlySocials.isPending ||
-    uploadMedia.isPending;
+    rescheduleOnOnlySocials.isPending;
 
   const { data: existingMedia } = usePostMedia(travelDeal?.id, open && isScheduled);
 
@@ -94,20 +110,40 @@ export function SocialPostPreviewDialog({
     }
   }, [travelDeal]);
 
-  // Reset images when dialog closes
   useEffect(() => {
     if (!open) {
-      setUploadedImages([]);
+      setExistingImages([]);
+      setPendingFiles((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+        return [];
+      });
+      setImageOrder([]);
     }
   }, [open]);
 
   useEffect(() => {
     if (Array.isArray(existingMedia) && existingMedia.length > 0) {
-      setUploadedImages(existingMedia);
+      setExistingImages(existingMedia as ExistingImage[]);
     }
   }, [existingMedia]);
 
-  const handleFiles = async (files: FileList | File[]) => {
+  useEffect(() => {
+    const items: ImageItem[] = [
+      ...existingImages.map((img): ImageItem => ({
+        type: "existing",
+        data: img,
+        sortKey: `ex-${img.id}`,
+      })),
+      ...pendingFiles.map((img): ImageItem => ({
+        type: "local",
+        data: img,
+        sortKey: `loc-${img.localId}`,
+      })),
+    ];
+    setImageOrder(items);
+  }, [existingImages, pendingFiles]);
+
+  const handleFiles = (files: FileList | File[]) => {
     const fileArray = Array.from(files).filter((f) =>
       ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4"].includes(f.type)
     );
@@ -115,18 +151,17 @@ export function SocialPostPreviewDialog({
       toast({ title: "Unsupported file type", description: "Only images (JPEG, PNG, GIF, WebP) and MP4 are allowed.", variant: "destructive" });
       return;
     }
-    try {
-      const result = await uploadMedia.mutateAsync(fileArray);
-      setUploadedImages((prev) => [...prev, ...result]);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      toast({ title: "Upload failed", description: msg, variant: "destructive" });
-    }
+    const newLocal: LocalImage[] = fileArray.map((file) => ({
+      localId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setPendingFiles((prev) => [...prev, ...newLocal]);
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      void handleFiles(e.target.files);
+      handleFiles(e.target.files);
       e.target.value = "";
     }
   };
@@ -135,13 +170,30 @@ export function SocialPostPreviewDialog({
     e.preventDefault();
     setIsDraggingOver(false);
     if (e.dataTransfer.files.length > 0) {
-      void handleFiles(e.dataTransfer.files);
+      handleFiles(e.dataTransfer.files);
     }
   };
 
-  const removeImage = (id: number) => {
-    setUploadedImages((prev) => prev.filter((img) => img.id !== id));
+  const removeImage = (sortKey: string) => {
+    const item = imageOrder.find((i) => i.sortKey === sortKey);
+    if (!item) return;
+    if (item.type === "existing") {
+      setExistingImages((prev) => prev.filter((img) => img.id !== item.data.id));
+    } else {
+      URL.revokeObjectURL(item.data.previewUrl);
+      setPendingFiles((prev) => prev.filter((img) => img.localId !== item.data.localId));
+    }
   };
+
+  const previewImage = useMemo(() => {
+    if (imageOrder.length > 0) {
+      const first = imageOrder[0];
+      return first.type === "existing"
+        ? first.data.thumb_url || first.data.url
+        : first.data.previewUrl;
+    }
+    return quoteImageUrl;
+  }, [imageOrder, quoteImageUrl]);
 
   const handleSaveAndSchedule = async () => {
     if (!travelDeal) return;
@@ -152,9 +204,13 @@ export function SocialPostPreviewDialog({
 
     const currentHtml = postRef.current?.innerHTML ?? "";
     const postScheduleIso = new Date(scheduleDate).toISOString();
-    const imageIds = uploadedImages.map((img) => img.id);
+    const existingIds = imageOrder
+      .filter((i) => i.type === "existing")
+      .map((i) => (i.data as ExistingImage).id);
+    const newFiles = imageOrder
+      .filter((i) => i.type === "local")
+      .map((i) => (i.data as LocalImage).file);
 
-    // Step 1: save content to DB
     try {
       await savePost.mutateAsync({
         id: travelDeal.id,
@@ -170,13 +226,17 @@ export function SocialPostPreviewDialog({
       return;
     }
 
-    // Step 2: push to OnlySocials
     try {
+      const formData = new FormData();
+      formData.append("postSchedule", postScheduleIso);
+      formData.append("existingImageIds", JSON.stringify(existingIds));
+      newFiles.forEach((file) => formData.append("files", file));
+
       if (isScheduled) {
-        await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, postSchedule: postScheduleIso, images: imageIds });
+        await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
         toast({ title: "Post updated and rescheduled on OnlySocials" });
       } else {
-        await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, postSchedule: postScheduleIso, images: imageIds });
+        await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
         toast({ title: "Post saved and scheduled on OnlySocials" });
       }
     } catch (err) {
@@ -263,15 +323,9 @@ export function SocialPostPreviewDialog({
                   </div>
 
                   <div className="relative aspect-[4/3] bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-950 dark:to-slate-900 overflow-hidden">
-                    {uploadedImages.length > 0 ? (
+                    {previewImage ? (
                       <img
-                        src={uploadedImages[0].thumb_url || uploadedImages[0].url}
-                        alt={uploadedImages[0].name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : quoteImageUrl ? (
-                      <img
-                        src={quoteImageUrl}
+                        src={previewImage}
                         alt={travelDeal.title || "Post image"}
                         className="w-full h-full object-cover"
                         data-testid="img-post-preview"
@@ -286,11 +340,6 @@ export function SocialPostPreviewDialog({
                     {travelDeal.price && (
                       <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full">
                         From £{travelDeal.price}pp
-                      </div>
-                    )}
-                    {uploadedImages.length > 1 && (
-                      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-semibold px-2 py-1 rounded-full">
-                        +{uploadedImages.length - 1} more
                       </div>
                     )}
                   </div>
@@ -335,10 +384,9 @@ export function SocialPostPreviewDialog({
                   </label>
                   <Input
                     value={subtitle}
-                    onChange={(e) => !isScheduled && setSubtitle(e.target.value)}
-                    readOnly={isScheduled}
+                    onChange={(e) => setSubtitle(e.target.value)}
                     placeholder="Catchy tagline for your post..."
-                    className={`rounded-xl border-black/8 dark:border-white/8 shadow-sm transition-shadow ${isScheduled ? "bg-black/5 dark:bg-white/5 cursor-not-allowed text-black/50 dark:text-white/50" : "bg-white dark:bg-slate-800 focus:shadow-md"}`}
+                    className="rounded-xl bg-white dark:bg-slate-800 border-black/8 dark:border-white/8 shadow-sm focus:shadow-md transition-shadow"
                     data-testid="input-subtitle"
                   />
                 </div>
@@ -350,9 +398,9 @@ export function SocialPostPreviewDialog({
                   </label>
                   <div
                     ref={postRef}
-                    contentEditable={!isScheduled}
+                    contentEditable
                     suppressContentEditableWarning
-                    className={`min-h-[240px] max-h-[380px] overflow-y-auto rounded-xl px-4 py-3 text-[13px] leading-[1.7] border transition-shadow ${isScheduled ? "bg-black/5 dark:bg-white/5 cursor-not-allowed text-black/60 dark:text-white/60 border-black/8 dark:border-white/8" : "bg-white dark:bg-slate-800 border-black/8 dark:border-white/8 shadow-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"}`}
+                    className="min-h-[240px] max-h-[380px] overflow-y-auto rounded-xl px-4 py-3 text-[13px] leading-[1.7] bg-white dark:bg-slate-800 border border-black/8 dark:border-white/8 shadow-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-shadow"
                     data-testid="editor-post-content"
                   />
                 </div>
@@ -364,10 +412,9 @@ export function SocialPostPreviewDialog({
                   </label>
                   <Input
                     value={hashtags}
-                    onChange={(e) => !isScheduled && setHashtags(e.target.value)}
-                    readOnly={isScheduled}
+                    onChange={(e) => setHashtags(e.target.value)}
                     placeholder="#TravelDeals #Holiday ..."
-                    className={`rounded-xl border-black/8 dark:border-white/8 shadow-sm transition-shadow ${isScheduled ? "bg-black/5 dark:bg-white/5 cursor-not-allowed text-black/50 dark:text-white/50" : "bg-white dark:bg-slate-800 focus:shadow-md"}`}
+                    className="rounded-xl bg-white dark:bg-slate-800 border-black/8 dark:border-white/8 shadow-sm focus:shadow-md transition-shadow"
                     data-testid="input-hashtags"
                   />
                 </div>
@@ -377,14 +424,18 @@ export function SocialPostPreviewDialog({
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
                     <ImagePlus className="w-3.5 h-3.5" />
                     Images
-                    {uploadedImages.length > 0 && (
+                    {imageOrder.length > 0 && (
                       <span className="ml-auto text-[10px] text-black/40 dark:text-white/40 font-normal">
                         drag to reorder
                       </span>
                     )}
+                    {pendingFiles.length > 0 && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal ml-1">
+                        ({pendingFiles.length} new - will upload on save)
+                      </span>
+                    )}
                   </label>
 
-                  {/* Drop zone */}
                   <div
                     className={`relative rounded-xl border-2 border-dashed transition-colors cursor-pointer ${
                       isDraggingOver
@@ -405,41 +456,34 @@ export function SocialPostPreviewDialog({
                       onChange={handleFileInputChange}
                     />
                     <div className="flex flex-col items-center justify-center py-4 gap-1.5 select-none">
-                      {uploadMedia.isPending ? (
-                        <Spinner className="w-5 h-5 text-blue-500" />
-                      ) : (
-                        <ImagePlus className="w-5 h-5 text-black/25 dark:text-white/25" />
-                      )}
+                      <ImagePlus className="w-5 h-5 text-black/25 dark:text-white/25" />
                       <p className="text-[11px] text-black/40 dark:text-white/40">
-                        {uploadMedia.isPending ? "Uploading..." : "Click or drop images here"}
+                        Click or drop images here
                       </p>
                     </div>
                   </div>
 
-                  {/* Reorderable thumbnails */}
-                  {uploadedImages.length > 0 && (
+                  {imageOrder.length > 0 && (
                     <Reorder.Group
                       axis="x"
-                      values={uploadedImages}
-                      onReorder={setUploadedImages}
+                      values={imageOrder}
+                      onReorder={setImageOrder}
                       className="flex gap-2 flex-wrap"
                     >
-                      {uploadedImages.map((img) => (
-                        <Reorder.Item key={img.id} value={img} className="relative group cursor-grab active:cursor-grabbing">
-                          <div className="w-16 h-16 rounded-lg overflow-hidden border border-black/8 dark:border-white/8 shadow-sm bg-slate-100 dark:bg-slate-800">
+                      {imageOrder.map((item) => (
+                        <Reorder.Item key={item.sortKey} value={item} className="relative group cursor-grab active:cursor-grabbing">
+                          <div className={`w-16 h-16 rounded-lg overflow-hidden border shadow-sm bg-slate-100 dark:bg-slate-800 ${item.type === "local" ? "border-amber-400 dark:border-amber-500" : "border-black/8 dark:border-white/8"}`}>
                             <img
-                              src={img.thumb_url || img.url}
-                              alt={img.name}
+                              src={item.type === "existing" ? (item.data.thumb_url || item.data.url) : item.data.previewUrl}
+                              alt={item.type === "existing" ? item.data.name : item.data.file.name}
                               className="w-full h-full object-cover pointer-events-none"
                             />
                           </div>
-                          {/* Drag handle indicator */}
                           <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <GripVertical className="w-3 h-3 text-white drop-shadow" />
                           </div>
-                          {/* Remove button */}
                           <button
-                            onClick={(e) => { e.stopPropagation(); removeImage(img.id); }}
+                            onClick={(e) => { e.stopPropagation(); removeImage(item.sortKey); }}
                             className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                           >
                             <X className="w-2.5 h-2.5" />

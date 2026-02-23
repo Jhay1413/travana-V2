@@ -129,7 +129,9 @@ export const scheduleOnlySocialsPost = async (
 
 export const rescheduleOnlySocialsPost = async (
   onlySocialsPostId: string,
-  newPostSchedule: string
+  newPostSchedule: string,
+  postContent: string,
+  images: number[]
 ): Promise<{ id: string; uuid: string; name: string; hexColor: string }> => {
   const scheduleDateTime = parseISO(newPostSchedule);
   const scheduleDate = format(scheduleDateTime, "yyyy-MM-dd");
@@ -142,8 +144,23 @@ export const rescheduleOnlySocialsPost = async (
       headers: { ...getAuthHeader(), "Content-Type": "application/json" },
       redirect: "follow",
       body: JSON.stringify({
+        accounts: [ACCOUNT_ID],
+        versions: [
+          {
+            account_id: ACCOUNT_ID,
+            is_original: true,
+            content: [{ body: postContent, media: images, url: "" }],
+            options: { facebook_page: { type: "post" } },
+          },
+        ],
+        tags: [],
         date: scheduleDate,
         time: scheduleTime,
+        until_date: null,
+        until_time: "",
+        repeat_frequency: null,
+        short_link_provider: null,
+        short_link_provider_id: null,
       }),
     });
 

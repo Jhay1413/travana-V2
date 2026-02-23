@@ -5,7 +5,6 @@ import { AppError } from "../utils/error-handler";
 import {
   scheduleOnlySocialsPost,
   rescheduleOnlySocialsPost,
-  updateOnlySocialsPostMedia,
   deleteOnlySocialsPost,
   uploadMultipleOnlySocialsMedia,
   fetchOnlySocialsPost,
@@ -191,11 +190,24 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     return await socialPostRepository.update(id, data);
   },
 
-  async schedulePost(id: string, postSchedule: string, images: number[]): Promise<TravelDeal> {
+  async schedulePost(
+    id: string,
+    postSchedule: string,
+    existingImageIds: number[],
+    newFiles: Express.Multer.File[]
+  ): Promise<TravelDeal> {
     const deal = await socialPostRepository.findById(id);
     if (!deal) throw new AppError("Travel deal not found", 404);
 
-    const result = await scheduleOnlySocialsPost(postSchedule, deal.post, images);
+    let allImageIds = [...existingImageIds];
+    if (newFiles.length > 0) {
+      const uploaded = await uploadMultipleOnlySocialsMedia(newFiles);
+      const newIds = uploaded.map((u) => Number(u.id));
+      allImageIds = [...allImageIds, ...newIds];
+      console.log(`[SocialPost] Uploaded ${newFiles.length} new images for scheduling`);
+    }
+
+    const result = await scheduleOnlySocialsPost(postSchedule, deal.post, allImageIds);
 
     return await socialPostRepository.update(id, {
       onlySocialsId: result.uuid,
@@ -203,20 +215,30 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     });
   },
 
-  async reschedulePost(id: string, newPostSchedule: string, images: number[] = []): Promise<TravelDeal> {
+  async reschedulePost(
+    id: string,
+    newPostSchedule: string,
+    existingImageIds: number[],
+    newFiles: Express.Multer.File[]
+  ): Promise<TravelDeal> {
     const deal = await socialPostRepository.findById(id);
     if (!deal) throw new AppError("Travel deal not found", 404);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
 
+    let allImageIds = [...existingImageIds];
+    if (newFiles.length > 0) {
+      const uploaded = await uploadMultipleOnlySocialsMedia(newFiles);
+      const newIds = uploaded.map((u) => Number(u.id));
+      allImageIds = [...allImageIds, ...newIds];
+      console.log(`[SocialPost] Uploaded ${newFiles.length} new images for rescheduling`);
+    }
+
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
-      newPostSchedule
+      newPostSchedule,
+      deal.post,
+      allImageIds
     );
-
-    if (images.length > 0) {
-      await updateOnlySocialsPostMedia(deal.onlySocialsId, images);
-      console.log(`[SocialPost] Updated media for post ${deal.onlySocialsId} with ${images.length} images`);
-    }
 
     return await socialPostRepository.update(id, {
       onlySocialsId: result.uuid,
