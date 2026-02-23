@@ -591,39 +591,39 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         <div className="grid content-start gap-2" data-testid="col-itinerary-left">
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lodge-type">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lodge-type-label">Lodge Type</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lodge-type-value">{quote.lodge?.type || "—"}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lodge-type-value">{quote.lodge?.type || "—"}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-pets">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-pets-label">Pets</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-pets-value">{quote.pets}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-pets-value">{quote.pets}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-guests">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-guests-label">Number of Guests</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-guests-value">{quote.passengers.adults + quote.passengers.children}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-guests-value">{quote.passengers.adults + quote.passengers.children}</div>
                           </div>
                         </div>
                         <div className="grid content-start gap-2" data-testid="col-itinerary-right">
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-passengers-value">
                               {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
                             </div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-nights">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-nights-label">Number of Nights</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-nights-value">{quote.nights}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-nights-value">{quote.nights}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
                           </div>
                         </div>
                       </>
@@ -632,41 +632,41 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         <div className="grid content-start gap-2" data-testid="col-itinerary-left">
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cruise-line">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cruise-line-label">Cruise Line</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-cruise-line-value">{quote.cruise?.cruiseLine || "—"}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-cruise-line-value">{quote.cruise?.cruiseLine || "—"}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-ship">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-ship-label">Ship</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-ship-value">{quote.cruise?.ship || "—"}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-ship-value">{quote.cruise?.ship || "—"}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cabin-type">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cabin-type-label">Cabin Type</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-cabin-type-value">{quote.cruise?.cabinType || "—"}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-cabin-type-value">{quote.cruise?.cabinType || "—"}</div>
                           </div>
                         </div>
                         <div className="grid content-start gap-2" data-testid="col-itinerary-right">
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cruise-date">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cruise-date-label">Cruise Date</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-cruise-date-value">{quote.cruise?.cruiseDate ? formatUKDate(quote.cruise.cruiseDate) : "—"}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-cruise-date-value">{quote.cruise?.cruiseDate ? formatUKDate(quote.cruise.cruiseDate) : "—"}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-pre-cruise">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-pre-cruise-label">Pre-Cruise Stay</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-pre-cruise-value">{quote.cruise?.preCruiseStay || 0} nights</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-pre-cruise-value">{quote.cruise?.preCruiseStay || 0} nights</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-post-cruise">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-post-cruise-label">Post-Cruise Stay</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-post-cruise-value">{quote.cruise?.postCruiseStay || 0} nights</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-post-cruise-value">{quote.cruise?.postCruiseStay || 0} nights</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-passengers-value">
                               {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
                             </div>
                           </div>
@@ -677,47 +677,47 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         <div className="grid content-start gap-2" data-testid="col-itinerary-left">
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-hotel-label">Hotel</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-room-label">Room Type</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-board">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-board-label">Board Basis</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-transfer-label">Transfer Type</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-transfer-value">{quote.transferType || "Private Transfer"}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-transfer-value">{quote.transferType || "Private Transfer"}</div>
                           </div>
                         </div>
                         <div className="grid content-start gap-2" data-testid="col-itinerary-right">
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-departure-airport">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-departure-airport-label">Departure Airport</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-departure-airport-value">{quote.flights.outbound.from}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-departure-airport-value">{quote.flights.outbound.from}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-passengers-value">
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-passengers-value">
                               {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children (${quote.passengers.childAges.join(", ")})` : ""}
                             </div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-nights">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-nights-label">Number of Nights</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-nights-value">{quote.nights}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-nights-value">{quote.nights}</div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
-                            <div className="text-xs font-semibold text-black/85" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
+                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
                           </div>
                         </div>
                       </>
@@ -730,11 +730,11 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                       <div className="grid gap-2 sm:grid-cols-2">
                         <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-hays-reference">
                           <div className="text-xs font-semibold text-black/65">HAYS Reference</div>
-                          <div className="text-xs font-semibold text-black/85" data-testid="text-hays-reference-value">{quote.haysRef || "—"}</div>
+                          <div className="text-xs font-semibold text-black" data-testid="text-hays-reference-value">{quote.haysRef || "—"}</div>
                         </div>
                         <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-tour-reference">
                           <div className="text-xs font-semibold text-black/65">Supplier Reference</div>
-                          <div className="text-xs font-semibold text-black/85" data-testid="text-tour-reference-value">{quote.supplierRef || "—"}</div>
+                          <div className="text-xs font-semibold text-black" data-testid="text-tour-reference-value">{quote.supplierRef || "—"}</div>
                         </div>
                       </div>
                     </div>
@@ -775,28 +775,28 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                     <div className="mt-3 grid gap-2" data-testid="list-quote-summary-lines">
                       <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-total-price">
                         <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">Total price</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-total-price-value">
+                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-price-value">
                           {currency.format(quote.commissions.price)}
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-commission">
                         <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Comm</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-commission-value">
+                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-commission-value">
                           {currency.format(quote.commissions.commissionValue)}
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-discount">
                         <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-discount-label">Discount</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-discount-value">
+                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-discount-value">
                           {currency.format(quote.commissions.discounts)}
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-service-charge">
                         <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-service-charge-label">Service charge</div>
-                        <div className="text-xs font-semibold text-black/85" data-testid="text-quote-summary-service-charge-value">
+                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-service-charge-value">
                           {currency.format(quote.commissions.serviceCharge)}
                         </div>
                       </div>
