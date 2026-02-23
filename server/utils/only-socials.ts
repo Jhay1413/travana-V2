@@ -15,8 +15,8 @@ function getApiBase(): string {
 }
 
 function getAuthHeader(): Record<string, string> {
-  const token = process.env.ONLY_SOCIALS;
-  if (!token) throw new AppError("ONLY_SOCIALS token is not set", 500);
+  const token = process.env.ONLYSOCIAL_API_KEY;
+  if (!token) throw new AppError("ONLYSOCIAL_API_KEY is not set", 500);
   return { Authorization: `Bearer ${token.trim()}` };
 }
 
