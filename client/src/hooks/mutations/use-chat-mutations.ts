@@ -14,6 +14,18 @@ export function useSendMessage() {
   });
 }
 
+export function useSendMessageWithFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ conversationId, content, file }: { conversationId: string; content: string; file: File }) =>
+      chatApi.sendMessageWithFile(conversationId, content, file),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: chatKeys.messages(variables.conversationId) });
+      queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+    },
+  });
+}
+
 export function useStartDirectChat() {
   const queryClient = useQueryClient();
   return useMutation({

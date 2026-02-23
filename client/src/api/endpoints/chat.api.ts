@@ -17,6 +17,18 @@ export const chatApi = {
     return data;
   },
 
+  sendMessageWithFile: async (conversationId: string, content: string, file: File): Promise<ChatMessage> => {
+    const formData = new FormData();
+    formData.append("content", content);
+    formData.append("file", file);
+    const { data } = await axiosClient.post<ChatMessage>(
+      `/api/chat/conversations/${conversationId}/messages/upload`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+    return data;
+  },
+
   startDirectChat: async (targetUserId: string): Promise<{ conversationId: string }> => {
     const { data } = await axiosClient.post<{ conversationId: string }>("/api/chat/direct", { targetUserId });
     return data;

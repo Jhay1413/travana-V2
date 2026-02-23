@@ -33,6 +33,10 @@ export interface ChatMessage {
   conversationId: string;
   senderId: string;
   content: string;
+  fileUrl: string | null;
+  fileName: string | null;
+  fileType: string | null;
+  fileSize: number | null;
   createdAt: string;
   senderName: string | null;
   senderImage: string | null;

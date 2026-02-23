@@ -49,10 +49,17 @@ export const chatService = {
     return messages.reverse();
   },
 
-  async sendMessage(conversationId: string, senderId: string, content: string) {
-    if (!content.trim()) throw new AppError("Message cannot be empty", 400);
+  async sendMessage(conversationId: string, senderId: string, content: string, fileData?: { fileUrl: string; fileName: string; fileType: string; fileSize: number }) {
+    if (!content.trim() && !fileData) throw new AppError("Message cannot be empty", 400);
     await this.verifyMembership(conversationId, senderId);
-    return await chatRepository.createMessage({ conversationId, senderId, content: content.trim() });
+    const messageData: any = { conversationId, senderId, content: content.trim() || "" };
+    if (fileData) {
+      messageData.fileUrl = fileData.fileUrl;
+      messageData.fileName = fileData.fileName;
+      messageData.fileType = fileData.fileType;
+      messageData.fileSize = fileData.fileSize;
+    }
+    return await chatRepository.createMessage(messageData);
   },
 
   async markRead(conversationId: string, userId: string) {

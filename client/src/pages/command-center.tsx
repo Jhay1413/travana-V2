@@ -6,11 +6,12 @@ import axios from "@/api/client/axios-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useTickets, useChatConversations, useChatMessages } from "@/hooks/queries";
-import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
+import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import AdminOverview from "@/components/admin-overview";
+import ChatRichInput from "@/components/chat-rich-input";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
@@ -1636,6 +1637,7 @@ export default function CommandCenterPage() {
   const { data: chatConversations } = useChatConversations();
   const { data: chatMessages } = useChatMessages(chatSelectedConversation || "");
   const sendMessageMutation = useSendMessage();
+  const sendMessageWithFileMutation = useSendMessageWithFile();
   const startDirectChatMutation = useStartDirectChat();
   const { data: countriesData } = useQuery({
     queryKey: ["admin", "data", "country"],
@@ -2817,6 +2819,7 @@ export default function CommandCenterPage() {
                   ) : (
                     (chatMessages || []).map((msg: any) => {
                       const isOwn = msg.senderId === currentUserId;
+                      const isImage = msg.fileType?.startsWith("image/");
                       return (
                         <div key={msg.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`} data-testid={`chat-msg-${msg.id}`}>
                           <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
@@ -2827,7 +2830,37 @@ export default function CommandCenterPage() {
                             {!isOwn && (
                               <div className="mb-0.5 text-[11px] font-semibold text-[#3b82f6]">{msg.senderName || "Unknown"}</div>
                             )}
-                            <div className="text-sm whitespace-pre-wrap break-words">{msg.content}</div>
+                            {msg.fileUrl && (
+                              <div className="mb-1.5">
+                                {isImage ? (
+                                  <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer">
+                                    <img src={msg.fileUrl} alt={msg.fileName || "image"} className="max-w-full rounded-lg max-h-[200px] object-cover" data-testid={`chat-img-${msg.id}`} />
+                                  </a>
+                                ) : (
+                                  <a
+                                    href={msg.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${isOwn ? "bg-white/10 hover:bg-white/20" : "bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10"}`}
+                                    data-testid={`chat-file-${msg.id}`}
+                                  >
+                                    <FileText className="h-4 w-4 shrink-0" />
+                                    <span className="truncate">{msg.fileName}</span>
+                                    {msg.fileSize && (
+                                      <span className="shrink-0 opacity-60">
+                                        {msg.fileSize < 1024 * 1024 ? `${(msg.fileSize / 1024).toFixed(0)} KB` : `${(msg.fileSize / (1024 * 1024)).toFixed(1)} MB`}
+                                      </span>
+                                    )}
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                            {msg.content && msg.content !== "<p></p>" && (
+                              <div
+                                className="text-sm break-words chat-message-content"
+                                dangerouslySetInnerHTML={{ __html: msg.content }}
+                              />
+                            )}
                             <div className={`mt-1 text-[10px] ${isOwn ? "text-white/60" : "text-black/40 dark:text-white/40"}`}>
                               {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </div>
@@ -2838,36 +2871,17 @@ export default function CommandCenterPage() {
                   )}
                 </div>
 
-                <div className="border-t border-black/10 p-3 dark:border-white/10">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (!chatMessageInput.trim() || !chatSelectedConversation) return;
-                      sendMessageMutation.mutate(
-                        { conversationId: chatSelectedConversation, content: chatMessageInput },
-                        { onSuccess: () => setChatMessageInput("") }
-                      );
-                    }}
-                    className="flex gap-2"
-                    data-testid="form-chat-send"
-                  >
-                    <Input
-                      value={chatMessageInput}
-                      onChange={(e) => setChatMessageInput(e.target.value)}
-                      placeholder="Type a message..."
-                      className="flex-1 rounded-xl border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-                      data-testid="input-chat-message"
-                    />
-                    <Button
-                      type="submit"
-                      disabled={!chatMessageInput.trim() || sendMessageMutation.isPending}
-                      className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-                      data-testid="button-chat-send"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </form>
-                </div>
+                <ChatRichInput
+                  onSend={(content) => {
+                    if (!chatSelectedConversation) return;
+                    sendMessageMutation.mutate({ conversationId: chatSelectedConversation, content });
+                  }}
+                  onSendWithFile={(content, file) => {
+                    if (!chatSelectedConversation) return;
+                    sendMessageWithFileMutation.mutate({ conversationId: chatSelectedConversation, content, file });
+                  }}
+                  disabled={sendMessageMutation.isPending || sendMessageWithFileMutation.isPending}
+                />
               </>
             )}
           </Card>
