@@ -719,7 +719,7 @@ export function CommandCenterShell({
               <Separator className="mt-3 mb-1 bg-black/10 dark:bg-white/10" data-testid="separator-connect" />
 
               <div className="space-y-1" data-testid="section-connect">
-                {["internal-chat", "whatsapp", "facebook", "instagram", "email"].map((key) => {
+                {["whatsapp", "facebook", "instagram", "email"].map((key) => {
                   const map: Record<string, { label: string; icon: React.ReactNode }> = {
                     whatsapp: { label: "WhatsApp", icon: <MessageSquare className="h-4 w-4" /> },
                     facebook: { label: "Facebook", icon: <Users className="h-4 w-4" /> },
