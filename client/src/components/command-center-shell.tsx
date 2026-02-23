@@ -228,83 +228,64 @@ const DEFAULT_STYLE = NOTIF_STYLE.chat_message;
 
 function NotificationToast() {
   const { data: currentUser } = useCurrentUser();
-  const userId = currentUser?.id;
-  const { data: notifications = [] } = useNotifications(userId || "");
-  const markReadMutation = useMarkNotificationRead(userId || "");
+  const userId = currentUser?.id || "";
+  const { data: notifications = [] } = useNotifications(userId);
+  const markReadMutation = useMarkNotificationRead(userId);
   const [, setLocation] = useLocation();
 
-  const [currentNotif, setCurrentNotif] = useState<typeof notifications[number] | null>(null);
+  const [toastQueue, setToastQueue] = useState<Array<{ id: string; type: string; title: string; message: string; link: string | null }>>([]);
   const [visible, setVisible] = useState(false);
-  const seenRef = useRef<Set<string>>(new Set());
-  const queueRef = useRef<typeof notifications>([]);
-  const showingRef = useRef(false);
+  const shownIdsRef = useRef<Set<string>>(new Set());
+  const autoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(NOTIF_TOAST_SEEN_KEY) || "[]");
-      seenRef.current = new Set(stored);
-    } catch {}
-  }, []);
+    if (!userId || !notifications.length) return;
 
-  useEffect(() => {
-    if (!notifications.length) return;
-
-    const newUnread = notifications.filter(
-      (n) => !n.read && !seenRef.current.has(n.id)
+    const unreadToShow = notifications.filter(
+      (n) => !n.read && !shownIdsRef.current.has(n.id)
     );
 
-    if (newUnread.length === 0) return;
-
-    for (const n of newUnread) {
-      if (!queueRef.current.find((q) => q.id === n.id)) {
-        queueRef.current.push(n);
-      }
+    if (unreadToShow.length > 0) {
+      unreadToShow.forEach((n) => shownIdsRef.current.add(n.id));
+      setToastQueue((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const newItems = unreadToShow
+          .filter((n) => !existingIds.has(n.id))
+          .map((n) => ({ id: n.id, type: n.type, title: n.title, message: n.message, link: n.link }));
+        return [...prev, ...newItems];
+      });
     }
+  }, [notifications, userId]);
 
-    if (!showingRef.current) {
-      showNext();
+  useEffect(() => {
+    if (toastQueue.length > 0 && !visible) {
+      setVisible(true);
+      if (autoHideTimer.current) clearTimeout(autoHideTimer.current);
+      autoHideTimer.current = setTimeout(() => {
+        setVisible(false);
+        setTimeout(() => setToastQueue((prev) => prev.slice(1)), 350);
+      }, 6000);
     }
-  }, [notifications]);
+  }, [toastQueue, visible]);
 
-  const showNext = useCallback(() => {
-    const next = queueRef.current.shift();
-    if (!next) {
-      showingRef.current = false;
-      return;
-    }
-    showingRef.current = true;
-    seenRef.current.add(next.id);
-    try {
-      const arr = Array.from(seenRef.current).slice(-100);
-      localStorage.setItem(NOTIF_TOAST_SEEN_KEY, JSON.stringify(arr));
-    } catch {}
-    setCurrentNotif(next);
-    setVisible(true);
+  const currentNotif = toastQueue[0] || null;
 
-    setTimeout(() => {
-      setVisible(false);
-      setTimeout(() => showNext(), 400);
-    }, 6000);
-  }, []);
-
-  const dismiss = useCallback(() => {
+  const dismiss = () => {
+    if (autoHideTimer.current) clearTimeout(autoHideTimer.current);
     setVisible(false);
+    if (currentNotif) markReadMutation.mutate(currentNotif.id);
+    setTimeout(() => setToastQueue((prev) => prev.slice(1)), 350);
+  };
+
+  const handleClick = () => {
+    if (autoHideTimer.current) clearTimeout(autoHideTimer.current);
     if (currentNotif) {
       markReadMutation.mutate(currentNotif.id);
-    }
-    setTimeout(() => showNext(), 400);
-  }, [currentNotif, markReadMutation, showNext]);
-
-  const handleClick = useCallback(() => {
-    if (currentNotif) {
-      markReadMutation.mutate(currentNotif.id);
-      if (currentNotif.link) {
-        setLocation(currentNotif.link);
-      }
+      if (currentNotif.link) setLocation(currentNotif.link);
     }
     setVisible(false);
-    setTimeout(() => showNext(), 400);
-  }, [currentNotif, markReadMutation, setLocation, showNext]);
+    setTimeout(() => setToastQueue((prev) => prev.slice(1)), 350);
+  };
 
   if (!currentNotif) return null;
 
@@ -315,6 +296,7 @@ function NotificationToast() {
     <AnimatePresence>
       {visible && (
         <motion.div
+          key={currentNotif.id}
           initial={{ opacity: 0, y: 20, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.95 }}
