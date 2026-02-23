@@ -33,9 +33,10 @@ export const socialPostController = {
   reschedulePost: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as { id: string };
     const postSchedule = req.body.postSchedule as string;
+    const postContent = (req.body.postContent as string) || "";
     const existingImageIds: number[] = JSON.parse(req.body.existingImageIds || "[]");
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.reschedulePost(id, postSchedule, existingImageIds, newFiles);
+    const deal = await socialPostService.reschedulePost(id, postSchedule, existingImageIds, newFiles, postContent);
     return successResponse(res, deal, "Post rescheduled successfully");
   }),
 

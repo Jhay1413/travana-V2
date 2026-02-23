@@ -219,7 +219,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     id: string,
     newPostSchedule: string,
     existingImageIds: number[],
-    newFiles: Express.Multer.File[]
+    newFiles: Express.Multer.File[],
+    postContent: string
   ): Promise<TravelDeal> {
     const deal = await socialPostRepository.findById(id);
     if (!deal) throw new AppError("Travel deal not found", 404);
@@ -236,7 +237,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
       newPostSchedule,
-      deal.post,
+      postContent,
       allImageIds
     );
 
@@ -264,11 +265,15 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     return await uploadMultipleOnlySocialsMedia(files);
   },
 
-  async getPostMedia(id: string): Promise<OnlySocialsMediaContent[]> {
+  async getPostMedia(id: string): Promise<{ media: OnlySocialsMediaContent[]; postContent: string }> {
     const deal = await socialPostRepository.findById(id);
     if (!deal) throw new AppError("Travel deal not found", 404);
-    if (!deal.onlySocialsId) return [];
+    if (!deal.onlySocialsId) return { media: [], postContent: "" };
     const post = await fetchOnlySocialsPost(deal.onlySocialsId);
-    return post.versions?.[0]?.content?.[0]?.media ?? [];
+    const firstContent = post.versions?.[0]?.content?.[0];
+    return {
+      media: firstContent?.media ?? [],
+      postContent: firstContent?.body ?? "",
+    };
   },
 };

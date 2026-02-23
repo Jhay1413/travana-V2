@@ -84,8 +84,8 @@ export const socialPostApi = {
     return res;
   },
 
-  getMedia: async (id: string): Promise<UploadedMedia[]> => {
-    const { data: res } = await axiosClient.get<UploadedMedia[]>(`/api/social-posts/${id}/media`);
+  getMedia: async (id: string): Promise<{ media: UploadedMedia[]; postContent: string }> => {
+    const { data: res } = await axiosClient.get<{ media: UploadedMedia[]; postContent: string }>(`/api/social-posts/${id}/media`);
     return res;
   },
 };

@@ -17,7 +17,7 @@ export function useTravelDeal(quoteId: string, enabled = true) {
 }
 
 export function usePostMedia(dealId: string | null | undefined, enabled = true) {
-  return useQuery<UploadedMedia[]>({
+  return useQuery<{ media: UploadedMedia[]; postContent: string }>({
     queryKey: socialPostKeys.media(dealId ?? ""),
     queryFn: () => socialPostApi.getMedia(dealId!),
     enabled: !!dealId && enabled,

@@ -78,6 +78,7 @@ export function SocialPostPreviewDialog({
   const [pendingFiles, setPendingFiles] = useState<LocalImage[]>([]);
   const [imageOrder, setImageOrder] = useState<ImageItem[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [onlySocialsPostContent, setOnlySocialsPostContent] = useState("");
 
   const isScheduled = !!travelDeal?.onlySocialsId;
   const isBusy =
@@ -85,7 +86,7 @@ export function SocialPostPreviewDialog({
     scheduleOnOnlySocials.isPending ||
     rescheduleOnOnlySocials.isPending;
 
-  const { data: existingMedia } = usePostMedia(travelDeal?.id, open && isScheduled);
+  const { data: mediaData } = usePostMedia(travelDeal?.id, open && isScheduled);
 
   useEffect(() => {
     if (travelDeal) {
@@ -122,10 +123,16 @@ export function SocialPostPreviewDialog({
   }, [open]);
 
   useEffect(() => {
-    if (Array.isArray(existingMedia) && existingMedia.length > 0) {
-      setExistingImages(existingMedia as ExistingImage[]);
+    if (mediaData) {
+      const mediaArr = Array.isArray(mediaData.media) ? mediaData.media : [];
+      if (mediaArr.length > 0) {
+        setExistingImages(mediaArr as ExistingImage[]);
+      }
+      if (mediaData.postContent) {
+        setOnlySocialsPostContent(mediaData.postContent);
+      }
     }
-  }, [existingMedia]);
+  }, [mediaData]);
 
   useEffect(() => {
     const items: ImageItem[] = [
@@ -233,6 +240,7 @@ export function SocialPostPreviewDialog({
       newFiles.forEach((file) => formData.append("files", file));
 
       if (isScheduled) {
+        formData.append("postContent", onlySocialsPostContent || currentHtml);
         await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
         toast({ title: "Post updated and rescheduled on OnlySocials" });
       } else {
