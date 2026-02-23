@@ -1385,6 +1385,10 @@ export const chatMessages = pgTable("chat_messages", {
   conversationId: varchar("conversation_id").notNull(),
   senderId: text("sender_id").notNull(),
   content: text("content").notNull(),
+  fileUrl: text("file_url"),
+  fileName: text("file_name"),
+  fileType: text("file_type"),
+  fileSize: integer("file_size"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
