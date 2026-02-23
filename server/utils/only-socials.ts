@@ -129,37 +129,22 @@ export const scheduleOnlySocialsPost = async (
 
 export const rescheduleOnlySocialsPost = async (
   onlySocialsPostId: string,
-  newPostSchedule: string,
-  images: number[]
+  newPostSchedule: string
 ): Promise<{ id: string; uuid: string; name: string; hexColor: string }> => {
   const scheduleDateTime = parseISO(newPostSchedule);
   const scheduleDate = format(scheduleDateTime, "yyyy-MM-dd");
   const scheduleTime = format(scheduleDateTime, "HH:mm");
   const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
 
-  const payload: Record<string, any> = {
-    date: scheduleDate,
-    time: scheduleTime,
-  };
-
-  if (images.length > 0) {
-    payload.accounts = [ACCOUNT_ID];
-    payload.versions = [
-      {
-        account_id: ACCOUNT_ID,
-        is_original: true,
-        content: [{ media: images, url: "" }],
-        options: { facebook_page: { type: "post" } },
-      },
-    ];
-  }
-
   try {
     const response = await fetch(url, {
       method: "PUT",
       headers: { ...getAuthHeader(), "Content-Type": "application/json" },
       redirect: "follow",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        date: scheduleDate,
+        time: scheduleTime,
+      }),
     });
 
     const data = (await response.json()) as { id: string; uuid: string; name: string; hexColor: string };
@@ -176,6 +161,46 @@ export const rescheduleOnlySocialsPost = async (
     if (error instanceof AppError) throw error;
     throw new AppError(
       `Failed to reschedule post on OnlySocials: ${error instanceof Error ? error.message : String(error)}`,
+      500
+    );
+  }
+};
+
+export const updateOnlySocialsPostMedia = async (
+  onlySocialsPostId: string,
+  mediaIds: number[]
+): Promise<void> => {
+  const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      redirect: "follow",
+      body: JSON.stringify({
+        accounts: [ACCOUNT_ID],
+        versions: [
+          {
+            account_id: ACCOUNT_ID,
+            is_original: true,
+            content: [{ media: mediaIds, url: "" }],
+            options: { facebook_page: { type: "post" } },
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      console.error("[OnlySocials] update media failed:", JSON.stringify(data));
+      throw new AppError(`OnlySocials update media error: ${JSON.stringify(data)}`, response.status);
+    }
+
+    console.log("[OnlySocials] post media updated successfully");
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(
+      `Failed to update post media on OnlySocials: ${error instanceof Error ? error.message : String(error)}`,
       500
     );
   }

@@ -5,6 +5,7 @@ import { AppError } from "../utils/error-handler";
 import {
   scheduleOnlySocialsPost,
   rescheduleOnlySocialsPost,
+  updateOnlySocialsPostMedia,
   deleteOnlySocialsPost,
   uploadMultipleOnlySocialsMedia,
   fetchOnlySocialsPost,
@@ -209,9 +210,13 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
-      newPostSchedule,
-      images
+      newPostSchedule
     );
+
+    if (images.length > 0) {
+      await updateOnlySocialsPostMedia(deal.onlySocialsId, images);
+      console.log(`[SocialPost] Updated media for post ${deal.onlySocialsId} with ${images.length} images`);
+    }
 
     return await socialPostRepository.update(id, {
       onlySocialsId: result.uuid,
