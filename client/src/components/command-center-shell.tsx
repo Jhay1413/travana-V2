@@ -352,7 +352,7 @@ export function CommandCenterShell({
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
-      { key: "live-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+      { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
@@ -400,7 +400,7 @@ export function CommandCenterShell({
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
-              { key: "live-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+              { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ],
           },
