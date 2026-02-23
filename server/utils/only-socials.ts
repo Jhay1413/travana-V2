@@ -129,22 +129,37 @@ export const scheduleOnlySocialsPost = async (
 
 export const rescheduleOnlySocialsPost = async (
   onlySocialsPostId: string,
-  newPostSchedule: string
+  newPostSchedule: string,
+  images: number[]
 ): Promise<{ id: string; uuid: string; name: string; hexColor: string }> => {
   const scheduleDateTime = parseISO(newPostSchedule);
   const scheduleDate = format(scheduleDateTime, "yyyy-MM-dd");
   const scheduleTime = format(scheduleDateTime, "HH:mm");
   const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
 
+  const payload: Record<string, any> = {
+    date: scheduleDate,
+    time: scheduleTime,
+  };
+
+  if (images.length > 0) {
+    payload.accounts = [ACCOUNT_ID];
+    payload.versions = [
+      {
+        account_id: ACCOUNT_ID,
+        is_original: true,
+        content: [{ media: images, url: "" }],
+        options: { facebook_page: { type: "post" } },
+      },
+    ];
+  }
+
   try {
     const response = await fetch(url, {
       method: "PUT",
       headers: { ...getAuthHeader(), "Content-Type": "application/json" },
       redirect: "follow",
-      body: JSON.stringify({
-        date: scheduleDate,
-        time: scheduleTime,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = (await response.json()) as { id: string; uuid: string; name: string; hexColor: string };

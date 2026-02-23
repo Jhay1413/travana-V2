@@ -202,14 +202,15 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     });
   },
 
-  async reschedulePost(id: string, newPostSchedule: string): Promise<TravelDeal> {
+  async reschedulePost(id: string, newPostSchedule: string, images: number[] = []): Promise<TravelDeal> {
     const deal = await socialPostRepository.findById(id);
     if (!deal) throw new AppError("Travel deal not found", 404);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
 
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
-      newPostSchedule
+      newPostSchedule,
+      images
     );
 
     return await socialPostRepository.update(id, {

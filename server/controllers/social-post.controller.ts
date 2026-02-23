@@ -30,8 +30,8 @@ export const socialPostController = {
 
   reschedulePost: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { postSchedule } = req.body as { postSchedule: string };
-    const deal = await socialPostService.reschedulePost(id, postSchedule);
+    const { postSchedule, images = [] } = req.body as { postSchedule: string; images: number[] };
+    const deal = await socialPostService.reschedulePost(id, postSchedule, images);
     return successResponse(res, deal, "Post rescheduled successfully");
   }),
 

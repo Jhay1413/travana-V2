@@ -173,7 +173,7 @@ export function SocialPostPreviewDialog({
     // Step 2: push to OnlySocials
     try {
       if (isScheduled) {
-        await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, postSchedule: postScheduleIso });
+        await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, postSchedule: postScheduleIso, images: imageIds });
         toast({ title: "Post updated and rescheduled on OnlySocials" });
       } else {
         await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, postSchedule: postScheduleIso, images: imageIds });
