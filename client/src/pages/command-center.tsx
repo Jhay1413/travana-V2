@@ -2756,7 +2756,7 @@ export default function CommandCenterPage() {
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="truncate text-xs text-black/50 dark:text-white/50">
-                            {lastMsg ? lastMsg.content : "No messages yet"}
+                            {lastMsg ? lastMsg.content.replace(/<[^>]*>/g, "") : "No messages yet"}
                           </span>
                           {(conv.unreadCount || 0) > 0 && (
                             <span className="ml-2 inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-[#3b82f6] px-1.5 text-[10px] font-bold text-white" data-testid={`chat-unread-${conv.id}`}>
