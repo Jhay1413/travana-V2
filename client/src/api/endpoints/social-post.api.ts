@@ -1,5 +1,12 @@
 import axiosClient from "../client/axios-client";
 
+export interface UploadedMedia {
+  id: number;
+  url: string;
+  thumb_url: string;
+  name: string;
+}
+
 export interface GeneratePostParams {
   quoteId: string;
   title: string;
@@ -58,11 +65,24 @@ export const socialPostApi = {
     return res;
   },
 
-  rescheduleOnOnlySocials: async (id: string, postSchedule: string, images: number[] = []): Promise<TravelDeal> => {
+  rescheduleOnOnlySocials: async (id: string, postSchedule: string): Promise<TravelDeal> => {
     const { data: res } = await axiosClient.put<TravelDeal>(`/api/social-posts/${id}/reschedule`, {
       postSchedule,
-      images,
     });
+    return res;
+  },
+
+  uploadMedia: async (files: File[]): Promise<UploadedMedia[]> => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+    const { data: res } = await axiosClient.post<UploadedMedia[]>("/api/social-posts/media/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res;
+  },
+
+  getMedia: async (id: string): Promise<UploadedMedia[]> => {
+    const { data: res } = await axiosClient.get<UploadedMedia[]>(`/api/social-posts/${id}/media`);
     return res;
   },
 };

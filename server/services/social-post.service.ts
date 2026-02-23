@@ -7,9 +7,10 @@ import {
   rescheduleOnlySocialsPost,
   deleteOnlySocialsPost,
   uploadMultipleOnlySocialsMedia,
+  fetchOnlySocialsPost,
 } from "../utils/only-socials";
 import type { TravelDeal } from "@shared/schema";
-import type { OnlySocialsMediaUploadResponse } from "../types/social-post/social-post.types";
+import type { OnlySocialsMediaUploadResponse, OnlySocialsMediaContent } from "../types/social-post/social-post.types";
 
 function getOpenAI(): OpenAI {
   if (!process.env.OPENAI_API_KEY) {
@@ -201,16 +202,14 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     });
   },
 
-  async reschedulePost(id: string, newPostSchedule: string, images: number[]): Promise<TravelDeal> {
+  async reschedulePost(id: string, newPostSchedule: string): Promise<TravelDeal> {
     const deal = await socialPostRepository.findById(id);
     if (!deal) throw new AppError("Travel deal not found", 404);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
 
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
-      newPostSchedule,
-      deal.post,
-      images
+      newPostSchedule
     );
 
     return await socialPostRepository.update(id, {
@@ -235,5 +234,13 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
   async uploadMedia(files: Express.Multer.File[]): Promise<OnlySocialsMediaUploadResponse[]> {
     if (!files || files.length === 0) throw new AppError("No files provided", 400);
     return await uploadMultipleOnlySocialsMedia(files);
+  },
+
+  async getPostMedia(id: string): Promise<OnlySocialsMediaContent[]> {
+    const deal = await socialPostRepository.findById(id);
+    if (!deal) throw new AppError("Travel deal not found", 404);
+    if (!deal.onlySocialsId) return [];
+    const post = await fetchOnlySocialsPost(deal.onlySocialsId);
+    return post.versions?.[0]?.content?.[0]?.media ?? [];
   },
 };

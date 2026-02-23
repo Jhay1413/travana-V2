@@ -30,8 +30,8 @@ export const socialPostController = {
 
   reschedulePost: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { postSchedule, images = [] } = req.body as { postSchedule: string; images: number[] };
-    const deal = await socialPostService.reschedulePost(id, postSchedule, images);
+    const { postSchedule } = req.body as { postSchedule: string };
+    const deal = await socialPostService.reschedulePost(id, postSchedule);
     return successResponse(res, deal, "Post rescheduled successfully");
   }),
 
@@ -45,5 +45,11 @@ export const socialPostController = {
     const files = req.files as Express.Multer.File[];
     const media = await socialPostService.uploadMedia(files);
     return successResponse(res, media, "Media uploaded successfully", 201);
+  }),
+
+  getPostMedia: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const media = await socialPostService.getPostMedia(id);
+    return successResponse(res, media, "Media retrieved successfully");
   }),
 };

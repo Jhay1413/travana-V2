@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { socialPostApi } from "@/api/endpoints/social-post.api";
-import type { GeneratePostParams, TravelDeal } from "@/api/endpoints/social-post.api";
+import type { GeneratePostParams, TravelDeal, UploadedMedia } from "@/api/endpoints/social-post.api";
 import { socialPostKeys } from "@/hooks/queries/use-social-post-queries";
 
 export function useGeneratePost() {
@@ -38,10 +38,16 @@ export function useScheduleOnOnlySocials() {
 export function useRescheduleOnOnlySocials() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, postSchedule, images }: { id: string; postSchedule: string; images?: number[] }) =>
-      socialPostApi.rescheduleOnOnlySocials(id, postSchedule, images),
+    mutationFn: ({ id, postSchedule }: { id: string; postSchedule: string }) =>
+      socialPostApi.rescheduleOnOnlySocials(id, postSchedule),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
     },
+  });
+}
+
+export function useUploadMedia() {
+  return useMutation({
+    mutationFn: (files: File[]) => socialPostApi.uploadMedia(files),
   });
 }

@@ -25,5 +25,6 @@ router.post("/media/upload", upload.array("files", 10), socialPostController.upl
 router.post("/:id/schedule", socialPostController.schedulePost);
 router.put("/:id/reschedule", socialPostController.reschedulePost);
 router.delete("/:id/schedule", socialPostController.deleteScheduledPost);
+router.get("/:id/media", socialPostController.getPostMedia);
 
 export default router;
