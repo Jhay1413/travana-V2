@@ -406,6 +406,38 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
         }
       });
     }
+
+    if (quote.flightMeals || quote.preBookedSeats) {
+      const extraSortKey = (quote.returnDate || quote.travelDate) + "T23:59:99";
+      timelineItems.push({
+        type: "flight-extras",
+        sortKey: extraSortKey,
+        content: (
+          <div className="flex gap-2.5" data-testid="timeline-flight-extras">
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-sky-200 bg-sky-50 text-sky-600">
+                <Plane className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <div className="flex-1 pb-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-600">Flight Extras</div>
+              <div className="mt-1 grid gap-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <span className="font-medium text-black/80">Flight Meals:</span>
+                  <span>{quote.flightMeals === "Yes" ? "Yes" : "No"}</span>
+                </div>
+                {quote.preBookedSeats && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                    <span className="font-medium text-black/80">Pre-booked Seats:</span>
+                    <span>{quote.preBookedSeats}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    }
   }
 
   timelineItems.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
