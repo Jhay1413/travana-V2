@@ -13,6 +13,7 @@ import CsvImportDialog from "@/components/csv-import-dialog";
 import AdminOverview from "@/components/admin-overview";
 import ChatRichInput from "@/components/chat-rich-input";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import { NotificationToast } from "@/components/command-center-shell";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
 import type { CreateClientData } from "@/types/client";
@@ -5709,6 +5710,7 @@ export default function CommandCenterPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <NotificationToast />
     </div>
   );
 }

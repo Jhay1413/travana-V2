@@ -226,7 +226,7 @@ const NOTIF_STYLE: Record<string, { icon: typeof Bell; label: string; border: st
 
 const DEFAULT_STYLE = NOTIF_STYLE.chat_message;
 
-function NotificationToast() {
+export function NotificationToast() {
   const { data: currentUser } = useCurrentUser();
   const userId = currentUser?.id || "";
   const { data: notifications = [] } = useNotifications(userId);
