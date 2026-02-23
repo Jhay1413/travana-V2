@@ -17,7 +17,7 @@ export function formatUKDate(input: string) {
 
 export function formatLeadSource(source: string | null | undefined): string {
   if (!source) return "—";
-  return source.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  return source.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
 export function formatRelativeTime(date: string | Date) {

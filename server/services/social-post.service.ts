@@ -2,7 +2,14 @@ import OpenAI from "openai";
 import { format } from "date-fns";
 import { socialPostRepository } from "../repositories/social-post.repository";
 import { AppError } from "../utils/error-handler";
+import {
+  scheduleOnlySocialsPost,
+  rescheduleOnlySocialsPost,
+  deleteOnlySocialsPost,
+  uploadMultipleOnlySocialsMedia,
+} from "../utils/only-socials";
 import type { TravelDeal } from "@shared/schema";
+import type { OnlySocialsMediaUploadResponse } from "../types/social-post/social-post.types";
 
 function getOpenAI(): OpenAI {
   if (!process.env.OPENAI_API_KEY) {
@@ -112,7 +119,6 @@ export const socialPostService = {
       travelDate,
     } = params;
 
-    // Generate all three in parallel
     const [subtitle, resortSummary, hashtagsRaw] = await Promise.all([
       callOpenAI(
         `Write a short, catchy travel subtitle (max 10 words) for a "${title}" deal to ${destination}. Return ONLY the subtitle text, no quotes.`,
@@ -181,5 +187,53 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     const existing = await socialPostRepository.findById(id);
     if (!existing) throw new AppError("Travel deal not found", 404);
     return await socialPostRepository.update(id, data);
+  },
+
+  async schedulePost(id: string, postSchedule: string, images: number[]): Promise<TravelDeal> {
+    const deal = await socialPostRepository.findById(id);
+    if (!deal) throw new AppError("Travel deal not found", 404);
+
+    const result = await scheduleOnlySocialsPost(postSchedule, deal.post, images);
+
+    return await socialPostRepository.update(id, {
+      onlySocialsId: String(result.id),
+      postSchedule: new Date(postSchedule),
+    });
+  },
+
+  async reschedulePost(id: string, newPostSchedule: string, images: number[]): Promise<TravelDeal> {
+    const deal = await socialPostRepository.findById(id);
+    if (!deal) throw new AppError("Travel deal not found", 404);
+    if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
+
+    const result = await rescheduleOnlySocialsPost(
+      deal.onlySocialsId,
+      newPostSchedule,
+      deal.post,
+      images
+    );
+
+    return await socialPostRepository.update(id, {
+      onlySocialsId: String(result.id),
+      postSchedule: new Date(newPostSchedule),
+    });
+  },
+
+  async deleteScheduledPost(id: string): Promise<TravelDeal> {
+    const deal = await socialPostRepository.findById(id);
+    if (!deal) throw new AppError("Travel deal not found", 404);
+    if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials", 400);
+
+    await deleteOnlySocialsPost(deal.onlySocialsId);
+
+    return await socialPostRepository.update(id, {
+      onlySocialsId: null,
+      postSchedule: null,
+    });
+  },
+
+  async uploadMedia(files: Express.Multer.File[]): Promise<OnlySocialsMediaUploadResponse[]> {
+    if (!files || files.length === 0) throw new AppError("No files provided", 400);
+    return await uploadMultipleOnlySocialsMedia(files);
   },
 };

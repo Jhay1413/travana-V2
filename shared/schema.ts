@@ -826,6 +826,7 @@ export const travel_deal = pgTable('travel_deal', {
   departureAirport: varchar(),
   postSchedule: timestamp({ withTimezone: true }),
   onlySocialsId: varchar(),
+  isScheduled: boolean().default(false).notNull(),
   luggageTransfers: varchar(),
   price: numeric({ precision: 10, scale: 2 }),
   quote_id: uuid().notNull().references(() => quote.id, { onDelete: "cascade" }),
