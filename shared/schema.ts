@@ -1353,7 +1353,7 @@ export const tasks = pgTable("tasks", {
 
 export const insertTasksSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
 export type TaskNew = typeof tasks.$inferSelect;
-export type InsertTaskNew = typeof tasks.$inferInsert;
+export type InsertTaskNew = z.infer<typeof insertTasksSchema>;
 
 export const chatConversations = pgTable("chat_conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

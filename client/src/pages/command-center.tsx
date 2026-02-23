@@ -1552,12 +1552,12 @@ export default function CommandCenterPage() {
     const dueDate = new Date(`${dashNewDueDate}T${dashNewDueTime || "09:00"}`);
     dashCreateTaskMutation.mutate(
       {
-        transaction_type: dashTaskCategory === "booking" ? "quote" : dashTaskCategory,
-        deal_id: "",
-        user_id: currentUser.id,
+        entityType: dashTaskCategory === "booking" ? "quote" : dashTaskCategory,
+        entityId: "",
+        userId: currentUser.id,
         title: dashNewTitle,
-        due_date: dueDate,
-        status: "pending",
+        dueDate: dueDate,
+        completed: false,
       },
       {
         onSuccess: () => {
@@ -1689,11 +1689,11 @@ export default function CommandCenterPage() {
     if (!allTasksData) return [];
     return allTasksData
       .filter((t) => {
-        if (!t.due_date) return false;
-        const due = new Date(t.due_date);
+        if (!t.dueDate) return false;
+        const due = new Date(t.dueDate);
         return due >= whatsOnDateRange.start && due < whatsOnDateRange.end;
       })
-      .sort((a, b) => new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime());
+      .sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
   }, [allTasksData, whatsOnDateRange]);
 
   const filteredTickets = useMemo(() => {
@@ -2162,19 +2162,19 @@ export default function CommandCenterPage() {
                     ) : (
                       filteredTasks.map((task, idx) => {
                         const taskHref = task.clientId
-                          ? task.transaction_type === "enquiry"
-                            ? `/clients/${task.clientId}/enquiries/${task.deal_id}`
-                            : task.transaction_type === "booking"
-                              ? `/clients/${task.clientId}/bookings/${task.deal_id}`
-                              : task.transaction_type === "quote"
-                                ? `/clients/${task.clientId}/quotes/${task.deal_id}`
+                          ? task.entityType === "enquiry"
+                            ? `/clients/${task.clientId}/enquiries/${task.entityId}`
+                            : task.entityType === "booking"
+                              ? `/clients/${task.clientId}/bookings/${task.entityId}`
+                              : task.entityType === "quote"
+                                ? `/clients/${task.clientId}/quotes/${task.entityId}`
                                 : `/clients/${task.clientId}`
                           : null;
                         return (
                         <motion.button
                           key={task.id}
                           type="button"
-                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.status === "completed" ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
+                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
                           data-testid={`card-whats-on-task-${task.id}`}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -2184,9 +2184,9 @@ export default function CommandCenterPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.due_date || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
-                                <div className={`truncate text-sm font-medium ${task.status === "completed" ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-whats-on-task-title-${task.id}`}>
+                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.dueDate || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                                <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-whats-on-task-title-${task.id}`}>
                                   {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
                                   {task.title}
                                 </div>
@@ -2200,8 +2200,8 @@ export default function CommandCenterPage() {
                               </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
-                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.status === "completed" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                                {task.status === "completed" ? "Done" : "Pending"}
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                                {task.completed ? "Done" : "Pending"}
                               </span>
                               {taskHref && <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />}
                             </div>
@@ -3518,19 +3518,19 @@ export default function CommandCenterPage() {
                     ) : (
                       filteredTasks.map((task, idx) => {
                         const taskHref = task.clientId
-                          ? task.transaction_type === "enquiry"
-                            ? `/clients/${task.clientId}/enquiries/${task.deal_id}`
-                            : task.transaction_type === "booking"
-                              ? `/clients/${task.clientId}/bookings/${task.deal_id}`
-                              : task.transaction_type === "quote"
-                                ? `/clients/${task.clientId}/quotes/${task.deal_id}`
+                          ? task.entityType === "enquiry"
+                            ? `/clients/${task.clientId}/enquiries/${task.entityId}`
+                            : task.entityType === "booking"
+                              ? `/clients/${task.clientId}/bookings/${task.entityId}`
+                              : task.entityType === "quote"
+                                ? `/clients/${task.clientId}/quotes/${task.entityId}`
                                 : `/clients/${task.clientId}`
                           : null;
                         return (
                         <motion.button
                           key={task.id}
                           type="button"
-                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.status === "completed" ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
+                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
                           data-testid={`card-workspace-task-${task.id}`}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -3540,9 +3540,9 @@ export default function CommandCenterPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.due_date || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
-                                <div className={`truncate text-sm font-medium ${task.status === "completed" ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-workspace-task-title-${task.id}`}>
+                                <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.dueDate || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                                <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-workspace-task-title-${task.id}`}>
                                   {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
                                   {task.title}
                                 </div>
@@ -3556,8 +3556,8 @@ export default function CommandCenterPage() {
                               </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
-                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.status === "completed" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                                {task.status === "completed" ? "Done" : "Pending"}
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                                {task.completed ? "Done" : "Pending"}
                               </span>
                               {taskHref && <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />}
                             </div>

@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { tasks, notifications, quotes, enquiries, clientTable } from "@shared/schema";
+import { tasks, notifications, quote, enquiry_table, transaction, clientTable } from "@shared/schema";
 import { eq, and, desc, lte, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -37,36 +37,45 @@ export const taskRepository = {
       .map(t => t.entityId)
       .filter((id): id is string => id !== null);
 
-    const clientIdMap = new Map<string, string>();
-    const quoteTagsMap = new Map<string, string[]>();
+    const transactionIdMap = new Map<string, string>();
 
     if (quoteEntityIds.length > 0) {
       const quoteRows = await db
-        .select({ id: quotes.id, clientId: quotes.clientId, tags: quotes.tags })
-        .from(quotes)
-        .where(inArray(quotes.id, quoteEntityIds));
+        .select({ id: quote.id, transaction_id: quote.transaction_id })
+        .from(quote)
+        .where(inArray(quote.id, quoteEntityIds));
       for (const q of quoteRows) {
-        if (q.clientId) {
-          clientIdMap.set(`quote:${q.id}`, q.clientId);
-          clientIdMap.set(`booking:${q.id}`, q.clientId);
-        }
-        quoteTagsMap.set(q.id, q.tags ?? []);
+        transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
+        transactionIdMap.set(`booking:${q.id}`, q.transaction_id);
       }
     }
 
     if (enquiryEntityIds.length > 0) {
       const enquiryRows = await db
-        .select({ id: enquiries.id, clientId: enquiries.clientId })
-        .from(enquiries)
-        .where(inArray(enquiries.id, enquiryEntityIds));
+        .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id })
+        .from(enquiry_table)
+        .where(inArray(enquiry_table.id, enquiryEntityIds));
       for (const e of enquiryRows) {
-        if (e.clientId) {
-          clientIdMap.set(`enquiry:${e.id}`, e.clientId);
+        transactionIdMap.set(`enquiry:${e.id}`, e.transaction_id);
+      }
+    }
+
+    const uniqueTransactionIds = Array.from(new Set(Array.from(transactionIdMap.values())));
+    const clientIdMap = new Map<string, string>();
+
+    if (uniqueTransactionIds.length > 0) {
+      const txRows = await db
+        .select({ id: transaction.id, client_id: transaction.client_id })
+        .from(transaction)
+        .where(inArray(transaction.id, uniqueTransactionIds));
+      for (const tx of txRows) {
+        if (tx.client_id) {
+          clientIdMap.set(tx.id, tx.client_id);
         }
       }
     }
 
-    const uniqueClientIds = Array.from(new Set(Array.from(clientIdMap.values()).filter((v): v is string => v !== null)));
+    const uniqueClientIds = Array.from(new Set(Array.from(clientIdMap.values())));
     const clientNameMap = new Map<string, string>();
 
     if (uniqueClientIds.length > 0) {
@@ -81,10 +90,10 @@ export const taskRepository = {
 
     return allTasks.map(t => {
       const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
-      const cid = clientIdMap.get(key);
+      const txId = transactionIdMap.get(key);
+      const cid = txId ? clientIdMap.get(txId) ?? null : null;
       const clientName = cid ? clientNameMap.get(cid) ?? null : null;
-      const quoteTags = t.entityId ? quoteTagsMap.get(t.entityId) ?? [] : [];
-      return { ...t, clientId: cid ?? null, clientName, tags: [t.entityType ?? "", ...quoteTags].filter(Boolean) };
+      return { ...t, clientId: cid, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
     });
   },
 
