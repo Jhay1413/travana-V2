@@ -5,6 +5,7 @@ import routes from "./routes/index";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./repositories/task.repository";
+import { checkStaleTickets } from "./services/ticket-notification.service";
 
 const app = express();
 const httpServer = createServer(app);
@@ -94,6 +95,11 @@ app.use((req, res, next) => {
           await taskRepository.checkAndNotifyDueTasks();
         } catch (err) {
           console.error("Task notification check failed:", err);
+        }
+        try {
+          await checkStaleTickets();
+        } catch (err) {
+          console.error("Ticket notification check failed:", err);
         }
       }, 60_000);
     },
