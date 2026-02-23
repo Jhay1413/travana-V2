@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { useSchedulePost } from "@/hooks/mutations/use-social-post-mutations";
+import { useSavePost, useScheduleOnOnlySocials } from "@/hooks/mutations/use-social-post-mutations";
 import { useToast } from "@/hooks/use-toast";
 import {
   Copy,
@@ -20,6 +20,7 @@ import {
   Type,
   PenLine,
   Check,
+  Clock,
 } from "lucide-react";
 import type { TravelDeal } from "@/api/endpoints/social-post.api";
 
@@ -39,13 +40,16 @@ export function SocialPostPreviewDialog({
   isGenerating,
 }: SocialPostPreviewDialogProps) {
   const { toast } = useToast();
-  const schedulePost = useSchedulePost();
+  const savePost = useSavePost();
+  const scheduleOnOnlySocials = useScheduleOnOnlySocials();
   const postRef = useRef<HTMLDivElement>(null);
   const [subtitle, setSubtitle] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [postHtml, setPostHtml] = useState("");
   const [copied, setCopied] = useState(false);
+
+  const isScheduled = !!travelDeal?.onlySocialsId;
 
   useEffect(() => {
     if (travelDeal) {
@@ -72,18 +76,34 @@ export function SocialPostPreviewDialog({
     if (!travelDeal) return;
     const currentHtml = postRef.current?.innerHTML || postHtml;
     try {
-      await schedulePost.mutateAsync({
+      await savePost.mutateAsync({
         id: travelDeal.id,
         data: {
           post: currentHtml,
           subtitle,
           hashtags: hashtags.split(/\s+/).filter((h) => h.startsWith("#")),
-          postSchedule: scheduleDate ? new Date(scheduleDate).toISOString() : null,
         },
       });
       toast({ title: "Post saved successfully" });
     } catch {
       toast({ title: "Failed to save post", variant: "destructive" });
+    }
+  };
+
+  const handleSchedule = async () => {
+    if (!travelDeal) return;
+    if (!scheduleDate) {
+      toast({ title: "Please select a schedule date and time", variant: "destructive" });
+      return;
+    }
+    try {
+      await scheduleOnOnlySocials.mutateAsync({
+        id: travelDeal.id,
+        postSchedule: new Date(scheduleDate).toISOString(),
+      });
+      toast({ title: "Post scheduled on OnlySocials successfully" });
+    } catch {
+      toast({ title: "Failed to schedule post on OnlySocials", variant: "destructive" });
     }
   };
 
@@ -117,9 +137,17 @@ export function SocialPostPreviewDialog({
               <DialogDescription className="text-xs text-black/50 dark:text-white/50 mt-0.5">
                 {isGenerating
                   ? "AI is crafting your travel post"
-                  : "Edit your post content, then save or copy"}
+                  : isScheduled
+                  ? "Post is scheduled on OnlySocials"
+                  : "Edit your post content, then save or schedule"}
               </DialogDescription>
             </div>
+            {isScheduled && (
+              <div className="ml-auto flex items-center gap-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+                <Clock className="w-3.5 h-3.5" />
+                Scheduled
+              </div>
+            )}
           </div>
         </DialogHeader>
 
@@ -262,35 +290,20 @@ export function SocialPostPreviewDialog({
                   />
                 </div>
 
-                <div className="rounded-xl bg-white dark:bg-slate-800 border border-black/6 dark:border-white/6 shadow-sm p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CalendarClock className="w-4 h-4 text-blue-500" />
-                    <span className="text-xs font-bold text-black/70 dark:text-white/70">
-                      Schedule
-                    </span>
-                  </div>
-                  <Input
-                    type="datetime-local"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="rounded-xl bg-slate-50 dark:bg-slate-900 border-black/6 dark:border-white/6"
-                    data-testid="input-schedule-date"
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-1">
+                {/* Save content row */}
+                <div className="flex gap-3">
                   <Button
                     onClick={handleSave}
-                    disabled={schedulePost.isPending}
+                    disabled={savePost.isPending}
                     className="flex-1 h-11 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-semibold gap-2 shadow-lg shadow-blue-500/20 transition-all"
                     data-testid="button-save-post"
                   >
-                    {schedulePost.isPending ? (
+                    {savePost.isPending ? (
                       <Spinner className="w-4 h-4" />
                     ) : (
                       <Save className="w-4 h-4" />
                     )}
-                    Save Changes
+                    Save
                   </Button>
                   <Button
                     onClick={handleCopy}
@@ -304,6 +317,41 @@ export function SocialPostPreviewDialog({
                       <Copy className="w-4 h-4" />
                     )}
                     {copied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+
+                {/* Schedule section */}
+                <div className="rounded-xl bg-white dark:bg-slate-800 border border-black/6 dark:border-white/6 shadow-sm p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarClock className="w-4 h-4 text-orange-500" />
+                    <span className="text-xs font-bold text-black/70 dark:text-white/70">
+                      Schedule on OnlySocials
+                    </span>
+                    {isScheduled && (
+                      <span className="ml-auto text-[10px] text-green-600 dark:text-green-400 font-semibold bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <Input
+                    type="datetime-local"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    className="rounded-xl bg-slate-50 dark:bg-slate-900 border-black/6 dark:border-white/6"
+                    data-testid="input-schedule-date"
+                  />
+                  <Button
+                    onClick={handleSchedule}
+                    disabled={scheduleOnOnlySocials.isPending || !scheduleDate}
+                    className="w-full h-10 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-semibold gap-2 shadow-md shadow-orange-500/20 transition-all disabled:opacity-50"
+                    data-testid="button-schedule-post"
+                  >
+                    {scheduleOnOnlySocials.isPending ? (
+                      <Spinner className="w-4 h-4" />
+                    ) : (
+                      <Clock className="w-4 h-4" />
+                    )}
+                    {isScheduled ? "Reschedule Post" : "Schedule Post"}
                   </Button>
                 </div>
               </div>

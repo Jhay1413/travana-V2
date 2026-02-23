@@ -23,6 +23,7 @@ import {
   UtensilsCrossed,
   Sparkles,
   FileText,
+  Clock,
 } from "lucide-react";
 import type { EnrichedQuote } from "@/types/quote";
 import type { TravelDeal } from "@/api/endpoints/social-post.api";
@@ -244,14 +245,25 @@ function SocialPostCard({
           </Link>
           <div className="mt-4" />
           {existingDeal ? (
-            <Button
-              onClick={() => onViewPost(quote)}
-              className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white"
-              data-testid={`button-view-post-${quote.id}`}
-            >
-              <FileText className="w-4 h-4" />
-              View Post
-            </Button>
+            existingDeal.onlySocialsId ? (
+              <Button
+                onClick={() => onViewPost(quote)}
+                className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white"
+                data-testid={`button-scheduled-${quote.id}`}
+              >
+                <Clock className="w-4 h-4" />
+                Scheduled
+              </Button>
+            ) : (
+              <Button
+                onClick={() => onViewPost(quote)}
+                className="w-full rounded-xl text-sm font-medium gap-2 bg-orange-500 hover:bg-orange-600 text-white"
+                data-testid={`button-schedule-post-${quote.id}`}
+              >
+                <CalendarClock className="w-4 h-4" />
+                Schedule Post
+              </Button>
+            )
           ) : (
             <Button
               onClick={() => onGeneratePost(quote)}

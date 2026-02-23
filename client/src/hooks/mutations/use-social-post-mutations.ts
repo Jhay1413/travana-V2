@@ -13,11 +13,22 @@ export function useGeneratePost() {
   });
 }
 
-export function useSchedulePost() {
+export function useSavePost() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<TravelDeal> }) =>
       socialPostApi.update(id, data),
+    onSuccess: (deal) => {
+      queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
+    },
+  });
+}
+
+export function useScheduleOnOnlySocials() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, postSchedule, images }: { id: string; postSchedule: string; images?: number[] }) =>
+      socialPostApi.scheduleOnOnlySocials(id, postSchedule, images),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
     },

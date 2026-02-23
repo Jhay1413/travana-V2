@@ -49,4 +49,12 @@ export const socialPostApi = {
     const { data: res } = await axiosClient.patch<TravelDeal>(`/api/social-posts/${id}`, data);
     return res;
   },
+
+  scheduleOnOnlySocials: async (id: string, postSchedule: string, images: number[] = []): Promise<TravelDeal> => {
+    const { data: res } = await axiosClient.post<TravelDeal>(`/api/social-posts/${id}/schedule`, {
+      postSchedule,
+      images,
+    });
+    return res;
+  },
 };
