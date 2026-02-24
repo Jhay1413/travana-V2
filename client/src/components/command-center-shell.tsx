@@ -1054,13 +1054,15 @@ export function CommandCenterShell({
                       </Select>
                     )}
 
-                    <Button
-                      className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-                      data-testid="button-primary-action"
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create
-                    </Button>
+                    {active !== "pipeline" && (
+                      <Button
+                        className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                        data-testid="button-primary-action"
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create
+                      </Button>
+                    )}
 
                     {currentUser && (
                       <NotificationsDropdown userId={currentUser.id} />
