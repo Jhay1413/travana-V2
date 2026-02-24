@@ -260,7 +260,7 @@ export const transactionRepository = {
     agentId?: string,
     quoteStatusFilter?: string,
   ): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
-    const conditions = [eq(transaction.status, status)];
+    const conditions = [sql`${transaction.status} = ${status}`];
     if (agentId) {
       conditions.push(sql`(${transaction.agent_id} = ${agentId} OR ${transaction.user_id} = ${agentId})`);
     }
@@ -300,15 +300,24 @@ export const transactionRepository = {
     if (allTxnIds.length > 0) {
       if (status === "on_quote") {
         const [agg] = await db.select({
-          totalValue: sql<number>`COALESCE(SUM(CAST(${quote.sales_price} AS NUMERIC)), 0)`,
-          totalCommission: sql<number>`COALESCE(SUM(CAST(${quote.package_commission} AS NUMERIC)), 0)`,
-          totalFallback: sql<number>`COALESCE(SUM(CASE WHEN CAST(${quote.package_commission} AS NUMERIC) <= 0 THEN CAST(${quote.sales_price} AS NUMERIC) * 0.1 ELSE 0 END), 0)`,
+          totalValue: sql<number>`COALESCE(SUM(CASE WHEN ${quote.sales_price} IS NOT NULL AND ${quote.sales_price} != '' THEN CAST(${quote.sales_price} AS NUMERIC) ELSE 0 END), 0)`,
         }).from(quote).where(and(
           inArray(quote.transaction_id, allTxnIds),
+          sql`(${quote.isFreeQuote} IS NOT TRUE)`,
           sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
         ));
         totalValue = Number(agg?.totalValue || 0);
-        totalProfit = Number(agg?.totalCommission || 0) + Number(agg?.totalFallback || 0);
+        totalProfit = totalValue * 0.20;
+      } else if (status === "in_play") {
+        const [agg] = await db.select({
+          totalValue: sql<number>`COALESCE(SUM(CASE WHEN ${quote.sales_price} IS NOT NULL AND ${quote.sales_price} != '' THEN CAST(${quote.sales_price} AS NUMERIC) ELSE 0 END), 0)`,
+        }).from(quote).where(and(
+          inArray(quote.transaction_id, allTxnIds),
+          sql`(${quote.isFreeQuote} IS NOT TRUE)`,
+          sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+        ));
+        totalValue = Number(agg?.totalValue || 0);
+        totalProfit = totalValue * 0.35;
       } else if (status === "on_booking") {
         const [agg] = await db.select({
           totalValue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS NUMERIC)), 0)`,

@@ -362,6 +362,8 @@ interface PipelineColumnProps {
   stage: PipelineStage;
   transactions: Transaction[];
   total: number;
+  totalValue: number;
+  totalProfit: number;
   getClientName: (clientId: string | null) => string;
   onDragStart: (transaction: Transaction, stage: PipelineStage) => void;
   onDrop: (transactionId: string, fromStage: PipelineStage, toStage: PipelineStage) => void;
@@ -377,6 +379,8 @@ function PipelineColumn({
   stage,
   transactions: stageTransactions,
   total,
+  totalValue,
+  totalProfit,
   getClientName,
   onDragStart,
   onDrop,
@@ -437,6 +441,11 @@ function PipelineColumn({
         <div className="flex items-center gap-2">
           <div className={`h-2.5 w-2.5 rounded-full ${colors.dot}`} />
           <h3 className={`text-sm font-semibold ${colors.text}`}>{stage}</h3>
+          {(stage === "Quoted" || stage === "In Play") && totalValue > 0 && (
+            <span className={`text-[11px] font-medium ${colors.text} opacity-70`}>
+              {formatCurrency(totalValue)}&nbsp;/&nbsp;{formatCurrency(totalProfit)}
+            </span>
+          )}
         </div>
         <Badge className={`rounded-full text-[10px] ${colors.bg} ${colors.text} ${colors.border}`}>
           {total}
@@ -721,7 +730,7 @@ export default function PipelinePage() {
     Booked: bookingQuery,
   };
 
-  const stageDataMap: Record<PipelineStage, { items: Transaction[]; total: number }> = {
+  const stageDataMap: Record<PipelineStage, { items: Transaction[]; total: number; totalProfit: number; totalValue: number }> = {
     Enquiry: enquiryData,
     Quoted: quoteData,
     "In Play": inPlayData,
@@ -797,6 +806,8 @@ export default function PipelinePage() {
                   stage={stage}
                   transactions={data.items}
                   total={data.total}
+                  totalValue={data.totalValue}
+                  totalProfit={data.totalProfit}
                   getClientName={getClientName}
                   onDragStart={handleDragStart}
                   onDrop={handleDrop}
