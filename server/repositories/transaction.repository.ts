@@ -260,7 +260,7 @@ export const transactionRepository = {
     agentId?: string,
     quoteStatusFilter?: string,
   ): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
-    const conditions = [sql`${transaction.status} = ${status}`];
+    const conditions = [eq(transaction.status, status as "on_enquiry" | "on_quote" | "in_play" | "on_booking")];
     if (agentId) {
       conditions.push(sql`(${transaction.agent_id} = ${agentId} OR ${transaction.user_id} = ${agentId})`);
     }
@@ -298,34 +298,40 @@ export const transactionRepository = {
     let totalProfit = 0;
     let totalValue = 0;
     if (allTxnIds.length > 0) {
-      if (status === "on_quote") {
-        const [agg] = await db.select({
-          totalValue: sql<number>`COALESCE(SUM(CASE WHEN ${quote.sales_price} IS NOT NULL AND ${quote.sales_price} != '' THEN CAST(${quote.sales_price} AS NUMERIC) ELSE 0 END), 0)`,
-        }).from(quote).where(and(
-          inArray(quote.transaction_id, allTxnIds),
-          sql`(${quote.isFreeQuote} IS NOT TRUE)`,
-          sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
-        ));
-        totalValue = Number(agg?.totalValue || 0);
-        totalProfit = totalValue * 0.20;
-      } else if (status === "in_play") {
-        const [agg] = await db.select({
-          totalValue: sql<number>`COALESCE(SUM(CASE WHEN ${quote.sales_price} IS NOT NULL AND ${quote.sales_price} != '' THEN CAST(${quote.sales_price} AS NUMERIC) ELSE 0 END), 0)`,
-        }).from(quote).where(and(
-          inArray(quote.transaction_id, allTxnIds),
-          sql`(${quote.isFreeQuote} IS NOT TRUE)`,
-          sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
-        ));
-        totalValue = Number(agg?.totalValue || 0);
-        totalProfit = totalValue * 0.35;
-      } else if (status === "on_booking") {
-        const [agg] = await db.select({
-          totalValue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS NUMERIC)), 0)`,
-          totalCommission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS NUMERIC)), 0)`,
-          totalFallback: sql<number>`COALESCE(SUM(CASE WHEN CAST(${booking.package_commission} AS NUMERIC) <= 0 THEN CAST(${booking.sales_price} AS NUMERIC) * 0.1 ELSE 0 END), 0)`,
-        }).from(booking).where(inArray(booking.transaction_id, allTxnIds));
-        totalValue = Number(agg?.totalValue || 0);
-        totalProfit = Number(agg?.totalCommission || 0) + Number(agg?.totalFallback || 0);
+      try {
+        if (status === "on_quote") {
+          const [agg] = await db.select({
+            totalValue: sql<number>`COALESCE(SUM(COALESCE(${quote.sales_price}, 0)), 0)`,
+          }).from(quote).where(and(
+            inArray(quote.transaction_id, allTxnIds),
+            sql`(${quote.isFreeQuote} IS NOT TRUE)`,
+            sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+          ));
+          totalValue = Number(agg?.totalValue || 0);
+          totalProfit = totalValue * 0.20;
+        } else if (status === "in_play") {
+          const [agg] = await db.select({
+            totalValue: sql<number>`COALESCE(SUM(COALESCE(${quote.sales_price}, 0)), 0)`,
+          }).from(quote).where(and(
+            inArray(quote.transaction_id, allTxnIds),
+            sql`(${quote.isFreeQuote} IS NOT TRUE)`,
+            sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+          ));
+          totalValue = Number(agg?.totalValue || 0);
+          totalProfit = totalValue * 0.35;
+        } else if (status === "on_booking") {
+          const [agg] = await db.select({
+            totalValue: sql<number>`COALESCE(SUM(COALESCE(${booking.sales_price}, 0)), 0)`,
+            totalCommission: sql<number>`COALESCE(SUM(COALESCE(${booking.package_commission}, 0)), 0)`,
+            totalFallback: sql<number>`COALESCE(SUM(CASE WHEN COALESCE(${booking.package_commission}, 0) <= 0 THEN COALESCE(${booking.sales_price}, 0) * 0.1 ELSE 0 END), 0)`,
+          }).from(booking).where(inArray(booking.transaction_id, allTxnIds));
+          totalValue = Number(agg?.totalValue || 0);
+          totalProfit = Number(agg?.totalCommission || 0) + Number(agg?.totalFallback || 0);
+        }
+      } catch (aggErr) {
+        console.error("Pipeline aggregation error (non-fatal):", aggErr);
+        totalValue = 0;
+        totalProfit = 0;
       }
     }
 
