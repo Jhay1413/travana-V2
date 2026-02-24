@@ -134,6 +134,22 @@ export const newQuoteRepository = {
         image_id: quoteImages.id,
         image_url: quoteImages.url,
         image_is_primary: quoteImages.isPrimary,
+        // Fallback: primary image from the primary accommodation
+        accommodation_image_url: sql<string | null>`(
+          SELECT ai.image_url
+          FROM accommodation_images ai
+          WHERE ai.accommodation_id = ${quote_accomodation.accomodation_id}
+          ORDER BY ai."isPrimary" DESC NULLS LAST
+          LIMIT 1
+        )`,
+        // Fallback: primary image from the quote's lodge
+        lodge_image_url: sql<string | null>`(
+          SELECT li.image_url
+          FROM lodge_images li
+          WHERE li.lodge_id = ${quote.lodge_id}
+          ORDER BY li."isPrimary" DESC NULLS LAST
+          LIMIT 1
+        )`,
       })
       .from(quote)
       .where(inArray(quote.id, ids))
@@ -211,13 +227,27 @@ export const newQuoteRepository = {
         });
       }
       
-      // Add image (prefer primary, only take first one)
-      if (row.image_id && existingQuote.images.length === 0) {
-        existingQuote.images.push({
-          id: row.image_id,
-          image_url: row.image_url,
-          isPrimary: row.image_is_primary,
-        });
+      // Add image: accommodation > lodge > direct quote image
+      if (existingQuote.images.length === 0) {
+        if (row.accommodation_image_url) {
+          existingQuote.images.push({
+            id: 'accom',
+            image_url: row.accommodation_image_url,
+            isPrimary: true,
+          });
+        } else if (row.lodge_image_url) {
+          existingQuote.images.push({
+            id: 'lodge',
+            image_url: row.lodge_image_url,
+            isPrimary: true,
+          });
+        } else if (row.image_id) {
+          existingQuote.images.push({
+            id: row.image_id,
+            image_url: row.image_url,
+            isPrimary: row.image_is_primary,
+          });
+        }
       }
     }
 

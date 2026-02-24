@@ -225,12 +225,19 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
     setIsDragging(false);
   };
 
+  const isTouchDevice = typeof window !== "undefined" && "ontouchstart" in window;
+
+  const handleTap = () => {
+    if (!isDragging && isTouchDevice) setIsHovered((prev) => !prev);
+  };
+
   return (
     <div
       className={`relative ${isDragging ? "opacity-40" : ""}`}
-      onMouseEnter={() => !isDragging && setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      draggable
+      onMouseEnter={() => !isDragging && !isTouchDevice && setIsHovered(true)}
+      onMouseLeave={() => !isTouchDevice && setIsHovered(false)}
+      onClick={handleTap}
+      draggable={!isTouchDevice}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -267,9 +274,12 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
       </motion.div>
 
       {isHovered && !isDragging && (
+        <>
+        <div className="fixed inset-0 z-40 md:hidden" onClick={(e) => { e.stopPropagation(); setIsHovered(false); }} />
         <div
-          className="absolute left-0 right-0 top-full mt-1 z-50 p-4 rounded-xl border border-black/15 bg-white shadow-xl"
+          className="fixed inset-x-3 bottom-3 z-50 p-4 rounded-xl border border-black/15 bg-white shadow-2xl md:absolute md:inset-auto md:left-0 md:right-0 md:top-full md:mt-1 md:bottom-auto md:shadow-xl max-h-[70vh] overflow-y-auto"
           data-testid={`pipeline-hover-${transaction.id}`}
+          onClick={(e) => e.stopPropagation()}
         >
           <h4 className="font-semibold text-black/90 mb-3">{title}</h4>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -342,6 +352,7 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
             </Link>
           </div>
         </div>
+        </>
       )}
     </div>
   );
@@ -440,7 +451,7 @@ function PipelineColumn({
             ? "border-black/20 bg-black/[0.03]"
             : "border-black/10 bg-black/[0.015]"
         }`}
-        style={{ maxHeight: "calc(100vh - 340px)", minHeight: "200px" }}
+        style={{ maxHeight: "calc(100vh - 380px)", minHeight: "180px" }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -676,10 +687,10 @@ export default function PipelinePage() {
     <>
       <Select value={quoteStatusFilter} onValueChange={setQuoteStatusFilter}>
         <SelectTrigger
-          className="h-10 w-[200px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+          className="h-9 sm:h-10 w-full sm:w-[200px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white text-xs sm:text-sm"
           data-testid="select-quote-status"
         >
-          <Filter className="mr-2 h-4 w-4 shrink-0 opacity-60" />
+          <Filter className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 opacity-60" />
           <SelectValue placeholder="Quote Status" />
         </SelectTrigger>
         <SelectContent>
@@ -696,7 +707,7 @@ export default function PipelinePage() {
           onValueChange={setSelectedAgentId}
           allowAll
           allLabel="All Agents"
-          className="w-[190px]"
+          className="w-full sm:w-[190px]"
           data-testid="select-agent-filter"
         />
       )}
@@ -730,25 +741,25 @@ export default function PipelinePage() {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="space-y-6"
+        className="space-y-4 sm:space-y-6"
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           {STAGES.map((stage) => {
             const colors = stageColor(stage);
             const totals = stageTotals[stage];
             return (
               <Card
                 key={stage}
-                className={`glass ringed grain rounded-2xl p-4 ${colors.bg} ${colors.border}`}
+                className={`glass ringed grain rounded-2xl p-3 sm:p-4 ${colors.bg} ${colors.border}`}
                 data-testid={`pipeline-summary-${stage.toLowerCase()}`}
               >
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
                   <div className={`h-2 w-2 rounded-full ${colors.dot}`} />
-                  <span className={`text-xs font-semibold ${colors.text}`}>{stage}</span>
+                  <span className={`text-[11px] sm:text-xs font-semibold ${colors.text}`}>{stage}</span>
                 </div>
-                <p className="text-xl font-bold text-black/80">{totals.count}</p>
-                <p className="text-xs text-black/50 mt-1">
+                <p className="text-lg sm:text-xl font-bold text-black/80">{totals.count}</p>
+                <p className="text-[10px] sm:text-xs text-black/50 mt-1">
                   Profit: <span className="font-semibold text-emerald-700">{formatCurrency(totals.profit)}</span>
                 </p>
               </Card>
@@ -756,46 +767,47 @@ export default function PipelinePage() {
           })}
         </div>
 
-        <Card className="glass ringed grain rounded-2xl p-4">
+        <Card className="glass ringed grain rounded-2xl p-3 sm:p-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="h-5 w-5 text-emerald-600" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
               <div>
-                <p className="text-sm font-medium text-black/60">Total Pipeline</p>
-                <p className="text-lg font-bold text-black/80">
+                <p className="text-xs sm:text-sm font-medium text-black/60">Total Pipeline</p>
+                <p className="text-base sm:text-lg font-bold text-black/80">
                   {totalTransactions} transactions
                 </p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-xs text-black/40">Total Profit</p>
-              <p className="text-lg font-bold text-emerald-700" data-testid="pipeline-total-profit">
+              <p className="text-[10px] sm:text-xs text-black/40">Total Profit</p>
+              <p className="text-base sm:text-lg font-bold text-emerald-700" data-testid="pipeline-total-profit">
                 {formatCurrency(totalPipelineProfit)}
               </p>
             </div>
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="flex md:grid md:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto pb-2 md:pb-0 snap-x snap-mandatory md:snap-none -mx-2 px-2 md:mx-0 md:px-0">
           {STAGES.map((stage) => {
             const query = stageQueryMap[stage];
             const data = stageDataMap[stage];
             return (
-              <PipelineColumn
-                key={stage}
-                stage={stage}
-                transactions={data.items}
-                total={data.total}
-                getClientName={getClientName}
-                onDragStart={handleDragStart}
-                onDrop={handleDrop}
-                isDragActive={dragState.active}
-                dragFromStage={dragState.fromStage}
-                hasNextPage={!!query.hasNextPage}
-                isFetchingNextPage={query.isFetchingNextPage}
-                fetchNextPage={query.fetchNextPage}
-                isLoading={query.isLoading}
-              />
+              <div key={stage} className="min-w-[75vw] sm:min-w-[60vw] md:min-w-0 snap-start">
+                <PipelineColumn
+                  stage={stage}
+                  transactions={data.items}
+                  total={data.total}
+                  getClientName={getClientName}
+                  onDragStart={handleDragStart}
+                  onDrop={handleDrop}
+                  isDragActive={dragState.active}
+                  dragFromStage={dragState.fromStage}
+                  hasNextPage={!!query.hasNextPage}
+                  isFetchingNextPage={query.isFetchingNextPage}
+                  fetchNextPage={query.fetchNextPage}
+                  isLoading={query.isLoading}
+                />
+              </div>
             );
           })}
         </div>
