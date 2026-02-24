@@ -300,7 +300,7 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
             {notes.length > 0 ? (
               <>
                 <p className="text-xs text-black/60 line-clamp-3 leading-relaxed">
-                  {notes[0].content || notes[0].description || "No content"}
+                  {(notes[0].content || notes[0].description || "No content").replace(/<[^>]*>/g, "")}
                 </p>
                 <p className="text-[10px] text-black/30 mt-1">
                   {new Date(notes[0].createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
