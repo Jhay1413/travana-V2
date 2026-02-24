@@ -299,34 +299,24 @@ export const transactionRepository = {
     let totalValue = 0;
     if (allTxnIds.length > 0) {
       try {
-        if (status === "on_quote") {
+        if (status === "on_quote" || status === "in_play") {
           const [agg] = await db.select({
             totalValue: sql<number>`COALESCE(SUM(COALESCE(${quote.sales_price}, 0)), 0)`,
+            totalProfit: sql<number>`COALESCE(SUM(COALESCE(${quote.package_commission}, 0)), 0)`,
           }).from(quote).where(and(
             inArray(quote.transaction_id, allTxnIds),
             sql`(${quote.isFreeQuote} IS NOT TRUE)`,
             sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
           ));
           totalValue = Number(agg?.totalValue || 0);
-          totalProfit = totalValue * 0.20;
-        } else if (status === "in_play") {
-          const [agg] = await db.select({
-            totalValue: sql<number>`COALESCE(SUM(COALESCE(${quote.sales_price}, 0)), 0)`,
-          }).from(quote).where(and(
-            inArray(quote.transaction_id, allTxnIds),
-            sql`(${quote.isFreeQuote} IS NOT TRUE)`,
-            sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
-          ));
-          totalValue = Number(agg?.totalValue || 0);
-          totalProfit = totalValue * 0.35;
+          totalProfit = Number(agg?.totalProfit || 0);
         } else if (status === "on_booking") {
           const [agg] = await db.select({
             totalValue: sql<number>`COALESCE(SUM(COALESCE(${booking.sales_price}, 0)), 0)`,
-            totalCommission: sql<number>`COALESCE(SUM(COALESCE(${booking.package_commission}, 0)), 0)`,
-            totalFallback: sql<number>`COALESCE(SUM(CASE WHEN COALESCE(${booking.package_commission}, 0) <= 0 THEN COALESCE(${booking.sales_price}, 0) * 0.1 ELSE 0 END), 0)`,
+            totalProfit: sql<number>`COALESCE(SUM(COALESCE(${booking.package_commission}, 0)), 0)`,
           }).from(booking).where(inArray(booking.transaction_id, allTxnIds));
           totalValue = Number(agg?.totalValue || 0);
-          totalProfit = Number(agg?.totalCommission || 0) + Number(agg?.totalFallback || 0);
+          totalProfit = Number(agg?.totalProfit || 0);
         }
       } catch (aggErr) {
         console.error("Pipeline aggregation error (non-fatal):", aggErr);
