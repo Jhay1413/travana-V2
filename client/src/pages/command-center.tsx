@@ -4041,7 +4041,22 @@ export default function CommandCenterPage() {
       const quoteStatuses = ["all", "NEW_LEAD", "QUOTE_IN_PROGRESS", "QUOTE_CALL", "QUOTE_READY", "AWAITING_DECISION", "REQUOTE", "WON", "ARCHIVED", "LOST", "INACTIVE", "EXPIRED"];
       const bookingStatuses = ["all", "BOOKED", "LOST"];
       const statusOptions = opportunitiesTab === "enquiries" ? enquiryStatuses : opportunitiesTab === "quotes" ? quoteStatuses : bookingStatuses;
-      const formatStatus = (s: string) => s === "all" ? "All Statuses" : s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bIn\b/i, "in").replace(/\bin\b/, "In");
+      const formatStatus = (s: string) => s === "all" ? "All Statuses" : s.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bIn\b/, "in");
+      const statusBadgeClass = (s: string) => {
+        switch (s) {
+          case "QUOTE_IN_PROGRESS": return "bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/20";
+          case "NEW_LEAD": return "bg-violet-500/10 text-violet-600 border-violet-500/20";
+          case "QUOTE_CALL": return "bg-sky-500/10 text-sky-600 border-sky-500/20";
+          case "QUOTE_READY": return "bg-teal-500/10 text-teal-600 border-teal-500/20";
+          case "AWAITING_DECISION": return "bg-amber-500/10 text-amber-600 border-amber-500/20";
+          case "REQUOTE": return "bg-orange-500/10 text-orange-600 border-orange-500/20";
+          case "WON": case "BOOKED": return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+          case "LOST": return "bg-red-500/10 text-red-600 border-red-500/20";
+          case "ARCHIVED": case "INACTIVE": case "EXPIRED": return "bg-gray-500/10 text-gray-500 border-gray-500/20";
+          case "ACTIVE": return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+          default: return "";
+        }
+      };
       const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) : "—";
       return (
         <section data-testid="section-opportunities">
@@ -4157,7 +4172,7 @@ export default function CommandCenterPage() {
                             {item.clientPhone && <div className="truncate text-[10px] text-black/40 dark:text-white/40 flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" />{item.clientPhone}</div>}
                           </div>
                           <div className="truncate text-xs">{item.title}</div>
-                          <div><Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-lg">{formatStatus(item.status)}</Badge></div>
+                          <div><Badge variant="outline" className={`text-[10px] px-1.5 py-0 rounded-lg ${statusBadgeClass(item.status)}`}>{formatStatus(item.status)}</Badge></div>
                           <div className="text-xs tabular-nums">{formatDate(item.travelDate)}</div>
                           <div className="text-xs tabular-nums">{item.adults}A {item.children > 0 ? `${item.children}C` : ""}</div>
                           <div className="text-xs tabular-nums font-medium">{item.budget > 0 ? currency.format(item.budget) : "—"}</div>
@@ -4190,7 +4205,7 @@ export default function CommandCenterPage() {
                             {item.agentName && <div className="truncate text-[10px] text-black/40 dark:text-white/40">{item.agentName}</div>}
                           </div>
                           <div className="truncate text-xs">{item.title}</div>
-                          <div><Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-lg">{formatStatus(item.status)}</Badge></div>
+                          <div><Badge variant="outline" className={`text-[10px] px-1.5 py-0 rounded-lg ${statusBadgeClass(item.status)}`}>{formatStatus(item.status)}</Badge></div>
                           <div className="text-xs tabular-nums">{formatDate(item.travelDate)}</div>
                           <div className="text-xs tabular-nums">{item.adults}A {item.children > 0 ? `${item.children}C` : ""}</div>
                           <div className="text-xs tabular-nums font-medium">{item.salesPrice > 0 ? currency.format(item.salesPrice) : "—"}</div>
@@ -4224,7 +4239,7 @@ export default function CommandCenterPage() {
                             {item.agentName && <div className="truncate text-[10px] text-black/40 dark:text-white/40">{item.agentName}</div>}
                           </div>
                           <div className="truncate text-xs">{item.title}</div>
-                          <div><Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-lg">{formatStatus(item.status)}</Badge></div>
+                          <div><Badge variant="outline" className={`text-[10px] px-1.5 py-0 rounded-lg ${statusBadgeClass(item.status)}`}>{formatStatus(item.status)}</Badge></div>
                           <div className="text-xs tabular-nums">{formatDate(item.travelDate)}</div>
                           <div className="text-xs tabular-nums">{item.adults}A {item.children > 0 ? `${item.children}C` : ""}</div>
                           <div className="text-xs tabular-nums font-medium">{item.salesPrice > 0 ? currency.format(item.salesPrice) : "—"}</div>
