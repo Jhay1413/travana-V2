@@ -733,7 +733,7 @@ export default function PipelinePage() {
         className="space-y-6"
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {STAGES.map((stage) => {
             const colors = stageColor(stage);
             const totals = stageTotals[stage];
@@ -776,7 +776,7 @@ export default function PipelinePage() {
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {STAGES.map((stage) => {
             const query = stageQueryMap[stage];
             const data = stageDataMap[stage];
