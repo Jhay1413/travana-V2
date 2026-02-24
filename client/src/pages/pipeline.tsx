@@ -199,7 +199,7 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
   const travelDate = getTransactionDate(transaction);
   const passengers = getTransactionPassengers(transaction);
   const colors = stageColor(stage);
-  const { data: notes = [] } = useNotes(isHovered ? transaction.id : "");
+  const { data: notes = [] } = useNotes(transaction.id);
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData("application/json", JSON.stringify({ transactionId: transaction.id, fromStage: stage }));
@@ -292,23 +292,37 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
               </p>
             </div>
           </div>
-          {notes.length > 0 && (
-            <div className="mt-3 pt-2 border-t border-black/10">
-              <div className="flex items-center gap-1 mb-1">
-                <StickyNote className="h-3 w-3 text-black/40" />
-                <p className="text-[10px] uppercase tracking-wider text-black/40">Latest Note</p>
-              </div>
-              <p className="text-xs text-black/60 line-clamp-3 leading-relaxed">
-                {notes[0].content || notes[0].description || "No content"}
-              </p>
-              <p className="text-[10px] text-black/30 mt-1">
-                {new Date(notes[0].createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-              </p>
+          <div className="mt-3 pt-2 border-t border-black/10">
+            <div className="flex items-center gap-1 mb-1">
+              <StickyNote className="h-3 w-3 text-black/40" />
+              <p className="text-[10px] uppercase tracking-wider text-black/40">Latest Note</p>
             </div>
-          )}
+            {notes.length > 0 ? (
+              <>
+                <p className="text-xs text-black/60 line-clamp-3 leading-relaxed">
+                  {notes[0].content || notes[0].description || "No content"}
+                </p>
+                <p className="text-[10px] text-black/30 mt-1">
+                  {new Date(notes[0].createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-black/40 italic">No notes yet</p>
+            )}
+          </div>
           <div className="mt-3 pt-2 border-t border-black/10">
             <Link
-              href={`/transactions/${transaction.id}`}
+              href={
+                transaction.client_id && transaction.quotes?.length
+                  ? `/clients/${transaction.client_id}/quotes/${transaction.quotes[0].id}`
+                  : transaction.client_id && transaction.enquiry
+                    ? `/clients/${transaction.client_id}/enquiries/${transaction.enquiry.id}`
+                    : transaction.quotes?.length
+                      ? `/quotes/${transaction.quotes[0].id}`
+                      : transaction.client_id
+                        ? `/clients/${transaction.client_id}`
+                        : `/pipeline`
+              }
               className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
               data-testid={`pipeline-view-${transaction.id}`}
             >
