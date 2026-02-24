@@ -43,6 +43,14 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   images?: string[];
 };
 
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown): string {
+  const price = parseFloat(String(salesPrice ?? 0)) || 0;
+  const adults = parseInt(String(adult ?? 0), 10) || 0;
+  const children = parseInt(String(child ?? 0), 10) || 0;
+  const total = adults + children;
+  return total > 0 ? (price / total).toFixed(2) : "0.00";
+}
+
 function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
   if (!Array.isArray(images)) return [];
   return images
@@ -93,6 +101,8 @@ export const newQuoteService = {
 
     const txn = await transactionRepository.findById(quoteFields.transaction_id);
     if (!txn)  throw new AppError("Transaction not found", 404);
+
+    quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child);
 
     const q = await newQuoteRepository.create(quoteFields);
 
@@ -247,6 +257,18 @@ export const newQuoteService = {
     for (const key of directFields) {
       if (key in quoteFields) {
         (quoteData[key] as InsertQuote[typeof key]) = (quoteFields as Record<string, unknown>)[key] as InsertQuote[typeof key];
+      }
+    }
+
+    // Recalculate price_per_person if any of the pricing/passenger fields changed
+    if ('sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData) {
+      const current = await newQuoteRepository.findById(id);
+      if (current) {
+        quoteData.price_per_person = calcPricePerPerson(
+          quoteData.sales_price ?? current.sales_price,
+          quoteData.adult ?? current.adult,
+          quoteData.child ?? current.child,
+        );
       }
     }
 

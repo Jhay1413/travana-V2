@@ -96,6 +96,7 @@ export function BookingRHFForm({
   const destination = watch("destination");
   const resort = watch("resort");
   const parkId = watch("parkId");
+  const passengersAdults = watch("passengersAdults");
   const passengersChildren = watch("passengersChildren");
   const cruiseOnly = watch("cruiseOnly");
 
@@ -152,6 +153,15 @@ export function BookingRHFForm({
       setValue("childAges", newAges);
     }
   }, [passengersChildren, setValue, form]);
+
+  // ── Price per person calculation ──────────────────────────────────────────
+  useEffect(() => {
+    const price = Number(form.getValues("price")) || 0;
+    const adults = Number(passengersAdults) || 0;
+    const children = Number(passengersChildren) || 0;
+    const total = adults + children;
+    setValue("pricePerPerson", total > 0 ? parseFloat((price / total).toFixed(2)) : 0);
+  }, [passengersAdults, passengersChildren]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Options ───────────────────────────────────────────────────────────────
   const airportOptions = (airportsData || []).map(
@@ -1424,6 +1434,10 @@ export function BookingRHFForm({
                                 setValue("commission", parseFloat(((newPrice * parseFloat(comm.percentage_commission)) / 100).toFixed(2)));
                               }
                             }
+                            const adults = Number(form.getValues("passengersAdults")) || 0;
+                            const children = Number(form.getValues("passengersChildren")) || 0;
+                            const total = adults + children;
+                            setValue("pricePerPerson", total > 0 ? parseFloat((newPrice / total).toFixed(2)) : 0);
                           }
                         }}
                         className="h-9 rounded-xl border-black/10 bg-white/70"

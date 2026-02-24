@@ -96,6 +96,7 @@ function buildCreatePayload(
       child: values.passengersChildren || 0,
       infant: values.passengersInfants || 0,
       sales_price: values.price ? String(values.price) : undefined,
+      price_per_person: String(values.pricePerPerson || 0),
       package_commission: values.commission ? String(values.commission) : undefined,
       discounts: values.discount ? String(values.discount) : undefined,
       service_charge: values.serviceCharge ? String(values.serviceCharge) : undefined,

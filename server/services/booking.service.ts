@@ -16,6 +16,14 @@ import type {
   InsertBookingCruiseItinerary,
 } from "@shared/schema";
 
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown): string {
+  const price = parseFloat(String(salesPrice ?? 0)) || 0;
+  const adults = parseInt(String(adult ?? 0), 10) || 0;
+  const children = parseInt(String(child ?? 0), 10) || 0;
+  const total = adults + children;
+  return total > 0 ? (price / total).toFixed(2) : "0.00";
+}
+
 interface BookingRelationData {
   outboundFlight?: Partial<InsertBookingFlight>;
   inboundFlight?: Partial<InsertBookingFlight>;
@@ -74,6 +82,7 @@ export const bookingService = {
       infant: q.infant || 0,
       child: q.child || 0,
       adult: q.adult || 0,
+      price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child),
       booking_status: 'BOOKED',
       main_tour_operator_id: q.main_tour_operator_id,
       deal_type: q.deal_type,
@@ -233,7 +242,10 @@ export const bookingService = {
     const existingBooking = await bookingRepository.findByTransactionId(data.transaction_id);
     if (existingBooking) throw new AppError("Transaction already has a booking", 400);
 
-    const b = await bookingRepository.create(data);
+    const b = await bookingRepository.create({
+      ...data,
+      price_per_person: calcPricePerPerson(data.sales_price, data.adult, data.child),
+    });
     await transactionRepository.update(data.transaction_id, { status: 'on_booking' });
     return b;
   },
@@ -254,10 +266,23 @@ export const bookingService = {
       'lodge_id', 'lodge_type', 'transfer_type', 'booking_status',
       'main_tour_operator_id', 'deal_type', 'pre_booked_seats', 'flight_meals',
       'infant', 'child', 'adult', 'title', 'hays_ref', 'supplier_ref',
+      'price_per_person',
     ];
     for (const key of directFields) {
       if (key in bookingFields) {
         (bookingData[key] as InsertBooking[typeof key]) = (bookingFields as Record<string, unknown>)[key] as InsertBooking[typeof key];
+      }
+    }
+
+    // Recalculate price_per_person if any pricing/passenger fields changed
+    if ('sales_price' in bookingData || 'adult' in bookingData || 'child' in bookingData) {
+      const current = await bookingRepository.findById(id);
+      if (current) {
+        bookingData.price_per_person = calcPricePerPerson(
+          bookingData.sales_price ?? current.sales_price,
+          bookingData.adult ?? current.adult,
+          bookingData.child ?? current.child,
+        );
       }
     }
 

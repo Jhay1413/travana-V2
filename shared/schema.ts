@@ -789,6 +789,7 @@ export const booking = pgTable('booking_table', {
   infant: integer().notNull().default(0),
   child: integer().notNull().default(0),
   adult: integer().notNull().default(0),
+  price_per_person: numeric('price_per_person', { precision: 10, scale: 2 }).default("0.00").notNull(),
   booking_status: booking_status_enum(),
   main_tour_operator_id: uuid().references(() => tour_operator.id),
   date_created: timestamp({ withTimezone: true }).defaultNow(),
