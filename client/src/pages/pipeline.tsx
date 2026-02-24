@@ -37,25 +37,28 @@ import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { QuoteCreateDialog } from "@/components/quote-create-dialog";
 import type { Transaction } from "@/types/quote";
 
-type PipelineStage = "Enquiry" | "Quoted" | "Booked";
+type PipelineStage = "Enquiry" | "Quoted" | "In Play" | "Booked";
 
-const STAGES: PipelineStage[] = ["Enquiry", "Quoted", "Booked"];
+const STAGES: PipelineStage[] = ["Enquiry", "Quoted", "In Play", "Booked"];
 
 const STAGE_TO_STATUS: Record<PipelineStage, string> = {
   "Enquiry": "on_enquiry",
   "Quoted": "on_quote",
+  "In Play": "in_play",
   "Booked": "on_booking",
 };
 
 const STAGE_TO_API: Record<PipelineStage, string> = {
   "Enquiry": "enquiry",
   "Quoted": "quote",
+  "In Play": "in_play",
   "Booked": "booking",
 };
 
 const STATUS_TO_STAGE: Record<string, PipelineStage> = {
   "on_enquiry": "Enquiry",
   "on_quote": "Quoted",
+  "in_play": "In Play",
   "on_booking": "Booked",
 };
 
@@ -78,6 +81,15 @@ function stageColor(stage: PipelineStage) {
         dot: "bg-amber-500",
         header: "bg-amber-50 border-amber-200",
         dropHighlight: "ring-2 ring-amber-400 bg-amber-500/10",
+      };
+    case "In Play":
+      return {
+        bg: "bg-purple-500/10",
+        border: "border-purple-500/20",
+        text: "text-purple-700",
+        dot: "bg-purple-500",
+        header: "bg-purple-50 border-purple-200",
+        dropHighlight: "ring-2 ring-purple-400 bg-purple-500/10",
       };
     case "Booked":
       return {
@@ -510,6 +522,7 @@ export default function PipelinePage() {
 
   const enquiryQuery = usePipelineColumn("enquiry", PIPELINE_PAGE_SIZE, agentFilter);
   const quoteQuery = usePipelineColumn("quote", PIPELINE_PAGE_SIZE, agentFilter, quoteStatusParam);
+  const inPlayQuery = usePipelineColumn("in_play", PIPELINE_PAGE_SIZE, agentFilter);
   const bookingQuery = usePipelineColumn("booking", PIPELINE_PAGE_SIZE, agentFilter);
 
   const flattenPages = (query: typeof enquiryQuery): { items: Transaction[]; total: number; totalProfit: number; totalValue: number } => {
@@ -523,6 +536,7 @@ export default function PipelinePage() {
 
   const enquiryData = flattenPages(enquiryQuery);
   const quoteData = flattenPages(quoteQuery);
+  const inPlayData = flattenPages(inPlayQuery);
   const bookingData = flattenPages(bookingQuery);
 
   const [dragState, setDragState] = useState<{
@@ -547,9 +561,10 @@ export default function PipelinePage() {
     return {
       Enquiry: { count: enquiryData.total, profit: enquiryData.totalProfit },
       Quoted: { count: quoteData.total, profit: quoteData.totalProfit },
+      "In Play": { count: inPlayData.total, profit: inPlayData.totalProfit },
       Booked: { count: bookingData.total, profit: bookingData.totalProfit },
     };
-  }, [enquiryData, quoteData, bookingData]);
+  }, [enquiryData, quoteData, inPlayData, bookingData]);
 
   const getClientName = (clientId: string | null) => {
     if (!clientId) return "Unknown Client";
@@ -563,8 +578,9 @@ export default function PipelinePage() {
   const allLoadedTransactions = useMemo(() => [
     ...enquiryData.items,
     ...quoteData.items,
+    ...inPlayData.items,
     ...bookingData.items,
-  ], [enquiryData.items, quoteData.items, bookingData.items]);
+  ], [enquiryData.items, quoteData.items, inPlayData.items, bookingData.items]);
 
   const handleDrop = useCallback((transactionId: string, fromStage: PipelineStage, toStage: PipelineStage) => {
     setDragState({ active: false, fromStage: null, transactionId: null });
@@ -625,7 +641,7 @@ export default function PipelinePage() {
     queryClient.invalidateQueries({ queryKey: transactionKeys.all });
   };
 
-  const isInitialLoading = enquiryQuery.isLoading && quoteQuery.isLoading && bookingQuery.isLoading;
+  const isInitialLoading = enquiryQuery.isLoading && quoteQuery.isLoading && inPlayQuery.isLoading && bookingQuery.isLoading;
 
   if (isInitialLoading) {
     return (
@@ -644,9 +660,9 @@ export default function PipelinePage() {
   }
 
   const totalPipelineProfit =
-    stageTotals.Enquiry.profit + stageTotals.Quoted.profit + stageTotals.Booked.profit;
+    stageTotals.Enquiry.profit + stageTotals.Quoted.profit + stageTotals["In Play"].profit + stageTotals.Booked.profit;
   const totalTransactions =
-    stageTotals.Enquiry.count + stageTotals.Quoted.count + stageTotals.Booked.count;
+    stageTotals.Enquiry.count + stageTotals.Quoted.count + stageTotals["In Play"].count + stageTotals.Booked.count;
 
   const QUOTE_STATUS_OPTIONS = [
     { value: "all", label: "All Statuses" },
@@ -690,12 +706,14 @@ export default function PipelinePage() {
   const stageQueryMap: Record<PipelineStage, typeof enquiryQuery> = {
     Enquiry: enquiryQuery,
     Quoted: quoteQuery,
+    "In Play": inPlayQuery,
     Booked: bookingQuery,
   };
 
   const stageDataMap: Record<PipelineStage, { items: Transaction[]; total: number }> = {
     Enquiry: enquiryData,
     Quoted: quoteData,
+    "In Play": inPlayData,
     Booked: bookingData,
   };
 

@@ -116,6 +116,7 @@ export const transactionController = {
     const validStatuses: Record<string, string> = {
       enquiry: "on_enquiry",
       quote: "on_quote",
+      in_play: "in_play",
       booking: "on_booking",
     };
     const dbStatus = validStatuses[status];
