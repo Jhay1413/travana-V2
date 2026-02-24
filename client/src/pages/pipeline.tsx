@@ -3,12 +3,14 @@ import { motion } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
+import { useNotes } from "@/hooks/queries";
 import {
   Calendar,
   ChevronRight,
   Filter,
   GripVertical,
   Loader2,
+  StickyNote,
   PoundSterling,
   TrendingUp,
   Users,
@@ -197,6 +199,7 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
   const travelDate = getTransactionDate(transaction);
   const passengers = getTransactionPassengers(transaction);
   const colors = stageColor(stage);
+  const { data: notes = [] } = useNotes(isHovered ? transaction.id : "");
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData("application/json", JSON.stringify({ transactionId: transaction.id, fromStage: stage }));
@@ -288,17 +291,21 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
                 {profit > 0 ? formatCurrency(profit) : "TBC"}
               </p>
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-black/40 mb-0.5">Status</p>
-              <p className="font-medium text-black/70">{stage}</p>
-            </div>
-            {transaction.lead_source && (
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-black/40 mb-0.5">Lead Source</p>
-                <p className="font-medium text-black/70">{transaction.lead_source}</p>
-              </div>
-            )}
           </div>
+          {notes.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-black/10">
+              <div className="flex items-center gap-1 mb-1">
+                <StickyNote className="h-3 w-3 text-black/40" />
+                <p className="text-[10px] uppercase tracking-wider text-black/40">Latest Note</p>
+              </div>
+              <p className="text-xs text-black/60 line-clamp-3 leading-relaxed">
+                {notes[0].content || notes[0].description || "No content"}
+              </p>
+              <p className="text-[10px] text-black/30 mt-1">
+                {new Date(notes[0].createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              </p>
+            </div>
+          )}
           <div className="mt-3 pt-2 border-t border-black/10">
             <Link
               href={`/transactions/${transaction.id}`}
