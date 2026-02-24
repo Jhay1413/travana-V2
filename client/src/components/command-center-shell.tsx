@@ -24,6 +24,7 @@ import {
   ListChecks,
   Mail,
   MapPin,
+  Menu,
   MessageSquare,
   Phone,
   Plane,
@@ -481,6 +482,7 @@ export function CommandCenterShell({
 }) {
   const [, navigate] = useLocation();
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
   const { data: currentUser } = useCurrentUser();
@@ -629,8 +631,257 @@ export function CommandCenterShell({
 
   const RoleBadgeIcon = RoleIcon[role] ?? Sparkles;
 
+  const renderNavItems = (onNavigate?: () => void) => (
+    <>
+      <nav className="space-y-1">
+        {nav.grouped ? (
+          nav.sections.map((section) => {
+            const isExpanded = expandedSections.includes(section.id);
+            return (
+              <div key={section.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.id)}
+                  className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
+                  data-testid={`nav-section-${section.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                      <span className="text-black/70 dark:text-white/80">{section.icon}</span>
+                    </span>
+                    <span className="text-sm font-semibold">{section.label}</span>
+                  </div>
+                  <motion.div animate={{ rotate: isExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                    <ChevronRight className="h-4 w-4 text-black/35 dark:text-white/40" />
+                  </motion.div>
+                </button>
+                <AnimatePresence initial={false}>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden pl-4"
+                    >
+                      {section.items.map((item) => {
+                        const isActive = active === item.key;
+                        const hasChildren = item.children && item.children.length > 0;
+                        const childActive = hasChildren && item.children!.some((c) => active === c.key);
+                        return (
+                          <div key={item.key}>
+                            <Link
+                              href={getNavRoute(item.key)}
+                              onClick={() => onNavigate?.()}
+                              className={
+                                "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                                (isActive || childActive
+                                  ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                  : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                              }
+                              data-testid={`nav-${item.key}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className={"inline-flex h-7 w-7 items-center justify-center rounded-lg border " + (isActive || childActive ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")} aria-hidden>
+                                  <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                                </span>
+                                <span className="text-sm font-medium">{item.label}</span>
+                              </div>
+                              <ChevronRight className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                            </Link>
+                            {hasChildren && (
+                              <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
+                                {item.children!.map((child) => (
+                                  <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-black/5 text-black dark:bg-white/10 dark:text-white" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
+                                    <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                    <span>{child.label}</span>
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })
+        ) : (
+          nav.items.map((item) => {
+            const isActive = active === item.key;
+            const hasChildren = item.children && item.children.length > 0;
+            const childActive = hasChildren && item.children!.some((c) => active === c.key);
+            return (
+              <div key={item.key}>
+                <Link
+                  href={getNavRoute(item.key)}
+                  onClick={() => onNavigate?.()}
+                  className={
+                    "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                    (isActive || childActive
+                      ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                      : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                  }
+                  data-testid={`nav-${item.key}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={"inline-flex h-8 w-8 items-center justify-center rounded-xl border " + (isActive || childActive ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")} aria-hidden>
+                      <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                    </span>
+                    <span className="text-sm font-medium">{item.label}</span>
+                  </div>
+                  <ChevronRight className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                </Link>
+                {hasChildren && (
+                  <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
+                    {item.children!.map((child) => (
+                      <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-black/5 text-black dark:bg-white/10 dark:text-white" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
+                        <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                        <span>{child.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </nav>
+
+      <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+      <div className="grid gap-2">
+        <Link href="/social-posts" onClick={() => onNavigate?.()} className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 no-underline" data-testid="link-social-posts">
+          <div className="flex items-center gap-3">
+            <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+              <Share2 className="h-4 w-4 text-black/70 dark:text-white/80" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold">Social Posts</div>
+              <div className="text-xs text-black/55 dark:text-white/55">Browse & schedule posts</div>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+        </Link>
+        <Link href="/hub" onClick={() => onNavigate?.()} className="flex w-full items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 no-underline" data-testid="link-hub">
+          <div className="flex items-center gap-3">
+            <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+              <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold">TheHub</div>
+              <div className="text-xs text-black/55 dark:text-white/55">Profile, News & Training</div>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
+        </Link>
+      </div>
+
+      <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+      <div className="space-y-1">
+        <div className="flex items-center gap-3 px-3 mb-2">
+          <div className="relative grid h-9 w-9 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+            <MessageSquare className="h-4 w-4 text-black/70 dark:text-white/85" />
+          </div>
+          <div className="min-w-0">
+            <div className="title-serif truncate text-sm font-semibold">Connect</div>
+            <div className="truncate text-xs text-black/55 dark:text-white/55">Channels & conversations</div>
+          </div>
+        </div>
+        {["whatsapp", "facebook", "instagram", "email"].map((key) => {
+          const map: Record<string, { label: string; icon: React.ReactNode }> = {
+            whatsapp: { label: "WhatsApp", icon: <MessageSquare className="h-4 w-4" /> },
+            facebook: { label: "Facebook", icon: <Users className="h-4 w-4" /> },
+            instagram: { label: "Instagram", icon: <Sparkles className="h-4 w-4" /> },
+            email: { label: "Email", icon: <Mail className="h-4 w-4" /> },
+          };
+          const item = map[key];
+          const connectRoute = key === "tickets" ? "/tickets" : "/";
+          return (
+            <Link
+              key={key}
+              href={connectRoute}
+              onClick={() => onNavigate?.()}
+              className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
+              data-testid={`nav-connect-${key}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                  <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                </span>
+                <span className="text-sm font-medium">{item.label}</span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-black/35 dark:text-white/40" />
+            </Link>
+          );
+        })}
+      </div>
+    </>
+  );
+
   return (
-    <div className={cn(theme === "dark" ? "dark" : "", "app-shell px-2 py-2 md:px-3 md:py-3 lg:px-4 lg:py-4")}>\
+    <div className={cn(theme === "dark" ? "dark" : "", "app-shell px-2 py-2 md:px-3 md:py-3 lg:px-4 lg:py-4")}>
+
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-sm lg:hidden"
+              onClick={() => setMobileNavOpen(false)}
+              data-testid="mobile-nav-backdrop"
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 350, damping: 35 }}
+              className="fixed inset-y-0 left-0 z-[9999] w-[300px] overflow-y-auto bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-2xl p-4 lg:hidden"
+              data-testid="mobile-nav-drawer"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative grid h-10 w-10 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                    <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="title-serif truncate text-sm font-semibold">Travana</div>
+                    <div className="text-xs text-black/55 dark:text-white/55">Command Center</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                  data-testid="button-close-mobile-nav"
+                >
+                  <X className="h-4 w-4 text-black/70 dark:text-white/80" />
+                </button>
+              </div>
+
+              <select
+                value={role}
+                onChange={(e) => onRoleChange(e.target.value as Role)}
+                className="mb-4 w-full rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
+                data-testid="select-role-mobile"
+              >
+                {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                  <option key={r} value={r} className="text-black bg-white">{r}</option>
+                ))}
+              </select>
+
+              {renderNavItems(() => setMobileNavOpen(false))}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
       <div className="w-full space-y-3">
         <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
           <aside className="hidden lg:block" data-testid="nav-command-center">
@@ -957,6 +1208,14 @@ export function CommandCenterShell({
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setMobileNavOpen(true)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 lg:hidden"
+                      data-testid="button-hamburger-menu"
+                    >
+                      <Menu className="h-5 w-5 text-black/70 dark:text-white/80" />
+                    </button>
                     <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
                       {title}
                     </h1>
