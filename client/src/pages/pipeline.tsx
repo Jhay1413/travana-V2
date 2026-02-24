@@ -648,7 +648,7 @@ export default function PipelinePage() {
       <CommandCenterShell
         active="pipeline"
         title="Pipeline"
-        subtitle="Sales pipeline"
+        subtitle="Lets GO!"
         role={role}
         onRoleChange={setRole}
       >
@@ -722,7 +722,7 @@ export default function PipelinePage() {
     <CommandCenterShell
       active="pipeline"
       title="Pipeline"
-      subtitle="Sales pipeline overview"
+      subtitle="Lets GO!"
       role={role}
       onRoleChange={setRole}
       filterSlot={pipelineFilterSlot}
