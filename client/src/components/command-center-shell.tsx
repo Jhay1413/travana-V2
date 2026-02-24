@@ -833,7 +833,7 @@ export function CommandCenterShell({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-sm xl:hidden"
               onClick={() => setMobileNavOpen(false)}
               data-testid="mobile-nav-backdrop"
             />
@@ -842,7 +842,7 @@ export function CommandCenterShell({
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", stiffness: 350, damping: 35 }}
-              className="fixed inset-y-0 left-0 z-[9999] w-[300px] overflow-y-auto bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-2xl p-4 lg:hidden"
+              className="fixed inset-y-0 left-0 z-[9999] w-[300px] overflow-y-auto bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-2xl p-4 xl:hidden"
               data-testid="mobile-nav-drawer"
             >
               <div className="flex items-center justify-between mb-4">
@@ -883,8 +883,8 @@ export function CommandCenterShell({
       </AnimatePresence>
 
       <div className="w-full space-y-3">
-        <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
-          <aside className="hidden lg:block" data-testid="nav-command-center">
+        <div className="grid gap-3 xl:grid-cols-[320px_1fr]">
+          <aside className="hidden xl:block" data-testid="nav-command-center">
             <div className="glass ringed grain sticky top-4 rounded-3xl p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -1211,7 +1211,7 @@ export function CommandCenterShell({
                     <button
                       type="button"
                       onClick={() => setMobileNavOpen(true)}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 lg:hidden"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 xl:hidden"
                       data-testid="button-hamburger-menu"
                     >
                       <Menu className="h-5 w-5 text-black/70 dark:text-white/80" />
