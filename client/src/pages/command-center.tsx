@@ -11,6 +11,7 @@ import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, u
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
+import EmailInbox from "@/components/email-inbox";
 import AdminOverview from "@/components/admin-overview";
 import ChatRichInput from "@/components/chat-rich-input";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
@@ -2699,6 +2700,10 @@ export default function CommandCenterPage() {
       );
     }
     
+    if (active === "connect-email") {
+      return <EmailInbox />;
+    }
+
     if (active === "connect-internal-chat") {
       const currentUserId = currentUser?.id;
       return (
