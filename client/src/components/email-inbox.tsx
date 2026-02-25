@@ -389,11 +389,14 @@ export default function EmailInbox() {
             </div>
           ) : (
             filteredEmails.map((email) => (
-              <button
+              <div
                 key={email.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => openEmail(email)}
+                onKeyDown={(e) => { if (e.key === "Enter") openEmail(email); }}
                 className={
-                  "w-full text-left border-b border-black/5 px-4 py-3 transition dark:border-white/5 " +
+                  "w-full text-left border-b border-black/5 px-4 py-3 transition cursor-pointer dark:border-white/5 " +
                   (selectedId === email.id
                     ? "bg-[#3b82f6]/8 dark:bg-[#3b82f6]/15"
                     : email.read
@@ -442,7 +445,7 @@ export default function EmailInbox() {
                     <div className="h-2 w-2 rounded-full bg-[#3b82f6] mt-1.5 flex-shrink-0" />
                   )}
                 </div>
-              </button>
+              </div>
             ))
           )}
         </div>

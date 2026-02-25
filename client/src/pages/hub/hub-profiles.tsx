@@ -1,22 +1,201 @@
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Award,
   BookOpen,
+  Bookmark,
+  Calendar,
+  Camera,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  Edit3,
+  ExternalLink,
   FileText,
+  GraduationCap,
   Heart,
+  Image,
   MapPin,
+  MessageCircle,
+  MoreHorizontal,
   Pen,
   Pin,
+  Plane,
   Plus,
+  Repeat2,
+  Send,
+  Share2,
   Star,
+  Target,
+  ThumbsUp,
   Trophy,
+  TrendingUp,
   Upload,
+  Users,
   Video,
+  Zap,
 } from "lucide-react";
 import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/components/hub-components";
 import { agentProfiles } from "@/data/hub-mock";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
+type ProfileTab = "timeline" | "knowledge" | "training" | "achievements" | "about";
+
+interface TimelinePost {
+  id: string;
+  type: "deal" | "knowledge" | "training" | "blog" | "milestone" | "review";
+  content: string;
+  date: string;
+  pinned?: boolean;
+  likes: number;
+  comments: { author: string; avatar: string; text: string; date: string }[];
+  liked?: boolean;
+  image?: string;
+  badge?: string;
+  destination?: string;
+  value?: string;
+}
+
+const MOCK_TIMELINE: TimelinePost[] = [
+  {
+    id: "p1",
+    type: "deal",
+    pinned: true,
+    content: "Just closed a luxury Maldives honeymoon package for 2 guests — Soneva Fushi Overwater Villa, 10 nights, seaplane transfers included. One of my biggest deals this quarter!",
+    date: "2 hours ago",
+    likes: 14,
+    destination: "Maldives",
+    value: "£15,300",
+    badge: "High Value Deal",
+    comments: [
+      { author: "James Cooper", avatar: "JC", text: "Incredible deal Sarah! Soneva Fushi is a dream property. Well done! 🎉", date: "1 hour ago" },
+      { author: "Tina Brown", avatar: "TB", text: "This is exactly the kind of premium booking we love to see. Great work!", date: "45 mins ago" },
+    ],
+    liked: true,
+  },
+  {
+    id: "p2",
+    type: "knowledge",
+    pinned: true,
+    content: "Published a new destination guide: \"The Complete Agent's Guide to Selling Antalya\". Covers the top 15 hotels, transfer logistics, excursion upsells, and common objections with responses. Feel free to use this with your clients!",
+    date: "Yesterday",
+    likes: 23,
+    badge: "Knowledge Guide",
+    destination: "Turkey",
+    comments: [
+      { author: "Ryan Foster", avatar: "RF", text: "This is gold! Used the objection responses on a call today and it worked perfectly.", date: "12 hours ago" },
+    ],
+  },
+  {
+    id: "p3",
+    type: "training",
+    content: "Just completed the \"Advanced Cruise Selling\" training module with a score of 92%. Really improved my understanding of cabin categories and upgrade strategies.",
+    date: "2 days ago",
+    likes: 8,
+    badge: "Training Complete",
+    comments: [],
+  },
+  {
+    id: "p4",
+    type: "milestone",
+    content: "Hit a major milestone — 50 bookings confirmed this quarter! Thank you to everyone who's helped and to my amazing clients. Here's to the next 50! 🏆",
+    date: "3 days ago",
+    likes: 31,
+    badge: "Milestone",
+    comments: [
+      { author: "James Cooper", avatar: "JC", text: "Phenomenal achievement! You're absolutely smashing it.", date: "3 days ago" },
+      { author: "Casey Ashman", avatar: "CA", text: "Inspiring! I'm at 32 — trying to catch up 😅", date: "2 days ago" },
+      { author: "Admin", avatar: "AD", text: "Outstanding performance Sarah. Well deserved recognition!", date: "2 days ago" },
+    ],
+    liked: true,
+  },
+  {
+    id: "p5",
+    type: "review",
+    content: "Hotel Review: Titanic Mardan Palace, Antalya ⭐⭐⭐⭐⭐\n\nStayed 5 nights for a site inspection. The grounds are absolutely stunning — think Versailles meets the Mediterranean. The beach is pristine and the food quality across all 9 restaurants was exceptional. Perfect for families and couples seeking a premium AI experience. Commission structure is excellent via Jet2.",
+    date: "1 week ago",
+    likes: 19,
+    badge: "Hotel Review",
+    destination: "Turkey",
+    comments: [
+      { author: "Tom Blake", avatar: "TBL", text: "Great review! How were the kids' clubs?", date: "6 days ago" },
+    ],
+  },
+  {
+    id: "p6",
+    type: "blog",
+    content: "New Blog Post: \"5 Ways to Close a Holiday Sale on the First Call\"\n\nSharing my top techniques that have helped me achieve a 68% first-call close rate this year. Key takeaway: always have three options ready before the call, and lead with the mid-range option.",
+    date: "2 weeks ago",
+    likes: 42,
+    badge: "Blog Post",
+    comments: [
+      { author: "Ryan Foster", avatar: "RF", text: "The three-option strategy is genius. Already seeing improvement!", date: "1 week ago" },
+    ],
+  },
+];
+
+const MOCK_KNOWLEDGE = [
+  { id: "k1", title: "Complete Guide to Selling Antalya", type: "guide", views: 234, saves: 45, date: "Yesterday", destination: "Turkey" },
+  { id: "k2", title: "Titanic Mardan Palace — Full Agent Review", type: "review", views: 189, saves: 32, date: "1 week ago", destination: "Turkey" },
+  { id: "k3", title: "Cruise Cabin Upgrade Strategies", type: "guide", views: 156, saves: 28, date: "2 weeks ago", destination: "Cruise" },
+  { id: "k4", title: "Maldives Honeymoon Selling Points", type: "guide", views: 98, saves: 19, date: "3 weeks ago", destination: "Maldives" },
+  { id: "k5", title: "Handling 'Too Expensive' Objection", type: "tip", views: 312, saves: 67, date: "1 month ago", destination: "General" },
+  { id: "k6", title: "Lanzarote Family Resort Comparison", type: "review", views: 145, saves: 23, date: "1 month ago", destination: "Canaries" },
+];
+
+const MOCK_TRAINING = [
+  { id: "t1", title: "Advanced Cruise Selling", progress: 100, score: 92, duration: "2h 15m", mandatory: false },
+  { id: "t2", title: "Closing on First Call", progress: 100, score: 88, duration: "1h 30m", mandatory: true },
+  { id: "t3", title: "Turkey Destination Deep Dive", progress: 100, score: 95, duration: "3h 00m", mandatory: false },
+  { id: "t4", title: "Luxury Resort Positioning", progress: 65, score: null, duration: "2h 45m", mandatory: false },
+  { id: "t5", title: "Digital Marketing for Agents", progress: 30, score: null, duration: "1h 45m", mandatory: true },
+  { id: "t6", title: "Customer Complaint Handling", progress: 0, score: null, duration: "1h 00m", mandatory: true },
+];
+
+const MOCK_ACHIEVEMENTS = [
+  { id: "a1", title: "Top Seller", description: "Highest revenue in a single month", icon: Trophy, color: "from-amber-500 to-orange-500", earned: true, date: "Jan 2026" },
+  { id: "a2", title: "Knowledge Guru", description: "Published 10+ knowledge articles", icon: BookOpen, color: "from-blue-500 to-indigo-500", earned: true, date: "Dec 2025" },
+  { id: "a3", title: "First Call Closer", description: "70%+ first-call close rate", icon: Zap, color: "from-emerald-500 to-teal-500", earned: true, date: "Nov 2025" },
+  { id: "a4", title: "Globe Trotter", description: "Sold to 15+ destinations", icon: Plane, color: "from-purple-500 to-pink-500", earned: true, date: "Oct 2025" },
+  { id: "a5", title: "Team Player", description: "Helped 5 colleagues close deals", icon: Users, color: "from-cyan-500 to-blue-500", earned: true, date: "Sep 2025" },
+  { id: "a6", title: "Diamond Agent", description: "£100k+ in bookings", icon: Award, color: "from-slate-400 to-slate-500", earned: false, date: null },
+  { id: "a7", title: "Training Master", description: "Complete all training modules", icon: GraduationCap, color: "from-slate-400 to-slate-500", earned: false, date: null },
+  { id: "a8", title: "Review Champion", description: "Write 20+ hotel reviews", icon: Star, color: "from-slate-400 to-slate-500", earned: false, date: null },
+];
+
+function PostTypeIcon({ type }: { type: TimelinePost["type"] }) {
+  const map = {
+    deal: { icon: TrendingUp, color: "text-emerald-500" },
+    knowledge: { icon: BookOpen, color: "text-blue-500" },
+    training: { icon: GraduationCap, color: "text-purple-500" },
+    blog: { icon: Pen, color: "text-indigo-500" },
+    milestone: { icon: Trophy, color: "text-amber-500" },
+    review: { icon: Star, color: "text-orange-500" },
+  };
+  const { icon: Icon, color } = map[type];
+  return <Icon className={cn("h-4 w-4", color)} />;
+}
+
+function PostBadge({ label, type }: { label: string; type: TimelinePost["type"] }) {
+  const colors = {
+    deal: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+    knowledge: "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400",
+    training: "bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400",
+    blog: "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400",
+    milestone: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+    review: "bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400",
+  };
+  return (
+    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium", colors[type])}>
+      <PostTypeIcon type={type} />
+      {label}
+    </span>
+  );
+}
 
 function SkillHeatmap({ skills }: { skills: { name: string; level: number }[] }) {
   const getColor = (level: number) => {
@@ -27,126 +206,819 @@ function SkillHeatmap({ skills }: { skills: { name: string; level: number }[] })
   };
 
   return (
-    <div className="space-y-2">
+    <div className="grid grid-cols-2 gap-2">
       {skills.map((skill) => (
-        <div key={skill.name} className="flex items-center gap-3">
-          <span className="w-24 text-xs text-slate-600 dark:text-slate-400">{skill.name}</span>
-          <div className="flex-1">
-            <div className="h-3 w-full rounded-full bg-slate-200 dark:bg-slate-700">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${skill.level}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className={cn("h-3 rounded-full", getColor(skill.level))}
-              />
-            </div>
+        <div key={skill.name} className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-800/50">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{skill.name}</span>
+            <span className="text-[10px] font-bold text-slate-500">{skill.level}%</span>
           </div>
-          <span className="w-8 text-right text-xs font-medium text-slate-500">{skill.level}</span>
+          <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${skill.level}%` }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className={cn("h-1.5 rounded-full", getColor(skill.level))}
+            />
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
+function TimelinePostCard({ post, onLike }: { post: TimelinePost; onLike: (id: string) => void }) {
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const profile = agentProfiles[0];
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className={cn("grid h-10 w-10 place-items-center rounded-lg", color)}>
-        <Icon className="h-5 w-5 text-white" />
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "rounded-xl border bg-white dark:bg-slate-900",
+        post.pinned
+          ? "border-blue-200 dark:border-blue-500/20 ring-1 ring-blue-100 dark:ring-blue-500/10"
+          : "border-slate-200 dark:border-slate-800"
+      )}
+    >
+      {post.pinned && (
+        <div className="flex items-center gap-1.5 px-4 pt-3 text-[11px] font-medium text-blue-600 dark:text-blue-400">
+          <Pin className="h-3 w-3" />
+          Pinned Post
+        </div>
+      )}
+      <div className="p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+              {profile.avatar}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">{profile.name}</span>
+                <HubBadge variant="blue">{profile.role}</HubBadge>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs text-slate-500">{post.date}</span>
+                {post.badge && <PostBadge label={post.badge} type={post.type} />}
+              </div>
+            </div>
+          </div>
+          <button className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition">
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+          {post.content}
+        </div>
+
+        {(post.destination || post.value) && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {post.destination && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <MapPin className="h-3 w-3" /> {post.destination}
+              </span>
+            )}
+            {post.value && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                £ {post.value}
+              </span>
+            )}
+          </div>
+        )}
+
+        <Separator className="my-3" />
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onLike(post.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                post.liked
+                  ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
+                  : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              )}
+              data-testid={`post-like-${post.id}`}
+            >
+              <ThumbsUp className={cn("h-3.5 w-3.5", post.liked && "fill-blue-500")} />
+              {post.likes} {post.likes === 1 ? "Like" : "Likes"}
+            </button>
+            <button
+              onClick={() => setShowComments(!showComments)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              data-testid={`post-comment-toggle-${post.id}`}
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              {post.comments.length} {post.comments.length === 1 ? "Comment" : "Comments"}
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <Share2 className="h-3.5 w-3.5" />
+              Share
+            </button>
+            <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <Bookmark className="h-3.5 w-3.5" />
+              Save
+            </button>
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {showComments && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <Separator className="my-3" />
+              <div className="space-y-3">
+                {post.comments.map((c, i) => (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                      {c.avatar}
+                    </div>
+                    <div className="flex-1">
+                      <div className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
+                        <span className="text-xs font-semibold text-slate-900 dark:text-white">{c.author}</span>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{c.text}</p>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 px-1">
+                        <button className="text-[10px] font-medium text-slate-500 hover:text-blue-600 transition">Like</button>
+                        <button className="text-[10px] font-medium text-slate-500 hover:text-blue-600 transition">Reply</button>
+                        <span className="text-[10px] text-slate-400">{c.date}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                    {profile.avatar}
+                  </div>
+                  <div className="flex-1 relative">
+                    <Input
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder="Write a comment..."
+                      className="h-8 rounded-full bg-slate-100 border-0 text-xs pr-8 dark:bg-slate-800"
+                      data-testid={`post-comment-input-${post.id}`}
+                    />
+                    <button className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-600 transition">
+                      <Send className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-      <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-      <p className="text-xs text-slate-500">{label}</p>
-    </div>
+    </motion.div>
   );
 }
 
 export default function HubProfiles() {
   const profile = agentProfiles[0];
+  const [activeTab, setActiveTab] = useState<ProfileTab>("timeline");
+  const [timeline, setTimeline] = useState<TimelinePost[]>(MOCK_TIMELINE);
+  const [newPostText, setNewPostText] = useState("");
+
+  const toggleLike = (id: string) => {
+    setTimeline((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 }
+          : p
+      )
+    );
+  };
+
+  const pinnedPosts = timeline.filter((p) => p.pinned);
+  const regularPosts = timeline.filter((p) => !p.pinned);
+
+  const tabs: { key: ProfileTab; label: string; icon: React.ElementType }[] = [
+    { key: "timeline", label: "Timeline", icon: FileText },
+    { key: "knowledge", label: "Knowledge", icon: BookOpen },
+    { key: "training", label: "Training", icon: GraduationCap },
+    { key: "achievements", label: "Achievements", icon: Trophy },
+    { key: "about", label: "About", icon: Users },
+  ];
 
   return (
-    <div data-testid="page-hub-profiles">
-      <HubSectionHeader title="My Profile" subtitle="Your agent profile and reputation." />
+    <div data-testid="page-hub-profiles" className="-mt-4 sm:-mt-6 lg:-mt-8 -mx-4 sm:-mx-6 lg:-mx-8">
+      {/* Cover Photo */}
+      <div className="relative h-48 sm:h-56 lg:h-64 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 overflow-hidden">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djZoLTJ2LTZoLTR2LTJoNHYtNGgydjRoNHYyaC00eiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/30 to-transparent" />
+        <button className="absolute top-4 right-4 inline-flex items-center gap-1.5 rounded-lg bg-black/30 backdrop-blur-sm px-3 py-1.5 text-xs text-white hover:bg-black/40 transition" data-testid="button-edit-cover">
+          <Camera className="h-3.5 w-3.5" />
+          Edit Cover
+        </button>
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1 space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-6 text-center dark:border-slate-800 dark:bg-slate-900">
-            <div className="mx-auto">
-              <HubAvatar initials={profile.avatar} size="lg" />
-            </div>
-            <h2 className="mt-3 text-lg font-bold text-slate-900 dark:text-white" data-testid="text-profile-name">{profile.name}</h2>
-            <HubBadge variant="blue">{profile.role}</HubBadge>
-            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{profile.bio}</p>
-
-            <div className="mt-4 flex items-center justify-center gap-1">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  className={cn("h-4 w-4", star <= 4 ? "fill-amber-400 text-amber-400" : "text-slate-300 dark:text-slate-600")}
-                />
-              ))}
-              <span className="ml-1 text-xs text-slate-500">{profile.reputationScore} pts</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Training Progress</h3>
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500">Overall</span>
-                <span className="font-medium text-slate-700 dark:text-slate-300">{profile.trainingProgress}%</span>
-              </div>
-              <div className="mt-1.5">
-                <HubProgressBar value={profile.trainingProgress} />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Actions</h3>
-            <div className="mt-3 space-y-2">
-              <Button variant="outline" size="sm" className="w-full justify-start text-xs" data-testid="button-add-blog">
-                <Pen className="mr-2 h-3 w-3" /> Add Blog Post
-              </Button>
-              <Button variant="outline" size="sm" className="w-full justify-start text-xs" data-testid="button-upload-video">
-                <Upload className="mr-2 h-3 w-3" /> Upload Training Video
-              </Button>
-              <Button variant="outline" size="sm" className="w-full justify-start text-xs" data-testid="button-pin-guide">
-                <Pin className="mr-2 h-3 w-3" /> Pin Knowledge Guide
-              </Button>
-              <Button variant="outline" size="sm" className="w-full justify-start text-xs" data-testid="button-add-insight">
-                <MapPin className="mr-2 h-3 w-3" /> Add Destination Insight
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 space-y-6">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard icon={BookOpen} label="Contributions" value={profile.contributions} color="bg-blue-500" />
-            <StatCard icon={Trophy} label="Deal Wins" value={profile.dealWins} color="bg-amber-500" />
-            <StatCard icon={Award} label="Reputation" value={profile.reputationScore} color="bg-emerald-500" />
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white" data-testid="text-skill-heatmap">Skill Heatmap</h3>
-            <p className="mt-1 text-xs text-slate-500">Visual overview of your strengths and areas for development.</p>
-            <div className="mt-4">
-              <SkillHeatmap skills={profile.skills} />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white">Pinned Posts</h3>
-            <div className="mt-3 space-y-2">
-              {profile.pinnedPosts.map((post) => (
-                <div key={post} className="flex items-center gap-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/50">
-                  <Pin className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm text-slate-700 dark:text-slate-300">{post}</span>
+      {/* Profile Header Card */}
+      <div className="px-4 sm:px-6 lg:px-8">
+        <div className="relative -mt-16 sm:-mt-20 mb-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+              {/* Avatar */}
+              <div className="relative -mt-16 sm:-mt-20 flex-shrink-0">
+                <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold border-4 border-white dark:border-slate-900 shadow-lg" data-testid="profile-avatar-large">
+                  {profile.avatar}
                 </div>
-              ))}
+                <button className="absolute bottom-1 right-1 h-8 w-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                  <Camera className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                </button>
+                <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" title="Online" />
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0 sm:pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white" data-testid="text-profile-name">
+                        {profile.name}
+                      </h1>
+                      <CheckCircle2 className="h-5 w-5 text-blue-500 fill-blue-500" />
+                      <HubBadge variant="blue">{profile.role}</HubBadge>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-lg">
+                      {profile.bio}
+                    </p>
+                    <div className="flex items-center gap-4 mt-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                        <MapPin className="h-3 w-3" /> Newcastle, UK
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                        <Calendar className="h-3 w-3" /> Joined March 2018
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                        <Plane className="h-3 w-3" /> Turkey & Mediterranean Specialist
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button size="sm" className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white gap-1.5 text-xs" data-testid="button-edit-profile">
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Edit Profile
+                    </Button>
+                    <Button variant="outline" size="sm" className="rounded-lg text-xs gap-1.5" data-testid="button-share-profile">
+                      <Share2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Stats Row */}
+                <div className="flex items-center gap-6 mt-4 flex-wrap">
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{profile.contributions}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Posts</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{profile.dealWins}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Deal Wins</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
+                  <div className="text-center">
+                    <div className="flex items-center gap-1">
+                      <p className="text-lg font-bold text-slate-900 dark:text-white">{profile.reputationScore}</p>
+                      <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                    </div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Reputation</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{profile.trainingProgress}%</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Training</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">£48.2k</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Revenue QTD</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Tab Navigation */}
+        <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 mb-6">
+          <div className="flex items-center gap-0 overflow-x-auto px-2">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition whitespace-nowrap",
+                    isActive
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300"
+                  )}
+                  data-testid={`profile-tab-${tab.key}`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <AnimatePresence mode="wait">
+          {activeTab === "timeline" && (
+            <motion.div key="timeline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid gap-6 lg:grid-cols-[1fr_320px]">
+              <div className="space-y-4">
+                {/* Create Post */}
+                <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                      {profile.avatar}
+                    </div>
+                    <div className="flex-1">
+                      <Input
+                        value={newPostText}
+                        onChange={(e) => setNewPostText(e.target.value)}
+                        placeholder="Share a deal win, insight, or knowledge..."
+                        className="h-10 rounded-full bg-slate-100 border-0 text-sm dark:bg-slate-800"
+                        data-testid="input-new-post"
+                      />
+                    </div>
+                  </div>
+                  <Separator className="my-3" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        <TrendingUp className="h-3.5 w-3.5 text-emerald-500" /> Deal Win
+                      </button>
+                      <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        <BookOpen className="h-3.5 w-3.5 text-blue-500" /> Guide
+                      </button>
+                      <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        <Star className="h-3.5 w-3.5 text-orange-500" /> Review
+                      </button>
+                      <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        <Image className="h-3.5 w-3.5 text-purple-500" /> Photo
+                      </button>
+                    </div>
+                    <Button size="sm" className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs" data-testid="button-post">
+                      Post
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Pinned Posts */}
+                {pinnedPosts.length > 0 && (
+                  <div className="space-y-4">
+                    {pinnedPosts.map((post) => (
+                      <TimelinePostCard key={post.id} post={post} onLike={toggleLike} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Regular Posts */}
+                <div className="space-y-4">
+                  {regularPosts.map((post) => (
+                    <TimelinePostCard key={post.id} post={post} onLike={toggleLike} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Right Sidebar */}
+              <div className="space-y-4">
+                {/* Skill Heatmap */}
+                <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Target className="h-4 w-4 text-blue-500" />
+                    Skill Heatmap
+                  </h3>
+                  <div className="mt-3">
+                    <SkillHeatmap skills={profile.skills} />
+                  </div>
+                </div>
+
+                {/* Recent Achievements */}
+                <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-500" />
+                    Recent Achievements
+                  </h3>
+                  <div className="mt-3 space-y-2">
+                    {MOCK_ACHIEVEMENTS.filter((a) => a.earned).slice(0, 4).map((a) => {
+                      const Icon = a.icon;
+                      return (
+                        <div key={a.id} className="flex items-center gap-2.5">
+                          <div className={cn("h-8 w-8 rounded-lg bg-gradient-to-br flex items-center justify-center text-white flex-shrink-0", a.color)}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-slate-900 dark:text-white truncate">{a.title}</p>
+                            <p className="text-[10px] text-slate-500">{a.date}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("achievements")}
+                    className="mt-3 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 transition"
+                  >
+                    View all achievements →
+                  </button>
+                </div>
+
+                {/* Training Progress */}
+                <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-purple-500" />
+                    Training Progress
+                  </h3>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-slate-500">Overall Completion</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{profile.trainingProgress}%</span>
+                    </div>
+                    <HubProgressBar value={profile.trainingProgress} />
+                    <div className="mt-3 space-y-1.5">
+                      {MOCK_TRAINING.filter((t) => t.progress < 100).slice(0, 3).map((t) => (
+                        <div key={t.id} className="flex items-center justify-between">
+                          <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate max-w-[180px]">{t.title}</span>
+                          <span className="text-[10px] font-medium text-slate-500">{t.progress}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("training")}
+                    className="mt-3 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 transition"
+                  >
+                    View all training →
+                  </button>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Quick Actions</h3>
+                  <div className="space-y-1.5">
+                    <button className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800 transition text-left">
+                      <Pen className="h-3.5 w-3.5 text-indigo-500" /> Write Blog Post
+                    </button>
+                    <button className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800 transition text-left">
+                      <Upload className="h-3.5 w-3.5 text-purple-500" /> Upload Training Video
+                    </button>
+                    <button className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800 transition text-left">
+                      <Star className="h-3.5 w-3.5 text-orange-500" /> Write Hotel Review
+                    </button>
+                    <button className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800 transition text-left">
+                      <MapPin className="h-3.5 w-3.5 text-emerald-500" /> Add Destination Insight
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "knowledge" && (
+            <motion.div key="knowledge" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {MOCK_KNOWLEDGE.map((item) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 hover:shadow-md transition-shadow group cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className={cn(
+                        "h-10 w-10 rounded-lg flex items-center justify-center",
+                        item.type === "guide" ? "bg-blue-50 dark:bg-blue-500/10" :
+                        item.type === "review" ? "bg-orange-50 dark:bg-orange-500/10" :
+                        "bg-emerald-50 dark:bg-emerald-500/10"
+                      )}>
+                        {item.type === "guide" ? <BookOpen className="h-5 w-5 text-blue-500" /> :
+                         item.type === "review" ? <Star className="h-5 w-5 text-orange-500" /> :
+                         <Zap className="h-5 w-5 text-emerald-500" />}
+                      </div>
+                      <span className="text-[10px] rounded-full bg-slate-100 px-2 py-0.5 font-medium capitalize text-slate-500 dark:bg-slate-800">
+                        {item.type}
+                      </span>
+                    </div>
+                    <h4 className="mt-3 text-sm font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                      {item.title}
+                    </h4>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                        <MapPin className="h-2.5 w-2.5" /> {item.destination}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{item.date}</span>
+                    </div>
+                    <Separator className="my-3" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                          <ExternalLink className="h-2.5 w-2.5" /> {item.views} views
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                          <Bookmark className="h-2.5 w-2.5" /> {item.saves} saves
+                        </span>
+                      </div>
+                      <button className="text-blue-500 hover:text-blue-600 transition">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "training" && (
+            <motion.div key="training" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+                <div className="space-y-3">
+                  {MOCK_TRAINING.map((t) => (
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "h-10 w-10 rounded-lg flex items-center justify-center",
+                            t.progress === 100 ? "bg-emerald-50 dark:bg-emerald-500/10" :
+                            t.progress > 0 ? "bg-blue-50 dark:bg-blue-500/10" :
+                            "bg-slate-100 dark:bg-slate-800"
+                          )}>
+                            {t.progress === 100 ? (
+                              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                            ) : (
+                              <GraduationCap className={cn("h-5 w-5", t.progress > 0 ? "text-blue-500" : "text-slate-400")} />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{t.title}</h4>
+                              {t.mandatory && (
+                                <span className="text-[9px] rounded-full bg-red-50 px-1.5 py-0.5 font-medium text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                                  Mandatory
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5">
+                              <span className="text-xs text-slate-500 flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> {t.duration}
+                              </span>
+                              {t.score !== null && (
+                                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                  Score: {t.score}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {t.progress === 100 ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border-0 text-[10px]">
+                              Completed
+                            </Badge>
+                          ) : t.progress > 0 ? (
+                            <Button size="sm" className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs">
+                              Continue
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="outline" className="rounded-lg text-xs">
+                              Start
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      {t.progress > 0 && t.progress < 100 && (
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between text-[10px] mb-1">
+                            <span className="text-slate-500">Progress</span>
+                            <span className="font-medium text-slate-600 dark:text-slate-400">{t.progress}%</span>
+                          </div>
+                          <HubProgressBar value={t.progress} size="sm" />
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Training Sidebar */}
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Training Summary</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-500">Overall</span>
+                          <span className="font-bold">{profile.trainingProgress}%</span>
+                        </div>
+                        <HubProgressBar value={profile.trainingProgress} />
+                      </div>
+                      <Separator />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="text-center p-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10">
+                          <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                            {MOCK_TRAINING.filter((t) => t.progress === 100).length}
+                          </p>
+                          <p className="text-[10px] text-slate-500">Completed</p>
+                        </div>
+                        <div className="text-center p-2 rounded-lg bg-blue-50 dark:bg-blue-500/10">
+                          <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                            {MOCK_TRAINING.filter((t) => t.progress > 0 && t.progress < 100).length}
+                          </p>
+                          <p className="text-[10px] text-slate-500">In Progress</p>
+                        </div>
+                        <div className="text-center p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10">
+                          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                            {MOCK_TRAINING.filter((t) => t.mandatory && t.progress < 100).length}
+                          </p>
+                          <p className="text-[10px] text-slate-500">Required</p>
+                        </div>
+                        <div className="text-center p-2 rounded-lg bg-slate-100 dark:bg-slate-800">
+                          <p className="text-lg font-bold text-slate-600 dark:text-slate-400">
+                            {MOCK_TRAINING.filter((t) => t.progress === 0).length}
+                          </p>
+                          <p className="text-[10px] text-slate-500">Not Started</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Avg. Score</h3>
+                    <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                      {Math.round(MOCK_TRAINING.filter((t) => t.score !== null).reduce((sum, t) => sum + (t.score || 0), 0) / MOCK_TRAINING.filter((t) => t.score !== null).length)}%
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">Across {MOCK_TRAINING.filter((t) => t.score !== null).length} completed modules</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "achievements" && (
+            <motion.div key="achievements" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {MOCK_ACHIEVEMENTS.map((a) => {
+                  const Icon = a.icon;
+                  return (
+                    <motion.div
+                      key={a.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className={cn(
+                        "rounded-xl border p-5 text-center transition-all",
+                        a.earned
+                          ? "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 hover:shadow-md"
+                          : "border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50 opacity-60"
+                      )}
+                    >
+                      <div className={cn(
+                        "mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white",
+                        a.color
+                      )}>
+                        <Icon className="h-7 w-7" />
+                      </div>
+                      <h4 className="mt-3 text-sm font-semibold text-slate-900 dark:text-white">{a.title}</h4>
+                      <p className="mt-1 text-xs text-slate-500">{a.description}</p>
+                      {a.earned ? (
+                        <Badge className="mt-2 bg-emerald-50 text-emerald-700 border-0 dark:bg-emerald-500/10 dark:text-emerald-400 text-[10px]">
+                          Earned {a.date}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="mt-2 text-[10px] text-slate-400 border-slate-300">
+                          Locked
+                        </Badge>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "about" && (
+            <motion.div key="about" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid gap-6 lg:grid-cols-2">
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">About</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      <Users className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profile.role} at Tina's Travel Deals</p>
+                        <p className="text-xs text-slate-500">Current Role</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Newcastle upon Tyne, United Kingdom</p>
+                        <p className="text-xs text-slate-500">Location</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Calendar className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">March 2018</p>
+                        <p className="text-xs text-slate-500">Joined</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Plane className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Turkey, Mediterranean, Maldives, Canary Islands</p>
+                        <p className="text-xs text-slate-500">Specialisations</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Award className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">ABTA Certified, IATA Accredited</p>
+                        <p className="text-xs text-slate-500">Certifications</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Bio</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {profile.bio} Passionate about creating unforgettable holiday experiences and helping clients find their perfect getaway. Completed over 200 site inspections across Europe and beyond. Known for exceptional first-call close rates and deep destination knowledge.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Target className="h-4 w-4 text-blue-500" />
+                    Skill Breakdown
+                  </h3>
+                  <SkillHeatmap skills={profile.skills} />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Career Stats</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-500/10">
+                      <p className="text-xl font-bold text-blue-600 dark:text-blue-400">204</p>
+                      <p className="text-[10px] text-slate-500">Total Bookings</p>
+                    </div>
+                    <div className="rounded-lg bg-emerald-50 p-3 dark:bg-emerald-500/10">
+                      <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">£186k</p>
+                      <p className="text-[10px] text-slate-500">Revenue (12mo)</p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-500/10">
+                      <p className="text-xl font-bold text-amber-600 dark:text-amber-400">68%</p>
+                      <p className="text-[10px] text-slate-500">Close Rate</p>
+                    </div>
+                    <div className="rounded-lg bg-purple-50 p-3 dark:bg-purple-500/10">
+                      <p className="text-xl font-bold text-purple-600 dark:text-purple-400">4.8</p>
+                      <p className="text-[10px] text-slate-500">Client Rating</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-3">Top Destinations</h3>
+                  <div className="space-y-2">
+                    {[
+                      { name: "Turkey", bookings: 68, pct: 33 },
+                      { name: "Spain (Canaries)", bookings: 45, pct: 22 },
+                      { name: "Greece", bookings: 32, pct: 16 },
+                      { name: "Maldives", bookings: 24, pct: 12 },
+                      { name: "Caribbean", bookings: 18, pct: 9 },
+                    ].map((d) => (
+                      <div key={d.name} className="flex items-center gap-3">
+                        <span className="w-28 text-xs text-slate-600 dark:text-slate-400">{d.name}</span>
+                        <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
+                          <div className="h-2 rounded-full bg-blue-500" style={{ width: `${d.pct}%` }} />
+                        </div>
+                        <span className="text-[10px] font-medium text-slate-500 w-12 text-right">{d.bookings} deals</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
