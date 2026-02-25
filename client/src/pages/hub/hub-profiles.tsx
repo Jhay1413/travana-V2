@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import coverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
 import {
   Award,
   BookOpen,
@@ -412,8 +413,8 @@ export default function HubProfiles() {
   return (
     <div data-testid="page-hub-profiles" className="-mt-4 sm:-mt-6 lg:-mt-8 -mx-4 sm:-mx-6 lg:-mx-8">
       {/* Cover Photo */}
-      <div className="relative h-48 sm:h-56 lg:h-64 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djZoLTJ2LTZoLTR2LTJoNHYtNGgydjRoNHYyaC00eiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
+      <div className="relative h-48 sm:h-56 lg:h-64 overflow-hidden">
+        <img src={coverImage} alt="Cover" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/30 to-transparent" />
         <button className="absolute top-4 right-4 inline-flex items-center gap-1.5 rounded-lg bg-black/30 backdrop-blur-sm px-3 py-1.5 text-xs text-white hover:bg-black/40 transition" data-testid="button-edit-cover">
           <Camera className="h-3.5 w-3.5" />
