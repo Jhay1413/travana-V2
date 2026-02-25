@@ -71,6 +71,9 @@ app.use((req, res, next) => {
 
   app.use("/api", routes);
 
+  const path = await import("path");
+  app.use("/avatars", express.static(path.default.join(process.cwd(), "public", "avatars")));
+
   app.use(errorHandler);
 
   if (process.env.NODE_ENV === "production") {

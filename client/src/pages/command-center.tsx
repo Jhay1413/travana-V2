@@ -1,11 +1,12 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "@/api/client/axios-client";
+import { authApi } from "@/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
-import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useTickets, useChatConversations, useChatMessages } from "@/hooks/queries";
+import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useTickets, useChatConversations, useChatMessages, authKeys } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -72,9 +73,12 @@ import {
   Hotel,
   UtensilsCrossed,
   Eye,
+  EyeOff,
+  Lock,
   CalendarClock,
   Target,
   Send,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1506,6 +1510,7 @@ function EmptyState({ title, desc, action }: { title: string; desc: string; acti
 export default function CommandCenterPage() {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
   const [active, setActive] = useState<string>(() => {
     if (location === "/clients") return "clients";
     return "overview";
@@ -1550,6 +1555,24 @@ export default function CommandCenterPage() {
   const [chatSelectedConversation, setChatSelectedConversation] = useState<string | null>(null);
   const [chatMessageInput, setChatMessageInput] = useState("");
   const [chatNewChatUserId, setChatNewChatUserId] = useState<string | null>(null);
+
+  const [settingsPhone, setSettingsPhone] = useState("");
+  const [settingsEmail, setSettingsEmail] = useState("");
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user) {
+      setSettingsPhone(user.phoneNumber || "");
+      setSettingsEmail(user.email || "");
+    }
+  }, [user]);
 
   const handleDashAddTask = () => {
     if (!dashNewTitle || !dashNewDueDate || !currentUser?.id) return;
@@ -4264,6 +4287,63 @@ export default function CommandCenterPage() {
     }
 
     if (active === "agent-settings") {
+      const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingAvatar(true);
+        try {
+          await authApi.uploadAvatar(file);
+          queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
+          toast({ title: "Avatar updated successfully" });
+        } catch (err: any) {
+          toast({ title: "Failed to upload avatar", description: err?.response?.data?.message || err.message, variant: "destructive" });
+        } finally {
+          setUploadingAvatar(false);
+          if (avatarInputRef.current) avatarInputRef.current.value = "";
+        }
+      };
+
+      const handleSaveProfile = async () => {
+        setSavingProfile(true);
+        try {
+          await authApi.updateProfile({ phoneNumber: settingsPhone, email: settingsEmail });
+          queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
+          toast({ title: "Profile updated successfully" });
+        } catch (err: any) {
+          toast({ title: "Failed to update profile", description: err?.response?.data?.message || err.message, variant: "destructive" });
+        } finally {
+          setSavingProfile(false);
+        }
+      };
+
+      const handleChangePassword = async () => {
+        if (!oldPassword || !newPassword || !confirmPassword) {
+          toast({ title: "All password fields are required", variant: "destructive" });
+          return;
+        }
+        if (newPassword !== confirmPassword) {
+          toast({ title: "New passwords do not match", variant: "destructive" });
+          return;
+        }
+        if (newPassword.length < 6) {
+          toast({ title: "New password must be at least 6 characters", variant: "destructive" });
+          return;
+        }
+        setChangingPassword(true);
+        try {
+          await authApi.changePassword(oldPassword, newPassword, confirmPassword);
+          toast({ title: "Password changed successfully" });
+          setOldPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
+          setShowPasswordForm(false);
+        } catch (err: any) {
+          toast({ title: "Failed to change password", description: err?.response?.data?.message || err.message, variant: "destructive" });
+        } finally {
+          setChangingPassword(false);
+        }
+      };
+
       return (
         <section className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
           <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
@@ -4336,27 +4416,46 @@ export default function CommandCenterPage() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
                     <div className="flex items-center gap-3">
-                      {user?.avatar ? (
-                        <img src={user.avatar} alt="" className="h-12 w-12 rounded-2xl" data-testid="img-avatar" />
-                      ) : (
-                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-medium" data-testid="img-avatar-placeholder">
-                          {displayName?.charAt(0).toUpperCase() || "U"}
-                        </div>
-                      )}
+                      <div className="relative">
+                        {(user?.image || user?.avatar) ? (
+                          <img src={user?.image || user?.avatar || ""} alt="" className="h-12 w-12 rounded-2xl object-cover" data-testid="img-avatar" />
+                        ) : (
+                          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-medium" data-testid="img-avatar-placeholder">
+                            {displayName?.charAt(0).toUpperCase() || "U"}
+                          </div>
+                        )}
+                        {uploadingAvatar && (
+                          <div className="absolute inset-0 rounded-2xl bg-black/50 flex items-center justify-center">
+                            <Spinner className="h-5 w-5 text-white" />
+                          </div>
+                        )}
+                      </div>
                       <div>
                         <div className="text-sm font-medium">Avatar</div>
                         <div className="text-xs text-black/55 dark:text-white/55">Update your profile picture</div>
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white"
-                      data-testid="button-change-avatar"
-                    >
-                      <Camera className="mr-2 h-4 w-4" />
-                      Change
-                    </Button>
+                    <div>
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        className="hidden"
+                        onChange={handleAvatarUpload}
+                        data-testid="input-avatar-file"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={uploadingAvatar}
+                        onClick={() => avatarInputRef.current?.click()}
+                        className="rounded-xl border-black/10 bg-black/5 text-black hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                        data-testid="button-change-avatar"
+                      >
+                        <Camera className="mr-2 h-4 w-4" />
+                        {uploadingAvatar ? "Uploading..." : "Change"}
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-black/10 bg-black/5 px-4 py-3 dark:border-white/10 dark:bg-white/5">
@@ -4371,7 +4470,8 @@ export default function CommandCenterPage() {
                     </div>
                     <Input
                       type="email"
-                      defaultValue={user?.email || ""}
+                      value={settingsEmail}
+                      onChange={(e) => setSettingsEmail(e.target.value)}
                       placeholder="email@example.com"
                       className="h-10 rounded-xl border-black/10 bg-white/50 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-black/20 dark:text-white"
                       data-testid="input-email"
@@ -4390,6 +4490,8 @@ export default function CommandCenterPage() {
                     </div>
                     <Input
                       type="tel"
+                      value={settingsPhone}
+                      onChange={(e) => setSettingsPhone(e.target.value)}
                       placeholder="+44 7XXX XXX XXX"
                       className="h-10 rounded-xl border-black/10 bg-white/50 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-black/20 dark:text-white"
                       data-testid="input-phone"
@@ -4431,10 +4533,13 @@ export default function CommandCenterPage() {
 
               <div className="flex justify-end pt-2">
                 <Button
-                  className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                  onClick={handleSaveProfile}
+                  disabled={savingProfile}
+                  className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 gap-2"
                   data-testid="button-save-settings"
                 >
-                  Save Changes
+                  {savingProfile ? <Spinner className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+                  {savingProfile ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
             </div>
@@ -4451,6 +4556,7 @@ export default function CommandCenterPage() {
 
               <div className="space-y-2">
                 <button
+                  onClick={() => setShowPasswordForm(!showPasswordForm)}
                   className="w-full flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
                   data-testid="button-change-password"
                 >
@@ -4463,8 +4569,78 @@ export default function CommandCenterPage() {
                       <div className="text-xs text-black/55 dark:text-white/55">Update your security credentials</div>
                     </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-black/40 dark:text-white/45" />
+                  <ChevronDown className={`h-4 w-4 text-black/40 dark:text-white/45 transition-transform ${showPasswordForm ? "rotate-180" : ""}`} />
                 </button>
+
+                <AnimatePresence>
+                  {showPasswordForm && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="rounded-2xl border border-black/10 bg-black/5 px-4 py-4 dark:border-white/10 dark:bg-white/5 space-y-3">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-black/60 dark:text-white/60 flex items-center gap-1.5">
+                            <Lock className="h-3.5 w-3.5" />
+                            Current Password
+                          </label>
+                          <Input
+                            type="password"
+                            value={oldPassword}
+                            onChange={(e) => setOldPassword(e.target.value)}
+                            placeholder="Enter current password"
+                            className="h-10 rounded-xl border-black/10 bg-white/50 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                            data-testid="input-old-password"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-black/60 dark:text-white/60 flex items-center gap-1.5">
+                            <Lock className="h-3.5 w-3.5" />
+                            New Password
+                          </label>
+                          <Input
+                            type="password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="Enter new password (min 6 characters)"
+                            className="h-10 rounded-xl border-black/10 bg-white/50 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                            data-testid="input-new-password"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-black/60 dark:text-white/60 flex items-center gap-1.5">
+                            <Lock className="h-3.5 w-3.5" />
+                            Confirm New Password
+                          </label>
+                          <Input
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Confirm new password"
+                            className="h-10 rounded-xl border-black/10 bg-white/50 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                            data-testid="input-confirm-password"
+                          />
+                        </div>
+                        {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                          <p className="text-xs text-red-500">Passwords do not match</p>
+                        )}
+                        <div className="flex justify-end pt-1">
+                          <Button
+                            onClick={handleChangePassword}
+                            disabled={changingPassword || !oldPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                            className="h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 text-sm gap-2"
+                            data-testid="button-submit-password"
+                          >
+                            {changingPassword ? <Spinner className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+                            {changingPassword ? "Changing..." : "Update Password"}
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <button
                   className="w-full flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-4 py-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
