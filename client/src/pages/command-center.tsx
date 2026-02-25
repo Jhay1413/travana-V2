@@ -5772,7 +5772,7 @@ export default function CommandCenterPage() {
                 theme={theme}
                 onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
                 userName={displayName}
-                userAvatar={user?.profileImageUrl}
+                userAvatar={user?.image || user?.avatar || user?.profileImageUrl}
                 onLogout={() => window.location.href = "/api/logout"}
                 actualRole={actualRole}
                 rolePreview={rolePreview}
