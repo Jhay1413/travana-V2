@@ -7,8 +7,12 @@ import {
   rescheduleOnlySocialsPost,
   deleteOnlySocialsPost,
   uploadMultipleOnlySocialsMedia,
+  uploadMediaFromUrl,
   fetchOnlySocialsPost,
 } from "../utils/only-socials";
+import { db } from "../config/database";
+import { quote_accomodation, accommodation_images, lodge_images, lodges, quote, accomodation_list, park } from "@shared/schema";
+import { eq, inArray } from "drizzle-orm";
 import type { TravelDeal } from "@shared/schema";
 import type { OnlySocialsMediaUploadResponse, OnlySocialsMediaContent } from "../types/social-post/social-post.types";
 
@@ -194,7 +198,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     id: string,
     postSchedule: string,
     existingImageIds: number[],
-    newFiles: Express.Multer.File[]
+    newFiles: Express.Multer.File[],
+    imageUrls: string[] = []
   ): Promise<TravelDeal> {
     const deal = await socialPostRepository.findById(id);
     if (!deal) throw new AppError("Travel deal not found", 404);
@@ -205,6 +210,11 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       const newIds = uploaded.map((u) => Number(u.id));
       allImageIds = [...allImageIds, ...newIds];
       console.log(`[SocialPost] Uploaded ${newFiles.length} new images for scheduling`);
+    }
+    if (imageUrls.length > 0) {
+      const urlMediaIds = await this.uploadImageUrls(imageUrls);
+      allImageIds = [...allImageIds, ...urlMediaIds];
+      console.log(`[SocialPost] Uploaded ${urlMediaIds.length} images from URLs for scheduling`);
     }
 
     const result = await scheduleOnlySocialsPost(postSchedule, deal.post, allImageIds);
@@ -220,7 +230,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     newPostSchedule: string,
     existingImageIds: number[],
     newFiles: Express.Multer.File[],
-    postContent: string
+    postContent: string,
+    imageUrls: string[] = []
   ): Promise<TravelDeal> {
     const deal = await socialPostRepository.findById(id);
     if (!deal) throw new AppError("Travel deal not found", 404);
@@ -232,6 +243,11 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       const newIds = uploaded.map((u) => Number(u.id));
       allImageIds = [...allImageIds, ...newIds];
       console.log(`[SocialPost] Uploaded ${newFiles.length} new images for rescheduling`);
+    }
+    if (imageUrls.length > 0) {
+      const urlMediaIds = await this.uploadImageUrls(imageUrls);
+      allImageIds = [...allImageIds, ...urlMediaIds];
+      console.log(`[SocialPost] Uploaded ${urlMediaIds.length} images from URLs for rescheduling`);
     }
 
     const result = await rescheduleOnlySocialsPost(
@@ -263,6 +279,113 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
   async uploadMedia(files: Express.Multer.File[]): Promise<OnlySocialsMediaUploadResponse[]> {
     if (!files || files.length === 0) throw new AppError("No files provided", 400);
     return await uploadMultipleOnlySocialsMedia(files);
+  },
+
+  async getQuoteImages(quoteId: string): Promise<{ url: string; name: string; source: string; isPrimary: boolean }[]> {
+    const images: { url: string; name: string; source: string; isPrimary: boolean }[] = [];
+
+    try {
+      const quoteAccoms = await db.select({
+        accomodation_id: quote_accomodation.accomodation_id,
+        accomodation_name: accomodation_list.name,
+      })
+        .from(quote_accomodation)
+        .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+        .where(eq(quote_accomodation.quote_id, quoteId));
+
+      const accomIds = quoteAccoms
+        .map(a => a.accomodation_id)
+        .filter((id): id is string => !!id);
+
+      if (accomIds.length > 0) {
+        const accomImgs = await db.select()
+          .from(accommodation_images)
+          .where(inArray(accommodation_images.accommodation_id, accomIds));
+
+        for (const img of accomImgs) {
+          const accom = quoteAccoms.find(a => a.accomodation_id === img.accommodation_id);
+          images.push({
+            url: img.image_url,
+            name: accom?.accomodation_name || "Accommodation",
+            source: "accommodation",
+            isPrimary: img.isPrimary ?? false,
+          });
+        }
+      }
+
+      const [quoteRecord] = await db.select({
+        lodge_id: quote.lodge_id,
+        cottage_id: quote.cottage_id,
+      }).from(quote).where(eq(quote.id, quoteId));
+
+      if (quoteRecord?.lodge_id) {
+        const lodgeImgs = await db.select({
+          image_url: lodge_images.image_url,
+          isPrimary: lodge_images.isPrimary,
+          lodge_name: lodges.lodge_name,
+        })
+          .from(lodge_images)
+          .leftJoin(lodges, eq(lodge_images.lodge_id, lodges.id))
+          .where(eq(lodge_images.lodge_id, quoteRecord.lodge_id));
+
+        for (const img of lodgeImgs) {
+          images.push({
+            url: img.image_url,
+            name: img.lodge_name || "Lodge",
+            source: "lodge",
+            isPrimary: img.isPrimary ?? false,
+          });
+        }
+
+        const [lodge] = await db.select({
+          image: lodges.image,
+          lodge_name: lodges.lodge_name,
+          park_id: lodges.park_id,
+        }).from(lodges).where(eq(lodges.id, quoteRecord.lodge_id));
+
+        if (lodge?.image) {
+          images.push({
+            url: lodge.image,
+            name: lodge.lodge_name || "Lodge",
+            source: "lodge",
+            isPrimary: false,
+          });
+        }
+
+        if (lodge?.park_id) {
+          const [parkRecord] = await db.select({
+            image_1: park.image_1,
+            image_2: park.image_2,
+            name: park.name,
+          }).from(park).where(eq(park.id, lodge.park_id));
+
+          if (parkRecord?.image_1) {
+            images.push({ url: parkRecord.image_1, name: parkRecord.name || "Park", source: "park", isPrimary: false });
+          }
+          if (parkRecord?.image_2) {
+            images.push({ url: parkRecord.image_2, name: parkRecord.name || "Park", source: "park", isPrimary: false });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[SocialPost] Error fetching quote images:", err);
+    }
+
+    const primaryFirst = images.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+    return primaryFirst;
+  },
+
+  async uploadImageUrls(urls: string[]): Promise<number[]> {
+    const mediaIds: number[] = [];
+    for (const url of urls) {
+      try {
+        const result = await uploadMediaFromUrl(url);
+        mediaIds.push(Number(result.id));
+      } catch (err) {
+        console.error(`[SocialPost] Failed to upload image from URL ${url}:`, err);
+      }
+    }
+    return mediaIds;
   },
 
   async getPostMedia(id: string): Promise<{ media: OnlySocialsMediaContent[]; postContent: string }> {

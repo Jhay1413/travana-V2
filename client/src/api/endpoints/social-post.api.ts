@@ -39,6 +39,13 @@ export interface TravelDeal {
   created_at: string;
 }
 
+export interface QuoteImageSource {
+  url: string;
+  name: string;
+  source: "accommodation" | "lodge" | "park" | "cottage" | "quote";
+  isPrimary: boolean;
+}
+
 export const socialPostApi = {
   generate: async (data: GeneratePostParams): Promise<TravelDeal> => {
     const { data: res } = await axiosClient.post<TravelDeal>("/api/social-posts/generate", data);
@@ -86,6 +93,11 @@ export const socialPostApi = {
 
   getMedia: async (id: string): Promise<{ media: UploadedMedia[]; postContent: string }> => {
     const { data: res } = await axiosClient.get<{ media: UploadedMedia[]; postContent: string }>(`/api/social-posts/${id}/media`);
+    return res;
+  },
+
+  getQuoteImages: async (quoteId: string): Promise<QuoteImageSource[]> => {
+    const { data: res } = await axiosClient.get<QuoteImageSource[]>(`/api/social-posts/quote/${quoteId}/images`);
     return res;
   },
 };

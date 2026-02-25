@@ -223,6 +223,59 @@ export const updateOnlySocialsPostMedia = async (
   }
 };
 
+export const uploadMediaFromUrl = async (
+  imageUrl: string,
+  altText?: string
+): Promise<OnlySocialsMediaUploadResponse> => {
+  try {
+    const response = await axios.get(imageUrl, {
+      responseType: "arraybuffer",
+      timeout: 30000,
+      headers: { "User-Agent": "AppleTravelCRM/1.0" },
+    });
+
+    const buffer = Buffer.from(response.data);
+    const contentType = response.headers["content-type"] || "image/jpeg";
+
+    const extMap: Record<string, string> = {
+      "image/jpeg": ".jpg",
+      "image/png": ".png",
+      "image/gif": ".gif",
+      "image/webp": ".webp",
+    };
+    const ext = extMap[contentType] || ".jpg";
+    const urlPath = new URL(imageUrl).pathname;
+    const fileName = path.basename(urlPath) || `image${ext}`;
+
+    const formData = new FormData();
+    formData.append("file", buffer, {
+      filename: fileName,
+      contentType,
+    });
+    formData.append("alt_text", altText ?? fileName);
+
+    const uploadResponse = await axios.post(`${getApiBase()}/media`, formData, {
+      headers: {
+        ...getAuthHeader(),
+        ...formData.getHeaders(),
+      },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    });
+
+    console.log(`[OnlySocials] Uploaded image from URL: ${imageUrl} -> id: ${uploadResponse.data.id}`);
+    return uploadResponse.data as OnlySocialsMediaUploadResponse;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new AppError(
+        `Failed to upload media from URL to OnlySocials: ${JSON.stringify(error.response?.data) || error.message}`,
+        error.response?.status ?? 500
+      );
+    }
+    throw error;
+  }
+};
+
 export const uploadOnlySocialsMedia = async (
   file: Express.Multer.File | string,
   altText?: string

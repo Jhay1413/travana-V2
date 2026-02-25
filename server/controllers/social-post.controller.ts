@@ -25,8 +25,9 @@ export const socialPostController = {
     const { id } = req.params as { id: string };
     const postSchedule = req.body.postSchedule as string;
     const existingImageIds: number[] = JSON.parse(req.body.existingImageIds || "[]");
+    const imageUrls: string[] = JSON.parse(req.body.imageUrls || "[]");
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.schedulePost(id, postSchedule, existingImageIds, newFiles);
+    const deal = await socialPostService.schedulePost(id, postSchedule, existingImageIds, newFiles, imageUrls);
     return successResponse(res, deal, "Post scheduled successfully");
   }),
 
@@ -35,8 +36,9 @@ export const socialPostController = {
     const postSchedule = req.body.postSchedule as string;
     const postContent = (req.body.postContent as string) || "";
     const existingImageIds: number[] = JSON.parse(req.body.existingImageIds || "[]");
+    const imageUrls: string[] = JSON.parse(req.body.imageUrls || "[]");
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.reschedulePost(id, postSchedule, existingImageIds, newFiles, postContent);
+    const deal = await socialPostService.reschedulePost(id, postSchedule, existingImageIds, newFiles, postContent, imageUrls);
     return successResponse(res, deal, "Post rescheduled successfully");
   }),
 
@@ -56,5 +58,11 @@ export const socialPostController = {
     const { id } = req.params as { id: string };
     const media = await socialPostService.getPostMedia(id);
     return successResponse(res, media, "Media retrieved successfully");
+  }),
+
+  getQuoteImages: asyncHandler(async (req: Request, res: Response) => {
+    const { quoteId } = req.params as { quoteId: string };
+    const images = await socialPostService.getQuoteImages(quoteId);
+    return successResponse(res, images, "Quote images retrieved successfully");
   }),
 };

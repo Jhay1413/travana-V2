@@ -301,15 +301,14 @@ export const transactionRepository = {
       try {
         if (status === "on_quote" || status === "in_play") {
           const [agg] = await db.select({
-            totalValue: sql<number>`COALESCE(SUM(COALESCE(${quote.sales_price}, 0)), 0)`,
-            totalProfit: sql<number>`COALESCE(SUM(COALESCE(${quote.package_commission}, 0)), 0)`,
+            totalCommission: sql<number>`COALESCE(SUM(COALESCE(CAST(NULLIF(${quote.package_commission}, '') AS NUMERIC), 0)), 0)`,
           }).from(quote).where(and(
             inArray(quote.transaction_id, allTxnIds),
             sql`(${quote.isFreeQuote} IS NOT TRUE)`,
             sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
           ));
-          totalValue = Number(agg?.totalValue || 0);
-          totalProfit = Number(agg?.totalProfit || 0);
+          totalValue = Number(agg?.totalCommission || 0);
+          totalProfit = totalValue * (status === "on_quote" ? 0.20 : 0.35);
         } else if (status === "on_booking") {
           const [agg] = await db.select({
             totalValue: sql<number>`COALESCE(SUM(COALESCE(${booking.sales_price}, 0)), 0)`,

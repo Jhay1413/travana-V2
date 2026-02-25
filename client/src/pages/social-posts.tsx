@@ -564,6 +564,7 @@ export default function SocialPostsPage() {
         travelDeal={previewDeal}
         quoteImageUrl={previewImageUrl}
         isGenerating={generatePost.isPending}
+        quoteId={previewQuoteId}
       />
     </CommandCenterShell>
   );

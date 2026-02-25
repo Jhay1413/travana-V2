@@ -18,6 +18,7 @@ const upload = multer({
 });
 
 router.post("/generate", socialPostController.generatePost);
+router.get("/quote/:quoteId/images", socialPostController.getQuoteImages);
 router.get("/quote/:quoteId", socialPostController.getByQuoteId);
 router.patch("/:id", socialPostController.update);
 

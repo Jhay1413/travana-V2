@@ -29,8 +29,12 @@ import {
   ImagePlus,
   GripVertical,
   X,
+  Building2,
+  TreePine,
+  CheckCircle2,
 } from "lucide-react";
-import type { TravelDeal } from "@/api/endpoints/social-post.api";
+import type { TravelDeal, QuoteImageSource } from "@/api/endpoints/social-post.api";
+import { socialPostApi } from "@/api/endpoints/social-post.api";
 
 interface LocalImage {
   localId: string;
@@ -45,9 +49,17 @@ interface ExistingImage {
   name: string;
 }
 
+interface UrlImage {
+  url: string;
+  name: string;
+  source: string;
+  selected: boolean;
+}
+
 type ImageItem =
   | { type: "existing"; data: ExistingImage; sortKey: string }
-  | { type: "local"; data: LocalImage; sortKey: string };
+  | { type: "local"; data: LocalImage; sortKey: string }
+  | { type: "url"; data: UrlImage; sortKey: string };
 
 interface SocialPostPreviewDialogProps {
   open: boolean;
@@ -55,7 +67,23 @@ interface SocialPostPreviewDialogProps {
   travelDeal: TravelDeal | null;
   quoteImageUrl: string | null;
   isGenerating: boolean;
+  quoteId?: string | null;
 }
+
+const sourceIcons: Record<string, typeof Building2> = {
+  accommodation: Building2,
+  lodge: TreePine,
+  park: TreePine,
+  cottage: TreePine,
+};
+
+const sourceLabels: Record<string, string> = {
+  accommodation: "Accommodation",
+  lodge: "Lodge",
+  park: "Park",
+  cottage: "Cottage",
+  quote: "Quote",
+};
 
 export function SocialPostPreviewDialog({
   open,
@@ -63,6 +91,7 @@ export function SocialPostPreviewDialog({
   travelDeal,
   quoteImageUrl,
   isGenerating,
+  quoteId,
 }: SocialPostPreviewDialogProps) {
   const { toast } = useToast();
   const savePost = useSavePost();
@@ -76,6 +105,8 @@ export function SocialPostPreviewDialog({
   const [copied, setCopied] = useState(false);
   const [existingImages, setExistingImages] = useState<ExistingImage[]>([]);
   const [pendingFiles, setPendingFiles] = useState<LocalImage[]>([]);
+  const [urlImages, setUrlImages] = useState<UrlImage[]>([]);
+  const [loadingUrlImages, setLoadingUrlImages] = useState(false);
   const [imageOrder, setImageOrder] = useState<ImageItem[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [onlySocialsPostContent, setOnlySocialsPostContent] = useState("");
@@ -112,12 +143,34 @@ export function SocialPostPreviewDialog({
   }, [travelDeal]);
 
   useEffect(() => {
+    if (open && travelDeal && quoteId) {
+      setLoadingUrlImages(true);
+      socialPostApi.getQuoteImages(quoteId)
+        .then((images) => {
+          const mapped: UrlImage[] = images.map((img) => ({
+            url: img.url,
+            name: img.name,
+            source: img.source,
+            selected: true,
+          }));
+          setUrlImages(mapped);
+        })
+        .catch((err) => {
+          console.error("Failed to load quote images:", err);
+          setUrlImages([]);
+        })
+        .finally(() => setLoadingUrlImages(false));
+    }
+  }, [open, travelDeal, quoteId]);
+
+  useEffect(() => {
     if (!open) {
       setExistingImages([]);
       setPendingFiles((prev) => {
         prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
         return [];
       });
+      setUrlImages([]);
       setImageOrder([]);
     }
   }, [open]);
@@ -141,6 +194,11 @@ export function SocialPostPreviewDialog({
         data: img,
         sortKey: `ex-${img.id}`,
       })),
+      ...urlImages.filter(img => img.selected).map((img, i): ImageItem => ({
+        type: "url",
+        data: img,
+        sortKey: `url-${i}-${img.url.slice(-20)}`,
+      })),
       ...pendingFiles.map((img): ImageItem => ({
         type: "local",
         data: img,
@@ -148,7 +206,13 @@ export function SocialPostPreviewDialog({
       })),
     ];
     setImageOrder(items);
-  }, [existingImages, pendingFiles]);
+  }, [existingImages, pendingFiles, urlImages]);
+
+  const toggleUrlImage = (url: string) => {
+    setUrlImages(prev => prev.map(img =>
+      img.url === url ? { ...img, selected: !img.selected } : img
+    ));
+  };
 
   const handleFiles = (files: FileList | File[]) => {
     const fileArray = Array.from(files).filter((f) =>
@@ -186,21 +250,25 @@ export function SocialPostPreviewDialog({
     if (!item) return;
     if (item.type === "existing") {
       setExistingImages((prev) => prev.filter((img) => img.id !== item.data.id));
-    } else {
+    } else if (item.type === "local") {
       URL.revokeObjectURL(item.data.previewUrl);
       setPendingFiles((prev) => prev.filter((img) => img.localId !== item.data.localId));
+    } else if (item.type === "url") {
+      toggleUrlImage(item.data.url);
     }
   };
 
   const previewImage = useMemo(() => {
     if (imageOrder.length > 0) {
       const first = imageOrder[0];
-      return first.type === "existing"
-        ? first.data.thumb_url || first.data.url
-        : first.data.previewUrl;
+      if (first.type === "existing") return first.data.thumb_url || first.data.url;
+      if (first.type === "url") return first.data.url;
+      return first.data.previewUrl;
     }
     return quoteImageUrl;
   }, [imageOrder, quoteImageUrl]);
+
+  const selectedUrlCount = urlImages.filter(img => img.selected).length;
 
   const handleSaveAndSchedule = async () => {
     if (!travelDeal) return;
@@ -217,6 +285,9 @@ export function SocialPostPreviewDialog({
     const newFiles = imageOrder
       .filter((i) => i.type === "local")
       .map((i) => (i.data as LocalImage).file);
+    const selectedUrls = imageOrder
+      .filter((i) => i.type === "url")
+      .map((i) => (i.data as UrlImage).url);
 
     try {
       await savePost.mutateAsync({
@@ -237,6 +308,7 @@ export function SocialPostPreviewDialog({
       const formData = new FormData();
       formData.append("postSchedule", postScheduleIso);
       formData.append("existingImageIds", JSON.stringify(existingIds));
+      formData.append("imageUrls", JSON.stringify(selectedUrls));
       newFiles.forEach((file) => formData.append("files", file));
 
       if (isScheduled) {
@@ -317,7 +389,6 @@ export function SocialPostPreviewDialog({
         ) : travelDeal ? (
           <div className="px-6 pb-6 pt-4">
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-              {/* Left: live preview */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="rounded-2xl overflow-hidden bg-white dark:bg-slate-800 shadow-lg border border-black/5 dark:border-white/5">
                   <div className="flex items-center gap-2.5 px-4 py-3 border-b border-black/5 dark:border-white/5">
@@ -347,7 +418,7 @@ export function SocialPostPreviewDialog({
                     )}
                     {travelDeal.price && (
                       <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full">
-                        From £{travelDeal.price}pp
+                        From &pound;{travelDeal.price}pp
                       </div>
                     )}
                   </div>
@@ -383,7 +454,6 @@ export function SocialPostPreviewDialog({
                 </p>
               </div>
 
-              {/* Right: editor */}
               <div className="lg:col-span-3 space-y-4">
                 <div className="space-y-1.5">
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
@@ -427,11 +497,89 @@ export function SocialPostPreviewDialog({
                   />
                 </div>
 
-                {/* Image upload section */}
+                {urlImages.length > 0 && (
+                  <div className="space-y-2" data-testid="section-accommodation-images">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
+                      <Building2 className="w-3.5 h-3.5" />
+                      Accommodation / Lodge Images
+                      <span className="ml-auto text-[10px] text-black/40 dark:text-white/40 font-normal">
+                        {selectedUrlCount} of {urlImages.length} selected
+                      </span>
+                    </label>
+                    <p className="text-[10px] text-black/40 dark:text-white/40">
+                      Click to select/deselect images to include with your post. Selected images will be downloaded and uploaded to OnlySocials when scheduling.
+                    </p>
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                      {urlImages.map((img, i) => {
+                        const SourceIcon = sourceIcons[img.source] || Building2;
+                        return (
+                          <button
+                            key={`url-img-${i}`}
+                            onClick={() => toggleUrlImage(img.url)}
+                            className={`relative group rounded-lg overflow-hidden border-2 transition-all aspect-square ${
+                              img.selected
+                                ? "border-green-500 shadow-md shadow-green-500/20 ring-1 ring-green-500/30"
+                                : "border-black/10 dark:border-white/10 opacity-50 hover:opacity-75"
+                            }`}
+                            data-testid={`button-toggle-url-image-${i}`}
+                          >
+                            <img
+                              src={img.url}
+                              alt={img.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "/images/default-hotel.jpg";
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                            {img.selected && (
+                              <div className="absolute top-1 right-1">
+                                <CheckCircle2 className="w-5 h-5 text-green-400 drop-shadow-lg" />
+                              </div>
+                            )}
+                            <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1">
+                              <div className="flex items-center gap-1">
+                                <SourceIcon className="w-2.5 h-2.5 text-white/80 shrink-0" />
+                                <span className="text-[8px] text-white/90 font-medium truncate">
+                                  {sourceLabels[img.source] || img.source}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setUrlImages(prev => prev.map(img => ({ ...img, selected: true })))}
+                        className="text-[10px] text-blue-500 hover:text-blue-600 font-medium"
+                        data-testid="button-select-all-url-images"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-[10px] text-black/20 dark:text-white/20">|</span>
+                      <button
+                        onClick={() => setUrlImages(prev => prev.map(img => ({ ...img, selected: false })))}
+                        className="text-[10px] text-red-500 hover:text-red-600 font-medium"
+                        data-testid="button-deselect-all-url-images"
+                      >
+                        Deselect All
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {loadingUrlImages && (
+                  <div className="flex items-center gap-2 py-2">
+                    <Spinner className="w-4 h-4" />
+                    <span className="text-xs text-black/50 dark:text-white/50">Loading accommodation images...</span>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
                     <ImagePlus className="w-3.5 h-3.5" />
-                    Images
+                    Additional Images
                     {imageOrder.length > 0 && (
                       <span className="ml-auto text-[10px] text-black/40 dark:text-white/40 font-normal">
                         drag to reorder
@@ -471,14 +619,17 @@ export function SocialPostPreviewDialog({
                     </div>
                   </div>
 
-                  {imageOrder.length > 0 && (
+                  {imageOrder.filter(i => i.type !== "url").length > 0 && (
                     <Reorder.Group
                       axis="x"
-                      values={imageOrder}
-                      onReorder={setImageOrder}
+                      values={imageOrder.filter(i => i.type !== "url")}
+                      onReorder={(newOrder) => {
+                        const urlItems = imageOrder.filter(i => i.type === "url");
+                        setImageOrder([...urlItems, ...newOrder]);
+                      }}
                       className="flex gap-2 flex-wrap"
                     >
-                      {imageOrder.map((item) => (
+                      {imageOrder.filter(i => i.type !== "url").map((item) => (
                         <Reorder.Item key={item.sortKey} value={item} className="relative group cursor-grab active:cursor-grabbing">
                           <div className={`w-16 h-16 rounded-lg overflow-hidden border shadow-sm bg-slate-100 dark:bg-slate-800 ${item.type === "local" ? "border-amber-400 dark:border-amber-500" : "border-black/8 dark:border-white/8"}`}>
                             <img
@@ -502,7 +653,6 @@ export function SocialPostPreviewDialog({
                   )}
                 </div>
 
-                {/* Schedule date + combined save & schedule button */}
                 <div className="rounded-xl bg-white dark:bg-slate-800 border border-black/6 dark:border-white/6 shadow-sm p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <CalendarClock className="w-4 h-4 text-orange-500" />
@@ -515,6 +665,11 @@ export function SocialPostPreviewDialog({
                       </span>
                     )}
                   </div>
+                  {selectedUrlCount > 0 && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                      {selectedUrlCount} accommodation image{selectedUrlCount > 1 ? "s" : ""} will be downloaded and uploaded to OnlySocials
+                    </p>
+                  )}
                   <Input
                     type="datetime-local"
                     value={scheduleDate}
@@ -542,12 +697,8 @@ export function SocialPostPreviewDialog({
                       className="h-10 rounded-xl text-sm font-medium gap-2 border-black/8 dark:border-white/8 hover:bg-black/3 dark:hover:bg-white/5 transition-all"
                       data-testid="button-copy-post"
                     >
-                      {copied ? (
-                        <Check className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                      {copied ? "Copied!" : "Copy"}
+                      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                      {copied ? "Copied" : "Copy"}
                     </Button>
                   </div>
                 </div>
