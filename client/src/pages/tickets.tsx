@@ -94,6 +94,7 @@ export default function TicketsPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [agentFilter, setAgentFilter] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -242,7 +243,8 @@ export default function TicketsPage() {
     const matchesType = typeFilter === "all" || ticket.type === typeFilter;
     const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
     const matchesPriority = priorityFilter === "all" || ticket.priority === priorityFilter;
-    return matchesQuery && matchesType && matchesStatus && matchesPriority;
+    const matchesAgent = agentFilter === "all" || ticket.userId === agentFilter;
+    return matchesQuery && matchesType && matchesStatus && matchesPriority && matchesAgent;
   });
 
   const getClientName = (ticket: { clientName?: string | null; clientId: string }) => {
@@ -256,7 +258,7 @@ export default function TicketsPage() {
     return user?.name || "Unassigned";
   };
 
-  const activeFiltersCount = [typeFilter, statusFilter, priorityFilter].filter((f) => f !== "all").length;
+  const activeFiltersCount = [typeFilter, statusFilter, priorityFilter, agentFilter].filter((f) => f !== "all").length;
 
   return (
     <CommandCenterShell
@@ -358,6 +360,19 @@ export default function TicketsPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={agentFilter} onValueChange={setAgentFilter}>
+              <SelectTrigger className="w-[160px] rounded-2xl" data-testid="select-agent-filter">
+                <SelectValue placeholder="Agent" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Agents</SelectItem>
+                {users?.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {activeFiltersCount > 0 && (
               <Button
                 variant="ghost"
@@ -366,6 +381,7 @@ export default function TicketsPage() {
                   setTypeFilter("all");
                   setStatusFilter("all");
                   setPriorityFilter("all");
+                  setAgentFilter("all");
                 }}
                 className="text-black/50 hover:text-black"
                 data-testid="button-clear-filters"
