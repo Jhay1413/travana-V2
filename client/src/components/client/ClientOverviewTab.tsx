@@ -1,15 +1,8 @@
 import {
   BadgeCheck,
-  Calendar,
   Clock,
-  Globe,
-  Home,
-  Mail,
-  MapPin,
-  Phone,
   Plane,
   TrendingUp,
-  UserRound,
   ChevronRight,
 } from "lucide-react";
 import type { NeonClient } from "@/types/neon-client";
@@ -61,108 +54,6 @@ export function ClientOverviewTab({
             )}
           </div>
           <div className="mt-0.5 text-[11px] font-semibold text-black/50">Total Value</div>
-        </div>
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-2" data-testid="overview-details">
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-contact">
-          <div className="mb-3 text-xs font-semibold text-black/80">Contact Details</div>
-          <div className="grid gap-2.5">
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                <UserRound className="h-3.5 w-3.5 text-black/50" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold text-black/45">Full Name</div>
-                <div className="truncate text-sm text-black/85" data-testid="overview-name">
-                  {[clientData?.title, clientData?.firstName, clientData?.surename].filter(Boolean).join(" ") || "—"}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                <Phone className="h-3.5 w-3.5 text-black/50" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold text-black/45">Phone</div>
-                <div className="truncate text-sm text-black/85" data-testid="overview-phone">
-                  {clientData?.phoneNumber || "—"}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                <Mail className="h-3.5 w-3.5 text-black/50" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold text-black/45">Email</div>
-                <div className="truncate text-sm text-black/85" data-testid="overview-email">
-                  {clientData?.email || "—"}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                <Calendar className="h-3.5 w-3.5 text-black/50" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold text-black/45">Date of Birth</div>
-                <div className="truncate text-sm text-black/85" data-testid="overview-dob">
-                  {clientData?.DOB ? new Date(clientData.DOB).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "—"}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-address">
-          <div className="mb-3 text-xs font-semibold text-black/80">Address</div>
-          <div className="grid gap-2.5">
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                <Home className="h-3.5 w-3.5 text-black/50" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold text-black/45">Street</div>
-                <div className="truncate text-sm text-black/85" data-testid="overview-street">
-                  {[clientData?.houseNumber, clientData?.street].filter(Boolean).join(" ") || "—"}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                <MapPin className="h-3.5 w-3.5 text-black/50" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold text-black/45">City</div>
-                <div className="truncate text-sm text-black/85" data-testid="overview-city">
-                  {clientData?.city || "—"}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                <Globe className="h-3.5 w-3.5 text-black/50" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold text-black/45">Country</div>
-                <div className="truncate text-sm text-black/85" data-testid="overview-country">
-                  {clientData?.country || "—"}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-black/10 bg-black/[0.03]">
-                <Mail className="h-3.5 w-3.5 text-black/50" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold text-black/45">Postcode</div>
-                <div className="truncate text-sm text-black/85" data-testid="overview-postcode">
-                  {clientData?.post_code || "—"}
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
