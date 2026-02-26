@@ -489,9 +489,16 @@ export default function ClientPage() {
             </div>
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3" data-testid="text-client-name">
+                <div
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
+                  aria-hidden
+                  data-testid="avatar-client"
+                >
+                  <UserRound className="h-5 w-5 text-black/70" />
+                </div>
                 <div className="min-w-0">
-                  <div className="flex items-baseline gap-3" data-testid="text-client-name">
+                  <div className="flex items-baseline gap-3">
                     <span className="text-lg font-semibold">{client ? client.name : "Client"}</span>
                     {client?.phone && (
                       <a
@@ -505,7 +512,7 @@ export default function ClientPage() {
                     )}
                   </div>
                   {client ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Select
                         value={clientData?.badge || "New Client"}
                         onValueChange={(value) => {
@@ -538,13 +545,6 @@ export default function ClientPage() {
                       </Badge>
                     </div>
                   ) : null}
-                </div>
-                <div
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
-                  aria-hidden
-                  data-testid="avatar-client"
-                >
-                  <UserRound className="h-5 w-5 text-black/70" />
                 </div>
               </div>
 
