@@ -8,6 +8,9 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  Mail,
+  MapPin,
+  Home,
   Pencil,
   Phone,
   Sparkles,
@@ -573,200 +576,125 @@ export default function ClientPage() {
 
             </div>
 
-            <div className="mt-3 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-sections">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
-                <TabsList className="grid w-full grid-cols-3 rounded-2xl border border-black/10 bg-white/70">
-                  <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-client-overview">
-                    Overview
-                  </TabsTrigger>
-                  <TabsTrigger value="tickets" className="rounded-xl" data-testid="tab-client-tickets">
-                    Tickets
-                  </TabsTrigger>
-                  <TabsTrigger value="files" className="rounded-xl" data-testid="tab-client-files">
-                    Files
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="mt-3">
-                  <div className="grid gap-2" data-testid="panel-client-overview">
-                    <div className="rounded-2xl border border-black/10 bg-white/70 p-3">
-                      <div className="text-xs font-semibold" data-testid="text-client-stage-title">
-                        Pipeline status
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2" data-testid="list-client-stage-chips">
-                        {(["Enquiry", "Quote", "Booked"] as const).map((s) => (
-                          <span
-                            key={s}
-                            className={
-                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold " +
-                              (client?.stage === s
-                                ? "border-[#3b82f6]/30 bg-[#3b82f6] text-white"
-                                : "border-black/10 bg-black/[0.03] text-black/70")
-                            }
-                            data-testid={`pill-client-stage-${s.toLowerCase()}`}
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-black/10 bg-white/70 p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-semibold" data-testid="text-client-tags-title">
-                            Tags
-                          </div>
-                          <div className="mt-1 text-[11px] text-black/55" data-testid="text-client-tags-subtitle">
-                            High-signal labels used across the CRM
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="h-9 rounded-2xl border border-black/10 bg-black/[0.03] px-3 text-black hover:bg-black/[0.05]"
-                          data-testid="button-client-edit-tags"
-                          onClick={() => { }}
-                        >
-                          <BadgeCheck className="mr-2 h-4 w-4" />
-                          Edit
-                        </Button>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2" data-testid="list-client-tags">
-                        {(client?.tags ?? []).map((t, i) => (
-                          <span
-                            key={t + i}
-                            className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70"
-                            data-testid={`pill-client-tag-${i}`}
-                          >
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-black/10 bg-white/70 p-3">
-                      <div className="text-xs font-semibold" data-testid="text-client-quick-links-title">
-                        Quick links
-                      </div>
-                      <div className="mt-2 grid gap-2">
-                        <button
-                          type="button"
-                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                          data-testid="button-client-open-enquiries"
-                          onClick={() => setTab("enquiries")}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                              <Sparkles className="h-4 w-4" />
-                              Enquiries
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                          </div>
-                          <div className="mt-1 text-[11px] text-black/55" data-testid="text-client-enquiries-hint">
-                            {enquiries.length} enquir{enquiries.length === 1 ? "y" : "ies"} captured
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                          data-testid="button-client-open-quotes"
-                          onClick={() => setTab("quotes")}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                              <FileText className="h-4 w-4" />
-                              Quotes
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                          </div>
-                          <div className="mt-1 text-[11px] text-black/55" data-testid="text-client-quotes-hint">
-                            Working versions, revisions, approvals
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="group rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-left transition hover:bg-black/[0.03]"
-                          data-testid="button-client-open-booked"
-                          onClick={() => setTab("booked")}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="inline-flex items-center gap-2 text-xs font-semibold text-black/80">
-                              <Ticket className="h-4 w-4" />
-                              Booked
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-black/45 transition group-hover:translate-x-0.5" />
-                          </div>
-                          <div className="mt-1 text-[11px] text-black/55" data-testid="text-client-booked-hint">
-                            Confirmations, vouchers, timelines
-                          </div>
-                        </button>
-                      </div>
+            <div className="mt-3 rounded-3xl border border-black/10 bg-white/60 p-3" data-testid="section-contact-details">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-semibold text-black/80">Contact Details</div>
+                <button
+                  type="button"
+                  onClick={openEditDialog}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] font-semibold text-black/60 hover:bg-black/[0.05] transition"
+                  data-testid="button-edit-contact"
+                >
+                  <Pencil className="h-3 w-3" />
+                  Edit
+                </button>
+              </div>
+              <div className="grid gap-2" data-testid="list-contact-details">
+                <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10">
+                    <Phone className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-phone">Phone</div>
+                    <div className="truncate text-sm text-black/85" data-testid="value-contact-phone">
+                      {clientData?.phoneNumber ? (
+                        <a href={`tel:${clientData.phoneNumber.replace(/\s/g, '')}`} className="hover:text-blue-600 transition-colors">
+                          {clientData.phoneNumber}
+                        </a>
+                      ) : "—"}
                     </div>
                   </div>
-                </TabsContent>
+                </div>
 
-                <TabsContent value="files" className="mt-3">
-                  <div className="space-y-2" data-testid="panel-client-files">
-                    {filteredFiles.map((f) => (
-                      <div
-                        key={f.id}
-                        className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
-                        data-testid={`row-file-${f.id}`}
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-semibold" data-testid={`text-file-name-${f.id}`}>
-                            {f.name}
-                          </div>
-                          <div className="mt-1 text-[11px] text-black/55" data-testid={`text-file-meta-${f.id}`}>
-                            {f.type} · Updated {f.updated}
-                          </div>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
-                      </div>
-                    ))}
+                <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-500/10">
+                    <Mail className="h-4 w-4 text-green-600" />
                   </div>
-                </TabsContent>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-email">Email</div>
+                    <div className="truncate text-sm text-black/85" data-testid="value-contact-email">
+                      {clientData?.email ? (
+                        <a href={`mailto:${clientData.email}`} className="hover:text-green-600 transition-colors">
+                          {clientData.email}
+                        </a>
+                      ) : "—"}
+                    </div>
+                  </div>
+                </div>
 
-                <TabsContent value="tickets" className="mt-3">
-                  <div className="space-y-2" data-testid="panel-client-tickets">
-                    {filteredTickets.length === 0 ? (
-                      <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center">
-                        <div className="text-sm text-black/55">No tickets for this client.</div>
-                      </div>
-                    ) : (
-                      filteredTickets.map((t) => (
-                        <div
-                          key={t.id}
-                          className="rounded-2xl border border-black/10 bg-white/70 p-3"
-                          data-testid={`card-ticket-${t.id}`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${ticketTypePill(t.type)}`}>
-                                  {t.type}
-                                </span>
-                                <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${ticketStatusPill(t.status)}`}>
-                                  {t.status}
-                                </span>
-                              </div>
-                              <div className="text-xs font-semibold" data-testid={`text-ticket-title-${t.id}`}>
-                                {t.subject}
-                              </div>
-                              <div className="mt-1 text-[11px] text-black/55" data-testid={`text-ticket-meta-${t.id}`}>
-                                {getUserName(t.userId)} · {formatTicketDate(t.createdAt)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
+                <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/10">
+                    <UserRound className="h-4 w-4 text-purple-600" />
                   </div>
-                </TabsContent>
-              </Tabs>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-dob">Date of Birth</div>
+                    <div className="text-sm text-black/85" data-testid="value-contact-dob">
+                      {clientData?.DOB || "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10">
+                    <BadgeCheck className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-preferences">Preferences</div>
+                    <div className="mt-1 flex flex-wrap gap-1.5" data-testid="value-contact-preferences">
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${clientData?.whatsAppVerified ? "border-green-500/30 bg-green-500/10 text-green-700" : "border-black/10 bg-black/[0.03] text-black/50"}`}>
+                        WhatsApp {clientData?.whatsAppVerified ? "✓" : "✗"}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${clientData?.emailIsAllowed ? "border-green-500/30 bg-green-500/10 text-green-700" : "border-black/10 bg-black/[0.03] text-black/50"}`}>
+                        Email {clientData?.emailIsAllowed ? "✓" : "✗"}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${clientData?.mailAllowed ? "border-green-500/30 bg-green-500/10 text-green-700" : "border-black/10 bg-black/[0.03] text-black/50"}`}>
+                        Mail {clientData?.mailAllowed ? "✓" : "✗"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 mb-2">
+                <div className="text-xs font-semibold text-black/80">Address</div>
+              </div>
+              <div className="grid gap-2" data-testid="list-address-details">
+                <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 mt-0.5">
+                    <Home className="h-4 w-4 text-rose-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-street">Street</div>
+                    <div className="text-sm text-black/85" data-testid="value-address-street">
+                      {[clientData?.houseNumber, clientData?.street].filter(Boolean).join(" ") || "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 mt-0.5">
+                    <MapPin className="h-4 w-4 text-sky-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-city">City & Postcode</div>
+                    <div className="text-sm text-black/85" data-testid="value-address-city">
+                      {[clientData?.city, clientData?.post_code].filter(Boolean).join(", ") || "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 mt-0.5">
+                    <MapPin className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-country">Country</div>
+                    <div className="text-sm text-black/85" data-testid="value-address-country">
+                      {clientData?.country || "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </Card>
 
