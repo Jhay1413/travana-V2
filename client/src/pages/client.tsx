@@ -500,16 +500,6 @@ export default function ClientPage() {
                 <div className="min-w-0">
                   <div className="flex items-baseline gap-3">
                     <span className="text-lg font-semibold">{client ? client.name : "Client"}</span>
-                    {client?.phone && (
-                      <a
-                        href={`tel:${client.phone.replace(/\s/g, '')}`}
-                        className="inline-flex items-center gap-1 text-sm font-bold text-[#000000c4] hover:text-[#3b82f6] transition-colors"
-                        data-testid="text-client-phone-header"
-                      >
-                        <Phone className="h-3.5 w-3.5" />
-                        {client.phone}
-                      </a>
-                    )}
                   </div>
                   {client ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
