@@ -6,7 +6,6 @@ import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./repositories/task.repository";
 import { checkStaleTickets } from "./services/ticket-notification.service";
-import { pool } from "./config/database";
 
 const app = express();
 const httpServer = createServer(app);
@@ -67,14 +66,6 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  try {
-    await pool.query(`ALTER TABLE quote_table ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10,2) NOT NULL DEFAULT 0.00`);
-    await pool.query(`ALTER TABLE booking_table ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10,2) NOT NULL DEFAULT 0.00`);
-    log("Schema migration: price_per_person columns ensured");
-  } catch (err) {
-    console.error("Schema migration failed:", err);
-  }
-
   await setupAuth(app);
   registerAuthRoutes(app);
 
