@@ -57,74 +57,6 @@ export function ClientOverviewTab({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-upcoming">
-        <div className="mb-3 flex items-center gap-2">
-          <Plane className="h-4 w-4 text-black/50" />
-          <div className="text-xs font-semibold text-black/80">Upcoming Trips</div>
-        </div>
-        {(() => {
-          const upcomingItems: Array<{ id: string; title: string; type: string; travelDate: string; status: string; isBooking: boolean }> = [];
-          quotes.forEach((q: QuoteWithJoins) => {
-            if (!q.travel_date) return;
-            const td = new Date(q.travel_date);
-            if (td >= new Date() && !["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status || "")) {
-              upcomingItems.push({ id: q.id, title: q.title || q.holiday_type_name || "Trip", type: q.holiday_type_name || q.quote_type || "—", travelDate: q.travel_date, status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), isBooking: false });
-            }
-          });
-          bookings.forEach((b: BookingWithJoins) => {
-            if (!b.travel_date) return;
-            const td = new Date(b.travel_date);
-            if (td >= new Date()) {
-              upcomingItems.push({ id: b.id, title: b.title || b.holiday_type_name || "Booking", type: b.holiday_type_name || "—", travelDate: b.travel_date, status: "BOOKED", isBooking: true });
-            }
-          });
-          upcomingItems.sort((a, b) => new Date(a.travelDate).getTime() - new Date(b.travelDate).getTime());
-          const upcoming = upcomingItems.slice(0, 3);
-          if (upcoming.length === 0) {
-            return (
-              <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-4 text-center text-xs text-black/45" data-testid="empty-upcoming">
-                No upcoming trips scheduled
-              </div>
-            );
-          }
-          return (
-            <div className="grid gap-2">
-              {upcoming.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
-                  data-testid={`upcoming-trip-${item.id}`}
-                  onClick={() => navigate(`/clients/${clientId}/${item.isBooking ? "bookings" : "quotes"}/${item.id}`)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
-                      <Plane className="h-4 w-4 text-black/50" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-black/85" data-testid={`upcoming-title-${item.id}`}>
-                        {item.title}
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-black/55">
-                        <span>{item.type}</span>
-                        <span className="text-black/25">&middot;</span>
-                        <span>{new Date(item.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${item.isBooking ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                      {item.status}
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
-
       <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-activity">
         <div className="mb-3 flex items-center gap-2">
           <Clock className="h-4 w-4 text-black/50" />
@@ -256,6 +188,74 @@ export function ClientOverviewTab({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-upcoming">
+        <div className="mb-3 flex items-center gap-2">
+          <Plane className="h-4 w-4 text-black/50" />
+          <div className="text-xs font-semibold text-black/80">Upcoming Trips</div>
+        </div>
+        {(() => {
+          const upcomingItems: Array<{ id: string; title: string; type: string; travelDate: string; status: string; isBooking: boolean }> = [];
+          quotes.forEach((q: QuoteWithJoins) => {
+            if (!q.travel_date) return;
+            const td = new Date(q.travel_date);
+            if (td >= new Date() && !["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status || "")) {
+              upcomingItems.push({ id: q.id, title: q.title || q.holiday_type_name || "Trip", type: q.holiday_type_name || q.quote_type || "—", travelDate: q.travel_date, status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), isBooking: false });
+            }
+          });
+          bookings.forEach((b: BookingWithJoins) => {
+            if (!b.travel_date) return;
+            const td = new Date(b.travel_date);
+            if (td >= new Date()) {
+              upcomingItems.push({ id: b.id, title: b.title || b.holiday_type_name || "Booking", type: b.holiday_type_name || "—", travelDate: b.travel_date, status: "BOOKED", isBooking: true });
+            }
+          });
+          upcomingItems.sort((a, b) => new Date(a.travelDate).getTime() - new Date(b.travelDate).getTime());
+          const upcoming = upcomingItems.slice(0, 3);
+          if (upcoming.length === 0) {
+            return (
+              <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-4 text-center text-xs text-black/45" data-testid="empty-upcoming">
+                No upcoming trips scheduled
+              </div>
+            );
+          }
+          return (
+            <div className="grid gap-2">
+              {upcoming.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
+                  data-testid={`upcoming-trip-${item.id}`}
+                  onClick={() => navigate(`/clients/${clientId}/${item.isBooking ? "bookings" : "quotes"}/${item.id}`)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
+                      <Plane className="h-4 w-4 text-black/50" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-black/85" data-testid={`upcoming-title-${item.id}`}>
+                        {item.title}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-2 text-xs text-black/55">
+                        <span>{item.type}</span>
+                        <span className="text-black/25">&middot;</span>
+                        <span>{new Date(item.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${item.isBooking ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                      {item.status}
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
