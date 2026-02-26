@@ -15,6 +15,7 @@ import TicketsPage from "@/pages/tickets";
 import TicketPage from "@/pages/ticket";
 import AdminImportPage from "@/pages/admin-import";
 import AdminLookupPage from "@/pages/admin-lookup";
+import SettingsLookupPage from "@/pages/settings-lookup";
 import BookingPage from "@/pages/booking";
 import PipelinePage from "@/pages/pipeline";
 import HubPage from "@/pages/hub";
@@ -51,6 +52,7 @@ function AuthenticatedRouter() {
       <Route path="/hub" component={HubPage} />
       <Route path="/admin/import" component={AdminImportPage} />
       <Route path="/admin/lookup/:tableSlug" component={AdminLookupPage} />
+      <Route path="/settings/:tableSlug" component={SettingsLookupPage} />
       <Route component={NotFound} />
     </Switch>
   );

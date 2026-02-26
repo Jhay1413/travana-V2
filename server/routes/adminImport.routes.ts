@@ -22,6 +22,7 @@ import {
   room_type,
   deal_images,
   forwardsReport,
+  airport,
 } from "@shared/schema";
 
 const router = Router();
@@ -44,6 +45,7 @@ const tableMap: Record<string, any> = {
   room_type,
   deal_images,
   forwards_report: forwardsReport,
+  airport,
 };
 
 const tableConfig: Record<string, { label: string; columns: string[]; searchFields: string[]; dependsOn: string[] }> = {
@@ -64,6 +66,7 @@ const tableConfig: Record<string, { label: string; columns: string[]; searchFiel
   room_type: { label: "Room Types", columns: ["id", "name"], searchFields: ["name"], dependsOn: [] },
   deal_images: { label: "Deal Images", columns: ["id", "image_url", "s3Key", "owner_type", "owner_id", "isPrimary"], searchFields: ["image_url", "owner_type"], dependsOn: [] },
   forwards_report: { label: "Forwards Reports", columns: ["id", "month", "monthName", "year", "target", "company_commission", "agent_commission", "adjustment", "deal_ids", "historical_ids"], searchFields: ["monthName"], dependsOn: [] },
+  airport: { label: "Airports", columns: ["id", "airport_name", "airport_code"], searchFields: ["airport_name", "airport_code"], dependsOn: [] },
 };
 
 router.use(isAuthenticated);
@@ -156,6 +159,34 @@ router.post(
     const result = await db.insert(table).values(row).returning();
     const inserted = Array.isArray(result) ? result[0] : result;
     return successResponse(res, inserted, "Row created");
+  })
+);
+
+router.patch(
+  "/data/:tableName/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tableName = req.params.tableName as string;
+    const id = req.params.id as string;
+    const table = tableMap[tableName];
+    if (!table) {
+      return res.status(400).json({ success: false, message: `Unknown table: ${tableName}` });
+    }
+
+    const updates = req.body;
+    if (!updates || typeof updates !== "object") {
+      return res.status(400).json({ success: false, message: "Invalid update data" });
+    }
+
+    // Remove id field from updates to prevent PK modification
+    const { id: _id, ...safeUpdates } = updates;
+
+    if (Object.keys(safeUpdates).length === 0) {
+      return res.status(400).json({ success: false, message: "No fields to update" });
+    }
+
+    const result = await db.update(table).set(safeUpdates).where(eq(table.id, id)).returning();
+    const updated = Array.isArray(result) ? result[0] : result;
+    return successResponse(res, updated, "Row updated");
   })
 );
 

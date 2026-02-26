@@ -22,6 +22,7 @@ import jsonMapperRoutes from "./json-mapper.routes";
 import tagRoutes from "./tag.routes";
 import chatRoutes from "./chat.routes";
 import socialPostRoutes from "./social-post.routes";
+import settingsRoutes from "./settings.routes";
 
 const router = Router();
 
@@ -48,5 +49,6 @@ router.use("/json-mapper", jsonMapperRoutes);
 router.use("/tags", tagRoutes);
 router.use("/chat", chatRoutes);
 router.use("/social-posts", socialPostRoutes);
+router.use("/settings", settingsRoutes);
 
 export default router;

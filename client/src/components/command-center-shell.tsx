@@ -82,20 +82,22 @@ function getNavRoute(key: string): string {
     "agent-settings": "/",
     "agent-overview": "/",
     "opportunities": "/",
-    "countries": "/admin/lookup/countries",
-    "destinations": "/admin/lookup/destinations",
-    "resorts-admin": "/admin/lookup/resorts",
-    "accommodation-types": "/admin/lookup/accommodation-types",
-    "accommodation-list": "/admin/lookup/accommodation-list",
-    "board-basis": "/admin/lookup/board-basis",
-    "package-types": "/admin/lookup/package-types",
-    "package-commissions": "/admin/lookup/package-commissions",
-    "parks": "/admin/lookup/parks",
-    "cottages-admin": "/admin/lookup/cottages",
-    "lodges-admin": "/admin/lookup/lodges",
-    "cruise-extras": "/admin/lookup/cruise-extras",
-    "room-types": "/admin/lookup/room-types",
-    "deletion-codes": "/admin/lookup/deletion-codes",
+    "tour-operators": "/settings/tour-operators",
+    "airports": "/settings/airports",
+    "countries": "/settings/countries",
+    "destinations": "/settings/destinations",
+    "resorts-admin": "/settings/resorts",
+    "accommodation-types": "/settings/accommodation-types",
+    "accommodation-list": "/settings/accommodation-list",
+    "board-basis": "/settings/board-basis",
+    "package-types": "/settings/package-types",
+    "package-commissions": "/settings/package-commissions",
+    "parks": "/settings/parks",
+    "cottages-admin": "/settings/cottages",
+    "lodges-admin": "/settings/lodges",
+    "cruise-extras": "/settings/cruise-extras",
+    "room-types": "/settings/room-types",
+    "deletion-codes": "/settings/deletion-codes",
     org: "/",
     users: "/",
     audit: "/",
@@ -520,6 +522,25 @@ export function CommandCenterShell({
   type NavStructure = { grouped: true; sections: NavSection[] } | { grouped: false; items: NavItem[] };
 
   const nav: NavStructure = useMemo(() => {
+    const settingsChildren: NavItem[] = [
+      { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
+      { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
+      { key: "countries", label: "Countries", icon: <Globe className="h-4 w-4" /> },
+      { key: "destinations", label: "Destinations", icon: <Compass className="h-4 w-4" /> },
+      { key: "resorts-admin", label: "Resorts", icon: <MapPin className="h-4 w-4" /> },
+      { key: "accommodation-types", label: "Accommodation Types", icon: <Building2 className="h-4 w-4" /> },
+      { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" /> },
+      { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" /> },
+      { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" /> },
+      { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" /> },
+      { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" /> },
+      { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" /> },
+      { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" /> },
+      { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" /> },
+      { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" /> },
+      { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
+    ];
+
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
@@ -528,7 +549,7 @@ export function CommandCenterShell({
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
-      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren },
     ];
 
     if (role === "Admin") {
@@ -544,24 +565,7 @@ export function CommandCenterShell({
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
-              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: [
-                { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
-                { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
-                { key: "countries", label: "Countries", icon: <Globe className="h-4 w-4" /> },
-                { key: "destinations", label: "Destinations", icon: <Compass className="h-4 w-4" /> },
-                { key: "resorts-admin", label: "Resorts", icon: <MapPin className="h-4 w-4" /> },
-                { key: "accommodation-types", label: "Accommodation Types", icon: <Building2 className="h-4 w-4" /> },
-                { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" /> },
-                { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" /> },
-                { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" /> },
-                { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" /> },
-                { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" /> },
-                { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" /> },
-                { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" /> },
-                { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" /> },
-                { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" /> },
-                { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
-              ] },
+              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren },
             ],
           },
           {
@@ -576,7 +580,7 @@ export function CommandCenterShell({
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
-              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren },
             ],
           },
         ],
@@ -618,13 +622,28 @@ export function CommandCenterShell({
     const saved = sessionStorage.getItem("admin-nav-expanded");
     return saved ? JSON.parse(saved) : ["admin", "agent"];
   });
-  
+
+  const [expandedNavItems, setExpandedNavItems] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem("nav-items-expanded");
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
-      const next = prev.includes(sectionId) 
+      const next = prev.includes(sectionId)
         ? prev.filter(id => id !== sectionId)
         : [...prev, sectionId];
       sessionStorage.setItem("admin-nav-expanded", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const toggleNavItem = (key: string) => {
+    setExpandedNavItems(prev => {
+      const next = prev.includes(key)
+        ? prev.filter(k => k !== key)
+        : [...prev, key];
+      sessionStorage.setItem("nav-items-expanded", JSON.stringify(next));
       return next;
     });
   };
@@ -713,37 +732,72 @@ export function CommandCenterShell({
             const isActive = active === item.key;
             const hasChildren = item.children && item.children.length > 0;
             const childActive = hasChildren && item.children!.some((c) => active === c.key);
+            const isItemExpanded = expandedNavItems.includes(item.key) || childActive;
             return (
               <div key={item.key}>
-                <Link
-                  href={getNavRoute(item.key)}
-                  onClick={() => onNavigate?.()}
-                  className={
-                    "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
-                    (isActive || childActive
-                      ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-                      : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
-                  }
-                  data-testid={`nav-${item.key}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={"inline-flex h-8 w-8 items-center justify-center rounded-xl border " + (isActive || childActive ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")} aria-hidden>
-                      <span className="text-black/70 dark:text-white/80">{item.icon}</span>
-                    </span>
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </div>
-                  <ChevronRight className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
-                </Link>
-                {hasChildren && (
-                  <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
-                    {item.children!.map((child) => (
-                      <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-black/5 text-black dark:bg-white/10 dark:text-white" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
-                        <span className="text-black/60 dark:text-white/60">{child.icon}</span>
-                        <span>{child.label}</span>
-                      </Link>
-                    ))}
-                  </div>
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleNavItem(item.key)}
+                    className={
+                      "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                      (childActive
+                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                        : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                    }
+                    data-testid={`nav-${item.key}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={"inline-flex h-8 w-8 items-center justify-center rounded-xl border " + (childActive ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")} aria-hidden>
+                        <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                      </span>
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </div>
+                    <motion.div animate={{ rotate: isItemExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                      <ChevronRight className={"h-4 w-4 " + (childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                    </motion.div>
+                  </button>
+                ) : (
+                  <Link
+                    href={getNavRoute(item.key)}
+                    onClick={() => onNavigate?.()}
+                    className={
+                      "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                      (isActive
+                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                        : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                    }
+                    data-testid={`nav-${item.key}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={"inline-flex h-8 w-8 items-center justify-center rounded-xl border " + (isActive ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")} aria-hidden>
+                        <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                      </span>
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </div>
+                    <ChevronRight className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                  </Link>
                 )}
+                <AnimatePresence initial={false}>
+                  {hasChildren && isItemExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
+                        {item.children!.map((child) => (
+                          <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-black/5 text-black dark:bg-white/10 dark:text-white" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
+                            <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                            <span>{child.label}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             );
           })
@@ -1023,56 +1077,97 @@ export function CommandCenterShell({
                     const isActive = active === item.key;
                     const hasChildren = item.children && item.children.length > 0;
                     const childActive = hasChildren && item.children!.some((c) => active === c.key);
+                    const isItemExpanded = expandedNavItems.includes(item.key) || childActive;
                     return (
                       <div key={item.key}>
-                        <Link
-                          href={getNavRoute(item.key)}
-                          className={
-                            "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
-                            (isActive || childActive
-                              ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-                              : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
-                          }
-                          data-testid={`nav-${item.key}`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={
-                                "inline-flex h-8 w-8 items-center justify-center rounded-xl border " +
-                                (isActive || childActive
-                                  ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
-                                  : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
-                              }
-                              aria-hidden
-                            >
-                              <span className="text-black/70 dark:text-white/80">{item.icon}</span>
-                            </span>
-                            <span className="text-sm font-medium">{item.label}</span>
-                          </div>
-                          <ChevronRight
-                            className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
-                          />
-                        </Link>
-                        {hasChildren && (
-                          <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
-                            {item.children!.map((child) => (
-                              <Link
-                                key={child.key}
-                                href={getNavRoute(child.key)}
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleNavItem(item.key)}
+                            className={
+                              "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                              (childActive
+                                ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                            }
+                            data-testid={`nav-${item.key}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span
                                 className={
-                                  "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
-                                  (active === child.key
-                                    ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-                                    : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                  "inline-flex h-8 w-8 items-center justify-center rounded-xl border " +
+                                  (childActive
+                                    ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                    : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
                                 }
-                                data-testid={`nav-${child.key}`}
+                                aria-hidden
                               >
-                                <span className="text-black/60 dark:text-white/60">{child.icon}</span>
-                                <span>{child.label}</span>
-                              </Link>
-                            ))}
-                          </div>
+                                <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                              </span>
+                              <span className="text-sm font-medium">{item.label}</span>
+                            </div>
+                            <motion.div animate={{ rotate: isItemExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                              <ChevronRight className={"h-4 w-4 " + (childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                            </motion.div>
+                          </button>
+                        ) : (
+                          <Link
+                            href={getNavRoute(item.key)}
+                            className={
+                              "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                              (isActive
+                                ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                            }
+                            data-testid={`nav-${item.key}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={
+                                  "inline-flex h-8 w-8 items-center justify-center rounded-xl border " +
+                                  (isActive
+                                    ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                    : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                                }
+                                aria-hidden
+                              >
+                                <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                              </span>
+                              <span className="text-sm font-medium">{item.label}</span>
+                            </div>
+                            <ChevronRight className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                          </Link>
                         )}
+                        <AnimatePresence initial={false}>
+                          {hasChildren && isItemExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
+                                {item.children!.map((child) => (
+                                  <Link
+                                    key={child.key}
+                                    href={getNavRoute(child.key)}
+                                    className={
+                                      "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
+                                      (active === child.key
+                                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                        : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                    }
+                                    data-testid={`nav-${child.key}`}
+                                  >
+                                    <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                    <span>{child.label}</span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     );
                   })

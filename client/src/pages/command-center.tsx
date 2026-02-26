@@ -410,6 +410,25 @@ function ShellNav({
   type NavItem = { key: string; label: string; icon: React.ReactNode; route?: string; children?: NavItem[] };
   type NavSection = { id: string; label: string; icon: React.ReactNode; items: NavItem[] };
   const nav = useMemo(() => {
+    const settingsChildren: NavItem[] = [
+      { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" />, route: "/settings/tour-operators" },
+      { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" />, route: "/settings/airports" },
+      { key: "countries", label: "Countries", icon: <Globe className="h-4 w-4" />, route: "/settings/countries" },
+      { key: "destinations", label: "Destinations", icon: <Compass className="h-4 w-4" />, route: "/settings/destinations" },
+      { key: "resorts-admin", label: "Resorts", icon: <MapPin className="h-4 w-4" />, route: "/settings/resorts" },
+      { key: "accommodation-types", label: "Accommodation Types", icon: <Building2 className="h-4 w-4" />, route: "/settings/accommodation-types" },
+      { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" />, route: "/settings/accommodation-list" },
+      { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" />, route: "/settings/board-basis" },
+      { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" />, route: "/settings/package-types" },
+      { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" />, route: "/settings/package-commissions" },
+      { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" />, route: "/settings/parks" },
+      { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" />, route: "/settings/cottages" },
+      { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" />, route: "/settings/lodges" },
+      { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" />, route: "/settings/cruise-extras" },
+      { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" />, route: "/settings/room-types" },
+      { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" />, route: "/settings/deletion-codes" },
+    ];
+
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
@@ -418,7 +437,7 @@ function ShellNav({
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, route: "/tickets" },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
-      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren },
     ];
 
     if (role === "Admin") {
@@ -434,24 +453,7 @@ function ShellNav({
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
-              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: [
-                { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
-                { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
-                { key: "countries", label: "Countries", icon: <Globe className="h-4 w-4" /> },
-                { key: "destinations", label: "Destinations", icon: <Compass className="h-4 w-4" /> },
-                { key: "resorts-admin", label: "Resorts", icon: <MapPin className="h-4 w-4" /> },
-                { key: "accommodation-types", label: "Accommodation Types", icon: <Building2 className="h-4 w-4" /> },
-                { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" /> },
-                { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" /> },
-                { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" /> },
-                { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" /> },
-                { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" /> },
-                { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" /> },
-                { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" /> },
-                { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" /> },
-                { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" /> },
-                { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
-              ] as NavItem[] },
+              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren as NavItem[] },
             ] as NavItem[],
           },
           {
@@ -466,7 +468,7 @@ function ShellNav({
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, route: "/tickets" },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
-              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren as NavItem[] },
             ] as NavItem[],
           },
         ] as NavSection[],
@@ -633,23 +635,7 @@ function ShellNav({
                               {hasChildren && (
                                 <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
                                   {item.children!.map((child: { key: string; label: string; icon: React.ReactNode; route?: string }) => {
-                                    const childRoutes: Record<string, string> = {
-                                      "countries": "/admin/lookup/countries",
-                                      "destinations": "/admin/lookup/destinations",
-                                      "resorts-admin": "/admin/lookup/resorts",
-                                      "accommodation-types": "/admin/lookup/accommodation-types",
-                                      "accommodation-list": "/admin/lookup/accommodation-list",
-                                      "board-basis": "/admin/lookup/board-basis",
-                                      "package-types": "/admin/lookup/package-types",
-                                      "package-commissions": "/admin/lookup/package-commissions",
-                                      "parks": "/admin/lookup/parks",
-                                      "cottages-admin": "/admin/lookup/cottages",
-                                      "lodges-admin": "/admin/lookup/lodges",
-                                      "cruise-extras": "/admin/lookup/cruise-extras",
-                                      "room-types": "/admin/lookup/room-types",
-                                      "deletion-codes": "/admin/lookup/deletion-codes",
-                                    };
-                                    const route = childRoutes[child.key];
+                                    const route = child.route;
                                     if (route) {
                                       return (
                                         <Link
@@ -710,7 +696,7 @@ function ShellNav({
                 <button
                   onClick={() => {
                     if (item.route) { navigate(item.route); return; }
-                    if (hasChildren) { toggleSection(item.key); }
+                    if (hasChildren) { toggleSection(item.key); return; }
                     onActiveChange(item.key);
                   }}
                   className={
