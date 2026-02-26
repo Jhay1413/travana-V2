@@ -53,10 +53,9 @@ export function ClientOverviewTab({
               bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.sales_price || "0"), 0)
             )}
           </div>
-          <div className="mt-0.5 text-[11px] font-semibold text-black/50">Total Value</div>
+          <div className="mt-0.5 text-[11px] font-semibold text-black/50">Total Profit</div>
         </div>
       </div>
-
       <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-activity">
         <div className="mb-3 flex items-center gap-2">
           <Clock className="h-4 w-4 text-black/50" />
@@ -123,7 +122,6 @@ export function ClientOverviewTab({
           );
         })()}
       </div>
-
       <div className="grid gap-2 md:grid-cols-2">
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-preferences">
           <div className="mb-3 flex items-center gap-2">
@@ -189,7 +187,6 @@ export function ClientOverviewTab({
           </div>
         </div>
       </div>
-
       <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-upcoming">
         <div className="mb-3 flex items-center gap-2">
           <Plane className="h-4 w-4 text-black/50" />
