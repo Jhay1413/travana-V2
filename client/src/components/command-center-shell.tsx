@@ -1314,11 +1314,6 @@ export function CommandCenterShell({
                     <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
                       {title}
                     </h1>
-                    {subtitle ? (
-                      <span className="hidden md:inline text-xs text-black/45 dark:text-white/45" data-testid="text-page-hint">
-                        {subtitle}
-                      </span>
-                    ) : null}
                     {headerExtra}
                   </div>
                 </div>
