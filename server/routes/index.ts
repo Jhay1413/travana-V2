@@ -23,6 +23,7 @@ import tagRoutes from "./tag.routes";
 import chatRoutes from "./chat.routes";
 import socialPostRoutes from "./social-post.routes";
 import settingsRoutes from "./settings.routes";
+import clientFileRoutes from "./clientFile.routes";
 
 const router = Router();
 
@@ -50,5 +51,6 @@ router.use("/tags", tagRoutes);
 router.use("/chat", chatRoutes);
 router.use("/social-posts", socialPostRoutes);
 router.use("/settings", settingsRoutes);
+router.use("/client-files", clientFileRoutes);
 
 export default router;

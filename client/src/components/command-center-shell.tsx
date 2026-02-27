@@ -79,7 +79,7 @@ function getNavRoute(key: string): string {
     enquiries: "/",
     quotes: "/",
     bookings: "/",
-    "agent-settings": "/",
+    "agent-settings": "/hub/profiles",
     "agent-overview": "/",
     "opportunities": "/",
     "tour-operators": "/settings/tour-operators",
@@ -517,28 +517,38 @@ export function CommandCenterShell({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  type NavItem = { key: string; label: string; icon: React.ReactNode; children?: NavItem[] };
+  type NavItem = { key: string; label: string; icon: React.ReactNode; children?: NavItem[]; subGroups?: { label: string; items: NavItem[] }[] };
   type NavSection = { id: string; label: string; icon: React.ReactNode; items: NavItem[] };
   type NavStructure = { grouped: true; sections: NavSection[] } | { grouped: false; items: NavItem[] };
 
   const nav: NavStructure = useMemo(() => {
-    const settingsChildren: NavItem[] = [
-      { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
-      { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
-      { key: "countries", label: "Countries", icon: <Globe className="h-4 w-4" /> },
-      { key: "destinations", label: "Destinations", icon: <Compass className="h-4 w-4" /> },
-      { key: "resorts-admin", label: "Resorts", icon: <MapPin className="h-4 w-4" /> },
-      { key: "accommodation-types", label: "Accommodation Types", icon: <Building2 className="h-4 w-4" /> },
-      { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" /> },
-      { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" /> },
-      { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" /> },
-      { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" /> },
-      { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" /> },
-      { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" /> },
-      { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" /> },
-      { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" /> },
-      { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" /> },
-      { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
+    const settingsSubGroups: NavItem["subGroups"] = [
+      {
+        label: "Admin Settings",
+        items: [
+          { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" /> },
+          { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" /> },
+          { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" /> },
+          { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
+        ],
+      },
+      {
+        label: "Database Data",
+        items: [
+          { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" /> },
+          { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" /> },
+          { key: "countries", label: "Countries", icon: <Globe className="h-4 w-4" /> },
+          { key: "destinations", label: "Destinations", icon: <Compass className="h-4 w-4" /> },
+          { key: "resorts-admin", label: "Resorts", icon: <MapPin className="h-4 w-4" /> },
+          { key: "accommodation-types", label: "Accommodation Types", icon: <Building2 className="h-4 w-4" /> },
+          { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" /> },
+          { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" /> },
+          { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" /> },
+          { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" /> },
+          { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" /> },
+          { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" /> },
+        ],
+      },
     ];
 
     const base: NavItem[] = [
@@ -549,6 +559,7 @@ export function CommandCenterShell({
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
     if (role === "Admin") {
@@ -564,7 +575,7 @@ export function CommandCenterShell({
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
-              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren },
+              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, subGroups: settingsSubGroups },
             ],
           },
           {
@@ -579,6 +590,7 @@ export function CommandCenterShell({
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ],
           },
         ],
@@ -684,28 +696,82 @@ export function CommandCenterShell({
                       {section.items.map((item) => {
                         const isActive = active === item.key;
                         const hasChildren = item.children && item.children.length > 0;
+                        const hasSubGroups = item.subGroups && item.subGroups.length > 0;
                         const childActive = hasChildren && item.children!.some((c) => active === c.key);
+                        const subGroupActive = hasSubGroups && item.subGroups!.some(g => g.items.some(c => active === c.key));
+                        const isItemExpanded = expandedNavItems.includes(item.key) || subGroupActive;
                         return (
                           <div key={item.key}>
-                            <Link
-                              href={getNavRoute(item.key)}
-                              onClick={() => onNavigate?.()}
-                              className={
-                                "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
-                                (isActive || childActive
-                                  ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-                                  : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
-                              }
-                              data-testid={`nav-${item.key}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className={"inline-flex h-7 w-7 items-center justify-center rounded-lg border " + (isActive || childActive ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")} aria-hidden>
-                                  <span className="text-black/70 dark:text-white/80">{item.icon}</span>
-                                </span>
-                                <span className="text-sm font-medium">{item.label}</span>
-                              </div>
-                              <ChevronRight className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
-                            </Link>
+                            {hasSubGroups ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleNavItem(item.key)}
+                                className={
+                                  "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                                  (subGroupActive
+                                    ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                    : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                                }
+                                data-testid={`nav-${item.key}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className={"inline-flex h-7 w-7 items-center justify-center rounded-lg border " + (subGroupActive ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")} aria-hidden>
+                                    <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                                  </span>
+                                  <span className="text-sm font-medium">{item.label}</span>
+                                </div>
+                                <motion.div animate={{ rotate: isItemExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                                  <ChevronRight className={"h-4 w-4 " + (subGroupActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                                </motion.div>
+                              </button>
+                            ) : (
+                              <Link
+                                href={getNavRoute(item.key)}
+                                onClick={() => onNavigate?.()}
+                                className={
+                                  "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                                  (isActive || childActive
+                                    ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                    : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                                }
+                                data-testid={`nav-${item.key}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className={"inline-flex h-7 w-7 items-center justify-center rounded-lg border " + (isActive || childActive ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10" : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")} aria-hidden>
+                                    <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                                  </span>
+                                  <span className="text-sm font-medium">{item.label}</span>
+                                </div>
+                                <ChevronRight className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                              </Link>
+                            )}
+                            <AnimatePresence initial={false}>
+                              {hasSubGroups && isItemExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="ml-6 mt-1 space-y-2 border-l border-black/10 pl-3 dark:border-white/10">
+                                    {item.subGroups!.map((group) => (
+                                      <div key={group.label}>
+                                        <div className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+                                          {group.label}
+                                        </div>
+                                        {group.items.map((child) => (
+                                          <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-black/5 text-black dark:bg-white/10 dark:text-white" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
+                                            <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                            <span>{child.label}</span>
+                                          </Link>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                             {hasChildren && (
                               <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
                                 {item.children!.map((child) => (
@@ -1031,37 +1097,109 @@ export function CommandCenterShell({
                               {section.items.map((item) => {
                                 const isActive = active === item.key;
                                 const hasChildren = item.children && item.children.length > 0;
+                                const hasSubGroups = item.subGroups && item.subGroups.length > 0;
                                 const childActive = hasChildren && item.children!.some((c) => active === c.key);
+                                const subGroupActive = hasSubGroups && item.subGroups!.some(g => g.items.some(c => active === c.key));
+                                const isItemExpanded = expandedNavItems.includes(item.key) || subGroupActive;
                                 return (
                                   <div key={item.key}>
-                                    <Link
-                                      href={getNavRoute(item.key)}
-                                      className={
-                                        "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
-                                        (isActive || childActive
-                                          ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-                                          : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
-                                      }
-                                      data-testid={`nav-${item.key}`}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <span
-                                          className={
-                                            "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
-                                            (isActive || childActive
-                                              ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
-                                              : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
-                                          }
-                                          aria-hidden
+                                    {hasSubGroups ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleNavItem(item.key)}
+                                        className={
+                                          "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                                          (subGroupActive
+                                            ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                            : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                                        }
+                                        data-testid={`nav-${item.key}`}
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <span
+                                            className={
+                                              "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
+                                              (subGroupActive
+                                                ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                                : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                                            }
+                                            aria-hidden
+                                          >
+                                            <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                                          </span>
+                                          <span className="text-sm font-medium">{item.label}</span>
+                                        </div>
+                                        <motion.div animate={{ rotate: isItemExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                                          <ChevronRight className={"h-4 w-4 " + (subGroupActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                                        </motion.div>
+                                      </button>
+                                    ) : (
+                                      <Link
+                                        href={getNavRoute(item.key)}
+                                        className={
+                                          "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
+                                          (isActive || childActive
+                                            ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                            : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                                        }
+                                        data-testid={`nav-${item.key}`}
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <span
+                                            className={
+                                              "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
+                                              (isActive || childActive
+                                                ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                                : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                                            }
+                                            aria-hidden
+                                          >
+                                            <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                                          </span>
+                                          <span className="text-sm font-medium">{item.label}</span>
+                                        </div>
+                                        <ChevronRight
+                                          className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                                        />
+                                      </Link>
+                                    )}
+                                    <AnimatePresence initial={false}>
+                                      {hasSubGroups && isItemExpanded && (
+                                        <motion.div
+                                          initial={{ height: 0, opacity: 0 }}
+                                          animate={{ height: "auto", opacity: 1 }}
+                                          exit={{ height: 0, opacity: 0 }}
+                                          transition={{ duration: 0.2 }}
+                                          className="overflow-hidden"
                                         >
-                                          <span className="text-black/70 dark:text-white/80">{item.icon}</span>
-                                        </span>
-                                        <span className="text-sm font-medium">{item.label}</span>
-                                      </div>
-                                      <ChevronRight
-                                        className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
-                                      />
-                                    </Link>
+                                          <div className="ml-6 mt-1 space-y-2 border-l border-black/10 pl-3 dark:border-white/10">
+                                            {item.subGroups!.map((group) => (
+                                              <div key={group.label}>
+                                                <div className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+                                                  {group.label}
+                                                </div>
+                                                {group.items.map((child) => (
+                                                  <Link
+                                                    key={child.key}
+                                                    href={getNavRoute(child.key)}
+                                                    className={
+                                                      "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
+                                                      (active === child.key
+                                                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                                        : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                                    }
+                                                    data-testid={`nav-${child.key}`}
+                                                  >
+                                                    <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                                    <span>{child.label}</span>
+                                                  </Link>
+                                                ))}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
                                     {hasChildren && (
                                       <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
                                         {item.children!.map((child) => (

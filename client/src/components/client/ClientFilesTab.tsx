@@ -6,30 +6,39 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { FileItem } from "./client-types";
-
-interface UploadedFile {
-  id: string;
-  name: string;
-  title: string;
-  type: string;
-  category: string;
-  allocationType: string;
-  allocationId: string;
-  updated: string;
-  url: string;
-}
+import type { ClientFile } from "@shared/schema";
+import { clientFileApi } from "@/api";
 
 interface ClientFilesTabProps {
-  uploadedFiles: UploadedFile[];
-  setUploadedFiles: React.Dispatch<React.SetStateAction<UploadedFile[]>>;
+  clientFiles: ClientFile[];
+  onDeleteFile: (id: string) => void;
   filteredFiles: FileItem[];
   onUploadFile: () => void;
   role: string;
 }
 
+function formatDate(d: string | Date | null) {
+  if (!d) return "Unknown";
+  const date = typeof d === "string" ? new Date(d) : d;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function fileExt(name: string) {
+  return name.split(".").pop()?.toUpperCase() || "FILE";
+}
+
 export function ClientFilesTab({
-  uploadedFiles,
-  setUploadedFiles,
+  clientFiles,
+  onDeleteFile,
   filteredFiles,
   onUploadFile,
   role,
@@ -57,34 +66,37 @@ export function ClientFilesTab({
       </div>
 
       <div className="mt-4 grid gap-3" data-testid="list-files">
-        {uploadedFiles.map((f) => (
+        {clientFiles.map((f) => (
           <div
             key={f.id}
             className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
             data-testid={`row-file-uploaded-${f.id}`}
           >
-            <button
-              type="button"
-              onClick={() => window.open(f.url, '_blank')}
+            <a
+              href={clientFileApi.getDownloadUrl(f.id)}
+              target="_blank"
+              rel="noopener noreferrer"
               className="min-w-0 flex-1 text-left"
             >
               <div className="flex items-center gap-2">
                 <div className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
-                  {f.title}
+                  {f.title || f.originalName}
                 </div>
-                <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  {f.category}
-                </span>
+                {f.category && (
+                  <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    {f.category}
+                  </span>
+                )}
               </div>
               <div className="mt-1 text-xs text-black/55" data-testid={`text-file-uploaded-meta-${f.id}`}>
-                {f.type} · {f.name} · {f.allocationType !== "None" ? `${f.allocationType}` : "Client level"} · {f.updated}
+                {fileExt(f.originalName)} · {f.originalName} · {f.allocationType || "Client level"} · {formatDate(f.createdAt)}
               </div>
-            </button>
+            </a>
             <div className="flex items-center gap-2">
               {role === "Admin" && (
                 <button
                   type="button"
-                  onClick={() => setUploadedFiles((prev) => prev.filter((file) => file.id !== f.id))}
+                  onClick={() => onDeleteFile(f.id)}
                   className="rounded-xl border border-red-500/20 bg-red-500/10 p-1.5 text-red-600 transition hover:bg-red-500/20"
                   data-testid={`button-delete-file-${f.id}`}
                 >
@@ -124,7 +136,7 @@ export function ClientFilesTab({
             </div>
           </div>
         ))}
-        {filteredFiles.length === 0 && uploadedFiles.length === 0 && (
+        {filteredFiles.length === 0 && clientFiles.length === 0 && (
           <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center">
             <div className="text-sm text-black/55">No files uploaded yet.</div>
           </div>

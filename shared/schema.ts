@@ -1089,6 +1089,24 @@ export const insertTicketAttachmentSchema = createInsertSchema(ticketAttachments
 export type InsertTicketAttachment = z.infer<typeof insertTicketAttachmentSchema>;
 export type TicketAttachment = typeof ticketAttachments.$inferSelect;
 
+export const clientFiles = pgTable("client_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull(),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  title: text("title"),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  category: text("category"),
+  allocationType: text("allocation_type"),
+  allocationId: text("allocation_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertClientFileSchema = createInsertSchema(clientFiles).omit({ id: true, createdAt: true });
+export type InsertClientFile = z.infer<typeof insertClientFileSchema>;
+export type ClientFile = typeof clientFiles.$inferSelect;
+
 export const ticketReplies = pgTable("ticket_replies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticketId: varchar("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),

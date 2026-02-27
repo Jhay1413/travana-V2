@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
+import { clientFileApi } from "@/api";
 import {
   BadgeCheck,
   Calendar,
@@ -92,18 +94,31 @@ export default function ClientPage() {
     allocationType: "",
     allocationId: "",
   });
-  const [uploadedFiles, setUploadedFiles] = useState<{
-    id: string;
-    name: string;
-    title: string;
-    type: string;
-    category: string;
-    allocationType: string;
-    allocationId: string;
-    updated: string;
-    url: string;
-  }[]>([]);
   const clientId = params?.clientId ?? "";
+  const queryClient = useQueryClient();
+  const { data: clientFilesData = [] } = useQuery({
+    queryKey: ["client-files", clientId],
+    queryFn: () => clientFileApi.getByClient(clientId),
+    enabled: !!clientId,
+  });
+  const uploadFileMutation = useMutation({
+    mutationFn: (params: { file: File; title?: string; category?: string; allocationType?: string; allocationId?: string }) =>
+      clientFileApi.upload(clientId, params.file, params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-files", clientId] });
+      toast({ title: "File uploaded", description: "File saved successfully." });
+    },
+    onError: () => {
+      toast({ title: "Upload failed", description: "Could not upload file.", variant: "destructive" });
+    },
+  });
+  const deleteFileMutation = useMutation({
+    mutationFn: (id: string) => clientFileApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-files", clientId] });
+      toast({ title: "File deleted" });
+    },
+  });
 
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
 
@@ -279,22 +294,13 @@ export default function ClientPage() {
 
   const handleUploadFile = () => {
     if (uploadFile.file) {
-      const fileExt = uploadFile.file.name.split('.').pop()?.toUpperCase() || 'FILE';
-      const fileUrl = URL.createObjectURL(uploadFile.file);
-      setUploadedFiles((prev) => [
-        {
-          id: `uploaded-${Date.now()}`,
-          name: uploadFile.file!.name,
-          title: uploadFile.title || uploadFile.file!.name,
-          type: fileExt,
-          category: uploadFile.fileType,
-          allocationType: uploadFile.allocationType || "None",
-          allocationId: uploadFile.allocationId,
-          updated: "Just now",
-          url: fileUrl,
-        },
-        ...prev,
-      ]);
+      uploadFileMutation.mutate({
+        file: uploadFile.file,
+        title: uploadFile.title || uploadFile.file.name,
+        category: uploadFile.fileType,
+        allocationType: uploadFile.allocationType || undefined,
+        allocationId: uploadFile.allocationId || undefined,
+      });
     }
     setShowUploadFileModal(false);
     setUploadFile({ file: null, title: "", fileType: "", allocationType: "", allocationId: "" });
@@ -779,8 +785,8 @@ export default function ClientPage() {
 
                 <TabsContent value="files" className="mt-3">
                   <ClientFilesTab
-                    uploadedFiles={uploadedFiles}
-                    setUploadedFiles={setUploadedFiles}
+                    clientFiles={clientFilesData}
+                    onDeleteFile={(id) => deleteFileMutation.mutate(id)}
                     filteredFiles={filteredFiles}
                     onUploadFile={() => setShowUploadFileModal(true)}
                     role={role}
