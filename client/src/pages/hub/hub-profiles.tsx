@@ -40,8 +40,16 @@ import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/compone
 import { agentProfiles } from "@/data/hub-mock";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 type ProfileTab = "timeline" | "knowledge" | "training" | "achievements" | "about";
@@ -384,10 +392,55 @@ function TimelinePostCard({ post, onLike }: { post: TimelinePost; onLike: (id: s
 }
 
 export default function HubProfiles() {
-  const profile = agentProfiles[0];
+  const [profile, setProfile] = useState(() => ({
+    ...agentProfiles[0],
+    location: "Newcastle upon Tyne, United Kingdom",
+    joined: "March 2018",
+    specialisation: "Turkey & Mediterranean Specialist",
+    certifications: "ABTA Certified, IATA Accredited",
+    extendedBio: `${agentProfiles[0].bio} Passionate about creating unforgettable holiday experiences and helping clients find their perfect getaway. Completed over 200 site inspections across Europe and beyond. Known for exceptional first-call close rates and deep destination knowledge.`,
+  }));
   const [activeTab, setActiveTab] = useState<ProfileTab>("timeline");
   const [timeline, setTimeline] = useState<TimelinePost[]>(MOCK_TIMELINE);
   const [newPostText, setNewPostText] = useState("");
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: profile.name,
+    role: profile.role,
+    bio: profile.bio,
+    extendedBio: profile.extendedBio,
+    location: profile.location,
+    specialisation: profile.specialisation,
+    certifications: profile.certifications,
+  });
+
+  const openEditProfile = () => {
+    setEditForm({
+      name: profile.name,
+      role: profile.role,
+      bio: profile.bio,
+      extendedBio: profile.extendedBio,
+      location: profile.location,
+      specialisation: profile.specialisation,
+      certifications: profile.certifications,
+    });
+    setShowEditProfile(true);
+  };
+
+  const saveProfile = () => {
+    setProfile((prev) => ({
+      ...prev,
+      name: editForm.name,
+      role: editForm.role,
+      bio: editForm.bio,
+      extendedBio: editForm.extendedBio,
+      location: editForm.location,
+      specialisation: editForm.specialisation,
+      certifications: editForm.certifications,
+      avatar: editForm.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
+    }));
+    setShowEditProfile(false);
+  };
 
   const toggleLike = (id: string) => {
     setTimeline((prev) =>
@@ -454,18 +507,18 @@ export default function HubProfiles() {
                     </p>
                     <div className="flex items-center gap-4 mt-2 flex-wrap">
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                        <MapPin className="h-3 w-3" /> Newcastle, UK
+                        <MapPin className="h-3 w-3" /> {profile.location}
                       </span>
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                        <Calendar className="h-3 w-3" /> Joined March 2018
+                        <Calendar className="h-3 w-3" /> Joined {profile.joined}
                       </span>
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                        <Plane className="h-3 w-3" /> Turkey & Mediterranean Specialist
+                        <Plane className="h-3 w-3" /> {profile.specialisation}
                       </span>
                     </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
-                    <Button size="sm" className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white gap-1.5 text-xs" data-testid="button-edit-profile">
+                    <Button size="sm" className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white gap-1.5 text-xs" data-testid="button-edit-profile" onClick={openEditProfile}>
                       <Edit3 className="h-3.5 w-3.5" />
                       Edit Profile
                     </Button>
@@ -929,28 +982,28 @@ export default function HubProfiles() {
                     <div className="flex items-start gap-3">
                       <MapPin className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Newcastle upon Tyne, United Kingdom</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profile.location}</p>
                         <p className="text-xs text-slate-500">Location</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Calendar className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">March 2018</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profile.joined}</p>
                         <p className="text-xs text-slate-500">Joined</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Plane className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Turkey, Mediterranean, Maldives, Canary Islands</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profile.specialisation}</p>
                         <p className="text-xs text-slate-500">Specialisations</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Award className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">ABTA Certified, IATA Accredited</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profile.certifications}</p>
                         <p className="text-xs text-slate-500">Certifications</p>
                       </div>
                     </div>
@@ -960,7 +1013,7 @@ export default function HubProfiles() {
                 <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
                   <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Bio</h3>
                   <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {profile.bio} Passionate about creating unforgettable holiday experiences and helping clients find their perfect getaway. Completed over 200 site inspections across Europe and beyond. Known for exceptional first-call close rates and deep destination knowledge.
+                    {profile.extendedBio}
                   </p>
                 </div>
               </div>
@@ -1021,6 +1074,96 @@ export default function HubProfiles() {
           )}
         </AnimatePresence>
       </div>
+
+      <Dialog open={showEditProfile} onOpenChange={setShowEditProfile}>
+        <DialogContent className="max-w-lg rounded-2xl" data-testid="dialog-edit-profile">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Edit Profile</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-name" className="text-xs font-medium text-slate-600">Full Name</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                className="rounded-lg"
+                data-testid="input-edit-name"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-role" className="text-xs font-medium text-slate-600">Role</Label>
+              <Input
+                id="edit-role"
+                value={editForm.role}
+                onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}
+                className="rounded-lg"
+                data-testid="input-edit-role"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-location" className="text-xs font-medium text-slate-600">Location</Label>
+              <Input
+                id="edit-location"
+                value={editForm.location}
+                onChange={(e) => setEditForm((p) => ({ ...p, location: e.target.value }))}
+                className="rounded-lg"
+                data-testid="input-edit-location"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-specialisation" className="text-xs font-medium text-slate-600">Specialisation</Label>
+              <Input
+                id="edit-specialisation"
+                value={editForm.specialisation}
+                onChange={(e) => setEditForm((p) => ({ ...p, specialisation: e.target.value }))}
+                className="rounded-lg"
+                data-testid="input-edit-specialisation"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-certifications" className="text-xs font-medium text-slate-600">Certifications</Label>
+              <Input
+                id="edit-certifications"
+                value={editForm.certifications}
+                onChange={(e) => setEditForm((p) => ({ ...p, certifications: e.target.value }))}
+                className="rounded-lg"
+                data-testid="input-edit-certifications"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-bio" className="text-xs font-medium text-slate-600">Short Bio</Label>
+              <Textarea
+                id="edit-bio"
+                value={editForm.bio}
+                onChange={(e) => setEditForm((p) => ({ ...p, bio: e.target.value }))}
+                rows={2}
+                className="rounded-lg resize-none"
+                data-testid="input-edit-bio"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-extended-bio" className="text-xs font-medium text-slate-600">Full Bio</Label>
+              <Textarea
+                id="edit-extended-bio"
+                value={editForm.extendedBio}
+                onChange={(e) => setEditForm((p) => ({ ...p, extendedBio: e.target.value }))}
+                rows={4}
+                className="rounded-lg resize-none"
+                data-testid="input-edit-extended-bio"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" className="rounded-lg" onClick={() => setShowEditProfile(false)} data-testid="button-cancel-edit-profile">
+              Cancel
+            </Button>
+            <Button size="sm" className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white" onClick={saveProfile} data-testid="button-save-profile">
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
