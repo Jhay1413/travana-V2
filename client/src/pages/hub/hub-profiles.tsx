@@ -462,6 +462,8 @@ export default function HubProfiles() {
   const { data: savedProfile } = useQuery({
     queryKey: ["user-profile", "me"],
     queryFn: () => userProfileApi.getMyProfile(),
+    enabled: !!currentUser,
+    retry: false,
   });
 
   const saveProfileMutation = useMutation({
