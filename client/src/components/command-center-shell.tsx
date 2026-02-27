@@ -549,7 +549,6 @@ export function CommandCenterShell({
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
-      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren },
     ];
 
     if (role === "Admin") {
@@ -580,7 +579,6 @@ export function CommandCenterShell({
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
-              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren },
             ],
           },
         ],
@@ -872,6 +870,27 @@ export function CommandCenterShell({
             </Link>
           );
         })}
+      </div>
+
+      <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+      <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-black/5 px-3 py-3 dark:border-white/10 dark:bg-white/5">
+        <div className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+          {currentUser?.profileImageUrl ? (
+            <img src={currentUser.profileImageUrl} alt={currentUser.name} className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-sm font-semibold text-black/70 dark:text-white/80">
+              {currentUser?.name?.charAt(0)?.toUpperCase() ?? "U"}
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold">{currentUser?.name ?? "—"}</div>
+          <div className="truncate text-xs text-black/55 dark:text-white/55">{currentUser?.email ?? ""}</div>
+        </div>
+        <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+          {currentUser?.role ?? role}
+        </span>
       </div>
     </>
   );
@@ -1294,6 +1313,27 @@ export function CommandCenterShell({
                     </Link>
                   );
                 })}
+              </div>
+
+              <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+
+              <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-black/5 px-3 py-3 dark:border-white/10 dark:bg-white/5">
+                <div className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                  {currentUser?.profileImageUrl ? (
+                    <img src={currentUser.profileImageUrl} alt={currentUser.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-sm font-semibold text-black/70 dark:text-white/80">
+                      {currentUser?.name?.charAt(0)?.toUpperCase() ?? "U"}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{currentUser?.name ?? "—"}</div>
+                  <div className="truncate text-xs text-black/55 dark:text-white/55">{currentUser?.email ?? ""}</div>
+                </div>
+                <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                  {currentUser?.role ?? role}
+                </span>
               </div>
             </div>
           </aside>
