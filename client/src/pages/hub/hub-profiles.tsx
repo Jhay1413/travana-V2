@@ -34,6 +34,7 @@ import {
   Upload,
   Users,
   Video,
+  X,
   Zap,
 } from "lucide-react";
 import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/components/hub-components";
@@ -236,10 +237,40 @@ function SkillHeatmap({ skills }: { skills: { name: string; level: number }[] })
   );
 }
 
-function TimelinePostCard({ post, onLike }: { post: TimelinePost; onLike: (id: string) => void }) {
+interface TimelinePostCardProps {
+  post: TimelinePost;
+  onLike: (id: string) => void;
+  onComment: (id: string, text: string) => void;
+  onShare: (id: string) => void;
+  onSave: (id: string) => void;
+  profileAvatar: string;
+  profileName: string;
+  profileRole: string;
+  profileImage?: string | null;
+}
+
+function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAvatar, profileName, profileRole, profileImage }: TimelinePostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
-  const profile = agentProfiles[0];
+  const [saved, setSaved] = useState(false);
+  const [shared, setShared] = useState(false);
+
+  const handleComment = () => {
+    if (!commentText.trim()) return;
+    onComment(post.id, commentText.trim());
+    setCommentText("");
+  };
+
+  const handleShare = () => {
+    onShare(post.id);
+    setShared(true);
+    setTimeout(() => setShared(false), 2000);
+  };
+
+  const handleSave = () => {
+    onSave(post.id);
+    setSaved(!saved);
+  };
 
   return (
     <motion.div
@@ -261,13 +292,17 @@ function TimelinePostCard({ post, onLike }: { post: TimelinePost; onLike: (id: s
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-              {profile.avatar}
-            </div>
+            {profileImage ? (
+              <img src={profileImage} alt={profileName} className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+            ) : (
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                {profileAvatar}
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-900 dark:text-white">{profile.name}</span>
-                <HubBadge variant="blue">{profile.role}</HubBadge>
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">{profileName}</span>
+                <HubBadge variant="blue">{profileRole}</HubBadge>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-slate-500">{post.date}</span>
@@ -283,6 +318,12 @@ function TimelinePostCard({ post, onLike }: { post: TimelinePost; onLike: (id: s
         <div className="mt-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
           {post.content}
         </div>
+
+        {post.image && (
+          <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+            <img src={post.image} alt="Post attachment" className="w-full max-h-80 object-cover" />
+          </div>
+        )}
 
         {(post.destination || post.value) && (
           <div className="flex flex-wrap gap-2 mt-3">
@@ -326,13 +367,27 @@ function TimelinePostCard({ post, onLike }: { post: TimelinePost; onLike: (id: s
             </button>
           </div>
           <div className="flex items-center gap-1">
-            <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <button
+              onClick={handleShare}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition",
+                shared ? "bg-emerald-50 text-emerald-600" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              )}
+              data-testid={`post-share-${post.id}`}
+            >
               <Share2 className="h-3.5 w-3.5" />
-              Share
+              {shared ? "Shared!" : "Share"}
             </button>
-            <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-              <Bookmark className="h-3.5 w-3.5" />
-              Save
+            <button
+              onClick={handleSave}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition",
+                saved ? "bg-amber-50 text-amber-600" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              )}
+              data-testid={`post-save-${post.id}`}
+            >
+              <Bookmark className={cn("h-3.5 w-3.5", saved && "fill-amber-500")} />
+              {saved ? "Saved" : "Save"}
             </button>
           </div>
         </div>
@@ -358,26 +413,33 @@ function TimelinePostCard({ post, onLike }: { post: TimelinePost; onLike: (id: s
                         <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{c.text}</p>
                       </div>
                       <div className="flex items-center gap-3 mt-1 px-1">
-                        <button className="text-[10px] font-medium text-slate-500 hover:text-blue-600 transition">Like</button>
-                        <button className="text-[10px] font-medium text-slate-500 hover:text-blue-600 transition">Reply</button>
                         <span className="text-[10px] text-slate-400">{c.date}</span>
                       </div>
                     </div>
                   </div>
                 ))}
                 <div className="flex items-center gap-2 mt-2">
-                  <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-                    {profile.avatar}
-                  </div>
+                  {profileImage ? (
+                    <img src={profileImage} alt={profileName} className="h-7 w-7 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                      {profileAvatar}
+                    </div>
+                  )}
                   <div className="flex-1 relative">
                     <Input
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleComment(); }}
                       placeholder="Write a comment..."
                       className="h-8 rounded-full bg-slate-100 border-0 text-xs pr-8 dark:bg-slate-800"
                       data-testid={`post-comment-input-${post.id}`}
                     />
-                    <button className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-600 transition">
+                    <button
+                      onClick={handleComment}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-600 transition"
+                      data-testid={`post-comment-send-${post.id}`}
+                    >
                       <Send className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -464,6 +526,10 @@ export default function HubProfiles() {
     setShowEditProfile(false);
   };
 
+  const [newPostType, setNewPostType] = useState<TimelinePost["type"]>("deal");
+  const [newPostImage, setNewPostImage] = useState<string | null>(null);
+  const postPhotoInputRef = useRef<HTMLInputElement>(null);
+
   const toggleLike = (id: string) => {
     setTimeline((prev) =>
       prev.map((p) =>
@@ -472,6 +538,64 @@ export default function HubProfiles() {
           : p
       )
     );
+  };
+
+  const addComment = (postId: string, text: string) => {
+    setTimeline((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              comments: [
+                ...p.comments,
+                { author: profile.name, avatar: profile.avatar, text, date: "Just now" },
+              ],
+            }
+          : p
+      )
+    );
+  };
+
+  const sharePost = (id: string) => {
+    const post = timeline.find((p) => p.id === id);
+    if (post) {
+      navigator.clipboard?.writeText(post.content.slice(0, 100) + "...");
+    }
+  };
+
+  const savePost = (_id: string) => {};
+
+  const handleCreatePost = () => {
+    if (!newPostText.trim()) return;
+    const badgeMap: Record<string, string> = {
+      deal: "Deal Win",
+      knowledge: "Knowledge Guide",
+      blog: "Blog Post",
+      review: "Hotel Review",
+      training: "Training Update",
+      milestone: "Milestone",
+    };
+    const newPost: TimelinePost = {
+      id: `p-${Date.now()}`,
+      type: newPostType,
+      content: newPostText.trim(),
+      date: "Just now",
+      likes: 0,
+      comments: [],
+      liked: false,
+      badge: badgeMap[newPostType] || undefined,
+      image: newPostImage || undefined,
+    };
+    setTimeline((prev) => [newPost, ...prev]);
+    setNewPostText("");
+    setNewPostImage(null);
+    setNewPostType("deal");
+  };
+
+  const handlePostPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setNewPostImage(URL.createObjectURL(file));
   };
 
   const pinnedPosts = timeline.filter((p) => p.pinned);
@@ -624,36 +748,79 @@ export default function HubProfiles() {
                 {/* Create Post */}
                 <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
                   <div className="flex items-start gap-3">
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                      {profile.avatar}
-                    </div>
+                    {profileImage ? (
+                      <img src={profileImage} alt={profile.name} className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {profile.avatar}
+                      </div>
+                    )}
                     <div className="flex-1">
-                      <Input
+                      <Textarea
                         value={newPostText}
                         onChange={(e) => setNewPostText(e.target.value)}
                         placeholder="Share a deal win, insight, or knowledge..."
-                        className="h-10 rounded-full bg-slate-100 border-0 text-sm dark:bg-slate-800"
+                        className="min-h-[40px] rounded-xl bg-slate-100 border-0 text-sm dark:bg-slate-800 resize-none"
+                        rows={newPostText.length > 80 ? 3 : 1}
                         data-testid="input-new-post"
                       />
                     </div>
                   </div>
+                  {newPostImage && (
+                    <div className="mt-3 relative rounded-xl overflow-hidden border border-slate-200">
+                      <img src={newPostImage} alt="Attached" className="w-full max-h-48 object-cover" />
+                      <button
+                        onClick={() => setNewPostImage(null)}
+                        className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition"
+                        data-testid="button-remove-post-image"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                   <Separator className="my-3" />
+                  <input ref={postPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePostPhotoSelect} data-testid="input-post-photo" />
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">
-                      <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                        <TrendingUp className="h-3.5 w-3.5 text-emerald-500" /> Deal Win
-                      </button>
-                      <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                        <BookOpen className="h-3.5 w-3.5 text-blue-500" /> Guide
-                      </button>
-                      <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                        <Star className="h-3.5 w-3.5 text-orange-500" /> Review
-                      </button>
-                      <button className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                      {([
+                        { type: "deal" as const, icon: TrendingUp, label: "Deal Win", color: "text-emerald-500" },
+                        { type: "knowledge" as const, icon: BookOpen, label: "Guide", color: "text-blue-500" },
+                        { type: "review" as const, icon: Star, label: "Review", color: "text-orange-500" },
+                      ]).map((item) => (
+                        <button
+                          key={item.type}
+                          onClick={() => setNewPostType(item.type)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                            newPostType === item.type
+                              ? "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-white"
+                              : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          )}
+                          data-testid={`button-post-type-${item.type}`}
+                        >
+                          <item.icon className={cn("h-3.5 w-3.5", item.color)} /> {item.label}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => postPhotoInputRef.current?.click()}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                          newPostImage
+                            ? "bg-purple-100 text-purple-700"
+                            : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        )}
+                        data-testid="button-post-photo"
+                      >
                         <Image className="h-3.5 w-3.5 text-purple-500" /> Photo
                       </button>
                     </div>
-                    <Button size="sm" className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs" data-testid="button-post">
+                    <Button
+                      size="sm"
+                      className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                      data-testid="button-post"
+                      disabled={!newPostText.trim()}
+                      onClick={handleCreatePost}
+                    >
                       Post
                     </Button>
                   </div>
@@ -663,7 +830,7 @@ export default function HubProfiles() {
                 {pinnedPosts.length > 0 && (
                   <div className="space-y-4">
                     {pinnedPosts.map((post) => (
-                      <TimelinePostCard key={post.id} post={post} onLike={toggleLike} />
+                      <TimelinePostCard key={post.id} post={post} onLike={toggleLike} onComment={addComment} onShare={sharePost} onSave={savePost} profileAvatar={profile.avatar} profileName={profile.name} profileRole={profile.role} profileImage={profileImage} />
                     ))}
                   </div>
                 )}
@@ -671,7 +838,7 @@ export default function HubProfiles() {
                 {/* Regular Posts */}
                 <div className="space-y-4">
                   {regularPosts.map((post) => (
-                    <TimelinePostCard key={post.id} post={post} onLike={toggleLike} />
+                    <TimelinePostCard key={post.id} post={post} onLike={toggleLike} onComment={addComment} onShare={sharePost} onSave={savePost} profileAvatar={profile.avatar} profileName={profile.name} profileRole={profile.role} profileImage={profileImage} />
                   ))}
                 </div>
               </div>
