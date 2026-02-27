@@ -320,8 +320,8 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
         </div>
 
         {post.image && (
-          <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-            <img src={post.image} alt="Post attachment" className="w-full max-h-80 object-cover" />
+          <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 max-h-72">
+            <img src={post.image} alt="Post attachment" className="w-full h-full max-h-72 object-contain bg-slate-50 dark:bg-slate-800" />
           </div>
         )}
 
