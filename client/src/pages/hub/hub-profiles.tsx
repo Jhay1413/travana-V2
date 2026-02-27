@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import coverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
 import {
@@ -400,10 +400,14 @@ export default function HubProfiles() {
     certifications: "ABTA Certified, IATA Accredited",
     extendedBio: `${agentProfiles[0].bio} Passionate about creating unforgettable holiday experiences and helping clients find their perfect getaway. Completed over 200 site inspections across Europe and beyond. Known for exceptional first-call close rates and deep destination knowledge.`,
   }));
+  const [profileImage, setProfileImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileTab>("timeline");
   const [timeline, setTimeline] = useState<TimelinePost[]>(MOCK_TIMELINE);
   const [newPostText, setNewPostText] = useState("");
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const editAvatarInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState({
     name: profile.name,
     role: profile.role,
@@ -413,6 +417,20 @@ export default function HubProfiles() {
     specialisation: profile.specialisation,
     certifications: profile.certifications,
   });
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setProfileImage(url);
+  };
+
+  const handleEditAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setEditImagePreview(url);
+  };
 
   const openEditProfile = () => {
     setEditForm({
@@ -424,6 +442,7 @@ export default function HubProfiles() {
       specialisation: profile.specialisation,
       certifications: profile.certifications,
     });
+    setEditImagePreview(profileImage);
     setShowEditProfile(true);
   };
 
@@ -439,6 +458,9 @@ export default function HubProfiles() {
       certifications: editForm.certifications,
       avatar: editForm.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
     }));
+    if (editImagePreview !== profileImage) {
+      setProfileImage(editImagePreview);
+    }
     setShowEditProfile(false);
   };
 
@@ -482,10 +504,15 @@ export default function HubProfiles() {
             <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
               {/* Avatar */}
               <div className="relative -mt-16 sm:-mt-20 flex-shrink-0">
-                <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold border-4 border-white dark:border-slate-900 shadow-lg" data-testid="profile-avatar-large">
-                  {profile.avatar}
-                </div>
-                <button className="absolute bottom-1 right-1 h-8 w-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} data-testid="input-avatar-upload" />
+                {profileImage ? (
+                  <img src={profileImage} alt={profile.name} className="h-28 w-28 sm:h-32 sm:w-32 rounded-2xl object-cover border-4 border-white dark:border-slate-900 shadow-lg" data-testid="profile-avatar-large" />
+                ) : (
+                  <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold border-4 border-white dark:border-slate-900 shadow-lg" data-testid="profile-avatar-large">
+                    {profile.avatar}
+                  </div>
+                )}
+                <button onClick={() => avatarInputRef.current?.click()} className="absolute bottom-1 right-1 h-8 w-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition" data-testid="button-change-avatar">
                   <Camera className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
                 </button>
                 <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" title="Online" />
@@ -1080,7 +1107,31 @@ export default function HubProfiles() {
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Edit Profile</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 py-2 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-slate-600">Profile Photo</Label>
+              <div className="flex items-center gap-4">
+                <input ref={editAvatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleEditAvatarFileChange} data-testid="input-edit-avatar-upload" />
+                {editImagePreview ? (
+                  <img src={editImagePreview} alt="Preview" className="h-16 w-16 rounded-xl object-cover border border-slate-200" data-testid="img-edit-avatar-preview" />
+                ) : (
+                  <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-lg font-bold border border-slate-200">
+                    {profile.avatar}
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <Button type="button" variant="outline" size="sm" className="rounded-lg text-xs gap-1.5" onClick={() => editAvatarInputRef.current?.click()} data-testid="button-edit-avatar-upload">
+                    <Camera className="h-3.5 w-3.5" />
+                    {editImagePreview ? "Change Photo" : "Upload Photo"}
+                  </Button>
+                  {editImagePreview && (
+                    <button type="button" onClick={() => setEditImagePreview(null)} className="text-[10px] text-red-500 hover:text-red-600 transition text-left" data-testid="button-remove-avatar">
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
             <div className="grid gap-1.5">
               <Label htmlFor="edit-name" className="text-xs font-medium text-slate-600">Full Name</Label>
               <Input
