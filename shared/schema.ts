@@ -44,6 +44,22 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = typeof user.$inferInsert;
 export type User = typeof user.$inferSelect;
 
+export const userProfiles = pgTable("user_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
+  bio: text("bio"),
+  extendedBio: text("extended_bio"),
+  location: text("location"),
+  specialisation: text("specialisation"),
+  certifications: text("certifications"),
+  coverImage: text("cover_image"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({ id: true, updatedAt: true });
+export type InsertUserProfile = z.infer<typeof insertUserProfileSchema>;
+export type UserProfile = typeof userProfiles.$inferSelect;
+
 export const clientTable = pgTable("client_table", {
   id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
   title: varchar(),

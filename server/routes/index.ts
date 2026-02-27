@@ -24,6 +24,7 @@ import chatRoutes from "./chat.routes";
 import socialPostRoutes from "./social-post.routes";
 import settingsRoutes from "./settings.routes";
 import clientFileRoutes from "./clientFile.routes";
+import userProfileRoutes from "./userProfile.routes";
 
 const router = Router();
 
@@ -52,5 +53,6 @@ router.use("/chat", chatRoutes);
 router.use("/social-posts", socialPostRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/client-files", clientFileRoutes);
+router.use("/user-profiles", userProfileRoutes);
 
 export default router;

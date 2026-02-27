@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import coverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
 import {
@@ -39,6 +40,8 @@ import {
 } from "lucide-react";
 import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/components/hub-components";
 import { agentProfiles } from "@/data/hub-mock";
+import { userProfileApi } from "@/api";
+import { useCurrentUser } from "@/hooks/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -454,14 +457,68 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
 }
 
 export default function HubProfiles() {
+  const { data: currentUser } = useCurrentUser();
+  const queryClient = useQueryClient();
+  const { data: savedProfile } = useQuery({
+    queryKey: ["user-profile", "me"],
+    queryFn: () => userProfileApi.getMyProfile(),
+  });
+
+  const saveProfileMutation = useMutation({
+    mutationFn: (payload: { bio?: string; extendedBio?: string; location?: string; specialisation?: string; certifications?: string }) =>
+      userProfileApi.saveMyProfile(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-profile", "me"] });
+    },
+  });
+
+  const defaultBio = agentProfiles[0].bio;
+  const defaultExtendedBio = `${defaultBio} Passionate about creating unforgettable holiday experiences and helping clients find their perfect getaway. Completed over 200 site inspections across Europe and beyond. Known for exceptional first-call close rates and deep destination knowledge.`;
+
   const [profile, setProfile] = useState(() => ({
     ...agentProfiles[0],
+    name: currentUser?.name || agentProfiles[0].name,
+    role: currentUser?.role || agentProfiles[0].role,
+    avatar: currentUser?.name
+      ? currentUser.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
+      : agentProfiles[0].avatar,
     location: "Newcastle upon Tyne, United Kingdom",
     joined: "March 2018",
     specialisation: "Turkey & Mediterranean Specialist",
     certifications: "ABTA Certified, IATA Accredited",
-    extendedBio: `${agentProfiles[0].bio} Passionate about creating unforgettable holiday experiences and helping clients find their perfect getaway. Completed over 200 site inspections across Europe and beyond. Known for exceptional first-call close rates and deep destination knowledge.`,
+    bio: defaultBio,
+    extendedBio: defaultExtendedBio,
   }));
+
+  useEffect(() => {
+    if (currentUser) {
+      setProfile((prev) => ({
+        ...prev,
+        name: currentUser.name || prev.name,
+        role: currentUser.role || prev.role,
+        avatar: currentUser.name
+          ? currentUser.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
+          : prev.avatar,
+      }));
+      if (currentUser.image) {
+        setProfileImage(currentUser.image);
+      }
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (savedProfile) {
+      setProfile((prev) => ({
+        ...prev,
+        bio: savedProfile.bio || prev.bio,
+        extendedBio: savedProfile.extendedBio || prev.extendedBio,
+        location: savedProfile.location || prev.location,
+        specialisation: savedProfile.specialisation || prev.specialisation,
+        certifications: savedProfile.certifications || prev.certifications,
+      }));
+    }
+  }, [savedProfile]);
+
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileTab>("timeline");
   const [timeline, setTimeline] = useState<TimelinePost[]>(MOCK_TIMELINE);
@@ -523,6 +580,13 @@ export default function HubProfiles() {
     if (editImagePreview !== profileImage) {
       setProfileImage(editImagePreview);
     }
+    saveProfileMutation.mutate({
+      bio: editForm.bio,
+      extendedBio: editForm.extendedBio,
+      location: editForm.location,
+      specialisation: editForm.specialisation,
+      certifications: editForm.certifications,
+    });
     setShowEditProfile(false);
   };
 
