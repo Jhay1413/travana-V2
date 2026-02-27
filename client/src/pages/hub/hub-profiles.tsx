@@ -41,6 +41,7 @@ import {
 import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/components/hub-components";
 import { agentProfiles } from "@/data/hub-mock";
 import { userProfileApi } from "@/api";
+import axiosClient from "@/api/client/axios-client";
 import { useCurrentUser } from "@/hooks/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -539,18 +540,40 @@ export default function HubProfiles() {
     certifications: profile.certifications,
   });
 
-  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setProfileImage(url);
+  const uploadAvatar = async (file: File): Promise<string | null> => {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    try {
+      const { data } = await axiosClient.post("/api/auth/avatar", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const avatarUrl = data?.avatar || data?.image;
+      if (avatarUrl) {
+        queryClient.invalidateQueries({ queryKey: ["auth", "currentUser"] });
+        return avatarUrl;
+      }
+    } catch (err) {
+      console.error("Avatar upload failed:", err);
+    }
+    return null;
   };
 
-  const handleEditAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setEditImagePreview(url);
+    const previewUrl = URL.createObjectURL(file);
+    setProfileImage(previewUrl);
+    const savedUrl = await uploadAvatar(file);
+    if (savedUrl) setProfileImage(savedUrl);
+  };
+
+  const handleEditAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setEditImagePreview(previewUrl);
+    const savedUrl = await uploadAvatar(file);
+    if (savedUrl) setEditImagePreview(savedUrl);
   };
 
   const openEditProfile = () => {
