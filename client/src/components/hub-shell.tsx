@@ -34,9 +34,9 @@ const NAV_ITEMS = [
   { key: "training", label: "Training Centre", icon: GraduationCap, path: "/hub/training" },
   { key: "ai-intel", label: "AI Destination Intelligence", icon: Brain, path: "/hub/ai-intel" },
   { key: "knowledge", label: "Knowledge Vault", icon: BookOpen, path: "/hub/knowledge" },
+  { key: "profiles", label: "My Profile", icon: Users, path: "/hub/profiles" },
   { key: "deals", label: "Deal Wins Wall", icon: Trophy, path: "/hub/deals" },
   { key: "news", label: "News & Announcements", icon: Newspaper, path: "/hub/news" },
-  { key: "profiles", label: "Profiles", icon: Users, path: "/hub/profiles" },
   { key: "admin", label: "Admin", icon: Shield, path: "/hub/admin", ownerOnly: true },
 ];
 
