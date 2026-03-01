@@ -25,9 +25,10 @@ class AuthStorage implements IAuthStorage {
     if (userData.email) {
       const existing = await this.getUserByEmail(userData.email);
       if (existing && existing.id !== userData.id) {
+        const { id: _newId, ...safeUpdate } = updateData;
         const [result] = await db
           .update(user)
-          .set({ ...updateData, updatedAt: new Date() })
+          .set({ ...safeUpdate, updatedAt: new Date() })
           .where(eq(user.id, existing.id))
           .returning();
         return result;
