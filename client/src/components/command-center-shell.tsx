@@ -79,7 +79,7 @@ function getNavRoute(key: string): string {
     enquiries: "/",
     quotes: "/",
     bookings: "/",
-    "agent-settings": "/hub/profiles",
+    "agent-settings": "/profile",
     "agent-overview": "/",
     "opportunities": "/",
     "tour-operators": "/settings/tour-operators",

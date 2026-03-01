@@ -19,6 +19,7 @@ import SettingsLookupPage from "@/pages/settings-lookup";
 import BookingPage from "@/pages/booking";
 import PipelinePage from "@/pages/pipeline";
 import HubPage from "@/pages/hub";
+import ProfilePage from "@/pages/profile";
 import SocialPostsPage from "@/pages/social-posts";
 import { Loader2 } from "lucide-react";
 
@@ -48,6 +49,7 @@ function AuthenticatedRouter() {
       <Route path="/social-posts" component={SocialPostsPage} />
       <Route path="/tickets" component={TicketsPage} />
       <Route path="/tickets/:ticketId" component={TicketPage} />
+      <Route path="/profile" component={ProfilePage} />
       <Route path="/hub/:rest*" component={HubPage} />
       <Route path="/hub" component={HubPage} />
       <Route path="/admin/import" component={AdminImportPage} />
