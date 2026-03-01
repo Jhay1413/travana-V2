@@ -466,6 +466,7 @@ export function CommandCenterShell({
   filterSlot,
   quoteStatusFilter,
   onQuoteStatusFilterChange,
+  createActions,
 }: {
   children: React.ReactNode;
   active?: string;
@@ -481,6 +482,7 @@ export function CommandCenterShell({
   filterSlot?: React.ReactNode;
   quoteStatusFilter?: string;
   onQuoteStatusFilterChange?: (v: string) => void;
+  createActions?: Array<{ label: string; icon?: React.ReactNode; onClick: () => void }>;
 }) {
   const [, navigate] = useLocation();
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -1582,13 +1584,40 @@ export function CommandCenterShell({
                     )}
 
                     {active !== "pipeline" && (
-                      <Button
-                        className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-                        data-testid="button-primary-action"
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create
-                      </Button>
+                      createActions && createActions.length > 0 ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                              data-testid="button-primary-action"
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Create
+                              <ChevronDown className="ml-2 h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="z-[400] w-44">
+                            {createActions.map((action) => (
+                              <DropdownMenuItem
+                                key={action.label}
+                                onClick={action.onClick}
+                                className="flex cursor-pointer items-center gap-2"
+                              >
+                                {action.icon}
+                                {action.label}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <Button
+                          className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                          data-testid="button-primary-action"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Create
+                        </Button>
+                      )
                     )}
 
                     {currentUser && (

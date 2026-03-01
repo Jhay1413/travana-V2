@@ -1,6 +1,6 @@
 {
-  "id": "85798a10-0b2a-494d-a3d5-d1495909d3a0",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "2d688109-a3cb-46ad-acb8-ebb9e802a3e3",
+  "prevId": "3fec8a73-a1bb-414b-b2e6-9831465443c5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7602,12 +7602,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "agent_id": {
-          "name": "agent_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "lead_source": {
           "name": "lead_source",
           "type": "lead_source_enum",
@@ -7638,19 +7632,6 @@
           "tableTo": "client_table",
           "columnsFrom": [
             "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "transaction_agent_id_user_id_fk": {
-          "name": "transaction_agent_id_user_id_fk",
-          "tableFrom": "transaction",
-          "tableTo": "user",
-          "columnsFrom": [
-            "agent_id"
           ],
           "columnsTo": [
             "id"

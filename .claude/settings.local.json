@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(node:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm install imapflow nodemailer @types/nodemailer)",
+      "Bash(echo $DATABASE_URL)",
+      "Bash(echo $NEON_DATABASE_URL)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_B0ALKiSoDRc7@ep-dark-moon-abt6m6qo-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require\" npx drizzle-kit push)"
     ]
   }
 }

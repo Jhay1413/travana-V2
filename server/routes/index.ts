@@ -25,6 +25,7 @@ import socialPostRoutes from "./social-post.routes";
 import settingsRoutes from "./settings.routes";
 import clientFileRoutes from "./clientFile.routes";
 import userProfileRoutes from "./userProfile.routes";
+import emailRoutes from "./email.routes";
 
 const router = Router();
 
@@ -54,5 +55,6 @@ router.use("/social-posts", socialPostRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/client-files", clientFileRoutes);
 router.use("/user-profiles", userProfileRoutes);
+router.use("/emails", emailRoutes);
 
 export default router;

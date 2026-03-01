@@ -49,8 +49,7 @@ export function ClientOverviewTab({
         <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-total-value">
           <div className="text-2xl font-bold text-black/85">
             {currency.format(
-              quotes.reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0) +
-              bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.sales_price || "0"), 0)
+              bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.package_commission || "0"), 0)
             )}
           </div>
           <div className="mt-0.5 text-[11px] font-semibold text-black/50">Total Profit</div>
@@ -142,9 +141,9 @@ export function ClientOverviewTab({
               </span>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-              <span className="text-xs font-medium text-emerald-700">Booked value</span>
+              <span className="text-xs font-medium text-emerald-700">Booked commission</span>
               <span className="text-xs font-bold text-emerald-700" data-testid="overview-booked-value">
-                {currency.format(bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.sales_price || "0"), 0))}
+                {currency.format(bookings.reduce((sum: number, b: BookingWithJoins) => sum + parseFloat(b.package_commission || "0"), 0))}
               </span>
             </div>
           </div>

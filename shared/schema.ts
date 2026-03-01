@@ -463,7 +463,6 @@ export const transaction = pgTable('transaction', {
   status: transaction_status_enum(),
   is_active: boolean().default(true),
   client_id: uuid().references(() => clientTable.id),
-  agent_id: text().references(() => user.id),
   lead_source: lead_source_enum().default('SHOP'),
   user_id: text().notNull().references(() => user.id),
   created_at: timestamp().notNull().defaultNow(),
@@ -1430,3 +1429,24 @@ export const chatMessages = pgTable("chat_messages", {
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+
+// ─── Email Accounts ───────────────────────────────────────────────────────────
+
+export const emailAccounts = pgTable("email_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  emailAddress: text("email_address").notNull(),
+  imapHost: text("imap_host").notNull(),
+  imapPort: integer("imap_port").notNull().default(993),
+  smtpHost: text("smtp_host").notNull(),
+  smtpPort: integer("smtp_port").notNull().default(587),
+  secure: boolean("secure").notNull().default(true),
+  username: text("username").notNull(),
+  encryptedPassword: text("encrypted_password").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type EmailAccount = typeof emailAccounts.$inferSelect;
+export type InsertEmailAccount = Omit<typeof emailAccounts.$inferInsert, "id" | "createdAt" | "updatedAt">;

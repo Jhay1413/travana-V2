@@ -29,7 +29,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
-import { useUpdateClient, useUpdateNeonClient, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction } from "@/hooks/mutations";
+import { useUpdateClient, useUpdateNeonClient, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction, useCreateTicket } from "@/hooks/mutations";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { Favorite } from "@/api/endpoints/favorite.api";
@@ -78,6 +81,8 @@ export default function ClientPage() {
   });
   const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
   const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
+  const [showTaskDialog, setShowTaskDialog] = useState(false);
+  const [taskForm, setTaskForm] = useState({ subject: "", type: "Task", priority: "Medium", description: "" });
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
@@ -208,6 +213,7 @@ export default function ClientPage() {
   const updateEnquiryMutation = useUpdateEnquiry();
   const deleteEnquiryMutation = useDeleteEnquiry();
   const createTransactionMutation = useCreateTransaction();
+  const createTicketMutation = useCreateTicket();
 
   const handleEnquirySubmit = (data: Partial<EnquiryTable> & Record<string, unknown>) => {
     if (editingEnquiry) {
@@ -416,6 +422,12 @@ export default function ClientPage() {
       onQuery={setQ}
       theme="light"
       onToggleTheme={() => { }}
+      createActions={[
+        { label: "Enquiry", icon: <FileText className="h-4 w-4" />, onClick: () => setShowEnquiryWizard(true) },
+        { label: "Quote", icon: <Sparkles className="h-4 w-4" />, onClick: handleNewQuote },
+        { label: "Booking", icon: <Calendar className="h-4 w-4" />, onClick: () => setShowBookingCreateDialog(true) },
+        { label: "Task", icon: <Ticket className="h-4 w-4" />, onClick: () => setShowTaskDialog(true) },
+      ]}
       headerExtra={
         <Select
           value={clientData?.badge || "New Client"}
@@ -832,6 +844,97 @@ export default function ClientPage() {
           navigate(`/clients/${clientId}/bookings/${bookingId}`);
         }}
       />
+
+      <Dialog open={showTaskDialog} onOpenChange={setShowTaskDialog}>
+        <DialogContent className="z-[500] max-w-md rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Create Task</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="task-subject">Subject <span className="text-red-500">*</span></Label>
+              <Input
+                id="task-subject"
+                placeholder="What needs to be done?"
+                value={taskForm.subject}
+                onChange={(e) => setTaskForm((f) => ({ ...f, subject: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="task-type">Type</Label>
+                <Select value={taskForm.type} onValueChange={(v) => setTaskForm((f) => ({ ...f, type: v }))}>
+                  <SelectTrigger id="task-type" className="rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Task">Task</SelectItem>
+                    <SelectItem value="Support">Support</SelectItem>
+                    <SelectItem value="General">General</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="task-priority">Priority</Label>
+                <Select value={taskForm.priority} onValueChange={(v) => setTaskForm((f) => ({ ...f, priority: v }))}>
+                  <SelectTrigger id="task-priority" className="rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="task-description">Description</Label>
+              <Textarea
+                id="task-description"
+                placeholder="Optional notes…"
+                rows={3}
+                value={taskForm.description}
+                onChange={(e) => setTaskForm((f) => ({ ...f, description: e.target.value }))}
+                className="rounded-2xl resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-2xl" onClick={() => setShowTaskDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+              disabled={!taskForm.subject.trim() || createTicketMutation.isPending}
+              onClick={() => {
+                if (!taskForm.subject.trim() || !currentUser?.id) return;
+                createTicketMutation.mutate(
+                  {
+                    clientId,
+                    userId: currentUser.id,
+                    type: taskForm.type,
+                    status: "Open",
+                    priority: taskForm.priority,
+                    subject: taskForm.subject.trim(),
+                    description: taskForm.description.trim() || null,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "Task created" });
+                      setShowTaskDialog(false);
+                      setTaskForm({ subject: "", type: "Task", priority: "Medium", description: "" });
+                    },
+                    onError: () => toast({ title: "Failed to create task", variant: "destructive" }),
+                  }
+                );
+              }}
+            >
+              {createTicketMutation.isPending ? "Creating…" : "Create Task"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <UploadFileDialog
         open={showUploadFileModal}
         onOpenChange={setShowUploadFileModal}

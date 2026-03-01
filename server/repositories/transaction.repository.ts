@@ -1,7 +1,7 @@
 import { db } from "../config/database";
 import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
-import { eq, desc, and, sql, inArray, count } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, count, or } from "drizzle-orm";
 
 async function enrichTransactions(txns: Transaction[]) {
   if (txns.length === 0) return [];
@@ -349,7 +349,9 @@ export const transactionRepository = {
   },
 
   async findByAgentId(agentId: string) {
-    const txns = await db.select().from(transaction).where(eq(transaction.agent_id, agentId)).orderBy(desc(transaction.created_at));
+    const txns = await db.select().from(transaction)
+      .where(or(eq(transaction.agent_id, agentId), eq(transaction.user_id, agentId)))
+      .orderBy(desc(transaction.created_at));
     return enrichTransactions(txns);
   },
 

@@ -407,7 +407,7 @@ function ShellNav({
   onRoleChange: (role: Role | null) => void;
 }) {
   const [, navigate] = useLocation();
-  type NavItem = { key: string; label: string; icon: React.ReactNode; route?: string; children?: NavItem[] };
+  type NavItem = { key: string; label: string; icon: React.ReactNode; route?: string; children?: NavItem[]; subGroups?: { label: string; items: NavItem[] }[] };
   type NavSection = { id: string; label: string; icon: React.ReactNode; items: NavItem[] };
   const nav = useMemo(() => {
     const settingsChildren: NavItem[] = [
@@ -427,6 +427,35 @@ function ShellNav({
       { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" />, route: "/settings/cruise-extras" },
       { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" />, route: "/settings/room-types" },
       { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" />, route: "/settings/deletion-codes" },
+    ];
+
+    const settingsSubGroups: { label: string; items: NavItem[] }[] = [
+      {
+        label: "Admin Settings",
+        items: [
+          { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" />, route: "/settings/package-types" },
+          { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" />, route: "/settings/package-commissions" },
+          { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" />, route: "/settings/board-basis" },
+          { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" />, route: "/settings/deletion-codes" },
+        ],
+      },
+      {
+        label: "Database Data",
+        items: [
+          { key: "tour-operators", label: "Tour Operators", icon: <Plane className="h-4 w-4" />, route: "/settings/tour-operators" },
+          { key: "airports", label: "Airports", icon: <MapPin className="h-4 w-4" />, route: "/settings/airports" },
+          { key: "countries", label: "Countries", icon: <Globe className="h-4 w-4" />, route: "/settings/countries" },
+          { key: "destinations", label: "Destinations", icon: <Compass className="h-4 w-4" />, route: "/settings/destinations" },
+          { key: "resorts-admin", label: "Resorts", icon: <MapPin className="h-4 w-4" />, route: "/settings/resorts" },
+          { key: "accommodation-types", label: "Accommodation Types", icon: <Building2 className="h-4 w-4" />, route: "/settings/accommodation-types" },
+          { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" />, route: "/settings/accommodation-list" },
+          { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" />, route: "/settings/parks" },
+          { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" />, route: "/settings/cottages" },
+          { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" />, route: "/settings/lodges" },
+          { key: "cruise-extras", label: "Cruise Extras", icon: <LifeBuoy className="h-4 w-4" />, route: "/settings/cruise-extras" },
+          { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" />, route: "/settings/room-types" },
+        ],
+      },
     ];
 
     const base: NavItem[] = [
@@ -453,7 +482,8 @@ function ShellNav({
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
-              { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, children: settingsChildren as NavItem[] },
+              { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
+              { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" />, subGroups: settingsSubGroups },
             ] as NavItem[],
           },
           {
@@ -514,10 +544,23 @@ function ShellNav({
   
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
-      const next = prev.includes(sectionId) 
+      const next = prev.includes(sectionId)
         ? prev.filter(id => id !== sectionId)
         : [...prev, sectionId];
       sessionStorage.setItem("admin-nav-expanded", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const [expandedNavItems, setExpandedNavItems] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem("admin-nav-items-expanded");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const toggleNavItem = (key: string) => {
+    setExpandedNavItems(prev => {
+      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key];
+      sessionStorage.setItem("admin-nav-items-expanded", JSON.stringify(next));
       return next;
     });
   };
@@ -597,18 +640,22 @@ function ShellNav({
                         {section.items.map((item) => {
                           const isActive = active === item.key;
                           const hasChildren = item.children && item.children.length > 0;
+                          const hasSubGroups = item.subGroups && item.subGroups.length > 0;
                           const childActive = hasChildren && item.children!.some((c: { key: string }) => active === c.key);
+                          const subGroupActive = hasSubGroups && item.subGroups!.some(g => g.items.some(c => active === c.key));
+                          const isItemExpanded = expandedNavItems.includes(item.key) || subGroupActive;
                           return (
                             <div key={item.key}>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (item.route) { navigate(item.route); return; }
+                                  if (hasSubGroups) { toggleNavItem(item.key); return; }
                                   onActiveChange(item.key);
                                 }}
                                 className={
                                   "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
-                                  (isActive || childActive
+                                  (isActive || childActive || subGroupActive
                                     ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
                                     : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                                 }
@@ -618,7 +665,7 @@ function ShellNav({
                                   <span
                                     className={
                                       "inline-flex h-7 w-7 items-center justify-center rounded-lg border " +
-                                      (isActive || childActive
+                                      (isActive || childActive || subGroupActive
                                         ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
                                         : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
                                     }
@@ -628,10 +675,73 @@ function ShellNav({
                                   </span>
                                   <span className="text-sm font-medium">{item.label}</span>
                                 </div>
-                                <ChevronRight
-                                  className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
-                                />
+                                {hasSubGroups ? (
+                                  <motion.div animate={{ rotate: isItemExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                                    <ChevronRight className={"h-4 w-4 " + (subGroupActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
+                                  </motion.div>
+                                ) : (
+                                  <ChevronRight
+                                    className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")}
+                                  />
+                                )}
                               </button>
+                              <AnimatePresence initial={false}>
+                                {hasSubGroups && isItemExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="ml-6 mt-1 space-y-2 border-l border-black/10 pl-3 dark:border-white/10">
+                                      {item.subGroups!.map((group) => (
+                                        <div key={group.label}>
+                                          <div className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+                                            {group.label}
+                                          </div>
+                                          {group.items.map((child) => {
+                                            if (child.route) {
+                                              return (
+                                                <Link
+                                                  key={child.key}
+                                                  href={child.route}
+                                                  className={
+                                                    "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
+                                                    (active === child.key
+                                                      ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                                      : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                                  }
+                                                  data-testid={`nav-${child.key}`}
+                                                >
+                                                  <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                                  <span>{child.label}</span>
+                                                </Link>
+                                              );
+                                            }
+                                            return (
+                                              <button
+                                                key={child.key}
+                                                onClick={(e) => { e.stopPropagation(); onActiveChange(child.key); }}
+                                                className={
+                                                  "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
+                                                  (active === child.key
+                                                    ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                                    : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
+                                                }
+                                                data-testid={`nav-${child.key}`}
+                                              >
+                                                <span className="text-black/60 dark:text-white/60">{child.icon}</span>
+                                                <span>{child.label}</span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                               {hasChildren && (
                                 <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
                                   {item.children!.map((child: { key: string; label: string; icon: React.ReactNode; route?: string }) => {
@@ -1591,7 +1701,8 @@ export default function CommandCenterPage() {
   const displayName = user?.firstName || user?.name || user?.email || "User";
 
   const { data: dashboardStats } = useDashboardStats();
-  const { data: transactionsData } = useTransactions();
+  const isRestrictedRole = role !== "Admin" && role !== "Manager";
+  const { data: transactionsData } = useTransactions(isRestrictedRole && currentUser?.id ? { agentId: currentUser.id } : undefined);
 
   const overviewSocialPosts = useMemo(() => {
     if (!transactionsData) return [];
@@ -1793,11 +1904,7 @@ export default function CommandCenterPage() {
   }, [transactionsData, allClientNames]);
 
   const getQuoteProfit = (q: any): number => {
-    const commission = parseFloat(q.package_commission) || 0;
-    if (commission > 0) return commission;
-    const salesPrice = parseFloat(q.sales_price) || 0;
-    if (salesPrice > 0) return salesPrice * 0.1;
-    return 0;
+    return parseFloat(q.package_commission) || 0;
   };
 
   const topClients = useMemo(() => {
@@ -5178,7 +5285,7 @@ export default function CommandCenterPage() {
         );
       }
 
-      if (active === "settings") {
+      if (active === "settings" || active === "admin-settings-page") {
         return (
           <section className="space-y-4">
             <div className="flex gap-2">

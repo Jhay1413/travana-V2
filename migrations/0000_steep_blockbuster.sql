@@ -6,7 +6,7 @@ CREATE TYPE "public"."owner_type_enum" AS ENUM('package_holiday', 'hot_tub_break
 CREATE TYPE "public"."quote_status_enum" AS ENUM('NEW_LEAD', 'QUOTE_IN_PROGRESS', 'QUOTE_CALL', 'QUOTE_READY', 'AWAITING_DECISION', 'REQUOTE', 'WON', 'ARCHIVED', 'LOST', 'INACTIVE', 'EXPIRED');--> statement-breakpoint
 CREATE TYPE "public"."referral_request_status_enum" AS ENUM('PENDING', 'APPROVED', 'REJECTED');--> statement-breakpoint
 CREATE TYPE "public"."referral_status_enum" AS ENUM('PENDING', 'RELEASED', 'REJECTED');--> statement-breakpoint
-CREATE TYPE "public"."transaction_status_enum" AS ENUM('on_enquiry', 'on_quote', 'on_booking');--> statement-breakpoint
+CREATE TYPE "public"."transaction_status_enum" AS ENUM('on_enquiry', 'on_quote', 'in_play', 'on_booking');--> statement-breakpoint
 CREATE TABLE "accommodation_images" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"accommodation_id" uuid NOT NULL,
@@ -74,6 +74,7 @@ CREATE TABLE "booking_table" (
 	"infant" integer DEFAULT 0 NOT NULL,
 	"child" integer DEFAULT 0 NOT NULL,
 	"adult" integer DEFAULT 0 NOT NULL,
+	"price_per_person" numeric(10, 2) DEFAULT '0.00' NOT NULL,
 	"booking_status" "booking_status_enum",
 	"main_tour_operator_id" uuid,
 	"date_created" timestamp with time zone DEFAULT now(),
@@ -219,6 +220,49 @@ CREATE TABLE "booking_transfers" (
 	"note" varchar
 );
 --> statement-breakpoint
+CREATE TABLE "chat_conversations" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"type" text DEFAULT 'direct' NOT NULL,
+	"name" text,
+	"created_by" text,
+	"created_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE "chat_messages" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"conversation_id" varchar NOT NULL,
+	"sender_id" text NOT NULL,
+	"content" text NOT NULL,
+	"file_url" text,
+	"file_name" text,
+	"file_type" text,
+	"file_size" integer,
+	"created_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE "chat_participants" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"conversation_id" varchar NOT NULL,
+	"user_id" text NOT NULL,
+	"joined_at" timestamp DEFAULT now(),
+	"last_read_at" timestamp
+);
+--> statement-breakpoint
+CREATE TABLE "client_files" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"client_id" varchar NOT NULL,
+	"filename" text NOT NULL,
+	"original_name" text NOT NULL,
+	"title" text,
+	"mime_type" text NOT NULL,
+	"size" integer NOT NULL,
+	"category" text,
+	"allocation_type" text,
+	"allocation_id" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "client_table" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"title" varchar,
@@ -358,6 +402,22 @@ CREATE TABLE "destination_table" (
 	"name" varchar NOT NULL,
 	"type" varchar,
 	"country_id" uuid
+);
+--> statement-breakpoint
+CREATE TABLE "email_accounts" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" text NOT NULL,
+	"label" text NOT NULL,
+	"email_address" text NOT NULL,
+	"imap_host" text NOT NULL,
+	"imap_port" integer DEFAULT 993 NOT NULL,
+	"smtp_host" text NOT NULL,
+	"smtp_port" integer DEFAULT 587 NOT NULL,
+	"secure" boolean DEFAULT true NOT NULL,
+	"username" text NOT NULL,
+	"encrypted_password" text NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "enquiries" (
@@ -1004,7 +1064,21 @@ CREATE TABLE "user" (
 	"phoneNumber" text NOT NULL,
 	"orgName" text,
 	"percentageCommission" integer,
+	"password" text,
 	CONSTRAINT "user_email_unique" UNIQUE("email")
+);
+--> statement-breakpoint
+CREATE TABLE "user_profiles" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" text NOT NULL,
+	"bio" text,
+	"extended_bio" text,
+	"location" text,
+	"specialisation" text,
+	"certifications" text,
+	"cover_image" text,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "user_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "users" (
@@ -1060,6 +1134,7 @@ ALTER TABLE "cruise_itenary_table" ADD CONSTRAINT "cruise_itenary_table_ship_id_
 ALTER TABLE "ship_table" ADD CONSTRAINT "ship_table_cruise_line_id_cruise_line_table_id_fk" FOREIGN KEY ("cruise_line_id") REFERENCES "public"."cruise_line_table"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "cruise_voyage_table" ADD CONSTRAINT "cruise_voyage_table_itinerary_id_cruise_itenary_table_id_fk" FOREIGN KEY ("itinerary_id") REFERENCES "public"."cruise_itenary_table"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "destination_table" ADD CONSTRAINT "destination_table_country_id_country_table_id_fk" FOREIGN KEY ("country_id") REFERENCES "public"."country_table"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "email_accounts" ADD CONSTRAINT "email_accounts_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "enquiry_accomodation" ADD CONSTRAINT "enquiry_accomodation_enquiry_id_enquiry_table_id_fk" FOREIGN KEY ("enquiry_id") REFERENCES "public"."enquiry_table"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "enquiry_accomodation" ADD CONSTRAINT "enquiry_accomodation_accomodation_id_accomodation_list_table_id_fk" FOREIGN KEY ("accomodation_id") REFERENCES "public"."accomodation_list_table"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "enquiry_board_basis" ADD CONSTRAINT "enquiry_board_basis_enquiry_id_enquiry_table_id_fk" FOREIGN KEY ("enquiry_id") REFERENCES "public"."enquiry_table"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1149,6 +1224,7 @@ ALTER TABLE "transaction" ADD CONSTRAINT "transaction_client_id_client_table_id_
 ALTER TABLE "transaction" ADD CONSTRAINT "transaction_agent_id_user_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "transaction" ADD CONSTRAINT "transaction_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "travel_deal" ADD CONSTRAINT "travel_deal_quote_id_quote_table_id_fk" FOREIGN KEY ("quote_id") REFERENCES "public"."quote_table"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "forwards_report_year_month_idx" ON "forwards_report" USING btree ("year","month");--> statement-breakpoint
 CREATE INDEX "lodge_code_idx" ON "lodges_table" USING btree ("lodge_code");--> statement-breakpoint
 CREATE INDEX "IDX_session_expire" ON "sessions" USING btree ("expire");

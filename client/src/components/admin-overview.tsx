@@ -48,11 +48,7 @@ interface AdminOverviewProps {
 }
 
 function getProfit(item: any): number {
-  const commission = parseFloat(item.package_commission) || 0;
-  if (commission > 0) return commission;
-  const salesPrice = parseFloat(item.sales_price) || 0;
-  if (salesPrice > 0) return salesPrice * 0.1;
-  return 0;
+  return parseFloat(item.package_commission) || 0;
 }
 
 function StatBox({
