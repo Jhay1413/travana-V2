@@ -29,36 +29,20 @@ import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
 import { QuoteSummaryTimeline } from "@/components/quote/QuoteSummaryTimeline";
 import { StatusPill } from "@/components/quote/StatusPill";
 
-export default function QuotePage({ isBooking = false }: { isBooking?: boolean } = {}) {
+export default function QuotePage() {
   const [, setLocation] = useLocation();
   const [, quoteParams] = useRoute("/clients/:clientId/quotes/:quoteId");
-  const [, bookingParams] = useRoute("/clients/:clientId/bookings/:quoteId");
   const [, freeQuoteParams] = useRoute("/quotes/:quoteId");
-  const [, freeBookingParams] = useRoute("/bookings/:quoteId");
-  const params = isBooking ? (bookingParams ?? freeBookingParams) : (quoteParams ?? freeQuoteParams);
+  const params = quoteParams ?? freeQuoteParams;
 
   const { role } = useRole();
   const clientId = params?.clientId ?? "";
   const quoteId = params?.quoteId ?? "";
 
-  const quoteQuery = useQuote(isBooking ? "" : quoteId);
-  const bookingQuery = useBooking(isBooking ? quoteId : "");
-  const bookingFallbackQuery = useBooking(
-    !isBooking && quoteQuery.error && (quoteQuery.error as any)?.response?.status === 404 ? quoteId : ""
-  );
-
-  const isBookingFallback = !isBooking && !!bookingFallbackQuery.data;
-  const isFallbackLoading = !isBooking && quoteQuery.error && (quoteQuery.error as any)?.response?.status === 404 && bookingFallbackQuery.isLoading;
-  const effectiveIsBooking = isBooking || isBookingFallback;
-  const activeQuery = effectiveIsBooking ? (isBooking ? bookingQuery : bookingFallbackQuery) : quoteQuery;
-  const quoteData = activeQuery.data;
-  const isLoading = activeQuery.isLoading || isFallbackLoading;
-  const error = isBookingFallback ? null : (isFallbackLoading ? null : activeQuery.error);
-  const clientQuery = useClient(effectiveIsBooking ? "" : clientId);
-  const neonClientQuery = useNeonClient(effectiveIsBooking ? clientId : "");
-  const clientData = effectiveIsBooking
-    ? (neonClientQuery.data ? { name: `${neonClientQuery.data.firstName || ""} ${neonClientQuery.data.surename || ""}`.trim() } : undefined)
-    : clientQuery.data;
+  const quoteQuery = useQuote(quoteId);
+  const { data: quoteData, isLoading, error } = quoteQuery;
+  const clientQuery = useClient(clientId);
+  const clientData = clientQuery.data;
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: currentUser } = useCurrentUser();
@@ -109,7 +93,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
     return transformQuoteData(quoteData);
   }, [quoteData]);
 
-  const pageLabel = isBooking || (quoteData && ("quote_status" in quoteData && quoteData?.quote_status === "accepted")) || (quoteData && "booking_status" in quoteData) ? "Booking" : "Quote";
+  const pageLabel = "Quote";
 
   if (isLoading) {
     return (
@@ -735,7 +719,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                     )}
                   </div>
 
-                  {(isBooking || quote.status === "accepted" || quote.status === "BOOKED" || quote.haysRef || quote.supplierRef) && (
+                  {(quote.status === "accepted" || quote.status === "BOOKED" || quote.haysRef || quote.supplierRef) && (
                     <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3" data-testid="card-booking-references">
                       <div className="text-xs font-semibold text-emerald-800 mb-2">Booking References</div>
                       <div className="grid gap-2 sm:grid-cols-2">
@@ -825,7 +809,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                 </Tabs>
               </Card>
 
-              <QuoteTasksSection quoteId={quoteId} entityType={pageLabel === "Booking" ? "booking" : "quote"} assignedUserId={quoteData?.user_id} />
+              <QuoteTasksSection quoteId={quoteId} entityType="quote" assignedUserId={quoteData?.user_id} />
 
             </div>
           </div>

@@ -145,11 +145,6 @@ export const taskRepository = {
         .select({ id: quote.id, transaction_id: quote.transaction_id })
         .from(quote)
         .where(inArray(quote.id, quoteEntityIds));
-      console.log('📊 Quote lookup (extended):', { 
-        requestedIds: quoteEntityIds, 
-        foundQuotes: quoteRows.length,
-        quotes: quoteRows.map(q => ({ id: q.id, transaction_id: q.transaction_id }))
-      });
       for (const q of quoteRows) {
         transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
       }
@@ -188,11 +183,6 @@ export const taskRepository = {
         .select({ id: transaction.id, client_id: transaction.client_id })
         .from(transaction)
         .where(inArray(transaction.id, uniqueTransactionIds));
-      console.log('🔗 Transaction lookup (extended):', { 
-        requestedIds: uniqueTransactionIds, 
-        foundTransactions: txRows.length,
-        transactions: txRows.map(tx => ({ id: tx.id, client_id: tx.client_id }))
-      });
       for (const tx of txRows) {
         if (tx.client_id) {
           clientIdMap.set(tx.id, tx.client_id);
@@ -232,12 +222,6 @@ export const taskRepository = {
       const txId = transactionIdMap.get(key);
       const cid = txId ? clientIdMap.get(txId) ?? null : null;
       const clientName = cid ? clientNameMap.get(cid) ?? null : null;
-      
-      // Log if clientId is null for a quote/booking/enquiry
-      if (!cid && (t.entityType === "quote" || t.entityType === "booking" || t.entityType === "enquiry")) {
-        console.log(`⚠️  Task ${t.id} (${t.entityType}) - entityId: ${t.entityId} - No clientId found. TxId: ${txId}, Key: ${key}`);
-      }
-      
       return { ...t, clientId: cid, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
     });
   },
