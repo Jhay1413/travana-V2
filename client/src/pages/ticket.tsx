@@ -223,27 +223,42 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
                   data-testid={`attachment-${attachment.id}`}
                 >
                   {isImageType(attachment.mimeType) ? (
-                    <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-black/5">
+                    <button
+                      type="button"
+                      className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-black/5 cursor-pointer"
+                      onClick={() => onImageClick?.({ url: getAttachmentDownloadUrl(attachment.id), name: attachment.filename })}
+                      data-testid={`button-lightbox-side-attachment-${attachment.id}`}
+                    >
                       <img
                         src={getAttachmentDownloadUrl(attachment.id)}
                         alt={attachment.filename}
                         className="w-full h-full object-cover"
                       />
-                    </div>
+                    </button>
                   ) : (
                     <div className="w-14 h-14 rounded-lg flex items-center justify-center bg-red-50 flex-shrink-0">
                       <FileText className="h-7 w-7 text-red-600" />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <a
-                      href={getAttachmentDownloadUrl(attachment.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium text-black/80 hover:text-black truncate block"
-                    >
-                      {attachment.filename}
-                    </a>
+                    {isImageType(attachment.mimeType) ? (
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-black/80 hover:text-black truncate block text-left cursor-pointer"
+                        onClick={() => onImageClick?.({ url: getAttachmentDownloadUrl(attachment.id), name: attachment.filename })}
+                      >
+                        {attachment.filename}
+                      </button>
+                    ) : (
+                      <a
+                        href={getAttachmentDownloadUrl(attachment.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-black/80 hover:text-black truncate block"
+                      >
+                        {attachment.filename}
+                      </a>
+                    )}
                     <p className="text-xs text-black/40">{formatFileSize(attachment.size)}</p>
                   </div>
                   <Button
@@ -265,7 +280,7 @@ function AttachmentsDialog({ ticketId, open, onOpenChange }: { ticketId: string;
   );
 }
 
-function TicketRepliesSection({ ticketId, users }: { ticketId: string; users: ApiUser[] }) {
+function TicketRepliesSection({ ticketId, users, onImageClick }: { ticketId: string; users: ApiUser[]; onImageClick?: (img: { url: string; name: string }) => void }) {
   const [replyContent, setReplyContent] = useState("");
   const [editingReply, setEditingReply] = useState<TicketReply | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -642,6 +657,7 @@ export default function TicketPage() {
   const deleteAttachmentMutation = useDeleteAttachment(ticketId);
   const ticketFileInputRef = useRef<HTMLInputElement>(null);
   const [ticketUploading, setTicketUploading] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
 
   const ticket = tickets?.find((t) => t.id === ticketId);
 
@@ -963,18 +979,18 @@ export default function TicketPage() {
                           className="group relative rounded-xl overflow-hidden border border-black/10 bg-black/[0.02]"
                           data-testid={`inline-attachment-${attachment.id}`}
                         >
-                          <a
-                            href={getAttachmentDownloadUrl(attachment.id)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block"
+                          <button
+                            type="button"
+                            className="block w-full cursor-pointer"
+                            onClick={() => setLightboxImage({ url: getAttachmentDownloadUrl(attachment.id), name: attachment.originalName })}
+                            data-testid={`button-lightbox-attachment-${attachment.id}`}
                           >
                             <img
                               src={getAttachmentDownloadUrl(attachment.id)}
                               alt={attachment.originalName}
                               className="w-full h-32 object-cover"
                             />
-                          </a>
+                          </button>
                           <div className="p-2 flex items-center justify-between">
                             <div className="min-w-0 flex-1">
                               <p className="text-xs text-black/60 truncate">{attachment.originalName}</p>
@@ -1098,9 +1114,34 @@ export default function TicketPage() {
           </div>
         </Card>
 
-        <TicketRepliesSection ticketId={ticketId} users={users || []} />
+        <TicketRepliesSection ticketId={ticketId} users={users || []} onImageClick={setLightboxImage} />
       </motion.div>
 
+      <Dialog open={!!lightboxImage} onOpenChange={(open) => { if (!open) setLightboxImage(null); }}>
+        <DialogContent className="max-w-4xl w-auto p-0 bg-black/95 border-none rounded-2xl overflow-hidden" aria-describedby={undefined}>
+          <DialogHeader className="absolute top-0 left-0 right-0 z-10 flex flex-row items-center justify-between p-3 bg-gradient-to-b from-black/60 to-transparent">
+            <DialogTitle className="text-sm font-medium text-white/90 truncate">{lightboxImage?.name}</DialogTitle>
+            <a
+              href={lightboxImage?.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-2.5 py-1 text-xs font-medium text-white/90 transition hover:bg-white/25"
+              data-testid="button-lightbox-download"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Open Original
+            </a>
+          </DialogHeader>
+          {lightboxImage && (
+            <img
+              src={lightboxImage.url}
+              alt={lightboxImage.name}
+              className="max-h-[85vh] w-auto mx-auto object-contain"
+              data-testid="img-lightbox"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </CommandCenterShell>
   );
 }
