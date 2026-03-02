@@ -50,6 +50,7 @@ import {
   LogOut,
   Mail,
   MapPin,
+  Menu,
   MessageSquare,
   Phone,
   Plane,
@@ -584,7 +585,7 @@ function ShellNav({
   };
 
   return (
-    <aside className="hidden lg:block">
+    <aside className="hidden xl:block">
       <div className="glass ringed grain sticky top-4 rounded-3xl p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -1033,6 +1034,7 @@ function TopBar({
   rolePreview,
   onRoleChange,
   clients,
+  onMobileNavOpen,
 }: {
   role: Role;
   active: string;
@@ -1047,6 +1049,7 @@ function TopBar({
   rolePreview: Role | null;
   onRoleChange: (role: Role | null) => void;
   clients?: Array<{ id: string; name: string; email: string; tier: string; stage: string; nextTrip?: string; phone?: string; clientType?: string }>;
+  onMobileNavOpen?: () => void;
 }) {
   const { user: currentUser } = useAuth();
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -1200,6 +1203,16 @@ function TopBar({
     <div className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-[100]">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
+          {onMobileNavOpen && (
+            <button
+              type="button"
+              onClick={onMobileNavOpen}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 xl:hidden"
+              data-testid="button-hamburger-menu"
+            >
+              <Menu className="h-5 w-5 text-black/70 dark:text-white/80" />
+            </button>
+          )}
           <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
             {title}
           </h1>
@@ -1732,6 +1745,7 @@ export default function CommandCenterPage() {
   const [opportunitiesPage, setOpportunitiesPage] = useState(1);
   const [debouncedOpportunitiesSearch, setDebouncedOpportunitiesSearch] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { role, setRole: setRoleFromHook, actualRole } = useRole();
   const rolePreview = role !== actualRole ? role : null;
   const setRolePreview = (r: Role | null) => {
@@ -6218,11 +6232,230 @@ export default function CommandCenterPage() {
     );
   }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole, airportSearch, tourOperatorSearch, airportsList, tourOperators, countryMap, opportunitiesTab, filteredOpportunities, opportunitiesTotal, opportunitiesTotalPages, opportunitiesPage, opportunitiesLoading, opportunitiesSearch, opportunitiesDateRange, opportunitiesStatusFilter, opportunitiesAgentFilter, opportunitiesSortBy, opportunitiesAgentList, currentUser]);
 
+  const mobileNavItems = useMemo(() => {
+    type MobileNavGroup = { groupLabel?: string; items: { key: string; label: string; icon: React.ReactNode; route?: string }[] };
+    const connectItems: MobileNavGroup = {
+      groupLabel: "Connect",
+      items: [
+        { key: "connect-whatsapp", label: "WhatsApp", icon: <MessageSquare className="h-4 w-4" /> },
+        { key: "connect-facebook", label: "Facebook", icon: <Users className="h-4 w-4" /> },
+        { key: "connect-instagram", label: "Instagram", icon: <Sparkles className="h-4 w-4" /> },
+        { key: "connect-email", label: "Email", icon: <Mail className="h-4 w-4" /> },
+      ],
+    };
+    if (role === "Admin") {
+      return [
+        {
+          groupLabel: "Admin",
+          items: [
+            { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+            { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
+            { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
+            { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
+            { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
+            { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" /> },
+          ],
+        },
+        {
+          groupLabel: "Agent Tools",
+          items: [
+            { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+            { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+            { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
+            { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
+            { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
+            { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
+            { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+            { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+          ],
+        },
+        connectItems,
+      ] as MobileNavGroup[];
+    }
+    if (role === "Manager") {
+      return [
+        {
+          items: [
+            { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+            { key: "team", label: "Team Pipeline", icon: <BarChart3 className="h-4 w-4" /> },
+            { key: "coverage", label: "Coverage", icon: <Compass className="h-4 w-4" /> },
+            { key: "coaching", label: "Coaching", icon: <BadgeCheck className="h-4 w-4" /> },
+            { key: "reports", label: "Reports", icon: <FileText className="h-4 w-4" /> },
+          ],
+        },
+        connectItems,
+      ] as MobileNavGroup[];
+    }
+    if (role === "Homeworker") {
+      return [
+        {
+          items: [
+            { key: "overview", label: "Work Queue", icon: <ListChecks className="h-4 w-4" /> },
+            { key: "assigned", label: "Assigned Clients", icon: <Users className="h-4 w-4" /> },
+            { key: "callbacks", label: "Callbacks", icon: <Phone className="h-4 w-4" /> },
+            { key: "messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
+          ],
+        },
+        connectItems,
+      ] as MobileNavGroup[];
+    }
+    if (role === "Referer") {
+      return [
+        {
+          items: [
+            { key: "overview", label: "Affiliate Hub", icon: <Link2 className="h-4 w-4" /> },
+            { key: "leads", label: "Leads", icon: <Users className="h-4 w-4" /> },
+            { key: "commission", label: "Commission", icon: <CircleDollarSign className="h-4 w-4" /> },
+            { key: "payouts", label: "Payouts", icon: <Banknote className="h-4 w-4" /> },
+          ],
+        },
+        connectItems,
+      ] as MobileNavGroup[];
+    }
+    return [
+      {
+        items: [
+          { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+          { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+          { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
+          { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
+          { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
+          { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
+          { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+          { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
+        ],
+      },
+      connectItems,
+    ] as MobileNavGroup[];
+  }, [role]);
+
   return (
     <div className={themeClass}>
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-sm xl:hidden"
+              onClick={() => setMobileNavOpen(false)}
+              data-testid="mobile-nav-backdrop"
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 350, damping: 35 }}
+              className="fixed inset-y-0 left-0 z-[9999] w-[300px] overflow-y-auto bg-white/95 dark:bg-black/95 backdrop-blur-xl shadow-2xl p-4 xl:hidden"
+              data-testid="mobile-nav-drawer"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative grid h-10 w-10 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                    <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="title-serif truncate text-sm font-semibold">Travana</div>
+                    <div className="text-xs text-black/55 dark:text-white/55">Command Center</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                  data-testid="button-close-mobile-nav"
+                >
+                  <X className="h-4 w-4 text-black/70 dark:text-white/80" />
+                </button>
+              </div>
+
+              <select
+                value={rolePreview || actualRole}
+                onChange={(e) => {
+                  const newRole = e.target.value as Role;
+                  setRolePreview(newRole === actualRole ? null : newRole);
+                }}
+                className="mb-4 w-full rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
+                data-testid="select-role-mobile"
+              >
+                {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                  <option key={r} value={r} className="text-black bg-white">{r}{r === actualRole ? " ✓" : ""}</option>
+                ))}
+              </select>
+
+              <nav className="space-y-3">
+                {mobileNavItems.map((group, gi) => (
+                  <div key={gi}>
+                    {group.groupLabel && (
+                      <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+                        {group.groupLabel}
+                      </div>
+                    )}
+                    <div className="space-y-0.5">
+                      {group.items.map((item) => {
+                        const isActive = active === item.key;
+                        return (
+                          <button
+                            key={item.key}
+                            onClick={() => {
+                              if (item.route) {
+                                navigate(item.route);
+                              } else {
+                                setActive(item.key);
+                              }
+                              setMobileNavOpen(false);
+                            }}
+                            className={
+                              "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition " +
+                              (isActive
+                                ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
+                            }
+                            data-testid={`mobile-nav-${item.key}`}
+                          >
+                            <span
+                              className={
+                                "inline-flex h-8 w-8 items-center justify-center rounded-xl border " +
+                                (isActive
+                                  ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
+                                  : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5")
+                              }
+                              aria-hidden
+                            >
+                              <span className="text-black/70 dark:text-white/80">{item.icon}</span>
+                            </span>
+                            <span className="text-sm font-medium">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </nav>
+
+              <div className="mt-4 pt-4 border-t border-black/10 dark:border-white/10">
+                <Link
+                  href="/hub"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white no-underline"
+                  data-testid="mobile-nav-hub"
+                >
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                    <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
+                  </span>
+                  <span className="text-sm font-medium">TheHub</span>
+                </Link>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
       <div className="app-shell px-2 py-2 md:px-3 md:py-3 lg:px-4 lg:py-4">
         <div className="w-full space-y-3">
-          <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
+          <div className="grid gap-3 xl:grid-cols-[320px_1fr]">
             <ShellNav 
               role={role} 
               active={active} 
@@ -6247,6 +6480,7 @@ export default function CommandCenterPage() {
                 rolePreview={rolePreview}
                 onRoleChange={setRolePreview}
                 clients={clients}
+                onMobileNavOpen={() => setMobileNavOpen(true)}
               />
 
               <div className="pr-1" data-testid="panel-scroll">
