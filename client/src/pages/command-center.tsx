@@ -1693,7 +1693,7 @@ export default function CommandCenterPage() {
   });
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"whats-on" | "pipeline" | "calendar" | "news">("whats-on");
-  const [whatsOnFilter, setWhatsOnFilter] = useState<"today" | "tomorrow" | "this-week" | "custom">("today");
+  const [whatsOnFilter, setWhatsOnFilter] = useState<"all" | "today" | "tomorrow" | "this-week" | "custom">("all");
   const [whatsOnDate, setWhatsOnDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
   const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -1876,6 +1876,8 @@ export default function CommandCenterPage() {
     endOfWeek.setDate(startOfWeek.getDate() + 7);
 
     switch (whatsOnFilter) {
+      case "all":
+        return { start: new Date(0), end: new Date(2100, 0, 1) };
       case "today":
         return { start: today, end: tomorrow };
       case "tomorrow":
@@ -2279,7 +2281,7 @@ export default function CommandCenterPage() {
               <TabsContent value="whats-on" className="mt-0">
                 <div className="grid gap-4" data-testid="panel-whats-on-overview">
                   <div className="flex flex-wrap items-center gap-2" data-testid="whats-on-filters">
-                    {(["today", "tomorrow", "this-week", "custom"] as const).map((f) => (
+                    {(["all", "today", "tomorrow", "this-week", "custom"] as const).map((f) => (
                       <button
                         key={f}
                         type="button"
@@ -2291,7 +2293,7 @@ export default function CommandCenterPage() {
                         }`}
                         data-testid={`button-whats-on-${f}`}
                       >
-                        {f === "today" ? "Today" : f === "tomorrow" ? "Tomorrow" : f === "this-week" ? "This Week" : "Select Date"}
+                        {f === "all" ? "All" : f === "today" ? "Today" : f === "tomorrow" ? "Tomorrow" : f === "this-week" ? "This Week" : "Select Date"}
                       </button>
                     ))}
                     {whatsOnFilter === "custom" && (
@@ -2315,20 +2317,21 @@ export default function CommandCenterPage() {
                       </div>
                     ) : (
                       filteredTasks.map((task, idx) => {
-                        const taskHref = task.clientId
-                          ? task.entityType === "enquiry"
-                            ? `/clients/${task.clientId}/enquiries/${task.entityId}`
-                            : task.entityType === "booking"
-                              ? `/clients/${task.clientId}/bookings/${task.entityId}`
-                              : task.entityType === "quote"
-                                ? `/clients/${task.clientId}/quotes/${task.entityId}`
-                                : `/clients/${task.clientId}`
-                          : null;
+                        let taskHref: string | null = null;
+                        if (task.entityType === "quote" && task.entityId) {
+                          taskHref = task.clientId ? `/clients/${task.clientId}/quotes/${task.entityId}` : `/quotes/${task.entityId}`;
+                        } else if (task.entityType === "booking" && task.entityId) {
+                          taskHref = task.clientId ? `/clients/${task.clientId}/bookings/${task.entityId}` : `/bookings/${task.entityId}`;
+                        } else if (task.entityType === "enquiry" && task.entityId) {
+                          taskHref = task.clientId ? `/clients/${task.clientId}/enquiries/${task.entityId}` : `/enquiries/${task.entityId}`;
+                        } else if (task.entityType === "client" && task.clientId) {
+                          taskHref = `/clients/${task.clientId}`;
+                        }
                         return (
                         <motion.button
                           key={task.id}
                           type="button"
-                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
+                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"} ${taskHref ? "cursor-pointer" : "cursor-default"}`}
                           data-testid={`card-whats-on-task-${task.id}`}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -3663,7 +3666,7 @@ export default function CommandCenterPage() {
               <TabsContent value="whats-on" className="mt-0">
                 <div className="grid gap-4" data-testid="panel-whats-on-workspace">
                   <div className="flex flex-wrap items-center gap-2" data-testid="whats-on-workspace-filters">
-                    {(["today", "tomorrow", "this-week", "custom"] as const).map((f) => (
+                    {(["all", "today", "tomorrow", "this-week", "custom"] as const).map((f) => (
                       <button
                         key={f}
                         type="button"
@@ -3675,7 +3678,7 @@ export default function CommandCenterPage() {
                         }`}
                         data-testid={`button-workspace-whats-on-${f}`}
                       >
-                        {f === "today" ? "Today" : f === "tomorrow" ? "Tomorrow" : f === "this-week" ? "This Week" : "Select Date"}
+                        {f === "all" ? "All" : f === "today" ? "Today" : f === "tomorrow" ? "Tomorrow" : f === "this-week" ? "This Week" : "Select Date"}
                       </button>
                     ))}
                     {whatsOnFilter === "custom" && (
@@ -3699,20 +3702,21 @@ export default function CommandCenterPage() {
                       </div>
                     ) : (
                       filteredTasks.map((task, idx) => {
-                        const taskHref = task.clientId
-                          ? task.entityType === "enquiry"
-                            ? `/clients/${task.clientId}/enquiries/${task.entityId}`
-                            : task.entityType === "booking"
-                              ? `/clients/${task.clientId}/bookings/${task.entityId}`
-                              : task.entityType === "quote"
-                                ? `/clients/${task.clientId}/quotes/${task.entityId}`
-                                : `/clients/${task.clientId}`
-                          : null;
+                        let taskHref: string | null = null;
+                        if (task.entityType === "quote" && task.entityId) {
+                          taskHref = task.clientId ? `/clients/${task.clientId}/quotes/${task.entityId}` : `/quotes/${task.entityId}`;
+                        } else if (task.entityType === "booking" && task.entityId) {
+                          taskHref = task.clientId ? `/clients/${task.clientId}/bookings/${task.entityId}` : `/bookings/${task.entityId}`;
+                        } else if (task.entityType === "enquiry" && task.entityId) {
+                          taskHref = task.clientId ? `/clients/${task.clientId}/enquiries/${task.entityId}` : `/enquiries/${task.entityId}`;
+                        } else if (task.entityType === "client" && task.clientId) {
+                          taskHref = `/clients/${task.clientId}`;
+                        }
                         return (
                         <motion.button
                           key={task.id}
                           type="button"
-                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
+                          className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"} ${taskHref ? "cursor-pointer" : "cursor-default"}`}
                           data-testid={`card-workspace-task-${task.id}`}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}

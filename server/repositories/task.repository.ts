@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { tasks, notifications, quote, enquiry_table, transaction, clientTable } from "@shared/schema";
+import { tasks, notifications, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
 import { eq, and, desc, lte, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -30,7 +30,11 @@ export const taskRepository = {
     if (allTasks.length === 0) return [];
 
     const quoteEntityIds = allTasks
-      .filter(t => t.entityType === "quote" || t.entityType === "booking")
+      .filter(t => t.entityType === "quote")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+    const bookingEntityIds = allTasks
+      .filter(t => t.entityType === "booking")
       .map(t => t.entityId)
       .filter((id): id is string => id !== null);
     const enquiryEntityIds = allTasks
@@ -47,7 +51,16 @@ export const taskRepository = {
         .where(inArray(quote.id, quoteEntityIds));
       for (const q of quoteRows) {
         transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
-        transactionIdMap.set(`booking:${q.id}`, q.transaction_id);
+      }
+    }
+
+    if (bookingEntityIds.length > 0) {
+      const bookingRows = await db
+        .select({ id: booking.id, transaction_id: booking.transaction_id })
+        .from(booking)
+        .where(inArray(booking.id, bookingEntityIds));
+      for (const b of bookingRows) {
+        transactionIdMap.set(`booking:${b.id}`, b.transaction_id);
       }
     }
 
@@ -108,7 +121,11 @@ export const taskRepository = {
     if (allTasks.length === 0) return [];
 
     const quoteEntityIds = allTasks
-      .filter(t => t.entityType === "quote" || t.entityType === "booking")
+      .filter(t => t.entityType === "quote")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+    const bookingEntityIds = allTasks
+      .filter(t => t.entityType === "booking")
       .map(t => t.entityId)
       .filter((id): id is string => id !== null);
     const enquiryEntityIds = allTasks
@@ -130,7 +147,16 @@ export const taskRepository = {
         .where(inArray(quote.id, quoteEntityIds));
       for (const q of quoteRows) {
         transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
-        transactionIdMap.set(`booking:${q.id}`, q.transaction_id);
+      }
+    }
+
+    if (bookingEntityIds.length > 0) {
+      const bookingRows = await db
+        .select({ id: booking.id, transaction_id: booking.transaction_id })
+        .from(booking)
+        .where(inArray(booking.id, bookingEntityIds));
+      for (const b of bookingRows) {
+        transactionIdMap.set(`booking:${b.id}`, b.transaction_id);
       }
     }
 
