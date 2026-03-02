@@ -26,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useTourOperators } from "@/hooks/queries";
+import { useTourOperators, useTransactions } from "@/hooks/queries";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
 
@@ -43,7 +43,6 @@ const currencyFull = new Intl.NumberFormat(undefined, {
 });
 
 interface AdminOverviewProps {
-  transactionsData: any[] | undefined;
   apiUsers: any[] | undefined;
 }
 
@@ -105,9 +104,10 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 type TOTimePeriod = "all" | "week" | "month" | "custom";
 type TOSortMode = "profit" | "bookings" | "most-profitable";
 
-export default function AdminOverview({ transactionsData, apiUsers }: AdminOverviewProps) {
+export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
   const [tab, setTab] = useState("agent-performance");
   const { data: tourOperators } = useTourOperators();
+  const { data: transactionsData } = useTransactions();
   const [toTimePeriod, setToTimePeriod] = useState<TOTimePeriod>("month");
   const [toSortMode, setToSortMode] = useState<TOSortMode>("profit");
   const [toDateFrom, setToDateFrom] = useState("");

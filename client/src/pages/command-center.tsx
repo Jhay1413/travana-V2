@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "@/api/client/axios-client";
-import { authApi } from "@/api";
+import { authApi, opportunitiesApi } from "@/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useTickets, useChatConversations, useChatMessages, authKeys } from "@/hooks/queries";
@@ -1630,6 +1630,8 @@ export default function CommandCenterPage() {
   const [opportunitiesDateRange, setOpportunitiesDateRange] = useState<"this-month" | "last-month" | "this-week" | "last-7" | "last-30" | "last-90" | "this-year" | "all-time">("this-month");
   const [opportunitiesSortBy, setOpportunitiesSortBy] = useState<"newest" | "oldest" | "price-high" | "price-low">("newest");
   const [opportunitiesAgentFilter, setOpportunitiesAgentFilter] = useState("all");
+  const [opportunitiesPage, setOpportunitiesPage] = useState(1);
+  const [debouncedOpportunitiesSearch, setDebouncedOpportunitiesSearch] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const { role, setRole: setRoleFromHook, actualRole } = useRole();
   const rolePreview = role !== actualRole ? role : null;
@@ -1949,100 +1951,46 @@ export default function CommandCenterPage() {
     return arr.slice(0, 10);
   }, [transactionsData, allNeonClientsData, topClientsFilter]);
 
-  const opportunitiesData = useMemo(() => {
-    if (!transactionsData || !allNeonClientsData?.clients) return { enquiries: [] as any[], quotes: [] as any[], bookings: [] as any[] };
-    const neonMap = new Map<string, { name: string; phone: string }>();
-    for (const c of allNeonClientsData.clients) {
-      const title = c.title && c.title !== "NULL" ? c.title : "";
-      neonMap.set(c.id, { name: [title, c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown", phone: c.phoneNumber || "" });
-    }
-    const agentMap = new Map<string, string>();
-    if (apiUsers) {
-      for (const u of apiUsers as any[]) {
-        agentMap.set(u.id, u.firstName || u.name || u.email || "Agent");
-      }
-    }
-    const enquiries: any[] = [];
-    const quotes: any[] = [];
-    const bookings: any[] = [];
-    for (const t of transactionsData as any[]) {
-      const clientInfo = t.client_id ? neonMap.get(t.client_id) : null;
-      const clientName = clientInfo?.name || "Unknown";
-      const clientPhone = clientInfo?.phone || "";
-      const agentName = (t.agent_id && agentMap.get(t.agent_id)) || (t.user_id && agentMap.get(t.user_id)) || "";
-      if (t.enquiry) {
-        enquiries.push({ id: t.enquiry.id, transactionId: t.id, clientId: t.client_id, clientName, clientPhone, agentName, title: t.enquiry.title || "Untitled", status: t.enquiry.status || "NEW_LEAD", travelDate: t.enquiry.travel_date, dateCreated: t.enquiry.date_created, adults: t.enquiry.adults || 0, children: t.enquiry.children || 0, budget: parseFloat(t.enquiry.budget) || 0, nights: t.enquiry.no_of_nights || 0 });
-      }
-      if (t.quotes) {
-        for (const q of t.quotes) {
-          if (q.is_active === false) continue;
-          quotes.push({ id: q.id, transactionId: t.id, clientId: t.client_id, clientName, clientPhone, agentName, title: q.title || "Untitled", status: q.quote_status || "NEW_LEAD", travelDate: q.travel_date, dateCreated: q.date_created, salesPrice: parseFloat(q.sales_price) || 0, commission: parseFloat(q.package_commission) || 0, nights: q.num_of_nights || 0, adults: q.adult || 0, children: q.child || 0 });
-        }
-      }
-      if (t.booking) {
-        bookings.push({ id: t.booking.id, transactionId: t.id, clientId: t.client_id, clientName, clientPhone, agentName, title: t.booking.title || "Untitled", status: t.booking.booking_status || "BOOKED", travelDate: t.booking.travel_date, dateCreated: t.booking.date_created, salesPrice: parseFloat(t.booking.sales_price) || 0, commission: parseFloat(t.booking.package_commission) || 0, nights: t.booking.num_of_nights || 0, adults: t.booking.adult || 0, children: t.booking.child || 0, haysRef: t.booking.hays_ref, supplierRef: t.booking.supplier_ref });
-      }
-    }
-    enquiries.sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
-    quotes.sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
-    bookings.sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
-    return { enquiries, quotes, bookings };
-  }, [transactionsData, allNeonClientsData, apiUsers]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedOpportunitiesSearch(opportunitiesSearch), 300);
+    return () => clearTimeout(timer);
+  }, [opportunitiesSearch]);
 
-  const filteredOpportunities = useMemo(() => {
-    const src = opportunitiesTab === "enquiries" ? opportunitiesData.enquiries : opportunitiesTab === "quotes" ? opportunitiesData.quotes : opportunitiesData.bookings;
-    let result = src;
-    if (opportunitiesDateRange !== "all-time") {
-      const now = new Date();
-      let rangeStart: Date;
-      if (opportunitiesDateRange === "this-month") {
-        rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else if (opportunitiesDateRange === "last-month") {
-        rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-        result = result.filter((item: any) => { const d = new Date(item.dateCreated || 0); return d >= rangeStart && d <= rangeEnd; });
-      } else if (opportunitiesDateRange === "this-week") {
-        const day = now.getDay();
-        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); rangeStart.setHours(0, 0, 0, 0);
-      } else if (opportunitiesDateRange === "last-7") {
-        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 7); rangeStart.setHours(0, 0, 0, 0);
-      } else if (opportunitiesDateRange === "last-30") {
-        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 30); rangeStart.setHours(0, 0, 0, 0);
-      } else if (opportunitiesDateRange === "last-90") {
-        rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 90); rangeStart.setHours(0, 0, 0, 0);
-      } else {
-        rangeStart = new Date(now.getFullYear(), 0, 1);
-      }
-      if (opportunitiesDateRange !== "last-month") {
-        result = result.filter((item: any) => new Date(item.dateCreated || 0) >= rangeStart);
-      }
-    }
-    if (opportunitiesStatusFilter !== "all") {
-      result = result.filter((item: any) => item.status === opportunitiesStatusFilter);
-    }
-    if (opportunitiesAgentFilter !== "all") {
-      result = result.filter((item: any) => item.agentName === opportunitiesAgentFilter);
-    }
-    if (opportunitiesSearch.trim()) {
-      const q = opportunitiesSearch.toLowerCase().trim();
-      result = result.filter((item: any) => item.clientName.toLowerCase().includes(q) || item.title.toLowerCase().includes(q) || (item.haysRef && item.haysRef.toLowerCase().includes(q)));
-    }
-    if (opportunitiesSortBy === "oldest") {
-      result = [...result].sort((a, b) => new Date(a.dateCreated || 0).getTime() - new Date(b.dateCreated || 0).getTime());
-    } else if (opportunitiesSortBy === "price-high") {
-      result = [...result].sort((a, b) => (b.salesPrice || b.budget || 0) - (a.salesPrice || a.budget || 0));
-    } else if (opportunitiesSortBy === "price-low") {
-      result = [...result].sort((a, b) => (a.salesPrice || a.budget || 0) - (b.salesPrice || b.budget || 0));
-    }
-    return result;
-  }, [opportunitiesTab, opportunitiesData, opportunitiesStatusFilter, opportunitiesSearch, opportunitiesDateRange, opportunitiesSortBy, opportunitiesAgentFilter]);
+  useEffect(() => {
+    setOpportunitiesPage(1);
+  }, [opportunitiesTab, opportunitiesStatusFilter, debouncedOpportunitiesSearch, opportunitiesDateRange, opportunitiesSortBy, opportunitiesAgentFilter]);
 
+  const opportunitiesFilters = useMemo(() => ({
+    page: opportunitiesPage,
+    limit: 25,
+    status: opportunitiesStatusFilter,
+    search: debouncedOpportunitiesSearch,
+    dateRange: opportunitiesDateRange,
+    agentId: opportunitiesAgentFilter,
+    sortBy: opportunitiesSortBy,
+  }), [opportunitiesPage, opportunitiesStatusFilter, debouncedOpportunitiesSearch, opportunitiesDateRange, opportunitiesSortBy, opportunitiesAgentFilter]);
+
+  const opportunitiesFetcher = opportunitiesTab === "enquiries" ? opportunitiesApi.getEnquiries : opportunitiesTab === "quotes" ? opportunitiesApi.getQuotes : opportunitiesApi.getBookings;
+  const { data: opportunitiesResult, isLoading: opportunitiesLoading } = useQuery({
+    queryKey: ["opportunities", opportunitiesTab, opportunitiesFilters],
+    queryFn: () => opportunitiesFetcher(opportunitiesFilters),
+    enabled: active === "opportunities",
+    keepPreviousData: true,
+  } as any);
+
+  const filteredOpportunities = opportunitiesResult?.items || [];
+  const opportunitiesTotal = opportunitiesResult?.total || 0;
+  const opportunitiesTotalPages = opportunitiesResult?.totalPages || 1;
+
+  const { data: opportunitiesAgentListRaw } = useQuery({
+    queryKey: ["opportunities", "agents"],
+    queryFn: opportunitiesApi.getAgents,
+    enabled: active === "opportunities",
+  });
   const opportunitiesAgentList = useMemo(() => {
-    const src = opportunitiesTab === "enquiries" ? opportunitiesData.enquiries : opportunitiesTab === "quotes" ? opportunitiesData.quotes : opportunitiesData.bookings;
-    const agents = new Set<string>();
-    for (const item of src) { if (item.agentName) agents.add(item.agentName); }
-    return Array.from(agents).sort();
-  }, [opportunitiesTab, opportunitiesData]);
+    if (!opportunitiesAgentListRaw) return [];
+    return opportunitiesAgentListRaw.map((a) => ({ id: a.id, name: a.firstName || a.name || "Agent" }));
+  }, [opportunitiesAgentListRaw]);
 
   const liveClientsData = useMemo(() => {
     if (!transactionsData || !allNeonClientsData?.clients) return [];
@@ -2197,7 +2145,6 @@ export default function CommandCenterPage() {
     if (role === "Admin" && active === "overview") {
       return (
         <AdminOverview
-          transactionsData={transactionsData as any[] | undefined}
           apiUsers={apiUsers as any[] | undefined}
         />
       );
@@ -4189,20 +4136,17 @@ export default function CommandCenterPage() {
               </div>
             </div>
 
-            <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); setOpportunitiesAgentFilter("all"); }}>
+            <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); setOpportunitiesAgentFilter("all"); setOpportunitiesPage(1); }}>
               <div className="flex items-center gap-3 mb-3">
                 <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-opportunities">
                   <TabsTrigger value="enquiries" className="rounded-xl gap-1.5" data-testid="tab-opportunities-enquiries">
                     <ClipboardList className="h-3.5 w-3.5" /> Enquiries
-                    <Badge variant="secondary" className="ml-1 rounded-full text-[10px] px-1.5 py-0">{opportunitiesData.enquiries.length}</Badge>
                   </TabsTrigger>
                   <TabsTrigger value="quotes" className="rounded-xl gap-1.5" data-testid="tab-opportunities-quotes">
                     <Sparkles className="h-3.5 w-3.5" /> Quotes
-                    <Badge variant="secondary" className="ml-1 rounded-full text-[10px] px-1.5 py-0">{opportunitiesData.quotes.length}</Badge>
                   </TabsTrigger>
                   <TabsTrigger value="bookings" className="rounded-xl gap-1.5" data-testid="tab-opportunities-bookings">
                     <Ticket className="h-3.5 w-3.5" /> Bookings
-                    <Badge variant="secondary" className="ml-1 rounded-full text-[10px] px-1.5 py-0">{opportunitiesData.bookings.length}</Badge>
                   </TabsTrigger>
                 </TabsList>
 
@@ -4253,7 +4197,7 @@ export default function CommandCenterPage() {
                     data-testid="select-opportunities-agent"
                   >
                     <option value="all">All Agents</option>
-                    {opportunitiesAgentList.map((a) => <option key={a} value={a}>{a}</option>)}
+                    {opportunitiesAgentList.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 )}
 
@@ -4270,7 +4214,7 @@ export default function CommandCenterPage() {
                 </select>
 
                 <div className="ml-auto text-[10px] text-black/40 dark:text-white/40 tabular-nums">
-                  {filteredOpportunities.length} result{filteredOpportunities.length !== 1 ? "s" : ""}
+                  {opportunitiesLoading ? "Loading..." : `${opportunitiesTotal} result${opportunitiesTotal !== 1 ? "s" : ""}`}
                 </div>
               </div>
 
@@ -4378,6 +4322,40 @@ export default function CommandCenterPage() {
                   )}
                 </div>
               </TabsContent>
+
+              {opportunitiesTotalPages > 1 && (
+                <div className="flex items-center justify-between mt-3 px-1">
+                  <div className="text-[10px] text-black/40 dark:text-white/40 tabular-nums">
+                    Page {opportunitiesPage} of {opportunitiesTotalPages}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      disabled={opportunitiesPage <= 1}
+                      onClick={() => setOpportunitiesPage(1)}
+                      className="rounded-lg px-2 py-1 text-[10px] font-medium bg-black/5 dark:bg-white/5 disabled:opacity-30 hover:bg-black/10 dark:hover:bg-white/10 transition"
+                      data-testid="button-opportunities-first"
+                    >First</button>
+                    <button
+                      disabled={opportunitiesPage <= 1}
+                      onClick={() => setOpportunitiesPage((p) => Math.max(1, p - 1))}
+                      className="rounded-lg px-2 py-1 text-[10px] font-medium bg-black/5 dark:bg-white/5 disabled:opacity-30 hover:bg-black/10 dark:hover:bg-white/10 transition"
+                      data-testid="button-opportunities-prev"
+                    >Prev</button>
+                    <button
+                      disabled={opportunitiesPage >= opportunitiesTotalPages}
+                      onClick={() => setOpportunitiesPage((p) => Math.min(opportunitiesTotalPages, p + 1))}
+                      className="rounded-lg px-2 py-1 text-[10px] font-medium bg-black/5 dark:bg-white/5 disabled:opacity-30 hover:bg-black/10 dark:hover:bg-white/10 transition"
+                      data-testid="button-opportunities-next"
+                    >Next</button>
+                    <button
+                      disabled={opportunitiesPage >= opportunitiesTotalPages}
+                      onClick={() => setOpportunitiesPage(opportunitiesTotalPages)}
+                      className="rounded-lg px-2 py-1 text-[10px] font-medium bg-black/5 dark:bg-white/5 disabled:opacity-30 hover:bg-black/10 dark:hover:bg-white/10 transition"
+                      data-testid="button-opportunities-last"
+                    >Last</button>
+                  </div>
+                </div>
+              )}
             </Tabs>
           </Card>
         </section>
@@ -5845,7 +5823,7 @@ export default function CommandCenterPage() {
         action="Design client record"
       />
     );
-  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole, airportSearch, tourOperatorSearch, airportsList, tourOperators, countryMap]);
+  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole, airportSearch, tourOperatorSearch, airportsList, tourOperators, countryMap, opportunitiesTab, filteredOpportunities, opportunitiesTotal, opportunitiesTotalPages, opportunitiesPage, opportunitiesLoading, opportunitiesSearch, opportunitiesDateRange, opportunitiesStatusFilter, opportunitiesAgentFilter, opportunitiesSortBy, opportunitiesAgentList]);
 
   return (
     <div className={themeClass}>

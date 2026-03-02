@@ -26,6 +26,7 @@ import settingsRoutes from "./settings.routes";
 import clientFileRoutes from "./clientFile.routes";
 import userProfileRoutes from "./userProfile.routes";
 import emailRoutes from "./email.routes";
+import opportunitiesRoutes from "./opportunities.routes";
 
 const router = Router();
 
@@ -56,5 +57,6 @@ router.use("/settings", settingsRoutes);
 router.use("/client-files", clientFileRoutes);
 router.use("/user-profiles", userProfileRoutes);
 router.use("/emails", emailRoutes);
+router.use("/opportunities", opportunitiesRoutes);
 
 export default router;
