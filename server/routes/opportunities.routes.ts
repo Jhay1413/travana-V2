@@ -4,11 +4,8 @@ import { enquiry_table, quote, booking, transaction, clientTable, user } from "@
 import { eq, and, sql, ilike, or, gte, lte, count } from "drizzle-orm";
 import { asyncHandler } from "../utils/async-handler";
 import { successResponse } from "../utils/response";
-import { alias } from "drizzle-orm/pg-core";
 
 const router = Router();
-
-const agentUser = alias(user, "agent_user");
 
 function getDateRange(range: string): { start?: Date; end?: Date } {
   const now = new Date();
@@ -77,7 +74,7 @@ router.get(
       conditions.push(eq(enquiry_table.status, status));
     }
     if (agentId && agentId !== "all") {
-      conditions.push(sql`("transaction"."agent_id" = ${agentId} OR ${transaction.user_id} = ${agentId})`);
+      conditions.push(eq(transaction.user_id, agentId));
     }
     if (dateRange && dateRange !== "all-time") {
       const { start, end } = getDateRange(dateRange);
@@ -122,8 +119,6 @@ router.get(
         clientSurname: clientTable.surename,
         clientPhone: clientTable.phoneNumber,
         userId: transaction.user_id,
-        agentFirstName: agentUser.firstName,
-        agentName: agentUser.name,
         title: enquiry_table.title,
         status: enquiry_table.status,
         travelDate: enquiry_table.travel_date,
@@ -132,11 +127,13 @@ router.get(
         children: enquiry_table.children,
         budget: enquiry_table.budget,
         nights: enquiry_table.no_of_nights,
+        agentFirstName: user.firstName,
+        agentName: user.name,
       })
       .from(enquiry_table)
       .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
       .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .leftJoin(agentUser, sql`(${agentUser.id} = "transaction"."agent_id" OR ${agentUser.id} = ${transaction.user_id})`)
+      .leftJoin(user, eq(user.id, transaction.user_id))
       .where(whereClause)
       .orderBy(orderBy)
       .limit(limit)
@@ -182,7 +179,7 @@ router.get(
       conditions.push(eq(quote.quote_status, status));
     }
     if (agentId && agentId !== "all") {
-      conditions.push(sql`(${transaction}.agent_id = ${agentId} OR ${transaction.user_id} = ${agentId})`);
+      conditions.push(eq(transaction.user_id, agentId));
     }
     if (dateRange && dateRange !== "all-time") {
       const { start, end } = getDateRange(dateRange);
@@ -227,8 +224,8 @@ router.get(
         clientSurname: clientTable.surename,
         clientPhone: clientTable.phoneNumber,
         userId: transaction.user_id,
-        agentFirstName: agentUser.firstName,
-        agentName: agentUser.name,
+        agentFirstName: user.firstName,
+        agentName: user.name,
         title: quote.title,
         status: quote.quote_status,
         travelDate: quote.travel_date,
@@ -242,7 +239,7 @@ router.get(
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
       .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .leftJoin(agentUser, sql`(${agentUser.id} = ${transaction}.agent_id OR ${agentUser.id} = ${transaction.user_id})`)
+      .leftJoin(user, eq(user.id, transaction.user_id))
       .where(whereClause)
       .orderBy(orderBy)
       .limit(limit)
@@ -289,7 +286,7 @@ router.get(
       conditions.push(eq(booking.booking_status, status));
     }
     if (agentId && agentId !== "all") {
-      conditions.push(sql`(${transaction}.agent_id = ${agentId} OR ${transaction.user_id} = ${agentId})`);
+      conditions.push(eq(transaction.user_id, agentId));
     }
     if (dateRange && dateRange !== "all-time") {
       const { start, end } = getDateRange(dateRange);
@@ -335,8 +332,8 @@ router.get(
         clientSurname: clientTable.surename,
         clientPhone: clientTable.phoneNumber,
         userId: transaction.user_id,
-        agentFirstName: agentUser.firstName,
-        agentName: agentUser.name,
+        agentFirstName: user.firstName,
+        agentName: user.name,
         title: booking.title,
         status: booking.booking_status,
         travelDate: booking.travel_date,
@@ -352,7 +349,7 @@ router.get(
       .from(booking)
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
       .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .leftJoin(agentUser, sql`(${agentUser.id} = ${transaction}.agent_id OR ${agentUser.id} = ${transaction.user_id})`)
+      .leftJoin(user, eq(user.id, transaction.user_id))
       .where(whereClause)
       .orderBy(orderBy)
       .limit(limit)
