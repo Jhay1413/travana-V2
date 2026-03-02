@@ -474,6 +474,20 @@ export default function BookingPage() {
                     </div>
                   </div>
 
+                  <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3" data-testid="card-booking-references">
+                    <div className="text-xs font-semibold text-emerald-800 mb-2">Booking References</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-hays-reference">
+                        <div className="text-xs font-semibold text-black/65">HAYS Reference</div>
+                        <div className="text-xs font-semibold text-black" data-testid="text-hays-reference-value">{booking.haysRef || "—"}</div>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-tour-reference">
+                        <div className="text-xs font-semibold text-black/65">Supplier Reference</div>
+                        <div className="text-xs font-semibold text-black" data-testid="text-tour-reference-value">{booking.supplierRef || "—"}</div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
                     {booking.packageType?.toLowerCase().includes("hot tub") ? (
                       <>
@@ -611,20 +625,6 @@ export default function BookingPage() {
                         </div>
                       </>
                     )}
-                  </div>
-
-                  <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3" data-testid="card-booking-references">
-                    <div className="text-xs font-semibold text-emerald-800 mb-2">Booking References</div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-hays-reference">
-                        <div className="text-xs font-semibold text-black/65">HAYS Reference</div>
-                        <div className="text-xs font-semibold text-black" data-testid="text-hays-reference-value">{booking.haysRef || "—"}</div>
-                      </div>
-                      <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-tour-reference">
-                        <div className="text-xs font-semibold text-black/65">Supplier Reference</div>
-                        <div className="text-xs font-semibold text-black" data-testid="text-tour-reference-value">{booking.supplierRef || "—"}</div>
-                      </div>
-                    </div>
                   </div>
 
                   <QuoteNotesSection transactionId={booking.transaction_id} />
