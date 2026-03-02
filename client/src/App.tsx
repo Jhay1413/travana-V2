@@ -16,7 +16,7 @@ import TicketPage from "@/pages/ticket";
 import AdminImportPage from "@/pages/admin-import";
 import AdminLookupPage from "@/pages/admin-lookup";
 import SettingsLookupPage from "@/pages/settings-lookup";
-import BookingPage from "@/pages/booking";
+import BookingPage from "@/pages/booking-standalone";
 import PipelinePage from "@/pages/pipeline";
 import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";

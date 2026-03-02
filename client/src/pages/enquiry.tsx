@@ -626,8 +626,10 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
 export default function EnquiryPage() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/clients/:clientId/enquiries/:enquiryId");
-  const clientId = params?.clientId || "";
-  const enquiryId = params?.enquiryId || "";
+  const [, freeParams] = useRoute("/enquiries/:enquiryId");
+  const resolvedParams = params ?? freeParams;
+  const clientId = resolvedParams?.clientId || "";
+  const enquiryId = resolvedParams?.enquiryId || "";
   const { role, setRole } = useRole();
 
   const { data: enquiry, isLoading } = useEnquiry(enquiryId);
