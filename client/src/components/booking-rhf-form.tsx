@@ -99,6 +99,8 @@ export function BookingRHFForm({
   const passengersAdults = watch("passengersAdults");
   const passengersChildren = watch("passengersChildren");
   const cruiseOnly = watch("cruiseOnly");
+  const tourOperatorId = watch("tourOperatorId");
+  const price = watch("price");
 
 
   // ── Lookup data ──────────────────────────────────────────────────────────
@@ -162,6 +164,23 @@ export function BookingRHFForm({
     const total = adults + children;
     setValue("pricePerPerson", total > 0 ? parseFloat((price / total).toFixed(2)) : 0);
   }, [passengersAdults, passengersChildren]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Commission auto-calculation ───────────────────────────────────────────
+  useEffect(() => {
+    if (tourOperatorId && packageType && tourOperatorsData) {
+      const currentPrice = Number(price) || 0;
+      const op = tourOperatorsData.find((o: { id: string }) => o.id === tourOperatorId);
+      const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === packageType);
+      if (commission?.percentage_commission != null && currentPrice > 0) {
+        const calculatedCommission = parseFloat(((currentPrice * parseFloat(commission.percentage_commission)) / 100).toFixed(2));
+        // Only update if different from current value to avoid infinite loops
+        const currentCommission = form.getValues("commission");
+        if (currentCommission !== calculatedCommission) {
+          setValue("commission", calculatedCommission);
+        }
+      }
+    }
+  }, [tourOperatorId, packageType, price, tourOperatorsData, form, setValue]);
 
   // ── Options ───────────────────────────────────────────────────────────────
   const airportOptions = (airportsData || []).map(

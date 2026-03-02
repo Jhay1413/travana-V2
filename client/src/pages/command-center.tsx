@@ -6,13 +6,16 @@ import axios from "@/api/client/axios-client";
 import { authApi, opportunitiesApi } from "@/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
-import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useTickets, useChatConversations, useChatMessages, authKeys } from "@/hooks/queries";
+import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useAllTasksExtended, useTickets, useChatConversations, useChatMessages, authKeys } from "@/hooks/queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import EmailInbox from "@/components/email-inbox";
 import AdminOverview from "@/components/admin-overview";
+import PipelineBoard from "@/components/pipeline-board";
+import SocialPostsBoard from "@/components/social-posts-board";
+import TicketsBoard from "@/components/tickets-board";
 import ChatRichInput from "@/components/chat-rich-input";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { NotificationToast } from "@/components/command-center-shell";
@@ -22,6 +25,7 @@ import type { CreateClientData } from "@/types/client";
 import type { EnrichedQuote } from "@/types/quote";
 import {
   Activity,
+  AlertCircle,
   BadgeCheck,
   Banknote,
   BarChart3,
@@ -461,10 +465,10 @@ function ShellNav({
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-      { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
+      { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
-      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
-      { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, route: "/tickets" },
+      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
+      { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
@@ -493,10 +497,10 @@ function ShellNav({
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
-              { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" />, route: "/pipeline" },
+              { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
-              { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" />, route: "/social-posts" },
-              { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, route: "/tickets" },
+              { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
+              { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ] as NavItem[],
@@ -1027,6 +1031,11 @@ function TopBar({
   const { user: currentUser } = useAuth();
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
+  const [showSelectClientDialog, setShowSelectClientDialog] = useState(false);
+  const [selectClientIntent, setSelectClientIntent] = useState<"enquiry" | "quote" | "booking" | "task" | "ticket" | null>(null);
+  const [selectClientSearch, setSelectClientSearch] = useState("");
+  const [selectClientId, setSelectClientId] = useState<string | null>(null);
+  const { data: selectClientResults } = useNeonClients({ page: 1, limit: 20, search: selectClientSearch.trim() || undefined });
   const [newClientForm, setNewClientForm] = useState({
     clientType: "New Client",
     title: "",
@@ -1257,21 +1266,25 @@ function TopBar({
                   <UserRound className="mr-2 h-4 w-4" />
                   New Client
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-enquiry">
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-enquiry" onClick={() => { setSelectClientIntent("enquiry"); setSelectClientSearch(""); setSelectClientId(null); setShowSelectClientDialog(true); }}>
                   <Sparkles className="mr-2 h-4 w-4" />
                   Enquiry
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-quote">
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-quote" onClick={() => { setSelectClientIntent("quote"); setSelectClientSearch(""); setSelectClientId(null); setShowSelectClientDialog(true); }}>
                   <FileText className="mr-2 h-4 w-4" />
                   Quote
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-booking">
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-booking" onClick={() => { setSelectClientIntent("booking"); setSelectClientSearch(""); setSelectClientId(null); setShowSelectClientDialog(true); }}>
                   <Ticket className="mr-2 h-4 w-4" />
                   Booking
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-task">
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-task" onClick={() => { setSelectClientIntent("task"); setSelectClientSearch(""); setSelectClientId(null); setShowSelectClientDialog(true); }}>
                   <ClipboardList className="mr-2 h-4 w-4" />
                   Task
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-ticket" onClick={() => { setSelectClientIntent("ticket"); setSelectClientSearch(""); setSelectClientId(null); setShowSelectClientDialog(true); }}>
+                  <AlertCircle className="mr-2 h-4 w-4" />
+                  Ticket
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1484,6 +1497,72 @@ function TopBar({
                     data-testid="button-save-client"
                   >
                     {createClientMutation.isPending ? "Creating..." : "Create Client"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={showSelectClientDialog} onOpenChange={setShowSelectClientDialog}>
+              <DialogContent className="sm:max-w-[480px] rounded-2xl z-[300]">
+                <DialogHeader>
+                  <DialogTitle>
+                    Select Client for {selectClientIntent ? selectClientIntent.charAt(0).toUpperCase() + selectClientIntent.slice(1) : ""}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/50" />
+                    <Input
+                      value={selectClientSearch}
+                      onChange={(e) => setSelectClientSearch(e.target.value)}
+                      placeholder="Search clients…"
+                      className="h-10 rounded-xl pl-10"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-64 overflow-y-auto rounded-xl border border-black/10 dark:border-white/10">
+                    {selectClientResults?.clients && selectClientResults.clients.length > 0 ? (
+                      selectClientResults.clients.map((client) => (
+                        <button
+                          key={client.id}
+                          onClick={() => setSelectClientId(client.id)}
+                          className={cn(
+                            "w-full px-4 py-3 text-left border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors",
+                            selectClientId === client.id
+                              ? "bg-[#3b82f6]/10 text-[#3b82f6]"
+                              : "hover:bg-black/5 dark:hover:bg-white/5"
+                          )}
+                        >
+                          <div className="font-medium text-sm">{client.firstName} {client.surename}</div>
+                          <div className="text-xs text-black/50 dark:text-white/50">{client.phoneNumber}</div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-4 text-sm text-center text-black/50 dark:text-white/50">
+                        {selectClientSearch.trim() ? "No clients found" : "Start typing to search clients"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSelectClientDialog(false)}
+                    className="rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    disabled={!selectClientId}
+                    onClick={() => {
+                      if (selectClientId && selectClientIntent) {
+                        setShowSelectClientDialog(false);
+                        navigate(`/clients/${selectClientId}?create=${selectClientIntent}`);
+                      }
+                    }}
+                    className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                  >
+                    Continue
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -1780,7 +1859,7 @@ export default function CommandCenterPage() {
     return map;
   }, [countriesData]);
 
-  const { data: allTasksData } = useAllTasks();
+  const { data: allTasksData } = useAllTasksExtended();
   const { data: allTicketsData } = useTickets();
 
   const whatsOnDateRange = useMemo(() => {
@@ -1814,7 +1893,7 @@ export default function CommandCenterPage() {
   }, [whatsOnFilter, whatsOnDate]);
 
   const filteredTasks = useMemo(() => {
-    if (!allTasksData) return [];
+    if (!allTasksData || !Array.isArray(allTasksData)) return [];
     return allTasksData
       .filter((t) => {
         if (!t.dueDate) return false;
@@ -1825,7 +1904,7 @@ export default function CommandCenterPage() {
   }, [allTasksData, whatsOnDateRange]);
 
   const filteredTickets = useMemo(() => {
-    if (!allTicketsData) return [];
+    if (!allTicketsData || !Array.isArray(allTicketsData)) return [];
     return allTicketsData
       .filter((t) => {
         const created = new Date(t.createdAt);
@@ -1957,6 +2036,12 @@ export default function CommandCenterPage() {
   }, [opportunitiesSearch]);
 
   useEffect(() => {
+    if (currentUser?.id) {
+      setOpportunitiesAgentFilter(currentUser.id);
+    }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     setOpportunitiesPage(1);
   }, [opportunitiesTab, opportunitiesStatusFilter, debouncedOpportunitiesSearch, opportunitiesDateRange, opportunitiesSortBy, opportunitiesAgentFilter]);
 
@@ -1973,10 +2058,10 @@ export default function CommandCenterPage() {
   const opportunitiesFetcher = opportunitiesTab === "enquiries" ? opportunitiesApi.getEnquiries : opportunitiesTab === "quotes" ? opportunitiesApi.getQuotes : opportunitiesApi.getBookings;
   const { data: opportunitiesResult, isLoading: opportunitiesLoading } = useQuery({
     queryKey: ["opportunities", opportunitiesTab, opportunitiesFilters],
-    queryFn: () => opportunitiesFetcher(opportunitiesFilters),
+    queryFn: () => opportunitiesFetcher(opportunitiesFilters) as Promise<{ items: any[]; total: number; totalPages: number }>,
     enabled: active === "opportunities",
-    keepPreviousData: true,
-  } as any);
+    placeholderData: (prev: any) => prev,
+  });
 
   const filteredOpportunities = opportunitiesResult?.items || [];
   const opportunitiesTotal = opportunitiesResult?.total || 0;
@@ -2956,6 +3041,18 @@ export default function CommandCenterPage() {
           </Card>
         </section>
       );
+    }
+
+    if (active === "pipeline") {
+      return <PipelineBoard />;
+    }
+
+    if (active === "social-posts") {
+      return <SocialPostsBoard />;
+    }
+
+    if (active === "tickets") {
+      return <TicketsBoard />;
     }
 
     // Clients section - UI-only copy of Overview for separate customization
@@ -4136,7 +4233,7 @@ export default function CommandCenterPage() {
               </div>
             </div>
 
-            <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); setOpportunitiesAgentFilter("all"); setOpportunitiesPage(1); }}>
+            <Tabs value={opportunitiesTab} onValueChange={(v) => { setOpportunitiesTab(v as any); setOpportunitiesStatusFilter("all"); setOpportunitiesSearch(""); setOpportunitiesAgentFilter(currentUser?.id || "all"); setOpportunitiesPage(1); }}>
               <div className="flex items-center gap-3 mb-3">
                 <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-opportunities">
                   <TabsTrigger value="enquiries" className="rounded-xl gap-1.5" data-testid="tab-opportunities-enquiries">
@@ -5823,7 +5920,7 @@ export default function CommandCenterPage() {
         action="Design client record"
       />
     );
-  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole, airportSearch, tourOperatorSearch, airportsList, tourOperators, countryMap, opportunitiesTab, filteredOpportunities, opportunitiesTotal, opportunitiesTotalPages, opportunitiesPage, opportunitiesLoading, opportunitiesSearch, opportunitiesDateRange, opportunitiesStatusFilter, opportunitiesAgentFilter, opportunitiesSortBy, opportunitiesAgentList]);
+  }, [active, clients, role, tab, theme, setTheme, user, displayName, rolePreview, setRolePreview, actualRole, airportSearch, tourOperatorSearch, airportsList, tourOperators, countryMap, opportunitiesTab, filteredOpportunities, opportunitiesTotal, opportunitiesTotalPages, opportunitiesPage, opportunitiesLoading, opportunitiesSearch, opportunitiesDateRange, opportunitiesStatusFilter, opportunitiesAgentFilter, opportunitiesSortBy, opportunitiesAgentList, currentUser]);
 
   return (
     <div className={themeClass}>

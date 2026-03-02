@@ -262,7 +262,7 @@ export const transactionRepository = {
   ): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
     const conditions = [eq(transaction.status, status as "on_enquiry" | "on_quote" | "in_play" | "on_booking")];
     if (agentId) {
-      conditions.push(sql`(${transaction.agent_id} = ${agentId} OR ${transaction.user_id} = ${agentId})`);
+      conditions.push(eq(transaction.user_id, agentId));
     }
 
     if (status === "on_quote") {
@@ -350,7 +350,7 @@ export const transactionRepository = {
 
   async findByAgentId(agentId: string) {
     const txns = await db.select().from(transaction)
-      .where(or(eq(transaction.agent_id, agentId), eq(transaction.user_id, agentId)))
+      .where(eq(transaction.user_id, agentId))
       .orderBy(desc(transaction.created_at));
     return enrichTransactions(txns);
   },
@@ -381,7 +381,7 @@ export const transactionRepository = {
     const quotes = await db.select().from(quote).where(eq(quote.transaction_id, id));
     const [bookingResult] = await db.select().from(booking).where(eq(booking.transaction_id, id)).limit(1);
     const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
-    const [agent] = txn.agent_id ? await db.select().from(user).where(eq(user.id, txn.agent_id)).limit(1) : [undefined];
+    const [agent] = txn.user_id ? await db.select().from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];
 
     let enrichedEnquiry: any = enquiryResult || null;
     if (enquiryResult) {

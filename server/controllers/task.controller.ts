@@ -4,13 +4,19 @@ import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 import { AppError } from "../utils/error-handler";
 import { insertTasksSchema } from "@shared/schema";
+import { getUserId } from "../utils/get-user-id";
 
 export const taskController = {
   listAll: asyncHandler(async (req: Request, res: Response) => {
-    const tasks = await taskService.listAll();
+    const userId = getUserId(req);
+    const tasks = await taskService.listAll(userId || undefined);
     return successResponse(res, tasks);
   }),
-
+  listAllExtended: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const tasks = await taskService.listAllWithClientTasks(userId || undefined);
+    return successResponse(res, tasks);
+  }),
   listByEntity: asyncHandler(async (req: Request, res: Response) => {
     const { entityType, entityId } = req.query as { entityType?: string; entityId?: string };
     if (!entityType || !entityId) {

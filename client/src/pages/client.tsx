@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell } from "@/components/command-center-shell";
@@ -29,7 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNeonClient, useTransactions, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
-import { useUpdateClient, useUpdateNeonClient, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction, useCreateTicket } from "@/hooks/mutations";
+import { useUpdateClient, useUpdateNeonClient, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction, useCreateTicket, useCreateTask } from "@/hooks/mutations";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -82,7 +82,9 @@ export default function ClientPage() {
   const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
   const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
   const [showTaskDialog, setShowTaskDialog] = useState(false);
-  const [taskForm, setTaskForm] = useState({ subject: "", type: "Task", priority: "Medium", description: "" });
+  const [taskForm, setTaskForm] = useState({ title: "", dueDate: "", dueTime: "09:00" });
+  const [showTicketDialog, setShowTicketDialog] = useState(false);
+  const [ticketForm, setTicketForm] = useState({ subject: "", type: "Task", priority: "Medium", description: "" });
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
@@ -208,12 +210,24 @@ export default function ClientPage() {
   };
 
   const [showEnquiryWizard, setShowEnquiryWizard] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const create = params.get("create");
+    if (create === "enquiry") setShowEnquiryWizard(true);
+    else if (create === "quote") setShowQuoteCreateDialog(true);
+    else if (create === "booking") setShowBookingCreateDialog(true);
+    else if (create === "task") setShowTaskDialog(true);
+    else if (create === "ticket") setShowTicketDialog(true);
+  }, []);
+
   const [editingEnquiry, setEditingEnquiry] = useState<EnquiryTable | null>(null);
   const createEnquiryMutation = useCreateEnquiry();
   const updateEnquiryMutation = useUpdateEnquiry();
   const deleteEnquiryMutation = useDeleteEnquiry();
   const createTransactionMutation = useCreateTransaction();
   const createTicketMutation = useCreateTicket();
+  const createTaskMutation = useCreateTask("client", clientId || "");
 
   const handleEnquirySubmit = (data: Partial<EnquiryTable> & Record<string, unknown>) => {
     if (editingEnquiry) {
@@ -689,26 +703,7 @@ export default function ClientPage() {
                 </div>
                 <div className="mt-1 text-xs text-black/55" data-testid="text-client-right-subtitle">Knowing you client is the key to Rapport</div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  className="h-9 rounded-2xl bg-[#ff2f00e6] px-3 text-white hover:bg-[#ff2f00e6]/90"
-                  data-testid="button-client-new-task"
-                  onClick={() => { }}
-                >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Add task
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
-                  data-testid="button-client-new-item"
-                  onClick={() => { }}
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  New
-                </Button>
-              </div>
+              
             </div>
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
@@ -852,52 +847,35 @@ export default function ClientPage() {
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-1.5">
-              <Label htmlFor="task-subject">Subject <span className="text-red-500">*</span></Label>
+              <Label htmlFor="task-title">Task <span className="text-red-500">*</span></Label>
               <Input
-                id="task-subject"
+                id="task-title"
                 placeholder="What needs to be done?"
-                value={taskForm.subject}
-                onChange={(e) => setTaskForm((f) => ({ ...f, subject: e.target.value }))}
+                value={taskForm.title}
+                onChange={(e) => setTaskForm((f) => ({ ...f, title: e.target.value }))}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label htmlFor="task-type">Type</Label>
-                <Select value={taskForm.type} onValueChange={(v) => setTaskForm((f) => ({ ...f, type: v }))}>
-                  <SelectTrigger id="task-type" className="rounded-2xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Task">Task</SelectItem>
-                    <SelectItem value="Support">Support</SelectItem>
-                    <SelectItem value="General">General</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="task-due-date">Due Date <span className="text-red-500">*</span></Label>
+                <Input
+                  id="task-due-date"
+                  type="date"
+                  value={taskForm.dueDate}
+                  onChange={(e) => setTaskForm((f) => ({ ...f, dueDate: e.target.value }))}
+                  className="rounded-2xl"
+                />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="task-priority">Priority</Label>
-                <Select value={taskForm.priority} onValueChange={(v) => setTaskForm((f) => ({ ...f, priority: v }))}>
-                  <SelectTrigger id="task-priority" className="rounded-2xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Low">Low</SelectItem>
-                    <SelectItem value="Medium">Medium</SelectItem>
-                    <SelectItem value="High">High</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="task-due-time">Due Time</Label>
+                <Input
+                  id="task-due-time"
+                  type="time"
+                  value={taskForm.dueTime}
+                  onChange={(e) => setTaskForm((f) => ({ ...f, dueTime: e.target.value }))}
+                  className="rounded-2xl"
+                />
               </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="task-description">Description</Label>
-              <Textarea
-                id="task-description"
-                placeholder="Optional notes…"
-                rows={3}
-                value={taskForm.description}
-                onChange={(e) => setTaskForm((f) => ({ ...f, description: e.target.value }))}
-                className="rounded-2xl resize-none"
-              />
             </div>
           </div>
           <DialogFooter>
@@ -906,31 +884,122 @@ export default function ClientPage() {
             </Button>
             <Button
               className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-              disabled={!taskForm.subject.trim() || createTicketMutation.isPending}
+              disabled={!taskForm.title.trim() || !taskForm.dueDate || createTaskMutation.isPending}
               onClick={() => {
-                if (!taskForm.subject.trim() || !currentUser?.id) return;
-                createTicketMutation.mutate(
+                if (!taskForm.title.trim() || !taskForm.dueDate || !currentUser?.id) return;
+                const dueDate = new Date(`${taskForm.dueDate}T${taskForm.dueTime || "09:00"}`);
+                createTaskMutation.mutate(
                   {
-                    clientId,
+                    entityType: "client",
+                    entityId: clientId,
                     userId: currentUser.id,
-                    type: taskForm.type,
-                    status: "Open",
-                    priority: taskForm.priority,
-                    subject: taskForm.subject.trim(),
-                    description: taskForm.description.trim() || null,
+                    title: taskForm.title.trim(),
+                    dueDate: dueDate,
+                    completed: false,
+                    notified: false,
                   },
                   {
                     onSuccess: () => {
                       toast({ title: "Task created" });
                       setShowTaskDialog(false);
-                      setTaskForm({ subject: "", type: "Task", priority: "Medium", description: "" });
+                      setTaskForm({ title: "", dueDate: "", dueTime: "09:00" });
                     },
                     onError: () => toast({ title: "Failed to create task", variant: "destructive" }),
                   }
                 );
               }}
             >
-              {createTicketMutation.isPending ? "Creating…" : "Create Task"}
+              {createTaskMutation.isPending ? "Creating…" : "Create Task"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showTicketDialog} onOpenChange={setShowTicketDialog}>
+        <DialogContent className="z-[500] max-w-md rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Create Ticket</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="ticket-subject">Subject <span className="text-red-500">*</span></Label>
+              <Input
+                id="ticket-subject"
+                placeholder="What needs to be done?"
+                value={ticketForm.subject}
+                onChange={(e) => setTicketForm((f) => ({ ...f, subject: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="ticket-type">Type</Label>
+                <Select value={ticketForm.type} onValueChange={(v) => setTicketForm((f) => ({ ...f, type: v }))}>
+                  <SelectTrigger id="ticket-type" className="rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[600]">
+                    <SelectItem value="Task">Task</SelectItem>
+                    <SelectItem value="Support">Support</SelectItem>
+                    <SelectItem value="General">General</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="ticket-priority">Priority</Label>
+                <Select value={ticketForm.priority} onValueChange={(v) => setTicketForm((f) => ({ ...f, priority: v }))}>
+                  <SelectTrigger id="ticket-priority" className="rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[600]">
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="ticket-description">Description</Label>
+              <Textarea
+                id="ticket-description"
+                placeholder="Optional notes…"
+                rows={3}
+                value={ticketForm.description}
+                onChange={(e) => setTicketForm((f) => ({ ...f, description: e.target.value }))}
+                className="rounded-2xl resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-2xl" onClick={() => setShowTicketDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+              disabled={!ticketForm.subject.trim() || createTicketMutation.isPending}
+              onClick={() => {
+                if (!ticketForm.subject.trim() || !currentUser?.id) return;
+                createTicketMutation.mutate(
+                  {
+                    clientId,
+                    userId: currentUser.id,
+                    type: ticketForm.type,
+                    status: "Open",
+                    priority: ticketForm.priority,
+                    subject: ticketForm.subject.trim(),
+                    description: ticketForm.description.trim() || null,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "Ticket created" });
+                      setShowTicketDialog(false);
+                      setTicketForm({ subject: "", type: "Task", priority: "Medium", description: "" });
+                    },
+                    onError: () => toast({ title: "Failed to create ticket", variant: "destructive" }),
+                  }
+                );
+              }}
+            >
+              {createTicketMutation.isPending ? "Creating…" : "Create Ticket"}
             </Button>
           </DialogFooter>
         </DialogContent>

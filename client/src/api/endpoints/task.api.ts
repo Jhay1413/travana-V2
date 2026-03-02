@@ -9,6 +9,11 @@ export const taskApi = {
     return data;
   },
 
+  getAllExtended: async (): Promise<TaskWithClient[]> => {
+    const { data } = await axiosClient.get<TaskWithClient[]>("/api/tasks/all-extended");
+    return data;
+  },
+
   getByEntity: async (entityType: string, entityId: string): Promise<TaskNew[]> => {
     const { data } = await axiosClient.get<TaskNew[]>(`/api/tasks?entityType=${entityType}&entityId=${entityId}`);
     return data;

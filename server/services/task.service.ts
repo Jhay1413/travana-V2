@@ -6,8 +6,12 @@ type TaskNew = typeof tasks.$inferSelect;
 type InsertTaskNew = typeof tasks.$inferInsert;
 
 export const taskService = {
-  async listAll(): Promise<TaskWithClient[]> {
-    return await taskRepository.findAll();
+  async listAll(userId?: string): Promise<TaskWithClient[]> {
+    return await taskRepository.findAll(userId);
+  },
+
+  async listAllWithClientTasks(userId?: string): Promise<TaskWithClient[]> {
+    return await taskRepository.findAllWithClientTasks(userId);
   },
 
   async listByEntity(entityType: string, entityId: string): Promise<TaskNew[]> {

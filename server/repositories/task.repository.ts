@@ -20,11 +20,12 @@ function entityLink(entityType: string, entityId: string): string {
 export type TaskWithClient = TaskNew & { clientId: string | null; clientName: string | null; tags: string[] };
 
 export const taskRepository = {
-  async findAll(): Promise<TaskWithClient[]> {
-    const allTasks = await db
-      .select()
-      .from(tasks)
-      .orderBy(desc(tasks.dueDate));
+  async findAll(userId?: string): Promise<TaskWithClient[]> {
+    const query = db.select().from(tasks);
+    
+    const allTasks = userId
+      ? await query.where(eq(tasks.userId, userId)).orderBy(desc(tasks.dueDate))
+      : await query.orderBy(desc(tasks.dueDate));
 
     if (allTasks.length === 0) return [];
 
@@ -90,6 +91,108 @@ export const taskRepository = {
 
     return allTasks.map(t => {
       const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
+      const txId = transactionIdMap.get(key);
+      const cid = txId ? clientIdMap.get(txId) ?? null : null;
+      const clientName = cid ? clientNameMap.get(cid) ?? null : null;
+      return { ...t, clientId: cid, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
+    });
+  },
+
+  async findAllWithClientTasks(userId?: string): Promise<TaskWithClient[]> {
+    const query = db.select().from(tasks);
+    
+    const allTasks = userId
+      ? await query.where(eq(tasks.userId, userId)).orderBy(desc(tasks.dueDate))
+      : await query.orderBy(desc(tasks.dueDate));
+
+    if (allTasks.length === 0) return [];
+
+    const quoteEntityIds = allTasks
+      .filter(t => t.entityType === "quote" || t.entityType === "booking")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+    const enquiryEntityIds = allTasks
+      .filter(t => t.entityType === "enquiry")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+    const clientEntityIds = allTasks
+      .filter(t => t.entityType === "client")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+
+    const transactionIdMap = new Map<string, string>();
+    const directClientIdMap = new Map<string, string>();
+
+    if (quoteEntityIds.length > 0) {
+      const quoteRows = await db
+        .select({ id: quote.id, transaction_id: quote.transaction_id })
+        .from(quote)
+        .where(inArray(quote.id, quoteEntityIds));
+      for (const q of quoteRows) {
+        transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
+        transactionIdMap.set(`booking:${q.id}`, q.transaction_id);
+      }
+    }
+
+    if (enquiryEntityIds.length > 0) {
+      const enquiryRows = await db
+        .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id })
+        .from(enquiry_table)
+        .where(inArray(enquiry_table.id, enquiryEntityIds));
+      for (const e of enquiryRows) {
+        transactionIdMap.set(`enquiry:${e.id}`, e.transaction_id);
+      }
+    }
+
+    // For tasks with entityType "client", entityId is the clientId directly
+    for (const clientId of clientEntityIds) {
+      directClientIdMap.set(`client:${clientId}`, clientId);
+    }
+
+    const uniqueTransactionIds = Array.from(new Set(Array.from(transactionIdMap.values())));
+    const clientIdMap = new Map<string, string>();
+
+    if (uniqueTransactionIds.length > 0) {
+      const txRows = await db
+        .select({ id: transaction.id, client_id: transaction.client_id })
+        .from(transaction)
+        .where(inArray(transaction.id, uniqueTransactionIds));
+      for (const tx of txRows) {
+        if (tx.client_id) {
+          clientIdMap.set(tx.id, tx.client_id);
+        }
+      }
+    }
+
+    // Combine clientIds from transactions and direct client tasks
+    const allClientIds = new Set([
+      ...Array.from(clientIdMap.values()),
+      ...Array.from(directClientIdMap.values())
+    ]);
+    const uniqueClientIds = Array.from(allClientIds);
+    const clientNameMap = new Map<string, string>();
+
+    if (uniqueClientIds.length > 0) {
+      const clientRows = await db
+        .select({ id: clientTable.id, firstName: clientTable.firstName, surename: clientTable.surename })
+        .from(clientTable)
+        .where(inArray(clientTable.id, uniqueClientIds));
+      for (const c of clientRows) {
+        clientNameMap.set(c.id, [c.firstName, c.surename].filter(Boolean).join(" "));
+      }
+    }
+
+    return allTasks.map(t => {
+      const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
+      
+      // Check if this is a direct client task first
+      const directClientId = directClientIdMap.get(key);
+      if (directClientId) {
+        const clientName = clientNameMap.get(directClientId) ?? null;
+        return { ...t, clientId: directClientId, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
+      }
+      
+      // Otherwise, look up via transaction
       const txId = transactionIdMap.get(key);
       const cid = txId ? clientIdMap.get(txId) ?? null : null;
       const clientName = cid ? clientNameMap.get(cid) ?? null : null;

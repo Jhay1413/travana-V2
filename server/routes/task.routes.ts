@@ -4,6 +4,7 @@ import { taskController } from "../controllers/task.controller";
 const router = Router();
 
 router.get("/all", taskController.listAll);
+router.get("/all-extended", taskController.listAllExtended);
 router.get("/", taskController.listByEntity);
 router.get("/user", taskController.listByUser);
 router.post("/", taskController.create);

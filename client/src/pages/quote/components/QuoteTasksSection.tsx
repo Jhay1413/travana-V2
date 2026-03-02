@@ -39,11 +39,13 @@ export function QuoteTasksSection({ quoteId, entityType = "quote" }: QuoteTasksS
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
       {
-        transaction_id: quoteId,
-        user_id: currentUser.id,
+        entityType: taskEntityType,
+        entityId: quoteId,
+        userId: currentUser.id,
         title: newTitle,
-        due_date: dueDate,
-        status: "pending",
+        dueDate: dueDate,
+        completed: false,
+        notified: false,
       },
       {
         onSuccess: () => {

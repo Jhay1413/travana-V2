@@ -10,6 +10,8 @@ export function useCreateTask(entityType: string, entityId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.byEntity(entityType, entityId) });
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      queryClient.invalidateQueries({ queryKey: taskKeys.list() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.listExtended() });
     },
   });
 }
