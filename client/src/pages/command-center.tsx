@@ -415,7 +415,17 @@ function ShellNav({
   onRoleChange: (role: Role | null) => void;
 }) {
   const [, navigate] = useLocation();
-  type NavItem = { key: string; label: string; icon: React.ReactNode; route?: string; children?: NavItem[]; subGroups?: { label: string; items: NavItem[] }[] };
+  const { data: sidebarTickets } = useTickets();
+  const { data: sidebarChats } = useChatConversations();
+  const openTicketCount = useMemo(() => {
+    if (!sidebarTickets || !Array.isArray(sidebarTickets)) return 0;
+    return sidebarTickets.filter((t: any) => t.status === "Open" || t.status === "In Progress").length;
+  }, [sidebarTickets]);
+  const unreadChatCount = useMemo(() => {
+    if (!sidebarChats || !Array.isArray(sidebarChats)) return 0;
+    return sidebarChats.filter((c: any) => c.unreadCount > 0).reduce((sum: number, c: any) => sum + c.unreadCount, 0);
+  }, [sidebarChats]);
+  type NavItem = { key: string; label: string; icon: React.ReactNode; route?: string; children?: NavItem[]; subGroups?: { label: string; items: NavItem[] }[]; badge?: number };
   type NavSection = { id: string; label: string; icon: React.ReactNode; items: NavItem[] };
   const nav = useMemo(() => {
     const settingsChildren: NavItem[] = [
@@ -472,8 +482,8 @@ function ShellNav({
       { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
-      { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
-      { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+      { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, badge: openTicketCount },
+      { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
@@ -504,8 +514,8 @@ function ShellNav({
               { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
-              { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
-              { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+              { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, badge: openTicketCount },
+              { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ] as NavItem[],
           },
@@ -543,7 +553,7 @@ function ShellNav({
     }
 
     return { grouped: false as const, items: base, sections: undefined as NavSection[] | undefined };
-  }, [role]);
+  }, [role, openTicketCount, unreadChatCount]);
 
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
     const saved = sessionStorage.getItem("admin-nav-expanded");
@@ -682,6 +692,9 @@ function ShellNav({
                                     <span className="text-black/70 dark:text-white/80">{item.icon}</span>
                                   </span>
                                   <span className="text-sm font-medium">{item.label}</span>
+                                  {item.badge != null && item.badge > 0 && (
+                                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">{item.badge}</span>
+                                  )}
                                 </div>
                                 {hasSubGroups ? (
                                   <motion.div animate={{ rotate: isItemExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
@@ -838,6 +851,9 @@ function ShellNav({
                       <span className="text-black/70 dark:text-white/80">{item.icon}</span>
                     </span>
                     <span className="text-sm font-medium">{item.label}</span>
+                    {item.badge != null && item.badge > 0 && (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">{item.badge}</span>
+                    )}
                   </div>
                   {hasChildren ? (
                     <ChevronDown className={"h-4 w-4 transition-transform " + (isOpen ? "rotate-0" : "-rotate-90") + " " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
