@@ -2457,14 +2457,12 @@ export default function CommandCenterPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(ticket.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                                 <span className="truncate text-sm font-medium" data-testid={`text-whats-on-ticket-subject-${ticket.id}`}>
+                                  {ticket.clientName && <span className="text-blue-600 dark:text-blue-400">{ticket.clientName} — </span>}
                                   {ticket.subject}
                                 </span>
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                                {ticket.clientName && <span>{ticket.clientName}</span>}
                                 <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
                                   ticket.priority === "Urgent" ? "border-red-500/25 bg-red-500/10 text-red-700" :
                                   ticket.priority === "High" ? "border-amber-500/25 bg-amber-500/10 text-amber-700" :
@@ -3959,14 +3957,12 @@ export default function CommandCenterPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(ticket.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                                 <span className="truncate text-sm font-medium" data-testid={`text-workspace-ticket-subject-${ticket.id}`}>
+                                  {ticket.clientName && <span className="text-blue-600 dark:text-blue-400">{ticket.clientName} — </span>}
                                   {ticket.subject}
                                 </span>
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                                {ticket.clientName && <span>{ticket.clientName}</span>}
                                 <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
                                   ticket.priority === "Urgent" ? "border-red-500/25 bg-red-500/10 text-red-700" :
                                   ticket.priority === "High" ? "border-amber-500/25 bg-amber-500/10 text-amber-700" :
