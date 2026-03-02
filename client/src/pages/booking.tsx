@@ -1,5 +1,1 @@
-import QuotePage from "./quote";
-
-export default function BookingPage() {
-  return <QuotePage isBooking />;
-}
+export { default } from "./booking-standalone";
