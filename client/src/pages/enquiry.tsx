@@ -114,7 +114,7 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) => void;
           <button key={cat.label} type="button" onClick={() => setActiveTab(i)} className={cn("rounded-lg px-2 py-1 text-[10px] font-semibold transition", activeTab === i ? "bg-black/10 text-black" : "text-black/50 hover:text-black/70")} data-testid={`emoji-tab-${cat.label}`}>{cat.label}</button>
         ))}
       </div>
-      <div className="grid grid-cols-10 gap-0.5 p-2">
+      <div className="grid grid-cols-8 sm:grid-cols-10 gap-0.5 p-2">
         {EMOJI_CATEGORIES[activeTab].emojis.map((emoji) => (
           <button key={emoji} type="button" onClick={() => { onSelect(emoji); onClose(); }} className="flex h-7 w-7 items-center justify-center rounded-lg text-base transition hover:bg-black/5" data-testid={`emoji-${emoji}`}>{emoji}</button>
         ))}
@@ -817,7 +817,7 @@ export default function EnquiryPage() {
             </div>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
+          <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
             <div className="space-y-5">
               <Card className="rounded-3xl border-black/10 bg-white/70 p-5" data-testid="card-holiday-details">
                 <div className="flex items-center gap-2 mb-4">

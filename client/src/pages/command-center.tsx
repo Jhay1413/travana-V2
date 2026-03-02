@@ -1203,7 +1203,7 @@ function TopBar({
           <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
             {title}
           </h1>
-          <div className="relative hidden sm:block w-[320px] z-[9999]" ref={searchRef}>
+          <div className="relative hidden md:block w-[280px] lg:w-[320px] z-[9999]" ref={searchRef}>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/50 z-10" />
             <Input
               value={query}
@@ -3002,7 +3002,7 @@ export default function CommandCenterPage() {
     if (active === "connect-internal-chat") {
       const currentUserId = currentUser?.id;
       return (
-        <section className="grid h-[calc(100vh-12rem)] gap-4 lg:grid-cols-[320px_1fr]" data-testid="section-live-chat">
+        <section className="grid gap-4 lg:grid-cols-[320px_1fr] h-[60vh] lg:h-[calc(100vh-12rem)]" data-testid="section-live-chat">
           <Card className="glass ringed grain flex flex-col rounded-3xl p-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-black/10 px-4 py-3 dark:border-white/10">
               <div className="space-y-0.5">
@@ -4606,7 +4606,8 @@ export default function CommandCenterPage() {
               </div>
 
               <TabsContent value="enquiries" className="mt-0">
-                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden">
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden overflow-x-auto">
+                  <div className="min-w-[600px]">
                   <div className="grid grid-cols-[1.5fr_1fr_.8fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] text-[10px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">
                     <div>Client</div><div>Title</div><div>Status</div><div>Travel Date</div><div>Guests</div><div>Budget</div><div>Created</div>
                   </div>
@@ -4635,11 +4636,13 @@ export default function CommandCenterPage() {
                   ) : (
                     <div className="px-4 py-8 text-center text-xs text-black/40 dark:text-white/40">No enquiries found.</div>
                   )}
+                  </div>
                 </div>
               </TabsContent>
 
               <TabsContent value="quotes" className="mt-0">
-                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden">
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden overflow-x-auto">
+                  <div className="min-w-[700px]">
                   <div className="grid grid-cols-[1.3fr_1fr_.8fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] text-[10px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">
                     <div>Client</div><div>Title</div><div>Status</div><div>Travel Date</div><div>Guests</div><div>Price</div><div>Commission</div><div>Created</div>
                   </div>
@@ -4669,11 +4672,13 @@ export default function CommandCenterPage() {
                   ) : (
                     <div className="px-4 py-8 text-center text-xs text-black/40 dark:text-white/40">No quotes found.</div>
                   )}
+                  </div>
                 </div>
               </TabsContent>
 
               <TabsContent value="bookings" className="mt-0">
-                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden">
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden overflow-x-auto">
+                  <div className="min-w-[800px]">
                   <div className="grid grid-cols-[1.2fr_1fr_.7fr_.6fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] text-[10px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">
                     <div>Client</div><div>Title</div><div>Status</div><div>Travel Date</div><div>Guests</div><div>Price</div><div>Commission</div><div>Refs</div><div>Created</div>
                   </div>
@@ -4707,6 +4712,7 @@ export default function CommandCenterPage() {
                   ) : (
                     <div className="px-4 py-8 text-center text-xs text-black/40 dark:text-white/40">No bookings found.</div>
                   )}
+                  </div>
                 </div>
               </TabsContent>
 

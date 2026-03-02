@@ -1560,14 +1560,14 @@ export function CommandCenterShell({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {filterSlot || (
                       <Select
                         value={quoteStatusFilter || "all"}
                         onValueChange={(v) => onQuoteStatusFilterChange?.(v)}
                       >
                         <SelectTrigger
-                          className="h-10 w-[200px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
+                          className="h-10 w-full sm:w-[200px] rounded-2xl border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/5 dark:text-white"
                           data-testid="select-quote-status"
                         >
                           <Filter className="mr-2 h-4 w-4 shrink-0 opacity-60" />

@@ -708,7 +708,7 @@ export default function ClientPage() {
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
               <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
-                <TabsList className="grid w-full grid-cols-6 rounded-2xl border border-black/10 bg-white/70">
+                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 rounded-2xl border border-black/10 bg-white/70">
                   <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-overview">
                     Overview
                   </TabsTrigger>

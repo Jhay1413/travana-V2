@@ -894,7 +894,7 @@ export default function TicketPage() {
                     data-testid="input-edit-subject"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="grid gap-2">
                     <Label>Type</Label>
                     <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
