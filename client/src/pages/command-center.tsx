@@ -2405,15 +2405,13 @@ export default function CommandCenterPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
                                 <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.dueDate || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                                 <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-whats-on-task-title-${task.id}`}>
                                   {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
                                   {task.title}
                                 </div>
-                              </div>
-                              <div className="mt-1 ml-4 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
                                 {task.tags?.map((tag: string) => (
                                   <span key={tag} className="inline-flex items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300" data-testid={`pill-whats-on-task-tag-${task.id}-${tag}`}>
                                     {tag}
@@ -3909,15 +3907,13 @@ export default function CommandCenterPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <div className={`h-2 w-2 shrink-0 rounded-full ${task.completed ? "bg-emerald-500" : "bg-amber-500"}`} />
                                 <span className="shrink-0 text-xs font-semibold text-black/60 dark:text-white/60">{new Date(task.dueDate || 0).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                                 <div className={`truncate text-sm font-medium ${task.completed ? "text-black/40 line-through dark:text-white/40" : ""}`} data-testid={`text-workspace-task-title-${task.id}`}>
                                   {task.clientName && <span className="text-blue-600 dark:text-blue-400">{task.clientName} — </span>}
                                   {task.title}
                                 </div>
-                              </div>
-                              <div className="mt-1 ml-4 flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-white/50">
                                 {task.tags?.map((tag: string) => (
                                   <span key={tag} className="inline-flex items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300" data-testid={`pill-workspace-task-tag-${task.id}-${tag}`}>
                                     {tag}
