@@ -43,24 +43,29 @@ export const dashboardRepository = {
   },
 
   async getMyProfit(userId: string): Promise<{ profitThisMonth: number }> {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    try {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    const [result] = await db
-      .select({
-        profit: sql<number>`COALESCE(SUM(CAST(NULLIF(${booking.package_commission}, '') AS NUMERIC)), 0)`,
-      })
-      .from(booking)
-      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-      .where(
-        and(
-          eq(transaction.user_id, userId),
-          gte(booking.date_created, startOfMonth),
-          lte(booking.date_created, endOfMonth)
-        )
-      );
+      const [result] = await db
+        .select({
+          profit: sql<number>`COALESCE(SUM(${booking.package_commission}), 0)`,
+        })
+        .from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .where(
+          and(
+            eq(transaction.user_id, userId),
+            gte(booking.date_created, startOfMonth),
+            lte(booking.date_created, endOfMonth)
+          )
+        );
 
-    return { profitThisMonth: Number(result?.profit || 0) };
+      return { profitThisMonth: Number(result?.profit || 0) };
+    } catch (err) {
+      console.error("[dashboard] getMyProfit error:", err);
+      return { profitThisMonth: 0 };
+    }
   },
 };
