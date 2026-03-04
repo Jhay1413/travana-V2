@@ -32,7 +32,7 @@ export const quoteFormSchema = z.object({
   childAges: z.array(z.coerce.number().int().min(0)).default([]),
   transferType: z.string().default(""),
   preBookedSeats: z.string().default(""),
-  flightMeals: z.string().default(""),
+  flightMeals: z.string().default("No"),
 
   // Destination / Accommodation
   country: z.string().default(""),
@@ -110,7 +110,7 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   childAges: [],
   transferType: "",
   preBookedSeats: "",
-  flightMeals: "",
+  flightMeals: "No",
   country: "",
   destination: "",
   resort: "",

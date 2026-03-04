@@ -347,6 +347,8 @@ export interface EnrichedQuote extends Quote {
   destination_name?: string | null;
   resort_id?: string | null;
   resort_name?: string | null;
+  departing_airport_name?: string | null;
+  client_id?: string | null;
   flights?: EnrichedQuoteFlight[];
   accommodations?: EnrichedQuoteAccommodation[];
   cruises?: EnrichedQuoteCruise[];
@@ -363,8 +365,10 @@ export interface EnrichedBooking extends Booking {
   destination_id?: string | null;
   destination_name?: string | null;
   resort_id?: string | null;
-  tags?: string[];
   resort_name?: string | null;
+  departing_airport_name?: string | null;
+  client_id?: string | null;
+  tags?: string[];
   flights?: EnrichedQuoteFlight[];
   accommodations?: EnrichedQuoteAccommodation[];
   cruises?: EnrichedQuoteCruise[];

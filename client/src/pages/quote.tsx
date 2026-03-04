@@ -424,16 +424,17 @@ export default function QuotePage() {
                               <span>{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                             </span>
                           </div>
-                          {quote.quoteLink && quote.quoteLink !== "#" && (
+                         
+                          {quoteData?.quote_ref && (
                             <a
-                              href={quote.quoteLink}
+                              href={quoteData.quote_ref}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#3b82f6] transition hover:text-[#3b82f6]/80"
-                              data-testid="link-quote-link"
+                              data-testid="link-view-link"
                             >
                               <LinkIcon className="h-3 w-3" />
-                              View Quote Link
+                              View Link
                             </a>
                           )}
                         </div>

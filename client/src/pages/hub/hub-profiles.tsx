@@ -42,7 +42,7 @@ import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/compone
 import { agentProfiles } from "@/data/hub-mock";
 import { userProfileApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
-import { useCurrentUser } from "@/hooks/queries";
+import { useCurrentUser, useMyProfit } from "@/hooks/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -459,6 +459,7 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
 
 export default function HubProfiles() {
   const { data: currentUser } = useCurrentUser();
+  const { data: myProfit } = useMyProfit();
   const queryClient = useQueryClient();
   const { data: savedProfile } = useQuery({
     queryKey: ["user-profile", "me"],
@@ -794,8 +795,14 @@ export default function HubProfiles() {
                   </div>
                   <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
                   <div className="text-center">
-                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">£48.2k</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Revenue QTD</p>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                      {myProfit && myProfit.profitThisMonth != null
+                        ? myProfit.profitThisMonth >= 1000
+                          ? `£${(myProfit.profitThisMonth / 1000).toFixed(1)}k`
+                          : `£${myProfit.profitThisMonth.toFixed(0)}`
+                        : "—"}
+                    </p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Profit This Month</p>
                   </div>
                 </div>
               </div>

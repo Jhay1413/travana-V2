@@ -5,4 +5,8 @@ export const dashboardService = {
   async getStats(): Promise<DashboardStats> {
     return await dashboardRepository.getStats();
   },
+
+  async getMyProfit(userId: string): Promise<{ profitThisMonth: number }> {
+    return await dashboardRepository.getMyProfit(userId);
+  },
 };

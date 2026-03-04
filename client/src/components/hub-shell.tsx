@@ -2,15 +2,12 @@ import { useState, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  BarChart3,
   Bell,
   BookOpen,
   Brain,
   ChevronRight,
   GraduationCap,
-  LayoutDashboard,
   LogOut,
-  Megaphone,
   Menu,
   Moon,
   Newspaper,
@@ -21,7 +18,6 @@ import {
   Sun,
   Trophy,
   User,
-  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,13 +26,12 @@ import { cn } from "@/lib/utils";
 import type { HubRole } from "@/data/hub-mock";
 
 const NAV_ITEMS = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/hub" },
+  { key: "profiles", label: "My Profile", icon: User, path: "/hub/profiles" },
   { key: "training", label: "Training Centre", icon: GraduationCap, path: "/hub/training" },
   { key: "ai-intel", label: "AI Destination Intelligence", icon: Brain, path: "/hub/ai-intel" },
   { key: "knowledge", label: "Knowledge Vault", icon: BookOpen, path: "/hub/knowledge" },
   { key: "deals", label: "Deal Wins Wall", icon: Trophy, path: "/hub/deals" },
   { key: "news", label: "News & Announcements", icon: Newspaper, path: "/hub/news" },
-  { key: "profiles", label: "Profiles", icon: Users, path: "/hub/profiles" },
   { key: "admin", label: "Admin", icon: Shield, path: "/hub/admin", ownerOnly: true },
 ];
 
@@ -68,7 +63,7 @@ export function HubShell({
 
   const activeKey = NAV_ITEMS.find((item) => location === item.path)?.key
     || NAV_ITEMS.find((item) => location.startsWith(item.path) && item.path !== "/hub")?.key
-    || "dashboard";
+    || "profiles";
 
   const filteredNav = NAV_ITEMS.filter((item) => {
     if ((item as any).ownerOnly && role !== "Owner") return false;

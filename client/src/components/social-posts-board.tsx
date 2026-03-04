@@ -64,7 +64,7 @@ function getHotelName(q: EnrichedQuote): string {
   return "—";
 }
 
-function getDepartingAirport(q: EnrichedQuote & { departing_airport_name?: string }): string {
+function getDepartingAirport(q: EnrichedQuote): string {
   const flights = q.flights ?? [];
   const outbound = flights.find((f) => f.flight_type === "outbound" && (f.leg_order === 0 || f.leg_order === null)) ?? flights.find((f) => f.flight_type === "outbound") ?? flights[0];
   return outbound?.departing_airport_name || q.departing_airport_name || "—";
@@ -116,9 +116,9 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Date:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-travel-date-${quote.id}`}>{formatDate(quote.travel_date)}</span></div>
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Date Created:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-created-${quote.id}`}>{formatDate(quote.date_created)}</span></div>
         </div>
-        {quote.deal_id && <div className="text-xs text-black/60 dark:text-white/50">Live Deal: <a href="#" className="text-blue-500 hover:underline" data-testid={`link-deal-${quote.id}`}>View Deal</a></div>}
+        {quote.quote_ref && <div className="text-xs text-black/60 dark:text-white/50">View Link: <a href={quote.quote_ref} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline" data-testid={`link-view-${quote.id}`}>View</a></div>}
         <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
-          <Link href={`/quotes/${quote.id}`}>
+          <Link href={`/clients/${post.clientId}/quotes/${quote.id}`}>
             <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2" data-testid={`button-view-quote-${quote.id}`}><Eye className="w-4 h-4" />View Quote</Button>
           </Link>
           <div className="mt-4" />

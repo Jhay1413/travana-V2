@@ -30,7 +30,7 @@ export const bookingFormSchema = z.object({
   childAges: z.array(z.coerce.number().int().min(0)).default([]),
   transferType: z.string().default(""),
   preBookedSeats: z.string().default(""),
-  flightMeals: z.string().default(""),
+  flightMeals: z.string().default("No"),
 
   country: z.string().default(""),
   destination: z.string().default(""),
@@ -99,7 +99,7 @@ export const defaultBookingFormValues: BookingFormValues = {
   childAges: [],
   transferType: "",
   preBookedSeats: "",
-  flightMeals: "",
+  flightMeals: "No",
   country: "",
   destination: "",
   resort: "",

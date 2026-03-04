@@ -281,8 +281,8 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
     }
 
     if (quote.transferType && !isCruise) {
-      const transferDate = quote.checkInDate || quote.travelDate;
-      const sortKey = transferDate + "T" + (quote.flights.outbound.arriveTime || "12:00");
+      const transferDate = quote.flights.outbound.arriveDate || quote.flights.outbound.departDate || quote.checkInDate || quote.travelDate;
+      const sortKey = transferDate + "T" + (quote.flights.outbound.arriveTime || "23:59");
       timelineItems.push({
         type: "transfer",
         sortKey,
@@ -426,12 +426,10 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
                   <span className="font-medium text-black/80">Flight Meals:</span>
                   <span>{quote.flightMeals === "Yes" ? "Yes" : "No"}</span>
                 </div>
-                {quote.preBookedSeats && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                    <span className="font-medium text-black/80">Pre-booked Seats:</span>
-                    <span>{quote.preBookedSeats}</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <span className="font-medium text-black/80">Pre-booked Seats:</span>
+                  <span>{quote.preBookedSeats || "No"}</span>
+                </div>
               </div>
             </div>
           </div>

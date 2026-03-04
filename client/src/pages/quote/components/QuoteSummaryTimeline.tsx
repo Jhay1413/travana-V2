@@ -229,8 +229,8 @@ export function QuoteSummaryTimeline({ quote }: QuoteSummaryTimelineProps) {
     }
 
     if (quote.transferType && !isCruise) {
-      const transferDate = quote.checkInDate || quote.travelDate;
-      const sortKey = transferDate + "T" + (quote.flights.outbound.arriveTime || "12:00");
+      const transferDate = quote.flights.outbound.arriveDate || quote.flights.outbound.departDate || quote.checkInDate || quote.travelDate;
+      const sortKey = transferDate + "T" + (quote.flights.outbound.arriveTime || "23:59");
       timelineItems.push({
         type: "transfer",
         sortKey,

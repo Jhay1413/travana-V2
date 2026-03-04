@@ -205,7 +205,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     nights: numNights,
     transferType: apiData.transfer_type || "",
     preBookedSeats: apiData.pre_booked_seats || "",
-    flightMeals: apiData.flight_meals ? "Yes" : "",
+    flightMeals: apiData.flight_meals ? "Yes" : "No",
     leadSource: apiData.lead_source || "",
     tags: apiData.tags || [],
     passengers: {

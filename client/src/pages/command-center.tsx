@@ -2701,6 +2701,12 @@ export default function CommandCenterPage() {
                                   </div>
                                 </div>
 
+                                {quote.quote_ref && (
+                                  <div className="text-xs text-black/60 dark:text-white/50">
+                                    View Link: <a href={quote.quote_ref} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline" data-testid={`link-view-overview-${quote.id}`}>View</a>
+                                  </div>
+                                )}
+
                                 <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 flex flex-col gap-3">
                                   <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
                                     <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2" data-testid={`button-view-quote-overview-${quote.id}`}>
