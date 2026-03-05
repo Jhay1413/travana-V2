@@ -118,7 +118,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
         </div>
         {quote.quote_ref && <div className="text-xs text-black/60 dark:text-white/50">View Link: <a href={quote.quote_ref} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline" data-testid={`link-view-${quote.id}`}>View</a></div>}
         <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
-          <Link href={`/clients/${post.clientId}/quotes/${quote.id}`}>
+          <Link href={`/social-posts/quotes/${quote.id}`}>
             <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2" data-testid={`button-view-quote-${quote.id}`}><Eye className="w-4 h-4" />View Quote</Button>
           </Link>
           <div className="mt-4" />

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { HubShell } from "@/components/hub-shell";
 import type { HubRole } from "@/data/hub-mock";
 import HubDashboard from "./hub-dashboard";
@@ -17,7 +17,9 @@ export default function HubPage() {
   return (
     <HubShell role={role} onRoleChange={setRole}>
       <Switch>
-        <Route path="/hub" component={HubDashboard} />
+        <Route path="/hub">
+          <Redirect to="/hub/profiles" />
+        </Route>
         <Route path="/hub/training" component={HubTraining} />
         <Route path="/hub/ai-intel" component={HubAiIntel} />
         <Route path="/hub/knowledge" component={HubKnowledge} />
@@ -33,7 +35,9 @@ export default function HubPage() {
             </div>
           )}
         </Route>
-        <Route component={HubDashboard} />
+        <Route>
+          <Redirect to="/hub/profiles" />
+        </Route>
       </Switch>
     </HubShell>
   );

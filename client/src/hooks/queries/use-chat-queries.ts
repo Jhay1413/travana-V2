@@ -12,7 +12,7 @@ export function useChatConversations() {
   return useQuery<ChatConversation[]>({
     queryKey: chatKeys.conversations(),
     queryFn: chatApi.getConversations,
-    refetchInterval: 5000,
+    refetchInterval: 2000,
   });
 }
 

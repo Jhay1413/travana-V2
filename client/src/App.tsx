@@ -20,6 +20,7 @@ import BookingPage from "@/pages/booking-standalone";
 import PipelinePage from "@/pages/pipeline";
 import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";
+import SocialQuotePage from "@/pages/social-quote";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -48,6 +49,7 @@ function AuthenticatedRouter() {
       <Route path="/enquiries/:enquiryId" component={EnquiryPage} />
       <Route path="/pipeline" component={PipelinePage} />
       <Route path="/social-posts" component={SocialPostsPage} />
+      <Route path="/social-posts/quotes/:quoteId" component={SocialQuotePage} />
       <Route path="/tickets" component={TicketsPage} />
       <Route path="/tickets/:ticketId" component={TicketPage} />
       <Route path="/hub/:rest*" component={HubPage} />

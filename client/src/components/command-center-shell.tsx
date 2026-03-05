@@ -42,7 +42,7 @@ import {
   X,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
-import { useCurrentUser, useNeonClients, useNotifications } from "@/hooks/queries";
+import { useCurrentUser, useNeonClients, useNotifications, useChatConversations } from "@/hooks/queries";
 import { useMarkNotificationRead } from "@/hooks/mutations";
 
 import { Button } from "@/components/ui/button";
@@ -491,6 +491,12 @@ export function CommandCenterShell({
 
   const { data: currentUser } = useCurrentUser();
 
+  const { data: sidebarChats } = useChatConversations();
+  const unreadChatCount = useMemo(() => {
+    if (!sidebarChats || !Array.isArray(sidebarChats)) return 0;
+    return sidebarChats.filter((c: any) => c.unreadCount > 0).reduce((sum: number, c: any) => sum + c.unreadCount, 0);
+  }, [sidebarChats]);
+
   const { data: searchData } = useNeonClients(
     query?.trim() ? { page: 1, limit: 8, search: query.trim() } : undefined
   );
@@ -519,7 +525,7 @@ export function CommandCenterShell({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  type NavItem = { key: string; label: string; icon: React.ReactNode; children?: NavItem[]; subGroups?: { label: string; items: NavItem[] }[] };
+  type NavItem = { key: string; label: string; icon: React.ReactNode; badge?: number; children?: NavItem[]; subGroups?: { label: string; items: NavItem[] }[] };
   type NavSection = { id: string; label: string; icon: React.ReactNode; items: NavItem[] };
   type NavStructure = { grouped: true; sections: NavSection[] } | { grouped: false; items: NavItem[] };
 
@@ -560,7 +566,7 @@ export function CommandCenterShell({
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
-      { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+      { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
       { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
@@ -591,7 +597,7 @@ export function CommandCenterShell({
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
-              { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
+              { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
               { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ],
           },
@@ -628,7 +634,7 @@ export function CommandCenterShell({
     }
 
     return { grouped: false, items: base };
-  }, [role]);
+  }, [role, unreadChatCount]);
 
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
     const saved = sessionStorage.getItem("admin-nav-expanded");
@@ -743,6 +749,9 @@ export function CommandCenterShell({
                                     <span className="text-black/70 dark:text-white/80">{item.icon}</span>
                                   </span>
                                   <span className="text-sm font-medium">{item.label}</span>
+                                  {item.badge != null && item.badge > 0 && (
+                                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">{item.badge}</span>
+                                  )}
                                 </div>
                                 <ChevronRight className={"h-4 w-4 " + (isActive || childActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
                               </Link>
@@ -840,6 +849,9 @@ export function CommandCenterShell({
                         <span className="text-black/70 dark:text-white/80">{item.icon}</span>
                       </span>
                       <span className="text-sm font-medium">{item.label}</span>
+                      {item.badge != null && item.badge > 0 && (
+                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">{item.badge}</span>
+                      )}
                     </div>
                     <ChevronRight className={"h-4 w-4 " + (isActive ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40")} />
                   </Link>

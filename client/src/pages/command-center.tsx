@@ -1728,8 +1728,9 @@ export default function CommandCenterPage() {
   const [tab, setTab] = useState<"whats-on" | "pipeline" | "calendar" | "news" | "daily-goals">("whats-on");
   const [whatsOnFilter, setWhatsOnFilter] = useState<"all" | "today" | "tomorrow" | "this-week" | "custom">("all");
   const [whatsOnDate, setWhatsOnDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [socialFilter, setSocialFilter] = useState<"today" | "tomorrow" | "date">("today");
-  const [socialDate, setSocialDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [socialFilter, setSocialFilter] = useState<"all" | "today" | "tomorrow" | "range">("today");
+  const [socialDateFrom, setSocialDateFrom] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [socialDateTo, setSocialDateTo] = useState<string>(new Date().toISOString().slice(0, 10));
   const [clientsTab, setClientsTab] = useState<"clients-list" | "pipeline" | "calendar" | "news">("clients-list");
   const [liveClientsDateRange, setLiveClientsDateRange] = useState<"today" | "this-week" | "this-month" | "last-month" | "last-7" | "this-year">("this-month");
   const [liveClientsSearch, setLiveClientsSearch] = useState("");
@@ -1867,19 +1868,25 @@ export default function CommandCenterPage() {
 
   const filteredOverviewSocialPosts = useMemo(() => {
     let result = overviewSocialPosts;
-    if (socialFilter === "today") {
+    if (socialFilter === "all") {
+      return result;
+    } else if (socialFilter === "today") {
       const today = new Date();
       result = result.filter(({ quote: q }) => spIsSameDay(q.date_created, today));
     } else if (socialFilter === "tomorrow") {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       result = result.filter(({ quote: q }) => spIsSameDay(q.date_created, tomorrow));
-    } else if (socialFilter === "date" && socialDate) {
-      const target = new Date(socialDate + "T00:00:00");
-      result = result.filter(({ quote: q }) => spIsSameDay(q.date_created, target));
+    } else if (socialFilter === "range" && socialDateFrom && socialDateTo) {
+      const from = new Date(socialDateFrom + "T00:00:00");
+      const to = new Date(socialDateTo + "T23:59:59.999");
+      result = result.filter(({ quote: q }) => {
+        const d = new Date(q.date_created);
+        return d >= from && d <= to;
+      });
     }
     return result;
-  }, [overviewSocialPosts, socialFilter, socialDate]);
+  }, [overviewSocialPosts, socialFilter, socialDateFrom, socialDateTo]);
 
   const { data: userFavorites } = useFavorites();
   const removeFavoriteMutation = useRemoveFavorite();
@@ -2578,7 +2585,7 @@ export default function CommandCenterPage() {
                 <div className="space-y-3" data-testid="panel-overview-social-posts">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-overview-social-filters">
-                      {(["today", "tomorrow", "date"] as const).map((f) => (
+                      {(["all", "today", "tomorrow", "range"] as const).map((f) => (
                         <button
                           key={f}
                           type="button"
@@ -2591,21 +2598,30 @@ export default function CommandCenterPage() {
                           }
                           data-testid={`filter-overview-social-${f}`}
                         >
-                          {f === "date" ? "Date selection" : f.charAt(0).toUpperCase() + f.slice(1)}
+                          {f === "all" ? "All Time" : f === "range" ? "Date Range" : f.charAt(0).toUpperCase() + f.slice(1)}
                         </button>
                       ))}
                     </div>
 
-                    <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-overview-social-date">
-                      <DatePicker
-                        value={socialDate}
-                        onChange={(v) => setSocialDate(v)}
-                        placeholder="Pick a date"
-                        data-testid="input-overview-social-date"
-                      />
-                      <span className="text-xs text-black/45 dark:text-white/45" data-testid="text-overview-social-date-hint">
-                        Showing: {socialDate}
-                      </span>
+                    <div className={(socialFilter === "range" ? "flex" : "hidden") + " items-center gap-2 flex-wrap"} data-testid="wrap-overview-social-date">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-black/50 dark:text-white/50">From</span>
+                        <DatePicker
+                          value={socialDateFrom}
+                          onChange={(v) => setSocialDateFrom(v)}
+                          placeholder="Start date"
+                          data-testid="input-overview-social-date-from"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-black/50 dark:text-white/50">To</span>
+                        <DatePicker
+                          value={socialDateTo}
+                          onChange={(v) => setSocialDateTo(v)}
+                          placeholder="End date"
+                          data-testid="input-overview-social-date-to"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -3498,7 +3514,7 @@ export default function CommandCenterPage() {
                 <div className="space-y-3" data-testid="panel-clients-social-posts">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-clients-social-filters">
-                      {(["today", "tomorrow", "date"] as const).map((f) => (
+                      {(["all", "today", "tomorrow", "range"] as const).map((f) => (
                         <button
                           key={f}
                           type="button"
@@ -3511,21 +3527,30 @@ export default function CommandCenterPage() {
                           }
                           data-testid={`filter-clients-social-${f}`}
                         >
-                          {f === "date" ? "Date selection" : f.charAt(0).toUpperCase() + f.slice(1)}
+                          {f === "all" ? "All Time" : f === "range" ? "Date Range" : f.charAt(0).toUpperCase() + f.slice(1)}
                         </button>
                       ))}
                     </div>
 
-                    <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-clients-social-date">
-                      <DatePicker
-                        value={socialDate}
-                        onChange={(v) => setSocialDate(v)}
-                        placeholder="Pick a date"
-                        data-testid="input-clients-social-date"
-                      />
-                      <span className="text-xs text-black/45 dark:text-white/45" data-testid="text-clients-social-date-hint">
-                        Showing: {socialDate}
-                      </span>
+                    <div className={(socialFilter === "range" ? "flex" : "hidden") + " items-center gap-2 flex-wrap"} data-testid="wrap-clients-social-date">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-black/50 dark:text-white/50">From</span>
+                        <DatePicker
+                          value={socialDateFrom}
+                          onChange={(v) => setSocialDateFrom(v)}
+                          placeholder="Start date"
+                          data-testid="input-clients-social-date-from"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-black/50 dark:text-white/50">To</span>
+                        <DatePicker
+                          value={socialDateTo}
+                          onChange={(v) => setSocialDateTo(v)}
+                          placeholder="End date"
+                          data-testid="input-clients-social-date-to"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -4084,7 +4109,7 @@ export default function CommandCenterPage() {
                 <div className="space-y-3" data-testid="panel-social-posts">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="inline-flex items-center gap-1 rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5" data-testid="group-social-filters-2">
-                      {(["today", "tomorrow", "date"] as const).map((f) => (
+                      {(["all", "today", "tomorrow", "range"] as const).map((f) => (
                         <button
                           key={f}
                           type="button"
@@ -4097,21 +4122,30 @@ export default function CommandCenterPage() {
                           }
                           data-testid={`filter-social-2-${f}`}
                         >
-                          {f === "date" ? "Date selection" : f.charAt(0).toUpperCase() + f.slice(1)}
+                          {f === "all" ? "All Time" : f === "range" ? "Date Range" : f.charAt(0).toUpperCase() + f.slice(1)}
                         </button>
                       ))}
                     </div>
 
-                    <div className={(socialFilter === "date" ? "flex" : "hidden") + " items-center gap-2"} data-testid="wrap-social-date-2">
-                      <DatePicker
-                        value={socialDate}
-                        onChange={(v) => setSocialDate(v)}
-                        placeholder="Pick a date"
-                        data-testid="input-social-date-2"
-                      />
-                      <span className="text-xs text-black/45 dark:text-white/45">
-                        Showing: {socialDate}
-                      </span>
+                    <div className={(socialFilter === "range" ? "flex" : "hidden") + " items-center gap-2 flex-wrap"} data-testid="wrap-social-date-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-black/50 dark:text-white/50">From</span>
+                        <DatePicker
+                          value={socialDateFrom}
+                          onChange={(v) => setSocialDateFrom(v)}
+                          placeholder="Start date"
+                          data-testid="input-social-date-2-from"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-black/50 dark:text-white/50">To</span>
+                        <DatePicker
+                          value={socialDateTo}
+                          onChange={(v) => setSocialDateTo(v)}
+                          placeholder="End date"
+                          data-testid="input-social-date-2-to"
+                        />
+                      </div>
                     </div>
                   </div>
 
