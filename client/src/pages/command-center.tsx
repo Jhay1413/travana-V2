@@ -14,6 +14,7 @@ import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favo
 import CsvImportDialog from "@/components/csv-import-dialog";
 import EmailInbox from "@/components/email-inbox";
 import AdminOverview from "@/components/admin-overview";
+import AdminFinancials from "@/components/admin-financials";
 import PipelineBoard from "@/components/pipeline-board";
 import SocialPostsBoard from "@/components/social-posts-board";
 import TicketsBoard from "@/components/tickets-board";
@@ -502,6 +503,7 @@ function ShellNav({
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
+              { key: "financials", label: "Financials", icon: <Banknote className="h-4 w-4" /> },
               { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
               { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" />, subGroups: settingsSubGroups },
             ] as NavItem[],
@@ -1182,6 +1184,7 @@ function TopBar({
       org: "Organisation",
       users: "Users & Roles",
       audit: "Audit",
+      financials: "Financials",
       settings: "Settings",
       "tour-operators": "Tour Operators",
       airports: "Airports",
@@ -2305,6 +2308,10 @@ export default function CommandCenterPage() {
           apiUsers={apiUsers as any[] | undefined}
         />
       );
+    }
+
+    if (role === "Admin" && active === "financials") {
+      return <AdminFinancials />;
     }
 
     // Agent Overview - dashboard for agent users
@@ -6285,6 +6292,7 @@ export default function CommandCenterPage() {
             { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
             { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
             { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
+            { key: "financials", label: "Financials", icon: <Banknote className="h-4 w-4" /> },
             { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
             { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" /> },
           ],

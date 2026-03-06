@@ -1,0 +1,288 @@
+Create a the Finacials section UI. This page is used by owners/admins only to monitor future commission revenue ("Forwards") from holiday bookings.
+
+Important: Focus on UI and layout only. Assume data is already provided via API. Use mock data where necessary.
+
+Tech stack requirements:
+
+React + TypeScript
+
+Vite
+
+Tailwind CSS
+
+shadcn/ui components
+
+Recharts for charts
+
+Clean SaaS dashboard design
+
+Responsive layout
+
+CORE BUSINESS LOGIC (for UI display only)
+
+Travel agents earn commission from bookings, but the commission is paid 8 weeks before the travel date.
+
+This means bookings contribute to "Forwards", which represent future commission income by month.
+
+Example:
+Booking date: March 20
+Travel date: December 6
+Commission paid: October
+
+Therefore the dashboard must show the next 12 months of forwards revenue.
+
+The most important number is the total forwards commission for each month.
+
+PAGE LAYOUT
+
+Create a single Admin Dashboard page with the following sections in order:
+
+Page Header
+
+Summary KPI Cards
+
+12 Month Forwards Chart
+
+Monthly Forwards Table
+
+Agent Performance Section
+
+Expandable Booking Detail Panel
+
+Use modern SaaS dashboard styling with cards, spacing, subtle shadows, and clean typography.
+
+SECTION 1 — HEADER
+
+Top of page:
+
+Title:
+Admin Revenue Dashboard
+
+Subtitle:
+Monitor future commission income ("Forwards") and track performance against monthly targets.
+
+Right side controls:
+
+Toggle view buttons:
+
+Chart View
+
+Table View
+
+SECTION 2 — SUMMARY KPI CARDS
+
+Display 4 large summary cards.
+
+Card 1:
+Next Month Forwards
+Example: £8,450
+
+Card 2:
+12 Month Forwards Total
+Example: £126,300
+
+Card 3:
+Average Deal Profit
+Calculated as:
+Total Profit ÷ Total Deals
+
+Example:
+£520
+
+Card 4:
+Deals Needed To Hit Target
+Use average deal value to estimate deals required.
+
+Example:
+4 deals needed
+
+Each card should include:
+
+Title
+
+Large value
+
+small supporting label
+
+subtle icon
+
+SECTION 3 — 12 MONTH FORWARDS CHART
+
+Primary visualization.
+
+Use Recharts.
+
+Chart type:
+Bar Chart
+
+X axis:
+Months (next 12 months)
+
+Y axis:
+Commission (£)
+
+Bars:
+Monthly forwards total
+
+Add a line overlay showing the monthly target.
+
+Color logic:
+
+Green = above target
+Amber = close to target
+Red = below target
+
+Tooltip should display:
+
+Month
+Forwards total
+Target
+Difference from target
+Deals required to hit target
+
+SECTION 4 — MONTHLY FORWARDS TABLE
+
+Below the chart create a clean data table.
+
+Columns:
+
+Month
+Forwards Total
+Target
+Over / Under Target
+Deals Needed To Hit Target
+Deals Count
+Average Deal Value
+
+Example row:
+
+October 2026
+£8,200
+£10,000
+-£1,800
+3 deals
+16 deals
+£512 avg
+
+Use color indicators:
+
+Green = above target
+Red = below target
+
+Rows should be clickable.
+
+SECTION 5 — AGENT PERFORMANCE
+
+Create a card section showing agent contributions to forwards.
+
+Display table:
+
+Agent
+Forwards Total
+Deals
+Average Profit
+
+Example:
+
+Sarah
+£32,500
+61 deals
+£533
+
+Dan
+£21,400
+38 deals
+£563
+
+Add a small horizontal bar visualization per agent showing contribution.
+
+SECTION 6 — EXPANDABLE MONTH PANEL
+
+When a month is clicked in the table, open a side panel (drawer) showing booking details.
+
+Fields shown:
+
+Client Name
+Destination
+Travel Date
+Commission Profit
+Agent
+
+Example row:
+
+John Smith
+Tenerife
+6 Dec 2026
+£520
+Sarah
+
+Add sorting by:
+
+Travel Date
+Profit
+Agent
+
+DESIGN REQUIREMENTS
+
+Use shadcn/ui components wherever possible:
+
+Card
+Table
+Badge
+Drawer
+Tabs
+Tooltip
+
+Style guidelines:
+
+Modern SaaS dashboard
+Soft shadows
+Rounded cards
+Neutral background
+Clear spacing
+Readable typography
+
+Color coding for status:
+
+Green = above target
+Red = below target
+Amber = close to target
+
+RESPONSIVE BEHAVIOR
+
+Desktop:
+Full dashboard layout
+
+Tablet:
+Stack cards and charts
+
+Mobile:
+Cards first, then charts, then table
+
+MOCK DATA
+
+Generate mock data for:
+
+12 months forwards totals
+
+monthly targets
+
+bookings
+
+agents
+
+Use realistic travel agency numbers.
+
+GOAL
+
+The UI should make it immediately obvious to the owner:
+
+How much commission is coming in each month
+
+Whether targets are being hit
+
+How many deals are needed to reach target
+
+Which agents are producing future revenue
+
+Which bookings make up each month's forwards
