@@ -7,6 +7,7 @@ import { authApi, opportunitiesApi } from "@/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useAllTasksExtended, useTickets, useChatConversations, useChatMessages, authKeys } from "@/hooks/queries";
+import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
 import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -1849,23 +1850,17 @@ export default function CommandCenterPage() {
   const isRestrictedRole = role !== "Admin" && role !== "Manager";
   const { data: transactionsData } = useTransactions(isRestrictedRole && currentUser?.id ? { agentId: currentUser.id } : undefined);
 
+  const { data: freeQuotesData } = useFreeQuotesInfinite(50);
   const overviewSocialPosts = useMemo(() => {
-    if (!transactionsData) return [];
+    if (!freeQuotesData) return [];
     const posts: { quote: EnrichedQuote; clientId: string }[] = [];
-    for (const txn of transactionsData) {
-      if (!txn.client_id || !txn.quotes) continue;
-      for (const q of txn.quotes) {
-        if (q.is_active === false) continue;
-        posts.push({ quote: q as EnrichedQuote, clientId: txn.client_id });
+    for (const page of freeQuotesData.pages) {
+      for (const q of page.quotes) {
+        posts.push({ quote: q as EnrichedQuote, clientId: (q as any).client_id || "" });
       }
     }
-    posts.sort((a, b) => {
-      const da = a.quote.date_created ? new Date(a.quote.date_created).getTime() : 0;
-      const db = b.quote.date_created ? new Date(b.quote.date_created).getTime() : 0;
-      return db - da;
-    });
     return posts;
-  }, [transactionsData]);
+  }, [freeQuotesData]);
 
   const filteredOverviewSocialPosts = useMemo(() => {
     let result = overviewSocialPosts;

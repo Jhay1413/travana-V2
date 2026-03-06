@@ -6,7 +6,7 @@ import { validate } from "../middlewares/validation.middleware";
 import { addImagesValidator } from "../validators/quote-image.validator";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 router.get("/free", quoteController.listFreeQuotes);
 router.get("/", quoteController.listQuotes);
