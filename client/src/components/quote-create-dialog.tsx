@@ -12,7 +12,7 @@ import { usePackageTypes } from "@/hooks/queries";
 import { QuoteRHFForm } from "./quote-rhf-form";
 import type { QuoteFormValues, QuoteCreateDialogProps } from "@/types/quote";
 import { defaultQuoteFormValues } from "@/types/quote";
-import type { CreateQuoteData } from "@/types/quote";
+import type { CreateQuoteData, CreateTransactionData } from "@/types/quote";
 
 function buildDateTime(date: string, time: string): string | null {
   if (!date) return null;
@@ -142,17 +142,24 @@ export function QuoteCreateDialog({
   const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
     const quotePayload = buildQuotePayload(values, packageTypesData);
     const imageUrls = images?.urls || [];
+    const imageFiles = images?.files || [];
 
     if (transactionId) {
-      const payload: CreateQuoteData = {
+      const json: CreateQuoteData = {
         ...quotePayload,
         transaction_id: transactionId,
+        ...(imageUrls.length > 0 && { images: imageUrls }),
       } as CreateQuoteData;
-      if (imageUrls.length > 0) {
-        (payload as any).images = imageUrls;
+
+      let payload: CreateQuoteData | FormData = json;
+      if (imageFiles.length > 0) {
+        const fd = new FormData();
+        fd.append("data", JSON.stringify(json));
+        imageFiles.forEach((f) => fd.append("images", f));
+        payload = fd;
       }
 
-      createQuote.mutate(payload, {
+      createQuote.mutate(payload as CreateQuoteData, {
         onSuccess: (newQuote) => {
           toast({ title: "Quote created", description: "New quote has been created." });
           onOpenChange(false);
@@ -167,18 +174,26 @@ export function QuoteCreateDialog({
         },
       });
     } else if (clientId && userId) {
-      createTransaction.mutate(
-        {
-          client_id: clientId,
-          user_id: userId,
-          lead_source: values.leadSource || undefined,
-          quote: {
-            ...quotePayload,
-            quote_status: values.status || "QUOTE_IN_PROGRESS",
-            images: imageUrls.length > 0 ? imageUrls : undefined,
-          },
+      const txnJson = {
+        client_id: clientId,
+        user_id: userId,
+        lead_source: values.leadSource || undefined,
+        quote: {
+          ...quotePayload,
+          quote_status: values.status || "QUOTE_IN_PROGRESS",
+          ...(imageUrls.length > 0 && { images: imageUrls }),
         },
-        {
+      };
+
+      let txnPayload: typeof txnJson | FormData = txnJson;
+      if (imageFiles.length > 0) {
+        const fd = new FormData();
+        fd.append("data", JSON.stringify(txnJson));
+        imageFiles.forEach((f) => fd.append("images", f));
+        txnPayload = fd;
+      }
+
+      createTransaction.mutate(txnPayload as CreateTransactionData, {
           onSuccess: (txn) => {
             toast({ title: "Quote created", description: "New quote has been created." });
             onOpenChange(false);

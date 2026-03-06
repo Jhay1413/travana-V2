@@ -1,15 +1,17 @@
 import { Router } from "express";
+import multer from "multer";
 import { quoteController } from "../controllers/quote.controller";
 import { quoteImageController } from "../controllers/quote-image.controller";
 import { validate } from "../middlewares/validation.middleware";
 import { addImagesValidator } from "../validators/quote-image.validator";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 router.get("/free", quoteController.listFreeQuotes);
 router.get("/", quoteController.listQuotes);
 router.get("/:id", quoteController.getQuoteById);
-router.post("/", quoteController.createQuote);
+router.post("/", upload.array("images", 10), quoteController.createQuote);
 router.post("/:id/duplicate", quoteController.duplicateQuote);
 router.patch("/:id", quoteController.updateQuote);
 router.delete("/:id", quoteController.deleteQuote);

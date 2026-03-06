@@ -30,8 +30,9 @@ export const quoteApi = {
     return data;
   },
 
-  create: async (quoteData: CreateQuoteData): Promise<Quote> => {
-    const { data } = await axiosClient.post<Quote>("/api/quotes", quoteData);
+  create: async (quoteData: CreateQuoteData | FormData): Promise<Quote> => {
+    const config = quoteData instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : {};
+    const { data } = await axiosClient.post<Quote>("/api/quotes", quoteData, config);
     return data;
   },
 

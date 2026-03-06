@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { transactionService } from "../services/transaction.service";
+import { socialPostService } from "../services/social-post.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 
@@ -138,7 +139,19 @@ export const transactionController = {
   }),
 
   createTransaction: asyncHandler(async (req: Request, res: Response) => {
-    const { enquiry, quote, booking, ...transactionData } = req.body;
+    const body = req.body.data ? JSON.parse(req.body.data) : req.body;
+    const { enquiry, quote, booking, ...transactionData } = body;
+
+    const files = (req.files as Express.Multer.File[]) || [];
+    let uploadedUrls: string[] = [];
+    if (files.length > 0) {
+      const uploaded = await socialPostService.uploadMedia(files);
+      uploadedUrls = uploaded.map((m) => m.url);
+    }
+    if (uploadedUrls.length > 0) {
+      if (quote) quote.images = [...(quote.images || []), ...uploadedUrls];
+      if (booking) booking.images = [...(booking.images || []), ...uploadedUrls];
+    }
 
     if (enquiry) {
       const normalizedEnquiry = normalizeEnquiry(enquiry);

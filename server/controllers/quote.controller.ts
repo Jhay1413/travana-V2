@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { newQuoteService } from "../services/newQuote.service";
+import { socialPostService } from "../services/social-post.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 
@@ -40,7 +41,13 @@ export const quoteController = {
   }),
 
   createQuote: asyncHandler(async (req: Request, res: Response) => {
-    const quote = await newQuoteService.createQuote(req.body);
+    const body = req.body.data ? JSON.parse(req.body.data) : req.body;
+    const files = (req.files as Express.Multer.File[]) || [];
+    if (files.length > 0) {
+      const uploaded = await socialPostService.uploadMedia(files);
+      body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
+    }
+    const quote = await newQuoteService.createQuote(body);
     return successResponse(res, quote, "Quote created successfully", 201);
   }),
 
