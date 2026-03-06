@@ -1,0 +1,247 @@
+Create a the Finacials Admin Section UI. This page is used by owners/admins only to monitor future commission revenue Admin Targets Management UI for a travel agency platform.
+
+This page allows owners and admins to manage:
+
+Monthly Shop Sales Targets
+
+Monthly Agent Sales Targets
+
+Focus on UI only. Assume data is provided via API and use mock data where necessary.
+
+Tech stack requirements:
+
+Frontend:
+
+React
+
+TypeScript
+
+Vite
+
+UI:
+
+Tailwind CSS
+
+shadcn/ui components
+
+Lucide icons
+
+Design style:
+
+Clean SaaS admin dashboard
+
+Card-based layout
+
+Spreadsheet-style editing
+
+Responsive design
+
+PAGE PURPOSE
+
+Travel agents generate commission profit from holiday bookings.
+
+This page allows admins to:
+
+• Set the shop sales target per month
+• Set individual agent monthly targets
+• Plan targets for the next 24 months
+• Ensure agent targets align with shop targets
+
+The UI must make it easy to edit targets quickly like a spreadsheet.
+
+PAGE LAYOUT
+
+Create a page with the following structure:
+
+Page Header
+
+Shop Targets Section
+
+Agent Targets Section
+
+Validation Summary
+
+SECTION 1 — PAGE HEADER
+
+Title:
+Sales Targets Management
+
+Subtitle:
+Set monthly shop and agent sales targets for the next 24 months.
+
+Right side controls:
+
+Button:
+"Copy Previous Month Targets"
+
+Description:
+Copies the previous month’s targets into the selected month for quick planning.
+
+SECTION 2 — SHOP TARGETS
+
+Create a card titled:
+
+Shop Monthly Targets
+
+Inside the card display a spreadsheet-style editable table.
+
+Columns:
+
+Month
+Shop Target (£)
+
+Rows:
+
+Display 24 months starting from the current month.
+
+Example:
+
+Month | Shop Target
+Jan 2026 | £40,000
+Feb 2026 | £35,000
+Mar 2026 | £42,000
+
+Editing behaviour:
+
+• Targets can be edited directly in the cell
+• Currency formatted (£)
+• Numeric input only
+
+Add small helper text:
+
+"These targets represent the total monthly commission goal for the shop."
+
+SECTION 3 — AGENT TARGETS
+
+Create another card titled:
+
+Agent Monthly Targets
+
+Display a spreadsheet-style grid.
+
+Columns:
+
+Agent Name
+24 monthly columns (same months as shop targets)
+
+Example:
+
+Agent | Jan | Feb | Mar | Apr | May | Jun | Jul ...
+
+Rows represent agents.
+
+Example:
+
+Sarah | £12,000 | £12,000 | £14,000 | £13,000
+Dan | £10,000 | £10,000 | £11,000 | £12,000
+Lucy | £8,000 | £9,000 | £9,000 | £10,000
+
+Features:
+
+• Editable cells
+• Currency formatting
+• Horizontal scrolling for months
+• Sticky first column for agent names
+
+Add controls above the table:
+
+Buttons:
+
+Add Agent
+Remove Agent
+
+SECTION 4 — VALIDATION SUMMARY
+
+Below the tables create a Target Allocation Summary Card.
+
+Display a table showing:
+
+Month
+Shop Target
+Total Agent Targets
+Difference
+
+Example:
+
+Month | Shop Target | Agent Targets Total | Difference
+Jan | £40,000 | £38,000 | -£2,000
+Feb | £35,000 | £36,000 | +£1,000
+
+Color coding:
+
+Green = balanced
+Red = agent targets exceed shop target
+Amber = agent targets below shop target
+
+Add small helper text:
+
+"This helps ensure agent targets align with the overall shop target."
+
+UX FEATURES
+
+Implement the following UI behaviors:
+
+Spreadsheet editing style
+Cells highlight on hover
+Editable inputs appear when clicked
+
+Copy Previous Month
+
+Button allows user to quickly copy the previous month’s targets across:
+
+• Shop targets
+• Agent targets
+
+This is useful for repeating monthly plans.
+
+DESIGN GUIDELINES
+
+Use shadcn/ui components:
+
+Card
+Table
+Input
+Button
+Badge
+Tooltip
+
+Styling:
+
+• Soft shadows
+• Rounded cards
+• Clean spacing
+• Neutral background
+• Clear typography
+• Sticky headers for large tables
+
+RESPONSIVE BEHAVIOR
+
+Desktop:
+Full spreadsheet layout.
+
+Tablet:
+Horizontal scroll enabled.
+
+Mobile:
+Stack sections vertically with scrollable tables.
+
+MOCK DATA
+
+Generate realistic mock data for:
+
+• 24 months
+• 3–6 agents
+• shop targets between £30,000 and £50,000
+• agent targets between £7,000 and £15,000
+
+GOAL
+
+The UI should make it extremely easy for an admin to:
+
+Plan monthly shop targets
+
+Allocate targets across agents
+
+Ensure targets are balanced
+
+Adjust targets quickly month-to-month
