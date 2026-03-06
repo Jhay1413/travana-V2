@@ -504,9 +504,8 @@ function ShellNav({
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
-              { key: "financials", label: "Financials", icon: <Banknote className="h-4 w-4" />, subGroups: [
-                { label: "Financials", items: [
-                  { key: "financials", label: "Revenue Dashboard", icon: <BarChart3 className="h-4 w-4" /> },
+              { key: "financials", label: "Revenue Dashboard", icon: <Banknote className="h-4 w-4" />, subGroups: [
+                { label: "Revenue Dashboard", items: [
                   { key: "financials-targets", label: "Targets Admin", icon: <Target className="h-4 w-4" /> },
                 ] },
               ] },
