@@ -1668,8 +1668,9 @@ function spGetHotelName(q: EnrichedQuote): string {
 }
 
 function spGetDepartingAirport(q: EnrichedQuote): string {
-  const outbound = q.flights?.find((f) => f.flight_type === "outbound" && (f.leg_order === 0 || f.leg_order === null));
-  return outbound?.departing_airport_name || "—";
+  const flights = q.flights ?? [];
+  const outbound = flights.find((f) => f.flight_type === "outbound" && (f.leg_order === 0 || f.leg_order === null)) ?? flights.find((f) => f.flight_type === "outbound") ?? flights[0];
+  return outbound?.departing_airport_name || q.departing_airport_name || "—";
 }
 
 function spGetBoardBasis(q: EnrichedQuote): string {

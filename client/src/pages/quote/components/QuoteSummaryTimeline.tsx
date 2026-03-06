@@ -104,10 +104,9 @@ export function QuoteSummaryTimeline({ quote }: QuoteSummaryTimelineProps) {
     });
   } else {
     if (quote.flights.outbound.from) {
-      const sortKey = quote.flights.outbound.departDate + "T" + (quote.flights.outbound.departTime || "00:00");
       timelineItems.push({
         type: "outbound",
-        sortKey,
+        sortKey: "010",
         content: (
           <div className="flex gap-2.5" data-testid="timeline-outbound">
             <div className="flex flex-col items-center">
@@ -141,12 +140,38 @@ export function QuoteSummaryTimeline({ quote }: QuoteSummaryTimelineProps) {
       });
     }
 
+    if (quote.transferType && !isCruise) {
+      timelineItems.push({
+        type: "transfer",
+        sortKey: "020",
+        content: (
+          <div className="flex gap-2.5" data-testid="timeline-transfer">
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
+                <Bus className="h-3.5 w-3.5" />
+              </div>
+              <div className="mt-1 h-full w-px bg-black/10" />
+            </div>
+            <div className="flex-1 pb-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Transfer</div>
+              <div className="mt-0.5 text-xs font-semibold">{quote.transferType}</div>
+              <div className="mt-1 grid gap-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span>{quote.flights.outbound.to || "Airport"} → {quote.accommodation.property || quote.destinationName}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    }
+
     if (isCruise && quote.cruise) {
       const cruiseDate = quote.cruise.cruiseDate || quote.travelDate;
-      const sortKey = cruiseDate + "T12:00";
       timelineItems.push({
         type: "cruise-embarkation",
-        sortKey,
+        sortKey: "040",
         content: (
           <div className="flex gap-2.5" data-testid="timeline-cruise-embarkation">
             <div className="flex flex-col items-center">
@@ -182,10 +207,9 @@ export function QuoteSummaryTimeline({ quote }: QuoteSummaryTimelineProps) {
     if (quote.accommodation.property) {
       const checkIn = quote.checkInDate || quote.travelDate;
       const checkInTime = quote.checkInTime || "14:00";
-      const sortKey = checkIn + "T" + checkInTime;
       timelineItems.push({
         type: "hotel",
-        sortKey,
+        sortKey: "030",
         content: (
           <div className="flex gap-2.5" data-testid="timeline-hotel">
             <div className="flex flex-col items-center">
@@ -228,44 +252,14 @@ export function QuoteSummaryTimeline({ quote }: QuoteSummaryTimelineProps) {
       });
     }
 
-    if (quote.transferType && !isCruise) {
-      const transferDate = quote.flights.outbound.arriveDate || quote.flights.outbound.departDate || quote.checkInDate || quote.travelDate;
-      const sortKey = transferDate + "T" + (quote.flights.outbound.arriveTime || "23:59");
-      timelineItems.push({
-        type: "transfer",
-        sortKey,
-        content: (
-          <div className="flex gap-2.5" data-testid="timeline-transfer">
-            <div className="flex flex-col items-center">
-              <div className="grid h-7 w-7 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
-                <Bus className="h-3.5 w-3.5" />
-              </div>
-              <div className="mt-1 h-full w-px bg-black/10" />
-            </div>
-            <div className="flex-1 pb-4">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Transfer</div>
-              <div className="mt-0.5 text-xs font-semibold">{quote.transferType}</div>
-              <div className="mt-1 grid gap-1">
-                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                  <MapPin className="h-3 w-3 shrink-0" />
-                  <span>{quote.flights.outbound.to || "Airport"} → {quote.accommodation.property || quote.destinationName}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ),
-      });
-    }
-
     const hasInbound = quote.flights.inbound.from || quote.flights.inbound.to || quote.flights.inbound.departDate || quote.returnDate;
     if (hasInbound) {
       const ibDate = quote.flights.inbound.departDate || quote.returnDate;
-      const sortKey = ibDate + "T" + (quote.flights.inbound.departTime || "23:59");
       const ibFrom = quote.flights.inbound.from || quote.flights.outbound.to || "";
       const ibTo = quote.flights.inbound.to || quote.flights.outbound.from || "";
       timelineItems.push({
         type: "inbound",
-        sortKey,
+        sortKey: "050",
         content: (
           <div className="flex gap-2.5" data-testid="timeline-inbound">
             <div className="flex flex-col items-center">
