@@ -19,6 +19,130 @@ function entityLink(entityType: string, entityId: string): string {
 
 export type TaskWithClient = TaskNew & { clientId: string | null; clientName: string | null; tags: string[] };
 
+async function resolveTaskClients(
+  allTasks: TaskNew[],
+  quoteEntityIds: string[],
+  bookingEntityIds: string[],
+  enquiryEntityIds: string[],
+  clientEntityIds: string[]
+) {
+  const transactionIdMap = new Map<string, string>();
+  const directClientMap = new Map<string, string>();
+
+  if (quoteEntityIds.length > 0) {
+    const quoteRows = await db
+      .select({ id: quote.id, transaction_id: quote.transaction_id })
+      .from(quote)
+      .where(inArray(quote.id, quoteEntityIds));
+    for (const q of quoteRows) {
+      transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
+    }
+    const unresolvedIds = quoteEntityIds.filter(id => !quoteRows.some(q => q.id === id));
+    if (unresolvedIds.length > 0) {
+      const txDirect = await db
+        .select({ id: transaction.id })
+        .from(transaction)
+        .where(inArray(transaction.id, unresolvedIds));
+      for (const tx of txDirect) {
+        transactionIdMap.set(`quote:${tx.id}`, tx.id);
+      }
+      const stillUnresolved = unresolvedIds.filter(id => !txDirect.some(tx => tx.id === id));
+      if (stillUnresolved.length > 0) {
+        const quotesByTx = await db
+          .select({ id: quote.id, transaction_id: quote.transaction_id })
+          .from(quote)
+          .where(inArray(quote.transaction_id, stillUnresolved));
+        for (const q of quotesByTx) {
+          transactionIdMap.set(`quote:${q.transaction_id}`, q.transaction_id);
+        }
+      }
+    }
+  }
+
+  if (bookingEntityIds.length > 0) {
+    const bookingRows = await db
+      .select({ id: booking.id, transaction_id: booking.transaction_id })
+      .from(booking)
+      .where(inArray(booking.id, bookingEntityIds));
+    for (const b of bookingRows) {
+      transactionIdMap.set(`booking:${b.id}`, b.transaction_id);
+    }
+    const unresolvedIds = bookingEntityIds.filter(id => !bookingRows.some(b => b.id === id));
+    if (unresolvedIds.length > 0) {
+      const txDirect = await db
+        .select({ id: transaction.id })
+        .from(transaction)
+        .where(inArray(transaction.id, unresolvedIds));
+      for (const tx of txDirect) {
+        transactionIdMap.set(`booking:${tx.id}`, tx.id);
+      }
+    }
+  }
+
+  if (enquiryEntityIds.length > 0) {
+    const enquiryRows = await db
+      .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id })
+      .from(enquiry_table)
+      .where(inArray(enquiry_table.id, enquiryEntityIds));
+    for (const e of enquiryRows) {
+      transactionIdMap.set(`enquiry:${e.id}`, e.transaction_id);
+    }
+    const unresolvedIds = enquiryEntityIds.filter(id => !enquiryRows.some(e => e.id === id));
+    if (unresolvedIds.length > 0) {
+      const txDirect = await db
+        .select({ id: transaction.id })
+        .from(transaction)
+        .where(inArray(transaction.id, unresolvedIds));
+      for (const tx of txDirect) {
+        transactionIdMap.set(`enquiry:${tx.id}`, tx.id);
+      }
+    }
+  }
+
+  for (const clientId of clientEntityIds) {
+    directClientMap.set(`client:${clientId}`, clientId);
+  }
+
+  const uniqueTransactionIds = Array.from(new Set(Array.from(transactionIdMap.values())));
+  const clientIdMap = new Map<string, string>();
+
+  if (uniqueTransactionIds.length > 0) {
+    const txRows = await db
+      .select({ id: transaction.id, client_id: transaction.client_id })
+      .from(transaction)
+      .where(inArray(transaction.id, uniqueTransactionIds));
+    for (const tx of txRows) {
+      if (tx.client_id) {
+        clientIdMap.set(tx.id, tx.client_id);
+      }
+    }
+  }
+
+  const txClientMap = new Map<string, string>();
+  for (const [key, txId] of transactionIdMap.entries()) {
+    const cid = clientIdMap.get(txId);
+    if (cid) txClientMap.set(key, cid);
+  }
+
+  const allClientIds = new Set([
+    ...Array.from(clientIdMap.values()),
+    ...Array.from(directClientMap.values())
+  ]);
+  const clientNameMap = new Map<string, string>();
+
+  if (allClientIds.size > 0) {
+    const clientRows = await db
+      .select({ id: clientTable.id, firstName: clientTable.firstName, surename: clientTable.surename })
+      .from(clientTable)
+      .where(inArray(clientTable.id, Array.from(allClientIds)));
+    for (const c of clientRows) {
+      clientNameMap.set(c.id, [c.firstName, c.surename].filter(Boolean).join(" "));
+    }
+  }
+
+  return { directClientMap, txClientMap, clientNameMap };
+}
+
 export const taskRepository = {
   async findAll(userId?: string): Promise<TaskWithClient[]> {
     const query = db.select().from(tasks);
@@ -42,72 +166,12 @@ export const taskRepository = {
       .map(t => t.entityId)
       .filter((id): id is string => id !== null);
 
-    const transactionIdMap = new Map<string, string>();
-
-    if (quoteEntityIds.length > 0) {
-      const quoteRows = await db
-        .select({ id: quote.id, transaction_id: quote.transaction_id })
-        .from(quote)
-        .where(inArray(quote.id, quoteEntityIds));
-      for (const q of quoteRows) {
-        transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
-      }
-    }
-
-    if (bookingEntityIds.length > 0) {
-      const bookingRows = await db
-        .select({ id: booking.id, transaction_id: booking.transaction_id })
-        .from(booking)
-        .where(inArray(booking.id, bookingEntityIds));
-      for (const b of bookingRows) {
-        transactionIdMap.set(`booking:${b.id}`, b.transaction_id);
-      }
-    }
-
-    if (enquiryEntityIds.length > 0) {
-      const enquiryRows = await db
-        .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id })
-        .from(enquiry_table)
-        .where(inArray(enquiry_table.id, enquiryEntityIds));
-      for (const e of enquiryRows) {
-        transactionIdMap.set(`enquiry:${e.id}`, e.transaction_id);
-      }
-    }
-
-    const uniqueTransactionIds = Array.from(new Set(Array.from(transactionIdMap.values())));
-    const clientIdMap = new Map<string, string>();
-
-    if (uniqueTransactionIds.length > 0) {
-      const txRows = await db
-        .select({ id: transaction.id, client_id: transaction.client_id })
-        .from(transaction)
-        .where(inArray(transaction.id, uniqueTransactionIds));
-      for (const tx of txRows) {
-        if (tx.client_id) {
-          clientIdMap.set(tx.id, tx.client_id);
-        }
-      }
-    }
-
-    const uniqueClientIds = Array.from(new Set(Array.from(clientIdMap.values())));
-    const clientNameMap = new Map<string, string>();
-
-    if (uniqueClientIds.length > 0) {
-      const clientRows = await db
-        .select({ id: clientTable.id, firstName: clientTable.firstName, surename: clientTable.surename })
-        .from(clientTable)
-        .where(inArray(clientTable.id, uniqueClientIds));
-      for (const c of clientRows) {
-        clientNameMap.set(c.id, [c.firstName, c.surename].filter(Boolean).join(" "));
-      }
-    }
-
+    const resolvedData = await resolveTaskClients(allTasks, quoteEntityIds, bookingEntityIds, enquiryEntityIds, []);
     return allTasks.map(t => {
       const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
-      const txId = transactionIdMap.get(key);
-      const cid = txId ? clientIdMap.get(txId) ?? null : null;
-      const clientName = cid ? clientNameMap.get(cid) ?? null : null;
-      return { ...t, clientId: cid, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
+      const clientId = resolvedData.directClientMap.get(key) ?? resolvedData.txClientMap.get(key) ?? null;
+      const clientName = clientId ? resolvedData.clientNameMap.get(clientId) ?? null : null;
+      return { ...t, clientId, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
     });
   },
 
@@ -137,92 +201,13 @@ export const taskRepository = {
       .map(t => t.entityId)
       .filter((id): id is string => id !== null);
 
-    const transactionIdMap = new Map<string, string>();
-    const directClientIdMap = new Map<string, string>();
-
-    if (quoteEntityIds.length > 0) {
-      const quoteRows = await db
-        .select({ id: quote.id, transaction_id: quote.transaction_id })
-        .from(quote)
-        .where(inArray(quote.id, quoteEntityIds));
-      for (const q of quoteRows) {
-        transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
-      }
-    }
-
-    if (bookingEntityIds.length > 0) {
-      const bookingRows = await db
-        .select({ id: booking.id, transaction_id: booking.transaction_id })
-        .from(booking)
-        .where(inArray(booking.id, bookingEntityIds));
-      for (const b of bookingRows) {
-        transactionIdMap.set(`booking:${b.id}`, b.transaction_id);
-      }
-    }
-
-    if (enquiryEntityIds.length > 0) {
-      const enquiryRows = await db
-        .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id })
-        .from(enquiry_table)
-        .where(inArray(enquiry_table.id, enquiryEntityIds));
-      for (const e of enquiryRows) {
-        transactionIdMap.set(`enquiry:${e.id}`, e.transaction_id);
-      }
-    }
-
-    // For tasks with entityType "client", entityId is the clientId directly
-    for (const clientId of clientEntityIds) {
-      directClientIdMap.set(`client:${clientId}`, clientId);
-    }
-
-    const uniqueTransactionIds = Array.from(new Set(Array.from(transactionIdMap.values())));
-    const clientIdMap = new Map<string, string>();
-
-    if (uniqueTransactionIds.length > 0) {
-      const txRows = await db
-        .select({ id: transaction.id, client_id: transaction.client_id })
-        .from(transaction)
-        .where(inArray(transaction.id, uniqueTransactionIds));
-      for (const tx of txRows) {
-        if (tx.client_id) {
-          clientIdMap.set(tx.id, tx.client_id);
-        }
-      }
-    }
-
-    // Combine clientIds from transactions and direct client tasks
-    const allClientIds = new Set([
-      ...Array.from(clientIdMap.values()),
-      ...Array.from(directClientIdMap.values())
-    ]);
-    const uniqueClientIds = Array.from(allClientIds);
-    const clientNameMap = new Map<string, string>();
-
-    if (uniqueClientIds.length > 0) {
-      const clientRows = await db
-        .select({ id: clientTable.id, firstName: clientTable.firstName, surename: clientTable.surename })
-        .from(clientTable)
-        .where(inArray(clientTable.id, uniqueClientIds));
-      for (const c of clientRows) {
-        clientNameMap.set(c.id, [c.firstName, c.surename].filter(Boolean).join(" "));
-      }
-    }
+    const resolvedData = await resolveTaskClients(allTasks, quoteEntityIds, bookingEntityIds, enquiryEntityIds, clientEntityIds);
 
     return allTasks.map(t => {
       const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
-      
-      // Check if this is a direct client task first
-      const directClientId = directClientIdMap.get(key);
-      if (directClientId) {
-        const clientName = clientNameMap.get(directClientId) ?? null;
-        return { ...t, clientId: directClientId, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
-      }
-      
-      // Otherwise, look up via transaction
-      const txId = transactionIdMap.get(key);
-      const cid = txId ? clientIdMap.get(txId) ?? null : null;
-      const clientName = cid ? clientNameMap.get(cid) ?? null : null;
-      return { ...t, clientId: cid, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
+      const clientId = resolvedData.directClientMap.get(key) ?? resolvedData.txClientMap.get(key) ?? null;
+      const clientName = clientId ? resolvedData.clientNameMap.get(clientId) ?? null : null;
+      return { ...t, clientId, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
     });
   },
 

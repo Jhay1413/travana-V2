@@ -1791,9 +1791,10 @@ export default function CommandCenterPage() {
   const [dashNewTitle, setDashNewTitle] = useState("");
   const [dashNewDueDate, setDashNewDueDate] = useState("");
   const [dashNewDueTime, setDashNewDueTime] = useState("09:00");
+  const [dashTaskClientId, setDashTaskClientId] = useState<string>("");
   const { data: currentUser } = useCurrentUser();
   const { toast } = useToast();
-  const dashCreateTaskMutation = useCreateTask("quote", "");
+  const dashCreateTaskMutation = useCreateTask("client", "");
   const dashTaskPresets = TASK_PRESETS_BY_ENTITY[dashTaskCategory] || TASK_PRESETS_BY_ENTITY.general;
   const [chatSelectedConversation, setChatSelectedConversation] = useState<string | null>(null);
   const [chatMessageInput, setChatMessageInput] = useState("");
@@ -1820,10 +1821,13 @@ export default function CommandCenterPage() {
   const handleDashAddTask = () => {
     if (!dashNewTitle || !dashNewDueDate || !currentUser?.id) return;
     const dueDate = new Date(`${dashNewDueDate}T${dashNewDueTime || "09:00"}`);
+    const selectedClient = dashTaskClientId && dashTaskClientId !== "none" ? dashTaskClientId : "";
+    const effectiveEntityType = selectedClient ? "client" : (dashTaskCategory === "booking" ? "quote" : dashTaskCategory);
+    const effectiveEntityId = selectedClient;
     dashCreateTaskMutation.mutate(
       {
-        entityType: dashTaskCategory === "booking" ? "quote" : dashTaskCategory,
-        entityId: "",
+        entityType: effectiveEntityType,
+        entityId: effectiveEntityId,
         userId: currentUser.id,
         title: dashNewTitle,
         dueDate: dueDate,
@@ -1836,6 +1840,7 @@ export default function CommandCenterPage() {
           setDashNewDueDate("");
           setDashNewDueTime("09:00");
           setDashTaskCategory("general");
+          setDashTaskClientId("");
           toast({ title: "Task added" });
         },
         onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
@@ -6571,6 +6576,21 @@ export default function CommandCenterPage() {
           </DialogHeader>
 
           <div className="mt-3 grid gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Client</Label>
+              <Select value={dashTaskClientId} onValueChange={setDashTaskClientId}>
+                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-dash-task-client">
+                  <SelectValue placeholder="Select a client (optional)…" />
+                </SelectTrigger>
+                <SelectContent className="max-h-52">
+                  <SelectItem value="none">No client</SelectItem>
+                  {(allNeonClientsData?.clients || []).slice(0, 200).map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{[c.firstName, c.surename].filter(Boolean).join(" ") || c.email || c.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Category</Label>
               <Select value={dashTaskCategory} onValueChange={(v) => { setDashTaskCategory(v); setDashNewTitle(""); }}>
