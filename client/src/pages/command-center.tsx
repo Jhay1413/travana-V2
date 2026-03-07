@@ -677,7 +677,7 @@ function ShellNav({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (item.route) { navigate(item.route); return; }
-                                  if (hasSubGroups) { toggleNavItem(item.key); return; }
+                                  if (hasSubGroups) { toggleNavItem(item.key); onActiveChange(item.key); return; }
                                   onActiveChange(item.key);
                                 }}
                                 className={
