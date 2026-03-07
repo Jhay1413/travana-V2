@@ -92,6 +92,7 @@ import {
   Circle,
   Trophy,
   Flame,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1913,6 +1914,9 @@ export default function CommandCenterPage() {
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [addUserStep, setAddUserStep] = useState(0);
   const [addUserData, setAddUserData] = useState({ firstName: "", lastName: "", email: "", phoneNumber: "", role: "Agent", password: "", percentageCommission: "" });
+  const [editUserOpen, setEditUserOpen] = useState(false);
+  const [editUserId, setEditUserId] = useState<string | null>(null);
+  const [editUserData, setEditUserData] = useState({ firstName: "", lastName: "", email: "", phoneNumber: "", role: "Agent", percentageCommission: "" });
   const { data: tourOperators } = useTourOperators();
   const createTourOperatorMutation = useCreateTourOperator();
   const updateTourOperatorMutation = useUpdateTourOperator();
@@ -5361,6 +5365,24 @@ export default function CommandCenterPage() {
                           <option key={r} value={r} className="text-black bg-white">{r}</option>
                         ))}
                       </select>
+                      <button
+                        onClick={() => {
+                          setEditUserId(u.id);
+                          setEditUserData({
+                            firstName: u.firstName || u.name?.split(" ")[0] || "",
+                            lastName: u.lastName || u.name?.split(" ").slice(1).join(" ") || "",
+                            email: u.email || "",
+                            phoneNumber: u.phoneNumber || "",
+                            role: u.role || "Agent",
+                            percentageCommission: u.percentageCommission != null ? String(u.percentageCommission) : "",
+                          });
+                          setEditUserOpen(true);
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 text-black/70 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                        data-testid={`button-edit-user-${u.id}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                       {u.id !== user?.id && (
                         <button
                           onClick={() => {
@@ -5603,6 +5625,91 @@ export default function CommandCenterPage() {
                       {createUserMutation.isPending ? "Creating..." : "Create User"}
                     </Button>
                   )}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={editUserOpen} onOpenChange={setEditUserOpen}>
+              <DialogContent className="sm:max-w-md rounded-3xl">
+                <DialogHeader>
+                  <DialogTitle className="text-base font-semibold">Edit User</DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground">
+                    Update the user's details below.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs mb-1">First Name</Label>
+                      <Input value={editUserData.firstName} onChange={e => setEditUserData(p => ({ ...p, firstName: e.target.value }))} data-testid="input-edit-user-firstname" />
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1">Last Name</Label>
+                      <Input value={editUserData.lastName} onChange={e => setEditUserData(p => ({ ...p, lastName: e.target.value }))} data-testid="input-edit-user-lastname" />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1">Email</Label>
+                    <Input type="email" value={editUserData.email} onChange={e => setEditUserData(p => ({ ...p, email: e.target.value }))} data-testid="input-edit-user-email" />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1">Phone Number</Label>
+                    <Input value={editUserData.phoneNumber} onChange={e => setEditUserData(p => ({ ...p, phoneNumber: e.target.value }))} data-testid="input-edit-user-phone" />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1">Role</Label>
+                    <Select value={editUserData.role} onValueChange={v => setEditUserData(p => ({ ...p, role: v }))}>
+                      <SelectTrigger className="rounded-xl" data-testid="select-edit-user-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["Admin", "Manager", "Agent", "Homeworker", "Referer"].map(r => (
+                          <SelectItem key={r} value={r}>{r}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1">Commission %</Label>
+                    <Input type="number" min="0" max="100" placeholder="Default" value={editUserData.percentageCommission} onChange={e => setEditUserData(p => ({ ...p, percentageCommission: e.target.value }))} data-testid="input-edit-user-commission" />
+                  </div>
+                </div>
+
+                <DialogFooter className="mt-3">
+                  <Button variant="outline" className="rounded-xl" onClick={() => setEditUserOpen(false)} data-testid="button-edit-user-cancel">
+                    Cancel
+                  </Button>
+                  <Button
+                    className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                    disabled={updateUserMutation.isPending || !editUserData.firstName.trim() || !editUserData.email.trim()}
+                    onClick={() => {
+                      if (!editUserId) return;
+                      updateUserMutation.mutate({
+                        id: editUserId,
+                        data: {
+                          name: `${editUserData.firstName.trim()} ${editUserData.lastName.trim()}`.trim(),
+                          email: editUserData.email.trim(),
+                          firstName: editUserData.firstName.trim(),
+                          lastName: editUserData.lastName.trim(),
+                          phoneNumber: editUserData.phoneNumber.trim(),
+                          role: editUserData.role,
+                          ...(editUserData.percentageCommission ? { percentageCommission: parseInt(editUserData.percentageCommission) } : {}),
+                        } as any,
+                      }, {
+                        onSuccess: () => {
+                          toast({ title: "User updated", description: `${editUserData.firstName} ${editUserData.lastName} has been updated.` });
+                          setEditUserOpen(false);
+                        },
+                        onError: (err: any) => {
+                          toast({ title: "Error", description: err?.response?.data?.message || err?.message || "Failed to update user", variant: "destructive" });
+                        },
+                      });
+                    }}
+                    data-testid="button-edit-user-save"
+                  >
+                    {updateUserMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
