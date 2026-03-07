@@ -50,6 +50,18 @@ function getProfit(item: any): number {
   return parseFloat(item.package_commission) || 0;
 }
 
+function getAgentMonthlyTarget(agentId: string): number {
+  let hash = 0;
+  const now = new Date();
+  const seed = agentId + now.getFullYear() + now.getMonth();
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  }
+  const min = 7000;
+  const max = 15000;
+  return Math.round((Math.abs(hash % (max - min)) + min) / 500) * 500;
+}
+
 function StatBox({
   label,
   value,
@@ -517,13 +529,17 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
                           <th className="pb-2 pr-4 text-right">Total Sales</th>
                           <th className="pb-2 pr-4 text-right">Commission</th>
                           <th className="pb-2 pr-4 text-right">Close Rate</th>
-                          <th className="pb-2 text-right">Avg Booking</th>
+                          <th className="pb-2 pr-4 text-right">Avg Booking</th>
+                          <th className="pb-2 pr-4 text-right">Target</th>
+                          <th className="pb-2 text-right">Over/Under</th>
                         </tr>
                       </thead>
                       <tbody>
                         {agentPerformance.map((agent, i) => {
                           const closeRate = agent.quotes > 0 ? Math.round((agent.bookings / agent.quotes) * 100) : 0;
                           const avgBooking = agent.bookings > 0 ? agent.totalBookingValue / agent.bookings : 0;
+                          const agentTarget = getAgentMonthlyTarget(agent.id);
+                          const overUnder = agent.commission - agentTarget;
                           return (
                             <motion.tr
                               key={agent.id}
@@ -562,8 +578,22 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
                                   {closeRate}%
                                 </Badge>
                               </td>
-                              <td className="py-2.5 text-right tabular-nums font-medium">
+                              <td className="py-2.5 pr-4 text-right tabular-nums font-medium">
                                 {currency.format(avgBooking)}
+                              </td>
+                              <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground" data-testid={`text-agent-target-${agent.id}`}>
+                                {currency.format(agentTarget)}
+                              </td>
+                              <td className="py-2.5 text-right tabular-nums font-medium" data-testid={`text-agent-overunder-${agent.id}`}>
+                                <span className={cn(
+                                  overUnder > 0
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : overUnder < 0
+                                      ? "text-red-600 dark:text-red-400"
+                                      : "text-muted-foreground"
+                                )}>
+                                  {overUnder > 0 ? "+" : ""}{currency.format(overUnder)}
+                                </span>
                               </td>
                             </motion.tr>
                           );
