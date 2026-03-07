@@ -27,7 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useTourOperators, useTransactions } from "@/hooks/queries";
-import { useShopTargets } from "@/hooks/queries/use-targets-queries";
+import { useShopTargets, useAgentTargets } from "@/hooks/queries/use-targets-queries";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
 
@@ -51,17 +51,6 @@ function getProfit(item: any): number {
   return parseFloat(item.package_commission) || 0;
 }
 
-function getAgentMonthlyTarget(agentId: string): number {
-  let hash = 0;
-  const now = new Date();
-  const seed = agentId + now.getFullYear() + now.getMonth();
-  for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
-  }
-  const min = 7000;
-  const max = 15000;
-  return Math.round((Math.abs(hash % (max - min)) + min) / 500) * 500;
-}
 
 function StatBox({
   label,
@@ -122,6 +111,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
   const { data: tourOperators } = useTourOperators();
   const { data: transactionsData } = useTransactions();
   const { data: shopTargetsData } = useShopTargets();
+  const { data: agentTargetsData } = useAgentTargets();
   const [toTimePeriod, setToTimePeriod] = useState<TOTimePeriod>("month");
   const [toSortMode, setToSortMode] = useState<TOSortMode>("profit");
   const [toDateFrom, setToDateFrom] = useState("");
@@ -572,7 +562,9 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
                         {agentPerformance.map((agent, i) => {
                           const closeRate = agent.quotes > 0 ? Math.round((agent.bookings / agent.quotes) * 100) : 0;
                           const avgBooking = agent.bookings > 0 ? agent.totalBookingValue / agent.bookings : 0;
-                          const agentTarget = getAgentMonthlyTarget(agent.id);
+                          const nowDate = new Date();
+                          const agentTargetRecord = agentTargetsData?.find((t: any) => t.userId === agent.id && t.year === nowDate.getFullYear() && t.month === (nowDate.getMonth() + 1));
+                          const agentTarget = agentTargetRecord ? parseFloat(agentTargetRecord.targetAmount) || 0 : 0;
                           const overUnder = agent.commission - agentTarget;
                           return (
                             <motion.tr
