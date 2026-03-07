@@ -1914,6 +1914,7 @@ export default function CommandCenterPage() {
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [addUserStep, setAddUserStep] = useState(0);
   const [addUserData, setAddUserData] = useState({ firstName: "", lastName: "", email: "", phoneNumber: "", role: "Agent", password: "", percentageCommission: "" });
+  const [activityPage, setActivityPage] = useState(0);
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [editUserId, setEditUserId] = useState<string | null>(null);
   const [editUserData, setEditUserData] = useState({ firstName: "", lastName: "", email: "", phoneNumber: "", role: "Agent", percentageCommission: "" });
@@ -3066,32 +3067,61 @@ export default function CommandCenterPage() {
                 </div>
               </div>
               {recentActivity.length > 0 ? (
-                <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
-                  {recentActivity.map((a) => {
-                    const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
-                    const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
-                    return (
-                      <div
-                        key={a.id}
-                        className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                        data-testid={`row-activity-${a.id}`}
-                      >
-                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
-                          {icon}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="truncate text-xs font-semibold">{a.action}</div>
-                            <div className="shrink-0 text-[10px] text-black/45 dark:text-white/45">{timeAgo(a.date)}</div>
+                <>
+                  <div className="space-y-1.5">
+                    {recentActivity.slice(activityPage * 10, activityPage * 10 + 10).map((a) => {
+                      const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
+                      const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+                      return (
+                        <div
+                          key={a.id}
+                          className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                          data-testid={`row-activity-${a.id}`}
+                        >
+                          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
+                            {icon}
                           </div>
-                          <div className="truncate text-[10px] text-black/50 dark:text-white/50">
-                            {a.client}{a.agent ? ` · ${a.agent}` : ""}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="truncate text-xs font-semibold">{a.action}</div>
+                              <div className="shrink-0 text-[10px] text-black/45 dark:text-white/45">{timeAgo(a.date)}</div>
+                            </div>
+                            <div className="truncate text-[10px] text-black/50 dark:text-white/50">
+                              {a.client}{a.agent ? ` · ${a.agent}` : ""}
+                            </div>
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                  {recentActivity.length > 10 && (
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="text-[10px] text-black/40 dark:text-white/40">
+                        {activityPage * 10 + 1}–{Math.min(activityPage * 10 + 10, recentActivity.length)} of {recentActivity.length}
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="flex gap-1.5">
+                        {activityPage > 0 && (
+                          <button
+                            onClick={() => setActivityPage(p => p - 1)}
+                            className="rounded-xl border border-black/10 bg-black/5 px-2.5 py-1 text-[10px] font-medium text-black/60 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"
+                            data-testid="button-activity-prev"
+                          >
+                            Previous
+                          </button>
+                        )}
+                        {(activityPage + 1) * 10 < recentActivity.length && (
+                          <button
+                            onClick={() => setActivityPage(p => p + 1)}
+                            className="rounded-xl border border-black/10 bg-black/5 px-2.5 py-1 text-[10px] font-medium text-black/60 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"
+                            data-testid="button-activity-next"
+                          >
+                            Next
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-3 py-4 text-center dark:border-white/10 dark:bg-white/[0.02]">
                   <Activity className="mx-auto h-5 w-5 text-black/20 dark:text-white/20 mb-1.5" />
@@ -3799,32 +3829,61 @@ export default function CommandCenterPage() {
                 </div>
               </div>
               {recentActivity.length > 0 ? (
-                <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
-                  {recentActivity.map((a) => {
-                    const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
-                    const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
-                    return (
-                      <div
-                        key={a.id}
-                        className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                        data-testid={`row-activity-2-${a.id}`}
-                      >
-                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
-                          {icon}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="truncate text-xs font-semibold">{a.action}</div>
-                            <div className="shrink-0 text-[10px] text-black/45 dark:text-white/45">{timeAgo(a.date)}</div>
+                <>
+                  <div className="space-y-1.5">
+                    {recentActivity.slice(activityPage * 10, activityPage * 10 + 10).map((a) => {
+                      const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
+                      const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+                      return (
+                        <div
+                          key={a.id}
+                          className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                          data-testid={`row-activity-2-${a.id}`}
+                        >
+                          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
+                            {icon}
                           </div>
-                          <div className="truncate text-[10px] text-black/50 dark:text-white/50">
-                            {a.client}{a.agent ? ` · ${a.agent}` : ""}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="truncate text-xs font-semibold">{a.action}</div>
+                              <div className="shrink-0 text-[10px] text-black/45 dark:text-white/45">{timeAgo(a.date)}</div>
+                            </div>
+                            <div className="truncate text-[10px] text-black/50 dark:text-white/50">
+                              {a.client}{a.agent ? ` · ${a.agent}` : ""}
+                            </div>
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                  {recentActivity.length > 10 && (
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="text-[10px] text-black/40 dark:text-white/40">
+                        {activityPage * 10 + 1}–{Math.min(activityPage * 10 + 10, recentActivity.length)} of {recentActivity.length}
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="flex gap-1.5">
+                        {activityPage > 0 && (
+                          <button
+                            onClick={() => setActivityPage(p => p - 1)}
+                            className="rounded-xl border border-black/10 bg-black/5 px-2.5 py-1 text-[10px] font-medium text-black/60 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"
+                            data-testid="button-activity-2-prev"
+                          >
+                            Previous
+                          </button>
+                        )}
+                        {(activityPage + 1) * 10 < recentActivity.length && (
+                          <button
+                            onClick={() => setActivityPage(p => p + 1)}
+                            className="rounded-xl border border-black/10 bg-black/5 px-2.5 py-1 text-[10px] font-medium text-black/60 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"
+                            data-testid="button-activity-2-next"
+                          >
+                            Next
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-3 py-4 text-center dark:border-white/10 dark:bg-white/[0.02]">
                   <Activity className="mx-auto h-5 w-5 text-black/20 dark:text-white/20 mb-1.5" />
