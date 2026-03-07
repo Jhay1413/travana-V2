@@ -257,8 +257,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     }
 
     return Array.from(agents.values())
-      .filter(a => a.quotes > 0 || a.bookings > 0)
-      .sort((a, b) => b.revenue - a.revenue);
+      .sort((a, b) => b.commission - a.commission || a.name.localeCompare(b.name));
   }, [transactionsData, apiUsers]);
 
   const destinationRevenue = useMemo(() => {
