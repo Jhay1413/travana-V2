@@ -2466,7 +2466,7 @@ export default function CommandCenterPage() {
                     News
                   </TabsTrigger>
                   <TabsTrigger value="daily-goals" className="rounded-xl" data-testid="tab-overview-daily-goals">
-                    Daily Goals
+                    Notes
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -4069,7 +4069,7 @@ export default function CommandCenterPage() {
                     News
                   </TabsTrigger>
                   <TabsTrigger value="daily-goals" className="rounded-xl" data-testid="tab-daily-goals">
-                    Daily Goals
+                    Notes
                   </TabsTrigger>
                 </TabsList>
               </Tabs>

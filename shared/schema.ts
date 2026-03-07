@@ -1450,3 +1450,36 @@ export const emailAccounts = pgTable("email_accounts", {
 
 export type EmailAccount = typeof emailAccounts.$inferSelect;
 export type InsertEmailAccount = Omit<typeof emailAccounts.$inferInsert, "id" | "createdAt" | "updatedAt">;
+
+// ─── Targets ───────────────────────────────────────────────────────────
+
+export const shopTargetTable = pgTable("shop_target_table", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  year: integer().notNull(),
+  month: integer().notNull(),
+  targetAmount: numeric("target_amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique("shop_target_year_month_unique").on(table.year, table.month)
+]);
+
+export const insertShopTargetSchema = createInsertSchema(shopTargetTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type ShopTarget = typeof shopTargetTable.$inferSelect;
+export type InsertShopTarget = z.infer<typeof insertShopTargetSchema>;
+
+export const agentTargetTable = pgTable("agent_target_table", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  year: integer().notNull(),
+  month: integer().notNull(),
+  targetAmount: numeric("target_amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique("agent_target_user_year_month_unique").on(table.userId, table.year, table.month)
+]);
+
+export const insertAgentTargetSchema = createInsertSchema(agentTargetTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type AgentTarget = typeof agentTargetTable.$inferSelect;
+export type InsertAgentTarget = z.infer<typeof insertAgentTargetSchema>;

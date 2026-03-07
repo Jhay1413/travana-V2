@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,14 @@ import {
   AlertTriangle,
   ArrowRight,
   Copy,
+  Loader2,
 } from "lucide-react";
+import { 
+  useTargetsOverview, 
+  useUpsertShopTargets, 
+  useUpsertAgentTargets 
+} from "@/hooks/queries";
+import type { ShopTargetInput, AgentTargetInput } from "@/types/targets/targets.types";
 
 function generateMonths(count: number) {
   const now = new Date();
@@ -43,34 +50,6 @@ function generateMonths(count: number) {
 }
 
 const MONTHS = generateMonths(24);
-
-const INITIAL_AGENTS = [
-  { id: "1", name: "Sarah Mitchell" },
-  { id: "2", name: "Dan Roberts" },
-  { id: "3", name: "Emma Clarke" },
-  { id: "4", name: "James Wilson" },
-  { id: "5", name: "Tia Morgan" },
-  { id: "6", name: "Casey Ashman" },
-];
-
-function randomTarget(min: number, max: number) {
-  return Math.round((Math.random() * (max - min) + min) / 500) * 500;
-}
-
-function initShopTargets() {
-  const map: Record<string, number> = {};
-  MONTHS.forEach((m) => { map[m.key] = randomTarget(30000, 50000); });
-  return map;
-}
-
-function initAgentTargets(agents: { id: string; name: string }[]) {
-  const map: Record<string, Record<string, number>> = {};
-  agents.forEach((a) => {
-    map[a.id] = {};
-    MONTHS.forEach((m) => { map[a.id][m.key] = randomTarget(7000, 15000); });
-  });
-  return map;
-}
 
 function fmt(v: number) {
   return "£" + v.toLocaleString("en-GB");
@@ -118,19 +97,54 @@ function CurrencyInput({ value, onChange, placeholder, autoFocus, className, tes
 }
 
 export default function AdminFinancialsTargets() {
-  const [agents] = useState(INITIAL_AGENTS);
-  const [shopTargets, setShopTargets] = useState<Record<string, number>>(initShopTargets);
-  const [agentTargets, setAgentTargets] = useState<Record<string, Record<string, number>>>(() => initAgentTargets(INITIAL_AGENTS));
+  // Fetch data from API
+  const { data: overview, isLoading, error } = useTargetsOverview();
+  const upsertShopMutation = useUpsertShopTargets();
+  const upsertAgentMutation = useUpsertAgentTargets();
+
+  // Transform API data to component state format
+  const agents = useMemo(() => {
+    if (!overview?.agents) return [];
+    return overview.agents.map(a => ({ id: a.id, name: a.name }));
+  }, [overview?.agents]);
+
+  const [shopTargets, setShopTargets] = useState<Record<string, number>>({});
+  const [agentTargets, setAgentTargets] = useState<Record<string, Record<string, number>>>({});
+
+  // Initialize state from API data
+  useEffect(() => {
+    if (!overview) return;
+
+    const shopMap: Record<string, number> = {};
+    overview.shopTargets.forEach(target => {
+      const key = `${target.year}-${String(target.month).padStart(2, "0")}`;
+      shopMap[key] = parseFloat(target.targetAmount);
+    });
+    setShopTargets(shopMap);
+
+    const agentMap: Record<string, Record<string, number>> = {};
+    overview.agentTargets.forEach(target => {
+      const key = `${target.year}-${String(target.month).padStart(2, "0")}`;
+      if (!agentMap[target.userId]) agentMap[target.userId] = {};
+      agentMap[target.userId][key] = parseFloat(target.targetAmount);
+    });
+    setAgentTargets(agentMap);
+  }, [overview]);
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardShopDefault, setWizardShopDefault] = useState("40000");
-  const [wizardAgentDefaults, setWizardAgentDefaults] = useState<Record<string, string>>(() => {
-    const m: Record<string, string> = {};
-    INITIAL_AGENTS.forEach(a => { m[a.id] = "10000"; });
-    return m;
-  });
+  const [wizardAgentDefaults, setWizardAgentDefaults] = useState<Record<string, string>>({});
   const [wizardApplyMode, setWizardApplyMode] = useState<"all" | "empty">("all");
+
+  // Initialize wizard agent defaults when agents change
+  useEffect(() => {
+    if (agents.length > 0 && Object.keys(wizardAgentDefaults).length === 0) {
+      const defaults: Record<string, string> = {};
+      agents.forEach(a => { defaults[a.id] = "10000"; });
+      setWizardAgentDefaults(defaults);
+    }
+  }, [agents, wizardAgentDefaults]);
 
   const [editMonth, setEditMonth] = useState<string | null>(null);
   const [editDrafts, setEditDrafts] = useState<{ shop: string; agents: Record<string, string> }>({ shop: "", agents: {} });
@@ -165,68 +179,165 @@ export default function AdminFinancialsTargets() {
     setEditMonth(monthKey);
   }, [shopTargets, agentTargets, agents]);
 
-  const saveEditMonth = useCallback(() => {
+  const saveEditMonth = useCallback(async () => {
     if (!editMonth) return;
+    
+    const monthData = MONTHS.find(m => m.key === editMonth);
+    if (!monthData) return;
+
+    // Update shop target
     const shopVal = parseInt(editDrafts.shop, 10);
     if (!isNaN(shopVal) && shopVal >= 0) {
       setShopTargets(prev => ({ ...prev, [editMonth]: shopVal }));
+      
+      // Save to API
+      await upsertShopMutation.mutateAsync({
+        targets: [{
+          year: monthData.year,
+          month: monthData.monthNum + 1,
+          targetAmount: shopVal.toFixed(2),
+        }]
+      });
     }
+
+    // Update agent targets
+    const agentTargetsToSave: AgentTargetInput[] = [];
     const newAgentTargets = { ...agentTargets };
+    
     for (const a of agents) {
       const val = parseInt(editDrafts.agents[a.id] ?? "0", 10);
       if (!isNaN(val) && val >= 0) {
-        newAgentTargets[a.id] = { ...newAgentTargets[a.id], [editMonth]: val };
+        if (!newAgentTargets[a.id]) newAgentTargets[a.id] = {};
+        newAgentTargets[a.id][editMonth] = val;
+        
+        agentTargetsToSave.push({
+          userId: a.id,
+          year: monthData.year,
+          month: monthData.monthNum + 1,
+          targetAmount: val.toFixed(2),
+        });
       }
     }
+    
     setAgentTargets(newAgentTargets);
+    
+    // Save to API
+    if (agentTargetsToSave.length > 0) {
+      await upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave });
+    }
+    
     setEditMonth(null);
-  }, [editMonth, editDrafts, agents, agentTargets]);
+  }, [editMonth, editDrafts, agents, agentTargets, upsertShopMutation, upsertAgentMutation]);
 
-  const applyWizard = useCallback(() => {
+  const applyWizard = useCallback(async () => {
     const shopVal = parseInt(wizardShopDefault, 10) || 0;
+    
+    // Update local state for shop targets
+    const shopTargetsToSave: ShopTargetInput[] = [];
     setShopTargets(prev => {
       const next = { ...prev };
       MONTHS.forEach(m => {
-        if (wizardApplyMode === "all" || next[m.key] == null) next[m.key] = shopVal;
+        if (wizardApplyMode === "all" || next[m.key] == null) {
+          next[m.key] = shopVal;
+          shopTargetsToSave.push({
+            year: m.year,
+            month: m.monthNum + 1,
+            targetAmount: shopVal.toFixed(2),
+          });
+        }
       });
       return next;
     });
+    
+    // Update local state for agent targets
+    const agentTargetsToSave: AgentTargetInput[] = [];
     setAgentTargets(prev => {
       const next = { ...prev };
       agents.forEach(a => {
         const val = parseInt(wizardAgentDefaults[a.id] || "0", 10) || 0;
         if (!next[a.id]) next[a.id] = {};
         MONTHS.forEach(m => {
-          if (wizardApplyMode === "all" || next[a.id]?.[m.key] == null) next[a.id][m.key] = val;
+          if (wizardApplyMode === "all" || next[a.id]?.[m.key] == null) {
+            next[a.id][m.key] = val;
+            agentTargetsToSave.push({
+              userId: a.id,
+              year: m.year,
+              month: m.monthNum + 1,
+              targetAmount: val.toFixed(2),
+            });
+          }
         });
       });
       return next;
     });
+    
+    // Save to API
+    try {
+      await Promise.all([
+        shopTargetsToSave.length > 0 && upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }),
+        agentTargetsToSave.length > 0 && upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave }),
+      ]);
+    } catch (error) {
+      console.error("Failed to save wizard targets:", error);
+    }
+    
     setWizardOpen(false);
     setWizardStep(0);
-  }, [wizardShopDefault, wizardAgentDefaults, wizardApplyMode, agents]);
+  }, [wizardShopDefault, wizardAgentDefaults, wizardApplyMode, agents, upsertShopMutation, upsertAgentMutation]);
 
-  const copyFromPrevQuarter = () => {
+  const copyFromPrevQuarter = async () => {
     if (quarter === 0) return;
     const prevMonths = MONTHS.slice((quarter - 1) * 3, (quarter - 1) * 3 + 3);
     const currMonths = MONTHS.slice(quarter * 3, quarter * 3 + 3);
+    
+    const shopTargetsToSave: ShopTargetInput[] = [];
+    const agentTargetsToSave: AgentTargetInput[] = [];
+    
     setShopTargets(prev => {
       const next = { ...prev };
       currMonths.forEach((cm, i) => {
-        if (prevMonths[i]) next[cm.key] = prev[prevMonths[i].key] ?? 0;
+        if (prevMonths[i]) {
+          const val = prev[prevMonths[i].key] ?? 0;
+          next[cm.key] = val;
+          shopTargetsToSave.push({
+            year: cm.year,
+            month: cm.monthNum + 1,
+            targetAmount: val.toFixed(2),
+          });
+        }
       });
       return next;
     });
+    
     setAgentTargets(prev => {
       const next = { ...prev };
       agents.forEach(a => {
         if (!next[a.id]) next[a.id] = {};
         currMonths.forEach((cm, i) => {
-          if (prevMonths[i]) next[a.id][cm.key] = (prev[a.id]?.[prevMonths[i].key]) ?? 0;
+          if (prevMonths[i]) {
+            const val = (prev[a.id]?.[prevMonths[i].key]) ?? 0;
+            next[a.id][cm.key] = val;
+            agentTargetsToSave.push({
+              userId: a.id,
+              year: cm.year,
+              month: cm.monthNum + 1,
+              targetAmount: val.toFixed(2),
+            });
+          }
         });
       });
       return next;
     });
+    
+    // Save to API
+    try {
+      await Promise.all([
+        shopTargetsToSave.length > 0 && upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }),
+        agentTargetsToSave.length > 0 && upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave }),
+      ]);
+    } catch (error) {
+      console.error("Failed to copy targets:", error);
+    }
   };
 
   const wizardSteps = [
@@ -241,6 +352,37 @@ export default function AdminFinancialsTargets() {
     const agentTotal = agents.reduce((s, a) => s + (parseInt(editDrafts.agents[a.id] ?? "0", 10) || 0), 0);
     return { shop, agentTotal, diff: agentTotal - shop };
   })() : null;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <section className="space-y-6" data-testid="section-financials-targets">
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-black/40" />
+          <p className="mt-4 text-sm text-black/50">Loading targets data...</p>
+        </div>
+      </section>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <section className="space-y-6" data-testid="section-financials-targets">
+        <Card className="rounded-2xl border-red-200 bg-red-50 p-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <div>
+              <h3 className="font-semibold text-red-900">Failed to load targets</h3>
+              <p className="mt-1 text-sm text-red-700">
+                {error instanceof Error ? error.message : "An error occurred while loading targets data"}
+              </p>
+            </div>
+          </div>
+        </Card>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-6" data-testid="section-financials-targets">

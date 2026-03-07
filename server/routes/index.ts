@@ -28,6 +28,7 @@ import userProfileRoutes from "./userProfile.routes";
 import emailRoutes from "./email.routes";
 import opportunitiesRoutes from "./opportunities.routes";
 import revenueRoutes from "./revenue.routes";
+import targetsRoutes from "./targets.routes";
 
 const router = Router();
 
@@ -60,5 +61,6 @@ router.use("/user-profiles", userProfileRoutes);
 router.use("/emails", emailRoutes);
 router.use("/opportunities", opportunitiesRoutes);
 router.use("/revenue", revenueRoutes);
+router.use("/targets", targetsRoutes);
 
 export default router;

@@ -13,6 +13,7 @@ export { useReplies, replyKeys } from "./use-reply-queries";
 export { useNotifications, useUnreadNotifications, notificationKeys } from "./use-notification-queries";
 export { useDashboardStats, useMyProfit, dashboardKeys } from "./use-dashboard-queries";
 export { useRevenueDashboard, useMonthBookings, useMonthForwards, revenueKeys } from "./use-revenue-queries";
+export { useTargetsOverview, useShopTargets, useUpsertShopTargets, useAgentTargets, useAgentTargetsByUserId, useUpsertAgentTargets, useAgents } from "./use-targets-queries";
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";
 export { useAirports, airportKeys } from "./use-airport-queries";
 export { useAllTasks, useAllTasksExtended, useTasks, useUserTasks, taskKeys } from "./use-task-queries";

@@ -54,6 +54,11 @@ externalPort = 4200
 exposeLocalhost = true
 
 [[ports]]
+localPort = 27657
+externalPort = 8080
+exposeLocalhost = true
+
+[[ports]]
 localPort = 61932
 externalPort = 3001
 exposeLocalhost = true
@@ -104,4 +109,4 @@ integrations = ["javascript_log_in_with_replit:2.0.0"]
 [userenv]
 
 [userenv.shared]
-NEON_DATABASE_URL = "postgresql://neondb_owner:npg_B0ALKiSoDRc7@ep-round-band-ab5h220k-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+NEON_DATABASE_URL = "postgresql://neondb_owner:npg_B0ALKiSoDRc7@ep-dark-moon-abt6m6qo-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"

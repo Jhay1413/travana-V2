@@ -37,6 +37,17 @@ CREATE TABLE "accomodation_type" (
 	"type" varchar
 );
 --> statement-breakpoint
+CREATE TABLE "agent_target_table" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" text NOT NULL,
+	"year" integer NOT NULL,
+	"month" integer NOT NULL,
+	"target_amount" numeric(10, 2) NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "agent_target_user_year_month_unique" UNIQUE("user_id","year","month")
+);
+--> statement-breakpoint
 CREATE TABLE "airport_table" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"airport_code" varchar NOT NULL,
@@ -918,6 +929,16 @@ CREATE TABLE "sessions" (
 	"expire" timestamp NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "shop_target_table" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"year" integer NOT NULL,
+	"month" integer NOT NULL,
+	"target_amount" numeric(10, 2) NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "shop_target_year_month_unique" UNIQUE("year","month")
+);
+--> statement-breakpoint
 CREATE TABLE "tags" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
@@ -1022,7 +1043,6 @@ CREATE TABLE "transaction" (
 	"status" "transaction_status_enum",
 	"is_active" boolean DEFAULT true,
 	"client_id" uuid,
-	"agent_id" text,
 	"lead_source" "lead_source_enum" DEFAULT 'SHOP',
 	"user_id" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
@@ -1097,6 +1117,7 @@ CREATE TABLE "users" (
 ALTER TABLE "accommodation_images" ADD CONSTRAINT "accommodation_images_accommodation_id_accomodation_list_table_id_fk" FOREIGN KEY ("accommodation_id") REFERENCES "public"."accomodation_list_table"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "accomodation_list_table" ADD CONSTRAINT "accomodation_list_table_type_id_accomodation_type_id_fk" FOREIGN KEY ("type_id") REFERENCES "public"."accomodation_type"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "accomodation_list_table" ADD CONSTRAINT "accomodation_list_table_resorts_id_resorts_table_id_fk" FOREIGN KEY ("resorts_id") REFERENCES "public"."resorts_table"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_target_table" ADD CONSTRAINT "agent_target_table_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "airport_table" ADD CONSTRAINT "airport_table_country_id_country_table_id_fk" FOREIGN KEY ("country_id") REFERENCES "public"."country_table"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "booking_table" ADD CONSTRAINT "booking_table_transaction_id_transaction_id_fk" FOREIGN KEY ("transaction_id") REFERENCES "public"."transaction"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "booking_table" ADD CONSTRAINT "booking_table_holiday_type_id_package_type_table_id_fk" FOREIGN KEY ("holiday_type_id") REFERENCES "public"."package_type_table"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1221,7 +1242,6 @@ ALTER TABLE "tickets" ADD CONSTRAINT "tickets_user_id_user_id_fk" FOREIGN KEY ("
 ALTER TABLE "tour_package_commission_table" ADD CONSTRAINT "tour_package_commission_table_package_type_id_package_type_table_id_fk" FOREIGN KEY ("package_type_id") REFERENCES "public"."package_type_table"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tour_package_commission_table" ADD CONSTRAINT "tour_package_commission_table_tour_operator_id_tour_operator_table_id_fk" FOREIGN KEY ("tour_operator_id") REFERENCES "public"."tour_operator_table"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "transaction" ADD CONSTRAINT "transaction_client_id_client_table_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."client_table"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "transaction" ADD CONSTRAINT "transaction_agent_id_user_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "transaction" ADD CONSTRAINT "transaction_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "travel_deal" ADD CONSTRAINT "travel_deal_quote_id_quote_table_id_fk" FOREIGN KEY ("quote_id") REFERENCES "public"."quote_table"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

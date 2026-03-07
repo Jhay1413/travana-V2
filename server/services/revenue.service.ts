@@ -25,17 +25,17 @@ const DEFAULT_MONTHLY_TARGETS: Record<number, number> = {
 
 export const revenueService = {
   /**
-   * Get complete revenue dashboard data for the next 12 months
+   * Get complete revenue dashboard data for the current calendar year (January - December)
    */
   async getRevenueDashboard(): Promise<RevenueDashboardData> {
     const now = new Date();
+    const currentYear = now.getFullYear();
     const monthlyData: MonthForwards[] = [];
 
-    // Calculate forwards for next 12 months
-    for (let i = 0; i < 12; i++) {
-      const targetDate = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
+    // Calculate forwards for all 12 months of the current year (January to December)
+    for (let month = 1; month <= 12; month++) {
+      const targetDate = new Date(currentYear, month - 1, 1);
       const year = targetDate.getFullYear();
-      const month = targetDate.getMonth() + 1;
 
       const { totalCommission, dealCount } = await revenueRepository.getForwardsForMonth(
         year,
@@ -73,13 +73,17 @@ export const revenueService = {
       avgProfit: agent.dealCount > 0 ? agent.totalCommission / agent.dealCount : 0,
     }));
 
-    // Calculate summary metrics
-    const nextMonthForwards = monthlyData[0]?.forwards || 0;
+    // Calculate summary metrics - use the actual next month, not first in array
+    const currentMonth = now.getMonth() + 1; // JS months are 0-indexed
+    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+    const nextMonthData = monthlyData.find(m => m.monthNumber === nextMonth) || monthlyData[0];
+    
+    const nextMonthForwards = nextMonthData?.forwards || 0;
     const total12MonthForwards = monthlyData.reduce((sum, m) => sum + m.forwards, 0);
     const totalDeals = monthlyData.reduce((sum, m) => sum + m.deals, 0);
     const avgDealProfit = totalDeals > 0 ? total12MonthForwards / totalDeals : 0;
 
-    const nextMonthTarget = monthlyData[0]?.target || 10000;
+    const nextMonthTarget = nextMonthData?.target || 10000;
     const nextMonthGap = Math.max(0, nextMonthTarget - nextMonthForwards);
     const dealsNeeded = avgDealProfit > 0 ? Math.ceil(nextMonthGap / avgDealProfit) : 0;
 
@@ -108,6 +112,7 @@ export const revenueService = {
 
     const bookings: BookingDetail[] = bookingsData.map((b) => ({
       bookingId: b.bookingId,
+      clientId: b.clientId,
       clientName: `${b.clientFirstName} ${b.clientSurename}`,
       destination: b.title || "Unknown",
       travelDate: b.travelDate,

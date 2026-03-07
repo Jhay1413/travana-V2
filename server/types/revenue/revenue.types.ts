@@ -19,6 +19,7 @@ export interface AgentPerformance {
 
 export interface BookingDetail {
   bookingId: string;
+  clientId: string;
   clientName: string;
   destination: string;
   travelDate: string;
