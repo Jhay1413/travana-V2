@@ -2320,13 +2320,28 @@ export default function CommandCenterPage() {
         userMap.set(u.id, u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Agent");
       }
     }
+    const quoteClientMap = new Map<string, { name: string; clientId: string }>();
+    for (const t of transactionsData as any[]) {
+      if (!t.client_id) continue;
+      const name = neonMap.get(t.client_id) || "";
+      if (!name) continue;
+      if (t.quotes) {
+        for (const q of t.quotes) {
+          quoteClientMap.set(q.id, { name, clientId: t.client_id });
+        }
+      }
+      if (t.booking) {
+        quoteClientMap.set(t.booking.id || t.id, { name, clientId: t.client_id });
+      }
+    }
     const events: { id: string; action: string; client: string; agent: string; date: Date; type: "enquiry" | "quote" | "booking" | "task" | "note"; link: string }[] = [];
     for (const t of transactionsData as any[]) {
-      const clientName = t.client_id ? (neonMap.get(t.client_id) || "Unknown Client") : "Unknown Client";
+      const directClientName = t.client_id ? (neonMap.get(t.client_id) || "") : "";
       const agentName = t.user_id ? (userMap.get(t.user_id) || "") : "";
-      const cid = t.client_id || "_";
       if (t.enquiry) {
         const d = new Date(t.enquiry.created_at || t.created_at);
+        const clientName = directClientName || "Unknown Client";
+        const cid = t.client_id || "_";
         events.push({ id: `enq-${t.id}`, action: "New enquiry", client: clientName, agent: agentName, date: d, type: "enquiry", link: `/clients/${cid}/enquiries/${t.enquiry.id || t.id}` });
       }
       if (t.quotes) {
@@ -2334,12 +2349,18 @@ export default function CommandCenterPage() {
           if (q.is_active === false) continue;
           const d = new Date(q.date_created || q.created_at || t.created_at);
           const price = parseFloat(q.sales_price) || 0;
+          const resolved = quoteClientMap.get(q.id);
+          const clientName = directClientName || resolved?.name || "Unknown Client";
+          const cid = t.client_id || resolved?.clientId || "_";
           events.push({ id: `qt-${q.id}`, action: `Quote sent${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "quote", link: `/clients/${cid}/quotes/${q.id}` });
         }
       }
       if (t.booking) {
         const d = new Date(t.booking.date_created || t.booking.createdAt || t.created_at);
         const price = parseFloat(t.booking.sales_price) || 0;
+        const resolved = quoteClientMap.get(t.booking.id || t.id);
+        const clientName = directClientName || resolved?.name || "Unknown Client";
+        const cid = t.client_id || resolved?.clientId || "_";
         events.push({ id: `bk-${t.id}`, action: `Booking confirmed${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "booking", link: `/clients/${cid}/bookings/${t.booking.id || t.id}` });
       }
     }
@@ -2347,7 +2368,8 @@ export default function CommandCenterPage() {
       for (const task of allTasksData) {
         const d = new Date(task.createdAt);
         const agentName = task.userId ? (userMap.get(task.userId) || "") : "";
-        const clientName = task.clientName || "Unknown Client";
+        const resolved = task.entityId ? quoteClientMap.get(task.entityId) : undefined;
+        const clientName = task.clientName || resolved?.name || "Unknown Client";
         const taskLabel = task.completed ? `Task completed — ${task.title}` : `Task created — ${task.title}`;
         const entityLink = task.entityType === "quote" ? `/clients/${task.clientId || "_"}/quotes/${task.entityId}` : task.entityType === "booking" ? `/clients/${task.clientId || "_"}/bookings/${task.entityId}` : `/clients/${task.clientId || "_"}/enquiries/${task.entityId}`;
         events.push({ id: `task-${task.id}`, action: taskLabel, client: clientName, agent: agentName, date: d, type: "task", link: entityLink });
