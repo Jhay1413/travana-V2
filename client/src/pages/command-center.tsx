@@ -2320,26 +2320,27 @@ export default function CommandCenterPage() {
         userMap.set(u.id, u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Agent");
       }
     }
-    const events: { id: string; action: string; client: string; agent: string; date: Date; type: "enquiry" | "quote" | "booking" | "note" }[] = [];
+    const events: { id: string; action: string; client: string; agent: string; date: Date; type: "enquiry" | "quote" | "booking" | "note"; link: string }[] = [];
     for (const t of transactionsData as any[]) {
       const clientName = t.client_id ? (neonMap.get(t.client_id) || "Unknown Client") : "Unknown Client";
       const agentName = t.user_id ? (userMap.get(t.user_id) || "") : "";
+      const cid = t.client_id || "_";
       if (t.enquiry) {
         const d = new Date(t.enquiry.created_at || t.created_at);
-        events.push({ id: `enq-${t.id}`, action: "New enquiry", client: clientName, agent: agentName, date: d, type: "enquiry" });
+        events.push({ id: `enq-${t.id}`, action: "New enquiry", client: clientName, agent: agentName, date: d, type: "enquiry", link: `/clients/${cid}/enquiries/${t.enquiry.id || t.id}` });
       }
       if (t.quotes) {
         for (const q of t.quotes) {
           if (q.is_active === false) continue;
           const d = new Date(q.date_created || q.created_at || t.created_at);
           const price = parseFloat(q.sales_price) || 0;
-          events.push({ id: `qt-${q.id}`, action: `Quote sent${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "quote" });
+          events.push({ id: `qt-${q.id}`, action: `Quote sent${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "quote", link: `/clients/${cid}/quotes/${q.id}` });
         }
       }
       if (t.booking) {
         const d = new Date(t.booking.date_created || t.booking.createdAt || t.created_at);
         const price = parseFloat(t.booking.sales_price) || 0;
-        events.push({ id: `bk-${t.id}`, action: `Booking confirmed${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "booking" });
+        events.push({ id: `bk-${t.id}`, action: `Booking confirmed${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "booking", link: `/clients/${cid}/bookings/${t.booking.id || t.id}` });
       }
     }
     const validEvents = events.filter(e => !isNaN(e.date.getTime()));
@@ -3075,7 +3076,8 @@ export default function CommandCenterPage() {
                       return (
                         <div
                           key={a.id}
-                          className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                          className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 cursor-pointer"
+                          onClick={() => navigate(a.link)}
                           data-testid={`row-activity-${a.id}`}
                         >
                           <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
@@ -3837,7 +3839,8 @@ export default function CommandCenterPage() {
                       return (
                         <div
                           key={a.id}
-                          className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                          className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 cursor-pointer"
+                          onClick={() => navigate(a.link)}
                           data-testid={`row-activity-2-${a.id}`}
                         >
                           <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
@@ -4637,7 +4640,8 @@ export default function CommandCenterPage() {
                   return (
                     <div
                       key={a.id}
-                      className="flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                      className="flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 cursor-pointer"
+                      onClick={() => navigate(a.link)}
                       data-testid={`row-activity-panel-${a.id}`}
                     >
                       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
