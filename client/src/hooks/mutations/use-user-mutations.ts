@@ -3,6 +3,16 @@ import { userApi } from "@/api";
 import { userKeys } from "@/hooks/queries";
 import type { User } from "@/types/user";
 
+export function useCreateUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) => userApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
+  });
+}
+
 export function useUpdateUser() {
   const queryClient = useQueryClient();
   return useMutation({

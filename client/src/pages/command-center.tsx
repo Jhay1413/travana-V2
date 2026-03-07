@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useAllTasksExtended, useTickets, useChatConversations, useChatMessages, authKeys } from "@/hooks/queries";
 import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
-import { useCreateClient, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
+import { useCreateClient, useCreateUser, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
@@ -1907,8 +1907,12 @@ export default function CommandCenterPage() {
   const { data: clientsListData } = useNeonClients({ page: clientsListPage, limit: 15, search: clientsListSearch.trim() || undefined });
   const { data: allNeonClientsData } = useNeonClients({ page: 1, limit: 500 });
   const { data: apiUsers } = useUsers();
+  const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [addUserStep, setAddUserStep] = useState(0);
+  const [addUserData, setAddUserData] = useState({ firstName: "", lastName: "", email: "", phoneNumber: "", role: "Agent", password: "", percentageCommission: "" });
   const { data: tourOperators } = useTourOperators();
   const createTourOperatorMutation = useCreateTourOperator();
   const updateTourOperatorMutation = useUpdateTourOperator();
@@ -5311,10 +5315,11 @@ export default function CommandCenterPage() {
                 </div>
                 <Button
                   className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-                  data-testid="button-invite-user"
+                  data-testid="button-add-user"
+                  onClick={() => { setAddUserData({ firstName: "", lastName: "", email: "", phoneNumber: "", role: "Agent", password: "", percentageCommission: "" }); setAddUserStep(0); setAddUserOpen(true); }}
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  Invite
+                  Add User
                 </Button>
               </div>
 
@@ -5450,6 +5455,157 @@ export default function CommandCenterPage() {
                 ))}
               </div>
             </Card>
+
+            <Dialog open={addUserOpen} onOpenChange={setAddUserOpen}>
+              <DialogContent className="sm:max-w-md rounded-3xl">
+                <DialogHeader>
+                  <DialogTitle className="text-base font-semibold">
+                    {addUserStep === 0 && "Step 1 of 3 — Personal Details"}
+                    {addUserStep === 1 && "Step 2 of 3 — Role & Commission"}
+                    {addUserStep === 2 && "Step 3 of 3 — Review & Confirm"}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground">
+                    {addUserStep === 0 && "Enter the new user's name, email and phone number."}
+                    {addUserStep === 1 && "Choose a role and optional commission percentage."}
+                    {addUserStep === 2 && "Review the details below, then click Create to add this user."}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="mt-1 mb-4 flex gap-1">
+                  {[0, 1, 2].map(s => (
+                    <div key={s} className={cn("h-1 flex-1 rounded-full transition-colors", s <= addUserStep ? "bg-blue-500" : "bg-black/10 dark:bg-white/10")} />
+                  ))}
+                </div>
+
+                {addUserStep === 0 && (
+                  <div className="grid gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs mb-1">First Name</Label>
+                        <Input placeholder="First name" value={addUserData.firstName} onChange={e => setAddUserData(p => ({ ...p, firstName: e.target.value }))} data-testid="input-add-user-firstname" />
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1">Last Name</Label>
+                        <Input placeholder="Last name" value={addUserData.lastName} onChange={e => setAddUserData(p => ({ ...p, lastName: e.target.value }))} data-testid="input-add-user-lastname" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1">Email</Label>
+                      <Input placeholder="email@example.com" type="email" value={addUserData.email} onChange={e => setAddUserData(p => ({ ...p, email: e.target.value }))} data-testid="input-add-user-email" />
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1">Phone Number</Label>
+                      <Input placeholder="07700 900000" value={addUserData.phoneNumber} onChange={e => setAddUserData(p => ({ ...p, phoneNumber: e.target.value }))} data-testid="input-add-user-phone" />
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1">Password</Label>
+                      <Input placeholder="Set a password" type="password" value={addUserData.password} onChange={e => setAddUserData(p => ({ ...p, password: e.target.value }))} data-testid="input-add-user-password" />
+                    </div>
+                  </div>
+                )}
+
+                {addUserStep === 1 && (
+                  <div className="grid gap-4">
+                    <div>
+                      <Label className="text-xs mb-1">Role</Label>
+                      <Select value={addUserData.role} onValueChange={v => setAddUserData(p => ({ ...p, role: v }))}>
+                        <SelectTrigger className="rounded-xl" data-testid="select-add-user-role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["Admin", "Manager", "Agent", "Homeworker", "Referer"].map(r => (
+                            <SelectItem key={r} value={r}>{r}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="mt-1.5 text-[10px] text-muted-foreground">
+                        {addUserData.role === "Admin" && "Full system access — manage users, settings, and all data."}
+                        {addUserData.role === "Manager" && "Team oversight — view all agents, approve discounts, run reports."}
+                        {addUserData.role === "Agent" && "Standard agent — manage own clients, quotes and bookings."}
+                        {addUserData.role === "Homeworker" && "Remote agent — limited to own bookings, no admin access."}
+                        {addUserData.role === "Referer" && "Referral partner — view commission on referred bookings only."}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1">Commission %</Label>
+                      <Input placeholder="e.g. 10" type="number" min="0" max="100" value={addUserData.percentageCommission} onChange={e => setAddUserData(p => ({ ...p, percentageCommission: e.target.value }))} data-testid="input-add-user-commission" />
+                      <p className="mt-1 text-[10px] text-muted-foreground">Leave blank for the default rate.</p>
+                    </div>
+                  </div>
+                )}
+
+                {addUserStep === 2 && (
+                  <div className="space-y-3">
+                    <div className="rounded-2xl border border-black/10 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.02] space-y-2">
+                      {[
+                        { label: "Name", value: `${addUserData.firstName} ${addUserData.lastName}`.trim() || "—" },
+                        { label: "Email", value: addUserData.email || "—" },
+                        { label: "Phone", value: addUserData.phoneNumber || "—" },
+                        { label: "Role", value: addUserData.role },
+                        { label: "Commission", value: addUserData.percentageCommission ? `${addUserData.percentageCommission}%` : "Default" },
+                      ].map(row => (
+                        <div key={row.label} className="flex items-center justify-between text-sm" data-testid={`text-add-user-review-${row.label.toLowerCase()}`}>
+                          <span className="text-muted-foreground">{row.label}</span>
+                          <span className="font-medium">{row.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <DialogFooter className="mt-2 flex gap-2 sm:justify-between">
+                  {addUserStep > 0 ? (
+                    <Button variant="outline" className="rounded-xl" onClick={() => setAddUserStep(s => s - 1)} data-testid="button-add-user-back">
+                      Back
+                    </Button>
+                  ) : (
+                    <div />
+                  )}
+                  {addUserStep < 2 ? (
+                    <Button
+                      className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                      disabled={
+                        (addUserStep === 0 && (!addUserData.firstName.trim() || !addUserData.lastName.trim() || !addUserData.email.trim()))
+                      }
+                      onClick={() => setAddUserStep(s => s + 1)}
+                      data-testid="button-add-user-next"
+                    >
+                      Next
+                    </Button>
+                  ) : (
+                    <Button
+                      className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                      disabled={createUserMutation.isPending}
+                      onClick={() => {
+                        const id = crypto.randomUUID();
+                        createUserMutation.mutate({
+                          id,
+                          name: `${addUserData.firstName} ${addUserData.lastName}`.trim(),
+                          email: addUserData.email.trim(),
+                          firstName: addUserData.firstName.trim(),
+                          lastName: addUserData.lastName.trim(),
+                          phoneNumber: addUserData.phoneNumber.trim(),
+                          role: addUserData.role,
+                          password: addUserData.password || undefined,
+                          percentageCommission: addUserData.percentageCommission ? parseInt(addUserData.percentageCommission) : undefined,
+                        }, {
+                          onSuccess: () => {
+                            toast({ title: "User created", description: `${addUserData.firstName} ${addUserData.lastName} has been added.` });
+                            setAddUserOpen(false);
+                          },
+                          onError: (err: any) => {
+                            toast({ title: "Error", description: err?.response?.data?.message || err?.message || "Failed to create user", variant: "destructive" });
+                          },
+                        });
+                      }}
+                      data-testid="button-add-user-create"
+                    >
+                      {createUserMutation.isPending ? "Creating..." : "Create User"}
+                    </Button>
+                  )}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </section>
         );
       }

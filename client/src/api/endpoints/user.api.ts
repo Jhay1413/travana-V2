@@ -7,6 +7,11 @@ export const userApi = {
     return data;
   },
 
+  create: async (userData: Record<string, unknown>): Promise<User> => {
+    const { data } = await axiosClient.post<User>("/api/users", userData);
+    return data;
+  },
+
   update: async (id: string, userData: Partial<User>): Promise<User> => {
     const { data } = await axiosClient.patch<User>(`/api/users/${id}`, userData);
     return data;
