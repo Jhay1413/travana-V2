@@ -137,7 +137,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
   }, [apiUsers]);
 
   const stats = useMemo(() => {
-    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget: 40000, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0 };
+    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget: 40000, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0, monthAvgBookingProfit: 0, monthBookingsCount: 0, monthOpenQuotesValue: 0, monthQuotesCount: 0 };
 
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -145,6 +145,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     const weekStart = new Date(todayStart);
     weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     let todayProfit = 0;
     let weekProfit = 0;
@@ -153,6 +154,10 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     let bookingsCount = 0;
     let totalOpenQuotesValue = 0;
     let quotesCount = 0;
+    let monthTotalBookingProfit = 0;
+    let monthBookingsCount = 0;
+    let monthOpenQuotesValue = 0;
+    let monthQuotesCount = 0;
 
     for (const t of transactionsData) {
       if (t.booking) {
@@ -165,6 +170,11 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
         if (created >= todayStart) todayProfit += profit;
         if (created >= weekStart) weekProfit += profit;
         if (created >= monthStart) monthProfit += profit;
+
+        if (created >= monthStart && created < monthEnd) {
+          monthTotalBookingProfit += profit;
+          monthBookingsCount += 1;
+        }
       }
       if (t.quotes) {
         for (const q of t.quotes) {
@@ -174,6 +184,11 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
           if (qStatus !== "BOOKED" && qStatus !== "BOOKING_CONFIRMED") {
             totalOpenQuotesValue += getProfit(q);
             quotesCount += 1;
+            const qDate = new Date(q.date_created || t.created_at);
+            if (qDate >= monthStart && qDate < monthEnd) {
+              monthOpenQuotesValue += getProfit(q);
+              monthQuotesCount += 1;
+            }
           }
         }
       }
@@ -188,11 +203,19 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
       totalOpenQuotesValue,
       bookingsCount,
       quotesCount,
+      monthAvgBookingProfit: monthBookingsCount > 0 ? monthTotalBookingProfit / monthBookingsCount : 0,
+      monthBookingsCount,
+      monthOpenQuotesValue,
+      monthQuotesCount,
     };
   }, [transactionsData]);
 
   const agentPerformance = useMemo(() => {
     if (!transactionsData || !apiUsers) return [];
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     const agents = new Map<string, { id: string; name: string; revenue: number; commission: number; bookings: number; quotes: number; totalBookingValue: number }>();
 
@@ -216,14 +239,20 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
       if (t.quotes) {
         for (const q of t.quotes) {
           if (q.is_active === false) continue;
-          agent.quotes += 1;
+          const qDate = new Date(q.date_created || t.created_at);
+          if (qDate >= monthStart && qDate < monthEnd) {
+            agent.quotes += 1;
+          }
         }
       }
       if (t.booking) {
-        agent.bookings += 1;
-        agent.revenue += parseFloat(t.booking.sales_price) || 0;
-        agent.commission += getProfit(t.booking);
-        agent.totalBookingValue += parseFloat(t.booking.sales_price) || 0;
+        const bDate = new Date(t.booking.date_created || t.created_at);
+        if (bDate >= monthStart && bDate < monthEnd) {
+          agent.bookings += 1;
+          agent.revenue += parseFloat(t.booking.sales_price) || 0;
+          agent.commission += getProfit(t.booking);
+          agent.totalBookingValue += parseFloat(t.booking.sales_price) || 0;
+        }
       }
     }
 
@@ -497,20 +526,23 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
         <Tabs value={tab}>
           <TabsContent value="agent-performance" className="mt-0">
             <div className="space-y-5" data-testid="panel-agent-performance">
+              <p className="text-xs font-medium text-muted-foreground">
+                Showing data for {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+              </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
                   <p className="text-xs font-medium text-muted-foreground">Average Booking Profit</p>
                   <p className="mt-1 text-xl font-bold" data-testid="stat-avg-booking-value">
-                    {currencyFull.format(stats.avgBookingValue)}
+                    {currencyFull.format(stats.monthAvgBookingProfit)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">{stats.bookingsCount} bookings total</p>
+                  <p className="text-[10px] text-muted-foreground">{stats.monthBookingsCount} bookings this month</p>
                 </div>
                 <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
                   <p className="text-xs font-medium text-muted-foreground">Total Profit Value of Open Quotes</p>
                   <p className="mt-1 text-xl font-bold" data-testid="stat-open-quotes-value">
-                    {currencyFull.format(stats.totalOpenQuotesValue)}
+                    {currencyFull.format(stats.monthOpenQuotesValue)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">{stats.quotesCount} open quotes</p>
+                  <p className="text-[10px] text-muted-foreground">{stats.monthQuotesCount} open quotes this month</p>
                 </div>
               </div>
 
