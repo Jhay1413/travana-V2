@@ -2320,7 +2320,7 @@ export default function CommandCenterPage() {
         userMap.set(u.id, u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Agent");
       }
     }
-    const events: { id: string; action: string; client: string; agent: string; date: Date; type: "enquiry" | "quote" | "booking" | "note"; link: string }[] = [];
+    const events: { id: string; action: string; client: string; agent: string; date: Date; type: "enquiry" | "quote" | "booking" | "task" | "note"; link: string }[] = [];
     for (const t of transactionsData as any[]) {
       const clientName = t.client_id ? (neonMap.get(t.client_id) || "Unknown Client") : "Unknown Client";
       const agentName = t.user_id ? (userMap.get(t.user_id) || "") : "";
@@ -2343,10 +2343,29 @@ export default function CommandCenterPage() {
         events.push({ id: `bk-${t.id}`, action: `Booking confirmed${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "booking", link: `/clients/${cid}/bookings/${t.booking.id || t.id}` });
       }
     }
+    if (allTasksData && Array.isArray(allTasksData)) {
+      for (const task of allTasksData) {
+        const d = new Date(task.createdAt);
+        const agentName = task.userId ? (userMap.get(task.userId) || "") : "";
+        const clientName = task.clientName || "Unknown Client";
+        const taskLabel = task.completed ? `Task completed — ${task.title}` : `Task created — ${task.title}`;
+        const entityLink = task.entityType === "quote" ? `/clients/${task.clientId || "_"}/quotes/${task.entityId}` : task.entityType === "booking" ? `/clients/${task.clientId || "_"}/bookings/${task.entityId}` : `/clients/${task.clientId || "_"}/enquiries/${task.entityId}`;
+        events.push({ id: `task-${task.id}`, action: taskLabel, client: clientName, agent: agentName, date: d, type: "task", link: entityLink });
+      }
+    }
+    if (allTicketsData && Array.isArray(allTicketsData)) {
+      for (const ticket of allTicketsData) {
+        const d = new Date(ticket.createdAt);
+        const agentName = ticket.userName || "";
+        const clientName = ticket.clientName || "Unknown Client";
+        const ticketLabel = `Ticket — ${ticket.subject}`;
+        events.push({ id: `note-${ticket.id}`, action: ticketLabel, client: clientName, agent: agentName, date: d, type: "note", link: `/command-center` });
+      }
+    }
     const validEvents = events.filter(e => !isNaN(e.date.getTime()));
     validEvents.sort((a, b) => b.date.getTime() - a.date.getTime());
-    return validEvents.slice(0, 20);
-  }, [transactionsData, allNeonClientsData, apiUsers]);
+    return validEvents.slice(0, 30);
+  }, [transactionsData, allNeonClientsData, apiUsers, allTasksData, allTicketsData]);
 
   const timeAgo = (date: Date) => {
     const now = new Date();
@@ -3071,8 +3090,8 @@ export default function CommandCenterPage() {
                 <>
                   <div className="space-y-1.5">
                     {recentActivity.slice(activityPage * 10, activityPage * 10 + 10).map((a) => {
-                      const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
-                      const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+                      const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : a.type === "task" ? <ListChecks className="h-3.5 w-3.5" /> : a.type === "note" ? <Ticket className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
+                      const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : a.type === "task" ? "bg-amber-500/10 text-amber-600" : a.type === "note" ? "bg-rose-500/10 text-rose-600" : "bg-purple-500/10 text-purple-600";
                       return (
                         <div
                           key={a.id}
@@ -3834,8 +3853,8 @@ export default function CommandCenterPage() {
                 <>
                   <div className="space-y-1.5">
                     {recentActivity.slice(activityPage * 10, activityPage * 10 + 10).map((a) => {
-                      const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
-                      const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+                      const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : a.type === "task" ? <ListChecks className="h-3.5 w-3.5" /> : a.type === "note" ? <Ticket className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
+                      const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : a.type === "task" ? "bg-amber-500/10 text-amber-600" : a.type === "note" ? "bg-rose-500/10 text-rose-600" : "bg-purple-500/10 text-purple-600";
                       return (
                         <div
                           key={a.id}
@@ -4635,8 +4654,8 @@ export default function CommandCenterPage() {
 
               <div className="space-y-1.5">
                 {recentActivity.length > 0 ? recentActivity.slice(0, 10).map((a) => {
-                  const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
-                  const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+                  const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : a.type === "task" ? <ListChecks className="h-3.5 w-3.5" /> : a.type === "note" ? <Ticket className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
+                  const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : a.type === "task" ? "bg-amber-500/10 text-amber-600" : a.type === "note" ? "bg-rose-500/10 text-rose-600" : "bg-purple-500/10 text-purple-600";
                   return (
                     <div
                       key={a.id}
