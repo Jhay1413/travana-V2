@@ -160,6 +160,7 @@ export default function AdminFinancials() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const totalForwards = MONTHS_DATA.reduce((s, m) => s + m.forwards, 0);
+  const total12Target = MONTHS_DATA.reduce((s, m) => s + m.target, 0);
   const nextMonthForwards = MONTHS_DATA[0]?.forwards ?? 0;
   const totalDeals = MONTHS_DATA.reduce((s, m) => s + m.deals, 0);
   const avgDealProfit = totalDeals > 0 ? Math.round(totalForwards / totalDeals) : 0;
@@ -279,11 +280,16 @@ export default function AdminFinancials() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium text-black/50 dark:text-white/50">12 Month Forwards Total</p>
-              <p className="mt-1 text-2xl font-bold tracking-tight">{fmt(totalForwards)}</p>
-              <p className="mt-0.5 text-[11px] text-black/40 dark:text-white/40">{totalDeals} deals pipeline</p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <p className="text-2xl font-bold tracking-tight">{fmt(totalForwards)}</p>
+                <span className={`text-sm font-semibold ${totalForwards - total12Target >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {totalForwards - total12Target >= 0 ? "+" : ""}{fmt(totalForwards - total12Target)}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-black/40 dark:text-white/40">{totalDeals} deals · target {fmt(total12Target)}</p>
             </div>
-            <div className="rounded-xl bg-emerald-500/10 p-2">
-              <Banknote className="h-4 w-4 text-emerald-600" />
+            <div className={`rounded-xl p-2 ${totalForwards - total12Target >= 0 ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
+              <Banknote className={`h-4 w-4 ${totalForwards - total12Target >= 0 ? "text-emerald-600" : "text-red-600"}`} />
             </div>
           </div>
         </Card>
