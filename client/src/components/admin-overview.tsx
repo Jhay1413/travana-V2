@@ -27,6 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useTourOperators, useTransactions } from "@/hooks/queries";
+import { useShopTargets } from "@/hooks/queries/use-targets-queries";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
 
@@ -120,6 +121,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
   const [tab, setTab] = useState("agent-performance");
   const { data: tourOperators } = useTourOperators();
   const { data: transactionsData } = useTransactions();
+  const { data: shopTargetsData } = useShopTargets();
   const [toTimePeriod, setToTimePeriod] = useState<TOTimePeriod>("month");
   const [toSortMode, setToSortMode] = useState<TOSortMode>("profit");
   const [toDateFrom, setToDateFrom] = useState("");
@@ -137,9 +139,10 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
   }, [apiUsers]);
 
   const stats = useMemo(() => {
-    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget: 40000, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0, monthAvgBookingProfit: 0, monthBookingsCount: 0, monthOpenQuotesValue: 0, monthQuotesCount: 0 };
-
     const now = new Date();
+    const currentMonthTarget = shopTargetsData?.find((t: any) => t.year === now.getFullYear() && t.month === (now.getMonth() + 1));
+    const salesTarget = currentMonthTarget ? parseFloat(currentMonthTarget.targetAmount) || 0 : 0;
+    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0, monthAvgBookingProfit: 0, monthBookingsCount: 0, monthOpenQuotesValue: 0, monthQuotesCount: 0 };
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dayOfWeek = now.getDay() || 7;
     const weekStart = new Date(todayStart);
@@ -198,7 +201,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
       todayProfit,
       weekProfit,
       monthProfit,
-      salesTarget: 40000,
+      salesTarget,
       avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0,
       totalOpenQuotesValue,
       bookingsCount,
@@ -208,7 +211,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
       monthOpenQuotesValue,
       monthQuotesCount,
     };
-  }, [transactionsData]);
+  }, [transactionsData, shopTargetsData]);
 
   const agentPerformance = useMemo(() => {
     if (!transactionsData || !apiUsers) return [];

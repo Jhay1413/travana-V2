@@ -10,6 +10,7 @@ import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirpo
 import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
 import { useCreateClient, useCreateUser, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
+import { useShopTargets } from "@/hooks/queries/use-targets-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import EmailInbox from "@/components/email-inbox";
@@ -1862,6 +1863,7 @@ export default function CommandCenterPage() {
   const displayName = user?.firstName || user?.name || user?.email || "User";
 
   const { data: dashboardStats } = useDashboardStats();
+  const { data: shopTargetsData } = useShopTargets();
   const isRestrictedRole = role !== "Admin" && role !== "Manager";
   const { data: transactionsData } = useTransactions(isRestrictedRole && currentUser?.id ? { agentId: currentUser.id } : undefined);
 
@@ -2273,8 +2275,10 @@ export default function CommandCenterPage() {
   }, [dashboardStats, allClients]);
 
   const profitStats = useMemo(() => {
-    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget: 150000, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0 };
     const now = new Date();
+    const currentMonthTarget = shopTargetsData?.find((t: any) => t.year === now.getFullYear() && t.month === (now.getMonth() + 1));
+    const salesTarget = currentMonthTarget ? parseFloat(currentMonthTarget.targetAmount) || 0 : 0;
+    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0 };
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dayOfWeek = now.getDay() || 7;
     const weekStart = new Date(todayStart);
@@ -2302,8 +2306,8 @@ export default function CommandCenterPage() {
         }
       }
     }
-    return { todayProfit, weekProfit, monthProfit, salesTarget: 150000, avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0, totalOpenQuotesValue, bookingsCount, quotesCount };
-  }, [transactionsData]);
+    return { todayProfit, weekProfit, monthProfit, salesTarget, avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0, totalOpenQuotesValue, bookingsCount, quotesCount };
+  }, [transactionsData, shopTargetsData]);
 
   const targetPct = profitStats.salesTarget > 0 ? Math.round((profitStats.monthProfit / profitStats.salesTarget) * 100) : 0;
 
