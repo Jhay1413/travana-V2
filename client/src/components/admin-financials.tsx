@@ -310,12 +310,12 @@ export default function AdminFinancials() {
         <Card className="rounded-2xl border-black/10 bg-white/80 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="kpi-deals-needed">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-medium text-black/50 dark:text-white/50">Deals Needed To Hit Target</p>
+              <p className="text-xs font-medium text-black/50 dark:text-white/50">Hit Target This Month</p>
               <p className="mt-1 text-2xl font-bold tracking-tight">
                 {dealsNeeded > 0 ? `${dealsNeeded} deals` : "On target"}
               </p>
               <p className="mt-0.5 text-[11px] text-black/40 dark:text-white/40">
-                {dealsNeeded > 0 ? `${fmt(nextMonthGap)} shortfall` : "Next month covered"}
+                {dealsNeeded > 0 ? `${fmt(nextMonthGap)} shortfall` : "Target covered"}
               </p>
             </div>
             <div className="rounded-xl bg-amber-500/10 p-2">
