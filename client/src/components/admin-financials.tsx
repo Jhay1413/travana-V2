@@ -43,73 +43,9 @@ import {
   ChevronRight,
   ArrowUpDown,
   Users,
+  Loader2,
 } from "lucide-react";
-
-const MONTHS_DATA = (() => {
-  const now = new Date();
-  const months: {
-    month: string;
-    shortMonth: string;
-    forwards: number;
-    target: number;
-    deals: number;
-  }[] = [];
-  const targets = [10000, 10000, 12000, 12000, 15000, 15000, 12000, 10000, 10000, 12000, 15000, 12000];
-  const forwardsValues = [8450, 11200, 9800, 14500, 13200, 16800, 11400, 7200, 10800, 13500, 14200, 11300];
-  const dealCounts = [16, 22, 19, 28, 25, 32, 21, 14, 20, 26, 27, 22];
-
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
-    const monthName = d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-    const shortName = d.toLocaleDateString("en-GB", { month: "short" });
-    months.push({
-      month: monthName,
-      shortMonth: shortName,
-      forwards: forwardsValues[i],
-      target: targets[i],
-      deals: dealCounts[i],
-    });
-  }
-  return months;
-})();
-
-const AGENTS_DATA = [
-  { name: "Sarah Mitchell", forwards: 32500, deals: 61, avgProfit: 533 },
-  { name: "Dan Roberts", forwards: 21400, deals: 38, avgProfit: 563 },
-  { name: "Emma Clarke", forwards: 18200, deals: 34, avgProfit: 535 },
-  { name: "James Wilson", forwards: 15600, deals: 29, avgProfit: 538 },
-  { name: "Tia Morgan", forwards: 12800, deals: 24, avgProfit: 533 },
-  { name: "Casey Ashman", forwards: 9200, deals: 17, avgProfit: 541 },
-];
-
-const BOOKINGS_BY_MONTH: Record<
-  string,
-  { client: string; destination: string; travelDate: string; commission: number; agent: string }[]
-> = {};
-
-MONTHS_DATA.forEach((m) => {
-  const agents = ["Sarah Mitchell", "Dan Roberts", "Emma Clarke", "James Wilson", "Tia Morgan", "Casey Ashman"];
-  const destinations = ["Tenerife", "Crete", "Majorca", "Turkey", "Egypt", "Maldives", "Barbados", "Dubai", "Lanzarote", "Rhodes"];
-  const clients = [
-    "John Smith", "Claire Brown", "Michael Davis", "Sophie Wilson", "David Taylor",
-    "Emma White", "James Harris", "Lucy Martin", "Robert Jones", "Hannah Clark",
-    "Tom Walker", "Olivia King", "George Wright", "Amy Green", "Chris Hall",
-    "Megan Adams", "Paul Baker", "Katie Young", "Ryan Allen", "Sarah Scott",
-  ];
-  const count = m.deals;
-  const bookings = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(m.month.includes("2026") ? 2026 : 2027, new Date(Date.parse(m.month.split(" ")[0] + " 1, 2000")).getMonth(), Math.floor(Math.random() * 28) + 1);
-    bookings.push({
-      client: clients[i % clients.length],
-      destination: destinations[i % destinations.length],
-      travelDate: d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-      commission: Math.round(m.forwards / count + (Math.random() - 0.5) * 200),
-      agent: agents[i % agents.length],
-    });
-  }
-  BOOKINGS_BY_MONTH[m.month] = bookings;
-});
+import type { BookingDetail } from "@/types/revenue/revenue.types";
 
 function fmt(v: number) {
   return "£" + v.toLocaleString("en-GB");
@@ -156,32 +92,46 @@ type SortKey = "travelDate" | "commission" | "agent";
 export default function AdminFinancials() {
   const [view, setView] = useState<"chart" | "table">("chart");
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("commission");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const totalForwards = MONTHS_DATA.reduce((s, m) => s + m.forwards, 0);
+  // Fetch dashboard data
+  const { data: dashboardData, isLoading, error } = useRevenueDashboard();
+
+  // Fetch bookings for selected month
+  const { data: monthBookingsData } = useMonthBookings(
+    selectedYear || 0,
+    selectedMonthNumber || 0
+  );
+
+  const MONTHS_DATA = dashboardData?.monthlyData || [];
+  const AGENTS_DATA = dashboardData?.agentPerformance || [];
+
+  const totalForwards = dashboardData?.total12MonthForwards || 0;
   const total12Target = MONTHS_DATA.reduce((s, m) => s + m.target, 0);
-  const nextMonthForwards = MONTHS_DATA[0]?.forwards ?? 0;
+  const nextMonthForwards = dashboardData?.nextMonthForwards || 0;
   const totalDeals = MONTHS_DATA.reduce((s, m) => s + m.deals, 0);
-  const avgDealProfit = totalDeals > 0 ? Math.round(totalForwards / totalDeals) : 0;
-  const nextMonthTarget = MONTHS_DATA[0]?.target ?? 10000;
+  const avgDealProfit = dashboardData?.avgDealProfit || 0;
+  const nextMonthTarget = dashboardData?.nextMonthTarget || 10000;
   const nextMonthGap = Math.max(0, nextMonthTarget - nextMonthForwards);
-  const dealsNeeded = avgDealProfit > 0 ? Math.ceil(nextMonthGap / avgDealProfit) : 0;
+  const dealsNeeded = dashboardData?.dealsNeeded || 0;
 
   const maxAgentForwards = Math.max(...AGENTS_DATA.map((a) => a.forwards));
 
   const sortedBookings = useMemo(() => {
-    if (!selectedMonth || !BOOKINGS_BY_MONTH[selectedMonth]) return [];
-    const bookings = [...BOOKINGS_BY_MONTH[selectedMonth]];
+    if (!monthBookingsData?.bookings) return [];
+    const bookings = [...monthBookingsData.bookings];
     bookings.sort((a, b) => {
       if (sortKey === "commission") return sortDir === "asc" ? a.commission - b.commission : b.commission - a.commission;
-      if (sortKey === "agent") return sortDir === "asc" ? a.agent.localeCompare(b.agent) : b.agent.localeCompare(a.agent);
+      if (sortKey === "agent") return sortDir === "asc" ? a.agentName.localeCompare(b.agentName) : b.agentName.localeCompare(a.agentName);
       return sortDir === "asc"
         ? new Date(a.travelDate).getTime() - new Date(b.travelDate).getTime()
         : new Date(b.travelDate).getTime() - new Date(a.travelDate).getTime();
     });
     return bookings;
-  }, [selectedMonth, sortKey, sortDir]);
+  }, [monthBookingsData, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -190,6 +140,34 @@ export default function AdminFinancials() {
       setSortDir("desc");
     }
   };
+
+  const handleMonthClick = (monthData: typeof MONTHS_DATA[0]) => {
+    setSelectedMonth(monthData.month);
+    setSelectedYear(monthData.year);
+    setSelectedMonthNumber(monthData.monthNumber);
+  };
+
+  if (isLoading) {
+    return (
+      <section className="flex h-96 items-center justify-center">
+        <div className="flex items-center gap-2 text-black/50">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Loading revenue dashboard...</span>
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="flex h-96 items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600">Failed to load revenue dashboard</p>
+          <p className="mt-1 text-sm text-black/50">Please try refreshing the page</p>
+        </div>
+      </section>
+    );
+  }
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
@@ -388,7 +366,7 @@ export default function AdminFinancials() {
                   <TableRow
                     key={m.month}
                     className="cursor-pointer border-black/5 transition hover:bg-black/[0.02] dark:border-white/5 dark:hover:bg-white/[0.02]"
-                    onClick={() => setSelectedMonth(m.month)}
+                    onClick={() => handleMonthClick(m)}
                     data-testid={`row-forwards-${m.shortMonth}`}
                   >
                     <TableCell className="text-sm font-medium">{m.month}</TableCell>
@@ -465,7 +443,13 @@ export default function AdminFinancials() {
         </div>
       </Card>
 
-      <Sheet open={!!selectedMonth} onOpenChange={(open) => !open && setSelectedMonth(null)}>
+      <Sheet open={!!selectedMonth} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedMonth(null);
+          setSelectedYear(null);
+          setSelectedMonthNumber(null);
+        }
+      }}>
         <SheetContent className="w-full overflow-y-auto border-black/10 bg-white/95 backdrop-blur-xl sm:max-w-lg" data-testid="drawer-month-detail">
           <SheetHeader>
             <SheetTitle className="text-base font-semibold">{selectedMonth} — Booking Details</SheetTitle>
@@ -491,24 +475,27 @@ export default function AdminFinancials() {
             <div className="space-y-2">
               {sortedBookings.map((b, i) => (
                 <div
-                  key={i}
+                  key={b.bookingId}
                   className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white p-3 dark:border-white/5 dark:bg-white/5"
                   data-testid={`booking-detail-${i}`}
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{b.client}</p>
+                    <p className="text-sm font-medium">{b.clientName}</p>
                     <div className="mt-0.5 flex items-center gap-2 text-[11px] text-black/45">
                       <span>{b.destination}</span>
                       <span>·</span>
-                      <span>{b.travelDate}</span>
+                      <span>{new Date(b.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-emerald-600">{fmt(b.commission)}</p>
-                    <p className="text-[11px] text-black/40">{b.agent}</p>
+                    <p className="text-[11px] text-black/40">{b.agentName}</p>
                   </div>
                 </div>
               ))}
+              {sortedBookings.length === 0 && (
+                <p className="py-8 text-center text-sm text-black/40">No bookings found for this month</p>
+              )}
             </div>
           </div>
         </SheetContent>
