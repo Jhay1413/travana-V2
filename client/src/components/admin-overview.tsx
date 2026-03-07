@@ -125,7 +125,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
   }, [apiUsers]);
 
   const stats = useMemo(() => {
-    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget: 150000, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0 };
+    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget: 40000, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0 };
 
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -171,7 +171,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
       todayProfit,
       weekProfit,
       monthProfit,
-      salesTarget: 150000,
+      salesTarget: 40000,
       avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0,
       totalOpenQuotesValue,
       bookingsCount,
