@@ -46,7 +46,7 @@ import {
   Loader2,
 } from "lucide-react";
 import type { BookingDetail } from "@/types/revenue/revenue.types";
-import { useRevenueDashboard } from "@/hooks/queries/use-revenue-queries";
+import { useRevenueDashboard, useMonthBookings } from "@/hooks/queries/use-revenue-queries";
 
 function fmt(v: number) {
   return "£" + v.toLocaleString("en-GB");
