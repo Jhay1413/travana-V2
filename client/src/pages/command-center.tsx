@@ -2306,6 +2306,62 @@ export default function CommandCenterPage() {
 
   const targetPct = profitStats.salesTarget > 0 ? Math.round((profitStats.monthProfit / profitStats.salesTarget) * 100) : 0;
 
+  const recentActivity = useMemo(() => {
+    if (!transactionsData) return [];
+    const neonMap = new Map<string, string>();
+    for (const c of (allNeonClientsData?.clients || [])) {
+      const title = c.title && c.title !== "NULL" ? c.title : "";
+      neonMap.set(c.id, [title, c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown");
+    }
+    const userMap = new Map<string, string>();
+    if (apiUsers) {
+      for (const u of apiUsers as any[]) {
+        userMap.set(u.id, u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Agent");
+      }
+    }
+    const events: { id: string; action: string; client: string; agent: string; date: Date; type: "enquiry" | "quote" | "booking" | "note" }[] = [];
+    for (const t of transactionsData as any[]) {
+      const clientName = t.client_id ? (neonMap.get(t.client_id) || "Unknown Client") : "Unknown Client";
+      const agentName = t.user_id ? (userMap.get(t.user_id) || "") : "";
+      if (t.enquiry) {
+        const d = new Date(t.enquiry.created_at || t.created_at);
+        events.push({ id: `enq-${t.id}`, action: "New enquiry", client: clientName, agent: agentName, date: d, type: "enquiry" });
+      }
+      if (t.quotes) {
+        for (const q of t.quotes) {
+          if (q.is_active === false) continue;
+          const d = new Date(q.date_created || q.created_at || t.created_at);
+          const price = parseFloat(q.sales_price) || 0;
+          events.push({ id: `qt-${q.id}`, action: `Quote sent${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "quote" });
+        }
+      }
+      if (t.booking) {
+        const d = new Date(t.booking.date_created || t.booking.createdAt || t.created_at);
+        const price = parseFloat(t.booking.sales_price) || 0;
+        events.push({ id: `bk-${t.id}`, action: `Booking confirmed${price ? ` — ${currencyFull.format(price)}` : ""}`, client: clientName, agent: agentName, date: d, type: "booking" });
+      }
+    }
+    const validEvents = events.filter(e => !isNaN(e.date.getTime()));
+    validEvents.sort((a, b) => b.date.getTime() - a.date.getTime());
+    return validEvents.slice(0, 20);
+  }, [transactionsData, allNeonClientsData, apiUsers]);
+
+  const timeAgo = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days === 1) return "Yesterday";
+    if (days < 7) return `${days}d ago`;
+    const weeks = Math.floor(days / 7);
+    if (weeks < 5) return `${weeks}w ago`;
+    return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  };
+
   const profitStatBoxes = (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <StatBox label="Today's Total Profit" value={currency.format(profitStats.todayProfit)} icon={CircleDollarSign} color="bg-emerald-500" subtext="Profit from today's bookings" />
@@ -2995,58 +3051,56 @@ export default function CommandCenterPage() {
                 )}
               </Card>
 
-            <Card className="glass ringed grain rounded-3xl p-4">
-              <div className="space-y-1">
-                <div className="text-xs text-black/70 dark:text-white/70">Activity</div>
-                <div className="title-serif text-lg font-semibold">Recent</div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {[
-                  { id: 1, action: "Quote sent", client: "Ava Harrington", meta: "2h ago" },
-                  { id: 2, action: "Booking confirmed", client: "James Whitmore", meta: "Yesterday" },
-                  { id: 3, action: "New enquiry", client: "Emma Richardson", meta: "2d ago" },
-                ].map((a) => (
-                  <button
-                    key={a.id}
-                    className="flex w-full items-start gap-3 rounded-2xl border border-black/10 bg-black/5 p-3 text-left hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                  >
-                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                      <Activity className="h-4 w-4 text-black/70 dark:text-white/80" />
+            <Card className="glass ringed grain rounded-3xl p-4" data-testid="card-recent-activity">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-500/10">
+                    <Activity className="h-3.5 w-3.5 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-black/80 dark:text-white/80">Recent Activity</div>
+                    <div className="text-[10px] text-black/45 dark:text-white/45">
+                      {recentActivity.length > 0 ? `${recentActivity.length} events` : "No activity yet"}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="truncate text-sm font-medium">{a.action}</div>
-                        <div className="shrink-0 text-xs text-black/45 dark:text-white/45">{a.meta}</div>
-                      </div>
-                      <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55">{a.client}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Card>
-
-            <div className="rounded-3xl border border-black/10 bg-black/5 p-4 ringed dark:border-white/10 dark:bg-white/5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-black/70 dark:text-white/70">Assist</div>
-                  <div className="title-serif text-lg font-semibold">Next-best actions</div>
-                  <div className="text-xs text-black/55 dark:text-white/55">
-                    High intent leads and at-risk quotes detected.
                   </div>
                 </div>
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                  <Sparkles className="h-5 w-5 text-black/70 dark:text-white/80" />
-                </div>
               </div>
-              <div className="mt-3 grid gap-2">
-                <div className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
-                  Refresh Noah's quote with alternative departure airport (+£320 margin).
+              {recentActivity.length > 0 ? (
+                <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
+                  {recentActivity.map((a) => {
+                    const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
+                    const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+                    return (
+                      <div
+                        key={a.id}
+                        className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                        data-testid={`row-activity-${a.id}`}
+                      >
+                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
+                          {icon}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="truncate text-xs font-semibold">{a.action}</div>
+                            <div className="shrink-0 text-[10px] text-black/45 dark:text-white/45">{timeAgo(a.date)}</div>
+                          </div>
+                          <div className="truncate text-[10px] text-black/50 dark:text-white/50">
+                            {a.client}{a.agent ? ` · ${a.agent}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="rounded-2xl border border-black/10 bg-black/5 px-3 py-2 text-xs text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/70">
-                  Sofia's enquiry: propose two itineraries, one adventure-forward.
+              ) : (
+                <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-3 py-4 text-center dark:border-white/10 dark:bg-white/[0.02]">
+                  <Activity className="mx-auto h-5 w-5 text-black/20 dark:text-white/20 mb-1.5" />
+                  <div className="text-[11px] text-black/40 dark:text-white/40">
+                    Activity will appear here as you create enquiries, quotes, and bookings.
+                  </div>
                 </div>
-              </div>
-            </div>
+              )}
+            </Card>
           </div>
           </div>
         </section>
@@ -3730,34 +3784,55 @@ export default function CommandCenterPage() {
           </Card>
 
           <div className="flex flex-col gap-4">
-            <Card className="glass ringed grain rounded-3xl p-4">
-              <div className="space-y-1">
-                <div className="text-xs text-black/70 dark:text-white/70">Activity</div>
-                <div className="title-serif text-lg font-semibold">Recent</div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {[
-                  { id: 1, action: "Quote sent", client: "Ava Harrington", meta: "2h ago" },
-                  { id: 2, action: "Booking confirmed", client: "James Whitmore", meta: "Yesterday" },
-                  { id: 3, action: "New enquiry", client: "Emma Richardson", meta: "2d ago" },
-                ].map((a) => (
-                  <button
-                    key={a.id}
-                    className="flex w-full items-start gap-3 rounded-2xl border border-black/10 bg-black/5 p-3 text-left hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                  >
-                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                      <Activity className="h-4 w-4 text-black/70 dark:text-white/80" />
+            <Card className="glass ringed grain rounded-3xl p-4" data-testid="card-recent-activity-2">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-500/10">
+                    <Activity className="h-3.5 w-3.5 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-black/80 dark:text-white/80">Recent Activity</div>
+                    <div className="text-[10px] text-black/45 dark:text-white/45">
+                      {recentActivity.length > 0 ? `${recentActivity.length} events` : "No activity yet"}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="truncate text-sm font-medium">{a.action}</div>
-                        <div className="shrink-0 text-xs text-black/45 dark:text-white/45">{a.meta}</div>
+                  </div>
+                </div>
+              </div>
+              {recentActivity.length > 0 ? (
+                <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
+                  {recentActivity.map((a) => {
+                    const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
+                    const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+                    return (
+                      <div
+                        key={a.id}
+                        className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                        data-testid={`row-activity-2-${a.id}`}
+                      >
+                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
+                          {icon}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="truncate text-xs font-semibold">{a.action}</div>
+                            <div className="shrink-0 text-[10px] text-black/45 dark:text-white/45">{timeAgo(a.date)}</div>
+                          </div>
+                          <div className="truncate text-[10px] text-black/50 dark:text-white/50">
+                            {a.client}{a.agent ? ` · ${a.agent}` : ""}
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55">{a.client}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-3 py-4 text-center dark:border-white/10 dark:bg-white/[0.02]">
+                  <Activity className="mx-auto h-5 w-5 text-black/20 dark:text-white/20 mb-1.5" />
+                  <div className="text-[11px] text-black/40 dark:text-white/40">
+                    Activity will appear here as you create enquiries, quotes, and bookings.
+                  </div>
+                </div>
+              )}
             </Card>
 
               <Card className="glass ringed grain rounded-3xl p-4" data-testid="card-top-clients-section">
@@ -4496,33 +4571,35 @@ export default function CommandCenterPage() {
 
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
-              <div className="space-y-2">
-                {seedActivity.map((a) => (
-                  <button
-                    key={a.id}
-                    className="w-full rounded-3xl border border-black/10 bg-black/5 p-3 text-left transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
-                    data-testid={`row-activity-${a.id}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/5 dark:text-white/80">
-                        <IconForActivity type={a.type} />
+              <div className="space-y-1.5">
+                {recentActivity.length > 0 ? recentActivity.slice(0, 10).map((a) => {
+                  const icon = a.type === "booking" ? <Plane className="h-3.5 w-3.5" /> : a.type === "quote" ? <Sparkles className="h-3.5 w-3.5" /> : <Compass className="h-3.5 w-3.5" />;
+                  const iconBg = a.type === "booking" ? "bg-emerald-500/10 text-emerald-600" : a.type === "quote" ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+                  return (
+                    <div
+                      key={a.id}
+                      className="flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"
+                      data-testid={`row-activity-panel-${a.id}`}
+                    >
+                      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-black/10 ${iconBg} dark:border-white/10`}>
+                        {icon}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <div className="truncate text-sm font-semibold" data-testid={`text-activity-label-${a.id}`}>
-                            {a.label}
-                          </div>
-                          <div className="text-xs text-black/45 dark:text-white/45" data-testid={`text-activity-time-${a.id}`}>
-                            {a.time}
-                          </div>
+                          <div className="truncate text-xs font-semibold">{a.action}</div>
+                          <div className="shrink-0 text-[10px] text-black/45 dark:text-white/45">{timeAgo(a.date)}</div>
                         </div>
-                        <div className="mt-1 truncate text-xs text-black/55 dark:text-white/55" data-testid={`text-activity-meta-${a.id}`}>
-                          {a.meta}
+                        <div className="truncate text-[10px] text-black/50 dark:text-white/50">
+                          {a.client}{a.agent ? ` · ${a.agent}` : ""}
                         </div>
                       </div>
                     </div>
-                  </button>
-                ))}
+                  );
+                }) : (
+                  <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-3 py-4 text-center dark:border-white/10 dark:bg-white/[0.02]">
+                    <div className="text-[11px] text-black/40 dark:text-white/40">No recent activity</div>
+                  </div>
+                )}
               </div>
             </Card>
 
