@@ -147,10 +147,12 @@ export default function AdminFinancialsTargets() {
     });
   }, [shopTargets, agentTargets, agents]);
 
+  const validationData12 = validationData.slice(0, 12);
+
   const overallHealth = useMemo(() => {
-    const balanced = validationData.filter(v => Math.abs(v.diff) < 500).length;
-    return Math.round((balanced / validationData.length) * 100);
-  }, [validationData]);
+    const balanced = validationData12.filter(v => Math.abs(v.diff) < 500).length;
+    return Math.round((balanced / validationData12.length) * 100);
+  }, [validationData12]);
 
   const openEditMonth = useCallback((monthKey: string) => {
     setEditDrafts({
@@ -276,7 +278,7 @@ export default function AdminFinancialsTargets() {
             </div>
             <span className="text-lg font-bold">{overallHealth}%</span>
           </div>
-          <p className="mt-1 text-[11px] text-black/40">{validationData.filter(v => Math.abs(v.diff) < 500).length} of {validationData.length} months balanced</p>
+          <p className="mt-1 text-[11px] text-black/40">{validationData12.filter(v => Math.abs(v.diff) < 500).length} of {validationData12.length} months balanced</p>
         </Card>
         <Card className="rounded-2xl border-black/10 bg-white/80 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5">
           <p className="text-xs font-medium text-black/50 dark:text-white/50">Total Shop Target (12m)</p>
