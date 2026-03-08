@@ -21,6 +21,7 @@ import PipelinePage from "@/pages/pipeline";
 import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";
 import SocialQuotePage from "@/pages/social-quote";
+import DestinationGuruPage from "@/pages/destination-guru";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -48,6 +49,7 @@ function AuthenticatedRouter() {
       <Route path="/clients/:clientId/enquiries/:enquiryId" component={EnquiryPage} />
       <Route path="/enquiries/:enquiryId" component={EnquiryPage} />
       <Route path="/pipeline" component={PipelinePage} />
+      <Route path="/destination-guru" component={DestinationGuruPage} />
       <Route path="/social-posts" component={SocialPostsPage} />
       <Route path="/social-posts/quotes/:quoteId" component={SocialQuotePage} />
       <Route path="/tickets" component={TicketsPage} />

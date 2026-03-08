@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon } from "lucide-react";
+import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -23,6 +23,8 @@ import type { Favorite } from "@/api/endpoints/favorite.api";
 import type { DealImage } from "@/types/quote";
 import { QuoteEditDialog } from "@/components/quote-edit-dialog";
 import { QuoteCreateDialog } from "@/components/quote-create-dialog";
+import { DestinationGuru } from "@/components/destination-guru";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { transformQuoteData, currency, formatUKDate, formatLeadSource } from "@/components/quote/quote-types";
 import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
@@ -58,6 +60,7 @@ export default function QuotePage() {
   const convertToBookingMutation = useConvertToBooking();
   const updateQuoteMutation = useUpdateQuote();
   const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [showGuruSheet, setShowGuruSheet] = useState(false);
   const [convertHaysRef, setConvertHaysRef] = useState("");
   const [convertTourRef, setConvertTourRef] = useState("");
   const [newTag, setNewTag] = useState("");
@@ -196,6 +199,15 @@ export default function QuotePage() {
             <Button size="sm" className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90" data-testid="button-export-quote" onClick={() => { }}>
               <FileText className="mr-2 h-4 w-4" />
               Export
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
+              data-testid="button-destination-guru"
+              onClick={() => setShowGuruSheet(true)}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Destination Guru
             </Button>
           </div>
         </div>
@@ -886,6 +898,21 @@ export default function QuotePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Sheet open={showGuruSheet} onOpenChange={setShowGuruSheet}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0 border-l border-black/10 bg-[#f8f8f8] dark:bg-[#0a0a0a]">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Destination Guru</SheetTitle>
+          </SheetHeader>
+          <div className="p-5">
+            <DestinationGuru
+              destination={quote.destinationName || quote.destination || ""}
+              compact
+              onClose={() => setShowGuruSheet(false)}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </CommandCenterShell>
   );
 }

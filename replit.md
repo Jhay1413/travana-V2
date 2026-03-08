@@ -42,6 +42,7 @@ Key pages include:
 - Clients list and detail views
 - Quote management
 - Ticket management
+- Destination Guru (AI-powered destination intelligence)
 
 #### Global Search
 - **Backend**: `GET /api/search?q=<term>` (`server/repositories/search.repository.ts`) — single SQL query per category with proper JOINs for destination/country/accommodation data
