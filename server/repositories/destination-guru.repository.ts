@@ -1,7 +1,7 @@
 import { db } from "../config/database";
 import { destinationGuruTable } from "@shared/schema";
 import type { DestinationGuru, InsertDestinationGuru } from "@shared/schema";
-import { eq, ilike } from "drizzle-orm";
+import { eq, ilike, or, sql } from "drizzle-orm";
 
 export const destinationGuruRepository = {
   async findAll(): Promise<DestinationGuru[]> {
@@ -14,7 +14,16 @@ export const destinationGuruRepository = {
   },
 
   async findByDestination(destination: string): Promise<DestinationGuru | undefined> {
-    const [result] = await db.select().from(destinationGuruTable).where(ilike(destinationGuruTable.destination, destination)).limit(1);
+    const [result] = await db
+      .select()
+      .from(destinationGuruTable)
+      .where(
+        or(
+          ilike(destinationGuruTable.destination, destination),
+          sql`${destination} ILIKE '%' || ${destinationGuruTable.destination} || '%'`
+        )
+      )
+      .limit(1);
     return result;
   },
 
