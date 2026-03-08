@@ -491,6 +491,25 @@ export function CommandCenterShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  const [localSearchText, setLocalSearchText] = useState(query ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const trimmed = localSearchText.trim();
+    if (!trimmed) {
+      setDebouncedSearch("");
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedSearch(trimmed), 250);
+    return () => clearTimeout(timer);
+  }, [localSearchText]);
+
+  useEffect(() => {
+    if (query !== undefined && query !== localSearchText) {
+      setLocalSearchText(query);
+    }
+  }, [query]);
+
   const { data: currentUser } = useCurrentUser();
 
   const { data: sidebarChats } = useChatConversations();
@@ -500,7 +519,7 @@ export function CommandCenterShell({
   }, [sidebarChats]);
 
   const { data: searchData } = useNeonClients(
-    query?.trim() ? { page: 1, limit: 8, search: query.trim() } : undefined
+    debouncedSearch ? { page: 1, limit: 8, search: debouncedSearch } : undefined
   );
   const { data: allClientsData } = useNeonClients({ page: 1, limit: 500 });
   const { data: transactionsData } = useTransactions();
@@ -517,7 +536,7 @@ export function CommandCenterShell({
   };
 
   const globalSearchResults = useMemo(() => {
-    const q = query?.trim()?.toLowerCase();
+    const q = debouncedSearch?.toLowerCase();
     if (!q) return [] as GlobalSearchResult[];
     const results: GlobalSearchResult[] = [];
 
@@ -598,7 +617,7 @@ export function CommandCenterShell({
     }
 
     return results;
-  }, [query, searchData, allClientsData, transactionsData, freeQuotesData]);
+  }, [debouncedSearch, searchData, allClientsData, transactionsData, freeQuotesData]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -1568,17 +1587,18 @@ export function CommandCenterShell({
                   <div className="relative w-full sm:w-[360px] z-[9999]" ref={searchRef}>
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/50 z-10" />
                     <Input
-                      value={query ?? ""}
+                      value={localSearchText}
                       onChange={(e) => {
+                        setLocalSearchText(e.target.value);
                         onQuery?.(e.target.value);
                         setShowSearchResults(true);
                       }}
-                      onFocus={() => query?.trim() && setShowSearchResults(true)}
+                      onFocus={() => localSearchText.trim() && setShowSearchResults(true)}
                       placeholder="Search clients, bookings, social posts…"
                       className="h-10 rounded-2xl border-black/10 bg-black/5 pl-10 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/45"
                       data-testid="input-search"
                     />
-                    {showSearchResults && query?.trim() && (
+                    {showSearchResults && localSearchText.trim() && (
                       <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden max-h-[420px] overflow-y-auto" data-testid="global-search-dropdown">
                         {globalSearchResults.length > 0 ? (
                           <>
@@ -1600,6 +1620,7 @@ export function CommandCenterShell({
                                       onClick={() => {
                                         navigate(result.link);
                                         setShowSearchResults(false);
+                                        setLocalSearchText("");
                                         onQuery?.("");
                                       }}
                                       className="w-full px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors"
@@ -1625,18 +1646,18 @@ export function CommandCenterShell({
                         ) : (
                           <div className="p-4">
                             <p className="text-center text-sm text-black/50 dark:text-white/50 mb-3">
-                              No results found for "{query}"
+                              No results found for "{localSearchText}"
                             </p>
                             <Button
                               className="w-full h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                               onClick={() => {
                                 setShowSearchResults(false);
-                                navigate("/clients?new=true&name=" + encodeURIComponent(query || ""));
+                                navigate("/clients?new=true&name=" + encodeURIComponent(localSearchText || ""));
                               }}
                               data-testid="button-add-client-from-search"
                             >
                               <Plus className="mr-2 h-4 w-4" />
-                              Add Client "{query}"
+                              Add Client "{localSearchText}"
                             </Button>
                           </div>
                         )}
