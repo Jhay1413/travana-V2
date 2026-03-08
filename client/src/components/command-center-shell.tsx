@@ -7,6 +7,7 @@ import {
   Banknote,
   BarChart3,
   Bell,
+  Briefcase,
   Building2,
   CheckCircle,
   ChevronDown,
@@ -42,7 +43,8 @@ import {
   X,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
-import { useCurrentUser, useNeonClients, useNotifications, useChatConversations } from "@/hooks/queries";
+import { useCurrentUser, useNeonClients, useNotifications, useChatConversations, useTransactions } from "@/hooks/queries";
+import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
 import { useMarkNotificationRead } from "@/hooks/mutations";
 
 import { Button } from "@/components/ui/button";
@@ -500,20 +502,103 @@ export function CommandCenterShell({
   const { data: searchData } = useNeonClients(
     query?.trim() ? { page: 1, limit: 8, search: query.trim() } : undefined
   );
+  const { data: allClientsData } = useNeonClients({ page: 1, limit: 500 });
+  const { data: transactionsData } = useTransactions();
+  const { data: freeQuotesData } = useFreeQuotesInfinite(50);
 
-  const searchResults = useMemo(() => {
-    if (!query?.trim() || !searchData?.clients) return [];
-    return searchData.clients
-      .slice(0, 8)
-      .map((c: any) => ({
-        id: c.id,
-        name: [c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown",
-        phone: c.phoneNumber || "",
-        email: c.email || "",
-        location: [c.city, c.country].filter(Boolean).join(", "),
-        clientType: "Client",
-      }));
-  }, [query, searchData]);
+  type GlobalSearchResult = {
+    id: string;
+    category: "client" | "booking" | "social";
+    title: string;
+    subtitle: string;
+    link: string;
+    badge: string;
+    badgeColor: string;
+  };
+
+  const globalSearchResults = useMemo(() => {
+    const q = query?.trim()?.toLowerCase();
+    if (!q) return [] as GlobalSearchResult[];
+    const results: GlobalSearchResult[] = [];
+
+    if (searchData?.clients) {
+      for (const c of searchData.clients.slice(0, 5)) {
+        const name = [c.title, c.firstName, c.surename].filter((v: any) => v && v !== "NULL").join(" ").trim() || "Unknown";
+        results.push({
+          id: c.id,
+          category: "client",
+          title: name,
+          subtitle: [c.phoneNumber, c.email, c.city].filter(Boolean).join(" · "),
+          link: `/clients/${c.id}`,
+          badge: "Client",
+          badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/30",
+        });
+      }
+    }
+
+    if (transactionsData) {
+      const neonMap = new Map<string, string>();
+      if (allClientsData?.clients) {
+        for (const c of allClientsData.clients) {
+          neonMap.set(c.id, [c.firstName, c.surename].filter(Boolean).join(" ").trim());
+        }
+      }
+      let bookingCount = 0;
+      for (const t of transactionsData as any[]) {
+        if (bookingCount >= 5) break;
+        if (!t.booking) continue;
+        const clientName = t.client_id ? (neonMap.get(t.client_id) || "") : "";
+        const destination = t.booking.destination_name || t.booking.country_name || t.holiday_type_name || "";
+        const haysRef = t.booking.hays_ref || "";
+        const supplierRef = t.booking.supplier_ref || "";
+        const salesPrice = t.booking.sales_price || "";
+        const travelDate = t.booking.travel_date || "";
+        const searchable = [clientName, destination, haysRef, supplierRef, travelDate].join(" ").toLowerCase();
+        if (!searchable.includes(q)) continue;
+        const formattedPrice = salesPrice ? `£${parseFloat(salesPrice).toLocaleString("en-GB")}` : "";
+        const formattedDate = travelDate ? new Date(travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+        results.push({
+          id: `booking-${t.booking.id || t.id}`,
+          category: "booking",
+          title: `${destination || "Booking"}${clientName ? ` — ${clientName}` : ""}`,
+          subtitle: [haysRef && `Ref: ${haysRef}`, formattedPrice, formattedDate].filter(Boolean).join(" · "),
+          link: `/clients/${t.client_id || "_"}/bookings/${t.booking.id || t.id}`,
+          badge: "Booking",
+          badgeColor: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+        });
+        bookingCount++;
+      }
+    }
+
+    if (freeQuotesData) {
+      let socialCount = 0;
+      for (const page of freeQuotesData.pages) {
+        if (socialCount >= 5) break;
+        for (const fq of page.quotes as any[]) {
+          if (socialCount >= 5) break;
+          const destination = fq.destination_name || fq.country_name || "";
+          const hotelName = fq.accommodations?.[0]?.hotel_name || fq.lodge_name || fq.cottage_name || "";
+          const salesPrice = fq.sales_price || "";
+          const travelDate = fq.travel_date || "";
+          const searchable = [destination, hotelName, travelDate].join(" ").toLowerCase();
+          if (!searchable.includes(q)) continue;
+          const formattedPrice = salesPrice ? `£${parseFloat(salesPrice).toLocaleString("en-GB")}` : "";
+          results.push({
+            id: `social-${fq.id}`,
+            category: "social",
+            title: `${destination || hotelName || "Social Post"}`,
+            subtitle: [hotelName, formattedPrice, travelDate ? new Date(travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""].filter(Boolean).join(" · "),
+            link: `/social-posts?quote=${fq.id}`,
+            badge: "Social Post",
+            badgeColor: "bg-purple-500/10 text-purple-600 border-purple-500/30",
+          });
+          socialCount++;
+        }
+      }
+    }
+
+    return results;
+  }, [query, searchData, allClientsData, transactionsData, freeQuotesData]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -1489,54 +1574,72 @@ export function CommandCenterShell({
                         setShowSearchResults(true);
                       }}
                       onFocus={() => query?.trim() && setShowSearchResults(true)}
-                      placeholder="Search clients, trips, destinations…"
+                      placeholder="Search clients, bookings, social posts…"
                       className="h-10 rounded-2xl border-black/10 bg-black/5 pl-10 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/45"
                       data-testid="input-search"
                     />
-                    {showSearchResults && searchResults.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden">
-                        {searchResults.map((client: any) => (
-                          <button
-                            key={client.id}
-                            onClick={() => {
-                              navigate(`/clients/${client.id}`);
-                              setShowSearchResults(false);
-                              onQuery?.("");
-                            }}
-                            className="w-full px-4 py-3 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors"
-                            data-testid={`search-result-${client.id}`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="font-medium text-sm">{client.name}</div>
-                                <div className="text-xs text-black/50 dark:text-white/50">{client.phone}</div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#3b82f6]/10 text-[#3b82f6] border border-[#3b82f6]/30">
-                                  {client.clientType || "New Client"}
-                                </span>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {showSearchResults && query?.trim() && searchResults.length === 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] p-4">
-                        <p className="text-center text-sm text-black/50 dark:text-white/50 mb-3">
-                          No clients found matching "{query}"
-                        </p>
-                        <Button
-                          className="w-full h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-                          onClick={() => {
-                            setShowSearchResults(false);
-                            navigate("/clients?new=true&name=" + encodeURIComponent(query || ""));
-                          }}
-                          data-testid="button-add-client-from-search"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add Client "{query}"
-                        </Button>
+                    {showSearchResults && query?.trim() && (
+                      <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden max-h-[420px] overflow-y-auto" data-testid="global-search-dropdown">
+                        {globalSearchResults.length > 0 ? (
+                          <>
+                            {["client", "booking", "social"].map((cat) => {
+                              const items = globalSearchResults.filter((r) => r.category === cat);
+                              if (items.length === 0) return null;
+                              const catLabel = cat === "client" ? "Clients" : cat === "booking" ? "Bookings" : "Social Posts";
+                              const CatIcon = cat === "client" ? Users : cat === "booking" ? Briefcase : Globe;
+                              return (
+                                <div key={cat}>
+                                  <div className="flex items-center gap-2 px-4 py-2 bg-black/[0.03] dark:bg-white/[0.03] border-b border-black/5 dark:border-white/5">
+                                    <CatIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{catLabel}</span>
+                                    <span className="text-[10px] text-muted-foreground/60">({items.length})</span>
+                                  </div>
+                                  {items.map((result) => (
+                                    <button
+                                      key={result.id}
+                                      onClick={() => {
+                                        navigate(result.link);
+                                        setShowSearchResults(false);
+                                        onQuery?.("");
+                                      }}
+                                      className="w-full px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors"
+                                      data-testid={`search-result-${result.id}`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="font-medium text-sm truncate">{result.title}</div>
+                                          {result.subtitle && (
+                                            <div className="text-xs text-black/50 dark:text-white/50 truncate mt-0.5">{result.subtitle}</div>
+                                          )}
+                                        </div>
+                                        <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-medium ${result.badgeColor}`}>
+                                          {result.badge}
+                                        </span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              );
+                            })}
+                          </>
+                        ) : (
+                          <div className="p-4">
+                            <p className="text-center text-sm text-black/50 dark:text-white/50 mb-3">
+                              No results found for "{query}"
+                            </p>
+                            <Button
+                              className="w-full h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                              onClick={() => {
+                                setShowSearchResults(false);
+                                navigate("/clients?new=true&name=" + encodeURIComponent(query || ""));
+                              }}
+                              data-testid="button-add-client-from-search"
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Add Client "{query}"
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

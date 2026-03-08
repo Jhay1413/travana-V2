@@ -43,6 +43,14 @@ Key pages include:
 - Quote management
 - Ticket management
 
+#### Global Search (`client/src/components/command-center-shell.tsx`)
+- Searches across clients, bookings, and social posts (free quotes)
+- Client search uses server-side `useNeonClients` with search parameter
+- Booking/social post search performs client-side filtering on already-loaded `useTransactions` and `useFreeQuotesInfinite` data
+- Results are categorized with color-coded badges (blue=Client, green=Booking, purple=Social Post)
+- Clicking a result navigates to the relevant detail page
+- Shows up to 5 results per category
+
 ### Backend Architecture
 - **Runtime**: Node.js with Express
 - **Language**: TypeScript with ESM modules
