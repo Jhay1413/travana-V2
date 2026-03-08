@@ -29,6 +29,7 @@ import emailRoutes from "./email.routes";
 import opportunitiesRoutes from "./opportunities.routes";
 import revenueRoutes from "./revenue.routes";
 import targetsRoutes from "./targets.routes";
+import searchRoutes from "./search.routes";
 
 const router = Router();
 
@@ -62,5 +63,6 @@ router.use("/emails", emailRoutes);
 router.use("/opportunities", opportunitiesRoutes);
 router.use("/revenue", revenueRoutes);
 router.use("/targets", targetsRoutes);
+router.use("/search", searchRoutes);
 
 export default router;

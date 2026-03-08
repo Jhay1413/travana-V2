@@ -43,8 +43,8 @@ import {
   X,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
-import { useCurrentUser, useNeonClients, useNotifications, useChatConversations, useTransactions } from "@/hooks/queries";
-import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
+import { useCurrentUser, useNotifications, useChatConversations } from "@/hooks/queries";
+import { useGlobalSearch } from "@/hooks/queries/use-search-queries";
 import { useMarkNotificationRead } from "@/hooks/mutations";
 
 import { Button } from "@/components/ui/button";
@@ -518,16 +518,11 @@ export function CommandCenterShell({
     return sidebarChats.filter((c: any) => c.unreadCount > 0).reduce((sum: number, c: any) => sum + c.unreadCount, 0);
   }, [sidebarChats]);
 
-  const { data: searchData } = useNeonClients(
-    debouncedSearch ? { page: 1, limit: 8, search: debouncedSearch } : undefined
-  );
-  const { data: allClientsData } = useNeonClients({ page: 1, limit: 500 });
-  const { data: transactionsData } = useTransactions();
-  const { data: freeQuotesData } = useFreeQuotesInfinite(50);
+  const { data: searchResults } = useGlobalSearch(debouncedSearch);
 
   type GlobalSearchResult = {
     id: string;
-    category: "client" | "booking" | "social";
+    category: "client" | "quote" | "booking";
     title: string;
     subtitle: string;
     link: string;
@@ -536,88 +531,53 @@ export function CommandCenterShell({
   };
 
   const globalSearchResults = useMemo(() => {
-    const q = debouncedSearch?.toLowerCase();
-    if (!q) return [] as GlobalSearchResult[];
+    if (!debouncedSearch || !searchResults) return [] as GlobalSearchResult[];
     const results: GlobalSearchResult[] = [];
 
-    if (searchData?.clients) {
-      for (const c of searchData.clients.slice(0, 5)) {
-        const name = [c.title, c.firstName, c.surename].filter((v: any) => v && v !== "NULL").join(" ").trim() || "Unknown";
-        results.push({
-          id: c.id,
-          category: "client",
-          title: name,
-          subtitle: [c.phoneNumber, c.email, c.city].filter(Boolean).join(" · "),
-          link: `/clients/${c.id}`,
-          badge: "Client",
-          badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/30",
-        });
-      }
+    for (const c of searchResults.clients) {
+      results.push({
+        id: c.id,
+        category: "client",
+        title: c.name,
+        subtitle: c.subtitle,
+        link: `/clients/${c.id}`,
+        badge: "Client",
+        badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/30",
+      });
     }
 
-    if (transactionsData) {
-      const neonMap = new Map<string, string>();
-      if (allClientsData?.clients) {
-        for (const c of allClientsData.clients) {
-          neonMap.set(c.id, [c.firstName, c.surename].filter(Boolean).join(" ").trim());
-        }
-      }
-      let bookingCount = 0;
-      for (const t of transactionsData as any[]) {
-        if (bookingCount >= 5) break;
-        if (!t.booking) continue;
-        const clientName = t.client_id ? (neonMap.get(t.client_id) || "") : "";
-        const destination = t.booking.destination_name || t.booking.country_name || t.holiday_type_name || "";
-        const haysRef = t.booking.hays_ref || "";
-        const supplierRef = t.booking.supplier_ref || "";
-        const salesPrice = t.booking.sales_price || "";
-        const travelDate = t.booking.travel_date || "";
-        const searchable = [clientName, destination, haysRef, supplierRef, travelDate].join(" ").toLowerCase();
-        if (!searchable.includes(q)) continue;
-        const formattedPrice = salesPrice ? `£${parseFloat(salesPrice).toLocaleString("en-GB")}` : "";
-        const formattedDate = travelDate ? new Date(travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
-        results.push({
-          id: `booking-${t.booking.id || t.id}`,
-          category: "booking",
-          title: `${destination || "Booking"}${clientName ? ` — ${clientName}` : ""}`,
-          subtitle: [haysRef && `Ref: ${haysRef}`, formattedPrice, formattedDate].filter(Boolean).join(" · "),
-          link: `/clients/${t.client_id || "_"}/bookings/${t.booking.id || t.id}`,
-          badge: "Booking",
-          badgeColor: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
-        });
-        bookingCount++;
-      }
+    for (const q of searchResults.quotes) {
+      const dest = q.destination || q.country || q.holidayType || "Quote";
+      const formattedPrice = q.salesPrice ? `£${parseFloat(q.salesPrice).toLocaleString("en-GB")}` : "";
+      const formattedDate = q.travelDate ? new Date(q.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+      results.push({
+        id: `quote-${q.id}`,
+        category: "quote",
+        title: `${dest}${q.clientName ? ` — ${q.clientName}` : ""}`,
+        subtitle: [q.accommodation, formattedPrice, formattedDate].filter(Boolean).join(" · "),
+        link: q.clientId ? `/clients/${q.clientId}/quotes/${q.id}` : `/quotes/${q.id}`,
+        badge: "Quote",
+        badgeColor: "bg-amber-500/10 text-amber-600 border-amber-500/30",
+      });
     }
 
-    if (freeQuotesData) {
-      let socialCount = 0;
-      for (const page of freeQuotesData.pages) {
-        if (socialCount >= 5) break;
-        for (const fq of page.quotes as any[]) {
-          if (socialCount >= 5) break;
-          const destination = fq.destination_name || fq.country_name || "";
-          const hotelName = fq.accommodations?.[0]?.hotel_name || fq.lodge_name || fq.cottage_name || "";
-          const salesPrice = fq.sales_price || "";
-          const travelDate = fq.travel_date || "";
-          const searchable = [destination, hotelName, travelDate].join(" ").toLowerCase();
-          if (!searchable.includes(q)) continue;
-          const formattedPrice = salesPrice ? `£${parseFloat(salesPrice).toLocaleString("en-GB")}` : "";
-          results.push({
-            id: `social-${fq.id}`,
-            category: "social",
-            title: `${destination || hotelName || "Social Post"}`,
-            subtitle: [hotelName, formattedPrice, travelDate ? new Date(travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""].filter(Boolean).join(" · "),
-            link: `/social-posts?quote=${fq.id}`,
-            badge: "Social Post",
-            badgeColor: "bg-purple-500/10 text-purple-600 border-purple-500/30",
-          });
-          socialCount++;
-        }
-      }
+    for (const b of searchResults.bookings) {
+      const dest = b.destination || b.country || b.holidayType || "Booking";
+      const formattedPrice = b.salesPrice ? `£${parseFloat(b.salesPrice).toLocaleString("en-GB")}` : "";
+      const formattedDate = b.travelDate ? new Date(b.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+      results.push({
+        id: `booking-${b.id}`,
+        category: "booking",
+        title: `${dest}${b.clientName ? ` — ${b.clientName}` : ""}`,
+        subtitle: [b.haysRef && `Ref: ${b.haysRef}`, b.accommodation, formattedPrice, formattedDate].filter(Boolean).join(" · "),
+        link: b.clientId ? `/clients/${b.clientId}/bookings/${b.id}` : `/bookings/${b.id}`,
+        badge: "Booking",
+        badgeColor: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+      });
     }
 
     return results;
-  }, [debouncedSearch, searchData, allClientsData, transactionsData, freeQuotesData]);
+  }, [debouncedSearch, searchResults]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -1594,7 +1554,7 @@ export function CommandCenterShell({
                         setShowSearchResults(true);
                       }}
                       onFocus={() => localSearchText.trim() && setShowSearchResults(true)}
-                      placeholder="Search clients, bookings, social posts…"
+                      placeholder="Search clients, quotes, bookings…"
                       className="h-10 rounded-2xl border-black/10 bg-black/5 pl-10 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/45"
                       data-testid="input-search"
                     />
@@ -1602,11 +1562,11 @@ export function CommandCenterShell({
                       <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden max-h-[420px] overflow-y-auto" data-testid="global-search-dropdown">
                         {globalSearchResults.length > 0 ? (
                           <>
-                            {["client", "booking", "social"].map((cat) => {
+                            {["client", "quote", "booking"].map((cat) => {
                               const items = globalSearchResults.filter((r) => r.category === cat);
                               if (items.length === 0) return null;
-                              const catLabel = cat === "client" ? "Clients" : cat === "booking" ? "Bookings" : "Social Posts";
-                              const CatIcon = cat === "client" ? Users : cat === "booking" ? Briefcase : Globe;
+                              const catLabel = cat === "client" ? "Clients" : cat === "quote" ? "Quotes" : "Bookings";
+                              const CatIcon = cat === "client" ? Users : cat === "quote" ? Compass : Briefcase;
                               return (
                                 <div key={cat}>
                                   <div className="flex items-center gap-2 px-4 py-2 bg-black/[0.03] dark:bg-white/[0.03] border-b border-black/5 dark:border-white/5">

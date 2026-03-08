@@ -24,3 +24,4 @@ export { socialPostApi } from "./endpoints/social-post.api";
 export { clientFileApi } from "./endpoints/clientFile.api";
 export { userProfileApi } from "./endpoints/userProfile.api";
 export { opportunitiesApi } from "./endpoints/opportunities.api";
+export { searchApi } from "./endpoints/search.api";

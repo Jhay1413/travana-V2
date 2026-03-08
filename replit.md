@@ -43,11 +43,11 @@ Key pages include:
 - Quote management
 - Ticket management
 
-#### Global Search (`client/src/components/command-center-shell.tsx`)
-- Searches across clients, bookings, and social posts (free quotes)
-- Client search uses server-side `useNeonClients` with search parameter
-- Booking/social post search performs client-side filtering on already-loaded `useTransactions` and `useFreeQuotesInfinite` data
-- Results are categorized with color-coded badges (blue=Client, green=Booking, purple=Social Post)
+#### Global Search
+- **Backend**: `GET /api/search?q=<term>` (`server/repositories/search.repository.ts`) — single SQL query per category with proper JOINs for destination/country/accommodation data
+- **Frontend**: `useGlobalSearch` hook (`client/src/hooks/queries/use-search-queries.ts`) with 250ms debounce in `command-center-shell.tsx`
+- Searches across clients (name, email, phone, city), quotes (destination, country, accommodation, tour operator, client name), and bookings (destination, country, accommodation, hays ref, supplier ref, client name)
+- Results are categorized with color-coded badges (blue=Client, amber=Quote, green=Booking)
 - Clicking a result navigates to the relevant detail page
 - Shows up to 5 results per category
 
