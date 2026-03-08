@@ -42,7 +42,7 @@ Key pages include:
 - Clients list and detail views
 - Quote management
 - Ticket management
-- Destination Guru (AI-powered destination intelligence)
+- Destination Guru (AI-powered destination intelligence with OpenAI generation and database persistence)
 
 #### Global Search
 - **Backend**: `GET /api/search?q=<term>` (`server/repositories/search.repository.ts`) — single SQL query per category with proper JOINs for destination/country/accommodation data
@@ -98,6 +98,7 @@ Schema includes tables for:
 - `tour_operators` / `airports` - Lookup tables
 - `tickets` / `ticket_attachments` / `ticket_replies` - Support ticket system
 - `notifications` - User notification system
+- `destination_guru` - AI-generated destination intelligence (JSONB data, unique per destination)
 
 Backend uses repository/service/controller pattern:
 - `server/repositories/` - Data access layer (transaction, newQuote, booking, enquiryTable, etc.)

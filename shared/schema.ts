@@ -1483,3 +1483,19 @@ export const agentTargetTable = pgTable("agent_target_table", {
 export const insertAgentTargetSchema = createInsertSchema(agentTargetTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type AgentTarget = typeof agentTargetTable.$inferSelect;
 export type InsertAgentTarget = z.infer<typeof insertAgentTargetSchema>;
+
+export const destinationGuruTable = pgTable("destination_guru", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  destination: text().notNull(),
+  country: text().notNull(),
+  data: jsonb().notNull(),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique("destination_guru_destination_unique").on(table.destination)
+]);
+
+export const insertDestinationGuruSchema = createInsertSchema(destinationGuruTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type DestinationGuru = typeof destinationGuruTable.$inferSelect;
+export type InsertDestinationGuru = z.infer<typeof insertDestinationGuruSchema>;

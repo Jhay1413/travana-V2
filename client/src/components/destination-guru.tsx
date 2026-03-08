@@ -334,19 +334,22 @@ export function DestinationGuru({
   destination,
   compact = false,
   onClose,
+  externalData,
 }: {
   destination: string;
   compact?: boolean;
   onClose?: () => void;
+  externalData?: DestinationGuruData;
 }) {
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
 
   const data = useMemo(() => {
+    if (externalData) return externalData;
     const key = Object.keys(SAMPLE_DATA).find(
       (k) => k.toLowerCase() === destination?.toLowerCase()
     );
     return key ? SAMPLE_DATA[key] : SAMPLE_DATA["Corfu"];
-  }, [destination]);
+  }, [destination, externalData]);
 
   const resolvedDest = data.destination;
 
@@ -613,12 +616,14 @@ export function DestinationGuruCard({
   destination,
   country,
   onClick,
+  guruData,
 }: {
   destination: string;
   country: string;
   onClick: () => void;
+  guruData?: DestinationGuruData;
 }) {
-  const data = SAMPLE_DATA[destination];
+  const data = guruData || SAMPLE_DATA[destination];
   const maxTemp = data ? Math.max(...data.temperatures.map(t => t.avgHigh)) : 0;
   const bestMonths = data?.bestTimeToVisit.months || "";
 
