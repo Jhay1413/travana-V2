@@ -2,6 +2,7 @@ import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
 import { quoteImageRepository } from "../repositories/quote-image.repository";
 import { tagService } from "./tag.service";
+import { destinationGuruService } from "./destination-guru.service";
 import { AppError } from "../utils/error-handler";
 import type {
   Quote,
@@ -57,6 +58,26 @@ function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
     .map((url) => (typeof url === "string" ? url.trim() : ""))
     .filter((url) => url.length > 0)
     .filter((url, index, arr) => arr.indexOf(url) === index);
+}
+
+async function resolveAndGenerateGuru(accommodationId: string, userId?: string) {
+  const { db } = await import("../config/database");
+  const { accomodation_list, resorts, destination } = await import("@shared/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const results = await db
+    .select({ destinationName: destination.name })
+    .from(accomodation_list)
+    .innerJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+    .innerJoin(destination, eq(resorts.destination_id, destination.id))
+    .where(eq(accomodation_list.id, accommodationId))
+    .limit(1);
+
+  const destName = results[0]?.destinationName;
+  if (destName && destName.trim().length > 0) {
+    console.log(`🌍 DESTINATION GURU - auto-generating for: ${destName}`);
+    await destinationGuruService.generate(destName.trim(), userId);
+  }
 }
 
 export const newQuoteService = {
@@ -190,6 +211,12 @@ export const newQuoteService = {
       } catch (err) {
         console.error('🆓 FREE QUOTE (newQuote.service) - error:', err);
       }
+    }
+
+    if (primaryAccommodation?.accomodation_id) {
+      resolveAndGenerateGuru(primaryAccommodation.accomodation_id as string, txn.user_id).catch((err) => {
+        console.error('🌍 DESTINATION GURU auto-generate error:', err);
+      });
     }
 
     return q;
