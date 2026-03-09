@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles, ImagePlus, Trash2 } from "lucide-react";
+import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles, ImagePlus, Trash2, Share2, Check } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -31,6 +31,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useDestinationGuruSearch } from "@/hooks/queries/use-destination-guru-queries";
 import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-guru-mutations";
 import { Loader2 } from "lucide-react";
+import axiosClient from "@/api/client/axios-client";
 import { transformQuoteData, currency, formatUKDate, formatLeadSource } from "@/components/quote/quote-types";
 import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
@@ -71,6 +72,10 @@ export default function QuotePage() {
   const deleteImageMutation = useDeleteQuoteImage();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
   const [showGuruSheet, setShowGuruSheet] = useState(false);
   const [convertHaysRef, setConvertHaysRef] = useState("");
   const [convertTourRef, setConvertTourRef] = useState("");
@@ -233,6 +238,25 @@ export default function QuotePage() {
             >
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "Unpin" : "Pin"}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setShowShareDialog(true);
+                if (!shareToken) {
+                  setShareLoading(true);
+                  try {
+                    const res = await axiosClient.post(`/api/quote-share/${quoteId}/generate-token`);
+                    setShareToken(res.data.token);
+                  } catch {}
+                  setShareLoading(false);
+                }
+              }}
+              className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+              data-testid="button-share-quote"
+            >
+              <Share2 className="h-4 w-4" />
+              Share Quote
             </button>
             <Button
               size="sm"
