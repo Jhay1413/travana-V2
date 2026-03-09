@@ -1520,3 +1520,19 @@ export const feedbackTable = pgTable("feedback", {
 export const insertFeedbackSchema = createInsertSchema(feedbackTable).omit({ id: true, createdAt: true, updatedAt: true, status: true, adminNotes: true });
 export type Feedback = typeof feedbackTable.$inferSelect;
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
+
+export const hubAnnouncementTable = pgTable("hub_announcements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  authorId: text("author_id").notNull(),
+  authorName: text("author_name"),
+  category: text("category").notNull().default("general"),
+  title: text("title"),
+  content: text("content").notNull(),
+  pinned: boolean("pinned").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const insertHubAnnouncementSchema = createInsertSchema(hubAnnouncementTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type HubAnnouncement = typeof hubAnnouncementTable.$inferSelect;
+export type InsertHubAnnouncement = z.infer<typeof insertHubAnnouncementSchema>;
