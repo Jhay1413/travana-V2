@@ -27,8 +27,6 @@ import {
   Landmark,
   Heart,
   AlertCircle,
-  ChevronLeft,
-  ChevronRight,
   X,
   PawPrint,
 } from "lucide-react";
@@ -94,44 +92,52 @@ function GlassCard({ children, className = "" }: { children: React.ReactNode; cl
   );
 }
 
-function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<{ id: string; image_url: string | null; isPrimary: boolean | null }> }) {
-  const [currentImg, setCurrentImg] = useState(0);
-  const validImages = images.filter(i => i.image_url);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+function getResponsiveImageUrl(
+  url: string,
+  width: number,
+  height: number,
+): string {
+  const tuiMatch = url.match(/^(https?:\/\/content\.tui\.co\.uk\/.+\.(jpg|jpeg|png|webp))/i);
+  if (tuiMatch) {
+    return `${tuiMatch[1]}?i10c=img.resize(width:${width});img.crop(width:${width}%2Cheight:${height})`;
+  }
+  return url;
+}
 
-  useEffect(() => {
-    if (validImages.length <= 1) return;
-    timerRef.current = setInterval(() => {
-      setCurrentImg(prev => (prev + 1) % validImages.length);
-    }, 5000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [validImages.length]);
+function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<{ id: string; image_url: string | null; isPrimary: boolean | null }> }) {
+  const validImages = images.filter(i => i.image_url);
+  const primaryImage = validImages.find(i => i.isPrimary) || validImages[0];
+  const heroUrl = primaryImage?.image_url || null;
+
+  const mobileUrl = heroUrl ? getResponsiveImageUrl(heroUrl, 800, 1200) : null;
+  const desktopUrl = heroUrl ? getResponsiveImageUrl(heroUrl, 1920, 1080) : null;
 
   const totalPax = quote.adults + quote.children + quote.infants;
 
   return (
     <div className="relative min-h-[70vh] md:min-h-[80vh] flex items-end overflow-hidden">
-      <AnimatePresence mode="wait">
-        {validImages.length > 0 && (
-          <motion.div
-            key={currentImg}
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.05 }}
-            transition={{ duration: 1.2 }}
-            className="absolute inset-0"
-          >
+      {heroUrl ? (
+        <div className="absolute inset-0">
+          <picture>
+            <source
+              media="(max-width: 768px)"
+              srcSet={mobileUrl!}
+            />
+            <source
+              media="(min-width: 769px)"
+              srcSet={desktopUrl!}
+            />
             <img
-              src={validImages[currentImg].image_url!}
-              alt="Destination"
+              src={desktopUrl!}
+              alt={quote.title || quote.destinationName || "Holiday destination"}
               className="w-full h-full object-cover"
+              loading="eager"
+              fetchPriority="high"
               data-testid="img-hero"
             />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {!validImages.length && (
+          </picture>
+        </div>
+      ) : (
         <div className="absolute inset-0">
           <img
             src={defaultHeroBg}
@@ -142,25 +148,6 @@ function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<
       )}
 
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
-
-      {validImages.length > 1 && (
-        <div className="absolute bottom-36 md:bottom-44 right-6 flex gap-2 z-20">
-          <button
-            onClick={() => setCurrentImg(prev => (prev - 1 + validImages.length) % validImages.length)}
-            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-            data-testid="button-hero-prev"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setCurrentImg(prev => (prev + 1) % validImages.length)}
-            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-            data-testid="button-hero-next"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-      )}
 
       <div className="relative z-10 w-full px-4 md:px-8 pb-10 md:pb-14">
         <div className="max-w-5xl mx-auto">
