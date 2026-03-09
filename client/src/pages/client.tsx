@@ -436,6 +436,7 @@ export default function ClientPage() {
       onQuery={setQ}
       theme="light"
       onToggleTheme={() => { }}
+      filterSlot={<></>}
       createActions={[
         { label: "Enquiry", icon: <FileText className="h-4 w-4" />, onClick: () => setShowEnquiryWizard(true) },
         { label: "Quote", icon: <Sparkles className="h-4 w-4" />, onClick: handleNewQuote },
