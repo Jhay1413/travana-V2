@@ -145,7 +145,7 @@ export function ShareQuotePanel({
   const handlePreview = async () => {
     try {
       const t = await ensureToken();
-      window.open(getQuoteUrl(t), "_blank");
+      window.location.href = `/view-quote/${t}`;
     } catch {
       toast({ title: "Failed to generate link", variant: "destructive" });
     }

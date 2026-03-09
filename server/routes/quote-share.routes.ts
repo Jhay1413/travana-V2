@@ -1,6 +1,8 @@
 import { Router, Request, Response } from "express";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
 import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { getUserId } from "../utils/get-user-id";
+import { authStorage } from "../replit_integrations/auth/storage";
 
 const shareRouter = Router();
 
@@ -8,7 +10,7 @@ shareRouter.use(isAuthenticated);
 
 async function verifyQuoteAccess(req: Request, res: Response): Promise<boolean> {
   const quoteId = req.params.id;
-  const userId = (req.user as any)?.id;
+  const userId = getUserId(req);
   if (!userId) {
     res.status(401).json({ success: false, error: "Unauthorized" });
     return false;
@@ -18,7 +20,8 @@ async function verifyQuoteAccess(req: Request, res: Response): Promise<boolean> 
     res.status(404).json({ success: false, error: "Quote not found" });
     return false;
   }
-  const userRole = (req.user as any)?.role;
+  const dbUser = await authStorage.getUser(userId);
+  const userRole = dbUser?.role;
   if (agentId !== userId && userRole !== "Admin" && userRole !== "Manager") {
     res.status(403).json({ success: false, error: "Access denied" });
     return false;
