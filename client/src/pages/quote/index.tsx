@@ -268,9 +268,9 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
           </div>
         </div>
 
-        {/* Share Panel - visible on smaller screens above main content */}
+        {/* Share Panel - always visible at top */}
         {quote && !isBooking && (
-          <div className="mt-4 lg:hidden" data-testid="share-panel-mobile">
+          <div className="mt-4" data-testid="share-panel-top">
             <ShareQuotePanel
               quoteId={quoteId}
               quoteTitle={quote.quoteTitle}
@@ -546,19 +546,6 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
             <div className="space-y-3" data-testid="col-quote-sidebar">
               {quote && (
                 <>
-                  {!isBooking && (
-                    <div className="hidden lg:block">
-                      <ShareQuotePanel
-                        quoteId={quoteId}
-                        quoteTitle={quote.quoteTitle}
-                        destinationName={quote.destinationName || quote.destination}
-                        clientName={clientData?.name}
-                        clientEmail={(clientData as any)?.email}
-                        clientPhone={(clientData as any)?.phone || (clientData as any)?.mobile}
-                        agentName={quote.owner?.name}
-                      />
-                    </div>
-                  )}
                   {!isBooking && (
                     <QuoteEngagement quoteId={quoteId} />
                   )}
