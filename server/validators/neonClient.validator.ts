@@ -9,7 +9,9 @@ export const updateNeonClientValidator = z.object({
   params: z.object({
     id: z.string().uuid(),
   }),
-  body: insertClientTableSchema.partial(),
+  body: insertClientTableSchema.partial().extend({
+    badge: z.string().optional().nullable(),
+  }),
 });
 
 const importClientRowSchema = insertClientTableSchema.extend({
