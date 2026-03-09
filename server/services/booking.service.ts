@@ -240,7 +240,7 @@ export const bookingService = {
     if (txn.client_id) {
       const bookingCount = await bookingRepository.countByClientId(txn.client_id);
       if (bookingCount >= 3) {
-        await neonClientRepository.update(txn.client_id, { badge: 'VIP' });
+        await neonClientRepository.update(txn.client_id, { badge: 'VIP Client' });
       }
     }
 
@@ -264,7 +264,7 @@ export const bookingService = {
     if (txn.client_id) {
       const bookingCount = await bookingRepository.countByClientId(txn.client_id);
       if (bookingCount >= 3) {
-        await neonClientRepository.update(txn.client_id, { badge: 'VIP' });
+        await neonClientRepository.update(txn.client_id, { badge: 'VIP Client' });
       }
     }
 

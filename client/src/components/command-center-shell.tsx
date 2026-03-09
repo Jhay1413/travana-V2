@@ -42,6 +42,8 @@ import {
   TrendingUp,
   Users,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
 import { useCurrentUser, useNotifications, useChatConversations } from "@/hooks/queries";
@@ -491,6 +493,16 @@ export function CommandCenterShell({
   const [, navigate] = useLocation();
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
+  });
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("sidebar-collapsed", String(next)); } catch {}
+      return next;
+    });
+  }, []);
   const searchRef = useRef<HTMLDivElement>(null);
 
   const [localSearchText, setLocalSearchText] = useState(query ?? "");
@@ -1091,44 +1103,109 @@ export function CommandCenterShell({
       </AnimatePresence>
 
       <div className="w-full space-y-3">
-        <div className="grid gap-3 xl:grid-cols-[320px_1fr]">
+        <div className={cn("grid gap-3", sidebarCollapsed ? "xl:grid-cols-[72px_1fr]" : "xl:grid-cols-[320px_1fr]")} style={{ transition: "grid-template-columns 0.25s ease" }}>
           <aside className="hidden xl:block" data-testid="nav-command-center">
-            <div className="glass ringed grain sticky top-4 rounded-3xl p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
+            <div className={cn("glass ringed grain sticky top-4 rounded-3xl transition-all duration-250", sidebarCollapsed ? "p-2" : "p-4")}>
+              {sidebarCollapsed ? (
+                <div className="flex flex-col items-center gap-1">
                   <div
                     className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
                     data-testid="img-brand-mark"
                   >
                     <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
-                    <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-title">
-                      Travana
-                    </div>
-                    <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-brand-subtitle">
-                      Command Center
-                    </div>
                   </div>
                 </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                      data-testid="img-brand-mark"
+                    >
+                      <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
+                      <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-title">
+                        Travana
+                      </div>
+                      <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-brand-subtitle">
+                        Command Center
+                      </div>
+                    </div>
+                  </div>
 
-                <select
-                  value={role}
-                  onChange={(e) => onRoleChange(e.target.value as Role)}
-                  className="rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
-                  data-testid="select-role-nav"
-                >
-                  {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
-                    <option key={r} value={r} className="text-black bg-white">
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <select
+                    value={role}
+                    onChange={(e) => onRoleChange(e.target.value as Role)}
+                    className="rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
+                    data-testid="select-role-nav"
+                  >
+                    {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                      <option key={r} value={r} className="text-black bg-white">
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-              <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+              <Separator className={cn("bg-black/10 dark:bg-white/10", sidebarCollapsed ? "my-2" : "my-4")} />
 
+              {sidebarCollapsed ? (
+                <nav className="flex flex-col items-center gap-1">
+                  {nav.grouped
+                    ? nav.sections.flatMap((section) => section.items).map((item) => {
+                        const isActive = active === item.key;
+                        return (
+                          <Link
+                            key={item.key}
+                            href={getNavRoute(item.key)}
+                            className={cn(
+                              "grid h-10 w-10 place-items-center rounded-xl transition",
+                              isActive
+                                ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
+                                : "text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
+                            )}
+                            title={item.label}
+                            data-testid={`nav-${item.key}`}
+                          >
+                            <span className="text-current">{item.icon}</span>
+                          </Link>
+                        );
+                      })
+                    : (nav as any).items?.map((item: any) => {
+                        const isActive = active === item.key;
+                        return (
+                          <Link
+                            key={item.key}
+                            href={getNavRoute(item.key)}
+                            className={cn(
+                              "grid h-10 w-10 place-items-center rounded-xl transition",
+                              isActive
+                                ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
+                                : "text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
+                            )}
+                            title={item.label}
+                            data-testid={`nav-${item.key}`}
+                          >
+                            <span className="text-current">{item.icon}</span>
+                          </Link>
+                        );
+                      })
+                  }
+                  <Separator className="my-1 w-8 bg-black/10 dark:bg-white/10" />
+                  <button
+                    type="button"
+                    onClick={toggleSidebarCollapsed}
+                    className="grid h-10 w-10 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
+                    title="Expand sidebar"
+                    data-testid="button-expand-sidebar"
+                  >
+                    <PanelLeftOpen className="h-4 w-4" />
+                  </button>
+                </nav>
+              ) : (
               <nav className="space-y-1">
                 {nav.grouped ? (
                   nav.sections.map((section) => {
@@ -1399,7 +1476,10 @@ export function CommandCenterShell({
                   })
                 )}
               </nav>
+              )}
 
+              {!sidebarCollapsed && (
+              <>
               <Separator className="my-4 bg-black/10 dark:bg-white/10" />
 
               <div className="grid gap-2">
@@ -1523,6 +1603,19 @@ export function CommandCenterShell({
                   {currentUser?.role ?? role}
                 </span>
               </div>
+
+              <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+              <button
+                type="button"
+                onClick={toggleSidebarCollapsed}
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
+                data-testid="button-collapse-sidebar"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+                <span className="text-sm font-medium">Minimise</span>
+              </button>
+              </>
+              )}
             </div>
           </aside>
 
