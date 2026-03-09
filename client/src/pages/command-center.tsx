@@ -639,7 +639,7 @@ function ShellNav({
             <div className="min-w-0">
               <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-name">Travana</div>
               <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-brand-sub">
-                Command Center
+                Pipeline
               </div>
             </div>
           </div>
@@ -1312,7 +1312,7 @@ function TopBar({
       commission: "Commission",
       payouts: "Payouts",
     };
-    return map[active] ?? "Command Center";
+    return map[active] ?? "Pipeline";
   }, [active]);
 
   return (
@@ -7038,7 +7038,7 @@ export default function CommandCenterPage() {
                   </div>
                   <div className="min-w-0">
                     <div className="title-serif truncate text-sm font-semibold">Travana</div>
-                    <div className="text-xs text-black/55 dark:text-white/55">Command Center</div>
+                    <div className="text-xs text-black/55 dark:text-white/55">Pipeline</div>
                   </div>
                 </div>
                 <button

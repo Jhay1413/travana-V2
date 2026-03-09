@@ -1082,7 +1082,7 @@ export function CommandCenterShell({
                   </div>
                   <div className="min-w-0">
                     <div className="title-serif truncate text-sm font-semibold">Travana</div>
-                    <div className="text-xs text-black/55 dark:text-white/55">Command Center</div>
+                    <div className="text-xs text-black/55 dark:text-white/55">Pipeline</div>
                   </div>
                 </div>
                 <button
@@ -1140,7 +1140,7 @@ export function CommandCenterShell({
                         Travana
                       </div>
                       <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-brand-subtitle">
-                        Command Center
+                        Pipeline
                       </div>
                     </div>
                   </div>
