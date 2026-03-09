@@ -64,6 +64,15 @@ export const bookingRepository = {
     return result;
   },
 
+  async countByClientId(clientId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .where(eq(transaction.client_id, clientId));
+    return result[0]?.count || 0;
+  },
+
   async findAll(): Promise<Booking[]> {
     return await db.select().from(booking).orderBy(desc(booking.date_created));
   },

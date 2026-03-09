@@ -1,6 +1,7 @@
 import { bookingRepository } from "../repositories/booking.repository";
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
+import { neonClientRepository } from "../repositories/neonClient.repository";
 import { AppError } from "../utils/error-handler";
 import type {
   InsertBooking,
@@ -58,6 +59,9 @@ export const bookingService = {
   async convertQuoteToBooking(quoteId: string, haysRef: string, supplierRef: string) {
     const q = await newQuoteRepository.findById(quoteId);
     if (!q) throw new AppError("Quote not found", 404);
+
+    const txn = await transactionRepository.findById(q.transaction_id);
+    if (!txn) throw new AppError("Transaction not found", 404);
 
     const existingBooking = await bookingRepository.findByTransactionId(q.transaction_id);
     if (existingBooking) throw new AppError("Transaction already has a booking", 400);
@@ -232,6 +236,14 @@ export const bookingService = {
     await newQuoteRepository.update(quoteId, { quote_status: 'WON' });
     await transactionRepository.update(q.transaction_id, { status: 'on_booking' });
 
+    // Check if client should be upgraded to VIP (3+ bookings)
+    if (txn.client_id) {
+      const bookingCount = await bookingRepository.countByClientId(txn.client_id);
+      if (bookingCount >= 3) {
+        await neonClientRepository.update(txn.client_id, { badge: 'VIP' });
+      }
+    }
+
     return b;
   },
 
@@ -247,6 +259,15 @@ export const bookingService = {
       price_per_person: calcPricePerPerson(data.sales_price, data.adult, data.child),
     });
     await transactionRepository.update(data.transaction_id, { status: 'on_booking' });
+
+    // Check if client should be upgraded to VIP (3+ bookings)
+    if (txn.client_id) {
+      const bookingCount = await bookingRepository.countByClientId(txn.client_id);
+      if (bookingCount >= 3) {
+        await neonClientRepository.update(txn.client_id, { badge: 'VIP' });
+      }
+    }
+
     return b;
   },
 

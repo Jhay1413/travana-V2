@@ -415,6 +415,17 @@ CREATE TABLE "destination_table" (
 	"country_id" uuid
 );
 --> statement-breakpoint
+CREATE TABLE "destination_guru" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"destination" text NOT NULL,
+	"country" text NOT NULL,
+	"data" jsonb NOT NULL,
+	"created_by" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "destination_guru_destination_unique" UNIQUE("destination")
+);
+--> statement-breakpoint
 CREATE TABLE "email_accounts" (
 	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,

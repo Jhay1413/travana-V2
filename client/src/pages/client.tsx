@@ -767,6 +767,7 @@ export default function ClientPage() {
                 <TabsContent value="quotes" className="mt-3">
                   <ClientQuotesTab
                     quotes={quotes}
+                    bookings={bookings}
                     clientId={clientId}
                     navigate={navigate}
                     onNewQuote={handleNewQuote}

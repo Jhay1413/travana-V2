@@ -317,12 +317,13 @@ export default function PipelineBoard() {
   const [haysRef, setHaysRef] = useState("");
   const [tourRef, setTourRef] = useState("");
 
-  // Set default to current user once loaded
+  // Set default filter: "all" for Admin/Manager, current user for restricted roles
   useEffect(() => {
     if (currentUser?.id && !selectedAgentId) {
-      setSelectedAgentId(currentUser.id);
+      const isRestrictedRole = currentUser.role !== "Admin" && currentUser.role !== "Manager";
+      setSelectedAgentId(isRestrictedRole ? currentUser.id : "all");
     }
-  }, [currentUser?.id, selectedAgentId]);
+  }, [currentUser?.id, currentUser?.role, selectedAgentId]);
 
   const agentFilter = selectedAgentId && selectedAgentId !== "all" ? selectedAgentId : undefined;
   const quoteStatusParam = quoteStatusFilter !== "all" ? quoteStatusFilter : undefined;
