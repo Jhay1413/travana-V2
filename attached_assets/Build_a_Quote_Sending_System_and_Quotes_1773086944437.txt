@@ -1,0 +1,250 @@
+Build a Quote Sending System and Quote View Tracking feature for a travel agency CRM.
+
+This feature allows travel agents to send customers a unique quote link and track when the customer views the quote.
+
+SYSTEM OVERVIEW
+
+Each quote must generate a unique secure URL token.
+
+Example:
+
+https://app.platform.com/quote/7F3K2L
+
+This URL opens the customer quote page.
+
+Agents must be able to send this link directly from the Quote Details page inside the CRM.
+
+QUOTE DATABASE STRUCTURE
+
+Create a quotes table with the following fields:
+
+quote_id
+customer_id
+quote_token
+total_price
+deposit_required
+status
+created_at
+updated_at
+
+quote_token must be a secure random string.
+
+Example:
+
+7F3K2L
+A9X4P2
+K83ZL1
+
+QUOTE VIEW TRACKING TABLE
+
+Create a table called:
+
+quote_views
+
+Fields:
+
+view_id
+quote_id
+viewed_at
+ip_address
+device_type
+browser
+country (optional)
+
+WHEN A CUSTOMER OPENS A QUOTE
+
+When the quote page loads:
+
+Identify the quote using the token in the URL.
+
+Log a new record in the quote_views table.
+
+Capture:
+
+timestamp
+IP address
+device type (mobile/desktop/tablet)
+browser
+
+Example log entry:
+
+quote_id: 1043
+viewed_at: 2026-03-09 19:42
+device_type: mobile
+browser: Chrome
+
+SHOW VIEW DATA TO AGENTS
+
+Inside the CRM Quote Page show:
+
+Quote Views
+
+Example display:
+
+Quote viewed 3 times
+Last viewed today at 19:42
+First viewed yesterday at 14:05
+
+Optional advanced data:
+
+Device breakdown
+Mobile: 2
+Desktop: 1
+
+REAL-TIME VIEW ALERTS (OPTIONAL)
+
+When a quote is opened, send a notification to the agent.
+
+Example:
+
+Sarah just viewed Quote #1043
+
+SEND QUOTE SYSTEM
+
+Inside the CRM Quote Page include a Send Quote panel.
+
+Buttons:
+
+Copy Quote Link
+Send Email
+Send WhatsApp
+Send Messenger
+Send SMS
+
+COPY LINK BUTTON
+
+Copies the quote URL to clipboard.
+
+Example:
+
+https://app.platform.com/quote/7F3K2L
+
+EMAIL SEND FUNCTION
+
+Agents can send the quote directly from the CRM.
+
+Email template:
+
+Subject:
+Your Holiday Quote
+
+Message:
+
+Hi {{customer_name}},
+
+I've found a great option for your holiday.
+
+You can view the full details including flights, hotels and itinerary here:
+
+{{quote_link}}
+
+Let me know what you think or if you'd like me to secure the price.
+
+WHATSAPP SEND BUTTON
+
+This button generates a WhatsApp message link.
+
+Example URL:
+
+https://wa.me/{{phone_number}}?text={{encoded_message}}
+
+Message template:
+
+Hi {{customer_name}} 😊
+
+I've found a great option for your holiday.
+
+You can view the full quote here:
+
+{{quote_link}}
+
+Let me know if you'd like me to secure it.
+
+MESSENGER SEND BUTTON
+
+Generate a prefilled message that agents can copy and paste into Facebook Messenger.
+
+SMS SEND BUTTON
+
+Generate an SMS message with the quote link.
+
+Example:
+
+Your holiday quote is ready.
+
+View it here:
+{{quote_link}}
+
+QUOTE STATUS TRACKING
+
+Update the quote status automatically.
+
+Statuses:
+
+Draft
+Sent
+Viewed
+Requested Changes
+Booked
+
+When a customer opens the quote, change status to:
+
+Viewed
+
+AGENT QUOTE PAGE UI
+
+Inside the CRM quote page show:
+
+Customer name
+Quote price
+Quote status
+Quote link
+
+View statistics
+
+Example:
+
+Quote Status: Viewed
+Views: 3
+Last viewed: Today 19:42
+
+Buttons:
+
+Preview Quote
+Copy Link
+Send Email
+Send WhatsApp
+Send Messenger
+Send SMS
+
+SECURITY
+
+The quote must only be accessible via the unique token.
+
+Example:
+
+/quote/{token}
+
+Do not expose quote IDs.
+
+TECH REQUIREMENTS
+
+Build this using:
+
+REST API endpoints
+
+GET /quote/{token}
+POST /quote/send
+POST /quote/view-log
+
+Ensure the quote page is mobile friendly and loads quickly.
+
+GOAL
+
+Allow agents to easily send quotes and track customer engagement.
+
+Agents should know:
+
+• If the customer opened the quote
+• How many times it was viewed
+• When it was last viewed
