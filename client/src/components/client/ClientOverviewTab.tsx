@@ -193,13 +193,6 @@ export function ClientOverviewTab({
         </div>
         {(() => {
           const upcomingItems: Array<{ id: string; title: string; type: string; travelDate: string; status: string; isBooking: boolean }> = [];
-          quotes.forEach((q: QuoteWithJoins) => {
-            if (!q.travel_date) return;
-            const td = new Date(q.travel_date);
-            if (td >= new Date() && !["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status || "")) {
-              upcomingItems.push({ id: q.id, title: q.title || q.holiday_type_name || "Trip", type: q.holiday_type_name || q.quote_type || "—", travelDate: q.travel_date, status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), isBooking: false });
-            }
-          });
           bookings.forEach((b: BookingWithJoins) => {
             if (!b.travel_date) return;
             const td = new Date(b.travel_date);
