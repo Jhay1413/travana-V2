@@ -617,6 +617,9 @@ export const quote = pgTable('quote_table', {
   quote_ref: varchar(),
   isQuoteCopy: boolean().default(false),
   isFreeQuote: boolean().default(false),
+  quote_token: varchar('quote_token', { length: 12 }),
+  quote_sent_at: timestamp('quote_sent_at', { precision: 0, withTimezone: true }),
+  quote_sent_via: varchar('quote_sent_via'),
 });
 
 export const insertQuoteSchema = createInsertSchema(quote).omit({ id: true, date_created: true });
@@ -1536,3 +1539,30 @@ export const hubAnnouncementTable = pgTable("hub_announcements", {
 export const insertHubAnnouncementSchema = createInsertSchema(hubAnnouncementTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type HubAnnouncement = typeof hubAnnouncementTable.$inferSelect;
 export type InsertHubAnnouncement = z.infer<typeof insertHubAnnouncementSchema>;
+
+export const quoteViewsTable = pgTable("quote_views", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  quoteId: uuid("quote_id").notNull().references(() => quote.id, { onDelete: "cascade" }),
+  viewedAt: timestamp("viewed_at", { withTimezone: true }).notNull().defaultNow(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  deviceType: varchar("device_type", { length: 20 }),
+  browser: varchar("browser", { length: 100 }),
+  userAgent: text("user_agent"),
+});
+
+export const insertQuoteViewSchema = createInsertSchema(quoteViewsTable).omit({ id: true, viewedAt: true });
+export type QuoteView = typeof quoteViewsTable.$inferSelect;
+export type InsertQuoteView = z.infer<typeof insertQuoteViewSchema>;
+
+export const quoteCustomerActionsTable = pgTable("quote_customer_actions", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  quoteId: uuid("quote_id").notNull().references(() => quote.id, { onDelete: "cascade" }),
+  actionType: varchar("action_type", { length: 30 }).notNull(),
+  message: text("message"),
+  customerName: varchar("customer_name", { length: 255 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertQuoteCustomerActionSchema = createInsertSchema(quoteCustomerActionsTable).omit({ id: true, createdAt: true });
+export type QuoteCustomerAction = typeof quoteCustomerActionsTable.$inferSelect;
+export type InsertQuoteCustomerAction = z.infer<typeof insertQuoteCustomerActionSchema>;

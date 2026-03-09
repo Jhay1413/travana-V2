@@ -6,6 +6,7 @@ import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./repositories/task.repository";
 import { checkStaleTickets } from "./services/ticket-notification.service";
+import quotePublicRoutes from "./routes/quote-public.routes";
 
 const app = express();
 const httpServer = createServer(app);
@@ -66,6 +67,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  app.use("/api/public/quote", quotePublicRoutes);
+
   await setupAuth(app);
   registerAuthRoutes(app);
 

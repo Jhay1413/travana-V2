@@ -101,6 +101,16 @@ Schema includes tables for:
 - `destination_guru` - AI-generated destination intelligence (JSONB data, unique per destination)
 - `feedback` - User feedback/suggestions/bug reports with status tracking
 - `hub_announcements` - TheHUB news & announcements with rich text content, categories, and pinning
+- `quote_views` - Customer view tracking for shared quotes (device, browser, IP)
+- `quote_customer_actions` - Customer responses to shared quotes (accepted/changes_requested)
+
+#### Quote Sharing System
+- Quotes can be shared via unique 6-char tokens stored in `quote_table.quote_token`
+- Public API: `/api/public/quote/:token` (no auth required, registered before auth middleware in `server/index.ts`)
+- Authenticated API: `/api/quote-share/:id/...` (generates tokens, views, actions, with ownership checks)
+- Public page: `/view-quote/:token` renders `PublicQuotePage` (detected in `App.tsx` before auth check)
+- Routes split: `server/routes/quote-public.routes.ts` (public) and `server/routes/quote-share.routes.ts` (authenticated with RBAC)
+- Agent share UI: `ShareQuotePanel.tsx` (Copy Link, Email, WhatsApp, SMS, Messenger) and `QuoteEngagement.tsx` (view stats, customer actions)
 
 Backend uses repository/service/controller pattern:
 - `server/repositories/` - Data access layer (transaction, newQuote, booking, enquiryTable, etc.)

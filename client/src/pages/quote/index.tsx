@@ -39,7 +39,9 @@ import {
   StatusPill,
   QuoteTasksSection,
   QuoteNotesSection,
-  QuoteSummaryTimeline
+  QuoteSummaryTimeline,
+  ShareQuotePanel,
+  QuoteEngagement,
 } from "./components";
 
 export default function QuotePage({ isBooking = false }: { isBooking?: boolean } = {}) {
@@ -389,10 +391,24 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               </div>
             </Card>
 
-            {/* Sidebar - Tasks, Notes, Timeline */}
+            {/* Sidebar - Share, Engagement, Tasks, Notes, Timeline */}
             <div className="space-y-3" data-testid="col-quote-sidebar">
               {quote && (
                 <>
+                  {!isBooking && (
+                    <ShareQuotePanel
+                      quoteId={quoteId}
+                      quoteTitle={quote.quoteTitle}
+                      destinationName={quote.destinationName || quote.destination}
+                      clientName={clientData?.name}
+                      clientEmail={(clientData as any)?.email}
+                      clientPhone={(clientData as any)?.phone || (clientData as any)?.mobile}
+                      agentName={quote.owner?.name}
+                    />
+                  )}
+                  {!isBooking && (
+                    <QuoteEngagement quoteId={quoteId} />
+                  )}
                   <QuoteTasksSection 
                     quoteId={quoteId} 
                     entityType={isBooking ? "booking" : "quote"} 

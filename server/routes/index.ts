@@ -33,6 +33,7 @@ import searchRoutes from "./search.routes";
 import destinationGuruRoutes from "./destination-guru.routes";
 import feedbackRoutes from "./feedback.routes";
 import announcementRoutes from "./announcement.routes";
+import quoteShareRoutes from "./quote-share.routes";
 
 const router = Router();
 
@@ -70,5 +71,6 @@ router.use("/search", searchRoutes);
 router.use("/destination-guru", destinationGuruRoutes);
 router.use("/feedback", feedbackRoutes);
 router.use("/announcements", announcementRoutes);
+router.use("/quote-share", quoteShareRoutes);
 
 export default router;

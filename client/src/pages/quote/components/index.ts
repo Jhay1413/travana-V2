@@ -10,3 +10,5 @@ export { QuoteNotesSection } from "./QuoteNotesSection";
 export { QuoteSummaryTimeline } from "./QuoteSummaryTimeline";
 export { NoteCard } from "./NoteCard";
 export { ReplyCard } from "./ReplyCard";
+export { ShareQuotePanel } from "./ShareQuotePanel";
+export { QuoteEngagement } from "./QuoteEngagement";
