@@ -268,6 +268,21 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
           </div>
         </div>
 
+        {/* Share Panel - visible on smaller screens above main content */}
+        {quote && !isBooking && (
+          <div className="mt-4 lg:hidden" data-testid="share-panel-mobile">
+            <ShareQuotePanel
+              quoteId={quoteId}
+              quoteTitle={quote.quoteTitle}
+              destinationName={quote.destinationName || quote.destination}
+              clientName={clientData?.name}
+              clientEmail={(clientData as any)?.email}
+              clientPhone={(clientData as any)?.phone || (clientData as any)?.mobile}
+              agentName={quote.owner?.name}
+            />
+          </div>
+        )}
+
         {/* Main Content */}
         <div className="mt-4" data-testid="layout-quote-body">
           <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-quote-sections">
@@ -532,15 +547,17 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               {quote && (
                 <>
                   {!isBooking && (
-                    <ShareQuotePanel
-                      quoteId={quoteId}
-                      quoteTitle={quote.quoteTitle}
-                      destinationName={quote.destinationName || quote.destination}
-                      clientName={clientData?.name}
-                      clientEmail={(clientData as any)?.email}
-                      clientPhone={(clientData as any)?.phone || (clientData as any)?.mobile}
-                      agentName={quote.owner?.name}
-                    />
+                    <div className="hidden lg:block">
+                      <ShareQuotePanel
+                        quoteId={quoteId}
+                        quoteTitle={quote.quoteTitle}
+                        destinationName={quote.destinationName || quote.destination}
+                        clientName={clientData?.name}
+                        clientEmail={(clientData as any)?.email}
+                        clientPhone={(clientData as any)?.phone || (clientData as any)?.mobile}
+                        agentName={quote.owner?.name}
+                      />
+                    </div>
                   )}
                   {!isBooking && (
                     <QuoteEngagement quoteId={quoteId} />
