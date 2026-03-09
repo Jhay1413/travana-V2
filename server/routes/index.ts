@@ -31,6 +31,7 @@ import revenueRoutes from "./revenue.routes";
 import targetsRoutes from "./targets.routes";
 import searchRoutes from "./search.routes";
 import destinationGuruRoutes from "./destination-guru.routes";
+import feedbackRoutes from "./feedback.routes";
 
 const router = Router();
 
@@ -66,5 +67,6 @@ router.use("/revenue", revenueRoutes);
 router.use("/targets", targetsRoutes);
 router.use("/search", searchRoutes);
 router.use("/destination-guru", destinationGuruRoutes);
+router.use("/feedback", feedbackRoutes);
 
 export default router;

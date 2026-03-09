@@ -27,6 +27,7 @@ import {
   MapPin,
   Menu,
   MessageSquare,
+  MessageSquarePlus,
   Phone,
   Plane,
   Plus,
@@ -116,6 +117,7 @@ function getNavRoute(key: string): string {
     payouts: "/",
     hub: "/hub",
     "social-posts": "/social-posts",
+    "feedback": "/feedback",
   };
   return routes[key] || "/";
 }
@@ -647,6 +649,7 @@ export function CommandCenterShell({
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
+              { key: "feedback", label: "Feedback", icon: <MessageSquarePlus className="h-4 w-4" /> },
               { key: "settings", label: "Settings", icon: <Settings2 className="h-4 w-4" />, subGroups: settingsSubGroups },
             ],
           },

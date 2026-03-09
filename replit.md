@@ -99,6 +99,7 @@ Schema includes tables for:
 - `tickets` / `ticket_attachments` / `ticket_replies` - Support ticket system
 - `notifications` - User notification system
 - `destination_guru` - AI-generated destination intelligence (JSONB data, unique per destination)
+- `feedback` - User feedback/suggestions/bug reports with status tracking
 
 Backend uses repository/service/controller pattern:
 - `server/repositories/` - Data access layer (transaction, newQuote, booking, enquiryTable, etc.)

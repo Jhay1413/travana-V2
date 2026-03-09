@@ -1499,3 +1499,24 @@ export const destinationGuruTable = pgTable("destination_guru", {
 export const insertDestinationGuruSchema = createInsertSchema(destinationGuruTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type DestinationGuru = typeof destinationGuruTable.$inferSelect;
 export type InsertDestinationGuru = z.infer<typeof insertDestinationGuruSchema>;
+
+export const feedback_type_enum = pgEnum("feedback_type_enum", ["suggestion", "bug", "general"]);
+export const feedback_status_enum = pgEnum("feedback_status_enum", ["open", "in_review", "resolved", "closed"]);
+
+export const feedbackTable = pgTable("feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull().references(() => user.id),
+  userName: text("user_name"),
+  type: feedback_type_enum("type").notNull().default("general"),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: feedback_status_enum("status").notNull().default("open"),
+  adminNotes: text("admin_notes"),
+  page: text("page"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertFeedbackSchema = createInsertSchema(feedbackTable).omit({ id: true, createdAt: true, updatedAt: true, status: true, adminNotes: true });
+export type Feedback = typeof feedbackTable.$inferSelect;
+export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;

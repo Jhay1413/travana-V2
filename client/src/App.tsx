@@ -22,6 +22,8 @@ import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";
 import SocialQuotePage from "@/pages/social-quote";
 import DestinationGuruPage from "@/pages/destination-guru";
+import FeedbackPage from "@/pages/feedback";
+import { FeedbackButton } from "@/components/feedback-button";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -59,6 +61,7 @@ function AuthenticatedRouter() {
       <Route path="/admin/import" component={AdminImportPage} />
       <Route path="/admin/lookup/:tableSlug" component={AdminLookupPage} />
       <Route path="/settings/:tableSlug" component={SettingsLookupPage} />
+      <Route path="/feedback" component={FeedbackPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -75,7 +78,12 @@ function AppRouter() {
     return <LandingPage />;
   }
 
-  return <AuthenticatedRouter />;
+  return (
+    <>
+      <AuthenticatedRouter />
+      <FeedbackButton />
+    </>
+  );
 }
 
 function App() {
