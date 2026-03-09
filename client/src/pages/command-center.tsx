@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -95,6 +95,8 @@ import {
   Trophy,
   Flame,
   Pencil,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -426,6 +428,8 @@ function ShellNav({
   actualRole,
   rolePreview,
   onRoleChange,
+  sidebarCollapsed,
+  toggleSidebarCollapsed,
 }: {
   role: Role;
   active: string;
@@ -433,6 +437,8 @@ function ShellNav({
   actualRole: Role;
   rolePreview: Role | null;
   onRoleChange: (role: Role | null) => void;
+  sidebarCollapsed: boolean;
+  toggleSidebarCollapsed: () => void;
 }) {
   const [, navigate] = useLocation();
   const { data: sidebarTickets } = useTickets();
@@ -611,8 +617,18 @@ function ShellNav({
   };
 
   return (
-    <aside className="hidden xl:block">
-      <div className="glass ringed grain sticky top-4 rounded-3xl p-4">
+    <aside className="hidden xl:block" data-testid="nav-command-center">
+      <div className={cn("glass ringed grain sticky top-4 rounded-3xl transition-all duration-250", sidebarCollapsed ? "p-2" : "p-4")}>
+        {sidebarCollapsed ? (
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+              data-testid="img-brand-mark"
+            >
+              <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
+            </div>
+          </div>
+        ) : (
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
@@ -646,9 +662,71 @@ function ShellNav({
             ))}
           </select>
         </div>
+        )}
 
-        <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+        <Separator className={cn("bg-black/10 dark:bg-white/10", sidebarCollapsed ? "my-2" : "my-4")} />
 
+        {sidebarCollapsed ? (
+          <nav className="flex flex-col items-center gap-1">
+            {nav.grouped
+              ? nav.sections.flatMap((section) => section.items).map((item) => {
+                  const isActive = active === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        if (item.route) { navigate(item.route); return; }
+                        onActiveChange(item.key);
+                      }}
+                      className={cn(
+                        "grid h-10 w-10 place-items-center rounded-xl transition",
+                        isActive
+                          ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
+                          : "text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
+                      )}
+                      title={item.label}
+                      data-testid={`nav-${item.key}`}
+                    >
+                      <span className="text-current">{item.icon}</span>
+                    </button>
+                  );
+                })
+              : nav.items?.map((item) => {
+                  const isActive = active === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        if (item.route) { navigate(item.route); return; }
+                        onActiveChange(item.key);
+                      }}
+                      className={cn(
+                        "grid h-10 w-10 place-items-center rounded-xl transition",
+                        isActive
+                          ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
+                          : "text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
+                      )}
+                      title={item.label}
+                      data-testid={`nav-${item.key}`}
+                    >
+                      <span className="text-current">{item.icon}</span>
+                    </button>
+                  );
+                })
+            }
+            <Separator className="my-1 w-8 bg-black/10 dark:bg-white/10" />
+            <button
+              type="button"
+              onClick={toggleSidebarCollapsed}
+              className="grid h-10 w-10 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
+              title="Expand sidebar"
+              data-testid="button-expand-sidebar"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+          </nav>
+        ) : (
+        <>
         <nav className="space-y-1">
           {nav.grouped ? (
             nav.sections.map((section) => {
@@ -1039,6 +1117,19 @@ function ShellNav({
             );
           })}
         </div>
+
+        <Separator className="my-4 bg-black/10 dark:bg-white/10" />
+        <button
+          type="button"
+          onClick={toggleSidebarCollapsed}
+          className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
+          data-testid="button-collapse-sidebar"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+          <span className="text-sm font-medium">Minimise</span>
+        </button>
+        </>
+        )}
       </div>
     </aside>
   );
@@ -1819,6 +1910,16 @@ export default function CommandCenterPage() {
   const [debouncedOpportunitiesSearch, setDebouncedOpportunitiesSearch] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
+  });
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("sidebar-collapsed", String(next)); } catch {}
+      return next;
+    });
+  }, []);
   const { role, setRole: setRoleFromHook, actualRole } = useRole();
   const rolePreview = role !== actualRole ? role : null;
   const setRolePreview = (r: Role | null) => {
@@ -7032,7 +7133,7 @@ export default function CommandCenterPage() {
 
       <div className="app-shell px-2 py-2 md:px-3 md:py-3 lg:px-4 lg:py-4">
         <div className="w-full space-y-3">
-          <div className="grid gap-3 xl:grid-cols-[320px_1fr]">
+          <div className={cn("grid gap-3", sidebarCollapsed ? "xl:grid-cols-[72px_1fr]" : "xl:grid-cols-[320px_1fr]")} style={{ transition: "grid-template-columns 0.25s ease" }}>
             <ShellNav 
               role={role} 
               active={active} 
@@ -7040,6 +7141,8 @@ export default function CommandCenterPage() {
               actualRole={actualRole}
               rolePreview={rolePreview}
               onRoleChange={setRolePreview}
+              sidebarCollapsed={sidebarCollapsed}
+              toggleSidebarCollapsed={toggleSidebarCollapsed}
             />
 
             <div className="flex flex-col gap-3">
