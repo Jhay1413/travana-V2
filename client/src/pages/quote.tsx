@@ -164,7 +164,40 @@ export default function QuotePage() {
                 <div className="text-base font-semibold" data-testid="text-quote-title">
                   {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
                 </div>
-                <StatusPill status={quote.status} />
+                <StatusPill
+                  status={quote.status}
+                  onStatusChange={(value) => {
+                    if (value === "WON") {
+                      setShowConvertDialog(true);
+                    } else if (value === "LOST") {
+                      updateQuoteMutation.mutate(
+                        { id: quoteId, data: { quote_status: "LOST" } },
+                        {
+                          onSuccess: () => {
+                            queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+                            toast({ title: "Quote marked as lost" });
+                          },
+                          onError: () => {
+                            toast({ title: "Failed to update status", variant: "destructive" });
+                          },
+                        }
+                      );
+                    } else {
+                      updateQuoteMutation.mutate(
+                        { id: quoteId, data: { quote_status: value } },
+                        {
+                          onSuccess: () => {
+                            queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+                            toast({ title: "Quote status updated" });
+                          },
+                          onError: () => {
+                            toast({ title: "Failed to update status", variant: "destructive" });
+                          },
+                        }
+                      );
+                    }
+                  }}
+                />
                 {quote.isCopyQuote && (
                   <span
                     className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
@@ -556,56 +589,6 @@ export default function QuotePage() {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Select
-                            value={quote.status || "QUOTE_IN_PROGRESS"}
-                            onValueChange={(value) => {
-                              if (value === "WON") {
-                                setShowConvertDialog(true);
-                              } else if (value === "LOST") {
-                                updateQuoteMutation.mutate(
-                                  { id: quoteId, data: { quote_status: "LOST" } },
-                                  {
-                                    onSuccess: () => {
-                                      queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
-                                      toast({ title: "Quote marked as lost" });
-                                    },
-                                    onError: () => {
-                                      toast({ title: "Failed to update status", variant: "destructive" });
-                                    },
-                                  }
-                                );
-                              } else {
-                                updateQuoteMutation.mutate(
-                                  { id: quoteId, data: { quote_status: value } },
-                                  {
-                                    onSuccess: () => {
-                                      queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
-                                      toast({ title: "Quote status updated" });
-                                    },
-                                    onError: () => {
-                                      toast({ title: "Failed to update status", variant: "destructive" });
-                                    },
-                                  }
-                                );
-                              }
-                            }}
-                          >
-                            <SelectTrigger
-                              className="h-8 w-[180px] rounded-full border-black/10 bg-white/70 text-[11px] font-semibold text-black/70"
-                              data-testid="select-quote-status"
-                            >
-                              <Filter className="mr-1.5 h-3.5 w-3.5 shrink-0 opacity-60" />
-                              <SelectValue placeholder="Quote Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="QUOTE_IN_PROGRESS">Quote in Progress</SelectItem>
-                              <SelectItem value="QUOTE_CALL">Quote Call</SelectItem>
-                              <SelectItem value="AWAITING_DECISION">Awaiting Decision</SelectItem>
-                              <SelectItem value="HOT_QUOTE">Hot Quote</SelectItem>
-                              <SelectItem value="WON">Won</SelectItem>
-                              <SelectItem value="LOST">Lost</SelectItem>
-                            </SelectContent>
-                          </Select>
                           <UserReassignSelect
                             value={quoteData?.user_id || currentUser?.id || ""}
                             onValueChange={(userId) => {
