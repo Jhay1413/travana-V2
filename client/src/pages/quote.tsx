@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles, ImagePlus, Trash2 } from "lucide-react";
+import { ChevronLeft, Copy, Check, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles, ImagePlus, Trash2, Share2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -31,6 +31,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useDestinationGuruSearch } from "@/hooks/queries/use-destination-guru-queries";
 import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-guru-mutations";
 import { Loader2 } from "lucide-react";
+import axiosClient from "@/api/client/axios-client";
 import { transformQuoteData, currency, formatUKDate, formatLeadSource } from "@/components/quote/quote-types";
 import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
@@ -71,6 +72,10 @@ export default function QuotePage() {
   const deleteImageMutation = useDeleteQuoteImage();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [showSharePopup, setShowSharePopup] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
   const [showGuruSheet, setShowGuruSheet] = useState(false);
   const [convertHaysRef, setConvertHaysRef] = useState("");
   const [convertTourRef, setConvertTourRef] = useState("");
@@ -233,6 +238,27 @@ export default function QuotePage() {
             >
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "Unpin" : "Pin"}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setShowSharePopup(true);
+                if (!shareToken) {
+                  setShareLoading(true);
+                  try {
+                    const res = await axiosClient.post(`/api/quote-share/${quoteId}/generate-token`);
+                    setShareToken(res.data.token);
+                  } catch {
+                    toast({ title: "Failed to generate share link", variant: "destructive" });
+                  }
+                  setShareLoading(false);
+                }
+              }}
+              className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+              data-testid="button-share-quote"
+            >
+              <Share2 className="h-4 w-4" />
+              Share Quote
             </button>
             <Button
               size="sm"
@@ -929,6 +955,50 @@ export default function QuotePage() {
           onOpenChange={setShowCreateDialog}
         />
       )}
+      <Dialog open={showSharePopup} onOpenChange={setShowSharePopup}>
+        <DialogContent className="max-w-md rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-share-quote">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Share Quote</DialogTitle>
+            <DialogDescription className="text-xs text-black/55">
+              Copy the link below and send it to your customer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            {shareLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-black/40" />
+              </div>
+            ) : shareToken ? (
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={`${window.location.origin}/view-quote/${shareToken}`}
+                  className="flex-1 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-xs text-black/70 outline-none"
+                  data-testid="input-share-link"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <Button
+                  size="sm"
+                  className="h-9 rounded-xl px-4"
+                  data-testid="button-copy-share-link"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(`${window.location.origin}/view-quote/${shareToken}`);
+                    setShareCopied(true);
+                    toast({ title: "Link copied to clipboard!" });
+                    setTimeout(() => setShareCopied(false), 2000);
+                  }}
+                >
+                  {shareCopied ? <Check className="mr-1.5 h-3.5 w-3.5" /> : <Copy className="mr-1.5 h-3.5 w-3.5" />}
+                  {shareCopied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-black/50">Failed to generate link. Please close and try again.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
         <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-convert-booking">
           <DialogHeader>
