@@ -37,7 +37,6 @@ import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
 import { QuoteSummaryTimeline } from "@/components/quote/QuoteSummaryTimeline";
 import { StatusPill } from "@/components/quote/StatusPill";
-import { ShareQuotePanel } from "@/pages/quote/components/ShareQuotePanel";
 
 export default function QuotePage() {
   const [, setLocation] = useLocation();
@@ -291,18 +290,6 @@ export default function QuotePage() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </div>
-
-        <div className="mt-4" data-testid="share-panel-top">
-          <ShareQuotePanel
-            quoteId={quoteId}
-            quoteTitle={quote.quoteTitle}
-            destinationName={quote.destinationName || quote.destination}
-            clientName={clientData?.name}
-            clientEmail={(clientData as any)?.email}
-            clientPhone={(clientData as any)?.phone || (clientData as any)?.mobile}
-            agentName={quote.owner?.name}
-          />
         </div>
 
         <div className="mt-4" data-testid="layout-quote-body">
