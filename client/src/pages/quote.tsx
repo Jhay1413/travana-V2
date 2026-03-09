@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useQuote, useBooking, useClient, useNeonClient, useTags, quoteKeys, bookingKeys } from "@/hooks/queries";
 import { useDuplicateQuote, useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
@@ -194,20 +195,27 @@ export default function QuotePage() {
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "Unpin" : "Pin"}
             </button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 rounded-2xl border-black/10 bg-white/70"
-              data-testid="button-copy-quote"
-              onClick={() => navigator.clipboard.writeText(`${quote.quoteTitle} (${quote.id})`)}
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Copy
-            </Button>
-            <Button size="sm" className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90" data-testid="button-export-quote" onClick={() => { }}>
-              <FileText className="mr-2 h-4 w-4" />
-              Export
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-9 rounded-2xl border-black/10 bg-white/70" data-testid="button-quote-actions">
+                  <MoreHorizontal className="mr-2 h-4 w-4" />
+                  Actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                <DropdownMenuItem
+                  onClick={() => navigator.clipboard.writeText(`${quote.quoteTitle} (${quote.id})`)}
+                  data-testid="button-copy-quote"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { }} data-testid="button-export-quote">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Export
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               size="sm"
               className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
