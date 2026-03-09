@@ -66,6 +66,8 @@ export const searchRepository = {
             ilike(clientTable.email, term),
             ilike(clientTable.phoneNumber, term),
             ilike(clientTable.city, term),
+            // Search by full name (concatenated)
+            sql`concat_ws(' ', ${clientTable.title}, ${clientTable.firstName}, ${clientTable.surename}) ilike ${term}`,
           )
         )
         .limit(limit),
