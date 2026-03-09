@@ -38,6 +38,7 @@ import {
   useSubmitQuoteAction,
   type PublicQuoteData,
 } from "@/hooks/queries/use-quote-public-queries";
+import defaultHeroBg from "@assets/Maldives_1773092726855.png";
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
@@ -131,7 +132,13 @@ function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<
       </AnimatePresence>
 
       {!validImages.length && (
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-950" />
+        <div className="absolute inset-0">
+          <img
+            src={defaultHeroBg}
+            alt="Holiday destination"
+            className="w-full h-full object-cover"
+          />
+        </div>
       )}
 
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
