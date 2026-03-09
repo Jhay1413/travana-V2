@@ -29,6 +29,7 @@ import {
   AlertCircle,
   X,
   PawPrint,
+  Phone,
 } from "lucide-react";
 import {
   usePublicQuote,
@@ -559,8 +560,15 @@ function AgentSection({ agent }: { agent: PublicQuoteData["agent"] }) {
           <div>
             <p className="text-sm text-white/50">Your Travel Advisor</p>
             <p className="text-lg font-semibold text-white" data-testid="text-agent-name">{agent.name}</p>
-            <p className="text-xs text-white/40 mt-0.5">Here to help you with your dream holiday</p>
           </div>
+          <a
+            href="tel:01915947999"
+            className="ml-auto flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/20 hover:text-white"
+            data-testid="button-call-agent"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            Call 0191 594 7999
+          </a>
         </div>
       </GlassCard>
     </SectionWrapper>
