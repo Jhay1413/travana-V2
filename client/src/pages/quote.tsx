@@ -195,6 +195,15 @@ export default function QuotePage() {
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
               {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "Unpin" : "Pin"}
             </button>
+            <Button
+              size="sm"
+              className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
+              data-testid="button-destination-guru"
+              onClick={() => setShowGuruSheet(true)}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Destination Guru
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="outline" className="h-9 rounded-2xl border-black/10 bg-white/70" data-testid="button-quote-actions">
@@ -216,15 +225,6 @@ export default function QuotePage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              size="sm"
-              className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
-              data-testid="button-destination-guru"
-              onClick={() => setShowGuruSheet(true)}
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Destination Guru
-            </Button>
           </div>
         </div>
 
