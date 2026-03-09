@@ -1,0 +1,290 @@
+Build a Customer Quote View Page, Quote Sending System, and View Tracking for the TravelHub CRM.
+
+This feature lets agents send customers a unique, secure quote link. When customers open it, they see a beautifully designed, mobile-friendly page with their full travel itinerary, destination intelligence, and the ability to accept the quote or request changes. Agents can track exactly when and how customers engage with the quote.
+
+═══════════════════════════════════════════
+IMPORTANT: EXISTING SYSTEM CONTEXT
+═══════════════════════════════════════════
+
+This project already has a full quote system. DO NOT create a new quotes table.
+
+Existing database:
+- `quote` table (Drizzle ORM, UUID primary keys) with fields including: id, transaction_id, quote_status (pgEnum: NEW_LEAD, QUOTE_IN_PROGRESS, QUOTE_CALL, QUOTE_READY, AWAITING_DECISION, REQUOTE, WON, ARCHIVED, LOST, INACTIVE, EXPIRED), sales_price, package_commission, discounts, service_charge, price_per_person, travel_date, num_of_nights, adult, child, infant, holiday_type_id, main_tour_operator_id, quote_type, deal_type, transfer_type, isFreeQuote, date_created, date_expiry
+- Related sub-tables: quote_flights, quote_accomodation, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, quote_cruise (with quote_cruise_itinerary, quote_cruise_item_extra), passengers, quote_images, quote_tags
+- `transaction` table links quotes to clients via transaction.client_id and to agents via transaction.user_id
+- `client_table` / `neon_clients` for customer records
+- `destination_guru` table with JSONB `data` column containing AI-generated destination intelligence (keyed by destination name)
+- `notifications` table for in-app agent notifications
+
+Existing tech stack:
+- Backend: Express + TypeScript + Drizzle ORM on PostgreSQL (NEON_DATABASE_URL)
+- Frontend: React 18 + TypeScript + Tailwind CSS + shadcn/ui + Framer Motion
+- State: TanStack React Query with custom hooks (queries/ and mutations/)
+- Auth: Replit OIDC with session cookies
+- API pattern: RESTful under /api/*, responses wrapped in { success, data } envelope
+- Repository → Service → Controller → Routes pattern
+- Schema defined in shared/schema.ts using Drizzle with Zod validation
+- All currency in GBP (£)
+
+═══════════════════════════════════════════
+PART 1: DATABASE ADDITIONS
+═══════════════════════════════════════════
+
+Add the following columns to the EXISTING `quote` table in shared/schema.ts:
+
+  quote_token: varchar(12), unique, nullable
+    - Secure random alphanumeric string (e.g., 7F3K2L, A9X4P2)
+    - Generated when agent first sends/shares the quote
+    - Used in the public URL: /view-quote/{token}
+
+  quote_sent_at: timestamp, nullable
+    - Records when the quote was first sent to the customer
+
+  quote_sent_via: varchar, nullable
+    - Channel used: "email", "whatsapp", "sms", "messenger", "link"
+
+Create a NEW table: `quote_views`
+
+  id: uuid, primary key, default gen_random_uuid()
+  quote_id: uuid, references quote.id, NOT NULL
+  viewed_at: timestamp, default now(), NOT NULL
+  ip_address: varchar(45)
+  device_type: varchar(20) — "mobile", "desktop", "tablet"
+  browser: varchar(100)
+  user_agent: text
+
+Create a NEW table: `quote_customer_actions`
+
+  id: uuid, primary key, default gen_random_uuid()
+  quote_id: uuid, references quote.id, NOT NULL
+  action_type: varchar — "accepted", "changes_requested"
+  message: text, nullable (customer's message when requesting changes)
+  customer_name: varchar — captured from form
+  created_at: timestamp, default now(), NOT NULL
+
+DO NOT change the existing quote_status_enum. Track send/view/action events in the new tables above, separate from the existing status workflow.
+
+Use `psql "$NEON_DATABASE_URL"` to apply schema changes (drizzle-kit push does not work in this environment).
+
+═══════════════════════════════════════════
+PART 2: PUBLIC CUSTOMER QUOTE PAGE
+═══════════════════════════════════════════
+
+Create a public route (NO authentication required):
+
+  /view-quote/:token
+
+This page is what the customer sees. It must be:
+- Beautiful, professional, and modern
+- Fully mobile responsive (mobile-first design)
+- Fast loading
+- Branded with the agency identity
+
+DESIGN REQUIREMENTS:
+
+The page should use the existing glassmorphism / grain design language from the CRM but adapted for a clean, customer-facing presentation. Use Framer Motion for smooth entrance animations.
+
+PAGE LAYOUT — Full Itinerary View:
+
+1. HERO SECTION
+   - Large hero image from quote_images (primary image) or a beautiful destination fallback
+   - Destination name as large headline
+   - Country name
+   - Travel dates formatted nicely (e.g., "14th March — 21st March 2026")
+   - Number of nights
+   - Party size (e.g., "2 Adults, 1 Child")
+
+2. DESTINATION INTELLIGENCE SECTION
+   - Pull data from the `destination_guru` table matching the quote's destination
+   - Display relevant sections from the JSONB data: overview, best time to visit, local highlights, food & drink, practical tips
+   - Present as attractive cards with icons
+   - If no destination guru data exists, skip this section gracefully
+
+3. FLIGHTS SECTION (if quote has flights)
+   - Outbound flight card: airline, flight number, departure airport → arrival airport, times, date
+   - Return flight card: same format
+   - Use airport names from the airports lookup table
+   - Visual timeline/card format, not a plain table
+
+4. ACCOMMODATION SECTION (if quote has accommodation)
+   - Hotel/resort name and image
+   - Room type, board basis
+   - Check-in / check-out dates
+   - Star rating if available
+
+5. TRANSFERS SECTION (if quote has transfers)
+   - Transfer type, from/to, vehicle type
+
+6. EXTRAS SECTION (combine if present)
+   - Car hire details
+   - Attraction tickets
+   - Lounge passes
+   - Airport parking
+   - Cruise details (if cruise package)
+
+7. PRICING SECTION
+   - Total package price (GBP, formatted with £)
+   - Price per person
+   - Deposit required (if applicable)
+   - Clear, prominent display
+   - DO NOT show commission, discounts, or service charge — these are internal agent figures
+
+8. YOUR AGENT SECTION
+   - Agent name (from transaction → user)
+   - Agency branding
+   - Contact information
+
+9. CUSTOMER ACTION SECTION
+   - Two clear buttons:
+     a) "I'm Interested — Let's Book" (accept)
+     b) "I Have Some Questions" (request changes)
+   - Accept: shows a simple confirmation with the customer's name, records action
+   - Request Changes: shows a text area for the customer to write their message, then submits
+   - After either action, show a friendly confirmation message
+   - Each action creates a record in `quote_customer_actions` and triggers a notification to the agent
+
+═══════════════════════════════════════════
+PART 3: VIEW TRACKING
+═══════════════════════════════════════════
+
+BACKEND — When the public quote page loads:
+
+1. Resolve the quote by token via GET /api/public/quote/:token
+2. Log a view in `quote_views`:
+   - Parse User-Agent header for device_type and browser
+   - Capture IP address from request
+   - Record timestamp
+3. Create a notification for the agent:
+   - Title: "Quote Viewed"
+   - Message: "{customer_name} just viewed their quote for {destination}"
+   - Use the existing notifications table and notification creation pattern
+
+FRONTEND — Agent View (CRM Quote Detail Page):
+
+Add a "Quote Engagement" card/section to the existing quote detail page showing:
+
+  - View count: "Viewed 3 times"
+  - First viewed: "Yesterday at 14:05"
+  - Last viewed: "Today at 19:42"
+  - Device breakdown: Mobile: 2, Desktop: 1
+  - Customer actions: Show if customer accepted or requested changes, with their message
+
+═══════════════════════════════════════════
+PART 4: SEND QUOTE SYSTEM (CRM Agent Side)
+═══════════════════════════════════════════
+
+Add a "Share Quote" panel to the existing CRM quote detail page.
+
+When an agent first shares a quote, generate the quote_token if one doesn't exist yet. Save it to the quote record.
+
+BUTTONS:
+
+1. COPY LINK
+   - Copies the full URL to clipboard: https://{domain}/view-quote/{token}
+   - Show a toast confirmation: "Link copied!"
+
+2. SEND EMAIL
+   - Opens the agent's default email client (mailto: link)
+   - Pre-fill with:
+     To: customer email (from client record)
+     Subject: Your Holiday Quote — {destination}
+     Body:
+       Hi {customer_first_name},
+
+       I've put together a great option for your {destination} holiday.
+
+       You can view the full details including flights, accommodation and your complete itinerary here:
+
+       {quote_link}
+
+       Let me know what you think or if you'd like me to secure the price.
+
+       Best regards,
+       {agent_name}
+
+3. SEND WHATSAPP
+   - Opens WhatsApp link: https://wa.me/{phone}?text={encoded_message}
+   - Phone from client record (format to international: remove spaces, ensure + prefix)
+   - Message:
+       Hi {customer_first_name},
+
+       I've found a great option for your {destination} holiday.
+
+       View your full quote here:
+       {quote_link}
+
+       Let me know if you'd like me to secure it!
+
+4. SEND SMS
+   - Opens SMS link: sms:{phone}?body={encoded_message}
+   - Message:
+       Your {destination} holiday quote is ready! View it here: {quote_link}
+
+5. SEND MESSENGER
+   - Copy a pre-written message to clipboard (Messenger doesn't support pre-filled URLs reliably)
+   - Show toast: "Message copied — paste in Messenger"
+   - Message same as WhatsApp template
+
+When any send action is used, update quote.quote_sent_at (if not already set) and quote.quote_sent_via.
+
+═══════════════════════════════════════════
+PART 5: API ENDPOINTS
+═══════════════════════════════════════════
+
+PUBLIC (no auth):
+  GET  /api/public/quote/:token        — Returns full quote data for customer page (excluding sensitive fields like commission)
+  POST /api/public/quote/:token/view   — Logs a view (called automatically on page load)
+  POST /api/public/quote/:token/action — Customer accepts or requests changes { action_type, message?, customer_name }
+
+AUTHENTICATED (agent):
+  POST   /api/quotes/:id/generate-token  — Generates and saves a quote_token
+  GET    /api/quotes/:id/views           — Returns view statistics for agent
+  GET    /api/quotes/:id/customer-actions — Returns customer actions for agent
+  PATCH  /api/quotes/:id/sent            — Updates sent_at and sent_via
+
+═══════════════════════════════════════════
+PART 6: SECURITY
+═══════════════════════════════════════════
+
+- Public quote page accessible ONLY via unique token — never expose quote UUIDs in public URLs
+- Public API endpoints must NOT return: commission, discounts, service_charge, or any agent-internal data
+- Rate limit the view logging endpoint to prevent spam
+- Token generation: use crypto.randomBytes for secure random tokens, 6-8 alphanumeric chars, uppercase
+- Customer action endpoints: basic validation only (no auth, but require customer_name)
+
+═══════════════════════════════════════════
+PART 7: FILE STRUCTURE
+═══════════════════════════════════════════
+
+Follow existing project patterns:
+
+Backend:
+  server/repositories/quote-public.repository.ts
+  server/services/quote-public.service.ts
+  server/controllers/quote-public.controller.ts
+  server/routes/quote-public.routes.ts
+
+Frontend — Public page:
+  client/src/pages/public-quote/index.tsx
+  client/src/pages/public-quote/components/  (hero, flights, accommodation, extras, pricing, agent, actions)
+
+Frontend — CRM additions:
+  client/src/pages/quote/components/QuoteEngagement.tsx  (view stats card)
+  client/src/pages/quote/components/ShareQuotePanel.tsx  (send buttons)
+
+Hooks:
+  client/src/hooks/queries/use-quote-public-queries.ts
+  client/src/hooks/mutations/use-quote-public-mutations.ts
+
+Types:
+  client/src/types/quote-public/index.ts
+
+Register the public route in App.tsx: /view-quote/:token → PublicQuotePage
+
+═══════════════════════════════════════════
+GOAL
+═══════════════════════════════════════════
+
+Agents can share a beautiful, professional quote page with customers in one click.
+Customers see their full travel itinerary with destination intelligence and can respond directly.
+Agents know exactly when customers engage — views, devices, and responses — all tracked in real time.
