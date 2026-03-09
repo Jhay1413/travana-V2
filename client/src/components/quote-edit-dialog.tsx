@@ -25,6 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote } from "@/hooks/mutations";
+import { useUploadQuoteImages, useAddQuoteImageUrls } from "@/hooks/mutations/use-quote-image-mutations";
 import { useQuote } from "@/hooks/queries";
 import { usePackageTypes } from "@/hooks/queries";
 import { QuoteRHFForm } from "./quote-rhf-form";
@@ -278,18 +279,46 @@ export function QuoteEditDialog({
 }: QuoteEditDialogProps) {
   const { toast } = useToast();
   const updateQuote = useUpdateQuote();
+  const uploadImages = useUploadQuoteImages();
+  const addImageUrls = useAddQuoteImageUrls();
   const { data: packageTypesData } = usePackageTypes();
   const { data: quoteData, isLoading, isError } = useQuote(quoteId);
-  console.log(quoteData)
   const defaultValues = quoteData ? buildDefaultValues(quoteData) : undefined;
 
-  const handleSubmit = async (values: QuoteFormValues) => {
+  const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
     const payload = buildUpdatePayload(values, packageTypesData);
+    const imageFiles = images?.files || [];
+    const imageUrls = images?.urls || [];
+
     updateQuote.mutate(
       { id: quoteId, data: payload },
       {
-        onSuccess: () => {
-          toast({ title: "Quote updated", description: "Changes saved successfully." });
+        onSuccess: async () => {
+          let imageUploadFailed = false;
+
+          if (imageFiles.length > 0) {
+            try {
+              await uploadImages.mutateAsync({ quoteId, files: imageFiles });
+            } catch {
+              imageUploadFailed = true;
+            }
+          }
+
+          if (imageUrls.length > 0) {
+            try {
+              await addImageUrls.mutateAsync({ quoteId, urls: imageUrls });
+            } catch {
+              imageUploadFailed = true;
+            }
+          }
+
+          toast({
+            title: "Quote updated",
+            description: imageUploadFailed
+              ? "Changes saved, but some images failed to upload."
+              : "Changes saved successfully.",
+            variant: imageUploadFailed ? "destructive" : "default",
+          });
           onOpenChange(false);
           onSuccess?.();
         },
