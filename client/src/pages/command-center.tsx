@@ -511,7 +511,6 @@ function ShellNav({
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, badge: openTicketCount },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
-      { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
     ];
 
     if (role === "Admin") {
@@ -549,7 +548,6 @@ function ShellNav({
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, badge: openTicketCount },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
-              { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
             ] as NavItem[],
           },
         ] as NavSection[],
@@ -1147,6 +1145,7 @@ function TopBar({
   userName,
   userAvatar,
   onLogout,
+  onSettingsClick,
   actualRole,
   rolePreview,
   onRoleChange,
@@ -1162,6 +1161,7 @@ function TopBar({
   userName?: string;
   userAvatar?: string | null;
   onLogout?: () => void;
+  onSettingsClick?: () => void;
   actualRole: Role;
   rolePreview: Role | null;
   onRoleChange: (role: Role | null) => void;
@@ -1785,6 +1785,10 @@ function TopBar({
                   <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-profile">
                     <User2 className="mr-2 h-4 w-4" />
                     Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer" onClick={onSettingsClick} data-testid="menu-item-settings">
+                    <Settings2 className="mr-2 h-4 w-4" />
+                    Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -6943,7 +6947,6 @@ export default function CommandCenterPage() {
             { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
             { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
             { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
-            { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
           ],
         },
         connectItems,
@@ -7000,7 +7003,6 @@ export default function CommandCenterPage() {
           { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
           { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
           { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" /> },
-          { key: "agent-settings", label: "Settings", icon: <Settings2 className="h-4 w-4" /> },
         ],
       },
       connectItems,
@@ -7156,6 +7158,7 @@ export default function CommandCenterPage() {
                 userName={displayName}
                 userAvatar={user?.image || user?.avatar || user?.profileImageUrl}
                 onLogout={() => window.location.href = "/api/logout"}
+                onSettingsClick={() => setActive("agent-settings")}
                 actualRole={actualRole}
                 rolePreview={rolePreview}
                 onRoleChange={setRolePreview}
