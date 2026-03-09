@@ -11,7 +11,7 @@ import { useGlobalSearch } from "@/hooks/queries/use-search-queries";
 import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
 import { useCreateClient, useCreateUser, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
-import { useShopTargets } from "@/hooks/queries/use-targets-queries";
+import { useShopTargets, useAgentTargetsByUserId } from "@/hooks/queries/use-targets-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import EmailInbox from "@/components/email-inbox";
@@ -200,13 +200,16 @@ function StatBox({
   icon: Icon,
   color,
   subtext,
+  progress,
 }: {
   label: string;
   value: string;
   icon: React.ElementType;
   color: string;
   subtext?: string;
+  progress?: { achieved: number; target: number; barColor: string };
 }) {
+  const pct = progress && progress.target > 0 ? Math.min(Math.round((progress.achieved / progress.target) * 100), 100) : 0;
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -215,14 +218,24 @@ function StatBox({
     >
       <Card className="glass ringed grain rounded-2xl p-4" data-testid={`stat-box-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}>
         <div className="flex items-start justify-between">
-          <div className="space-y-1">
+          <div className="space-y-1 flex-1 min-w-0">
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
             <p className="text-2xl font-bold tracking-tight" data-testid={`stat-value-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}>{value}</p>
-            {subtext && (
+            {progress ? (
+              <div className="space-y-1 pt-1">
+                <div className="h-2.5 w-full rounded-full bg-gray-200/60 overflow-hidden" data-testid={`progress-bar-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}>
+                  <div
+                    className={cn("h-full rounded-full transition-all duration-700 ease-out", progress.barColor)}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">{currency.format(progress.achieved)} achieved · {pct}%</p>
+              </div>
+            ) : subtext ? (
               <p className="text-[10px] text-muted-foreground">{subtext}</p>
-            )}
+            ) : null}
           </div>
-          <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", color)}>
+          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ml-3", color)}>
             <Icon className="h-5 w-5 text-white" />
           </div>
         </div>
@@ -1910,6 +1923,7 @@ export default function CommandCenterPage() {
 
   const { data: dashboardStats } = useDashboardStats();
   const { data: shopTargetsData } = useShopTargets();
+  const { data: agentTargetsData } = useAgentTargetsByUserId(currentUser?.id || "");
   const isRestrictedRole = role !== "Admin" && role !== "Manager";
   const { data: transactionsData } = useTransactions(isRestrictedRole && currentUser?.id ? { agentId: currentUser.id } : undefined);
 
@@ -2324,7 +2338,9 @@ export default function CommandCenterPage() {
     const now = new Date();
     const currentMonthTarget = shopTargetsData?.find((t: any) => t.year === now.getFullYear() && t.month === (now.getMonth() + 1));
     const salesTarget = currentMonthTarget ? parseFloat(currentMonthTarget.targetAmount) || 0 : 0;
-    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0 };
+    const currentAgentTarget = agentTargetsData?.find((t: any) => t.year === now.getFullYear() && t.month === (now.getMonth() + 1));
+    const agentSalesTarget = currentAgentTarget ? parseFloat(currentAgentTarget.targetAmount) || 0 : 0;
+    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget, agentSalesTarget, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0 };
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dayOfWeek = now.getDay() || 7;
     const weekStart = new Date(todayStart);
@@ -2352,10 +2368,9 @@ export default function CommandCenterPage() {
         }
       }
     }
-    return { todayProfit, weekProfit, monthProfit, salesTarget, avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0, totalOpenQuotesValue, bookingsCount, quotesCount };
-  }, [transactionsData, shopTargetsData]);
+    return { todayProfit, weekProfit, monthProfit, salesTarget, agentSalesTarget, avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0, totalOpenQuotesValue, bookingsCount, quotesCount };
+  }, [transactionsData, shopTargetsData, agentTargetsData]);
 
-  const targetPct = profitStats.salesTarget > 0 ? Math.round((profitStats.monthProfit / profitStats.salesTarget) * 100) : 0;
 
   const recentActivity = useMemo(() => {
     if (!transactionsData) return [];
@@ -2455,12 +2470,26 @@ export default function CommandCenterPage() {
     return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   };
 
+  const isAgentView = role === "Agent" || role === "Homeworker";
+  const activeTarget = isAgentView ? profitStats.agentSalesTarget : profitStats.salesTarget;
+  const agentTargetPct = activeTarget > 0 ? Math.round((profitStats.monthProfit / activeTarget) * 100) : 0;
+
   const profitStatBoxes = (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <StatBox label="Today's Total Profit" value={currency.format(profitStats.todayProfit)} icon={CircleDollarSign} color="bg-emerald-500" subtext="Profit from today's bookings" />
       <StatBox label="This Week's Total" value={currency.format(profitStats.weekProfit)} icon={TrendingUp} color="bg-blue-500" subtext="Mon – Sun rolling total" />
-      <StatBox label="This Month's Total" value={currency.format(profitStats.monthProfit)} icon={BarChart3} color="bg-purple-500" subtext={`${targetPct}% of sales target`} />
-      <StatBox label="Agency Sales Target" value={currency.format(profitStats.salesTarget)} icon={Target} color="bg-amber-500" subtext={`${currency.format(profitStats.monthProfit)} achieved`} />
+      <StatBox label="This Month's Total" value={currency.format(profitStats.monthProfit)} icon={BarChart3} color="bg-purple-500" subtext={`${agentTargetPct}% of sales target`} />
+      {isAgentView ? (
+        <StatBox
+          label="Sales Target"
+          value={currency.format(activeTarget)}
+          icon={Target}
+          color="bg-amber-500"
+          progress={{ achieved: profitStats.monthProfit, target: activeTarget, barColor: "bg-amber-500" }}
+        />
+      ) : (
+        <StatBox label="Agency Sales Target" value={currency.format(profitStats.salesTarget)} icon={Target} color="bg-amber-500" subtext={`${currency.format(profitStats.monthProfit)} achieved`} />
+      )}
     </div>
   );
 
