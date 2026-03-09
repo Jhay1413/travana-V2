@@ -28,10 +28,11 @@ router.get("/", async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
     const role = await getUserRole(userId);
-    if (role !== "Admin" && role !== "Manager") {
-      return res.status(403).json({ success: false, message: "Admin or Manager access required" });
+    if (role === "Admin" || role === "Manager") {
+      const items = await feedbackRepository.findAll();
+      return res.json({ success: true, data: items });
     }
-    const items = await feedbackRepository.findAll();
+    const items = await feedbackRepository.findByUserId(userId);
     res.json({ success: true, data: items });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
