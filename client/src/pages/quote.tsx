@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles } from "lucide-react";
+import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles, ImagePlus, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useQuote, useBooking, useClient, useNeonClient, useTags, quoteKeys, bookingKeys } from "@/hooks/queries";
 import { useDuplicateQuote, useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote } from "@/hooks/mutations";
+import { useSetPrimaryQuoteImage, useUploadQuoteImages, useDeleteQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -65,6 +66,10 @@ export default function QuotePage() {
   const updateTransactionMutation = useUpdateTransaction();
   const convertToBookingMutation = useConvertToBooking();
   const updateQuoteMutation = useUpdateQuote();
+  const setPrimaryImageMutation = useSetPrimaryQuoteImage();
+  const uploadImagesMutation = useUploadQuoteImages();
+  const deleteImageMutation = useDeleteQuoteImage();
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showGuruSheet, setShowGuruSheet] = useState(false);
   const [convertHaysRef, setConvertHaysRef] = useState("");
@@ -92,10 +97,10 @@ export default function QuotePage() {
 
   const images = useMemo(() => {
     const imgs = quoteData?.images || [];
-    return imgs.map((img: DealImage) => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary }));
+    return imgs.map((img: DealImage) => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary, ownerType: img.owner_type || "quote" }));
   }, [quoteData]);
-  const primaryImage = useMemo(() => images.find((img: { isPrimary: boolean | null }) => img.isPrimary) || images[0], [images]);
-  const galleryImages = useMemo(() => images.filter((img: { id: string }) => img.id !== primaryImage?.id), [images, primaryImage]);
+  const primaryImage = useMemo(() => images.find((img) => img.isPrimary) || images[0], [images]);
+  const galleryImages = useMemo(() => images.filter((img) => img.id !== primaryImage?.id), [images, primaryImage]);
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
@@ -269,24 +274,95 @@ export default function QuotePage() {
 
                   {galleryImages.length > 0 && (
                     <div className="grid grid-cols-3 gap-1.5" data-testid="grid-itinerary-gallery">
-                      {galleryImages.map((img: { id: string; url: string; isPrimary: boolean | null }, idx: number) => (
-                        <button
+                      {galleryImages.map((img, idx: number) => (
+                        <div
                           key={img.id}
-                          type="button"
-                          className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
+                          className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)]"
                           data-testid={`button-gallery-image-${idx}`}
-                          onClick={() => { }}
-                          title="Click to set as main image"
                         >
                           <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100" aria-hidden />
-                          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 bg-black/50 py-0.5 text-[8px] font-semibold text-white opacity-0 transition group-hover:opacity-100" data-testid={`label-set-main-${idx}`}>
-                            <Star className="h-2.5 w-2.5" /> Set as main
-                          </div>
-                        </button>
+                          {img.ownerType === "quote" && (
+                            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 bg-black/50 py-0.5 opacity-0 transition group-hover:opacity-100">
+                              <button
+                                type="button"
+                                className="flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-semibold text-white hover:text-amber-300 transition-colors"
+                                data-testid={`button-set-main-${idx}`}
+                                onClick={() => {
+                                  setPrimaryImageMutation.mutate(
+                                    { quoteId, imageId: img.id },
+                                    {
+                                      onSuccess: () => toast({ title: "Main image updated" }),
+                                      onError: () => toast({ title: "Failed to set main image", variant: "destructive" }),
+                                    }
+                                  );
+                                }}
+                                title="Set as main image"
+                              >
+                                <Star className="h-2.5 w-2.5" /> Main
+                              </button>
+                              <button
+                                type="button"
+                                className="flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-semibold text-white hover:text-red-300 transition-colors"
+                                data-testid={`button-delete-image-${idx}`}
+                                onClick={() => {
+                                  deleteImageMutation.mutate(
+                                    { quoteId, imageId: img.id },
+                                    {
+                                      onSuccess: () => toast({ title: "Image removed" }),
+                                      onError: () => toast({ title: "Failed to remove image", variant: "destructive" }),
+                                    }
+                                  );
+                                }}
+                                title="Remove image"
+                              >
+                                <Trash2 className="h-2.5 w-2.5" /> Del
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
+
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    data-testid="input-image-upload"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length === 0) return;
+                      uploadImagesMutation.mutate(
+                        { quoteId, files },
+                        {
+                          onSuccess: () => {
+                            toast({ title: `${files.length} image${files.length > 1 ? "s" : ""} uploaded` });
+                            if (imageInputRef.current) imageInputRef.current.value = "";
+                          },
+                          onError: () => {
+                            toast({ title: "Failed to upload images", variant: "destructive" });
+                            if (imageInputRef.current) imageInputRef.current.value = "";
+                          },
+                        }
+                      );
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-black/15 bg-black/[0.02] py-2 text-[10px] font-semibold text-black/50 transition hover:border-black/25 hover:bg-black/[0.04] hover:text-black/70"
+                    data-testid="button-upload-images"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={uploadImagesMutation.isPending}
+                  >
+                    {uploadImagesMutation.isPending ? (
+                      <><Loader2 className="h-3 w-3 animate-spin" /> Uploading...</>
+                    ) : (
+                      <><ImagePlus className="h-3 w-3" /> Add Images</>
+                    )}
+                  </button>
 
                   <div className="mt-3 rounded-2xl border border-black/10 bg-white/60 p-2.5" data-testid="card-quote-tags-inline">
                     <div className="flex items-center justify-between">

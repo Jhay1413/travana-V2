@@ -60,13 +60,19 @@ export const quoteImageRepository = {
    * Set an image as primary (and unset others)
    */
   async setPrimaryImage(quoteId: string, imageId: string) {
-    // First, unset all images for this quote
+    const [target] = await db
+      .select({ id: quoteImages.id })
+      .from(quoteImages)
+      .where(and(eq(quoteImages.id, imageId), eq(quoteImages.quoteId, quoteId)))
+      .limit(1);
+
+    if (!target) return undefined;
+
     await db
       .update(quoteImages)
       .set({ isPrimary: false })
       .where(eq(quoteImages.quoteId, quoteId));
 
-    // Then set the specified image as primary
     const [updatedImage] = await db
       .update(quoteImages)
       .set({ isPrimary: true })
