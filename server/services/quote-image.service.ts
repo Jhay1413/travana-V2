@@ -1,5 +1,7 @@
 import { quoteImageRepository } from "../repositories/quote-image.repository";
 import { AppError } from "../utils/error-handler";
+import path from "path";
+import fs from "fs/promises";
 
 export const quoteImageService = {
   /**
@@ -10,8 +12,8 @@ export const quoteImageService = {
       throw new AppError("No images provided", 400);
     }
 
-    // Validate URLs
     const validUrls = imageUrls.filter(url => {
+      if (url.startsWith('/uploads/') || url.startsWith('/avatars/')) return true;
       try {
         new URL(url);
         return url.startsWith('http://') || url.startsWith('https://');
@@ -43,7 +45,15 @@ export const quoteImageService = {
    * Delete an image from a quote
    */
   async deleteImage(quoteId: string, imageId: string) {
+    const images = await quoteImageRepository.getByQuoteId(quoteId);
+    const imageToDelete = images.find(img => img.id === imageId);
+
     await quoteImageRepository.deleteImage(quoteId, imageId);
+
+    if (imageToDelete?.url?.startsWith("/uploads/")) {
+      const filepath = path.join(process.cwd(), "public", imageToDelete.url);
+      await fs.unlink(filepath).catch(() => {});
+    }
   },
 
   /**

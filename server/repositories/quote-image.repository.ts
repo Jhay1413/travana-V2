@@ -8,27 +8,25 @@ export const quoteImageRepository = {
    * Add multiple images to a quote
    */
   async addImages(quoteId: string, imageUrls: string[]) {
-    console.log(`📸 REPOSITORY - addImages called for quote ${quoteId}`);
-    console.log(`📸 REPOSITORY - Number of images to insert:`, imageUrls.length);
-    console.log(`📸 REPOSITORY - Image URLs:`, imageUrls);
-    
+    const existing = await db
+      .select({ id: quoteImages.id })
+      .from(quoteImages)
+      .where(and(eq(quoteImages.quoteId, quoteId), eq(quoteImages.isPrimary, true)));
+
+    const hasPrimary = existing.length > 0;
+
     const imagesToInsert = imageUrls.map((url, index) => ({
       id: randomUUID(),
       quoteId,
       url,
-      // First image is primary by default
-      isPrimary: index === 0,
+      isPrimary: !hasPrimary && index === 0,
     }));
-
-    console.log(`📸 REPOSITORY - Images to insert:`, imagesToInsert);
 
     const insertedImages = await db
       .insert(quoteImages)
       .values(imagesToInsert)
       .returning();
 
-    console.log(`📸 REPOSITORY - Successfully inserted ${insertedImages.length} images`);
-    
     return insertedImages;
   },
 

@@ -101,6 +101,15 @@ export const quoteApi = {
     return data;
   },
 
+  uploadImages: async (quoteId: string, files: File[]): Promise<any> => {
+    const formData = new FormData();
+    files.forEach(file => formData.append("images", file));
+    const { data } = await axiosClient.post(`/api/quotes/${quoteId}/images/upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+
   removeImage: async (quoteId: string, imageId: string): Promise<void> => {
     await axiosClient.delete(`/api/quotes/${quoteId}/images/${imageId}`);
   },

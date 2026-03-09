@@ -3,6 +3,7 @@ export { useCreateClient, useUpdateClient } from "./use-client-mutations";
 export { useUpdateNeonClient, useImportNeonClients } from "./use-neon-client-mutations";
 export { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "./use-transaction-mutations";
 export { useCreateQuote, useDuplicateQuote, useUpdateQuote, useDeleteQuote, useUpdateQuoteTags } from "./use-quote-mutations";
+export { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage, useSetPrimaryQuoteImage } from "./use-quote-image-mutations";
 export { useConvertToBooking, useUpdateBooking, useDeleteBooking } from "./use-booking-mutations";
 export { useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "./use-enquiry-mutations";
 export { useCreateNote, useUpdateNote, useDeleteNote } from "./use-note-mutations";

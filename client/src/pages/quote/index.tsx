@@ -6,7 +6,7 @@
  * Original file: 2,388 lines → Refactored: ~150 lines + modular components
  */
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
 import {
   ChevronLeft,
@@ -18,6 +18,9 @@ import {
   Tag,
   X,
   ImagePlus,
+  Trash2,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -29,7 +32,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
-import { useUpdateQuote, useUpdateBooking } from "@/hooks/mutations";
+import { useUpdateQuote, useUpdateBooking, useUploadQuoteImages, useDeleteQuoteImage, useSetPrimaryQuoteImage } from "@/hooks/mutations";
 import type { Favorite } from "@/api/endpoints/favorite.api";
 
 // Local imports
@@ -69,6 +72,36 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
   const tagInputRef = useRef<HTMLInputElement>(null);
   const tagSuggestionsRef = useRef<HTMLDivElement>(null);
   const updateQuoteMutation = useUpdateQuote();
+  const uploadImagesMutation = useUploadQuoteImages();
+  const deleteImageMutation = useDeleteQuoteImage();
+  const setPrimaryMutation = useSetPrimaryQuoteImage();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleImageUpload = useCallback((files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter(f => f.type.startsWith("image/"));
+    if (fileArray.length === 0) return;
+    uploadImagesMutation.mutate(
+      { quoteId, files: fileArray },
+      {
+        onSuccess: () => {
+          toast({ title: `${fileArray.length} image${fileArray.length > 1 ? "s" : ""} uploaded` });
+          queryClient.invalidateQueries({ queryKey: ["quotes"] });
+        },
+        onError: (err: Error) => {
+          toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+        },
+      }
+    );
+  }, [quoteId, uploadImagesMutation, toast, queryClient]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files.length > 0) {
+      handleImageUpload(e.dataTransfer.files);
+    }
+  }, [handleImageUpload]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -246,9 +279,30 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
                 {/* Images */}
                 <div className="grid content-start gap-1.5" data-testid="col-itinerary-media">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    data-testid="input-image-upload"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        handleImageUpload(e.target.files);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
                   <div
-                    className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]"
+                    className={`relative aspect-square overflow-hidden rounded-2xl border-2 transition-colors ${
+                      isDragging
+                        ? "border-blue-400 bg-blue-50/50"
+                        : "border-black/10 bg-black/[0.03]"
+                    }`}
                     data-testid="img-itinerary-hero"
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
                   >
                     {primaryImage ? (
                       <>
@@ -268,27 +322,53 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                         >
                           <Star className="h-3 w-3 fill-current" /> Main
                         </div>
+                        <button
+                          type="button"
+                          className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition hover:bg-red-600 group-hover:opacity-100 hover:opacity-100"
+                          style={{ opacity: 1 }}
+                          data-testid="button-delete-primary-image"
+                          title="Remove image"
+                          onClick={() => {
+                            deleteImageMutation.mutate(
+                              { quoteId, imageId: primaryImage.id },
+                              {
+                                onSuccess: () => {
+                                  toast({ title: "Image removed" });
+                                  queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                                },
+                              }
+                            );
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
                       </>
                     ) : (
-                      <div
-                        className="flex h-full items-center justify-center text-xs text-black/40"
-                        data-testid="placeholder-no-hero"
+                      <button
+                        type="button"
+                        className="flex h-full w-full flex-col items-center justify-center gap-2 text-black/40 transition hover:text-black/60"
+                        data-testid="button-upload-hero"
+                        onClick={() => fileInputRef.current?.click()}
                       >
-                        No images
-                      </div>
+                        {uploadImagesMutation.isPending ? (
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        ) : (
+                          <>
+                            <Upload className="h-6 w-6" />
+                            <span className="text-xs font-medium">Drop or click to upload</span>
+                          </>
+                        )}
+                      </button>
                     )}
                   </div>
 
                   {galleryImages.length > 0 && (
                     <div className="grid grid-cols-3 gap-1.5" data-testid="grid-itinerary-gallery">
                       {galleryImages.map((img: { id: string; url: string; isPrimary: boolean | null }, idx: number) => (
-                        <button
+                        <div
                           key={img.id}
-                          type="button"
-                          className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
-                          data-testid={`button-gallery-image-${idx}`}
-                          onClick={() => {}}
-                          title="Click to set as main image"
+                          className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)]"
+                          data-testid={`card-gallery-image-${idx}`}
                         >
                           <img
                             src={img.url}
@@ -297,12 +377,68 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                             data-testid={`img-gallery-${idx}`}
                           />
                           <div
-                            className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100"
+                            className="absolute inset-0 bg-black/0 transition group-hover:bg-black/30"
                             aria-hidden
                           />
-                        </button>
+                          <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1 p-1 opacity-0 transition group-hover:opacity-100">
+                            <button
+                              type="button"
+                              className="flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-amber-600 shadow-sm hover:bg-white"
+                              data-testid={`button-set-primary-${idx}`}
+                              title="Set as main image"
+                              onClick={() => {
+                                setPrimaryMutation.mutate(
+                                  { quoteId, imageId: img.id },
+                                  {
+                                    onSuccess: () => {
+                                      toast({ title: "Main image updated" });
+                                      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                                    },
+                                  }
+                                );
+                              }}
+                            >
+                              <Star className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              className="flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-red-500 shadow-sm hover:bg-white"
+                              data-testid={`button-delete-gallery-${idx}`}
+                              title="Remove image"
+                              onClick={() => {
+                                deleteImageMutation.mutate(
+                                  { quoteId, imageId: img.id },
+                                  {
+                                    onSuccess: () => {
+                                      toast({ title: "Image removed" });
+                                      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+                                    },
+                                  }
+                                );
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
+                  )}
+
+                  {(primaryImage || galleryImages.length > 0) && (
+                    <button
+                      type="button"
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-black/15 bg-white/50 px-3 py-2 text-[11px] font-medium text-black/50 transition hover:border-black/25 hover:bg-white/70 hover:text-black/70"
+                      data-testid="button-add-more-images"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {uploadImagesMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ImagePlus className="h-3.5 w-3.5" />
+                      )}
+                      Add images
+                    </button>
                   )}
 
                   {/* Tags */}

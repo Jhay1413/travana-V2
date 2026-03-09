@@ -6,7 +6,18 @@ import { validate } from "../middlewares/validation.middleware";
 import { addImagesValidator } from "../validators/quote-image.validator";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} not allowed. Only JPEG, PNG, WebP and GIF are accepted.`));
+    }
+  },
+});
 
 router.get("/free", quoteController.listFreeQuotes);
 router.get("/", quoteController.listQuotes);
@@ -30,6 +41,7 @@ router.delete("/:id/transfers/:transferId", quoteController.removeTransfer);
 router.post("/:id/passengers", quoteController.addPassenger);
 router.delete("/:id/passengers/:passengerId", quoteController.removePassenger);
 
+router.post("/:quoteId/images/upload", upload.array("images", 10), quoteImageController.uploadImages);
 router.post("/:quoteId/images", validate(addImagesValidator), quoteImageController.addImages);
 router.get("/:quoteId/images", quoteImageController.getImages);
 router.delete("/:quoteId/images/:imageId", quoteImageController.deleteImage);
