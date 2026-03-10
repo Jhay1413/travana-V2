@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
-import { usePackageTypes, useCountries, useResorts, useBoardBasis, useAirports, useAccommodationTypes, useDestinationSearch } from "@/hooks/queries";
+import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResorts, useBoardBasis, useAirports, useAccommodationTypes } from "@/hooks/queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 
@@ -209,10 +209,9 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<EnquiryForm>(defaultForm);
   const [direction, setDirection] = useState(1);
-  const [destSearch, setDestSearch] = useState("");
-
   const { data: countriesData } = useCountries();
-  const { data: destinationsData, isFetching: isDestFetching } = useDestinationSearch(destSearch, form.country || undefined);
+  const { data: destinationsData } = useDestinations(form.country || undefined);
+  const { data: allDestinationsData } = useAllDestinations();
   const { data: resortsData } = useResorts(form.destination);
   const { data: boardBasisData } = useBoardBasis();
   const { data: airportsData } = useAirports();
@@ -429,14 +428,14 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         <SearchableSelect
                           value={form.destination}
                           onValueChange={(v) => {
-                            const label = (destinationsData || []).find((d) => d.id === v)?.name || "";
+                            const label = (allDestinationsData || []).find((d: any) => d.id === v)?.name || "";
                             setForm((prev) => ({ ...prev, destination: v, destinationLabel: label }));
                           }}
                           selectedLabel={form.destinationLabel}
-                          options={(destinationsData || []).map((d) => ({ value: d.id, label: d.name }))}
-                          onSearch={setDestSearch}
-                          isLoading={isDestFetching}
+                          options={(allDestinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
                           placeholder="Search destinations..."
+                          searchPlaceholder="Search destinations..."
+                          emptyMessage="No destinations found."
                           data-testid="select-enquiry-destination"
                         />
                       </div>
@@ -450,14 +449,14 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         <SearchableSelect
                           value={form.cruiseDestination}
                           onValueChange={(v) => {
-                            const label = (destinationsData || []).find((d) => d.id === v)?.name || "";
+                            const label = (allDestinationsData || []).find((d: any) => d.id === v)?.name || "";
                             setForm((prev) => ({ ...prev, cruiseDestination: v, destinationLabel: label }));
                           }}
                           selectedLabel={form.destinationLabel}
-                          options={(destinationsData || []).map((d) => ({ value: d.id, label: d.name }))}
-                          onSearch={setDestSearch}
-                          isLoading={isDestFetching}
+                          options={(allDestinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
                           placeholder="Search destinations..."
+                          searchPlaceholder="Search destinations..."
+                          emptyMessage="No destinations found."
                           data-testid="select-cruise-destination"
                         />
                       </div>
@@ -505,45 +504,43 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Country</Label>
-                        <Select value={form.country} onValueChange={(v) => setForm(prev => ({ ...prev, country: v, destination: "", resort: "" }))}>
-                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-country">
-                            <SelectValue placeholder="Select country..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(countriesData || []).map((c) => (
-                              <SelectItem key={c.id} value={c.id}>{c.country_name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={form.country}
+                          onValueChange={(v) => setForm(prev => ({ ...prev, country: v, destination: "", resort: "", destinationLabel: "" }))}
+                          options={(countriesData || []).map((c: any) => ({ value: c.id, label: c.country_name }))}
+                          placeholder="Select country..."
+                          searchPlaceholder="Search countries..."
+                          emptyMessage="No countries found."
+                          data-testid="select-enquiry-country"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Destination</Label>
                         <SearchableSelect
                           value={form.destination}
                           onValueChange={(v) => {
-                            const label = (destinationsData || []).find((d) => d.id === v)?.name || "";
+                            const label = (destinationsData || []).find((d: any) => d.id === v)?.name || "";
                             setForm((prev) => ({ ...prev, destination: v, resort: "", destinationLabel: label }));
                           }}
                           selectedLabel={form.destinationLabel}
-                          options={(destinationsData || []).map((d) => ({ value: d.id, label: d.name }))}
-                          onSearch={setDestSearch}
-                          isLoading={isDestFetching}
-                          placeholder={form.country ? "Search destinations..." : "Select country first"}
+                          options={(destinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
+                          placeholder={form.country ? "Select destination..." : "Select country first"}
+                          searchPlaceholder="Search destinations..."
+                          emptyMessage="No destinations found."
                           data-testid="select-enquiry-destination"
                         />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Resort</Label>
-                        <Select value={form.resort} onValueChange={(v) => set("resort", v)} disabled={!form.destination}>
-                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-resort">
-                            <SelectValue placeholder={form.destination ? "Select resort..." : "Select destination first"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(resortsData || []).map((r) => (
-                              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={form.resort}
+                          onValueChange={(v) => set("resort", v)}
+                          options={(resortsData || []).map((r: any) => ({ value: r.id, label: r.name }))}
+                          placeholder={form.destination ? "Select resort..." : "Select destination first"}
+                          searchPlaceholder="Search resorts..."
+                          emptyMessage="No resorts found."
+                          data-testid="select-enquiry-resort"
+                        />
                       </div>
                     </div>
                   )}
