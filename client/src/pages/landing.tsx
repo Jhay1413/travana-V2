@@ -39,7 +39,7 @@ export default function LandingPage() {
               transition={{ duration: 0.6 }}
             >
               <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
-                Travel Agency
+                Tina's
                 <br />
                 Command Center
               </h1>
