@@ -1,6 +1,7 @@
 import { db } from "../config/database";
 import { clients, type Client, type InsertClient } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
 export const clientRepository = {
   async findById(id: string): Promise<Client | undefined> {
@@ -13,7 +14,9 @@ export const clientRepository = {
   },
 
   async create(client: InsertClient): Promise<Client> {
-    const [result] = await db.insert(clients).values(client).returning();
+    const id = randomUUID();
+    const name = [client.firstName, client.lastName].filter(Boolean).join(" ");
+    const [result] = await db.insert(clients).values({ ...client, id, name }).returning();
     return result;
   },
 

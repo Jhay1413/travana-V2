@@ -1215,7 +1215,7 @@ export const clients = pgTable("clients", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertClientSchema = createInsertSchema(clients);
+export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true });
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
 
