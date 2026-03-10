@@ -186,13 +186,14 @@ export default function TicketsBoard() {
   };
 
   const handleCreate = () => {
-    if (!formData.clientId || !formData.userId || !formData.subject) {
+    const needsClient = formData.type !== "Build";
+    if ((needsClient && !formData.clientId) || !formData.userId || !formData.subject) {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
     }
     setIsUploading(true);
     createTicketMutation.mutate({
-      clientId: formData.clientId,
+      clientId: formData.type === "Build" ? null : formData.clientId,
       userId: formData.userId,
       type: formData.type,
       status: formData.status,
@@ -470,6 +471,7 @@ export default function TicketsBoard() {
             <DialogDescription>Create a support ticket for a client</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {formData.type !== "Build" && (
             <div className="grid gap-2">
               <Label htmlFor="client">Customer *</Label>
               <div className="relative" ref={customerDropdownRef}>
@@ -516,6 +518,7 @@ export default function TicketsBoard() {
                 )}
               </div>
             </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="user">Assigned To *</Label>
               <Select value={formData.userId} onValueChange={(v) => setFormData({ ...formData, userId: v })}>
@@ -534,7 +537,12 @@ export default function TicketsBoard() {
             <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-2">
                 <Label>Type</Label>
-                <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
+                <Select value={formData.type} onValueChange={(v) => {
+                    const updates: any = { type: v };
+                    if (v === "Build") { updates.clientId = ""; }
+                    setFormData({ ...formData, ...updates });
+                    if (v === "Build") { setSelectedCustomerName(""); setCustomerSearch(""); }
+                  }}>
                   <SelectTrigger data-testid="select-type">
                     <SelectValue />
                   </SelectTrigger>

@@ -1079,7 +1079,7 @@ export type ReferralRequest = typeof referral_request.$inferSelect;
 
 export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  clientId: uuid("client_id").references(() => clientTable.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id),
   type: text("type").notNull(),
   status: text("status").notNull().default("Open"),
