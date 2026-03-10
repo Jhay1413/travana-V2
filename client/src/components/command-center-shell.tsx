@@ -725,15 +725,24 @@ export function CommandCenterShell({
     return { grouped: false, items: base };
   }, [role, unreadChatCount]);
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(() => {
-    const saved = sessionStorage.getItem("admin-nav-expanded");
-    return saved ? JSON.parse(saved) : ["admin", "agent"];
-  });
+  const [expandedSections, setExpandedSections] = useState<string[]>(["admin", "agent"]);
 
-  const [expandedNavItems, setExpandedNavItems] = useState<string[]>(() => {
-    const saved = sessionStorage.getItem("nav-items-expanded");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [expandedNavItems, setExpandedNavItems] = useState<string[]>(["settings", "financials"]);
+
+  useEffect(() => {
+    if (role === "Admin") {
+      setExpandedSections((prev) => {
+        const next = Array.from(new Set([...prev, "admin", "agent"]));
+        sessionStorage.setItem("admin-nav-expanded", JSON.stringify(next));
+        return next;
+      });
+      setExpandedNavItems((prev) => {
+        const next = Array.from(new Set([...prev, "settings", "financials"]));
+        sessionStorage.setItem("nav-items-expanded", JSON.stringify(next));
+        return next;
+      });
+    }
+  }, [role]);
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
