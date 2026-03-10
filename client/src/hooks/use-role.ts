@@ -4,9 +4,19 @@ import type { Role } from "@/components/command-center-shell";
 
 const ROLE_KEY = "apple-travel-role-preview";
 
+function normalizeRole(raw?: string): Role {
+  if (!raw) return "Agent";
+  const lower = raw.toLowerCase();
+  if (lower === "admin") return "Admin";
+  if (lower === "manager") return "Manager";
+  if (lower === "homeworker") return "Homeworker";
+  if (lower === "referer") return "Referer";
+  return "Agent";
+}
+
 export function useRole() {
   const { data: user } = useCurrentUser();
-  const actualRole: Role = (user?.role as Role) || "Agent";
+  const actualRole: Role = normalizeRole(user?.role);
 
   const [rolePreview, setRolePreview] = useState<Role | null>(() => {
     const saved = sessionStorage.getItem(ROLE_KEY);
