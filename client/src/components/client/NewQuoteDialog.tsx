@@ -12,6 +12,7 @@ import type { LookupPackageType, LookupCountry, LookupDestination, LookupResort,
 import type { Airport } from "@/types/airport";
 import type { TourOperator } from "@/types/tour-operator";
 import type { NewQuoteFormState } from "./client-types";
+import { getDepartureAirportOptions } from "@/lib/uk-airports";
 
 export function NewQuoteDialog({
   open,
@@ -986,7 +987,7 @@ export function NewQuoteDialog({
                     <SearchableSelect
                       value={newQuote.outboundDepartAirport}
                       onValueChange={(v) => setNewQuote({ ...newQuote, outboundDepartAirport: v })}
-                      options={(airportsData || []).map((a: Airport) => ({ value: a.id, label: `${a.airport_name} (${a.airport_code})` }))}
+                      options={getDepartureAirportOptions(airportsData)}
                       placeholder="Select airport..."
                       searchPlaceholder="Search airports..."
                       emptyMessage="No airports found."

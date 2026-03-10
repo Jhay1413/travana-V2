@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, ImagePlus } from "lucide-react";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
+import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { quoteFormSchema, defaultQuoteFormValues } from "@/types/quote";
 import type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/types/quote";
 
@@ -195,6 +196,7 @@ export function QuoteRHFForm({
       label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
     })
   );
+  const departureAirportOptions = getDepartureAirportOptions(airportsData);
 
   // ── JSON upload ───────────────────────────────────────────────────────────
   const handleJsonUpload = (file: File) => {
@@ -1247,7 +1249,7 @@ export function QuoteRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={airportOptions}
+                        options={departureAirportOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         placeholder="Select airport..."

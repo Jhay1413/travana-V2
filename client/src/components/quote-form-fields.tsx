@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes, useParks, useLodges, useCruiseLines, useShips, useCruiseItineraries } from "@/hooks/queries";
+import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import type { LookupCountry, LookupDestination, LookupResort, LookupAccommodation, LookupBoardBasis } from "@/api/endpoints/lookup.api";
 
 export interface FlightLeg {
@@ -228,6 +229,7 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
     value: a.id,
     label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
   }));
+  const departureAirportOptions = getDepartureAirportOptions(airportsData);
 
   const outboundDepartKey: keyof QuoteFormState = useUuidKeys ? "outboundDepartAirport" : "outboundDepartAirportId";
   const outboundArriveKey: keyof QuoteFormState = useUuidKeys ? "outboundArriveAirport" : "outboundArriveAirportId";
@@ -913,7 +915,7 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
                 <SearchableSelect
                   value={fieldValue(outboundDepartKey)}
                   onValueChange={(v) => set(outboundDepartKey, v)}
-                  options={airportOptions}
+                  options={departureAirportOptions}
                   placeholder="Select airport..."
                   searchPlaceholder="Search airports..."
                   emptyMessage="No airports found."
@@ -1003,7 +1005,7 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
                     <SearchableSelect
                       value={leg.departAirportId}
                       onValueChange={(v) => updateConnectingLeg("outbound", idx, "departAirportId", v)}
-                      options={airportOptions}
+                      options={departureAirportOptions}
                       placeholder="Select airport..."
                       searchPlaceholder="Search airports..."
                       emptyMessage="No airports found."

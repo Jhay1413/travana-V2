@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus } from "lucide-react";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
+import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
 import type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/types/booking";
 
@@ -189,6 +190,7 @@ export function BookingRHFForm({
       label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
     })
   );
+  const departureAirportOptions = getDepartureAirportOptions(airportsData);
   const handleJsonUpload = (file: File) => {
     handleJsonUploadUtil(file, {
       form,
@@ -1170,7 +1172,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={airportOptions}
+                        options={departureAirportOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         placeholder="Select airport..."

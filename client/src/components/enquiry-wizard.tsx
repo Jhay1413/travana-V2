@@ -12,6 +12,7 @@ import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
 import { usePackageTypes, useCountries, useResorts, useBoardBasis, useAirports, useAccommodationTypes, useDestinationSearch } from "@/hooks/queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { getDepartureAirportOptions } from "@/lib/uk-airports";
 
 const FLEXIBILITY_OPTIONS = [
   "Exact Date",
@@ -759,9 +760,9 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         <SelectValue placeholder="Select airport..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {(airportsData || []).map((a: any) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {a.airport_name} ({a.airport_code})
+                        {getDepartureAirportOptions(airportsData).map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
