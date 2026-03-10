@@ -21,7 +21,7 @@ import { clientFileApi } from "@/api";
 interface ClientFilesTabProps {
   clientFiles: ClientFile[];
   onDeleteFile: (id: string) => void;
-  filteredFiles: FileItem[];
+  filteredFiles?: FileItem[];
   onUploadFile: () => void;
   role: string;
 }
@@ -126,36 +126,7 @@ export function ClientFilesTab({
               </div>
             </button>
           ))}
-          {filteredFiles.map((f) => (
-            <div
-              key={f.id}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3"
-              data-testid={`row-file-wide-${f.id}`}
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold" data-testid={`text-file-wide-name-${f.id}`}>
-                  {f.name}
-                </div>
-                <div className="mt-1 text-xs text-black/55" data-testid={`text-file-wide-meta-${f.id}`}>
-                  {f.type} · Updated {f.updated}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {role === "Admin" && (
-                  <button
-                    type="button"
-                    onClick={() => { }}
-                    className="rounded-xl border border-red-500/20 bg-red-500/10 p-1.5 text-red-600 transition hover:bg-red-500/20"
-                    data-testid={`button-delete-file-wide-${f.id}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
-              </div>
-            </div>
-          ))}
-          {filteredFiles.length === 0 && clientFiles.length === 0 && (
+          {clientFiles.length === 0 && (
             <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center">
               <div className="text-sm text-black/55">No files uploaded yet.</div>
             </div>
