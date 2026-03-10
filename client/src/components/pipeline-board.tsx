@@ -243,20 +243,28 @@ interface PipelineColumnProps {
   isLoading: boolean;
 }
 
+const VISIBLE_PAGE_SIZE = 10;
+
 function PipelineColumn({ stage, transactions: stageTransactions, total, totalValue, totalProfit, getClientName, onDragStart, onDrop, isDragActive, dragFromStage, hasNextPage, isFetchingNextPage, fetchNextPage, isLoading }: PipelineColumnProps) {
   const [isOver, setIsOver] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [localPage, setLocalPage] = useState(0);
   const colors = stageColor(stage);
   const isValidTarget = isDragActive && dragFromStage !== stage;
 
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver((entries) => { if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); }, { threshold: 0.1, root: scrollContainerRef.current });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const localStart = localPage * VISIBLE_PAGE_SIZE;
+  const localEnd = localStart + VISIBLE_PAGE_SIZE;
+  const visibleItems = stageTransactions.slice(localStart, localEnd);
+  const needsMoreData = localEnd >= stageTransactions.length && hasNextPage;
+  const canGoNext = localEnd < stageTransactions.length || hasNextPage;
+  const canGoPrev = localPage > 0;
+  const totalPages = Math.max(1, Math.ceil((hasNextPage ? stageTransactions.length + 1 : stageTransactions.length) / VISIBLE_PAGE_SIZE));
+
+  const handleNext = () => {
+    if (needsMoreData && hasNextPage) {
+      fetchNextPage();
+    }
+    setLocalPage((p) => p + 1);
+  };
 
   const handleDragOver = (e: React.DragEvent) => { if (!isValidTarget) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setIsOver(true); };
   const handleDragLeave = (e: React.DragEvent) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setIsOver(false); };
@@ -272,7 +280,7 @@ function PipelineColumn({ stage, transactions: stageTransactions, total, totalVa
         </div>
         <Badge className={`rounded-full text-[10px] ${colors.bg} ${colors.text} ${colors.border}`}>{total}</Badge>
       </div>
-      <div ref={scrollContainerRef} className={`flex-1 rounded-b-2xl border border-t-0 p-2 space-y-2 overflow-y-auto transition-all duration-200 ${isOver ? colors.dropHighlight : isValidTarget ? "border-black/20 bg-black/[0.03]" : "border-black/10 bg-black/[0.015]"}`} style={{ maxHeight: "calc(100vh - 380px)", minHeight: "180px" }} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+      <div className={`flex-1 rounded-b-2xl border border-t-0 p-2 space-y-2 transition-all duration-200 ${isOver ? colors.dropHighlight : isValidTarget ? "border-black/20 bg-black/[0.03]" : "border-black/10 bg-black/[0.015]"}`} style={{ minHeight: "180px" }} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
         {isOver && <div className={`rounded-lg border-2 border-dashed ${colors.border} p-3 text-center`}><p className={`text-xs font-medium ${colors.text}`}>Drop here to move to {stage}</p></div>}
         {isLoading ? (
           <div className="flex items-center justify-center h-full min-h-[180px]"><Spinner /></div>
@@ -280,10 +288,32 @@ function PipelineColumn({ stage, transactions: stageTransactions, total, totalVa
           <div className="flex items-center justify-center h-full min-h-[180px]"><p className="text-xs text-black/30">{isDragActive && isValidTarget ? `Drop here` : "No transactions"}</p></div>
         ) : (
           <>
-            {stageTransactions.map((transaction) => (<PipelineCard key={transaction.id} transaction={transaction} stage={stage} clientName={getClientName(transaction.client_id)} onDragStart={onDragStart} />))}
-            <div ref={sentinelRef} className="h-1" />
+            {visibleItems.map((transaction) => (<PipelineCard key={transaction.id} transaction={transaction} stage={stage} clientName={getClientName(transaction.client_id)} onDragStart={onDragStart} />))}
             {isFetchingNextPage && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-black/30" /></div>}
-            {!hasNextPage && stageTransactions.length > 0 && <p className="text-center text-[10px] text-black/30 py-1">Showing all {stageTransactions.length}</p>}
+            {(canGoPrev || canGoNext) && (
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  disabled={!canGoPrev}
+                  onClick={() => setLocalPage((p) => p - 1)}
+                  className="rounded-lg px-2.5 py-1 text-[10px] font-semibold text-black/50 transition hover:bg-black/[0.05] disabled:opacity-30 disabled:pointer-events-none"
+                  data-testid={`button-prev-${stage.toLowerCase()}`}
+                >
+                  ← Prev
+                </button>
+                <span className="text-[10px] text-black/35">{localPage + 1} / {totalPages}</span>
+                <button
+                  type="button"
+                  disabled={!canGoNext || isFetchingNextPage}
+                  onClick={handleNext}
+                  className="rounded-lg px-2.5 py-1 text-[10px] font-semibold text-black/50 transition hover:bg-black/[0.05] disabled:opacity-30 disabled:pointer-events-none"
+                  data-testid={`button-next-${stage.toLowerCase()}`}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+            {!canGoNext && stageTransactions.length > 0 && stageTransactions.length <= VISIBLE_PAGE_SIZE && <p className="text-center text-[10px] text-black/30 py-1">Showing all {stageTransactions.length}</p>}
           </>
         )}
       </div>
@@ -451,12 +481,12 @@ export default function PipelineBoard() {
         </Card>
 
         {/* Board columns */}
-        <div className="flex md:grid md:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto pb-2 md:pb-0 snap-x snap-mandatory md:snap-none -mx-2 px-2 md:mx-0 md:px-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {STAGES.map((stage) => {
             const query = stageQueryMap[stage];
             const data = stageDataMap[stage];
             return (
-              <div key={stage} className="min-w-[75vw] sm:min-w-[60vw] md:min-w-0 snap-start">
+              <div key={stage}>
                 <PipelineColumn stage={stage} transactions={data.items} total={data.total} totalValue={data.totalValue} totalProfit={data.totalProfit} getClientName={getClientName} onDragStart={handleDragStart} onDrop={handleDrop} isDragActive={dragState.active} dragFromStage={dragState.fromStage} hasNextPage={!!query.hasNextPage} isFetchingNextPage={query.isFetchingNextPage} fetchNextPage={query.fetchNextPage} isLoading={query.isLoading} />
               </div>
             );
