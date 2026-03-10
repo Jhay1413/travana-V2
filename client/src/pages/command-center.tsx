@@ -590,10 +590,7 @@ function ShellNav({
     return { grouped: false as const, items: base, sections: undefined as NavSection[] | undefined };
   }, [role, openTicketCount, unreadChatCount]);
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(() => {
-    const saved = sessionStorage.getItem("admin-nav-expanded");
-    return saved ? JSON.parse(saved) : ["admin", "agent"];
-  });
+  const [expandedSections, setExpandedSections] = useState<string[]>(["admin", "agent"]);
   
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
@@ -605,10 +602,22 @@ function ShellNav({
     });
   };
 
-  const [expandedNavItems, setExpandedNavItems] = useState<string[]>(() => {
-    const saved = sessionStorage.getItem("admin-nav-items-expanded");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [expandedNavItems, setExpandedNavItems] = useState<string[]>(["settings", "financials"]);
+
+  useEffect(() => {
+    if (role === "Admin") {
+      setExpandedSections((prev) => {
+        const next = Array.from(new Set([...prev, "admin", "agent"]));
+        sessionStorage.setItem("admin-nav-expanded", JSON.stringify(next));
+        return next;
+      });
+      setExpandedNavItems((prev) => {
+        const next = Array.from(new Set([...prev, "settings", "financials"]));
+        sessionStorage.setItem("admin-nav-items-expanded", JSON.stringify(next));
+        return next;
+      });
+    }
+  }, [role]);
 
   const toggleNavItem = (key: string) => {
     setExpandedNavItems(prev => {
