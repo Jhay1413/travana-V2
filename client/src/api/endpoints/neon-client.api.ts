@@ -17,6 +17,11 @@ export const neonClientApi = {
     return data;
   },
 
+  create: async (clientData: Partial<NeonClient>): Promise<NeonClient> => {
+    const { data } = await axiosClient.post<NeonClient>("/api/neon-clients", clientData);
+    return data;
+  },
+
   importClients: async (clients: NeonClientImportRow[]): Promise<ImportResult> => {
     const { data } = await axiosClient.post<ImportResult>("/api/neon-clients/import", { clients });
     return data;

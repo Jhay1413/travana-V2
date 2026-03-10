@@ -1,15 +1,15 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, Link } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import axios from "@/api/client/axios-client";
-import { authApi, opportunitiesApi } from "@/api";
+import { authApi, opportunitiesApi, neonClientApi } from "@/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
 import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useAllTasksExtended, useTickets, useChatConversations, useChatMessages, authKeys } from "@/hooks/queries";
 import { useGlobalSearch } from "@/hooks/queries/use-search-queries";
 import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
-import { useCreateClient, useCreateUser, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
+import { useCreateUser, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useShopTargets, useAgentTargetsByUserId } from "@/hooks/queries/use-targets-queries";
 import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
@@ -1173,6 +1173,7 @@ function TopBar({
   onMobileNavOpen?: () => void;
 }) {
   const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
   const [showSelectClientDialog, setShowSelectClientDialog] = useState(false);
@@ -1230,26 +1231,31 @@ function TopBar({
   };
   const [, navigate] = useLocation();
   const searchRef = useRef<HTMLDivElement>(null);
-  const createClientMutation = useCreateClient();
+  const createNeonClientMutation = useMutation({
+    mutationFn: (data: Record<string, any>) => neonClientApi.create(data as any),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["neon-clients"] });
+    },
+  });
 
   const handleCreateClient = () => {
     if (!newClientForm.firstName || !newClientForm.lastName || !newClientForm.phone) {
       return;
     }
-    createClientMutation.mutate({
-      clientType: newClientForm.clientType,
-      title: newClientForm.title || undefined,
+    createNeonClientMutation.mutate({
       firstName: newClientForm.firstName,
-      lastName: newClientForm.lastName,
-      phone: newClientForm.phone,
+      surename: newClientForm.lastName,
+      phoneNumber: newClientForm.phone,
+      title: newClientForm.title || undefined,
       email: newClientForm.email || undefined,
+      badge: newClientForm.clientType || undefined,
       houseNumber: newClientForm.houseNumber || undefined,
       street: newClientForm.street || undefined,
       city: newClientForm.city || undefined,
       country: newClientForm.country || undefined,
-      postcode: newClientForm.postcode || undefined,
+      post_code: newClientForm.postcode || undefined,
     }, {
-      onSuccess: (newClient) => {
+      onSuccess: (newClient: any) => {
         setShowNewClientDialog(false);
         setNewClientForm({
           clientType: "New Client",
@@ -1726,11 +1732,11 @@ function TopBar({
                   </Button>
                   <Button
                     onClick={handleCreateClient}
-                    disabled={!newClientForm.firstName || !newClientForm.lastName || !newClientForm.phone || createClientMutation.isPending}
+                    disabled={!newClientForm.firstName || !newClientForm.lastName || !newClientForm.phone || createNeonClientMutation.isPending}
                     className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                     data-testid="button-save-client"
                   >
-                    {createClientMutation.isPending ? "Creating..." : "Create Client"}
+                    {createNeonClientMutation.isPending ? "Creating..." : "Create Client"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
