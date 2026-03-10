@@ -1198,6 +1198,7 @@ function TopBar({
   const [postcodeError, setPostcodeError] = useState("");
   const [addressResults, setAddressResults] = useState<Array<{ line1: string; line2: string; city: string; postcode: string }>>([]);
   const [showAddressResults, setShowAddressResults] = useState(false);
+  const [showAddressSection, setShowAddressSection] = useState(false);
 
   const lookupPostcode = async () => {
     if (!postcodeSearch.trim()) return;
@@ -1264,6 +1265,7 @@ function TopBar({
           postcode: "",
         });
         setPostcodeSearch("");
+        setShowAddressSection(false);
         setPostcodeError("");
         navigate(`/clients/${newClient.id}`);
       },
@@ -1484,7 +1486,7 @@ function TopBar({
                 <DropdownMenuItem 
                   className="cursor-pointer" 
                   data-testid="menu-item-new-client"
-                  onClick={() => setShowNewClientDialog(true)}
+                  onClick={() => { setShowAddressSection(false); setShowNewClientDialog(true); }}
                 >
                   <UserRound className="mr-2 h-4 w-4" />
                   New Client
@@ -1605,10 +1607,18 @@ function TopBar({
                     />
                   </div>
 
-                  <Separator />
+                  <button
+                    type="button"
+                    onClick={() => setShowAddressSection(!showAddressSection)}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+                    data-testid="button-toggle-address"
+                  >
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showAddressSection ? "rotate-0" : "-rotate-90"}`} />
+                    Address (optional)
+                  </button>
 
+                  {showAddressSection && (
                   <div className="grid gap-2">
-                    <Label className="text-muted-foreground">Address (optional)</Label>
                     <div className="grid gap-4">
                       <div className="grid gap-2">
                         <Label htmlFor="postcodeSearch" className="text-xs">Postcode Search</Label>
@@ -1703,6 +1713,7 @@ function TopBar({
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button
