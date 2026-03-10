@@ -69,6 +69,10 @@ Authentication is handled through dedicated routes in `/server/replit_integratio
 - OIDC discovery and token management
 - User upsert on login (creates or updates user records)
 - Session middleware with Passport.js
+- Email/password login with bcrypt hashing
+- Forgot password flow: generates reset token (stored in `user.resetToken`/`user.resetTokenExpiry`), 1-hour expiry
+- Reset password flow: validates token, updates password, clears token
+- Frontend pages: `/forgot-password` and `/reset-password/:token` (public, no auth required)
 
 ### Database
 - **Database**: PostgreSQL (required via `DATABASE_URL` environment variable)

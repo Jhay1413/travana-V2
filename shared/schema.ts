@@ -37,6 +37,8 @@ export const user = pgTable("user", {
   orgName: text("orgName"),
   percentageCommission: integer("percentageCommission"),
   password: text("password"),
+  resetToken: text("resetToken"),
+  resetTokenExpiry: timestamp("resetTokenExpiry"),
 });
 
 export const insertUserSchema = createInsertSchema(user).omit({ createdAt: true, updatedAt: true });

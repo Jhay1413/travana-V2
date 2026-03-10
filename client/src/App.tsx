@@ -24,6 +24,8 @@ import SocialPostsPage from "@/pages/social-posts";
 import SocialQuotePage from "@/pages/social-quote";
 import DestinationGuruPage from "@/pages/destination-guru";
 import FeedbackPage from "@/pages/feedback";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 import { FeedbackButton } from "@/components/feedback-button";
 import { Loader2 } from "lucide-react";
 
@@ -76,6 +78,22 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/view-quote/:token" component={PublicQuotePage} />
+      </Switch>
+    );
+  }
+
+  if (location === "/forgot-password") {
+    return <ForgotPasswordPage />;
+  }
+
+  if (location.startsWith("/reset-password")) {
+    if (location === "/reset-password" || location === "/reset-password/") {
+      window.location.href = "/forgot-password";
+      return null;
+    }
+    return (
+      <Switch>
+        <Route path="/reset-password/:token" component={ResetPasswordPage} />
       </Switch>
     );
   }

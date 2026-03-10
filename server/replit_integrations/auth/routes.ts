@@ -3,6 +3,7 @@ import { authStorage } from "./storage";
 import { isAuthenticated } from "./replitAuth";
 import { getUserId } from "../../utils/get-user-id";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -153,6 +154,69 @@ export function registerAuthRoutes(app: Express): void {
       if (allowed.includes(file.mimetype)) cb(null, true);
       else cb(new Error("Only image files (JPEG, PNG, GIF, WebP) are allowed"));
     },
+  });
+
+  app.post("/api/auth/forgot-password", async (req: any, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const foundUser = await authStorage.getUserByEmail(email);
+      if (!foundUser) {
+        return res.json({ message: "If an account exists with that email, a reset link has been generated." });
+      }
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiry = new Date(Date.now() + 60 * 60 * 1000);
+
+      await authStorage.updateUser(foundUser.id, {
+        resetToken: token,
+        resetTokenExpiry: expiry,
+      } as any);
+
+      console.log(`[auth] Password reset requested for ${email}`);
+
+      return res.json({ message: "If an account exists with that email, a reset link has been generated." });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "Something went wrong" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req: any, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and password are required" });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      const foundUser = await authStorage.getUserByResetToken(token);
+      if (!foundUser) {
+        return res.status(400).json({ message: "Invalid or expired reset link" });
+      }
+
+      if (!foundUser.resetTokenExpiry || new Date(foundUser.resetTokenExpiry) < new Date()) {
+        return res.status(400).json({ message: "Reset link has expired" });
+      }
+
+      const hashed = await bcrypt.hash(password, 10);
+      await authStorage.updateUser(foundUser.id, {
+        password: hashed,
+        resetToken: null,
+        resetTokenExpiry: null,
+      } as any);
+
+      return res.json({ message: "Password has been reset successfully" });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ message: "Something went wrong" });
+    }
   });
 
   app.post("/api/auth/avatar", isAuthenticated, avatarUpload.single("avatar"), async (req: any, res) => {

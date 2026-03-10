@@ -114,16 +114,14 @@ export default function LandingPage() {
                   </Button>
                 </form>
 
-                <div className="mt-6 pt-6 border-t border-white/10">
-                  <p className="text-white/40 text-sm text-center mb-4">Or continue with</p>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="w-full rounded-xl border-white/10 bg-white/5 text-white hover:bg-white/10 h-12"
-                    data-testid="button-login-replit"
+                <div className="mt-4 text-center">
+                  <a
+                    href="/forgot-password"
+                    className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                    data-testid="link-forgot-password"
                   >
-                    <a href="/api/login">Sign in with Replit</a>
-                  </Button>
+                    Forgot your password?
+                  </a>
                 </div>
               </div>
             </motion.div>
