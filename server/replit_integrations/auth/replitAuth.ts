@@ -54,7 +54,7 @@ async function upsertUser(claims: any) {
   const firstName = claims["first_name"] || "";
   const lastName = claims["last_name"] || "";
   const name = [firstName, lastName].filter(Boolean).join(" ") || claims["email"] || "User";
-  
+
   await authStorage.upsertUser({
     id: claims["sub"],
     name,

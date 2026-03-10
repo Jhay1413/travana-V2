@@ -20,7 +20,7 @@ async function getUserName(userId: string): Promise<string | null> {
 
 async function getUserRole(userId: string): Promise<string | null> {
   const [u] = await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, userId)).limit(1);
-  return u?.role || null;
+  return u?.role?.toLowerCase() || null;
 }
 
 router.get("/", async (req: Request, res: Response) => {
@@ -28,7 +28,7 @@ router.get("/", async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
     const role = await getUserRole(userId);
-    if (role === "Admin" || role === "Manager") {
+    if (role === "admin" || role === "manager") {
       const items = await feedbackRepository.findAll();
       return res.json({ success: true, data: items });
     }
@@ -85,7 +85,7 @@ router.patch("/:id/status", async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
     const role = await getUserRole(userId);
-    if (role !== "Admin" && role !== "Manager") {
+    if (role !== "admin" && role !== "manager") {
       return res.status(403).json({ success: false, message: "Admin or Manager access required" });
     }
 
@@ -106,7 +106,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
     const role = await getUserRole(userId);
-    if (role !== "Admin" && role !== "Manager") {
+    if (role !== "admin" && role !== "manager") {
       return res.status(403).json({ success: false, message: "Admin or Manager access required" });
     }
 

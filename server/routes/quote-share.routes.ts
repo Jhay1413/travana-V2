@@ -21,8 +21,8 @@ async function verifyQuoteAccess(req: Request, res: Response): Promise<boolean> 
     return false;
   }
   const dbUser = await authStorage.getUser(userId);
-  const userRole = dbUser?.role;
-  if (agentId !== userId && userRole !== "Admin" && userRole !== "Manager") {
+  const userRole = dbUser?.role?.toLowerCase();
+  if (agentId !== userId && userRole !== "admin" && userRole !== "manager") {
     res.status(403).json({ success: false, error: "Access denied" });
     return false;
   }

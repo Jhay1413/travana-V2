@@ -14,7 +14,7 @@ const VALID_CATEGORIES = ["general", "supplier", "target", "incentive", "trainin
 
 async function getUserInfo(userId: string): Promise<{ name: string | null; role: string | null }> {
   const [u] = await db.select({ name: userTable.name, role: userTable.role }).from(userTable).where(eq(userTable.id, userId)).limit(1);
-  return { name: u?.name || null, role: u?.role || null };
+  return { name: u?.name || null, role: u?.role?.toLowerCase() || null };
 }
 
 router.get("/", async (_req: Request, res: Response) => {
@@ -32,7 +32,7 @@ router.post("/", async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
 
     const { name, role } = await getUserInfo(userId);
-    if (role !== "Admin" && role !== "Manager") {
+    if (role !== "admin" && role !== "manager") {
       return res.status(403).json({ success: false, message: "Only Admin or Manager can post announcements" });
     }
 
@@ -63,7 +63,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
 
     const { role } = await getUserInfo(userId);
-    if (role !== "Admin" && role !== "Manager") {
+    if (role !== "admin" && role !== "manager") {
       return res.status(403).json({ success: false, message: "Only Admin or Manager can edit announcements" });
     }
 
@@ -88,7 +88,7 @@ router.patch("/:id/pin", async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
 
     const { role } = await getUserInfo(userId);
-    if (role !== "Admin" && role !== "Manager") {
+    if (role !== "admin" && role !== "manager") {
       return res.status(403).json({ success: false, message: "Only Admin or Manager can pin announcements" });
     }
 
@@ -106,7 +106,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
 
     const { role } = await getUserInfo(userId);
-    if (role !== "Admin" && role !== "Manager") {
+    if (role !== "admin" && role !== "manager") {
       return res.status(403).json({ success: false, message: "Only Admin or Manager can delete announcements" });
     }
 
