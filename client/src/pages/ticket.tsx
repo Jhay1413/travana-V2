@@ -643,6 +643,7 @@ export default function TicketPage() {
     priority: "",
     subject: "",
     description: "",
+    assignedTo: "",
   });
 
   const { toast } = useToast();
@@ -730,6 +731,7 @@ export default function TicketPage() {
       priority: ticket.priority,
       subject: ticket.subject,
       description: ticket.description || "",
+      assignedTo: ticket.assignedTo || ticket.userId || "",
     });
     setIsEditing(true);
   };
@@ -741,6 +743,7 @@ export default function TicketPage() {
       priority: formData.priority,
       subject: formData.subject,
       description: formData.description || null,
+      assignedTo: formData.assignedTo || undefined,
     });
   };
 
@@ -942,6 +945,21 @@ export default function TicketPage() {
                   </div>
                 </div>
                 <div className="grid gap-2">
+                  <Label>Assigned To</Label>
+                  <Select value={formData.assignedTo} onValueChange={(v) => setFormData({ ...formData, assignedTo: v })}>
+                    <SelectTrigger className="rounded-xl" data-testid="select-edit-assigned-to">
+                      <SelectValue placeholder="Select user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users?.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea
                     id="description"
@@ -1089,6 +1107,13 @@ export default function TicketPage() {
                   </div>
                   <div>
                     <p className="text-xs text-black/40 mb-1">Assigned To</p>
+                    <p className="text-sm font-medium flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5 text-black/40" />
+                      {ticket.assignedTo ? getUserName(ticket.assignedTo) : getUserName(ticket.userId)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-black/40 mb-1">Created By</p>
                     <p className="text-sm font-medium flex items-center gap-1.5">
                       <User className="h-3.5 w-3.5 text-black/40" />
                       {getUserName(ticket.userId)}

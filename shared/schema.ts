@@ -1081,6 +1081,7 @@ export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: uuid("client_id").references(() => clientTable.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id),
+  assignedTo: text("assigned_to").references(() => user.id),
   type: text("type").notNull(),
   status: text("status").notNull().default("Open"),
   priority: text("priority").notNull().default("Medium"),

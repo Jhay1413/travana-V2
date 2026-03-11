@@ -447,9 +447,11 @@ function ShellNav({
   const openTicketCount = useMemo(() => {
     if (!sidebarTickets || !Array.isArray(sidebarTickets)) return 0;
     return sidebarTickets.filter((t: any) => {
-      return t.status === "Open" || t.status === "In Progress";
+      if (!(t.status === "Open" || t.status === "In Progress")) return false;
+      if (!sidebarCurrentUser?.id) return true;
+      return t.assignedTo === sidebarCurrentUser.id || t.userId === sidebarCurrentUser.id;
     }).length;
-  }, [sidebarTickets]);
+  }, [sidebarTickets, sidebarCurrentUser?.id]);
   const unreadChatCount = useMemo(() => {
     if (!sidebarChats || !Array.isArray(sidebarChats)) return 0;
     return sidebarChats.filter((c: any) => c.unreadCount > 0).reduce((sum: number, c: any) => sum + c.unreadCount, 0);
@@ -2217,10 +2219,12 @@ export default function CommandCenterPage() {
     if (!allTicketsData || !Array.isArray(allTicketsData)) return [];
     return allTicketsData
       .filter((t) => {
-        return t.status === "Open" || t.status === "In Progress";
+        if (!(t.status === "Open" || t.status === "In Progress")) return false;
+        if (!currentUser?.id) return true;
+        return t.assignedTo === currentUser.id || t.userId === currentUser.id;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [allTicketsData]);
+  }, [allTicketsData, currentUser?.id]);
 
   const allClients = useMemo(() => {
     const neonClients = paginatedNeonClients?.clients;

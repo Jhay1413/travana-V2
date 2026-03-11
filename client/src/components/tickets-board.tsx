@@ -25,7 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useTickets, useNeonClients, useUsers } from "@/hooks/queries";
+import { useTickets, useNeonClients, useUsers, useCurrentUser } from "@/hooks/queries";
 import { useCreateTicket } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { attachmentApi } from "@/api";
@@ -118,6 +118,7 @@ export default function TicketsBoard() {
   const { data: neonClientsData } = useNeonClients({ page: 1, limit: 20, search: customerSearch });
 
   const { data: users } = useUsers();
+  const { data: currentUser } = useCurrentUser();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -194,7 +195,8 @@ export default function TicketsBoard() {
     setIsUploading(true);
     createTicketMutation.mutate({
       clientId: formData.type === "Build" ? null : formData.clientId,
-      userId: formData.userId,
+      userId: currentUser?.id || formData.userId,
+      assignedTo: formData.userId,
       type: formData.type,
       status: formData.status,
       priority: formData.priority,
@@ -241,7 +243,7 @@ export default function TicketsBoard() {
     const matchesType = typeFilter === "all" || ticket.type === typeFilter;
     const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
     const matchesPriority = priorityFilter === "all" || ticket.priority === priorityFilter;
-    const matchesAgent = agentFilter === "all" || ticket.userId === agentFilter;
+    const matchesAgent = agentFilter === "all" || ticket.assignedTo === agentFilter || ticket.userId === agentFilter;
     return matchesQuery && matchesType && matchesStatus && matchesPriority && matchesAgent;
   });
 
@@ -250,10 +252,15 @@ export default function TicketsBoard() {
     return name && name !== "null" ? name : "Unknown Client";
   };
 
-  const getUserName = (ticket: { userName?: string | null; userId: string }) => {
+  const getUserName = (ticket: { userName?: string | null; userId: string; assignedTo?: string | null; assignedToName?: string | null }) => {
+    if (ticket.assignedToName) return ticket.assignedToName;
+    if (ticket.assignedTo) {
+      const assignee = users?.find((u) => u.id === ticket.assignedTo);
+      if (assignee?.name) return assignee.name;
+    }
     if (ticket.userName) return ticket.userName;
-    const user = users?.find((u) => u.id === ticket.userId);
-    return user?.name || "Unassigned";
+    const u = users?.find((usr) => usr.id === ticket.userId);
+    return u?.name || "Unassigned";
   };
 
   const activeFiltersCount = [typeFilter, statusFilter, priorityFilter, agentFilter].filter((f) => f !== "all").length;

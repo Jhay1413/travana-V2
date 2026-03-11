@@ -1,8 +1,11 @@
 import { db } from "../config/database";
 import { tickets, clientTable, user, type Ticket, type InsertTicket } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
-export type TicketWithNames = Ticket & { clientName: string | null; userName: string | null };
+const assignedUser = alias(user, "assigned_user");
+
+export type TicketWithNames = Ticket & { clientName: string | null; userName: string | null; assignedToName: string | null };
 
 function buildTicketWithNamesQuery() {
   return db
@@ -10,6 +13,7 @@ function buildTicketWithNamesQuery() {
       id: tickets.id,
       clientId: tickets.clientId,
       userId: tickets.userId,
+      assignedTo: tickets.assignedTo,
       type: tickets.type,
       status: tickets.status,
       priority: tickets.priority,
@@ -20,10 +24,12 @@ function buildTicketWithNamesQuery() {
       resolvedAt: tickets.resolvedAt,
       clientName: sql<string | null>`COALESCE(NULLIF(${clientTable.title}, 'NULL') || ' ', '') || ${clientTable.firstName} || ' ' || ${clientTable.surename}`.as("client_name"),
       userName: user.name,
+      assignedToName: sql<string | null>`${assignedUser.name}`.as("assigned_to_name"),
     })
     .from(tickets)
     .leftJoin(clientTable, eq(tickets.clientId, clientTable.id))
-    .leftJoin(user, eq(tickets.userId, user.id));
+    .leftJoin(user, eq(tickets.userId, user.id))
+    .leftJoin(assignedUser, eq(tickets.assignedTo, assignedUser.id));
 }
 
 export const ticketRepository = {
@@ -42,6 +48,12 @@ export const ticketRepository = {
 
   async findByUserId(userId: string): Promise<TicketWithNames[]> {
     return await buildTicketWithNamesQuery().where(eq(tickets.userId, userId)).orderBy(desc(tickets.createdAt));
+  },
+
+  async findByAssignedTo(userId: string): Promise<TicketWithNames[]> {
+    return await buildTicketWithNamesQuery().where(
+      or(eq(tickets.assignedTo, userId), eq(tickets.userId, userId))
+    ).orderBy(desc(tickets.createdAt));
   },
 
   async create(ticket: InsertTicket): Promise<Ticket> {
