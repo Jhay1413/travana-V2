@@ -447,10 +447,9 @@ function ShellNav({
   const openTicketCount = useMemo(() => {
     if (!sidebarTickets || !Array.isArray(sidebarTickets)) return 0;
     return sidebarTickets.filter((t: any) => {
-      if (sidebarCurrentUser?.id && t.userId !== sidebarCurrentUser.id) return false;
       return t.status === "Open" || t.status === "In Progress";
     }).length;
-  }, [sidebarTickets, sidebarCurrentUser?.id]);
+  }, [sidebarTickets]);
   const unreadChatCount = useMemo(() => {
     if (!sidebarChats || !Array.isArray(sidebarChats)) return 0;
     return sidebarChats.filter((c: any) => c.unreadCount > 0).reduce((sum: number, c: any) => sum + c.unreadCount, 0);
@@ -2218,12 +2217,10 @@ export default function CommandCenterPage() {
     if (!allTicketsData || !Array.isArray(allTicketsData)) return [];
     return allTicketsData
       .filter((t) => {
-        if (currentUser?.id && t.userId !== currentUser.id) return false;
-        const created = new Date(t.createdAt);
-        return created >= whatsOnDateRange.start && created < whatsOnDateRange.end;
+        return t.status === "Open" || t.status === "In Progress";
       })
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }, [allTicketsData, whatsOnDateRange, currentUser?.id]);
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [allTicketsData]);
 
   const allClients = useMemo(() => {
     const neonClients = paginatedNeonClients?.clients;
