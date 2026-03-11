@@ -62,7 +62,12 @@ export default function ClientPage() {
   const [active] = useState<string>("clients");
   const [q, setQ] = useState("");
   type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets";
-  const [tab, setTab] = useState<ClientTab>("overview");
+  const validTabs: ClientTab[] = ["overview", "enquiries", "quotes", "booked", "files", "tickets"];
+  const [tab, setTab] = useState<ClientTab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab") as ClientTab | null;
+    return t && validTabs.includes(t) ? t : "overview";
+  });
   const [expandedCopyGroups, setExpandedCopyGroups] = useState<Record<string, boolean>>({});
   const [showEditClient, setShowEditClient] = useState(false);
   const [editForm, setEditForm] = useState({

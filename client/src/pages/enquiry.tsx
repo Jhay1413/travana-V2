@@ -751,8 +751,8 @@ export default function EnquiryPage() {
       <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
           <div className="text-sm text-black/50">Enquiry not found</div>
-          <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => navigate(`/clients/${clientId}`)}>
-            <ChevronLeft className="mr-1 h-4 w-4" /> Back to client
+          <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => navigate(`/clients/${clientId}?tab=enquiries`)}>
+            <ChevronLeft className="mr-1 h-4 w-4" /> Enquiries
           </Button>
         </div>
       </CommandCenterShell>
@@ -790,7 +790,7 @@ export default function EnquiryPage() {
       <div className="mx-auto w-full max-w-5xl px-4 pb-12 pt-6">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <div className="mb-6 flex items-center gap-3">
-            <button type="button" onClick={() => navigate(`/clients/${clientId}`)} className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.04]" data-testid="button-back">
+            <button type="button" onClick={() => navigate(`/clients/${clientId}?tab=enquiries`)} className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.04]" data-testid="button-back">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <div className="min-w-0 flex-1">

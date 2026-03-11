@@ -120,10 +120,10 @@ export default function BookingPage() {
               variant="outline"
               className="h-9 rounded-2xl border-black/10 bg-white/70"
               data-testid="button-back-client"
-              onClick={() => setLocation("/")}
+              onClick={() => setLocation(clientId ? `/clients/${clientId}?tab=booked` : "/")}
             >
               <ChevronLeft className="mr-2 h-4 w-4" />
-              Back
+              Bookings
             </Button>
 
             <div className="min-w-0">
