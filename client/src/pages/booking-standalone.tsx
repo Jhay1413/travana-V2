@@ -120,10 +120,10 @@ export default function BookingPage() {
               variant="outline"
               className="h-9 rounded-2xl border-black/10 bg-white/70"
               data-testid="button-back-client"
-              onClick={() => setLocation(clientId ? `/clients/${clientId}` : "/social-posts")}
+              onClick={() => window.history.back()}
             >
               <ChevronLeft className="mr-2 h-4 w-4" />
-              Client
+              Back
             </Button>
 
             <div className="min-w-0">
