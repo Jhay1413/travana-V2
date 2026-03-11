@@ -446,14 +446,13 @@ function ShellNav({
   const { data: sidebarCurrentUser } = useCurrentUser();
   const openTicketCount = useMemo(() => {
     if (!sidebarTickets || !Array.isArray(sidebarTickets)) return 0;
-    const isAdminOrManager = role === "Admin" || role === "Manager";
     return sidebarTickets.filter((t: any) => {
       if (!(t.status === "Open" || t.status === "In Progress")) return false;
-      if (isAdminOrManager) return true;
       if (!sidebarCurrentUser?.id) return true;
-      return t.assignedTo === sidebarCurrentUser.id || t.userId === sidebarCurrentUser.id;
+      if (t.assignedTo) return t.assignedTo === sidebarCurrentUser.id;
+      return t.userId === sidebarCurrentUser.id;
     }).length;
-  }, [sidebarTickets, sidebarCurrentUser?.id, role]);
+  }, [sidebarTickets, sidebarCurrentUser?.id]);
   const unreadChatCount = useMemo(() => {
     if (!sidebarChats || !Array.isArray(sidebarChats)) return 0;
     return sidebarChats.filter((c: any) => c.unreadCount > 0).reduce((sum: number, c: any) => sum + c.unreadCount, 0);
@@ -2219,16 +2218,15 @@ export default function CommandCenterPage() {
 
   const filteredTickets = useMemo(() => {
     if (!allTicketsData || !Array.isArray(allTicketsData)) return [];
-    const isAdminOrManager = role === "Admin" || role === "Manager";
     return allTicketsData
       .filter((t) => {
         if (!(t.status === "Open" || t.status === "In Progress")) return false;
-        if (isAdminOrManager) return true;
         if (!currentUser?.id) return true;
-        return t.assignedTo === currentUser.id || t.userId === currentUser.id;
+        if (t.assignedTo) return t.assignedTo === currentUser.id;
+        return t.userId === currentUser.id;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [allTicketsData, currentUser?.id, role]);
+  }, [allTicketsData, currentUser?.id]);
 
   const allClients = useMemo(() => {
     const neonClients = paginatedNeonClients?.clients;
