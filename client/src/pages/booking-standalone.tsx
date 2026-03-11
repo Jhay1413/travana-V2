@@ -120,7 +120,7 @@ export default function BookingPage() {
               variant="outline"
               className="h-9 rounded-2xl border-black/10 bg-white/70"
               data-testid="button-back-client"
-              onClick={() => window.history.back()}
+              onClick={() => setLocation("/")}
             >
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back
