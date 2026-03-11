@@ -1100,10 +1100,17 @@ export default function TicketPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-t border-b border-black/10">
                   <div>
                     <p className="text-xs text-black/40 mb-1">Customer</p>
-                    <p className="text-sm font-medium flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5 text-black/40" />
-                      {getClientName()}
-                    </p>
+                    {ticket.clientId ? (
+                      <Link href={`/clients/${ticket.clientId}`} className="text-sm font-medium flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" data-testid="link-ticket-client">
+                        <Users className="h-3.5 w-3.5 text-blue-500" />
+                        {getClientName()}
+                      </Link>
+                    ) : (
+                      <p className="text-sm font-medium flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5 text-black/40" />
+                        {getClientName()}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-xs text-black/40 mb-1">Assigned To</p>
