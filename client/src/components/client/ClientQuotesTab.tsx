@@ -66,46 +66,60 @@ export function ClientQuotesTab({
               title: "In Play",
               rows: quotes
                 .filter((q: QuoteWithJoins) => !q.quote_status || !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
-                .map((q: QuoteWithJoins) => ({
-                  id: q.id,
-                  transactionId: q.transaction_id,
-                  title: q.title || q.holiday_type_name || "Trip",
-                  isQuoteCopy: Boolean(q.isQuoteCopy),
-                  destination: q.holiday_type_name || q.quote_type || "—",
-                  travelDate: q.travel_date,
-                  createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
-                  createdAtRaw: q.date_created || "",
-                  status: q.quote_status || "NEW_LEAD",
-                  totalCost: parseFloat(q.sales_price || "0"),
-                  pricePerPerson: parseFloat(q.price_per_person || "0"),
-                  imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
-                  pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
-                  nights: q.num_of_nights || 0,
-                })),
+                .map((q: QuoteWithJoins) => {
+                  const salesPrice = parseFloat(q.sales_price || "0");
+                  const discount = parseFloat(q.discounts || "0");
+                  const serviceCharge = parseFloat(q.service_charge || "0");
+                  const netPrice = salesPrice - discount + serviceCharge;
+                  
+                  return {
+                    id: q.id,
+                    transactionId: q.transaction_id,
+                    title: q.title || q.holiday_type_name || "Trip",
+                    isQuoteCopy: Boolean(q.isQuoteCopy),
+                    destination: q.holiday_type_name || q.quote_type || "—",
+                    travelDate: q.travel_date,
+                    createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                    createdAtRaw: q.date_created || "",
+                    status: q.quote_status || "NEW_LEAD",
+                    totalCost: netPrice,
+                    pricePerPerson: parseFloat(q.price_per_person || "0"),
+                    imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
+                    pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
+                    nights: q.num_of_nights || 0,
+                  };
+                }),
             },
             {
               id: "won",
               title: "Won (Bookings)",
               rows: bookings
-                .map((b: BookingWithJoins) => ({
-                  id: b.id,
-                  transactionId: b.transaction_id || "",
-                  title: b.title || b.holiday_type_name || "Booking",
-                  isQuoteCopy: false,
-                  destination: b.holiday_type_name || "—",
-                  travelDate: b.travel_date,
-                  createdAt: b.date_created ? new Date(b.date_created).toLocaleDateString("en-GB") : "—",
-                  createdAtRaw: b.date_created || "",
-                  status: b.booking_status || "BOOKED",
-                  totalCost: parseFloat(b.sales_price || "0"),
-                  pricePerPerson: 0,
-                  imageUrl: b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url || null,
-                  pax: `${b.adult || 0}A${(b.child || 0) > 0 ? ` ${b.child}C` : ""}${(b.infant || 0) > 0 ? ` ${b.infant}I` : ""}`,
-                  nights: b.num_of_nights || 0,
-                  haysRef: b.hays_ref,
-                  supplierRef: b.supplier_ref,
-                  isBooking: true,
-                })),
+                .map((b: BookingWithJoins) => {
+                  const salesPrice = parseFloat(b.sales_price || "0");
+                  const discount = parseFloat(b.discounts || "0");
+                  const serviceCharge = parseFloat(b.service_charge || "0");
+                  const netPrice = salesPrice - discount + serviceCharge;
+                  
+                  return {
+                    id: b.id,
+                    transactionId: b.transaction_id || "",
+                    title: b.title || b.holiday_type_name || "Booking",
+                    isQuoteCopy: false,
+                    destination: b.holiday_type_name || "—",
+                    travelDate: b.travel_date,
+                    createdAt: b.date_created ? new Date(b.date_created).toLocaleDateString("en-GB") : "—",
+                    createdAtRaw: b.date_created || "",
+                    status: b.booking_status || "BOOKED",
+                    totalCost: netPrice,
+                    pricePerPerson: 0,
+                    imageUrl: b.images?.find((img: DealImage) => img.isPrimary)?.image_url || b.images?.[0]?.image_url || null,
+                    pax: `${b.adult || 0}A${(b.child || 0) > 0 ? ` ${b.child}C` : ""}${(b.infant || 0) > 0 ? ` ${b.infant}I` : ""}`,
+                    nights: b.num_of_nights || 0,
+                    haysRef: b.hays_ref,
+                    supplierRef: b.supplier_ref,
+                    isBooking: true,
+                  };
+                }),
             },
           ].map((group) => {
             const groupRowsSorted = [...group.rows].sort(

@@ -38,6 +38,8 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
 
   const salesPrice = parseFloat(apiData.sales_price || "0");
   const packageCommission = parseFloat(apiData.package_commission || "0");
+  const discount = parseFloat(apiData.discounts || "0");
+  const serviceCharge = parseFloat(apiData.service_charge || "0");
 
   const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");
 
@@ -118,11 +120,14 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     commissions: {
       tourOperator: apiData.main_tour_operator_name || "",
       price: salesPrice,
+      discount: discount,
+      serviceCharge: serviceCharge,
       commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
-      commissionValue: packageCommission,
+      commissionValue: packageCommission + serviceCharge - discount,
       agentSplitPercent: 0,
       agentSplitValue: 0,
       netToAgency: packageCommission,
+      totalCommission: packageCommission,
     },
     notes: [],
     pets: apiData.pets || 0,

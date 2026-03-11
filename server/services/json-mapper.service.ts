@@ -230,13 +230,28 @@ export const jsonMapperService = {
 
     // Map room type (create if doesn't exist)
     if (input.roomType) {
+      console.log(`🚪 JSON Mapper - Processing room type: "${input.roomType}"`);
       let room = await jsonMapperRepository.findRoomTypeByName(input.roomType);
+      
       if (!room) {
-        console.log(`  → Creating room type: ${input.roomType}`);
+        console.log(`  → Room type "${input.roomType}" not found, creating new one...`);
         room = await jsonMapperRepository.createRoomType(input.roomType);
-        warnings.push(`Created new room type: "${input.roomType}"`);
+        
+        if (!room) {
+          console.error(`❌ Failed to create room type "${input.roomType}" - returned null/undefined`);
+          warnings.push(`Failed to create room type: "${input.roomType}"`);
+        } else if (!room.id) {
+          console.error(`❌ Created room type "${input.roomType}" but no ID was returned:`, room);
+          warnings.push(`Room type created but no ID returned: "${input.roomType}"`);
+        } else {
+          console.log(`✅ Successfully created room type "${input.roomType}" with ID: ${room.id}`);
+          warnings.push(`Created new room type: "${input.roomType}"`);
+          roomTypeId = room.id;
+        }
+      } else {
+        console.log(`✅ Found existing room type "${input.roomType}" with ID: ${room.id}`);
+        roomTypeId = room.id;
       }
-      roomTypeId = room.id;
     }
 
     // Map park: find by name, create if missing (using parkCode as the park's code field)

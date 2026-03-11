@@ -228,6 +228,8 @@ export const newQuoteService = {
       throw new AppError("Quote not found", 404);
     }
 
+    console.log('📋 DUPLICATE QUOTE - Source:', sourceQuoteId, 'Transaction:', sourceQuote.transaction_id);
+
     const sourceImages = await quoteImageRepository.getByQuoteId(sourceQuoteId);
     const sourceImageUrls = sourceImages
       .map((image) => image.url)
@@ -241,22 +243,27 @@ export const newQuoteService = {
       (url, index, arr) => arr.indexOf(url) === index,
     );
 
+    // Exclude fields that should not be duplicated
     const {
       id: _sourceId,
       date_created: _sourceCreatedAt,
       transaction_id: _ignoredTransactionId,
+      quote_token: _ignoreToken, // Don't copy token - it's unique per quote
       ...sourceInsertData
     } = sourceQuote;
 
+    // Create duplicate under SAME transaction with isQuoteCopy=true
     const payload: CreateQuotePayload = {
       ...(sourceInsertData as InsertQuote),
       ...(data as Partial<InsertQuote>),
-      transaction_id: sourceQuote.transaction_id,
-      isQuoteCopy: true,
+      transaction_id: sourceQuote.transaction_id, // Keep same transaction
+      isQuoteCopy: true, // Mark as duplicate (original has false)
       images: mergedImages,
     };
 
-    return await newQuoteService.createQuote(payload);
+    const duplicatedQuote = await newQuoteService.createQuote(payload);
+    console.log('✅ DUPLICATE QUOTE - Created:', duplicatedQuote.id, 'isQuoteCopy:', true);
+    return duplicatedQuote;
   },
 
   async updateQuote(id: string, data: UpdateQuotePayload) {

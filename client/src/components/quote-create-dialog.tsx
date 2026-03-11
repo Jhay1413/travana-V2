@@ -144,6 +144,16 @@ export function QuoteCreateDialog({
     const imageUrls = images?.urls || [];
     const imageFiles = images?.files || [];
 
+    // When converting from enquiry (initialValues present), transactionId is required
+    if (initialValues && Object.keys(initialValues).length > 0 && !transactionId) {
+      toast({
+        title: "Conversion Error",
+        description: "Unable to convert enquiry - transaction ID is missing. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (transactionId) {
       const json: CreateQuoteData = {
         ...quotePayload,

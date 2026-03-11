@@ -73,11 +73,14 @@ export type QuoteDisplay = {
   commissions: {
     tourOperator: string;
     price: number;
+    discount: number;
+    serviceCharge: number;
     commissionPercent: number;
     commissionValue: number;
     agentSplitPercent: number;
     agentSplitValue: number;
     netToAgency: number;
+    totalCommission: number;
   };
   tags: string[];
   notes: string[];

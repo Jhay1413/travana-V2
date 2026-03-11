@@ -70,8 +70,20 @@ function formatCurrency(amount: number): string {
 }
 
 function getTransactionValue(transaction: Transaction): number {
-  if (transaction.quotes && transaction.quotes.length > 0) return transaction.quotes.reduce((sum, q) => sum + (parseFloat(q.sales_price || "0") || 0), 0);
-  if (transaction.booking) return parseFloat(transaction.booking.sales_price || "0") || 0;
+  if (transaction.quotes && transaction.quotes.length > 0) {
+    return transaction.quotes.reduce((sum, q) => {
+      const salesPrice = parseFloat(q.sales_price || "0") || 0;
+      const discount = parseFloat(q.discounts || "0") || 0;
+      const serviceCharge = parseFloat(q.service_charge || "0") || 0;
+      return sum + (salesPrice - discount + serviceCharge);
+    }, 0);
+  }
+  if (transaction.booking) {
+    const salesPrice = parseFloat(transaction.booking.sales_price || "0") || 0;
+    const discount = parseFloat(transaction.booking.discounts || "0") || 0;
+    const serviceCharge = parseFloat(transaction.booking.service_charge || "0") || 0;
+    return salesPrice - discount + serviceCharge;
+  }
   return 0;
 }
 

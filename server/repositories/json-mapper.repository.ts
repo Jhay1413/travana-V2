@@ -258,12 +258,25 @@ export const jsonMapperRepository = {
    * Create room type if it doesn't exist
    */
   async createRoomType(name: string) {
-    const results = await db
-      .insert(room_type)
-      .values({ name })
-      .returning();
+    console.log(`🔧 createRoomType - Attempting to create room type: "${name}"`);
     
-    return results[0];
+    try {
+      const results = await db
+        .insert(room_type)
+        .values({ name })
+        .returning();
+      
+      console.log(`✅ createRoomType - Successfully created room type:`, results[0]);
+      
+      if (!results[0]) {
+        throw new Error('Insert succeeded but no record was returned');
+      }
+      
+      return results[0];
+    } catch (error) {
+      console.error(`❌ createRoomType - Error creating room type "${name}":`, error);
+      throw error;
+    }
   },
 
   /**

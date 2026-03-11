@@ -307,6 +307,16 @@ export default function ClientPage() {
   };
 
   const handleConvertEnquiryToQuote = (enq: EnquiryTable) => {
+    if (!enq.transaction_id) {
+      console.error("❌ Enquiry missing transaction_id:", enq);
+      toast({
+        title: "Conversion Error",
+        description: "This enquiry is missing a transaction ID and cannot be converted.",
+        variant: "destructive",
+      });
+      return;
+    }
+    console.log("✅ Converting enquiry to quote - Transaction ID:", enq.transaction_id);
     setConvertingFromEnquiryTxnId(enq.transaction_id);
     setConvertingEnquiryId(enq.id);
     setShowQuoteCreateDialog(true);

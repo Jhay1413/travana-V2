@@ -102,6 +102,9 @@ export function BookingRHFForm({
   const cruiseOnly = watch("cruiseOnly");
   const tourOperatorId = watch("tourOperatorId");
   const price = watch("price");
+  const discount = watch("discount");
+  const serviceCharge = watch("serviceCharge");
+  const commission = watch("commission");
 
 
   // ── Lookup data ──────────────────────────────────────────────────────────
@@ -170,18 +173,24 @@ export function BookingRHFForm({
   useEffect(() => {
     if (tourOperatorId && packageType && tourOperatorsData) {
       const currentPrice = Number(price) || 0;
+      const currentDiscount = Number(discount) || 0;
+      const currentServiceCharge = Number(serviceCharge) || 0;
       const op = tourOperatorsData.find((o: { id: string }) => o.id === tourOperatorId);
       const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === packageType);
+      
       if (commission?.percentage_commission != null && currentPrice > 0) {
-        const calculatedCommission = parseFloat(((currentPrice * parseFloat(commission.percentage_commission)) / 100).toFixed(2));
+        // Calculate base commission from price, then adjust with discount and service charge
+        const baseCommission = (currentPrice * parseFloat(commission.percentage_commission)) / 100;
+        const calculatedCommission = parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2));
+        
         // Only update if different from current value to avoid infinite loops
         const currentCommission = form.getValues("commission");
         if (currentCommission !== calculatedCommission) {
-          setValue("commission", calculatedCommission);
+          setValue("commission", calculatedCommission, { shouldValidate: true, shouldDirty: true });
         }
       }
     }
-  }, [tourOperatorId, packageType, price, tourOperatorsData, form, setValue]);
+  }, [tourOperatorId, packageType, price, discount, serviceCharge, tourOperatorsData, form, setValue]);
 
   // ── Options ───────────────────────────────────────────────────────────────
   const airportOptions = (airportsData || []).map(
@@ -327,7 +336,10 @@ export function BookingRHFForm({
                         const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === value);
                         if (commission?.percentage_commission != null) {
                           const currentPrice = form.getValues("price");
-                          setValue("commission", parseFloat(((currentPrice * parseFloat(commission.percentage_commission)) / 100).toFixed(2)));
+                          const currentDiscount = Number(form.getValues("discount")) || 0;
+                          const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
+                          const baseCommission = (currentPrice * parseFloat(commission.percentage_commission)) / 100;
+                          setValue("commission", parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
                         }
                       }
                     }}
@@ -390,7 +402,10 @@ export function BookingRHFForm({
                           const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === currentPackageType);
                           if (commission?.percentage_commission != null) {
                             const currentPrice = form.getValues("price");
-                            setValue("commission", parseFloat(((currentPrice * parseFloat(commission.percentage_commission)) / 100).toFixed(2)));
+                            const currentDiscount = Number(form.getValues("discount")) || 0;
+                            const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
+                            const baseCommission = (currentPrice * parseFloat(commission.percentage_commission)) / 100;
+                            setValue("commission", parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
                           }
                         }
                       }}
@@ -1444,21 +1459,33 @@ export function BookingRHFForm({
                         {...field}
                         onChange={(e) => {
                           field.onChange(e);
-                          if (name === "price") {
-                            const newPrice = parseFloat(e.target.value) || 0;
+                          if (name === "price" || name === "discount" || name === "serviceCharge") {
+                            const currentPrice = name === "price" ? parseFloat(e.target.value) || 0 : Number(form.getValues("price")) || 0;
+                            const currentDiscount = name === "discount" ? parseFloat(e.target.value) || 0 : Number(form.getValues("discount")) || 0;
+                            const currentServiceCharge = name === "serviceCharge" ? parseFloat(e.target.value) || 0 : Number(form.getValues("serviceCharge")) || 0;
+                            
+                            // Recalculate commission: base commission from price, then adjust with discount/service charge
                             const currentOperatorId = form.getValues("tourOperatorId");
                             const currentPackageType = form.getValues("packageType");
+                            
                             if (currentOperatorId && currentPackageType) {
                               const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
                               const comm = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === currentPackageType);
+                              
                               if (comm?.percentage_commission != null) {
-                                setValue("commission", parseFloat(((newPrice * parseFloat(comm.percentage_commission)) / 100).toFixed(2)));
+                                // Calculate base commission from original price, then subtract discount and add service charge
+                                const baseCommission = (currentPrice * parseFloat(comm.percentage_commission)) / 100;
+                                const adjustedCommission = baseCommission - currentDiscount + currentServiceCharge;
+                                
+                                setValue("commission", parseFloat(adjustedCommission.toFixed(2)), { shouldValidate: true, shouldDirty: true });
                               }
                             }
+                            
+                            // Price per person is fixed by total price (not affected by discount/service charge)
                             const adults = Number(form.getValues("passengersAdults")) || 0;
                             const children = Number(form.getValues("passengersChildren")) || 0;
                             const total = adults + children;
-                            setValue("pricePerPerson", total > 0 ? parseFloat((newPrice / total).toFixed(2)) : 0);
+                            setValue("pricePerPerson", total > 0 ? parseFloat((currentPrice / total).toFixed(2)) : 0);
                           }
                         }}
                         className="h-9 rounded-xl border-black/10 bg-white/70"
@@ -1471,6 +1498,28 @@ export function BookingRHFForm({
               />
             ))}
           </div>
+          {(() => {
+            const currentPrice = Number(price) || 0;
+            const currentDiscount = Number(discount) || 0;
+            const currentServiceCharge = Number(serviceCharge) || 0;
+            const currentCommission = Number(commission) || 0;
+            const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0;
+            
+            if (hasAdjustments) {
+              return (
+                <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
+                  <div className="text-xs font-medium text-blue-900">
+                    Commission Adjusted: £{currentCommission.toFixed(2)}
+                  </div>
+                  <div className="mt-1 text-[10px] text-blue-700/70">
+                    {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
+                    {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)}`}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         <div className="flex justify-end gap-2 pt-1">

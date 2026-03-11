@@ -258,7 +258,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
       commissionValue: packageCommission,
       discounts: discounts,
       serviceCharge: serviceCharge,
-      totalCommission: packageCommission - discounts + serviceCharge,
+      totalCommission: (packageCommission + serviceCharge) - discounts,
       agentSplitPercent: 0,
       agentSplitValue: 0,
       netToAgency: packageCommission,

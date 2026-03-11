@@ -9,7 +9,11 @@ async function enrichTransactions(txns: Transaction[]) {
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes] = await Promise.all([
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
-    db.select().from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`)),
+    db.select().from(quote).where(and(
+      inArray(quote.transaction_id, txnIds), 
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+      sql`(${quote.isQuoteCopy} IS NOT TRUE)`
+    )),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
     db.select().from(package_type),
   ]);
@@ -178,7 +182,11 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       package_commission: quote.package_commission,
       holiday_type_id: quote.holiday_type_id,
       quote_status: quote.quote_status,
-    }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`)),
+    }).from(quote).where(and(
+      inArray(quote.transaction_id, txnIds), 
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+      sql`(${quote.isQuoteCopy} IS NOT TRUE)`
+    )),
     db.select({
       id: booking.id,
       transaction_id: booking.transaction_id,

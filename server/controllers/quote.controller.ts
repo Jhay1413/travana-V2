@@ -43,6 +43,15 @@ export const quoteController = {
   createQuote: asyncHandler(async (req: Request, res: Response) => {
     const body = req.body.data ? JSON.parse(req.body.data) : req.body;
     const files = (req.files as Express.Multer.File[]) || [];
+    
+    // Validate transaction_id is present
+    if (!body.transaction_id) {
+      return res.status(400).json({
+        success: false,
+        message: "transaction_id is required when creating a quote",
+      });
+    }
+    
     if (files.length > 0) {
       const uploaded = await socialPostService.uploadMedia(files);
       body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
