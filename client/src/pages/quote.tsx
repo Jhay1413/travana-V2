@@ -716,18 +716,6 @@ export default function QuotePage() {
                             </span>
                           </div>
                          
-                          {quoteData?.quote_ref && (
-                            <a
-                              href={quoteData.quote_ref}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#3b82f6] transition hover:text-[#3b82f6]/80"
-                              data-testid="link-view-link"
-                            >
-                              <LinkIcon className="h-3 w-3" />
-                              View Link
-                            </a>
-                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <UserReassignSelect
