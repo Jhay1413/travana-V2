@@ -331,10 +331,10 @@ export default function QuotePage() {
                     href={quoteData.quote_ref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-500/20"
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-px text-[9px] font-semibold text-blue-600 transition hover:bg-blue-500/20"
                     data-testid="link-view-supplier-link"
                   >
-                    <LinkIcon className="h-3 w-3" />
+                    <LinkIcon className="h-2.5 w-2.5" />
                     View Link
                   </a>
                 )}
