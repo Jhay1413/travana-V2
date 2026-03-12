@@ -179,4 +179,5 @@ export interface QuoteCreateDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: (quoteId: string) => void;
   initialValues?: Partial<QuoteFormValues>;
+  isCopy?: boolean;
 }

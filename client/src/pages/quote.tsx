@@ -1066,6 +1066,7 @@ export default function QuotePage() {
           open={showCopyDialog}
           onOpenChange={setShowCopyDialog}
           initialValues={quoteToFormValues}
+          isCopy={true}
           onSuccess={(newQuoteId) => {
             setShowCopyDialog(false);
             queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });

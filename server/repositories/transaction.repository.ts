@@ -11,8 +11,7 @@ async function enrichTransactions(txns: Transaction[]) {
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
     db.select().from(quote).where(and(
       inArray(quote.transaction_id, txnIds), 
-      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
-      sql`(${quote.isQuoteCopy} IS NOT TRUE)`
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`
     )),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
     db.select().from(package_type),
@@ -273,6 +272,16 @@ export const transactionRepository = {
       conditions.push(eq(transaction.user_id, agentId));
     }
 
+    // Exclude enquiries older than 7 days
+    if (status === "on_enquiry") {
+      conditions.push(
+        sql`${transaction.id} IN (
+          SELECT ${enquiry_table.transaction_id} FROM ${enquiry_table}
+          WHERE ${enquiry_table.date_created} >= NOW() - INTERVAL '7 days'
+        )`
+      );
+    }
+
     if (status === "on_quote") {
       const ACTIVE_STATUSES = [
         "QUOTE_IN_PROGRESS", "QUOTE_CALL", "AWAITING_DECISION",
@@ -283,6 +292,7 @@ export const transactionRepository = {
           SELECT ${quote.transaction_id} FROM ${quote}
           WHERE ${quote.isFreeQuote} IS NOT TRUE
           AND ${quote.quote_status}::text IN (${sql.join(ACTIVE_STATUSES.map(s => sql`${s}`), sql`, `)})
+          AND ${quote.date_created} >= NOW() - INTERVAL '7 days'
         )`
       );
       if (quoteStatusFilter) {
@@ -290,6 +300,7 @@ export const transactionRepository = {
           sql`${transaction.id} IN (
             SELECT ${quote.transaction_id} FROM ${quote}
             WHERE ${quote.quote_status}::text = ${quoteStatusFilter}
+            AND ${quote.date_created} >= NOW() - INTERVAL '7 days'
           )`
         );
       }
