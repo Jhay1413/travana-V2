@@ -151,17 +151,6 @@ function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<
 
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
 
-      <div className="absolute top-0 left-0 right-0 z-20 px-4 md:px-8 pt-5 md:pt-6">
-        <div className="max-w-5xl mx-auto">
-          <img
-            src={tinasLogo}
-            alt="Tinas Travel"
-            className="h-16 md:h-24 w-auto drop-shadow-lg"
-            data-testid="img-tinas-logo"
-          />
-        </div>
-      </div>
-
       <div className="relative z-10 w-full px-4 md:px-8 pb-10 md:pb-14">
         <div className="max-w-5xl mx-auto">
           <motion.div
