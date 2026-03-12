@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { bookingApi } from "@/api";
+import axiosClient from "@/api/client/axios-client";
 import { bookingKeys, transactionKeys, quoteKeys } from "@/hooks/queries";
 import type { Booking } from "@/types/quote";
 
@@ -32,6 +33,18 @@ export function useDeleteBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => bookingApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: bookingKeys.all });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    },
+  });
+}
+
+export function useAdminDeleteBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      axiosClient.post(`/api/audit/delete-booking/${id}`, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });

@@ -16,6 +16,7 @@ import { useRemoveFavorite, useToggleFavorite } from "@/hooks/mutations/use-favo
 import CsvImportDialog from "@/components/csv-import-dialog";
 import EmailInbox from "@/components/email-inbox";
 import AdminOverview from "@/components/admin-overview";
+import { AdminAuditPanel } from "@/components/admin-audit-panel";
 import AdminFinancials from "@/components/admin-financials";
 import AdminFinancialsTargets from "@/components/admin-financials-targets";
 import PipelineBoard from "@/components/pipeline-board";
@@ -6774,6 +6775,14 @@ export default function CommandCenterPage() {
             </div>
             </div>
             )}
+          </section>
+        );
+      }
+
+      if (active === "audit") {
+        return (
+          <section className="space-y-4">
+            <AdminAuditPanel />
           </section>
         );
       }

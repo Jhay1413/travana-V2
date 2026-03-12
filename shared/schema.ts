@@ -1569,3 +1569,22 @@ export const quoteCustomerActionsTable = pgTable("quote_customer_actions", {
 export const insertQuoteCustomerActionSchema = createInsertSchema(quoteCustomerActionsTable).omit({ id: true, createdAt: true });
 export type QuoteCustomerAction = typeof quoteCustomerActionsTable.$inferSelect;
 export type InsertQuoteCustomerAction = z.infer<typeof insertQuoteCustomerActionSchema>;
+
+export const auditLog = pgTable("audit_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  action: varchar("action").notNull(),
+  entityType: varchar("entity_type").notNull(),
+  entityId: varchar("entity_id").notNull(),
+  entityTitle: varchar("entity_title"),
+  entityData: jsonb("entity_data"),
+  reason: text("reason"),
+  performedBy: varchar("performed_by").notNull(),
+  performedByName: varchar("performed_by_name"),
+  clientId: varchar("client_id"),
+  clientName: varchar("client_name"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLog).omit({ id: true, createdAt: true });
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

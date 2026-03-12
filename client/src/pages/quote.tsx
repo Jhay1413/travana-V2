@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useQuote, useBooking, useClient, useNeonClient, useTags, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
-import { useDuplicateQuote, useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote } from "@/hooks/mutations";
+import { useDuplicateQuote, useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote, useAdminDeleteQuote } from "@/hooks/mutations";
 import { useSetPrimaryQuoteImage, useUploadQuoteImages, useDeleteQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
@@ -77,6 +77,9 @@ export default function QuotePage() {
   const [shareCopied, setShareCopied] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [showGuruSheet, setShowGuruSheet] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const adminDeleteQuoteMutation = useAdminDeleteQuote();
   const [convertHaysRef, setConvertHaysRef] = useState("");
   const [convertTourRef, setConvertTourRef] = useState("");
   const [newTag, setNewTag] = useState("");
@@ -753,11 +756,12 @@ export default function QuotePage() {
                                   { label: `Edit ${pageLabel}`, icon: Pencil, id: "edit" },
                                   ...(quote.status !== "accepted" ? [{ label: "Convert to Booking", icon: RefreshCw, id: "convert" }] : []),
                                   { label: `Duplicate ${pageLabel}`, icon: Copy, id: "duplicate" },
+                                  ...(role === "Admin" ? [{ label: `Delete ${pageLabel}`, icon: Trash2, id: "admin-delete" }] : []),
                                 ].map((item) => (
                                   <button
                                     key={item.id}
                                     type="button"
-                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium transition hover:bg-black/[0.05] ${item.id === "admin-delete" ? "text-red-600 hover:bg-red-50" : "text-black/75"}`}
                                     data-testid={`button-quote-${item.id}`}
                                     onClick={() => {
                                       setShowEllipsisMenu(false);
@@ -765,6 +769,9 @@ export default function QuotePage() {
                                         setShowEditDialog(true);
                                       } else if (item.id === "convert") {
                                         setShowConvertDialog(true);
+                                      } else if (item.id === "admin-delete") {
+                                        setDeleteReason("");
+                                        setShowDeleteDialog(true);
                                       } else {
                                         duplicateQuoteMutation.mutate(
                                           { id: quoteId, data: {} },
@@ -1173,6 +1180,61 @@ export default function QuotePage() {
             >
               {convertToBookingMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Convert to Booking"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="max-w-sm rounded-2xl border-red-200 bg-white/95 backdrop-blur-xl" data-testid="dialog-admin-delete-quote">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold text-red-600">Delete {pageLabel}</DialogTitle>
+            <DialogDescription className="text-xs text-black/55">
+              This action cannot be undone. Please provide a reason for deleting this {pageLabel.toLowerCase()}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-3 grid gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Reason for deletion</Label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="Enter the reason for deleting this record..."
+                className="min-h-[80px] w-full resize-none rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                data-testid="textarea-delete-reason"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="h-9 flex-1 rounded-xl border-black/10"
+                onClick={() => setShowDeleteDialog(false)}
+                data-testid="button-cancel-delete"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="h-9 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-700"
+                data-testid="button-confirm-delete"
+                disabled={!deleteReason.trim() || adminDeleteQuoteMutation.isPending}
+                onClick={() => {
+                  adminDeleteQuoteMutation.mutate(
+                    { id: quoteId, reason: deleteReason.trim() },
+                    {
+                      onSuccess: () => {
+                        setShowDeleteDialog(false);
+                        toast({ title: `${pageLabel} deleted successfully` });
+                        setLocation(clientId ? `/clients/${clientId}` : "/quotes");
+                      },
+                      onError: () => {
+                        toast({ title: `Failed to delete ${pageLabel.toLowerCase()}`, variant: "destructive" });
+                      },
+                    }
+                  );
+                }}
+              >
+                {adminDeleteQuoteMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Delete"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

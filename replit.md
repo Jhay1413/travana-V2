@@ -106,6 +106,7 @@ Schema includes tables for:
 - `feedback` - User feedback/suggestions/bug reports with status tracking
 - `hub_announcements` - TheHUB news & announcements with rich text content, categories, and pinning
 - `quote_views` - Customer view tracking for shared quotes (device, browser, IP)
+- `audit_log` - Deletion audit trail for quotes/bookings (entity snapshot, reason, performer)
 - `quote_customer_actions` - Customer responses to shared quotes (accepted/changes_requested)
 
 #### Quote Sharing System

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, Star, Tag, X, Pin, PinOff, Link as LinkIcon } from "lucide-react";
+import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, Star, Tag, Trash2, X, Pin, PinOff, Link as LinkIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -9,7 +9,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useBooking, useNeonClient, useTags, bookingKeys } from "@/hooks/queries";
-import { useUpdateTransaction, useUpdateQuoteTags } from "@/hooks/mutations";
+import { useUpdateTransaction, useUpdateQuoteTags, useAdminDeleteBooking } from "@/hooks/mutations";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -47,6 +49,9 @@ export default function BookingPage() {
   const ellipsisRef = useRef<HTMLDivElement>(null);
   const updateTagsMutation = useUpdateQuoteTags();
   const updateTransactionMutation = useUpdateTransaction();
+  const adminDeleteBookingMutation = useAdminDeleteBooking();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   const [newTag, setNewTag] = useState("");
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
@@ -450,6 +455,21 @@ export default function BookingPage() {
                                   <Pencil className="h-3.5 w-3.5" />
                                   Edit Booking
                                 </button>
+                                {role === "Admin" && (
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-red-600 transition hover:bg-red-50"
+                                    data-testid="button-booking-admin-delete"
+                                    onClick={() => {
+                                      setShowEllipsisMenu(false);
+                                      setDeleteReason("");
+                                      setShowDeleteDialog(true);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Delete Booking
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -706,6 +726,60 @@ export default function BookingPage() {
           </div>
         </div>
       </div>
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="max-w-sm rounded-2xl border-red-200 bg-white/95 backdrop-blur-xl" data-testid="dialog-admin-delete-booking">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold text-red-600">Delete Booking</DialogTitle>
+            <DialogDescription className="text-xs text-black/55">
+              This action cannot be undone. Please provide a reason for deleting this booking.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-3 grid gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Reason for deletion</Label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="Enter the reason for deleting this record..."
+                className="min-h-[80px] w-full resize-none rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                data-testid="textarea-delete-reason"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="h-9 flex-1 rounded-xl border-black/10"
+                onClick={() => setShowDeleteDialog(false)}
+                data-testid="button-cancel-delete"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="h-9 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-700"
+                data-testid="button-confirm-delete"
+                disabled={!deleteReason.trim() || adminDeleteBookingMutation.isPending}
+                onClick={() => {
+                  adminDeleteBookingMutation.mutate(
+                    { id: bookingId, reason: deleteReason.trim() },
+                    {
+                      onSuccess: () => {
+                        setShowDeleteDialog(false);
+                        toast({ title: "Booking deleted successfully" });
+                        setLocation(clientId ? `/clients/${clientId}` : "/bookings");
+                      },
+                      onError: () => {
+                        toast({ title: "Failed to delete booking", variant: "destructive" });
+                      },
+                    }
+                  );
+                }}
+              >
+                {adminDeleteBookingMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </CommandCenterShell>
   );
 }

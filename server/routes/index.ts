@@ -34,6 +34,7 @@ import destinationGuruRoutes from "./destination-guru.routes";
 import feedbackRoutes from "./feedback.routes";
 import announcementRoutes from "./announcement.routes";
 import quoteShareRoutes from "./quote-share.routes";
+import auditRoutes from "./audit.routes";
 
 const router = Router();
 
@@ -72,5 +73,6 @@ router.use("/destination-guru", destinationGuruRoutes);
 router.use("/feedback", feedbackRoutes);
 router.use("/announcements", announcementRoutes);
 router.use("/quote-share", quoteShareRoutes);
+router.use("/audit", auditRoutes);
 
 export default router;

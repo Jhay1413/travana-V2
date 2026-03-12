@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
+import axiosClient from "@/api/client/axios-client";
 import { quoteKeys, transactionKeys } from "@/hooks/queries";
 import type { CreateQuoteData } from "@/types/quote";
 
@@ -43,6 +44,18 @@ export function useDeleteQuote() {
     mutationFn: (id: string) => quoteApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    },
+  });
+}
+
+export function useAdminDeleteQuote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      axiosClient.post(`/api/audit/delete-quote/${id}`, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
