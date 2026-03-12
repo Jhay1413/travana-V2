@@ -243,8 +243,15 @@ export default function TicketsBoard() {
     const matchesType = typeFilter === "all" || ticket.type === typeFilter;
     const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? (ticket.status !== "Resolved" && ticket.status !== "Closed") : ticket.status === statusFilter);
     const matchesPriority = priorityFilter === "all" || ticket.priority === priorityFilter;
-    const resolvedAgentFilter = agentFilter === "me" ? currentUser?.id : agentFilter;
-    const matchesAgent = agentFilter === "all" || ticket.assignedTo === resolvedAgentFilter || ticket.userId === resolvedAgentFilter;
+    const myId = currentUser?.id;
+    let matchesAgent = true;
+    if (agentFilter === "me") {
+      const assignedToMe = ticket.assignedTo === myId || (!ticket.assignedTo && ticket.userId === myId);
+      const iCreatedAndReassigned = ticket.userId === myId && ticket.assignedTo && ticket.assignedTo !== myId && (ticket.replyCount || 0) > 0;
+      matchesAgent = assignedToMe || !!iCreatedAndReassigned;
+    } else if (agentFilter !== "all") {
+      matchesAgent = ticket.assignedTo === agentFilter || ticket.userId === agentFilter;
+    }
     return matchesQuery && matchesType && matchesStatus && matchesPriority && matchesAgent;
   });
 

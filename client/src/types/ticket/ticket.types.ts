@@ -14,6 +14,7 @@ export interface Ticket {
   clientName?: string | null;
   userName?: string | null;
   assignedToName?: string | null;
+  replyCount?: number;
 }
 
 export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt">;

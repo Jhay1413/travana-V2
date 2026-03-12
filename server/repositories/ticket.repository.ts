@@ -1,11 +1,11 @@
 import { db } from "../config/database";
-import { tickets, clientTable, user, type Ticket, type InsertTicket } from "@shared/schema";
+import { tickets, ticketReplies, clientTable, user, type Ticket, type InsertTicket } from "@shared/schema";
 import { eq, desc, sql, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 const assignedUser = alias(user, "assigned_user");
 
-export type TicketWithNames = Ticket & { clientName: string | null; userName: string | null; assignedToName: string | null };
+export type TicketWithNames = Ticket & { clientName: string | null; userName: string | null; assignedToName: string | null; replyCount: number };
 
 function buildTicketWithNamesQuery() {
   return db
@@ -25,6 +25,7 @@ function buildTicketWithNamesQuery() {
       clientName: sql<string | null>`COALESCE(NULLIF(${clientTable.title}, 'NULL') || ' ', '') || ${clientTable.firstName} || ' ' || ${clientTable.surename}`.as("client_name"),
       userName: user.name,
       assignedToName: sql<string | null>`${assignedUser.name}`.as("assigned_to_name"),
+      replyCount: sql<number>`(SELECT COUNT(*)::int FROM ticket_replies WHERE ticket_replies.ticket_id = ${tickets.id})`.as("reply_count"),
     })
     .from(tickets)
     .leftJoin(clientTable, eq(tickets.clientId, clientTable.id))
