@@ -207,6 +207,103 @@ function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<
   );
 }
 
+function ImageGallery({ images }: { images: PublicQuoteData["images"] }) {
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const validImages = images.filter(i => i.image_url);
+
+  if (validImages.length <= 1) return null;
+
+  return (
+    <>
+      <SectionWrapper delay={0.05}>
+        <GlassCard className="p-4 md:p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 flex items-center justify-center">
+              <Globe className="w-5 h-5 text-violet-400" />
+            </div>
+            <h2 className="text-xl font-bold text-white" data-testid="text-gallery-title">Gallery</h2>
+            <span className="text-xs text-white/40 ml-auto">{validImages.length} photos</span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+            {validImages.map((img, idx) => (
+              <motion.button
+                key={img.id}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSelectedIdx(idx)}
+                className="relative aspect-square rounded-xl overflow-hidden group cursor-pointer border border-white/10 hover:border-white/30 transition-colors"
+                data-testid={`gallery-thumb-${idx}`}
+              >
+                <img
+                  src={getResponsiveImageUrl(img.image_url!, 300, 300)}
+                  alt={`Photo ${idx + 1}`}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+              </motion.button>
+            ))}
+          </div>
+        </GlassCard>
+      </SectionWrapper>
+
+      <AnimatePresence>
+        {selectedIdx !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setSelectedIdx(null)}
+            data-testid="gallery-lightbox"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative max-w-4xl max-h-[85vh] w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setSelectedIdx(null)}
+                className="absolute -top-12 right-0 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-10"
+                data-testid="button-close-lightbox"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <img
+                src={validImages[selectedIdx]?.image_url || ""}
+                alt={`Photo ${selectedIdx + 1}`}
+                className="w-full h-auto max-h-[80vh] object-contain rounded-2xl"
+                data-testid="img-lightbox"
+              />
+
+              <div className="flex items-center justify-center gap-4 mt-4">
+                <button
+                  onClick={() => setSelectedIdx(prev => prev !== null && prev > 0 ? prev - 1 : validImages.length - 1)}
+                  className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                  data-testid="button-lightbox-prev"
+                >
+                  <ChevronUp className="w-5 h-5 -rotate-90" />
+                </button>
+                <span className="text-white/60 text-sm">{selectedIdx + 1} / {validImages.length}</span>
+                <button
+                  onClick={() => setSelectedIdx(prev => prev !== null && prev < validImages.length - 1 ? prev + 1 : 0)}
+                  className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                  data-testid="button-lightbox-next"
+                >
+                  <ChevronDown className="w-5 h-5 -rotate-90" />
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 function DestinationGuruSection({ guru }: { guru: NonNullable<PublicQuoteData["destinationGuru"]> }) {
   const [expanded, setExpanded] = useState(false);
   const data = typeof guru.data === "string" ? tryParseJson(guru.data) : guru.data;
@@ -816,6 +913,8 @@ export default function PublicQuotePage() {
       <HeroSection quote={quote} images={quote.images} />
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 md:py-12 space-y-6 md:space-y-8">
+        <ImageGallery images={quote.images} />
+
         {quote.destinationGuru && (
           <DestinationGuruSection guru={quote.destinationGuru} />
         )}
