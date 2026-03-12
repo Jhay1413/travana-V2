@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, ImagePlus } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, ImagePlus, ExternalLink } from "lucide-react";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { quoteFormSchema, defaultQuoteFormValues } from "@/types/quote";
@@ -424,14 +424,28 @@ export function QuoteRHFForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs font-medium text-black/60">Quote Link</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      value={field.value ?? ""}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                      placeholder="https://..."
-                    />
-                  </FormControl>
+                  <div className="flex items-center gap-2">
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        placeholder="https://..."
+                      />
+                    </FormControl>
+                    {field.value && (
+                      <a
+                        href={field.value}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-medium text-blue-600 transition hover:bg-blue-100 whitespace-nowrap"
+                        data-testid="link-view-quote-link"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        View Link
+                      </a>
+                    )}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

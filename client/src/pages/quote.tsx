@@ -146,7 +146,7 @@ export default function QuotePage() {
     return {
       packageType: quoteData.holiday_type_id || "",
       quoteTitle: quoteData.title || "",
-      quoteLink: (quoteData as any).quote_link || "",
+      quoteLink: quoteData.quote_ref || "",
       leadSource: quoteData.lead_source || "",
       status: "QUOTE_IN_PROGRESS",
       tourOperatorId: quoteData.main_tour_operator_id || "",

@@ -45,7 +45,7 @@ export function buildQuotePayload(
     service_charge: String(values.serviceCharge || 0),
     price_per_person: String(values.pricePerPerson || 0),
     title: values.quoteTitle || undefined,
-    quote_link: values.quoteLink || undefined,
+    quote_ref: values.quoteLink || undefined,
     lead_source: values.leadSource || undefined,
     quote_status: values.status && values.status !== "draft" ? values.status : "QUOTE_IN_PROGRESS",
     main_tour_operator_id: values.tourOperatorId || undefined,

@@ -78,7 +78,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     // Overview
     packageType: quoteData.holiday_type_id || "",
     quoteTitle: quoteData.title || "",
-    quoteLink: (quoteData as unknown as Record<string, unknown>).quote_link as string || "",
+    quoteLink: quoteData.quote_ref as string || "",
     leadSource: quoteData.lead_source || "",
     status: quoteData.quote_status || "draft",
     tourOperatorId: quoteData.main_tour_operator_id || "",
@@ -186,7 +186,7 @@ function buildUpdatePayload(
   const payload: Record<string, unknown> = {
     holiday_type_id: values.packageType || null,
     title: values.quoteTitle || null,
-    quote_link: values.quoteLink || null,
+    quote_ref: values.quoteLink || null,
     lead_source: values.leadSource || null,
     quote_status: values.status,
     main_tour_operator_id: values.tourOperatorId || null,
