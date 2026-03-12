@@ -16,6 +16,7 @@ async function expireOldEnquiries(): Promise<void> {
       .where(
         and(
           eq(enquiry_table.is_expired, false),
+          eq(enquiry_table.is_future_deal, false),
           lt(enquiry_table.date_created, sevenDaysAgo)
         )
       )
@@ -40,6 +41,7 @@ async function expireOldQuotes(): Promise<void> {
       .where(
         and(
           eq(quote.is_expired, false),
+          eq(quote.is_future_deal, false),
           lt(quote.date_created, sevenDaysAgo)
         )
       )
