@@ -218,6 +218,8 @@ export const quotePublicRepository = {
       salesPrice: q.quote.sales_price || "0",
       pricePerPerson: q.quote.price_per_person || "0",
       transferType: q.quote.transfer_type || "none",
+      flightMeals: q.quote.flight_meals ?? false,
+      preBookedSeats: q.quote.pre_booked_seats || "",
       destinationName: destName,
       countryName: accommodations[0]?.country_name || "",
       resortName: accommodations[0]?.resort_name || "",

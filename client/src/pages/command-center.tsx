@@ -2087,7 +2087,7 @@ export default function CommandCenterPage() {
   const { data: shopTargetsData } = useShopTargets();
   const { data: agentTargetsData } = useAgentTargetsByUserId(currentUser?.id || "");
   const isRestrictedRole = role !== "Admin" && role !== "Manager";
-  const { data: transactionsData } = useTransactions(isRestrictedRole && currentUser?.id ? { agentId: currentUser.id } : undefined);
+  const { data: transactionsData } = useTransactions(currentUser?.id ? { agentId: currentUser.id } : undefined);
 
   const { data: freeQuotesData } = useFreeQuotesInfinite(50);
   const overviewSocialPosts = useMemo(() => {

@@ -13,6 +13,8 @@ export interface PublicQuoteData {
   salesPrice: string;
   pricePerPerson: string;
   transferType: string;
+  flightMeals: boolean;
+  preBookedSeats: string;
   destinationName: string;
   countryName: string;
   resortName: string;
