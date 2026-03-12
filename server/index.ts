@@ -6,7 +6,6 @@ import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./repositories/task.repository";
 import { checkStaleTickets } from "./services/ticket-notification.service";
-import { initializeExpiryCron } from "./services/expiry-cron.service";
 import quotePublicRoutes from "./routes/quote-public.routes";
 
 const app = express();
@@ -97,9 +96,6 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
-
-      // Initialize cron jobs for expiring old enquiries and quotes
-      initializeExpiryCron();
 
       setInterval(async () => {
         try {

@@ -21,8 +21,7 @@ function buildDateTime(date: string, time: string): string | null {
 
 export function buildQuotePayload(
   values: QuoteFormValues,
-  packageTypesData: { id: string; name: string }[] | undefined,
-  isCopy: boolean = false
+  packageTypesData: { id: string; name: string }[] | undefined
 ): Omit<CreateQuoteData, "transaction_id"> & { transaction_id?: string } {
   const packageTypeName =
     packageTypesData?.find((p) => p.id === values.packageType)?.name || values.packageType;
@@ -56,7 +55,6 @@ export function buildQuotePayload(
     country: values.country || undefined,
     destination: values.destination || undefined,
     resort: values.resort || undefined,
-    isQuoteCopy: isCopy,
   };
 
   if (showFlights) {
@@ -128,7 +126,6 @@ export function QuoteCreateDialog({
   onOpenChange,
   onSuccess,
   initialValues,
-  isCopy = false,
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
   const createQuote = useCreateQuote();
@@ -143,7 +140,7 @@ export function QuoteCreateDialog({
   const isSubmitting = createQuote.isPending || createTransaction.isPending;
 
   const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
-    const quotePayload = buildQuotePayload(values, packageTypesData, isCopy);
+    const quotePayload = buildQuotePayload(values, packageTypesData);
     const imageUrls = images?.urls || [];
     const imageFiles = images?.files || [];
 

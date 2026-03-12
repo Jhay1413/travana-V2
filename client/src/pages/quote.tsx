@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, Check, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles, ImagePlus, Trash2, Share2, ExternalLink } from "lucide-react";
+import { ChevronLeft, Copy, Check, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles, ImagePlus, Trash2, Share2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
@@ -325,18 +325,6 @@ export default function QuotePage() {
                   >
                     Copy Quote
                   </span>
-                )}
-                {(quoteData as any)?.quote_token && (
-                  <a
-                    href={`/view-quote/${(quoteData as any).quote_token}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-500/20"
-                    data-testid="link-view-quote"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    View Quote
-                  </a>
                 )}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
@@ -1078,7 +1066,6 @@ export default function QuotePage() {
           open={showCopyDialog}
           onOpenChange={setShowCopyDialog}
           initialValues={quoteToFormValues}
-          isCopy={true}
           onSuccess={(newQuoteId) => {
             setShowCopyDialog(false);
             queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });
