@@ -156,7 +156,7 @@ function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<
           <img
             src={tinasLogo}
             alt="Tinas Travel"
-            className="h-10 md:h-14 w-auto drop-shadow-lg"
+            className="h-16 md:h-24 w-auto drop-shadow-lg"
             data-testid="img-tinas-logo"
           />
         </div>
