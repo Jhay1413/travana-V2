@@ -89,9 +89,9 @@ function priorityPill(priority: string) {
 export default function TicketsBoard() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("active");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
-  const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [agentFilter, setAgentFilter] = useState<string>("me");
   const [showFilters, setShowFilters] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -241,9 +241,10 @@ export default function TicketsBoard() {
       ticket.subject.toLowerCase().includes(query.toLowerCase()) ||
       ticket.description?.toLowerCase().includes(query.toLowerCase());
     const matchesType = typeFilter === "all" || ticket.type === typeFilter;
-    const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? (ticket.status !== "Resolved" && ticket.status !== "Closed") : ticket.status === statusFilter);
     const matchesPriority = priorityFilter === "all" || ticket.priority === priorityFilter;
-    const matchesAgent = agentFilter === "all" || ticket.assignedTo === agentFilter || ticket.userId === agentFilter;
+    const resolvedAgentFilter = agentFilter === "me" ? currentUser?.id : agentFilter;
+    const matchesAgent = agentFilter === "all" || ticket.assignedTo === resolvedAgentFilter || ticket.userId === resolvedAgentFilter;
     return matchesQuery && matchesType && matchesStatus && matchesPriority && matchesAgent;
   });
 
@@ -263,7 +264,7 @@ export default function TicketsBoard() {
     return u?.name || "Unassigned";
   };
 
-  const activeFiltersCount = [typeFilter, statusFilter, priorityFilter, agentFilter].filter((f) => f !== "all").length;
+  const activeFiltersCount = [typeFilter, priorityFilter].filter((f) => f !== "all").length + (statusFilter !== "active" && statusFilter !== "all" ? 1 : 0) + (agentFilter !== "me" && agentFilter !== "all" ? 1 : 0);
 
   return (
     <motion.div
@@ -336,6 +337,7 @@ export default function TicketsBoard() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="active">Active (Open & In Progress)</SelectItem>
               {TICKET_STATUSES.map((status) => (
                 <SelectItem key={status} value={status}>
                   {status}
@@ -361,6 +363,7 @@ export default function TicketsBoard() {
               <SelectValue placeholder="Agent" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="me">My Tickets</SelectItem>
               <SelectItem value="all">All Agents</SelectItem>
               {users?.map((user) => (
                 <SelectItem key={user.id} value={user.id}>
@@ -375,9 +378,9 @@ export default function TicketsBoard() {
               size="sm"
               onClick={() => {
                 setTypeFilter("all");
-                setStatusFilter("all");
+                setStatusFilter("active");
                 setPriorityFilter("all");
-                setAgentFilter("all");
+                setAgentFilter("me");
               }}
               className="text-black/50 hover:text-black"
               data-testid="button-clear-filters"
