@@ -326,6 +326,18 @@ export default function QuotePage() {
                     Copy Quote
                   </span>
                 )}
+                {quoteData?.quote_ref && (
+                  <a
+                    href={quoteData.quote_ref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-500/20"
+                    data-testid="link-view-supplier-link"
+                  >
+                    <LinkIcon className="h-3 w-3" />
+                    View Link
+                  </a>
+                )}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
                 <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
