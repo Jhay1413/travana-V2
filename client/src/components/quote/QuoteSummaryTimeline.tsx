@@ -412,14 +412,14 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
             </div>
             <div className="flex-1 pb-2">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-600">Flight Extras</div>
-              <div className="mt-1 grid gap-1">
-                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                  <span className="font-medium text-black/80">Flight Meals:</span>
-                  <span>{quote.flightMeals === "Yes" ? "Yes" : "No"}</span>
+              <div className="mt-1 grid gap-1.5">
+                <div className="text-[11px]">
+                  <div className="font-medium text-black/80">Flight Meals:</div>
+                  <div className="text-black/60 mt-0.5">{quote.flightMeals === "Yes" ? "Yes" : "No"}</div>
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                  <span className="font-medium text-black/80">Pre-booked Seats:</span>
-                  <span>{quote.preBookedSeats || "No"}</span>
+                <div className="text-[11px]">
+                  <div className="font-medium text-black/80">Pre-booked Seats:</div>
+                  <div className="text-black/60 mt-0.5">{quote.preBookedSeats || "No"}</div>
                 </div>
               </div>
             </div>
