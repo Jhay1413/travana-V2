@@ -329,10 +329,8 @@ function FlightsSection({ flights }: { flights: PublicQuoteData["flights"] }) {
 
 function TransfersMealsSeatsSection({ quote }: { quote: PublicQuoteData }) {
   const transferType = quote.transferType && quote.transferType !== "none" ? quote.transferType : null;
-  const flightMeals = quote.flightMeals;
-  const preBookedSeats = quote.preBookedSeats;
 
-  if (!transferType && !flightMeals && !preBookedSeats) return null;
+  if (!transferType && !quote.flightMeals && !quote.preBookedSeats) return null;
 
   return (
     <SectionWrapper delay={0.12}>
@@ -344,33 +342,27 @@ function TransfersMealsSeatsSection({ quote }: { quote: PublicQuoteData }) {
           <h2 className="text-xl font-bold text-white" data-testid="text-transfers-meals-seats-title">Transfers, Meals & Seats</h2>
         </div>
         <div className="grid gap-3">
-          {transferType && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5">
-              <Car className="w-4 h-4 text-green-400 shrink-0" />
-              <div>
-                <p className="text-xs text-white/40">Transfer Type</p>
-                <p className="text-sm text-white/80 font-medium" data-testid="text-transfer-type">{transferType}</p>
-              </div>
+          <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5">
+            <Car className="w-4 h-4 text-green-400 shrink-0" />
+            <div>
+              <p className="text-xs text-white/40">Transfer Type</p>
+              <p className="text-sm text-white/80 font-medium" data-testid="text-transfer-type">{transferType || "None"}</p>
             </div>
-          )}
-          {flightMeals && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5">
-              <Utensils className="w-4 h-4 text-amber-400 shrink-0" />
-              <div>
-                <p className="text-xs text-white/40">In-Flight Meals</p>
-                <p className="text-sm text-white/80 font-medium" data-testid="text-flight-meals">Included</p>
-              </div>
+          </div>
+          <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5">
+            <Utensils className="w-4 h-4 text-amber-400 shrink-0" />
+            <div>
+              <p className="text-xs text-white/40">In-Flight Meals</p>
+              <p className="text-sm text-white/80 font-medium" data-testid="text-flight-meals">{quote.flightMeals ? "Included" : "Not Included"}</p>
             </div>
-          )}
-          {preBookedSeats && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5">
-              <Armchair className="w-4 h-4 text-blue-400 shrink-0" />
-              <div>
-                <p className="text-xs text-white/40">Pre-Booked Seats</p>
-                <p className="text-sm text-white/80 font-medium" data-testid="text-pre-booked-seats">{preBookedSeats}</p>
-              </div>
+          </div>
+          <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5">
+            <Armchair className="w-4 h-4 text-blue-400 shrink-0" />
+            <div>
+              <p className="text-xs text-white/40">Pre-Booked Seats</p>
+              <p className="text-sm text-white/80 font-medium" data-testid="text-pre-booked-seats">{quote.preBookedSeats || "None"}</p>
             </div>
-          )}
+          </div>
         </div>
       </GlassCard>
     </SectionWrapper>
