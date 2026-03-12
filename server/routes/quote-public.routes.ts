@@ -102,4 +102,31 @@ publicRouter.post("/:token/action", async (req: Request, res: Response) => {
   }
 });
 
+publicRouter.post("/:token/share", async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const { method } = req.body;
+
+    const quoteId = await quotePublicRepository.findQuoteIdByToken(token);
+    if (!quoteId) {
+      return res.status(404).json({ success: false, error: "Quote not found" });
+    }
+
+    const quoteData = await quotePublicRepository.findByToken(token);
+    const dest = quoteData?.destinationName || "their holiday";
+    const shareMethod = method || "unknown";
+
+    await quotePublicRepository.notifyAgent(
+      quoteId,
+      "Quote Shared!",
+      `A customer shared their ${dest} quote via ${shareMethod}`,
+    );
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error logging quote share:", err);
+    res.status(500).json({ success: false, error: "Failed to log share" });
+  }
+});
+
 export default publicRouter;

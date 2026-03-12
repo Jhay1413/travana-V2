@@ -124,6 +124,15 @@ export function useLogQuoteView() {
   });
 }
 
+export function useShareQuote() {
+  return useMutation({
+    mutationFn: async ({ token, method }: { token: string; method: string }) => {
+      const { data } = await axiosClient.post(`/api/public/quote/${token}/share`, { method });
+      return data;
+    },
+  });
+}
+
 export function useSubmitQuoteAction() {
   return useMutation({
     mutationFn: async ({
