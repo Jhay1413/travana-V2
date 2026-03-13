@@ -185,7 +185,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
         destMap.set(destName, { name: destName, revenue: 0, bookings: 0, prevRevenue: 0 });
       }
       const entry = destMap.get(destName)!;
-      entry.revenue += parseFloat(t.booking.sales_price) || 0;
+      entry.revenue += getProfit(t.booking);
       entry.bookings += 1;
     }
 
@@ -218,7 +218,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
         bbMap.set(boardBasis, { name: boardBasis, revenue: 0, count: 0 });
       }
       const entry = bbMap.get(boardBasis)!;
-      entry.revenue += parseFloat(t.booking.sales_price) || 0;
+      entry.revenue += getProfit(t.booking);
       entry.count += 1;
     }
 
@@ -258,7 +258,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
         if (ai !== -1 && bi !== -1) return ai - bi;
         if (ai !== -1) return -1;
         if (bi !== -1) return 1;
-        return b.revenue - a.revenue;
+        return b.commission - a.commission;
       });
   }, [transactionsData]);
 
@@ -352,7 +352,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
   const lowestDestination = destinationRevenue.length > 1 ? destinationRevenue[destinationRevenue.length - 1] : null;
   const maxDestRevenue = topDestinations.length > 0 ? topDestinations[0].revenue : 1;
   const maxBBRevenue = boardBasisRevenue.length > 0 ? boardBasisRevenue[0].revenue : 1;
-  const maxHTRevenue = holidayTypeRevenue.length > 0 ? holidayTypeRevenue[0].revenue : 1;
+  const maxHTRevenue = holidayTypeRevenue.length > 0 ? Math.max(...holidayTypeRevenue.map(h => h.commission), 1) : 1;
 
   const targetPct = stats.salesTarget > 0 ? Math.round((stats.monthProfit / stats.salesTarget) * 100) : 0;
 
@@ -536,11 +536,14 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
 
           <TabsContent value="revenue-analytics" className="mt-0">
             <div className="space-y-6" data-testid="panel-revenue-analytics">
+              <p className="text-xs font-medium text-muted-foreground">
+                Showing data for {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+              </p>
               <div className="grid gap-6 lg:grid-cols-2">
                 <div>
                   <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                     <Globe className="h-4 w-4 text-blue-500" />
-                    Revenue by Destination
+                    Profit by Destination
                   </h3>
                   {topDestinations.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-muted-foreground dark:border-white/10">
@@ -571,7 +574,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
                 <div>
                   <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                     <UtensilsCrossed className="h-4 w-4 text-amber-500" />
-                    Revenue by Board Basis
+                    Profit by Board Basis
                   </h3>
                   {boardBasisRevenue.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-muted-foreground dark:border-white/10">
@@ -610,7 +613,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
                       <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Top Destination</p>
                     </div>
                     <p className="mt-2 text-lg font-bold">{topDestination.name}</p>
-                    <p className="text-xs text-muted-foreground">{currency.format(topDestination.revenue)} revenue · {topDestination.bookings} bookings</p>
+                    <p className="text-xs text-muted-foreground">{currency.format(topDestination.revenue)} profit · {topDestination.bookings} bookings</p>
                   </div>
                 )}
                 {lowestDestination && (
@@ -620,7 +623,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
                       <p className="text-xs font-semibold text-red-700 dark:text-red-400">Lowest Performing Destination</p>
                     </div>
                     <p className="mt-2 text-lg font-bold">{lowestDestination.name}</p>
-                    <p className="text-xs text-muted-foreground">{currency.format(lowestDestination.revenue)} revenue · {lowestDestination.bookings} bookings</p>
+                    <p className="text-xs text-muted-foreground">{currency.format(lowestDestination.revenue)} profit · {lowestDestination.bookings} bookings</p>
                   </div>
                 )}
               </div>
@@ -629,6 +632,9 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
 
           <TabsContent value="holiday-types" className="mt-0">
             <div className="space-y-5" data-testid="panel-holiday-types">
+              <p className="text-xs font-medium text-muted-foreground">
+                Showing data for {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+              </p>
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <Ship className="h-4 w-4 text-purple-500" />
                 Revenue by Holiday Type
@@ -672,17 +678,16 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
                         data-testid={`card-holiday-type-${ht.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
                       >
                         <p className="text-sm font-semibold">{ht.name}</p>
-                        <p className="mt-1 text-xl font-bold tabular-nums">{currency.format(ht.revenue)}</p>
+                        <p className="mt-1 text-xl font-bold tabular-nums">{currency.format(ht.commission)}</p>
                         <div className="mt-2">
                           <ProgressBar
-                            value={ht.revenue}
+                            value={ht.commission}
                             max={maxHTRevenue}
                             color={cn("bg-gradient-to-r", colors[colorIdx])}
                           />
                         </div>
                         <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
                           <span>{ht.bookings} booking{ht.bookings !== 1 ? "s" : ""}</span>
-                          <span>Commission: {currency.format(ht.commission)}</span>
                         </div>
                       </motion.div>
                     );
