@@ -1,9 +1,12 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Calendar,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
+  Copy,
   Filter,
   GripVertical,
   Loader2,
@@ -135,8 +138,10 @@ interface PipelineCardProps {
 }
 
 function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineCardProps) {
+  const [, setLocation] = useLocation();
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showCopyQuotes, setShowCopyQuotes] = useState(false);
   const profit = getTransactionProfit(transaction);
   const totalValue = getTransactionValue(transaction);
   const title = getTransactionTitle(transaction);
@@ -144,6 +149,37 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
   const passengers = getTransactionPassengers(transaction);
   const colors = stageColor(stage);
   const { data: notes = [] } = useNotes(transaction.id);
+
+  // Count copy quotes (only for Quoted and In Play stages)
+  const showCopyIndicator = (stage === "Quoted" || stage === "In Play");
+  const copyQuotes = showCopyIndicator && transaction.quotes 
+    ? transaction.quotes.filter(q => q.isQuoteCopy === true)
+    : [];
+  const copyQuoteCount = copyQuotes.length;
+
+  // Determine navigation URL based on stage
+  const getNavigationUrl = () => {
+    if (!transaction.client_id) return `/pipeline`;
+
+    // Enquiry stage
+    if (stage === "Enquiry" && transaction.enquiry) {
+      return `/clients/${transaction.client_id}/enquiries/${transaction.enquiry.id}`;
+    }
+
+    // Quoted or In Play stages - navigate to first non-copy quote
+    if ((stage === "Quoted" || stage === "In Play") && transaction.quotes?.length) {
+      const mainQuote = transaction.quotes.find(q => !q.isQuoteCopy) || transaction.quotes[0];
+      return `/clients/${transaction.client_id}/quotes/${mainQuote.id}`;
+    }
+
+    // Booked stage
+    if (stage === "Booked" && transaction.booking) {
+      return `/clients/${transaction.client_id}/bookings/${transaction.booking.id}`;
+    }
+
+    // Fallback to client page
+    return `/clients/${transaction.client_id}`;
+  };
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData("application/json", JSON.stringify({ transactionId: transaction.id, fromStage: stage }));
@@ -157,6 +193,16 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
   const isTouchDevice = typeof window !== "undefined" && "ontouchstart" in window;
   const handleTap = () => { if (!isDragging && isTouchDevice) setIsHovered((prev) => !prev); };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if dragging or if clicking on interactive elements
+    if (isDragging) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    
+    const url = getNavigationUrl();
+    setLocation(url);
+  };
+
   return (
     <div
       className={`relative ${isDragging ? "opacity-40" : ""}`}
@@ -169,13 +215,31 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
     >
       <motion.div
         whileHover={!isDragging ? { y: -2 } : undefined}
-        className={`p-3.5 rounded-xl border ${colors.border} ${colors.bg} cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md`}
+        className={`p-3.5 rounded-xl border ${colors.border} ${colors.bg} cursor-pointer transition-shadow hover:shadow-md`}
         data-testid={`pipeline-card-${transaction.id}`}
+        onClick={handleCardClick}
       >
         <div className="flex items-start gap-2">
-          <GripVertical className="h-4 w-4 text-black/20 mt-0.5 flex-shrink-0" />
+          <GripVertical className="h-4 w-4 text-black/20 mt-0.5 flex-shrink-0 cursor-grab active:cursor-grabbing" />
           <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-semibold text-black/80 truncate mb-1.5" data-testid={`pipeline-title-${transaction.id}`}>{title}</h4>
+            <div className="flex items-start justify-between gap-2 mb-1.5">
+              <h4 className="text-sm font-semibold text-black/80 truncate flex-1" data-testid={`pipeline-title-${transaction.id}`}>{title}</h4>
+              {copyQuoteCount > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowCopyQuotes(!showCopyQuotes);
+                  }}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-700 hover:bg-blue-500/20 transition-colors"
+                  title={`${copyQuoteCount} copy quote${copyQuoteCount !== 1 ? 's' : ''}`}
+                >
+                  <Copy className="h-3 w-3" />
+                  <span className="text-[10px] font-semibold">{copyQuoteCount}</span>
+                  {showCopyQuotes ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-1.5 text-xs text-black/50 mb-1">
               <Users className="h-3 w-3" />
               <span className="truncate" data-testid={`pipeline-client-${transaction.id}`}>{clientName}</span>
@@ -193,6 +257,62 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
             </div>
           </div>
         </div>
+
+        {/* Copy Quotes Dropdown */}
+        {showCopyQuotes && copyQuoteCount > 0 && (
+          <div className="mt-3 pt-3 border-t border-black/10 space-y-2" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[10px] uppercase tracking-wider text-black/40 font-semibold mb-2">Copy Quotes</p>
+            {copyQuotes.map((quote, idx) => {
+              const quoteSalesPrice = parseFloat(quote.sales_price || "0");
+              const quoteDiscount = parseFloat(quote.discounts || "0");
+              const quoteServiceCharge = parseFloat(quote.service_charge || "0");
+              const quoteTotal = quoteSalesPrice - quoteDiscount + quoteServiceCharge;
+              const quoteCommission = parseFloat(quote.package_commission || "0");
+
+              return (
+                <div 
+                  key={quote.id} 
+                  className="p-2 rounded-lg bg-white/60 border border-black/5 text-xs hover:bg-white hover:border-black/10 transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (transaction.client_id) {
+                      setLocation(`/clients/${transaction.client_id}/quotes/${quote.id}`);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <span className="font-medium text-black/70 flex-1 truncate">
+                      {quote.title || `Copy ${idx + 1}`}
+                    </span>
+                    
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px] text-black/50 mt-1.5">
+                    <div>
+                      <span className="text-black/40">Travel:</span> {formatDate(quote.travel_date)}
+                    </div>
+                    {quoteTotal > 0 && (
+                      <div>
+                        <span className="text-black/40">Value:</span> {formatCurrency(quoteTotal)}
+                      </div>
+                    )}
+                    {quoteCommission > 0 && (
+                      <div>
+                        <span className="text-black/40">Profit:</span> {formatCurrency(quoteCommission)}
+                      </div>
+                    )}
+                    {(quote.adult || 0) > 0 && (
+                      <div>
+                        <span className="text-black/40">Pax:</span> {quote.adult}A
+                        {(quote.child || 0) > 0 && ` ${quote.child}C`}
+                        {(quote.infant || 0) > 0 && ` ${quote.infant}I`}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </motion.div>
 
       {isHovered && !isDragging && (
@@ -224,7 +344,7 @@ function PipelineCard({ transaction, stage, clientName, onDragStart }: PipelineC
             </div>
             <div className="mt-3 pt-2 border-t border-black/10">
               <Link
-                href={transaction.client_id && transaction.quotes?.length ? `/clients/${transaction.client_id}/quotes/${transaction.quotes[0].id}` : transaction.client_id && transaction.enquiry ? `/clients/${transaction.client_id}/enquiries/${transaction.enquiry.id}` : transaction.client_id ? `/clients/${transaction.client_id}` : `/pipeline`}
+                href={getNavigationUrl()}
                 className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
                 data-testid={`pipeline-view-${transaction.id}`}
               >

@@ -93,15 +93,18 @@ function normalizeBooking(data: any) {
 
 export const transactionController = {
   listTransactions: asyncHandler(async (req: Request, res: Response) => {
-    const { clientId, agentId, status } = req.query;
+    const { clientId, agentId, status, dateFrom, dateTo } = req.query;
     let transactions;
+
+    const parsedDateFrom = dateFrom && typeof dateFrom === "string" ? new Date(dateFrom) : undefined;
+    const parsedDateTo = dateTo && typeof dateTo === "string" ? new Date(dateTo) : undefined;
 
     if (clientId && typeof clientId === "string") {
       transactions = await transactionService.listTransactionsByClient(clientId);
     } else if (agentId && typeof agentId === "string") {
       transactions = await transactionService.listTransactionsByAgent(agentId);
     } else {
-      transactions = await transactionService.listTransactions();
+      transactions = await transactionService.listTransactions(parsedDateFrom, parsedDateTo);
     }
 
     return successResponse(res, transactions, "Transactions retrieved successfully");

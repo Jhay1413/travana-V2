@@ -159,6 +159,7 @@ export function QuoteCreateDialog({
         ...quotePayload,
         transaction_id: transactionId,
         ...(imageUrls.length > 0 && { images: imageUrls }),
+        ...(initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
       } as CreateQuoteData;
 
       let payload: CreateQuoteData | FormData = json;
@@ -192,6 +193,7 @@ export function QuoteCreateDialog({
           ...quotePayload,
           quote_status: values.status || "QUOTE_IN_PROGRESS",
           ...(imageUrls.length > 0 && { images: imageUrls }),
+          ...(initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
         },
       };
 

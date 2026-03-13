@@ -10,10 +10,12 @@ import { Card } from "@/components/ui/card";
 import type { DealImage } from "@/types/quote";
 import type { Favorite } from "@/api/endpoints/favorite.api";
 import { currency, formatUKDate, type QuoteWithJoins, type BookingWithJoins, type Client } from "./client-types";
+import type { Transaction } from "@/types/quote";
 
 interface ClientQuotesTabProps {
   quotes: QuoteWithJoins[];
   bookings: BookingWithJoins[];
+  transactions: Transaction[];
   clientId: string;
   navigate: (to: string) => void;
   onNewQuote: () => void;
@@ -27,6 +29,7 @@ interface ClientQuotesTabProps {
 export function ClientQuotesTab({
   quotes,
   bookings,
+  transactions,
   clientId,
   navigate,
   onNewQuote,
@@ -36,6 +39,14 @@ export function ClientQuotesTab({
   userFavorites,
   toggleFavoriteMutation,
 }: ClientQuotesTabProps) {
+  // Create a map of transaction_id to transaction status
+  const transactionStatusMap = new Map<string, string>();
+  transactions.forEach((t) => {
+    if (t.id && t.status) {
+      transactionStatusMap.set(t.id, t.status);
+    }
+  });
+
   return (
     <div className="grid gap-3" data-testid="layout-quotes">
       <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quotes-list">
@@ -65,7 +76,18 @@ export function ClientQuotesTab({
               id: "in-play",
               title: "In Play",
               rows: quotes
-                .filter((q: QuoteWithJoins) => !q.quote_status || !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
+                .filter((q: QuoteWithJoins) => {
+                  // Exclude quotes with won/lost/archived status
+                  if (q.quote_status && ["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status)) {
+                    return false;
+                  }
+                  // Exclude quotes whose transaction is on_booking status
+                  const txnStatus = transactionStatusMap.get(q.transaction_id);
+                  if (txnStatus === "on_booking") {
+                    return false;
+                  }
+                  return true;
+                })
                 .map((q: QuoteWithJoins) => {
                   const salesPrice = parseFloat(q.sales_price || "0");
                   const discount = parseFloat(q.discounts || "0");

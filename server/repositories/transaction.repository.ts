@@ -11,8 +11,7 @@ async function enrichTransactions(txns: Transaction[]) {
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
     db.select().from(quote).where(and(
       inArray(quote.transaction_id, txnIds), 
-      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
-      sql`(${quote.isQuoteCopy} IS NOT TRUE)`
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`
     )),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
     db.select().from(package_type),
@@ -182,10 +181,10 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       package_commission: quote.package_commission,
       holiday_type_id: quote.holiday_type_id,
       quote_status: quote.quote_status,
+      isQuoteCopy: quote.isQuoteCopy,
     }).from(quote).where(and(
       inArray(quote.transaction_id, txnIds), 
-      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
-      sql`(${quote.isQuoteCopy} IS NOT TRUE)`
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`
     )),
     db.select({
       id: booking.id,
@@ -251,8 +250,21 @@ export const transactionRepository = {
     return result;
   },
 
-  async findAll() {
-    const txns = await db.select().from(transaction).orderBy(desc(transaction.created_at));
+  async findAll(dateFrom?: Date, dateTo?: Date) {
+    const conditions = [];
+    
+    if (dateFrom) {
+      conditions.push(sql`${transaction.created_at} >= ${dateFrom.toISOString()}`);
+    }
+    if (dateTo) {
+      conditions.push(sql`${transaction.created_at} <= ${dateTo.toISOString()}`);
+    }
+
+    let query = db.select().from(transaction);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    const txns = await query.orderBy(desc(transaction.created_at));
     return enrichTransactions(txns);
   },
 

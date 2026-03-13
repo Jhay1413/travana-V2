@@ -133,6 +133,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     const currentMonthTarget = shopTargetsData?.find((t: any) => t.year === now.getFullYear() && t.month === (now.getMonth() + 1));
     const salesTarget = currentMonthTarget ? parseFloat(currentMonthTarget.targetAmount) || 0 : 0;
     if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0, monthAvgBookingProfit: 0, monthBookingsCount: 0, monthOpenQuotesValue: 0, monthQuotesCount: 0 };
+    
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dayOfWeek = now.getDay() || 7;
     const weekStart = new Date(todayStart);
@@ -155,16 +156,15 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     for (const t of transactionsData) {
       if (t.booking) {
         const profit = getProfit(t.booking);
-        const sp = parseFloat(t.booking.sales_price) || 0;
         const created = new Date(t.booking.date_created || t.created_at);
-        totalBookingValue += profit;
-        bookingsCount += 1;
-
+        
         if (created >= todayStart) todayProfit += profit;
         if (created >= weekStart) weekProfit += profit;
         if (created >= monthStart) monthProfit += profit;
 
         if (created >= monthStart && created < monthEnd) {
+          totalBookingValue += profit;
+          bookingsCount += 1;
           monthTotalBookingProfit += profit;
           monthBookingsCount += 1;
         }
@@ -172,13 +172,12 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
       if (t.quotes) {
         for (const q of t.quotes) {
           if (q.is_active === false) continue;
-          const sp = parseFloat(q.sales_price) || 0;
           const qStatus = (q.quote_status || "").toUpperCase();
           if (qStatus !== "BOOKED" && qStatus !== "BOOKING_CONFIRMED") {
-            totalOpenQuotesValue += getProfit(q);
-            quotesCount += 1;
             const qDate = new Date(q.date_created || t.created_at);
             if (qDate >= monthStart && qDate < monthEnd) {
+              totalOpenQuotesValue += getProfit(q);
+              quotesCount += 1;
               monthOpenQuotesValue += getProfit(q);
               monthQuotesCount += 1;
             }
@@ -257,6 +256,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     if (!transactionsData) return [];
     const destMap = new Map<string, { name: string; revenue: number; bookings: number; prevRevenue: number }>();
 
+    // Data is already filtered to current month by backend
     for (const t of transactionsData) {
       let destName: string | null = null;
 
@@ -302,6 +302,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     if (!transactionsData) return [];
     const bbMap = new Map<string, { name: string; revenue: number; count: number }>();
 
+    // Data is already filtered to current month by backend
     for (const t of transactionsData) {
       let boardBasis: string | null = null;
 
@@ -333,6 +334,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     if (!transactionsData) return [];
     const htMap = new Map<string, { name: string; revenue: number; bookings: number; commission: number }>();
 
+    // Data is already filtered to current month by backend
     for (const t of transactionsData) {
       let htName = t.holiday_type_name || "Other";
 

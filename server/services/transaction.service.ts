@@ -120,8 +120,8 @@ function normalizeFlightInput(input: unknown): Partial<InsertQuoteFlight> {
 }
 
 export const transactionService = {
-  async listTransactions() {
-    return await transactionRepository.findAll();
+  async listTransactions(dateFrom?: Date, dateTo?: Date) {
+    return await transactionRepository.findAll(dateFrom, dateTo);
   },
 
   async listTransactionsLightweight() {

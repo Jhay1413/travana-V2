@@ -784,6 +784,7 @@ export default function ClientPage() {
                   <ClientQuotesTab
                     quotes={quotes}
                     bookings={bookings}
+                    transactions={transactions}
                     clientId={clientId}
                     navigate={navigate}
                     onNewQuote={handleNewQuote}
