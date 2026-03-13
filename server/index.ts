@@ -6,7 +6,9 @@ import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./repositories/task.repository";
 import { checkStaleTickets } from "./services/ticket-notification.service";
+import { expireStaleEnquiriesAndQuotes } from "./services/expiry.service";
 import quotePublicRoutes from "./routes/quote-public.routes";
+import cron from "node-cron";
 
 const app = express();
 const httpServer = createServer(app);
@@ -109,6 +111,15 @@ app.use((req, res, next) => {
           console.error("Ticket notification check failed:", err);
         }
       }, 60_000);
+
+      // Run at midnight every day to expire enquiries and quotes older than 7 days
+      cron.schedule("0 0 * * *", async () => {
+        try {
+          await expireStaleEnquiriesAndQuotes();
+        } catch (err) {
+          console.error("Expiry cron job failed:", err);
+        }
+      });
     },
   );
 })();

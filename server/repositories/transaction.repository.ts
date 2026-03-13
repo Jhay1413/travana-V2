@@ -285,6 +285,10 @@ export const transactionRepository = {
       conditions.push(eq(transaction.user_id, agentId));
     }
 
+    if (status === "on_enquiry" || status === "on_quote" || status === "in_play") {
+      conditions.push(sql`${transaction.created_at} >= NOW() - INTERVAL '7 days'`);
+    }
+
     if (status === "on_quote") {
       const ACTIVE_STATUSES = [
         "QUOTE_IN_PROGRESS", "QUOTE_CALL", "AWAITING_DECISION",
