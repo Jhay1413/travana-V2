@@ -1,6 +1,6 @@
 import { db } from "../config/database";
-import { clientTable, transaction, quote, booking } from "@shared/schema";
-import { sql, eq, and, gte, lte } from "drizzle-orm";
+import { clientTable, transaction, quote, booking, user as userTable } from "@shared/schema";
+import { sql, eq, and, gte, lte, ne } from "drizzle-orm";
 
 export const dashboardRepository = {
   async getStats(): Promise<{
@@ -39,6 +39,144 @@ export const dashboardRepository = {
       enquiryCount: Number(transactionStats[0].enquiry),
       quotedCount: Number(transactionStats[0].quoted),
       bookedCount: Number(transactionStats[0].booked),
+    };
+  },
+
+  async getAdminOverviewStats(): Promise<{
+    todayProfit: number;
+    weekProfit: number;
+    monthProfit: number;
+    monthBookingsCount: number;
+    monthAvgBookingProfit: number;
+    monthOpenQuotesValue: number;
+    monthQuotesCount: number;
+    agentPerformance: Array<{
+      id: string;
+      name: string;
+      revenue: number;
+      commission: number;
+      bookings: number;
+      quotes: number;
+    }>;
+  }> {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayOfWeek = now.getDay() || 7;
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    const [bookingProfitStats, bookingMonthStats, openQuoteStats, agentBookingRows, agentQuoteRows, allUsers] = await Promise.all([
+      db.select({
+        todayProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
+        weekProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
+        monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
+      }).from(booking)
+        .where(gte(booking.date_created, weekStart)),
+
+      db.select({
+        monthCount: sql<number>`COUNT(*)`,
+        monthProfit: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+      }).from(booking)
+        .where(and(
+          gte(booking.date_created, monthStart),
+          sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+        )),
+
+      db.select({
+        totalCommission: sql<number>`COALESCE(SUM(CAST(${quote.package_commission} AS DECIMAL)), 0)`,
+        count: sql<number>`COUNT(*)`,
+      }).from(quote)
+        .where(and(
+          gte(quote.date_created, monthStart),
+          sql`${quote.date_created} < ${monthEnd.toISOString()}`,
+          sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+          sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED', 'LOST'))`,
+        )),
+
+      db.select({
+        agentId: transaction.user_id,
+        revenue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS DECIMAL)), 0)`,
+        commission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+        bookings: sql<number>`COUNT(*)`,
+      }).from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .where(and(
+          gte(booking.date_created, monthStart),
+          sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+        ))
+        .groupBy(transaction.user_id),
+
+      db.select({
+        agentId: transaction.user_id,
+        quotes: sql<number>`COUNT(*)`,
+      }).from(quote)
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+        .where(and(
+          gte(quote.date_created, monthStart),
+          sql`${quote.date_created} < ${monthEnd.toISOString()}`,
+          sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+        ))
+        .groupBy(transaction.user_id),
+
+      db.select({
+        id: userTable.id,
+        name: userTable.name,
+        firstName: userTable.firstName,
+        email: userTable.email,
+      }).from(userTable),
+    ]);
+
+    const userMap = new Map<string, string>();
+    for (const u of allUsers) {
+      userMap.set(u.id, u.firstName || u.name || u.email || "Agent");
+    }
+
+    const agentMap = new Map<string, { id: string; name: string; revenue: number; commission: number; bookings: number; quotes: number }>();
+    for (const u of allUsers) {
+      agentMap.set(u.id, {
+        id: u.id,
+        name: u.firstName || u.name || u.email || "Agent",
+        revenue: 0,
+        commission: 0,
+        bookings: 0,
+        quotes: 0,
+      });
+    }
+
+    for (const row of agentBookingRows) {
+      const agentId = row.agentId;
+      if (agentId && agentMap.has(agentId)) {
+        const agent = agentMap.get(agentId)!;
+        agent.revenue = Number(row.revenue);
+        agent.commission = Number(row.commission);
+        agent.bookings = Number(row.bookings);
+      }
+    }
+    for (const row of agentQuoteRows) {
+      const agentId = row.agentId;
+      if (agentId && agentMap.has(agentId)) {
+        agentMap.get(agentId)!.quotes = Number(row.quotes);
+      }
+    }
+
+    const bp = bookingProfitStats[0];
+    const bm = bookingMonthStats[0];
+    const qs = openQuoteStats[0];
+    const monthCount = Number(bm.monthCount);
+    const monthProfit = Number(bm.monthProfit);
+
+    return {
+      todayProfit: Number(bp.todayProfit),
+      weekProfit: Number(bp.weekProfit),
+      monthProfit,
+      monthBookingsCount: monthCount,
+      monthAvgBookingProfit: monthCount > 0 ? monthProfit / monthCount : 0,
+      monthOpenQuotesValue: Number(qs.totalCommission),
+      monthQuotesCount: Number(qs.count),
+      agentPerformance: Array.from(agentMap.values())
+        .sort((a, b) => b.commission - a.commission || a.name.localeCompare(b.name)),
     };
   },
 

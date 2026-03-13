@@ -9,4 +9,8 @@ export const dashboardService = {
   async getMyProfit(userId: string): Promise<{ profitThisMonth: number }> {
     return await dashboardRepository.getMyProfit(userId);
   },
+
+  async getAdminOverviewStats() {
+    return await dashboardRepository.getAdminOverviewStats();
+  },
 };

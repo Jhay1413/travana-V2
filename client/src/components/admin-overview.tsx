@@ -26,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useTourOperators, useTransactions } from "@/hooks/queries";
+import { useTourOperators, useTransactions, useAdminOverviewStats } from "@/hooks/queries";
 import { useShopTargets, useAgentTargets } from "@/hooks/queries/use-targets-queries";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
@@ -110,6 +110,7 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
   const [tab, setTab] = useState("agent-performance");
   const { data: tourOperators } = useTourOperators();
   const { data: transactionsData } = useTransactions();
+  const { data: adminStats } = useAdminOverviewStats();
   const { data: shopTargetsData } = useShopTargets();
   const { data: agentTargetsData } = useAgentTargets();
   const [toTimePeriod, setToTimePeriod] = useState<TOTimePeriod>("month");
@@ -132,165 +133,60 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
     const now = new Date();
     const currentMonthTarget = shopTargetsData?.find((t: any) => t.year === now.getFullYear() && t.month === (now.getMonth() + 1));
     const salesTarget = currentMonthTarget ? parseFloat(currentMonthTarget.targetAmount) || 0 : 0;
-    if (!transactionsData) return { todayProfit: 0, weekProfit: 0, monthProfit: 0, salesTarget, avgBookingValue: 0, totalOpenQuotesValue: 0, bookingsCount: 0, quotesCount: 0, monthAvgBookingProfit: 0, monthBookingsCount: 0, monthOpenQuotesValue: 0, monthQuotesCount: 0 };
-    
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayOfWeek = now.getDay() || 7;
-    const weekStart = new Date(todayStart);
-    weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    let todayProfit = 0;
-    let weekProfit = 0;
-    let monthProfit = 0;
-    let totalBookingValue = 0;
-    let bookingsCount = 0;
-    let totalOpenQuotesValue = 0;
-    let quotesCount = 0;
-    let monthTotalBookingProfit = 0;
-    let monthBookingsCount = 0;
-    let monthOpenQuotesValue = 0;
-    let monthQuotesCount = 0;
-
-    for (const t of transactionsData) {
-      if (t.booking) {
-        const profit = getProfit(t.booking);
-        const created = new Date(t.booking.date_created || t.created_at);
-        
-        if (created >= todayStart) todayProfit += profit;
-        if (created >= weekStart) weekProfit += profit;
-        if (created >= monthStart) monthProfit += profit;
-
-        if (created >= monthStart && created < monthEnd) {
-          totalBookingValue += profit;
-          bookingsCount += 1;
-          monthTotalBookingProfit += profit;
-          monthBookingsCount += 1;
-        }
-      }
-      if (t.quotes) {
-        for (const q of t.quotes) {
-          if (q.is_active === false) continue;
-          const qStatus = (q.quote_status || "").toUpperCase();
-          if (qStatus !== "BOOKED" && qStatus !== "BOOKING_CONFIRMED") {
-            const qDate = new Date(q.date_created || t.created_at);
-            if (qDate >= monthStart && qDate < monthEnd) {
-              totalOpenQuotesValue += getProfit(q);
-              quotesCount += 1;
-              monthOpenQuotesValue += getProfit(q);
-              monthQuotesCount += 1;
-            }
-          }
-        }
-      }
-    }
 
     return {
-      todayProfit,
-      weekProfit,
-      monthProfit,
+      todayProfit: adminStats?.todayProfit ?? 0,
+      weekProfit: adminStats?.weekProfit ?? 0,
+      monthProfit: adminStats?.monthProfit ?? 0,
       salesTarget,
-      avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0,
-      totalOpenQuotesValue,
-      bookingsCount,
-      quotesCount,
-      monthAvgBookingProfit: monthBookingsCount > 0 ? monthTotalBookingProfit / monthBookingsCount : 0,
-      monthBookingsCount,
-      monthOpenQuotesValue,
-      monthQuotesCount,
+      avgBookingValue: adminStats?.monthAvgBookingProfit ?? 0,
+      totalOpenQuotesValue: adminStats?.monthOpenQuotesValue ?? 0,
+      bookingsCount: adminStats?.monthBookingsCount ?? 0,
+      quotesCount: adminStats?.monthQuotesCount ?? 0,
+      monthAvgBookingProfit: adminStats?.monthAvgBookingProfit ?? 0,
+      monthBookingsCount: adminStats?.monthBookingsCount ?? 0,
+      monthOpenQuotesValue: adminStats?.monthOpenQuotesValue ?? 0,
+      monthQuotesCount: adminStats?.monthQuotesCount ?? 0,
     };
-  }, [transactionsData, shopTargetsData]);
+  }, [adminStats, shopTargetsData]);
 
   const agentPerformance = useMemo(() => {
-    if (!transactionsData || !apiUsers) return [];
-
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    const agents = new Map<string, { id: string; name: string; revenue: number; commission: number; bookings: number; quotes: number; totalBookingValue: number }>();
-
-    for (const u of apiUsers as any[]) {
-      agents.set(u.id, {
-        id: u.id,
-        name: u.firstName || u.name || u.email || "Agent",
-        revenue: 0,
-        commission: 0,
-        bookings: 0,
-        quotes: 0,
-        totalBookingValue: 0,
-      });
-    }
-
-    for (const t of transactionsData) {
-      const agentId = t.agent_id || t.user_id;
-      if (!agentId || !agents.has(agentId)) continue;
-      const agent = agents.get(agentId)!;
-
-      if (t.quotes) {
-        for (const q of t.quotes) {
-          if (q.is_active === false) continue;
-          const qDate = new Date(q.date_created || t.created_at);
-          if (qDate >= monthStart && qDate < monthEnd) {
-            agent.quotes += 1;
-          }
-        }
-      }
-      if (t.booking) {
-        const bDate = new Date(t.booking.date_created || t.created_at);
-        if (bDate >= monthStart && bDate < monthEnd) {
-          agent.bookings += 1;
-          agent.revenue += parseFloat(t.booking.sales_price) || 0;
-          agent.commission += getProfit(t.booking);
-          agent.totalBookingValue += parseFloat(t.booking.sales_price) || 0;
-        }
-      }
-    }
-
-    return Array.from(agents.values())
-      .sort((a, b) => b.commission - a.commission || a.name.localeCompare(b.name));
-  }, [transactionsData, apiUsers]);
+    if (!adminStats?.agentPerformance) return [];
+    return adminStats.agentPerformance.map((a) => ({
+      ...a,
+      totalBookingValue: a.revenue,
+    }));
+  }, [adminStats]);
 
   const destinationRevenue = useMemo(() => {
     if (!transactionsData) return [];
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const destMap = new Map<string, { name: string; revenue: number; bookings: number; prevRevenue: number }>();
 
-    // Data is already filtered to current month by backend
     for (const t of transactionsData) {
-      let destName: string | null = null;
+      if (!t.booking) continue;
+      const bDate = new Date(t.booking.date_created || t.created_at);
+      if (bDate < monthStart || bDate >= monthEnd) continue;
 
-      if (t.booking) {
-        if (t.booking.accommodations?.[0]?.destination_name) {
-          destName = t.booking.accommodations[0].destination_name;
-        } else if (t.booking.title) {
-          destName = t.booking.title;
-        }
-      }
-      if (!destName && t.quotes?.[0]) {
-        if (t.quotes[0].accommodations?.[0]?.destination_name) {
-          destName = t.quotes[0].accommodations[0].destination_name;
-        } else if (t.quotes[0].destination_name) {
-          destName = t.quotes[0].destination_name;
-        } else if (t.enquiry?.destinations?.[0]?.name) {
-          destName = t.enquiry.destinations[0].name;
-        }
+      let destName: string | null = null;
+      if (t.booking.accommodations?.[0]?.destination_name) {
+        destName = t.booking.accommodations[0].destination_name;
+      } else if (t.booking.title) {
+        destName = t.booking.title;
       }
       if (!destName && t.enquiry?.destinations?.[0]?.name) {
         destName = t.enquiry.destinations[0].name;
       }
-
       if (!destName) destName = "Unspecified";
 
       if (!destMap.has(destName)) {
         destMap.set(destName, { name: destName, revenue: 0, bookings: 0, prevRevenue: 0 });
       }
       const entry = destMap.get(destName)!;
-
-      if (t.booking) {
-        entry.revenue += parseFloat(t.booking.sales_price) || 0;
-        entry.bookings += 1;
-      }
+      entry.revenue += parseFloat(t.booking.sales_price) || 0;
+      entry.bookings += 1;
     }
 
     return Array.from(destMap.values())
@@ -300,29 +196,30 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
 
   const boardBasisRevenue = useMemo(() => {
     if (!transactionsData) return [];
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const bbMap = new Map<string, { name: string; revenue: number; count: number }>();
 
-    // Data is already filtered to current month by backend
     for (const t of transactionsData) {
-      let boardBasis: string | null = null;
+      if (!t.booking) continue;
+      const bDate = new Date(t.booking.date_created || t.created_at);
+      if (bDate < monthStart || bDate >= monthEnd) continue;
 
-      if (t.booking?.accommodations?.[0]?.board_basis_name) {
+      let boardBasis: string | null = null;
+      if (t.booking.accommodations?.[0]?.board_basis_name) {
         boardBasis = t.booking.accommodations[0].board_basis_name;
       } else if (t.quotes?.[0]?.accommodations?.[0]?.board_basis_name) {
         boardBasis = t.quotes[0].accommodations[0].board_basis_name;
       }
-
       if (!boardBasis) boardBasis = "Not Specified";
 
       if (!bbMap.has(boardBasis)) {
         bbMap.set(boardBasis, { name: boardBasis, revenue: 0, count: 0 });
       }
       const entry = bbMap.get(boardBasis)!;
-
-      if (t.booking) {
-        entry.revenue += parseFloat(t.booking.sales_price) || 0;
-        entry.count += 1;
-      }
+      entry.revenue += parseFloat(t.booking.sales_price) || 0;
+      entry.count += 1;
     }
 
     return Array.from(bbMap.values())
@@ -332,22 +229,25 @@ export default function AdminOverview({ apiUsers }: AdminOverviewProps) {
 
   const holidayTypeRevenue = useMemo(() => {
     if (!transactionsData) return [];
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const htMap = new Map<string, { name: string; revenue: number; bookings: number; commission: number }>();
 
-    // Data is already filtered to current month by backend
     for (const t of transactionsData) {
+      if (!t.booking) continue;
+      const bDate = new Date(t.booking.date_created || t.created_at);
+      if (bDate < monthStart || bDate >= monthEnd) continue;
+
       let htName = t.holiday_type_name || "Other";
 
       if (!htMap.has(htName)) {
         htMap.set(htName, { name: htName, revenue: 0, bookings: 0, commission: 0 });
       }
       const entry = htMap.get(htName)!;
-
-      if (t.booking) {
-        entry.revenue += parseFloat(t.booking.sales_price) || 0;
-        entry.commission += getProfit(t.booking);
-        entry.bookings += 1;
-      }
+      entry.revenue += parseFloat(t.booking.sales_price) || 0;
+      entry.commission += getProfit(t.booking);
+      entry.bookings += 1;
     }
 
     const order = ["Package Holiday", "Cruise Packages", "Hot Tub Breaks"];
