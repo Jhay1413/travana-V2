@@ -45,6 +45,12 @@ function splitDateTime(iso: string | undefined | null): { date: string; time: st
   };
 }
 
+function toIso(val: Date | string | null | undefined): string | null | undefined {
+  if (!val) return val as null | undefined;
+  if (val instanceof Date) return val.toISOString();
+  return val;
+}
+
 function buildExtrasPayload(values: {
   transfers: any[]; carHires: any[]; attractionTickets: any[];
   loungePasses: any[]; airportParkings: any[]; extraAccommodations: any[];
@@ -255,10 +261,10 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
       tourOperatorId: t.tour_operator_id || "",
       pickUpLocation: t.pick_up_location || "",
       dropOffLocation: t.drop_off_location || "",
-      pickUpDate: splitDateTime(t.pick_up_time?.toString?.()).date,
-      pickUpTime: splitDateTime(t.pick_up_time?.toString?.()).time,
-      dropOffDate: splitDateTime(t.drop_off_time?.toString?.()).date,
-      dropOffTime: splitDateTime(t.drop_off_time?.toString?.()).time,
+      pickUpDate: splitDateTime(toIso(t.pick_up_time)).date,
+      pickUpTime: splitDateTime(toIso(t.pick_up_time)).time,
+      dropOffDate: splitDateTime(toIso(t.drop_off_time)).date,
+      dropOffTime: splitDateTime(toIso(t.drop_off_time)).time,
       note: t.note || "",
       cost: parseFloat(String(t.cost || 0)) || 0,
       commission: parseFloat(String(t.commission || 0)) || 0,
@@ -269,10 +275,10 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
       tourOperatorId: c.tour_operator_id || "",
       pickUpLocation: c.pick_up_location || "",
       dropOffLocation: c.drop_off_location || "",
-      pickUpDate: splitDateTime(c.pick_up_time?.toString?.()).date,
-      pickUpTime: splitDateTime(c.pick_up_time?.toString?.()).time,
-      dropOffDate: splitDateTime(c.drop_off_time?.toString?.()).date,
-      dropOffTime: splitDateTime(c.drop_off_time?.toString?.()).time,
+      pickUpDate: splitDateTime(toIso(c.pick_up_time)).date,
+      pickUpTime: splitDateTime(toIso(c.pick_up_time)).time,
+      dropOffDate: splitDateTime(toIso(c.drop_off_time)).date,
+      dropOffTime: splitDateTime(toIso(c.drop_off_time)).time,
       noOfDays: c.no_of_days ?? 1,
       driverAge: c.driver_age ?? 25,
       cost: parseFloat(String(c.cost || 0)) || 0,
@@ -283,7 +289,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
       bookingRef: t.booking_ref || "",
       tourOperatorId: t.tour_operator_id || "",
       ticketType: t.ticket_type || "",
-      dateOfVisit: splitDateTime(t.date_of_visit?.toString?.()).date,
+      dateOfVisit: splitDateTime(toIso(t.date_of_visit)).date,
       numberOfTickets: t.number_of_tickets ?? 1,
       cost: parseFloat(String(t.cost || 0)) || 0,
       commission: parseFloat(String(t.commission || 0)) || 0,
@@ -294,7 +300,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
       tourOperatorId: p.tour_operator_id || "",
       airportId: p.airport_id || "",
       terminal: p.terminal || "",
-      dateOfUsage: splitDateTime(p.date_of_usage?.toString?.()).date,
+      dateOfUsage: splitDateTime(toIso(p.date_of_usage)).date,
       note: p.note || "",
       cost: parseFloat(String(p.cost || 0)) || 0,
       commission: parseFloat(String(p.commission || 0)) || 0,
@@ -305,7 +311,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
       tourOperatorId: p.tour_operator_id || "",
       airportId: p.airport_id || "",
       parkingType: p.parking_type || "",
-      parkingDate: splitDateTime(p.parking_date?.toString?.()).date,
+      parkingDate: splitDateTime(toIso(p.parking_date)).date,
       carMake: p.car_make || "",
       carModel: p.car_model || "",
       colour: p.colour || "",
@@ -323,8 +329,8 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
         accommodationId: a.accomodation_id || "",
         boardBasisId: a.board_basis_id || "",
         roomType: a.room_type || "",
-        checkInDate: splitDateTime(a.check_in_date_time?.toString?.()).date,
-        checkInTime: splitDateTime(a.check_in_date_time?.toString?.()).time,
+        checkInDate: splitDateTime(toIso(a.check_in_date_time)).date,
+        checkInTime: splitDateTime(toIso(a.check_in_date_time)).time,
         noOfNights: a.no_of_nights ?? 0,
         cost: parseFloat(String(a.cost || 0)) || 0,
         commission: parseFloat(String(a.commission || 0)) || 0,

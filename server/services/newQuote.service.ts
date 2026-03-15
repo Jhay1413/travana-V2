@@ -117,9 +117,7 @@ export const newQuoteService = {
 
   async getQuoteWithDetails(id: string) {
     const q = await newQuoteRepository.findWithDetails(id);
-    console.log(q)
     if (!q) throw new AppError("Quote not found", 404);
-    console.log('🔍 SERVICE - Quote details includes images:', q.images?.length || 0);
     return q;
   },
 
@@ -129,9 +127,6 @@ export const newQuoteService = {
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...quoteFields
     } = data;
-
-    console.log('🔍 CREATE QUOTE - outboundConnectingLegs:', JSON.stringify(outboundConnectingLegs));
-    console.log('🔍 CREATE QUOTE - inboundConnectingLegs:', JSON.stringify(inboundConnectingLegs));
 
     const txn = await transactionRepository.findById(quoteFields.transaction_id);
     if (!txn)  throw new AppError("Transaction not found", 404);
@@ -398,10 +393,6 @@ export const newQuoteService = {
   },
 
   async updateQuote(id: string, data: UpdateQuotePayload) {
-    console.log('🔍 QUOTE UPDATE - ID:', id);
-    console.log('🔍 QUOTE UPDATE - Received data:', JSON.stringify(data, null, 2));
-    console.log('📸 QUOTE UPDATE - Images in payload:', data.images, 'Length:', data.images?.length || 0);
-    
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType,
@@ -437,10 +428,6 @@ export const newQuoteService = {
         );
       }
     }
-
-    console.log('🔍 QUOTE UPDATE - Quote data to update:', quoteData);
-    console.log('🔍 QUOTE UPDATE - Flight updates:', { outboundFlight, inboundFlight });
-    console.log('🔍 QUOTE UPDATE - Accommodation update:', primaryAccommodation);
 
     // Only update quote table if there are fields to update
     let q;
