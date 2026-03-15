@@ -9,13 +9,14 @@ import {
   transaction, resorts, destination, country, room_type,
   lodges,
   park,
+  travel_deal,
 } from "@shared/schema";
 import type {
   Quote, InsertQuote, QuoteFlight, InsertQuoteFlight, QuoteAccomodation, InsertQuoteAccomodation,
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, isNotNull, gte, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -54,6 +55,38 @@ const parkingTourOp = alias(tour_operator, "parking_tour_op");
 const parkingAirport = alias(airport, "parking_airport");
 const cruiseTourOp = alias(tour_operator, "cruise_tour_op");
 
+function getScheduleDateRange(filter: string): { start: Date; end: Date } | null {
+  const today = new Date();
+  if (filter === "this-week") {
+    const day = today.getDay();
+    const daysToMonday = day === 0 ? -6 : 1 - day;
+    const start = new Date(today);
+    start.setDate(today.getDate() + daysToMonday);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  if (filter === "next-week") {
+    const day = today.getDay();
+    const daysToMonday = day === 0 ? -6 : 1 - day;
+    const start = new Date(today);
+    start.setDate(today.getDate() + daysToMonday + 7);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  if (filter === "next-month") {
+    const start = new Date(today.getFullYear(), today.getMonth() + 1, 1, 0, 0, 0, 0);
+    const end = new Date(today.getFullYear(), today.getMonth() + 2, 0, 23, 59, 59, 999);
+    return { start, end };
+  }
+  return null;
+}
+
 export const newQuoteRepository = {
   async findById(id: string): Promise<Quote | undefined> {
     const [result] = await db.select().from(quote).where(eq(quote.id, id)).limit(1);
@@ -72,17 +105,35 @@ export const newQuoteRepository = {
     return await db.select().from(quote).where(sql`${quote.quote_status} = ${status}`).orderBy(desc(quote.date_created));
   },
 
-  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12) {
+  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none") {
     const offset = page * pageSize;
-    
+
+    // When scheduledOnly, pre-fetch quote IDs that have a scheduled deal (optionally filtered by date range)
+    let scheduledQuoteIdSet: Set<string> | null = null;
+    if (scheduledOnly) {
+      const dealConditions: ReturnType<typeof and>[] = [isNotNull(travel_deal.onlySocialsId) as any];
+      const dateRange = getScheduleDateRange(scheduleFilter);
+      if (dateRange) {
+        dealConditions.push(gte(travel_deal.postSchedule, dateRange.start) as any);
+        dealConditions.push(lte(travel_deal.postSchedule, dateRange.end) as any);
+      }
+      const scheduledDeals = await db
+        .select({ quote_id: travel_deal.quote_id })
+        .from(travel_deal)
+        .where(and(...dealConditions));
+      scheduledQuoteIdSet = new Set(scheduledDeals.map(d => d.quote_id).filter(Boolean) as string[]);
+      if (scheduledQuoteIdSet.size === 0) return [];
+    }
+
     // Step 1: Get paginated quote IDs first
+    const whereCondition = scheduledQuoteIdSet
+      ? and(eq(quote.isFreeQuote, true), eq(quote.is_active, true), inArray(quote.id, [...scheduledQuoteIdSet]))
+      : and(eq(quote.isFreeQuote, true), eq(quote.is_active, true));
+
     const quoteIds = await db
       .select({ id: quote.id })
       .from(quote)
-      .where(and(
-        eq(quote.isFreeQuote, true),
-        eq(quote.is_active, true)
-      ))
+      .where(whereCondition)
       .orderBy(desc(quote.date_created))
       .limit(pageSize)
       .offset(offset);
@@ -130,6 +181,11 @@ export const newQuoteRepository = {
         destination_id: destination.id,
         destination_name: destination.name,
         
+        // Travel deal data
+        deal_id: travel_deal.id,
+        only_socials_id: travel_deal.onlySocialsId,
+        post_schedule: travel_deal.postSchedule,
+
         // Image data
         image_id: quoteImages.id,
         image_url: quoteImages.url,
@@ -177,7 +233,10 @@ export const newQuoteRepository = {
       
       // LEFT JOIN for images
       .leftJoin(quoteImages, eq(quoteImages.quoteId, quote.id))
-      
+
+      // LEFT JOIN for travel deal
+      .leftJoin(travel_deal, eq(travel_deal.quote_id, quote.id))
+
       .orderBy(desc(quote.date_created), desc(quoteImages.isPrimary));
 
     // Group results by quote ID
@@ -197,6 +256,9 @@ export const newQuoteRepository = {
           destination_id: row.destination_id,
           destination_name: row.destination_name,
           departing_airport_name: row.departing_airport_name,
+          dealId: row.deal_id ?? null,
+          onlySocialsId: row.only_socials_id ?? null,
+          postSchedule: row.post_schedule ? row.post_schedule.toISOString() : null,
           flights: [],
           accommodations: row.accommodation_id ? [{
             id: row.accommodation_id,
@@ -649,6 +711,124 @@ export const newQuoteRepository = {
       await db.insert(lodge_images)
         .values({ lodge_id: lodgeId, image_url: url })
         .onConflictDoNothing();
+    }
+  },
+
+  async replaceTransfers(quoteId: string, transfers: Array<Record<string, unknown>>): Promise<void> {
+    await db.delete(quote_transfers).where(eq(quote_transfers.quote_id, quoteId));
+    for (const t of transfers) {
+      await db.insert(quote_transfers).values({
+        quote_id: quoteId,
+        booking_ref: (t.booking_ref as string) || null,
+        tour_operator_id: (t.tour_operator_id as string) || null,
+        pick_up_location: (t.pick_up_location as string) || null,
+        drop_off_location: (t.drop_off_location as string) || null,
+        pick_up_time: toDateOrNull(t.pick_up_time),
+        drop_off_time: toDateOrNull(t.drop_off_time),
+        note: (t.note as string) || null,
+        cost: t.cost != null ? String(t.cost) : null,
+        commission: t.commission != null ? String(t.commission) : null,
+        is_included_in_package: (t.is_included_in_package as boolean) ?? true,
+      } as InsertQuoteTransfer);
+    }
+  },
+
+  async replaceCarHires(quoteId: string, carHires: Array<Record<string, unknown>>): Promise<void> {
+    await db.delete(quote_car_hire).where(eq(quote_car_hire.quote_id, quoteId));
+    for (const c of carHires) {
+      await db.insert(quote_car_hire).values({
+        quote_id: quoteId,
+        booking_ref: (c.booking_ref as string) || null,
+        tour_operator_id: (c.tour_operator_id as string) || null,
+        pick_up_location: (c.pick_up_location as string) || null,
+        drop_off_location: (c.drop_off_location as string) || null,
+        pick_up_time: toDateOrNull(c.pick_up_time),
+        drop_off_time: toDateOrNull(c.drop_off_time),
+        no_of_days: (c.no_of_days as number) ?? 1,
+        driver_age: (c.driver_age as number) ?? 25,
+        cost: c.cost != null ? String(c.cost) : null,
+        commission: c.commission != null ? String(c.commission) : null,
+        is_included_in_package: (c.is_included_in_package as boolean) ?? true,
+      } as InsertQuoteCarHire);
+    }
+  },
+
+  async replaceAttractionTickets(quoteId: string, tickets: Array<Record<string, unknown>>): Promise<void> {
+    await db.delete(quote_attraction_ticket).where(eq(quote_attraction_ticket.quote_id, quoteId));
+    for (const t of tickets) {
+      await db.insert(quote_attraction_ticket).values({
+        quote_id: quoteId,
+        booking_ref: (t.booking_ref as string) || null,
+        tour_operator_id: (t.tour_operator_id as string) || null,
+        ticket_type: (t.ticket_type as string) || null,
+        date_of_visit: toDateOrNull(t.date_of_visit),
+        number_of_tickets: (t.number_of_tickets as number) ?? 1,
+        cost: t.cost != null ? String(t.cost) : null,
+        commission: t.commission != null ? String(t.commission) : null,
+        is_included_in_package: (t.is_included_in_package as boolean) ?? true,
+      } as InsertQuoteAttractionTicket);
+    }
+  },
+
+  async replaceLoungePasses(quoteId: string, passes: Array<Record<string, unknown>>): Promise<void> {
+    await db.delete(quote_lounge_pass).where(eq(quote_lounge_pass.quote_id, quoteId));
+    for (const p of passes) {
+      await db.insert(quote_lounge_pass).values({
+        quote_id: quoteId,
+        booking_ref: (p.booking_ref as string) || null,
+        tour_operator_id: (p.tour_operator_id as string) || null,
+        airport_id: (p.airport_id as string) || null,
+        terminal: (p.terminal as string) || null,
+        date_of_usage: toDateOrNull(p.date_of_usage),
+        note: (p.note as string) || null,
+        cost: p.cost != null ? String(p.cost) : null,
+        commission: p.commission != null ? String(p.commission) : null,
+        is_included_in_package: (p.is_included_in_package as boolean) ?? true,
+      } as InsertQuoteLoungePass);
+    }
+  },
+
+  async replaceAirportParkings(quoteId: string, parkings: Array<Record<string, unknown>>): Promise<void> {
+    await db.delete(quote_airport_parking).where(eq(quote_airport_parking.quote_id, quoteId));
+    for (const p of parkings) {
+      await db.insert(quote_airport_parking).values({
+        quote_id: quoteId,
+        booking_ref: (p.booking_ref as string) || null,
+        tour_operator_id: (p.tour_operator_id as string) || null,
+        airport_id: (p.airport_id as string) || null,
+        parking_type: (p.parking_type as string) || null,
+        parking_date: toDateOrNull(p.parking_date),
+        car_make: (p.car_make as string) || null,
+        car_model: (p.car_model as string) || null,
+        colour: (p.colour as string) || null,
+        car_reg_number: (p.car_reg_number as string) || null,
+        duration: (p.duration as string) || null,
+        cost: p.cost != null ? String(p.cost) : null,
+        commission: p.commission != null ? String(p.commission) : null,
+        is_included_in_package: (p.is_included_in_package as boolean) ?? true,
+      } as InsertQuoteAirportParking);
+    }
+  },
+
+  async replaceExtraAccommodations(quoteId: string, accomms: Array<Record<string, unknown>>): Promise<void> {
+    await db.delete(quote_accomodation)
+      .where(and(eq(quote_accomodation.quote_id, quoteId), eq(quote_accomodation.is_primary, false)));
+    for (const a of accomms) {
+      const converted = convertAccommodationDates(a) as Partial<InsertQuoteAccomodation>;
+      await db.insert(quote_accomodation).values({
+        ...converted,
+        quote_id: quoteId,
+        is_primary: false,
+        booking_ref: (a.booking_ref as string) || null,
+        tour_operator_id: (a.tour_operator_id as string) || null,
+        accomodation_id: (a.accomodation_id as string) || null,
+        board_basis_id: (a.board_basis_id as string) || null,
+        room_type: (a.room_type as string) || null,
+        no_of_nights: (a.no_of_nights as number) ?? 0,
+        cost: a.cost != null ? String(a.cost) : null,
+        commission: a.commission != null ? String(a.commission) : null,
+        is_included_in_package: (a.is_included_in_package as boolean) ?? true,
+      } as InsertQuoteAccomodation);
     }
   },
 };

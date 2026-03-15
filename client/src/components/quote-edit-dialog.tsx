@@ -45,6 +45,91 @@ function splitDateTime(iso: string | undefined | null): { date: string; time: st
   };
 }
 
+function buildExtrasPayload(values: {
+  transfers: any[]; carHires: any[]; attractionTickets: any[];
+  loungePasses: any[]; airportParkings: any[]; extraAccommodations: any[];
+}) {
+  const buildDateTime = (date: string, time: string) => {
+    if (!date) return null;
+    return time ? `${date}T${time}:00` : `${date}T00:00:00`;
+  };
+  return {
+    transfers: values.transfers.map(t => ({
+      booking_ref: t.bookingRef || null,
+      tour_operator_id: t.tourOperatorId || null,
+      pick_up_location: t.pickUpLocation || null,
+      drop_off_location: t.dropOffLocation || null,
+      pick_up_time: buildDateTime(t.pickUpDate, t.pickUpTime),
+      drop_off_time: buildDateTime(t.dropOffDate, t.dropOffTime),
+      note: t.note || null,
+      cost: String(t.cost || 0),
+      commission: String(t.commission || 0),
+      is_included_in_package: t.isIncludedInPackage,
+    })),
+    carHires: values.carHires.map(c => ({
+      booking_ref: c.bookingRef || null,
+      tour_operator_id: c.tourOperatorId || null,
+      pick_up_location: c.pickUpLocation || null,
+      drop_off_location: c.dropOffLocation || null,
+      pick_up_time: buildDateTime(c.pickUpDate, c.pickUpTime),
+      drop_off_time: buildDateTime(c.dropOffDate, c.dropOffTime),
+      no_of_days: c.noOfDays,
+      driver_age: c.driverAge,
+      cost: String(c.cost || 0),
+      commission: String(c.commission || 0),
+      is_included_in_package: c.isIncludedInPackage,
+    })),
+    attractionTickets: values.attractionTickets.map(t => ({
+      booking_ref: t.bookingRef || null,
+      tour_operator_id: t.tourOperatorId || null,
+      ticket_type: t.ticketType || null,
+      date_of_visit: t.dateOfVisit ? `${t.dateOfVisit}T00:00:00` : null,
+      number_of_tickets: t.numberOfTickets,
+      cost: String(t.cost || 0),
+      commission: String(t.commission || 0),
+      is_included_in_package: t.isIncludedInPackage,
+    })),
+    loungePasses: values.loungePasses.map(p => ({
+      booking_ref: p.bookingRef || null,
+      tour_operator_id: p.tourOperatorId || null,
+      airport_id: p.airportId || null,
+      terminal: p.terminal || null,
+      date_of_usage: p.dateOfUsage ? `${p.dateOfUsage}T00:00:00` : null,
+      note: p.note || null,
+      cost: String(p.cost || 0),
+      commission: String(p.commission || 0),
+      is_included_in_package: p.isIncludedInPackage,
+    })),
+    airportParkings: values.airportParkings.map(p => ({
+      booking_ref: p.bookingRef || null,
+      tour_operator_id: p.tourOperatorId || null,
+      airport_id: p.airportId || null,
+      parking_type: p.parkingType || null,
+      parking_date: p.parkingDate ? `${p.parkingDate}T00:00:00` : null,
+      car_make: p.carMake || null,
+      car_model: p.carModel || null,
+      colour: p.colour || null,
+      car_reg_number: p.carRegNumber || null,
+      duration: p.duration || null,
+      cost: String(p.cost || 0),
+      commission: String(p.commission || 0),
+      is_included_in_package: p.isIncludedInPackage,
+    })),
+    extraAccommodations: values.extraAccommodations.map(a => ({
+      booking_ref: a.bookingRef || null,
+      tour_operator_id: a.tourOperatorId || null,
+      accomodation_id: a.accommodationId || null,
+      board_basis_id: a.boardBasisId || null,
+      room_type: a.roomType || null,
+      check_in_date_time: buildDateTime(a.checkInDate, a.checkInTime),
+      no_of_nights: a.noOfNights,
+      cost: String(a.cost || 0),
+      commission: String(a.commission || 0),
+      is_included_in_package: a.isIncludedInPackage,
+    })),
+  };
+}
+
 function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
   const flights = quoteData.flights || [];
   const outboundFlights = flights
@@ -163,6 +248,88 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     discount: discounts,
     serviceCharge: serviceCharge,
     pricePerPerson: pricePerPerson,
+
+    // Extras
+    transfers: (quoteData.transfers || []).map((t: any) => ({
+      bookingRef: t.booking_ref || "",
+      tourOperatorId: t.tour_operator_id || "",
+      pickUpLocation: t.pick_up_location || "",
+      dropOffLocation: t.drop_off_location || "",
+      pickUpDate: splitDateTime(t.pick_up_time?.toString?.()).date,
+      pickUpTime: splitDateTime(t.pick_up_time?.toString?.()).time,
+      dropOffDate: splitDateTime(t.drop_off_time?.toString?.()).date,
+      dropOffTime: splitDateTime(t.drop_off_time?.toString?.()).time,
+      note: t.note || "",
+      cost: parseFloat(String(t.cost || 0)) || 0,
+      commission: parseFloat(String(t.commission || 0)) || 0,
+      isIncludedInPackage: t.is_included_in_package ?? true,
+    })),
+    carHires: (quoteData.carHires || []).map((c: any) => ({
+      bookingRef: c.booking_ref || "",
+      tourOperatorId: c.tour_operator_id || "",
+      pickUpLocation: c.pick_up_location || "",
+      dropOffLocation: c.drop_off_location || "",
+      pickUpDate: splitDateTime(c.pick_up_time?.toString?.()).date,
+      pickUpTime: splitDateTime(c.pick_up_time?.toString?.()).time,
+      dropOffDate: splitDateTime(c.drop_off_time?.toString?.()).date,
+      dropOffTime: splitDateTime(c.drop_off_time?.toString?.()).time,
+      noOfDays: c.no_of_days ?? 1,
+      driverAge: c.driver_age ?? 25,
+      cost: parseFloat(String(c.cost || 0)) || 0,
+      commission: parseFloat(String(c.commission || 0)) || 0,
+      isIncludedInPackage: c.is_included_in_package ?? true,
+    })),
+    attractionTickets: (quoteData.attractionTickets || []).map((t: any) => ({
+      bookingRef: t.booking_ref || "",
+      tourOperatorId: t.tour_operator_id || "",
+      ticketType: t.ticket_type || "",
+      dateOfVisit: splitDateTime(t.date_of_visit?.toString?.()).date,
+      numberOfTickets: t.number_of_tickets ?? 1,
+      cost: parseFloat(String(t.cost || 0)) || 0,
+      commission: parseFloat(String(t.commission || 0)) || 0,
+      isIncludedInPackage: t.is_included_in_package ?? true,
+    })),
+    loungePasses: (quoteData.loungePasses || []).map((p: any) => ({
+      bookingRef: p.booking_ref || "",
+      tourOperatorId: p.tour_operator_id || "",
+      airportId: p.airport_id || "",
+      terminal: p.terminal || "",
+      dateOfUsage: splitDateTime(p.date_of_usage?.toString?.()).date,
+      note: p.note || "",
+      cost: parseFloat(String(p.cost || 0)) || 0,
+      commission: parseFloat(String(p.commission || 0)) || 0,
+      isIncludedInPackage: p.is_included_in_package ?? true,
+    })),
+    airportParkings: (quoteData.airportParkings || []).map((p: any) => ({
+      bookingRef: p.booking_ref || "",
+      tourOperatorId: p.tour_operator_id || "",
+      airportId: p.airport_id || "",
+      parkingType: p.parking_type || "",
+      parkingDate: splitDateTime(p.parking_date?.toString?.()).date,
+      carMake: p.car_make || "",
+      carModel: p.car_model || "",
+      colour: p.colour || "",
+      carRegNumber: p.car_reg_number || "",
+      duration: p.duration || "",
+      cost: parseFloat(String(p.cost || 0)) || 0,
+      commission: parseFloat(String(p.commission || 0)) || 0,
+      isIncludedInPackage: p.is_included_in_package ?? true,
+    })),
+    extraAccommodations: (quoteData.accommodations || [])
+      .filter((a: any) => !a.is_primary)
+      .map((a: any) => ({
+        bookingRef: a.booking_ref || "",
+        tourOperatorId: a.tour_operator_id || "",
+        accommodationId: a.accomodation_id || "",
+        boardBasisId: a.board_basis_id || "",
+        roomType: a.room_type || "",
+        checkInDate: splitDateTime(a.check_in_date_time?.toString?.()).date,
+        checkInTime: splitDateTime(a.check_in_date_time?.toString?.()).time,
+        noOfNights: a.no_of_nights ?? 0,
+        cost: parseFloat(String(a.cost || 0)) || 0,
+        commission: parseFloat(String(a.commission || 0)) || 0,
+        isIncludedInPackage: a.is_included_in_package ?? true,
+      })),
   };
 }
 
@@ -266,6 +433,7 @@ function buildUpdatePayload(
     payload.cruiseOnly = values.cruiseOnly;
   }
 
+  Object.assign(payload, buildExtrasPayload(values));
   return payload;
 }
 

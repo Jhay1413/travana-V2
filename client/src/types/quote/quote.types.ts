@@ -353,6 +353,10 @@ export interface EnrichedQuote extends Quote {
   accommodations?: EnrichedQuoteAccommodation[];
   cruises?: EnrichedQuoteCruise[];
   tags?: string[];
+  // Travel deal fields (joined from travel_deal table)
+  dealId?: string | null;
+  onlySocialsId?: string | null;
+  postSchedule?: string | null;
 }
 
 export interface EnrichedBooking extends Booking {

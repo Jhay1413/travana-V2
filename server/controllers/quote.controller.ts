@@ -23,8 +23,10 @@ export const quoteController = {
   listFreeQuotes: asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 0;
     const pageSize = parseInt(req.query.pageSize as string) || 12;
+    const scheduledOnly = req.query.scheduledOnly === "true";
+    const scheduleFilter = (req.query.scheduleFilter as string) || "none";
 
-    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize);
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter);
     
     return successResponse(res, {
       quotes,

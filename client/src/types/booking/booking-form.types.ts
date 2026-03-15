@@ -78,10 +78,96 @@ export const bookingFormSchema = z.object({
   discount: z.coerce.number().min(0).default(0),
   serviceCharge: z.coerce.number().min(0).default(0),
   pricePerPerson: z.coerce.number().min(0).default(0),
+
+  // Extras
+  transfers: z.array(z.object({
+    bookingRef: z.string().default(""),
+    tourOperatorId: z.string().default(""),
+    pickUpLocation: z.string().default(""),
+    dropOffLocation: z.string().default(""),
+    pickUpDate: z.string().default(""),
+    pickUpTime: z.string().default(""),
+    dropOffDate: z.string().default(""),
+    dropOffTime: z.string().default(""),
+    note: z.string().default(""),
+    cost: z.coerce.number().min(0).default(0),
+    commission: z.coerce.number().min(0).default(0),
+    isIncludedInPackage: z.boolean().default(true),
+  })).default([]),
+
+  carHires: z.array(z.object({
+    bookingRef: z.string().default(""),
+    tourOperatorId: z.string().default(""),
+    pickUpLocation: z.string().default(""),
+    dropOffLocation: z.string().default(""),
+    pickUpDate: z.string().default(""),
+    pickUpTime: z.string().default(""),
+    dropOffDate: z.string().default(""),
+    dropOffTime: z.string().default(""),
+    noOfDays: z.coerce.number().int().min(0).default(1),
+    driverAge: z.coerce.number().int().min(0).default(25),
+    cost: z.coerce.number().min(0).default(0),
+    commission: z.coerce.number().min(0).default(0),
+    isIncludedInPackage: z.boolean().default(true),
+  })).default([]),
+
+  attractionTickets: z.array(z.object({
+    bookingRef: z.string().default(""),
+    tourOperatorId: z.string().default(""),
+    ticketType: z.string().default(""),
+    dateOfVisit: z.string().default(""),
+    numberOfTickets: z.coerce.number().int().min(1).default(1),
+    cost: z.coerce.number().min(0).default(0),
+    commission: z.coerce.number().min(0).default(0),
+    isIncludedInPackage: z.boolean().default(true),
+  })).default([]),
+
+  loungePasses: z.array(z.object({
+    bookingRef: z.string().default(""),
+    tourOperatorId: z.string().default(""),
+    airportId: z.string().default(""),
+    terminal: z.string().default(""),
+    dateOfUsage: z.string().default(""),
+    note: z.string().default(""),
+    cost: z.coerce.number().min(0).default(0),
+    commission: z.coerce.number().min(0).default(0),
+    isIncludedInPackage: z.boolean().default(true),
+  })).default([]),
+
+  airportParkings: z.array(z.object({
+    bookingRef: z.string().default(""),
+    tourOperatorId: z.string().default(""),
+    airportId: z.string().default(""),
+    parkingType: z.string().default(""),
+    parkingDate: z.string().default(""),
+    carMake: z.string().default(""),
+    carModel: z.string().default(""),
+    colour: z.string().default(""),
+    carRegNumber: z.string().default(""),
+    duration: z.string().default(""),
+    cost: z.coerce.number().min(0).default(0),
+    commission: z.coerce.number().min(0).default(0),
+    isIncludedInPackage: z.boolean().default(true),
+  })).default([]),
+
+  extraAccommodations: z.array(z.object({
+    bookingRef: z.string().default(""),
+    tourOperatorId: z.string().default(""),
+    accommodationId: z.string().default(""),
+    boardBasisId: z.string().default(""),
+    roomType: z.string().default(""),
+    checkInDate: z.string().default(""),
+    checkInTime: z.string().default(""),
+    noOfNights: z.coerce.number().int().min(0).default(0),
+    cost: z.coerce.number().min(0).default(0),
+    commission: z.coerce.number().min(0).default(0),
+    isIncludedInPackage: z.boolean().default(true),
+  })).default([]),
 });
 
 export type FlightLegValue = z.infer<typeof flightLegSchema>;
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
+export type ExtrasFormValues = Pick<BookingFormValues, "transfers" | "carHires" | "attractionTickets" | "loungePasses" | "airportParkings" | "extraAccommodations">;
 
 export const defaultBookingFormValues: BookingFormValues = {
   haysRef: "",
@@ -141,6 +227,12 @@ export const defaultBookingFormValues: BookingFormValues = {
   discount: 0,
   serviceCharge: 0,
   pricePerPerson: 0,
+  transfers: [],
+  carHires: [],
+  attractionTickets: [],
+  loungePasses: [],
+  airportParkings: [],
+  extraAccommodations: [],
 };
 
 export interface BookingRHFFormProps {

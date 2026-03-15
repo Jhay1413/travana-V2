@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
-import { useTravelDeal } from "@/hooks/queries/use-social-post-queries";
 import { useGeneratePost } from "@/hooks/mutations/use-social-post-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { SocialPostPreviewDialog } from "@/components/social-post-preview-dialog";
@@ -25,7 +24,8 @@ import {
 import type { EnrichedQuote } from "@/types/quote";
 import type { TravelDeal } from "@/api/endpoints/social-post.api";
 
-type DateFilter = "all" | "today" | "tomorrow" | "custom";
+type ViewMode = "scheduled" | "all";
+type ScheduleFilter = "none" | "this-week" | "next-week" | "next-month";
 
 interface SocialPost {
   quote: EnrichedQuote;
@@ -44,12 +44,6 @@ function formatPrice(price: string | null | undefined): string {
   const num = parseFloat(price);
   if (isNaN(num)) return "—";
   return `£${num.toFixed(2)}`;
-}
-
-function isSameDay(dateStr: string | null | undefined, target: Date): boolean {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  return d.getFullYear() === target.getFullYear() && d.getMonth() === target.getMonth() && d.getDate() === target.getDate();
 }
 
 function getSubtitle(q: EnrichedQuote): string {
@@ -83,12 +77,16 @@ function getFirstImage(q: EnrichedQuote): string | null {
   return null;
 }
 
+
 function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; }) {
   const { quote } = post;
   const imageUrl = getFirstImage(quote);
   const tourOp = quote.main_tour_operator_name;
   const pricePerPerson = quote.price_per_person ? `${formatPrice(quote.price_per_person)}pp` : formatPrice(quote.sales_price);
-  const { data: existingDeal } = useTravelDeal(quote.id);
+
+  // Use deal state from the enriched quote (joined from travel_deal)
+  const isScheduled = !!quote.onlySocialsId;
+  const hasDeal = !!quote.dealId;
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="glass ringed grain rounded-2xl overflow-hidden flex flex-col" data-testid={`card-social-post-${quote.id}`}>
@@ -99,6 +97,11 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
           <img src="/images/default-hotel.jpg" alt="Default hotel" className="w-full h-full object-cover" />
         )}
         {tourOp && <Badge className="absolute top-3 left-3 bg-orange-500 text-white border-0 shadow-lg text-xs font-semibold px-3 py-1 rounded-full" data-testid={`badge-tour-op-${quote.id}`}>{tourOp}</Badge>}
+        {isScheduled && (
+          <Badge className="absolute top-3 right-3 bg-green-500 text-white border-0 shadow-lg text-xs font-semibold px-3 py-1 rounded-full">
+            <Clock className="w-3 h-3 mr-1 inline" />Scheduled
+          </Badge>
+        )}
       </div>
       <div className="p-4 pb-5 flex-1 flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
@@ -114,7 +117,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Nights:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-nights-${quote.id}`}>{quote.num_of_nights}</span></div>
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><UtensilsCrossed className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Board:</span><span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-board-${quote.id}`}>{getBoardBasis(quote)}</span></div>
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Date:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-travel-date-${quote.id}`}>{formatDate(quote.travel_date)}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Date Created:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-created-${quote.id}`}>{formatDate(quote.date_created)}</span></div>
+          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Scheduled:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-scheduled-${quote.id}`}>{formatDate(quote.postSchedule)}</span></div>
         </div>
         {quote.quote_ref && <div className="text-xs text-black/60 dark:text-white/50">View Link: <a href={quote.quote_ref} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline" data-testid={`link-view-${quote.id}`}>View</a></div>}
         <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
@@ -122,12 +125,10 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
             <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2" data-testid={`button-view-quote-${quote.id}`}><Eye className="w-4 h-4" />View Quote</Button>
           </Link>
           <div className="mt-4" />
-          {existingDeal ? (
-            existingDeal.onlySocialsId ? (
-              <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white" data-testid={`button-scheduled-${quote.id}`}><Clock className="w-4 h-4" />Scheduled</Button>
-            ) : (
-              <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-orange-500 hover:bg-orange-600 text-white" data-testid={`button-schedule-post-${quote.id}`}><CalendarClock className="w-4 h-4" />Schedule Post</Button>
-            )
+          {isScheduled ? (
+            <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white" data-testid={`button-scheduled-${quote.id}`}><Clock className="w-4 h-4" />Scheduled</Button>
+          ) : hasDeal ? (
+            <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-orange-500 hover:bg-orange-600 text-white" data-testid={`button-schedule-post-${quote.id}`}><CalendarClock className="w-4 h-4" />Schedule Post</Button>
           ) : (
             <Button onClick={() => onGeneratePost(quote)} disabled={isGenerating} className="w-full rounded-xl text-sm font-medium gap-2 bg-blue-500 hover:bg-blue-600 text-white" data-testid={`button-generate-post-${quote.id}`}>
               {isGenerating ? <Spinner className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
@@ -143,13 +144,13 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
 export default function SocialPostsBoard() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [customDate, setCustomDate] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("scheduled");
+  const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("none");
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
   const [previewDeal, setPreviewDeal] = useState<TravelDeal | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const generatePost = useGeneratePost();
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12);
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", viewMode === "scheduled" ? scheduleFilter : "none");
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -168,15 +169,20 @@ export default function SocialPostsBoard() {
 
   const filteredPosts = useMemo(() => {
     let result = socialPosts;
+
     if (searchQuery.trim()) {
       const needle = searchQuery.trim().toLowerCase();
-      result = result.filter(({ quote: q }) => (q.title || "").toLowerCase().includes(needle) || getHotelName(q).toLowerCase().includes(needle) || getDepartingAirport(q).toLowerCase().includes(needle) || getSubtitle(q).toLowerCase().includes(needle) || (q.main_tour_operator_name || "").toLowerCase().includes(needle));
+      result = result.filter(({ quote: q }) =>
+        (q.title || "").toLowerCase().includes(needle) ||
+        getHotelName(q).toLowerCase().includes(needle) ||
+        getDepartingAirport(q).toLowerCase().includes(needle) ||
+        getSubtitle(q).toLowerCase().includes(needle) ||
+        (q.main_tour_operator_name || "").toLowerCase().includes(needle)
+      );
     }
-    if (dateFilter === "today") { const today = new Date(); result = result.filter(({ quote: q }) => isSameDay(q.date_created, today)); }
-    else if (dateFilter === "tomorrow") { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); result = result.filter(({ quote: q }) => isSameDay(q.date_created, tomorrow)); }
-    else if (dateFilter === "custom" && customDate) { const target = new Date(customDate + "T00:00:00"); result = result.filter(({ quote: q }) => isSameDay(q.date_created, target)); }
+
     return result;
-  }, [socialPosts, searchQuery, dateFilter, customDate]);
+  }, [socialPosts, searchQuery]);
 
   const handleGeneratePost = async (quote: EnrichedQuote) => {
     const imageUrl = getFirstImage(quote);
@@ -203,11 +209,11 @@ export default function SocialPostsBoard() {
     });
   };
 
-  const dateButtons: { label: string; value: DateFilter }[] = [
-    { label: "All", value: "all" },
-    { label: "Today", value: "today" },
-    { label: "Tomorrow", value: "tomorrow" },
-    { label: "By Date", value: "custom" },
+  const scheduleFilterButtons: { label: string; value: ScheduleFilter }[] = [
+    { label: "All Scheduled", value: "none" },
+    { label: "This Week", value: "this-week" },
+    { label: "Next Week", value: "next-week" },
+    { label: "Next Month", value: "next-month" },
   ];
 
   return (
@@ -219,18 +225,43 @@ export default function SocialPostsBoard() {
             <Input placeholder="Search by title, hotel, airport, destination..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10" data-testid="input-search-social-posts" />
           </div>
           <div className="flex items-center gap-2">
-            {dateButtons.map((btn) => (
-              <Button key={btn.value} size="sm" variant={dateFilter === btn.value ? "default" : "outline"} className={`rounded-xl text-xs font-medium ${dateFilter === btn.value ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`} onClick={() => setDateFilter(btn.value)} data-testid={`button-filter-${btn.value}`}>{btn.label}</Button>
-            ))}
-            <AnimatePresence>
-              {dateFilter === "custom" && (
-                <motion.div initial={{ width: 0, opacity: 0 }} animate={{ width: "auto", opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="overflow-hidden">
-                  <Input type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)} className="w-40 rounded-xl text-xs bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10" data-testid="input-custom-date" />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <Button
+              size="sm"
+              variant={viewMode === "scheduled" ? "default" : "outline"}
+              className={`rounded-xl text-xs font-medium ${viewMode === "scheduled" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
+              onClick={() => { setViewMode("scheduled"); setScheduleFilter("none"); }}
+              data-testid="button-view-scheduled"
+            >
+              <Clock className="w-3.5 h-3.5 mr-1" />Scheduled
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "all" ? "default" : "outline"}
+              className={`rounded-xl text-xs font-medium ${viewMode === "all" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
+              onClick={() => { setViewMode("all"); setScheduleFilter("none"); }}
+              data-testid="button-view-all"
+            >
+              Show All
+            </Button>
           </div>
         </div>
+
+        {viewMode === "scheduled" && (
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {scheduleFilterButtons.map((btn) => (
+              <Button
+                key={btn.value}
+                size="sm"
+                variant={scheduleFilter === btn.value ? "default" : "outline"}
+                className={`rounded-xl text-xs font-medium ${scheduleFilter === btn.value ? "bg-green-500 hover:bg-green-600 text-white" : "border-black/10 dark:border-white/10"}`}
+                onClick={() => setScheduleFilter(btn.value)}
+                data-testid={`button-schedule-filter-${btn.value}`}
+              >
+                {btn.label}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between">
@@ -245,7 +276,9 @@ export default function SocialPostsBoard() {
         <div className="glass ringed grain rounded-2xl p-12 text-center">
           <CalendarClock className="w-12 h-12 mx-auto text-black/20 dark:text-white/20 mb-3" />
           <p className="text-sm font-medium text-black/60 dark:text-white/60">No posts found</p>
-          <p className="text-xs text-black/40 dark:text-white/40 mt-1">Try adjusting your search or date filters</p>
+          <p className="text-xs text-black/40 dark:text-white/40 mt-1">
+            {viewMode === "scheduled" ? "No scheduled posts match your filters" : "Try adjusting your search"}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

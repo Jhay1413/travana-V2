@@ -26,6 +26,12 @@ interface QuoteRelationData {
   primaryAccommodation?: Partial<InsertQuoteAccomodation>;
   images?: string[];
   tags?: string[];
+  transfers?: Record<string, unknown>[];
+  carHires?: Record<string, unknown>[];
+  attractionTickets?: Record<string, unknown>[];
+  loungePasses?: Record<string, unknown>[];
+  airportParkings?: Record<string, unknown>[];
+  extraAccommodations?: Record<string, unknown>[];
 }
 
 type CreateQuotePayload = InsertQuote & QuoteRelationData;
@@ -42,6 +48,12 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   cruiseOnly?: boolean;
   lead_source?: string;
   images?: string[];
+  transfers?: Record<string, unknown>[];
+  carHires?: Record<string, unknown>[];
+  attractionTickets?: Record<string, unknown>[];
+  loungePasses?: Record<string, unknown>[];
+  airportParkings?: Record<string, unknown>[];
+  extraAccommodations?: Record<string, unknown>[];
 };
 
 function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown): string {
@@ -93,8 +105,8 @@ export const newQuoteService = {
     return await newQuoteRepository.findByStatus(status);
   },
 
-  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12) {
-    return await newQuoteRepository.findFreeQuotesPaginated(page, pageSize);
+  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none") {
+    return await newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter);
   },
 
   async getQuoteById(id: string) {
@@ -114,6 +126,7 @@ export const newQuoteService = {
   async createQuote(data: CreateQuotePayload) {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...quoteFields
     } = data;
 
@@ -150,6 +163,25 @@ export const newQuoteService = {
     }
     if (primaryAccommodation) {
       await newQuoteRepository.upsertPrimaryAccommodation(q.id, primaryAccommodation);
+    }
+
+    if (transfers !== undefined) {
+      await newQuoteRepository.replaceTransfers(q.id, transfers);
+    }
+    if (carHires !== undefined) {
+      await newQuoteRepository.replaceCarHires(q.id, carHires);
+    }
+    if (attractionTickets !== undefined) {
+      await newQuoteRepository.replaceAttractionTickets(q.id, attractionTickets);
+    }
+    if (loungePasses !== undefined) {
+      await newQuoteRepository.replaceLoungePasses(q.id, loungePasses);
+    }
+    if (airportParkings !== undefined) {
+      await newQuoteRepository.replaceAirportParkings(q.id, airportParkings);
+    }
+    if (extraAccommodations !== undefined) {
+      await newQuoteRepository.replaceExtraAccommodations(q.id, extraAccommodations);
     }
 
     const normalizedImages = normalizeUniqueImageUrls(images);
@@ -202,6 +234,24 @@ export const newQuoteService = {
         if (primaryAccommodation) {
           await newQuoteRepository.upsertPrimaryAccommodation(freeQ.id, primaryAccommodation);
         }
+        if (transfers !== undefined) {
+          await newQuoteRepository.replaceTransfers(freeQ.id, transfers);
+        }
+        if (carHires !== undefined) {
+          await newQuoteRepository.replaceCarHires(freeQ.id, carHires);
+        }
+        if (attractionTickets !== undefined) {
+          await newQuoteRepository.replaceAttractionTickets(freeQ.id, attractionTickets);
+        }
+        if (loungePasses !== undefined) {
+          await newQuoteRepository.replaceLoungePasses(freeQ.id, loungePasses);
+        }
+        if (airportParkings !== undefined) {
+          await newQuoteRepository.replaceAirportParkings(freeQ.id, airportParkings);
+        }
+        if (extraAccommodations !== undefined) {
+          await newQuoteRepository.replaceExtraAccommodations(freeQ.id, extraAccommodations);
+        }
         if (normalizedImages.length > 0) {
           await quoteImageRepository.addImages(freeQ.id, normalizedImages);
         }
@@ -253,12 +303,93 @@ export const newQuoteService = {
     } = sourceQuote;
 
     // Create duplicate under SAME transaction with isQuoteCopy=true
+    // Fetch source extras for duplication
+    const sourceDetails = await newQuoteRepository.findWithDetails(sourceQuoteId);
+    const sourceExtras = sourceDetails ? {
+      transfers: (sourceDetails.transfers || []).map((t: Record<string, unknown>) => ({
+        booking_ref: t.booking_ref,
+        tour_operator_id: t.tour_operator_id,
+        pick_up_location: t.pick_up_location,
+        drop_off_location: t.drop_off_location,
+        pick_up_time: t.pick_up_time,
+        drop_off_time: t.drop_off_time,
+        note: t.note,
+        cost: t.cost,
+        commission: t.commission,
+        is_included_in_package: t.is_included_in_package,
+      })),
+      carHires: (sourceDetails.carHires || []).map((c: Record<string, unknown>) => ({
+        booking_ref: c.booking_ref,
+        tour_operator_id: c.tour_operator_id,
+        pick_up_location: c.pick_up_location,
+        drop_off_location: c.drop_off_location,
+        pick_up_time: c.pick_up_time,
+        drop_off_time: c.drop_off_time,
+        no_of_days: c.no_of_days,
+        driver_age: c.driver_age,
+        cost: c.cost,
+        commission: c.commission,
+        is_included_in_package: c.is_included_in_package,
+      })),
+      attractionTickets: (sourceDetails.attractionTickets || []).map((t: Record<string, unknown>) => ({
+        booking_ref: t.booking_ref,
+        tour_operator_id: t.tour_operator_id,
+        ticket_type: t.ticket_type,
+        date_of_visit: t.date_of_visit,
+        number_of_tickets: t.number_of_tickets,
+        cost: t.cost,
+        commission: t.commission,
+        is_included_in_package: t.is_included_in_package,
+      })),
+      loungePasses: (sourceDetails.loungePasses || []).map((p: Record<string, unknown>) => ({
+        booking_ref: p.booking_ref,
+        tour_operator_id: p.tour_operator_id,
+        airport_id: p.airport_id,
+        terminal: p.terminal,
+        date_of_usage: p.date_of_usage,
+        note: p.note,
+        cost: p.cost,
+        commission: p.commission,
+        is_included_in_package: p.is_included_in_package,
+      })),
+      airportParkings: (sourceDetails.airportParkings || []).map((p: Record<string, unknown>) => ({
+        booking_ref: p.booking_ref,
+        tour_operator_id: p.tour_operator_id,
+        airport_id: p.airport_id,
+        parking_type: p.parking_type,
+        parking_date: p.parking_date,
+        car_make: p.car_make,
+        car_model: p.car_model,
+        colour: p.colour,
+        car_reg_number: p.car_reg_number,
+        duration: p.duration,
+        cost: p.cost,
+        commission: p.commission,
+        is_included_in_package: p.is_included_in_package,
+      })),
+      extraAccommodations: (sourceDetails.accommodations || [])
+        .filter((a: Record<string, unknown>) => !a.is_primary)
+        .map((a: Record<string, unknown>) => ({
+          booking_ref: a.booking_ref,
+          tour_operator_id: a.tour_operator_id,
+          accomodation_id: a.accomodation_id,
+          board_basis_id: a.board_basis_id,
+          room_type: a.room_type,
+          check_in_date_time: a.check_in_date_time,
+          no_of_nights: a.no_of_nights,
+          cost: a.cost,
+          commission: a.commission,
+          is_included_in_package: a.is_included_in_package,
+        })),
+    } : {};
+
     const payload: CreateQuotePayload = {
       ...(sourceInsertData as InsertQuote),
       ...(data as Partial<InsertQuote>),
       transaction_id: sourceQuote.transaction_id, // Keep same transaction
       isQuoteCopy: true, // Mark as duplicate (original has false)
       images: mergedImages,
+      ...sourceExtras,
     };
 
     const duplicatedQuote = await newQuoteService.createQuote(payload);
@@ -277,6 +408,7 @@ export const newQuoteService = {
       embarkation, debarkation, cruiseExtras, cruiseOnly,
       lead_source,
       images,
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...quoteFields
     } = data;
 
@@ -340,6 +472,25 @@ export const newQuoteService = {
     }
     if (primaryAccommodation) {
       await newQuoteRepository.upsertPrimaryAccommodation(id, primaryAccommodation);
+    }
+
+    if (transfers !== undefined) {
+      await newQuoteRepository.replaceTransfers(id, transfers);
+    }
+    if (carHires !== undefined) {
+      await newQuoteRepository.replaceCarHires(id, carHires);
+    }
+    if (attractionTickets !== undefined) {
+      await newQuoteRepository.replaceAttractionTickets(id, attractionTickets);
+    }
+    if (loungePasses !== undefined) {
+      await newQuoteRepository.replaceLoungePasses(id, loungePasses);
+    }
+    if (airportParkings !== undefined) {
+      await newQuoteRepository.replaceAirportParkings(id, airportParkings);
+    }
+    if (extraAccommodations !== undefined) {
+      await newQuoteRepository.replaceExtraAccommodations(id, extraAccommodations);
     }
 
     if (images && images.length > 0) {

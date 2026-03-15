@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { useForm, useFieldArray, useWatch } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus } from "lucide-react";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
-import type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/types/booking";
+import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues } from "@/types/booking";
+import { QuoteExtrasSection as BookingExtrasSection } from "@/components/quote-extras-section";
 
 export { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
 export type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/types/booking";
@@ -1432,6 +1433,9 @@ export function BookingRHFForm({
             )}
           </div>
         )}
+
+        {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
+        <BookingExtrasSection control={control as Control<ExtrasFormValues>} />
 
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
           <SectionHeader icon={DollarSign} title="Pricing" />

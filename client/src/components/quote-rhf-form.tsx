@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { useForm, useFieldArray, useWatch } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, ImagePlus, ExternalLink } from "lucide-react";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
+import { QuoteExtrasSection } from "@/components/quote-extras-section";
+import type { ExtrasFormValues } from "@/types/booking";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { quoteFormSchema, defaultQuoteFormValues } from "@/types/quote";
 import type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/types/quote";
@@ -1526,6 +1528,9 @@ export function QuoteRHFForm({
             )}
           </div>
         )}
+
+        {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
+        <QuoteExtrasSection control={control as Control<ExtrasFormValues>} />
 
         {/* ── PRICING ───────────────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
