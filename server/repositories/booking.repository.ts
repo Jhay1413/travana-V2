@@ -420,6 +420,80 @@ export const bookingRepository = {
     return result;
   },
 
+  async replaceTransfers(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
+    await db.delete(booking_transfers).where(eq(booking_transfers.booking_id, bookingId));
+    for (const item of items) {
+      await db.insert(booking_transfers).values({
+        ...item,
+        booking_id: bookingId,
+        pick_up_time: toDateOrNull(item.pick_up_time),
+        drop_off_time: toDateOrNull(item.drop_off_time),
+      } as InsertBookingTransfer);
+    }
+  },
+
+  async replaceCarHires(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
+    await db.delete(booking_car_hire).where(eq(booking_car_hire.booking_id, bookingId));
+    for (const item of items) {
+      await db.insert(booking_car_hire).values({
+        ...item,
+        booking_id: bookingId,
+        pick_up_time: toDateOrNull(item.pick_up_time),
+        drop_off_time: toDateOrNull(item.drop_off_time),
+      } as InsertBookingCarHire);
+    }
+  },
+
+  async replaceAttractionTickets(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
+    await db.delete(booking_attraction_ticket).where(eq(booking_attraction_ticket.booking_id, bookingId));
+    for (const item of items) {
+      await db.insert(booking_attraction_ticket).values({
+        ...item,
+        booking_id: bookingId,
+        date_of_visit: toDateOrNull(item.date_of_visit),
+      } as InsertBookingAttractionTicket);
+    }
+  },
+
+  async replaceLoungePasses(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
+    await db.delete(booking_lounge_pass).where(eq(booking_lounge_pass.booking_id, bookingId));
+    for (const item of items) {
+      await db.insert(booking_lounge_pass).values({
+        ...item,
+        booking_id: bookingId,
+        date_of_usage: toDateOrNull(item.date_of_usage),
+      } as InsertBookingLoungePass);
+    }
+  },
+
+  async replaceAirportParkings(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
+    await db.delete(booking_airport_parking).where(eq(booking_airport_parking.booking_id, bookingId));
+    for (const item of items) {
+      await db.insert(booking_airport_parking).values({
+        ...item,
+        booking_id: bookingId,
+        parking_date: toDateOrNull(item.parking_date),
+      } as InsertBookingAirportParking);
+    }
+  },
+
+  async replaceExtraAccommodations(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
+    // Delete non-primary accommodations
+    const existing = await db.select().from(booking_accomodation).where(eq(booking_accomodation.booking_id, bookingId));
+    const nonPrimary = existing.filter(a => !a.is_primary);
+    for (const a of nonPrimary) {
+      await db.delete(booking_accomodation).where(eq(booking_accomodation.id, a.id));
+    }
+    for (const item of items) {
+      await db.insert(booking_accomodation).values({
+        ...item,
+        booking_id: bookingId,
+        is_primary: false,
+        check_in_date_time: toDateOrNull(item.check_in_date_time),
+      } as InsertBookingAccomodation);
+    }
+  },
+
   async upsertFlightByType(bookingId: string, flightType: string, data: Partial<InsertBookingFlight>): Promise<BookingFlight> {
     const converted = convertFlightDates(data as Record<string, unknown>) as Partial<InsertBookingFlight>;
     const existing = await db.select().from(booking_flights)

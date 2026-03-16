@@ -1,6 +1,6 @@
-import { Plane, Hotel, Bus, Clock, MapPin, Calendar, Anchor, PawPrint } from "lucide-react";
+import { Plane, Hotel, Bus, Clock, MapPin, Calendar, Anchor, PawPrint, ArrowLeftRight, Car, Ticket, Coffee, ParkingSquare } from "lucide-react";
 import type { QuoteDisplay } from "./quote-types";
-import { formatTimelineDate, formatTime24 } from "./quote-types";
+import { formatTimelineDate, formatTime24, formatIsoDateTime } from "./quote-types";
 
 export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
   const timelineItems: { type: string; sortKey: string; content: React.ReactNode }[] = [];
@@ -449,6 +449,161 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       ) : (
         <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center text-sm text-black/55" data-testid="empty-timeline">
           No travel details added yet. Edit the quote to add flight and accommodation details.
+        </div>
+      )}
+
+      {/* Extras */}
+      {(quote.transfers.length > 0 || quote.carHires.length > 0 || quote.attractionTickets.length > 0 || quote.loungePasses.length > 0 || quote.airportParkings.length > 0 || quote.extraAccommodations.length > 0) && (
+        <div className="mt-4 pt-4 border-t border-black/8" data-testid="section-extras">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-black/40 mb-3">Extras</div>
+          <div className="space-y-2">
+            {quote.transfers.map((t, idx) => (
+              <div key={idx} className="flex gap-2.5" data-testid={`extra-transfer-${idx}`}>
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-sky-200 bg-sky-50 text-sky-600">
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex-1 py-0.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-600">Transfer</div>
+                  {(t.pickUpLocation || t.dropOffLocation) && (
+                    <div className="mt-0.5 text-xs font-semibold">{[t.pickUpLocation, t.dropOffLocation].filter(Boolean).join(" → ")}</div>
+                  )}
+                  <div className="mt-0.5 grid gap-0.5">
+                    {t.pickUpTime && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>Pick-up {formatIsoDateTime(t.pickUpTime)}{t.dropOffTime ? ` · Drop-off ${formatIsoDateTime(t.dropOffTime)}` : ""}</span>
+                      </div>
+                    )}
+                    {t.note && <div className="text-[11px] text-black/50 italic">{t.note}</div>}
+                    {t.tourOperatorName && <div className="text-[11px] text-black/50">{t.tourOperatorName}</div>}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {quote.carHires.map((c, idx) => (
+              <div key={idx} className="flex gap-2.5" data-testid={`extra-carhire-${idx}`}>
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
+                  <Car className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex-1 py-0.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Car Hire</div>
+                  {(c.pickUpLocation || c.dropOffLocation) && (
+                    <div className="mt-0.5 text-xs font-semibold">{[c.pickUpLocation, c.dropOffLocation].filter(Boolean).join(" → ")}</div>
+                  )}
+                  <div className="mt-0.5 grid gap-0.5">
+                    {c.noOfDays != null && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>{c.noOfDays} day{c.noOfDays !== 1 ? "s" : ""}</span>
+                      </div>
+                    )}
+                    {c.tourOperatorName && <div className="text-[11px] text-black/50">{c.tourOperatorName}</div>}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {quote.attractionTickets.map((t, idx) => (
+              <div key={idx} className="flex gap-2.5" data-testid={`extra-ticket-${idx}`}>
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-purple-200 bg-purple-50 text-purple-600">
+                  <Ticket className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex-1 py-0.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-600">Attraction Ticket</div>
+                  {t.ticketType && <div className="mt-0.5 text-xs font-semibold">{t.ticketType}</div>}
+                  <div className="mt-0.5 grid gap-0.5">
+                    {t.dateOfVisit && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{formatTimelineDate(t.dateOfVisit)}</span>
+                      </div>
+                    )}
+                    <div className="text-[11px] text-black/60">{t.numberOfTickets} ticket{t.numberOfTickets !== 1 ? "s" : ""}</div>
+                    {t.tourOperatorName && <div className="text-[11px] text-black/50">{t.tourOperatorName}</div>}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {quote.loungePasses.map((p, idx) => (
+              <div key={idx} className="flex gap-2.5" data-testid={`extra-lounge-${idx}`}>
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-rose-200 bg-rose-50 text-rose-600">
+                  <Coffee className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex-1 py-0.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">Lounge Pass</div>
+                  {(p.airportName || p.terminal) && (
+                    <div className="mt-0.5 text-xs font-semibold">{[p.airportName, p.terminal ? `Terminal ${p.terminal}` : null].filter(Boolean).join(" · ")}</div>
+                  )}
+                  <div className="mt-0.5 grid gap-0.5">
+                    {p.dateOfUsage && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{formatTimelineDate(p.dateOfUsage)}</span>
+                      </div>
+                    )}
+                    {p.note && <div className="text-[11px] text-black/50 italic">{p.note}</div>}
+                    {p.tourOperatorName && <div className="text-[11px] text-black/50">{p.tourOperatorName}</div>}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {quote.airportParkings.map((p, idx) => (
+              <div key={idx} className="flex gap-2.5" data-testid={`extra-parking-${idx}`}>
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
+                  <ParkingSquare className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex-1 py-0.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Airport Parking</div>
+                  {(p.airportName || p.parkingType) && (
+                    <div className="mt-0.5 text-xs font-semibold">{[p.airportName, p.parkingType].filter(Boolean).join(" · ")}</div>
+                  )}
+                  <div className="mt-0.5 grid gap-0.5">
+                    {p.parkingDate && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{formatTimelineDate(p.parkingDate)}</span>
+                      </div>
+                    )}
+                    {p.duration && <div className="text-[11px] text-black/60">{p.duration}</div>}
+                    {p.tourOperatorName && <div className="text-[11px] text-black/50">{p.tourOperatorName}</div>}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {quote.extraAccommodations.map((a, idx) => (
+              <div key={idx} className="flex gap-2.5" data-testid={`extra-accommodation-${idx}`}>
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-600">
+                  <Hotel className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex-1 py-0.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">Extra Accommodation</div>
+                  {a.property && <div className="mt-0.5 text-xs font-semibold">{a.property}</div>}
+                  <div className="mt-0.5 grid gap-0.5">
+                    {a.checkInDate && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{formatTimelineDate(a.checkInDate)}</span>
+                      </div>
+                    )}
+                    {a.noOfNights != null && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>{a.noOfNights} night{a.noOfNights !== 1 ? "s" : ""}</span>
+                      </div>
+                    )}
+                    <div className="mt-0.5 flex flex-wrap gap-1.5">
+                      {a.roomType && <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{a.roomType}</span>}
+                      {a.board && <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{a.board}</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -29,6 +29,12 @@ interface BookingRelationData {
   outboundFlight?: Partial<InsertBookingFlight>;
   inboundFlight?: Partial<InsertBookingFlight>;
   primaryAccommodation?: Partial<InsertBookingAccomodation>;
+  transfers?: Record<string, unknown>[];
+  carHires?: Record<string, unknown>[];
+  attractionTickets?: Record<string, unknown>[];
+  loungePasses?: Record<string, unknown>[];
+  airportParkings?: Record<string, unknown>[];
+  extraAccommodations?: Record<string, unknown>[];
 }
 
 type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
@@ -277,6 +283,7 @@ export const bookingService = {
     
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...bookingFields
     } = data;
 
@@ -322,6 +329,24 @@ export const bookingService = {
     }
     if (primaryAccommodation) {
       await bookingRepository.upsertPrimaryAccommodation(id, primaryAccommodation);
+    }
+    if (transfers !== undefined) {
+      await bookingRepository.replaceTransfers(id, transfers);
+    }
+    if (carHires !== undefined) {
+      await bookingRepository.replaceCarHires(id, carHires);
+    }
+    if (attractionTickets !== undefined) {
+      await bookingRepository.replaceAttractionTickets(id, attractionTickets);
+    }
+    if (loungePasses !== undefined) {
+      await bookingRepository.replaceLoungePasses(id, loungePasses);
+    }
+    if (airportParkings !== undefined) {
+      await bookingRepository.replaceAirportParkings(id, airportParkings);
+    }
+    if (extraAccommodations !== undefined) {
+      await bookingRepository.replaceExtraAccommodations(id, extraAccommodations);
     }
 
     return await bookingRepository.findWithDetails(id);

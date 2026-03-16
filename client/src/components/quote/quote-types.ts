@@ -1,4 +1,4 @@
-import type { EnrichedQuote, EnrichedBooking, Passenger } from "@/types/quote";
+import type { EnrichedQuote, EnrichedBooking, Passenger, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "@/types/quote";
 
 export const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -58,6 +58,15 @@ export function formatTimelineDate(dateStr: string) {
 export function formatTime24(timeStr: string) {
   if (!timeStr) return "";
   return timeStr.slice(0, 5);
+}
+
+export function formatIsoDateTime(isoStr: string | null) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  if (Number.isNaN(d.getTime())) return isoStr;
+  const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return `${date} at ${time}`;
 }
 
 export function formatTagLabel(raw: string) {
@@ -130,6 +139,12 @@ export type QuoteDisplay = {
   pets: number;
   haysRef?: string;
   supplierRef?: string;
+  transfers: Array<{ pickUpLocation: string | null; dropOffLocation: string | null; pickUpTime: string | null; dropOffTime: string | null; note: string | null; tourOperatorName: string | null }>;
+  carHires: Array<{ pickUpLocation: string | null; dropOffLocation: string | null; pickUpTime: string | null; dropOffTime: string | null; noOfDays: number | null; tourOperatorName: string | null }>;
+  attractionTickets: Array<{ ticketType: string | null; dateOfVisit: string | null; numberOfTickets: number | null; tourOperatorName: string | null }>;
+  loungePasses: Array<{ terminal: string | null; airportName: string | null; dateOfUsage: string | null; note: string | null; tourOperatorName: string | null }>;
+  airportParkings: Array<{ parkingType: string | null; airportName: string | null; parkingDate: string | null; duration: string | null; tourOperatorName: string | null }>;
+  extraAccommodations: Array<{ property: string; checkInDate: string; noOfNights: number | null; board: string; roomType: string; tourOperatorName: string | null }>;
 };
 
 export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisplay {
@@ -269,6 +284,50 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     cruise: cruises.length > 0 ? { cruiseLine: cruises[0].cruise_line || "", ship: cruises[0].ship || "", cabinType: cruises[0].cabin_type || "", cruiseName: cruises[0].cruise_name || "", cruiseDate: cruises[0].cruise_date || "", preCruiseStay: cruises[0].pre_cruise_stay || 0, postCruiseStay: cruises[0].post_cruise_stay || 0 } : undefined,
     haysRef: ("hays_ref" in apiData ? apiData.hays_ref : undefined) || undefined,
     supplierRef: ("supplier_ref" in apiData ? apiData.supplier_ref : undefined) || undefined,
+    transfers: (apiData.transfers || []).map((t: EnrichedTransfer) => ({
+      pickUpLocation: t.pick_up_location,
+      dropOffLocation: t.drop_off_location,
+      pickUpTime: t.pick_up_time,
+      dropOffTime: t.drop_off_time,
+      note: t.note,
+      tourOperatorName: t.tour_operator_name ?? null,
+    })),
+    carHires: (apiData.carHires || []).map((c: EnrichedCarHire) => ({
+      pickUpLocation: c.pick_up_location,
+      dropOffLocation: c.drop_off_location,
+      pickUpTime: c.pick_up_time,
+      dropOffTime: c.drop_off_time,
+      noOfDays: c.no_of_days,
+      tourOperatorName: c.tour_operator_name ?? null,
+    })),
+    attractionTickets: (apiData.attractionTickets || []).map((t: EnrichedAttractionTicket) => ({
+      ticketType: t.ticket_type,
+      dateOfVisit: t.date_of_visit,
+      numberOfTickets: t.number_of_tickets,
+      tourOperatorName: t.tour_operator_name ?? null,
+    })),
+    loungePasses: (apiData.loungePasses || []).map((p: EnrichedLoungePass) => ({
+      terminal: p.terminal,
+      airportName: p.airport_name ?? null,
+      dateOfUsage: p.date_of_usage,
+      note: p.note,
+      tourOperatorName: p.tour_operator_name ?? null,
+    })),
+    airportParkings: (apiData.airportParkings || []).map((p: EnrichedAirportParking) => ({
+      parkingType: p.parking_type,
+      airportName: p.airport_name ?? null,
+      parkingDate: p.parking_date,
+      duration: p.duration,
+      tourOperatorName: p.tour_operator_name ?? null,
+    })),
+    extraAccommodations: accommodations.filter(a => !a.is_primary).map(a => ({
+      property: a.accomodation_name || "",
+      checkInDate: a.check_in_date_time?.split("T")[0] || "",
+      noOfNights: a.no_of_nights,
+      board: a.board_basis_name || "",
+      roomType: a.room_type_name || a.room_type || "",
+      tourOperatorName: a.tour_operator_name ?? null,
+    })),
   };
 
   return result;

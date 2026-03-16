@@ -97,6 +97,18 @@ export function splitIsoDateTime(iso: string | null | undefined): {
 }
 
 /**
+ * Format an ISO datetime string to "D Mon at HH:MM"
+ */
+export function formatIsoDateTime(isoStr: string | null): string {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  if (Number.isNaN(d.getTime())) return isoStr;
+  const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return `${date} at ${time}`;
+}
+
+/**
  * Format tag label (trim and normalize spaces)
  */
 export function formatTagLabel(raw: string): string {

@@ -3,7 +3,7 @@
  * Functions that transform API data into display-ready formats.
  */
 
-import type { EnrichedQuote, EnrichedBooking, Passenger, QuoteDisplay } from "./types";
+import type { EnrichedQuote, EnrichedBooking, Passenger, QuoteDisplay, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "./types";
 import { splitIsoDateTime } from "./formatters";
 
 /**
@@ -149,6 +149,50 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
         : undefined,
     haysRef: ("hays_ref" in apiData ? apiData.hays_ref : undefined) || undefined,
     supplierRef: ("supplier_ref" in apiData ? apiData.supplier_ref : undefined) || undefined,
+    transfers: (apiData.transfers || []).map((t: EnrichedTransfer) => ({
+      pickUpLocation: t.pick_up_location,
+      dropOffLocation: t.drop_off_location,
+      pickUpTime: t.pick_up_time,
+      dropOffTime: t.drop_off_time,
+      note: t.note,
+      tourOperatorName: t.tour_operator_name ?? null,
+    })),
+    carHires: (apiData.carHires || []).map((c: EnrichedCarHire) => ({
+      pickUpLocation: c.pick_up_location,
+      dropOffLocation: c.drop_off_location,
+      pickUpTime: c.pick_up_time,
+      dropOffTime: c.drop_off_time,
+      noOfDays: c.no_of_days,
+      tourOperatorName: c.tour_operator_name ?? null,
+    })),
+    attractionTickets: (apiData.attractionTickets || []).map((t: EnrichedAttractionTicket) => ({
+      ticketType: t.ticket_type,
+      dateOfVisit: t.date_of_visit,
+      numberOfTickets: t.number_of_tickets,
+      tourOperatorName: t.tour_operator_name ?? null,
+    })),
+    loungePasses: (apiData.loungePasses || []).map((p: EnrichedLoungePass) => ({
+      terminal: p.terminal,
+      airportName: p.airport_name ?? null,
+      dateOfUsage: p.date_of_usage,
+      note: p.note,
+      tourOperatorName: p.tour_operator_name ?? null,
+    })),
+    airportParkings: (apiData.airportParkings || []).map((p: EnrichedAirportParking) => ({
+      parkingType: p.parking_type,
+      airportName: p.airport_name ?? null,
+      parkingDate: p.parking_date,
+      duration: p.duration,
+      tourOperatorName: p.tour_operator_name ?? null,
+    })),
+    extraAccommodations: accommodations.filter(a => !a.is_primary).map(a => ({
+      property: a.accomodation_name || "",
+      checkInDate: a.check_in_date_time?.split("T")[0] || "",
+      noOfNights: a.no_of_nights,
+      board: a.board_basis_name || "",
+      roomType: a.room_type_name || a.room_type || "",
+      tourOperatorName: a.tour_operator_name ?? null,
+    })),
   };
 
   console.log("✅ Transformed quote leadSource:", result.leadSource);

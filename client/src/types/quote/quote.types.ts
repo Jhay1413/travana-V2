@@ -1,3 +1,96 @@
+import { z } from "zod";
+
+// Enriched extras — include all base type fields plus joined tour_operator_name / airport_name
+// so that EnrichedTransfer is structurally assignable to QuoteTransfer, etc.
+export const enrichedTransferSchema = z.object({
+  id: z.string(),
+  booking_ref: z.string().nullable(),
+  tour_operator_id: z.string().nullable(),
+  pick_up_location: z.string().nullable(),
+  drop_off_location: z.string().nullable(),
+  pick_up_time: z.string().nullable(),
+  drop_off_time: z.string().nullable(),
+  is_included_in_package: z.boolean().nullable(),
+  cost: z.string().nullable(),
+  commission: z.string().nullable(),
+  quote_id: z.string().nullable(),
+  note: z.string().nullable(),
+  tour_operator_name: z.string().nullable().optional(),
+});
+
+export const enrichedCarHireSchema = z.object({
+  id: z.string(),
+  quote_id: z.string().nullable(),
+  booking_ref: z.string().nullable(),
+  tour_operator_id: z.string().nullable(),
+  pick_up_location: z.string().nullable(),
+  drop_off_location: z.string().nullable(),
+  pick_up_time: z.string().nullable(),
+  drop_off_time: z.string().nullable(),
+  no_of_days: z.number(),
+  driver_age: z.number(),
+  is_included_in_package: z.boolean().nullable(),
+  cost: z.string().nullable(),
+  commission: z.string().nullable(),
+  tour_operator_name: z.string().nullable().optional(),
+});
+
+export const enrichedAttractionTicketSchema = z.object({
+  id: z.string(),
+  quote_id: z.string().nullable(),
+  booking_ref: z.string().nullable(),
+  tour_operator_id: z.string().nullable(),
+  ticket_type: z.string().nullable(),
+  date_of_visit: z.string().nullable(),
+  cost: z.string().nullable(),
+  commission: z.string().nullable(),
+  number_of_tickets: z.number(),
+  is_included_in_package: z.boolean().nullable(),
+  tour_operator_name: z.string().nullable().optional(),
+});
+
+export const enrichedLoungePassSchema = z.object({
+  id: z.string(),
+  quote_id: z.string().nullable(),
+  booking_ref: z.string().nullable(),
+  terminal: z.string().nullable(),
+  airport_id: z.string().nullable(),
+  date_of_usage: z.string().nullable(),
+  tour_operator_id: z.string().nullable(),
+  cost: z.string().nullable(),
+  commission: z.string().nullable(),
+  is_included_in_package: z.boolean().nullable(),
+  note: z.string().nullable(),
+  airport_name: z.string().nullable().optional(),
+  tour_operator_name: z.string().nullable().optional(),
+});
+
+export const enrichedAirportParkingSchema = z.object({
+  id: z.string(),
+  booking_ref: z.string().nullable(),
+  quote_id: z.string().nullable(),
+  airport_id: z.string().nullable(),
+  parking_type: z.string().nullable(),
+  parking_date: z.string().nullable(),
+  car_make: z.string().nullable(),
+  car_model: z.string().nullable(),
+  colour: z.string().nullable(),
+  car_reg_number: z.string().nullable(),
+  duration: z.string().nullable(),
+  tour_operator_id: z.string().nullable(),
+  is_included_in_package: z.boolean().nullable(),
+  cost: z.string().nullable(),
+  commission: z.string().nullable(),
+  airport_name: z.string().nullable().optional(),
+  tour_operator_name: z.string().nullable().optional(),
+});
+
+export type EnrichedTransfer = z.infer<typeof enrichedTransferSchema>;
+export type EnrichedCarHire = z.infer<typeof enrichedCarHireSchema>;
+export type EnrichedAttractionTicket = z.infer<typeof enrichedAttractionTicketSchema>;
+export type EnrichedLoungePass = z.infer<typeof enrichedLoungePassSchema>;
+export type EnrichedAirportParking = z.infer<typeof enrichedAirportParkingSchema>;
+
 export interface Transaction {
   id: string;
   status: string | null;
@@ -352,6 +445,11 @@ export interface EnrichedQuote extends Quote {
   flights?: EnrichedQuoteFlight[];
   accommodations?: EnrichedQuoteAccommodation[];
   cruises?: EnrichedQuoteCruise[];
+  transfers?: EnrichedTransfer[];
+  carHires?: EnrichedCarHire[];
+  attractionTickets?: EnrichedAttractionTicket[];
+  loungePasses?: EnrichedLoungePass[];
+  airportParkings?: EnrichedAirportParking[];
   tags?: string[];
   // Travel deal fields (joined from travel_deal table)
   dealId?: string | null;
@@ -375,6 +473,11 @@ export interface EnrichedBooking extends Booking {
   tags?: string[];
   flights?: EnrichedQuoteFlight[];
   accommodations?: EnrichedQuoteAccommodation[];
+  transfers?: EnrichedTransfer[];
+  carHires?: EnrichedCarHire[];
+  attractionTickets?: EnrichedAttractionTicket[];
+  loungePasses?: EnrichedLoungePass[];
+  airportParkings?: EnrichedAirportParking[];
   cruises?: EnrichedQuoteCruise[];
   passengers?: Passenger[];
   images?: DealImage[];

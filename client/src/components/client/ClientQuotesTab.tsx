@@ -152,17 +152,57 @@ export function ClientQuotesTab({
 
             const rowsWithToggles: Array<
               | { type: "quote"; row: (typeof groupRowsSorted)[number]; isChild: boolean }
-              | { type: "toggle"; parentId: string; count: number }
+              | { type: "toggle"; parentId: string; count: number; label: string }
             > = [];
 
             for (const main of mainRows) {
-              const copies = copyRows.filter((copy) => copy.transactionId === main.transactionId);
               rowsWithToggles.push({ type: "quote", row: main, isChild: false });
-              if (copies.length > 0) {
-                rowsWithToggles.push({ type: "toggle", parentId: main.id, count: copies.length });
-                if (expandedCopyGroups[main.id]) {
-                  for (const copy of copies) {
-                    rowsWithToggles.push({ type: "quote", row: copy, isChild: true });
+
+              if (group.id === "won") {
+                // For WON, show all quotes from the same transaction as collapsible children
+                const relatedQuoteRows = quotes
+                  .filter((q) => q.transaction_id === main.transactionId)
+                  .map((q) => {
+                    const salesPrice = parseFloat(q.sales_price || "0");
+                    const discount = parseFloat(q.discounts || "0");
+                    const serviceCharge = parseFloat(q.service_charge || "0");
+                    const netPrice = salesPrice - discount + serviceCharge;
+                    return {
+                      id: q.id,
+                      transactionId: q.transaction_id,
+                      title: q.title || q.holiday_type_name || "Quote",
+                      isQuoteCopy: Boolean(q.isQuoteCopy),
+                      destination: q.holiday_type_name || (q as any).quote_type || "—",
+                      travelDate: q.travel_date,
+                      createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                      createdAtRaw: q.date_created || "",
+                      status: q.quote_status || "NEW_LEAD",
+                      totalCost: netPrice,
+                      pricePerPerson: parseFloat(q.price_per_person || "0"),
+                      imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
+                      pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
+                      nights: q.num_of_nights || 0,
+                      isBooking: false,
+                    };
+                  });
+
+                if (relatedQuoteRows.length > 0) {
+                  rowsWithToggles.push({ type: "toggle", parentId: main.id, count: relatedQuoteRows.length, label: "quote" });
+                  if (expandedCopyGroups[main.id]) {
+                    for (const relatedRow of relatedQuoteRows) {
+                      rowsWithToggles.push({ type: "quote", row: relatedRow, isChild: true });
+                    }
+                  }
+                }
+              } else {
+                // For In Play, show copies from the same transaction
+                const copies = copyRows.filter((copy) => copy.transactionId === main.transactionId);
+                if (copies.length > 0) {
+                  rowsWithToggles.push({ type: "toggle", parentId: main.id, count: copies.length, label: "copy" });
+                  if (expandedCopyGroups[main.id]) {
+                    for (const copy of copies) {
+                      rowsWithToggles.push({ type: "quote", row: copy, isChild: true });
+                    }
                   }
                 }
               }
@@ -209,7 +249,7 @@ export function ClientQuotesTab({
                           }
                         >
                           <ChevronDown className={`h-3.5 w-3.5 transition ${isExpanded ? "rotate-180" : ""}`} />
-                          {isExpanded ? "Hide" : "Show"} {item.count} {item.count === 1 ? "copy" : "copies"}
+                          {isExpanded ? "Hide" : "Show"} {item.count} {item.count === 1 ? item.label : item.label === "quote" ? "quotes" : "copies"}
                         </button>
                       );
                     }

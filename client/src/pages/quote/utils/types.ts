@@ -3,7 +3,7 @@
  * Centralized type definitions for quote display and management.
  */
 
-import type { EnrichedQuote, EnrichedBooking, TransactionNote, Passenger, DealImage } from "@/types/quote";
+import type { EnrichedQuote, EnrichedBooking, TransactionNote, Passenger, DealImage, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "@/types/quote";
 
 export type QuoteDisplay = {
   id: string;
@@ -98,6 +98,12 @@ export type QuoteDisplay = {
   pets: number;
   haysRef?: string;
   supplierRef?: string;
+  transfers: Array<{ pickUpLocation: string | null; dropOffLocation: string | null; pickUpTime: string | null; dropOffTime: string | null; note: string | null; tourOperatorName: string | null }>;
+  carHires: Array<{ pickUpLocation: string | null; dropOffLocation: string | null; pickUpTime: string | null; dropOffTime: string | null; noOfDays: number | null; tourOperatorName: string | null }>;
+  attractionTickets: Array<{ ticketType: string | null; dateOfVisit: string | null; numberOfTickets: number; tourOperatorName: string | null }>;
+  loungePasses: Array<{ terminal: string | null; airportName: string | null; dateOfUsage: string | null; note: string | null; tourOperatorName: string | null }>;
+  airportParkings: Array<{ parkingType: string | null; airportName: string | null; parkingDate: string | null; duration: string | null; tourOperatorName: string | null }>;
+  extraAccommodations: Array<{ property: string; checkInDate: string; noOfNights: number | null; board: string; roomType: string; tourOperatorName: string | null }>;
 };
 
-export type { EnrichedQuote, EnrichedBooking, TransactionNote, Passenger, DealImage };
+export type { EnrichedQuote, EnrichedBooking, TransactionNote, Passenger, DealImage, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking };

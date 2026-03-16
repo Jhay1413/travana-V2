@@ -25,6 +25,7 @@ import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
 import { QuoteSummaryTimeline } from "@/components/quote/QuoteSummaryTimeline";
 import { StatusPill } from "@/components/quote/StatusPill";
+import { BookingEditDialog } from "@/components/booking-edit-dialog";
 
 export default function BookingPage() {
   const [, setLocation] = useLocation();
@@ -51,6 +52,7 @@ export default function BookingPage() {
   const updateTransactionMutation = useUpdateTransaction();
   const adminDeleteBookingMutation = useAdminDeleteBooking();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
   const [newTag, setNewTag] = useState("");
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
@@ -449,7 +451,7 @@ export default function BookingPage() {
                                   data-testid="button-booking-edit"
                                   onClick={() => {
                                     setShowEllipsisMenu(false);
-                                    toast({ title: "Edit booking coming soon" });
+                                    setShowEditDialog(true);
                                   }}
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
@@ -726,6 +728,12 @@ export default function BookingPage() {
           </div>
         </div>
       </div>
+      <BookingEditDialog
+        bookingId={bookingId}
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        onSuccess={() => bookingQuery.refetch()}
+      />
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent className="max-w-sm rounded-2xl border-red-200 bg-white/95 backdrop-blur-xl" data-testid="dialog-admin-delete-booking">
           <DialogHeader>

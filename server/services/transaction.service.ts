@@ -41,6 +41,12 @@ interface QuoteRelationPayload extends InsertQuote {
   inboundConnectingLegs?: Partial<InsertQuoteFlight>[];
   primaryAccommodation?: Partial<InsertQuoteAccomodation>;
   images?: string[];
+  transfers?: Record<string, unknown>[];
+  carHires?: Record<string, unknown>[];
+  attractionTickets?: Record<string, unknown>[];
+  loungePasses?: Record<string, unknown>[];
+  airportParkings?: Record<string, unknown>[];
+  extraAccommodations?: Record<string, unknown>[];
 }
 
 interface BookingRelationPayload extends InsertBooking {
@@ -50,6 +56,12 @@ interface BookingRelationPayload extends InsertBooking {
   inboundConnectingLegs?: Partial<InsertBookingFlight>[];
   primaryAccommodation?: Partial<InsertBookingAccomodation>;
   images?: string[];
+  transfers?: Record<string, unknown>[];
+  carHires?: Record<string, unknown>[];
+  attractionTickets?: Record<string, unknown>[];
+  loungePasses?: Record<string, unknown>[];
+  airportParkings?: Record<string, unknown>[];
+  extraAccommodations?: Record<string, unknown>[];
 }
 
 function toDateOrNull(value: unknown): Date | null {
@@ -199,7 +211,11 @@ export const transactionService = {
   },
 
   async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: QuoteRelationPayload) {
-    const { outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images, ...quoteFields } = quoteData;
+    const {
+      outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+      ...quoteFields
+    } = quoteData;
     const quoteDataRecord = quoteData as unknown as Record<string, unknown>;
 
     console.log('🔍 CREATE TXN+QUOTE - outboundConnectingLegs:', JSON.stringify(outboundConnectingLegs));
@@ -350,6 +366,15 @@ export const transactionService = {
       return { transaction: txn, quote: q };
     });
 
+    // Save extras for the main quote
+    const mainQuoteId = result.quote.id;
+    if (transfers !== undefined) await newQuoteRepository.replaceTransfers(mainQuoteId, transfers);
+    if (carHires !== undefined) await newQuoteRepository.replaceCarHires(mainQuoteId, carHires);
+    if (attractionTickets !== undefined) await newQuoteRepository.replaceAttractionTickets(mainQuoteId, attractionTickets);
+    if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(mainQuoteId, loungePasses);
+    if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(mainQuoteId, airportParkings);
+    if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(mainQuoteId, extraAccommodations);
+
     const { transaction: mainTxn } = result;
     try {
       const freeTxn = await transactionRepository.create({
@@ -368,6 +393,12 @@ export const transactionService = {
         inboundConnectingLegs: normalizedInboundConnecting,
         primaryAccommodation: primaryAccommodation || undefined,
         images: normalizeUniqueImageUrls(images),
+        transfers,
+        carHires,
+        attractionTickets,
+        loungePasses,
+        airportParkings,
+        extraAccommodations,
       } as any);
     } catch (err) {
       console.error('🆓 FREE QUOTE - error creating free quote:', err);
@@ -377,7 +408,11 @@ export const transactionService = {
   },
 
   async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: BookingRelationPayload) {
-    const { outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images, ...bookingFields } = bookingData;
+    const {
+      outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+      ...bookingFields
+    } = bookingData;
     const bookingDataRecord = bookingData as unknown as Record<string, unknown>;
 
     const normalizedOutboundFlight = normalizeFlightInput(outboundFlight);
@@ -513,6 +548,115 @@ export const transactionService = {
 
       return { transaction: txn, booking: b };
     });
+
+    // Save extras for the booking
+    const bookingId = result.booking.id;
+    if (transfers?.length) {
+      for (const t of transfers) {
+        await bookingRepository.addTransfer({
+          booking_id: bookingId,
+          booking_ref: (t.booking_ref as string) || null,
+          tour_operator_id: (t.tour_operator_id as string) || null,
+          pick_up_location: (t.pick_up_location as string) || null,
+          drop_off_location: (t.drop_off_location as string) || null,
+          pick_up_time: toDateOrNull(t.pick_up_time),
+          drop_off_time: toDateOrNull(t.drop_off_time),
+          note: (t.note as string) || null,
+          cost: t.cost != null ? String(t.cost) : null,
+          commission: t.commission != null ? String(t.commission) : null,
+          is_included_in_package: (t.is_included_in_package as boolean) ?? true,
+        } as import("@shared/schema").InsertBookingTransfer);
+      }
+    }
+    if (carHires?.length) {
+      for (const c of carHires) {
+        await bookingRepository.addCarHire({
+          booking_id: bookingId,
+          booking_ref: (c.booking_ref as string) || null,
+          tour_operator_id: (c.tour_operator_id as string) || null,
+          pick_up_location: (c.pick_up_location as string) || null,
+          drop_off_location: (c.drop_off_location as string) || null,
+          pick_up_time: toDateOrNull(c.pick_up_time),
+          drop_off_time: toDateOrNull(c.drop_off_time),
+          no_of_days: (c.no_of_days as number) ?? 1,
+          driver_age: (c.driver_age as number) ?? 25,
+          cost: c.cost != null ? String(c.cost) : null,
+          commission: c.commission != null ? String(c.commission) : null,
+          is_included_in_package: (c.is_included_in_package as boolean) ?? true,
+        } as import("@shared/schema").InsertBookingCarHire);
+      }
+    }
+    if (attractionTickets?.length) {
+      for (const t of attractionTickets) {
+        await bookingRepository.addAttractionTicket({
+          booking_id: bookingId,
+          booking_ref: (t.booking_ref as string) || null,
+          tour_operator_id: (t.tour_operator_id as string) || null,
+          ticket_type: (t.ticket_type as string) || null,
+          date_of_visit: toDateOrNull(t.date_of_visit),
+          number_of_tickets: (t.number_of_tickets as number) ?? 1,
+          cost: t.cost != null ? String(t.cost) : null,
+          commission: t.commission != null ? String(t.commission) : null,
+          is_included_in_package: (t.is_included_in_package as boolean) ?? true,
+        } as import("@shared/schema").InsertBookingAttractionTicket);
+      }
+    }
+    if (loungePasses?.length) {
+      for (const p of loungePasses) {
+        await bookingRepository.addLoungePass({
+          booking_id: bookingId,
+          booking_ref: (p.booking_ref as string) || null,
+          tour_operator_id: (p.tour_operator_id as string) || null,
+          airport_id: (p.airport_id as string) || null,
+          terminal: (p.terminal as string) || null,
+          date_of_usage: toDateOrNull(p.date_of_usage),
+          note: (p.note as string) || null,
+          cost: p.cost != null ? String(p.cost) : null,
+          commission: p.commission != null ? String(p.commission) : null,
+          is_included_in_package: (p.is_included_in_package as boolean) ?? true,
+        } as import("@shared/schema").InsertBookingLoungePass);
+      }
+    }
+    if (airportParkings?.length) {
+      for (const p of airportParkings) {
+        await bookingRepository.addAirportParking({
+          booking_id: bookingId,
+          booking_ref: (p.booking_ref as string) || null,
+          tour_operator_id: (p.tour_operator_id as string) || null,
+          airport_id: (p.airport_id as string) || null,
+          parking_type: (p.parking_type as string) || null,
+          parking_date: toDateOrNull(p.parking_date),
+          car_make: (p.car_make as string) || null,
+          car_model: (p.car_model as string) || null,
+          colour: (p.colour as string) || null,
+          car_reg_number: (p.car_reg_number as string) || null,
+          duration: (p.duration as string) || null,
+          cost: p.cost != null ? String(p.cost) : null,
+          commission: p.commission != null ? String(p.commission) : null,
+          is_included_in_package: (p.is_included_in_package as boolean) ?? true,
+        } as import("@shared/schema").InsertBookingAirportParking);
+      }
+    }
+    if (extraAccommodations?.length) {
+      for (const a of extraAccommodations) {
+        await bookingRepository.addAccommodation({
+          booking_id: bookingId,
+          booking_ref: (a.booking_ref as string) || null,
+          tour_operator_id: (a.tour_operator_id as string) || null,
+          accomodation_id: (a.accomodation_id as string) || null,
+          board_basis_id: (a.board_basis_id as string) || null,
+          room_type: (a.room_type as string) || null,
+          check_in_date_time: toDateOrNull(a.check_in_date_time),
+          no_of_nights: (a.no_of_nights as number) ?? 0,
+          cost: a.cost != null ? String(a.cost) : null,
+          commission: a.commission != null ? String(a.commission) : null,
+          is_included_in_package: (a.is_included_in_package as boolean) ?? true,
+          is_primary: false,
+        } as import("@shared/schema").InsertBookingAccomodation);
+      }
+    }
+
+    return result;
   },
 
   async updateTransaction(id: string, data: Partial<InsertTransaction>) {
