@@ -79,6 +79,7 @@ app.use((req, res, next) => {
   const path = await import("path");
   app.use("/avatars", express.static(path.default.join(process.cwd(), "public", "avatars")));
   app.use("/uploads", express.static(path.default.join(process.cwd(), "public", "uploads")));
+  app.use("/mockup-previews", express.static(path.default.join(process.cwd(), "public", "mockup-previews")));
 
   app.use(errorHandler);
 
