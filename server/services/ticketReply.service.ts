@@ -19,7 +19,7 @@ export const ticketReplyService = {
         type: "ticket_reply",
         title: "New reply on your ticket",
         message: `Someone replied to "${ticket.subject}"`,
-        link: `/tickets?id=${data.ticketId}`,
+        link: `/tickets/${data.ticketId}`,
         read: false,
       });
     }

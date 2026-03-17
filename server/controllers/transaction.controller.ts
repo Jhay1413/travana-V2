@@ -3,6 +3,8 @@ import { transactionService } from "../services/transaction.service";
 import { socialPostService } from "../services/social-post.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
+import { getUserId } from "../utils/get-user-id";
+import { authStorage } from "../replit_integrations/auth";
 
 const BUDGET_TYPE_MAP: Record<string, string> = {
   "Per Person": "PER_PERSON",
@@ -94,15 +96,26 @@ function normalizeBooking(data: any) {
 export const transactionController = {
   listTransactions: asyncHandler(async (req: Request, res: Response) => {
     const { clientId, agentId, status, dateFrom, dateTo } = req.query;
-    let transactions;
 
     const parsedDateFrom = dateFrom && typeof dateFrom === "string" ? new Date(dateFrom) : undefined;
     const parsedDateTo = dateTo && typeof dateTo === "string" ? new Date(dateTo) : undefined;
 
+    // Enforce session-based agent filter for non-admin/manager users
+    const sessionUserId = getUserId(req as any);
+    let effectiveAgentId = agentId && typeof agentId === "string" ? agentId : undefined;
+    if (sessionUserId) {
+      const sessionUser = await authStorage.getUser(sessionUserId);
+      const isRestricted = sessionUser?.role !== "Admin" && sessionUser?.role !== "Manager";
+      if (isRestricted) {
+        effectiveAgentId = sessionUserId;
+      }
+    }
+
+    let transactions;
     if (clientId && typeof clientId === "string") {
       transactions = await transactionService.listTransactionsByClient(clientId);
-    } else if (agentId && typeof agentId === "string") {
-      transactions = await transactionService.listTransactionsByAgent(agentId);
+    } else if (effectiveAgentId) {
+      transactions = await transactionService.listTransactionsByAgent(effectiveAgentId);
     } else {
       transactions = await transactionService.listTransactions(parsedDateFrom, parsedDateTo);
     }

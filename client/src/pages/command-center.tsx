@@ -2088,7 +2088,10 @@ export default function CommandCenterPage() {
   const { data: shopTargetsData } = useShopTargets();
   const { data: agentTargetsData } = useAgentTargetsByUserId(currentUser?.id || "");
   const isRestrictedRole = role !== "Admin" && role !== "Manager";
-  const { data: transactionsData } = useTransactions(currentUser?.id ? { agentId: currentUser.id } : undefined);
+  const { data: transactionsData } = useTransactions(
+    currentUser?.id ? { agentId: currentUser.id } : undefined,
+    { enabled: !!currentUser?.id }
+  );
 
   const { data: freeQuotesData } = useFreeQuotesInfinite(50);
   const overviewSocialPosts = useMemo(() => {
@@ -2265,7 +2268,7 @@ export default function CommandCenterPage() {
         stages["Booked"].push({ ...t, title: t.enquiry?.title || t.booking?.title || "Untitled", travel_date: t.booking?.travel_date || t.enquiry?.travel_date || t.created_at, sales_price: t.booking?.sales_price || t.quotes?.[0]?.sales_price, package_commission: t.booking?.package_commission || t.quotes?.[0]?.package_commission, transaction_id: t.client_id });
       } else if (t.status === "on_quote" && t.quotes && t.quotes.length > 0) {
         stages["In Play"].push({ ...t, title: t.quotes[0]?.title || t.enquiry?.title || "Untitled", travel_date: t.quotes[0]?.travel_date || t.enquiry?.travel_date || t.created_at, sales_price: t.quotes[0]?.sales_price, package_commission: t.quotes[0]?.package_commission, transaction_id: t.client_id });
-      } else {
+      } else if (t.status === "on_enquiry") {
         stages["New Lead"].push({ ...t, title: t.enquiry?.title || "New Enquiry", travel_date: t.enquiry?.travel_date || t.created_at, sales_price: null, package_commission: null, transaction_id: t.client_id });
       }
     }

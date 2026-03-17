@@ -10,7 +10,9 @@ async function enrichTransactions(txns: Transaction[]) {
   const [allEnquiries, allQuotes, allBookings, allPackageTypes] = await Promise.all([
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
     db.select().from(quote).where(and(
-      inArray(quote.transaction_id, txnIds), 
+      inArray(quote.transaction_id, txnIds),
+      sql`(${quote.isFreeQuote} IS NOT TRUE)`,
+      sql`(${quote.isQuoteCopy} IS NOT TRUE)`,
       sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`
     )),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
@@ -183,7 +185,9 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       quote_status: quote.quote_status,
       isQuoteCopy: quote.isQuoteCopy,
     }).from(quote).where(and(
-      inArray(quote.transaction_id, txnIds), 
+      inArray(quote.transaction_id, txnIds),
+      sql`(${quote.isFreeQuote} IS NOT TRUE)`,
+      sql`(${quote.isQuoteCopy} IS NOT TRUE)`,
       sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`
     )),
     db.select({
@@ -287,6 +291,23 @@ export const transactionRepository = {
 
     if (status === "on_enquiry" || status === "on_quote" || status === "in_play") {
       conditions.push(sql`${transaction.created_at} >= NOW() - INTERVAL '7 days'`);
+    }
+
+    if (status === "on_enquiry") {
+      conditions.push(
+        sql`${transaction.id} IN (
+          SELECT ${enquiry_table.transaction_id} FROM ${enquiry_table}
+        )`
+      );
+    }
+
+    if (status === "on_booking") {
+      conditions.push(
+        sql`${transaction.id} IN (
+          SELECT ${booking.transaction_id} FROM ${booking}
+          WHERE ${booking.date_created} >= DATE_TRUNC('month', NOW())
+        )`
+      );
     }
 
     if (status === "on_quote") {

@@ -12,10 +12,11 @@ export const transactionKeys = {
   pipeline: (status: string, agentId?: string, quoteStatus?: string) => [...transactionKeys.all, "pipeline", status, agentId, quoteStatus] as const,
 };
 
-export function useTransactions(filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string }) {
+export function useTransactions(filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string }, options?: { enabled?: boolean }) {
   return useQuery<Transaction[]>({
     queryKey: transactionKeys.list(filters),
     queryFn: () => transactionApi.getAll(filters),
+    enabled: options?.enabled ?? true,
   });
 }
 
