@@ -2266,8 +2266,11 @@ export default function CommandCenterPage() {
     for (const t of transactionsData) {
       if (t.status === "on_booking" || t.booking) {
         stages["Booked"].push({ ...t, title: t.enquiry?.title || t.booking?.title || "Untitled", travel_date: t.booking?.travel_date || t.enquiry?.travel_date || t.created_at, sales_price: t.booking?.sales_price || t.quotes?.[0]?.sales_price, package_commission: t.booking?.package_commission || t.quotes?.[0]?.package_commission, transaction_id: t.client_id });
-      } else if (t.status === "on_quote" && t.quotes && t.quotes.length > 0) {
-        stages["In Play"].push({ ...t, title: t.quotes[0]?.title || t.enquiry?.title || "Untitled", travel_date: t.quotes[0]?.travel_date || t.enquiry?.travel_date || t.created_at, sales_price: t.quotes[0]?.sales_price, package_commission: t.quotes[0]?.package_commission, transaction_id: t.client_id });
+      } else if (t.status === "on_quote" && t.quotes) {
+        const mainQuotes = t.quotes.filter((q: any) => !q.isFreeQuote && !q.isQuoteCopy);
+        if (mainQuotes.length > 0) {
+          stages["In Play"].push({ ...t, title: mainQuotes[0]?.title || t.enquiry?.title || "Untitled", travel_date: mainQuotes[0]?.travel_date || t.enquiry?.travel_date || t.created_at, sales_price: mainQuotes[0]?.sales_price, package_commission: mainQuotes[0]?.package_commission, transaction_id: t.client_id });
+        }
       } else if (t.status === "on_enquiry") {
         stages["New Lead"].push({ ...t, title: t.enquiry?.title || "New Enquiry", travel_date: t.enquiry?.travel_date || t.created_at, sales_price: null, package_commission: null, transaction_id: t.client_id });
       }
