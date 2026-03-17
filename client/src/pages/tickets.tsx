@@ -1,9 +1,11 @@
 import { useRole } from "@/hooks/use-role";
+import { useParams } from "wouter";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import TicketsBoard from "@/components/tickets-board";
 
 export default function TicketsPage() {
   const { role, setRole } = useRole();
+  const params = useParams<{ ticketId?: string }>();
 
   return (
     <CommandCenterShell
@@ -13,7 +15,7 @@ export default function TicketsPage() {
       role={role}
       onRoleChange={setRole}
     >
-      <TicketsBoard />
+      <TicketsBoard selectedTicketId={params.ticketId} />
     </CommandCenterShell>
   );
 }

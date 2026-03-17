@@ -13,7 +13,6 @@ import ClientPage from "@/pages/client";
 import QuotePage from "@/pages/quote"; // Using original full-featured version
 import EnquiryPage from "@/pages/enquiry";
 import TicketsPage from "@/pages/tickets";
-import TicketPage from "@/pages/ticket";
 import AdminImportPage from "@/pages/admin-import";
 import AdminLookupPage from "@/pages/admin-lookup";
 import SettingsLookupPage from "@/pages/settings-lookup";
@@ -58,7 +57,7 @@ function AuthenticatedRouter() {
       <Route path="/social-posts" component={SocialPostsPage} />
       <Route path="/social-posts/quotes/:quoteId" component={SocialQuotePage} />
       <Route path="/tickets" component={TicketsPage} />
-      <Route path="/tickets/:ticketId" component={TicketPage} />
+      <Route path="/tickets/:ticketId" component={TicketsPage} />
       <Route path="/hub/:rest*" component={HubPage} />
       <Route path="/hub" component={HubPage} />
       <Route path="/admin/import" component={AdminImportPage} />
