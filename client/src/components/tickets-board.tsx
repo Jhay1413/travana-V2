@@ -789,8 +789,16 @@ function TicketDetailPanel({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {attachments.filter(a => isImageType(a.mimeType)).map((attachment) => (
                     <div key={attachment.id} className="group relative rounded-lg overflow-hidden border border-slate-200 bg-white" data-testid={`inline-attachment-${attachment.id}`}>
-                      <button type="button" className="block w-full cursor-pointer" onClick={() => setLightboxImage({ url: getAttachmentDownloadUrl(attachment.id), name: attachment.originalName })} data-testid={`button-lightbox-attachment-${attachment.id}`}>
-                        <img src={getAttachmentDownloadUrl(attachment.id)} alt={attachment.originalName} className="w-full h-32 object-cover" />
+                      <button type="button" className="block w-full cursor-pointer relative h-32" onClick={() => setLightboxImage({ url: getAttachmentDownloadUrl(attachment.id), name: attachment.originalName })} data-testid={`button-lightbox-attachment-${attachment.id}`}>
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 text-slate-400">
+                          <FileText className="w-8 h-8" />
+                        </div>
+                        <img
+                          src={getAttachmentDownloadUrl(attachment.id)}
+                          alt={attachment.originalName}
+                          className="relative w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
                       </button>
                       <div className="p-2 flex items-center justify-between">
                         <div className="min-w-0 flex-1">
@@ -1153,17 +1161,17 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
                   <div
                     key={ticket.id}
                     onClick={() => handleSelectTicket(ticket.id)}
-                    className={`p-4 cursor-pointer border-l-4 transition-colors ${
+                    className={`p-4 cursor-pointer transition-colors ${
                       isActive
-                        ? "border-blue-500 bg-blue-50/60"
-                        : "border-transparent hover:bg-slate-50"
+                        ? "bg-slate-200/80"
+                        : "hover:bg-slate-100/60"
                     }`}
                     data-testid={`card-ticket-${ticket.id}`}
                   >
                     <div className="flex items-start justify-between mb-1 gap-2">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div className={`w-2 h-2 rounded-full flex-none ${priorityDotColor(ticket.priority)}`} />
-                        <h3 className={`text-sm font-semibold truncate ${isActive ? "text-blue-900" : "text-slate-900"}`}>
+                        <h3 className="text-sm font-semibold truncate text-slate-900">
                           {ticket.subject}
                         </h3>
                       </div>
