@@ -564,35 +564,45 @@ export function CommandCenterShell({
       });
     }
 
-    for (const q of searchResults.quotes) {
+    const searchLower = debouncedSearch.toLowerCase();
+    const clientNameMatches = (name: string) =>
+      name.toLowerCase().split(/\s+/).some((word) => word.startsWith(searchLower) || searchLower.startsWith(word));
+
+    const quoteResults = searchResults.quotes.map((q) => {
       const dest = q.destination || q.country || q.holidayType || "Quote";
       const formattedPrice = q.salesPrice ? `£${parseFloat(q.salesPrice).toLocaleString("en-GB")}` : "";
       const formattedDate = q.travelDate ? new Date(q.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
-      results.push({
+      return {
         id: `quote-${q.id}`,
-        category: "quote",
+        category: "quote" as const,
         title: `${dest}${q.clientName ? ` — ${q.clientName}` : ""}`,
         subtitle: [q.accommodation, formattedPrice, formattedDate].filter(Boolean).join(" · "),
         link: q.clientId ? `/clients/${q.clientId}/quotes/${q.id}` : `/quotes/${q.id}`,
         badge: "Quote",
         badgeColor: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-      });
-    }
+        _clientNameMatch: q.clientName ? clientNameMatches(q.clientName) : false,
+      };
+    });
+    quoteResults.sort((a, b) => (b._clientNameMatch ? 1 : 0) - (a._clientNameMatch ? 1 : 0));
+    results.push(...quoteResults.map(({ _clientNameMatch: _, ...r }) => r));
 
-    for (const b of searchResults.bookings) {
+    const bookingResults = searchResults.bookings.map((b) => {
       const dest = b.destination || b.country || b.holidayType || "Booking";
       const formattedPrice = b.salesPrice ? `£${parseFloat(b.salesPrice).toLocaleString("en-GB")}` : "";
       const formattedDate = b.travelDate ? new Date(b.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
-      results.push({
+      return {
         id: `booking-${b.id}`,
-        category: "booking",
+        category: "booking" as const,
         title: `${dest}${b.clientName ? ` — ${b.clientName}` : ""}`,
         subtitle: [b.haysRef && `Ref: ${b.haysRef}`, b.accommodation, formattedPrice, formattedDate].filter(Boolean).join(" · "),
         link: b.clientId ? `/clients/${b.clientId}/bookings/${b.id}` : `/bookings/${b.id}`,
         badge: "Booking",
         badgeColor: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
-      });
-    }
+        _clientNameMatch: b.clientName ? clientNameMatches(b.clientName) : false,
+      };
+    });
+    bookingResults.sort((a, b) => (b._clientNameMatch ? 1 : 0) - (a._clientNameMatch ? 1 : 0));
+    results.push(...bookingResults.map(({ _clientNameMatch: _, ...r }) => r));
 
     return results;
   }, [debouncedSearch, searchResults]);

@@ -12,7 +12,7 @@ router.get(
     if (!q || q.length < 2) {
       return successResponse(res, { clients: [], quotes: [], bookings: [] }, "Search results");
     }
-    const results = await searchRepository.globalSearch(q, 5);
+    const results = await searchRepository.globalSearch(q, 15, 5);
     return successResponse(res, results, "Search results");
   })
 );

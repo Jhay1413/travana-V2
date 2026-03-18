@@ -44,8 +44,14 @@ export type SearchResult = {
 };
 
 export const searchRepository = {
-  async globalSearch(searchTerm: string, limit: number = 5): Promise<SearchResult> {
+  async globalSearch(searchTerm: string, clientLimit: number = 15, limit: number = 5): Promise<SearchResult> {
     const term = `%${searchTerm}%`;
+
+    // Build per-word conditions so "tina smith" matches firstName="Tina" AND surename="Smith"
+    const words = searchTerm.trim().split(/\s+/).filter(Boolean);
+    const wordTerms = words.map((w) => `%${w}%`);
+    const clientFirstNameConditions = wordTerms.map((t) => ilike(clientTable.firstName, t));
+    const clientSurenameConditions = wordTerms.map((t) => ilike(clientTable.surename, t));
 
     const [clients, quotes, bookings] = await Promise.all([
       db
@@ -61,16 +67,16 @@ export const searchRepository = {
         .from(clientTable)
         .where(
           or(
-            ilike(clientTable.firstName, term),
-            ilike(clientTable.surename, term),
+            ...clientFirstNameConditions,
+            ...clientSurenameConditions,
             ilike(clientTable.email, term),
             ilike(clientTable.phoneNumber, term),
             ilike(clientTable.city, term),
-            // Search by full name (concatenated)
-            sql`concat_ws(' ', ${clientTable.title}, ${clientTable.firstName}, ${clientTable.surename}) ilike ${term}`,
+            // Search by full name (concatenated) — handles "Tina Smith" as one query
+            sql`concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename}) ilike ${term}`,
           )
         )
-        .limit(limit),
+        .limit(clientLimit),
 
       db
         .select({
