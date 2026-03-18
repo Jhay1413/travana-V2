@@ -76,6 +76,14 @@ export const searchRepository = {
             sql`concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename}) ilike ${term}`,
           )
         )
+        // Name matches rank 1, phone/email/city matches rank 2
+        .orderBy(
+          sql`CASE
+            WHEN ${clientTable.firstName} ILIKE ${term} OR ${clientTable.surename} ILIKE ${term}
+              OR concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename}) ILIKE ${term}
+            THEN 1 ELSE 2
+          END`
+        )
         .limit(clientLimit),
 
       db
@@ -114,13 +122,12 @@ export const searchRepository = {
           and(
             eq(quote.is_active, true),
             or(
-              ilike(destination.name, term),
-              ilike(country.country_name, term),
-              ilike(accomodation_list.name, term),
-              ilike(tour_operator.name, term),
-              ilike(clientTable.firstName, term),
-              ilike(clientTable.surename, term),
+              // Only match on client name and quote ref — not destination/accommodation
+              // (destination matches cause unrelated client names to appear in results)
+              ...wordTerms.map((t) => ilike(clientTable.firstName, t)),
+              ...wordTerms.map((t) => ilike(clientTable.surename, t)),
               ilike(quote.quote_ref, term),
+              sql`concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename}) ilike ${term}`,
             )
           )
         )

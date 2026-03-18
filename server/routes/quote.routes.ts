@@ -22,6 +22,7 @@ const upload = multer({
 router.get("/free", quoteController.listFreeQuotes);
 router.get("/", quoteController.listQuotes);
 router.get("/:id", quoteController.getQuoteById);
+router.post("/social-post", upload.array("images", 10), quoteController.createSocialQuote);
 router.post("/", upload.array("images", 10), quoteController.createQuote);
 router.post("/:id/duplicate", quoteController.duplicateQuote);
 router.patch("/:id", quoteController.updateQuote);

@@ -4,6 +4,16 @@ import axiosClient from "@/api/client/axios-client";
 import { quoteKeys, transactionKeys } from "@/hooks/queries";
 import type { CreateQuoteData } from "@/types/quote";
 
+export function useCreateSocialQuote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Omit<CreateQuoteData, 'transaction_id'> | FormData) => quoteApi.createSocialPost(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+    },
+  });
+}
+
 export function useCreateQuote() {
   const queryClient = useQueryClient();
   return useMutation({

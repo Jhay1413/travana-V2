@@ -37,6 +37,12 @@ export const quoteApi = {
     return data;
   },
 
+  createSocialPost: async (quoteData: Omit<CreateQuoteData, 'transaction_id'> | FormData): Promise<Quote> => {
+    const config = quoteData instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : {};
+    const { data } = await axiosClient.post<Quote>("/api/quotes/social-post", quoteData, config);
+    return data;
+  },
+
   duplicate: async (quoteId: string, quoteData: Partial<CreateQuoteData> & Record<string, any>): Promise<Quote> => {
     const { data } = await axiosClient.post<Quote>(`/api/quotes/${quoteId}/duplicate`, quoteData);
     return data;

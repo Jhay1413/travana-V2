@@ -3,6 +3,7 @@ import { newQuoteService } from "../services/newQuote.service";
 import { socialPostService } from "../services/social-post.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
+import { getUserId } from "../utils/get-user-id";
 
 export const quoteController = {
   listQuotes: asyncHandler(async (req: Request, res: Response) => {
@@ -60,6 +61,24 @@ export const quoteController = {
     }
     const quote = await newQuoteService.createQuote(body);
     return successResponse(res, quote, "Quote created successfully", 201);
+  }),
+
+  createSocialQuote: asyncHandler(async (req: Request, res: Response) => {
+    const body = req.body.data ? JSON.parse(req.body.data) : req.body;
+    const files = (req.files as Express.Multer.File[]) || [];
+
+    const userId = getUserId(req as any);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Authentication required" });
+    }
+
+    if (files.length > 0) {
+      const uploaded = await socialPostService.uploadMedia(files);
+      body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
+    }
+
+    const quote = await newQuoteService.createSocialQuote(userId, body);
+    return successResponse(res, quote, "Social quote created successfully", 201);
   }),
 
   duplicateQuote: asyncHandler(async (req: Request, res: Response) => {

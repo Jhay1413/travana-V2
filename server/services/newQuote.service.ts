@@ -267,6 +267,19 @@ export const newQuoteService = {
     return q;
   },
 
+  async createSocialQuote(userId: string, data: Omit<CreateQuotePayload, 'transaction_id' | 'isFreeQuote'>) {
+    const txn = await transactionRepository.create({
+      status: 'on_quote',
+      user_id: userId,
+    } as InsertTransaction);
+
+    return this.createQuote({
+      ...data,
+      transaction_id: txn.id,
+      isFreeQuote: true,
+    } as CreateQuotePayload);
+  },
+
   async duplicateQuote(sourceQuoteId: string, data: Partial<CreateQuotePayload>) {
     const sourceQuote = await newQuoteRepository.findById(sourceQuoteId);
     if (!sourceQuote) {

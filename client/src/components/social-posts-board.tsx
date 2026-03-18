@@ -5,6 +5,7 @@ import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
 import { useGeneratePost } from "@/hooks/mutations/use-social-post-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { SocialPostPreviewDialog } from "@/components/social-post-preview-dialog";
+import { QuoteCreateDialog } from "@/components/quote-create-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import {
   UtensilsCrossed,
   Sparkles,
   Clock,
+  Plus,
 } from "lucide-react";
 import type { EnrichedQuote } from "@/types/quote";
 import type { TravelDeal } from "@/api/endpoints/social-post.api";
@@ -149,6 +151,7 @@ export default function SocialPostsBoard() {
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
   const [previewDeal, setPreviewDeal] = useState<TravelDeal | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const generatePost = useGeneratePost();
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", viewMode === "scheduled" ? scheduleFilter : "none");
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -243,6 +246,14 @@ export default function SocialPostsBoard() {
             >
               Show All
             </Button>
+            <Button
+              size="sm"
+              className="rounded-xl text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white gap-1.5"
+              onClick={() => setCreateDialogOpen(true)}
+              data-testid="button-create-social-post"
+            >
+              <Plus className="w-3.5 h-3.5" />Create Social Post
+            </Button>
           </div>
         </div>
 
@@ -302,6 +313,13 @@ export default function SocialPostsBoard() {
         quoteImageUrl={previewImageUrl}
         isGenerating={generatePost.isPending}
         quoteId={previewQuoteId}
+      />
+
+      <QuoteCreateDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        socialPost
+        onSuccess={() => setCreateDialogOpen(false)}
       />
     </div>
   );

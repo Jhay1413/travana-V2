@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   Copy,
   FileText,
+  Pencil,
   PinOff,
   Pin,
   Star,
@@ -27,6 +28,7 @@ import { useQuoteData } from "@/pages/quote/hooks";
 import { currency, formatUKDate, formatLeadSource } from "@/pages/quote/utils";
 import { StatusPill, QuoteSummaryTimeline } from "@/pages/quote/components";
 import { QuoteCreateDialog } from "@/components/quote-create-dialog";
+import { QuoteEditDialog } from "@/components/quote-edit-dialog";
 
 export default function SocialQuotePage() {
   const [, setLocation] = useLocation();
@@ -49,6 +51,7 @@ export default function SocialQuotePage() {
   const [newTag, setNewTag] = useState("");
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const tagSuggestionsRef = useRef<HTMLDivElement>(null);
   const updateQuoteMutation = useUpdateQuote();
@@ -184,6 +187,16 @@ export default function SocialQuotePage() {
                 ? "Unpin"
                 : "Pin"}
             </button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-2xl border-black/10 bg-white/70"
+              data-testid="button-edit-social-quote"
+              onClick={() => setShowEditDialog(true)}
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -547,6 +560,16 @@ export default function SocialQuotePage() {
           </div>
         </div>
       </div>
+      <QuoteEditDialog
+        quoteId={quoteId}
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        onSuccess={() => {
+          setShowEditDialog(false);
+          queryClient.invalidateQueries({ queryKey: ["quotes", quoteId] });
+        }}
+      />
+
       {rawData && (() => {
         const splitDT = (iso: string | undefined | null) => {
           if (!iso) return { date: "", time: "" };

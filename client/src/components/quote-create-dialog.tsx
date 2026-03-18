@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateQuote, useCreateTransaction } from "@/hooks/mutations";
+import { useCreateQuote, useCreateTransaction, useCreateSocialQuote } from "@/hooks/mutations";
 import { usePackageTypes } from "@/hooks/queries";
 import { QuoteRHFForm } from "./quote-rhf-form";
 import type { QuoteFormValues, QuoteCreateDialogProps } from "@/types/quote";
@@ -208,10 +208,12 @@ export function QuoteCreateDialog({
   onOpenChange,
   onSuccess,
   initialValues,
+  socialPost = false,
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
   const createQuote = useCreateQuote();
   const createTransaction = useCreateTransaction();
+  const createSocialQuote = useCreateSocialQuote();
   const { data: packageTypesData } = usePackageTypes();
 
   const defaultValues: Partial<QuoteFormValues> = {
@@ -219,12 +221,43 @@ export function QuoteCreateDialog({
     ...initialValues,
   };
 
-  const isSubmitting = createQuote.isPending || createTransaction.isPending;
+  const isSubmitting = createQuote.isPending || createTransaction.isPending || createSocialQuote.isPending;
 
   const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
     const quotePayload = buildQuotePayload(values, packageTypesData);
     const imageUrls = images?.urls || [];
     const imageFiles = images?.files || [];
+
+    if (socialPost) {
+      const json = {
+        ...quotePayload,
+        ...(imageUrls.length > 0 && { images: imageUrls }),
+      };
+
+      let payload: typeof json | FormData = json;
+      if (imageFiles.length > 0) {
+        const fd = new FormData();
+        fd.append("data", JSON.stringify(json));
+        imageFiles.forEach((f) => fd.append("images", f));
+        payload = fd;
+      }
+
+      createSocialQuote.mutate(payload as any, {
+        onSuccess: (newQuote) => {
+          toast({ title: "Social post created", description: "New social post has been created." });
+          onOpenChange(false);
+          onSuccess?.(newQuote.id);
+        },
+        onError: (err) => {
+          toast({
+            title: "Failed to create social post",
+            description: err instanceof Error ? err.message : "Something went wrong.",
+            variant: "destructive",
+          });
+        },
+      });
+      return;
+    }
 
     // When converting from enquiry (initialValues present), transactionId is required
     if (initialValues && Object.keys(initialValues).length > 0 && !transactionId) {
@@ -312,20 +345,22 @@ export function QuoteCreateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
         <DialogHeader className="px-6 pt-6">
-          <DialogTitle className="text-lg font-semibold">New Quote</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">{socialPost ? "New Social Post" : "New Quote"}</DialogTitle>
           <DialogDescription className="text-sm text-black/55">
-            Fill in the quote details, accommodation, flights, and pricing.
+            {socialPost
+              ? "Fill in the details to create a social post. No client will be attached."
+              : "Fill in the quote details, accommodation, flights, and pricing."}
           </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-100px)]">
           <div className="px-6 pb-6">
             <QuoteRHFForm
-              key={(transactionId || clientId || "") + open}
+              key={(transactionId || clientId || "social") + open}
               defaultValues={defaultValues}
               onSubmit={handleSubmit}
               isLoading={isSubmitting}
-              submitLabel="Create Quote"
+              submitLabel={socialPost ? "Create Social Post" : "Create Quote"}
               onCancel={() => onOpenChange(false)}
             />
           </div>
