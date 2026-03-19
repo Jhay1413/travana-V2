@@ -319,6 +319,7 @@ export function SocialPostPreviewDialog({
         await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
         toast({ title: "Post saved and scheduled on OnlySocials" });
       }
+      onOpenChange(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to push to OnlySocials";
       toast({ title: "OnlySocials error", description: msg, variant: "destructive" });

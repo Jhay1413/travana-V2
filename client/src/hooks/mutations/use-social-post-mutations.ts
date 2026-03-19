@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { socialPostApi } from "@/api/endpoints/social-post.api";
 import type { GeneratePostParams, TravelDeal } from "@/api/endpoints/social-post.api";
 import { socialPostKeys } from "@/hooks/queries/use-social-post-queries";
+import { quoteKeys } from "@/hooks/queries/use-quote-queries";
 
 export function useGeneratePost() {
   const queryClient = useQueryClient();
@@ -31,6 +32,7 @@ export function useScheduleOnOnlySocials() {
       socialPostApi.scheduleOnOnlySocials(id, formData),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     },
   });
 }
@@ -42,6 +44,7 @@ export function useRescheduleOnOnlySocials() {
       socialPostApi.rescheduleOnOnlySocials(id, formData),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     },
   });
 }

@@ -131,7 +131,7 @@ export const opportunitiesRepository = {
     const { page, limit, status, search, dateRange, agentId, sortBy = "newest" } = filters;
     const offset = (page - 1) * limit;
 
-    const conditions: any[] = [eq(transaction.is_active, true)];
+    const conditions: any[] = [eq(transaction.is_active, true), eq(quote.isFreeQuote, false)];
 
     if (status && status !== "all") conditions.push(eq(quote.quote_status, status));
     if (agentId && agentId !== "all") conditions.push(eq(transaction.user_id, agentId));

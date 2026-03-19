@@ -98,7 +98,7 @@ export const newQuoteRepository = {
   },
 
   async findAll(): Promise<Quote[]> {
-    return await db.select().from(quote).orderBy(desc(quote.date_created));
+    return await db.select().from(quote).where(eq(quote.isFreeQuote, false)).orderBy(desc(quote.date_created));
   },
 
   async findByStatus(status: Quote['quote_status']): Promise<Quote[]> {
