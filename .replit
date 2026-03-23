@@ -125,3 +125,4 @@ integrations = ["javascript_log_in_with_replit:2.0.0"]
 
 [userenv.shared]
 NEON_DATABASE_URL = "postgresql://neondb_owner:npg_MwKDhW0ZcLO5@ep-jolly-fog-abmqr60u-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require"
+EMAIL_ENCRYPTION_KEY = "travanaEmail2026"

@@ -128,7 +128,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
           </Link>
           <div className="mt-4" />
           {isScheduled ? (
-            <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white" data-testid={`button-scheduled-${quote.id}`}><Clock className="w-4 h-4" />Scheduled</Button>
+            <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white" data-testid={`button-scheduled-${quote.id}`}><Clock className="w-4 h-4" />{formatDate(quote.postSchedule)}</Button>
           ) : hasDeal ? (
             <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-orange-500 hover:bg-orange-600 text-white" data-testid={`button-schedule-post-${quote.id}`}><CalendarClock className="w-4 h-4" />Schedule Post</Button>
           ) : (

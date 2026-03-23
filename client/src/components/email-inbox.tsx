@@ -28,6 +28,9 @@ import {
   ListOrdered,
   Inbox,
   Tag,
+  Loader2,
+  Settings,
+  WifiOff,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +44,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/hooks/use-auth";
+import { useEmailAccounts, useEmailMessages, useEmailMessage } from "@/hooks/queries";
+import { useCreateEmailAccount, useDeleteEmailAccount, useSendEmail } from "@/hooks/mutations";
+import type { ImapMessage } from "@/api/endpoints/email.api";
 
 type EmailFolder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash";
 
@@ -58,138 +65,17 @@ interface EmailMessage {
   folder: EmailFolder;
   labels?: string[];
   attachments?: { name: string; size: string; type: string }[];
-  replies?: {
-    id: string;
-    from: { name: string; email: string };
-    body: string;
-    date: string;
-  }[];
 }
 
-const MOCK_EMAILS: EmailMessage[] = [
-  {
-    id: "1",
-    from: { name: "Sarah Thompson", email: "sarah.t@travelcorp.com" },
-    to: [{ name: "You", email: "agent@tinastraveldeals.co.uk" }],
-    subject: "Quote Request - Maldives Honeymoon Package",
-    preview: "Hi, I'm looking for a luxury honeymoon package to the Maldives for 2 adults...",
-    body: `<p>Hi,</p><p>I'm looking for a luxury honeymoon package to the Maldives for 2 adults. We're planning to travel in June 2026 for approximately 10 nights.</p><p>Our budget is around £8,000 per person and we'd prefer an overwater villa if possible. We've been looking at the Soneva Fushi and Anantara Veli — could you provide quotes for both?</p><p>We'd also like to arrange a seaplane transfer from Male airport.</p><p>Looking forward to hearing from you.</p><p>Best regards,<br/>Sarah Thompson</p>`,
-    date: "2026-02-25T09:30:00",
-    read: false,
-    starred: true,
-    folder: "inbox",
-    labels: ["enquiry", "high-value"],
-    attachments: [
-      { name: "honeymoon-preferences.pdf", size: "245 KB", type: "pdf" },
-    ],
-  },
-  {
-    id: "2",
-    from: { name: "TUI Partner Portal", email: "partners@tui.co.uk" },
-    to: [{ name: "You", email: "agent@tinastraveldeals.co.uk" }],
-    subject: "New Commission Rates - Summer 2026 Update",
-    preview: "Dear Partner, We're pleased to announce updated commission rates for the summer 2026 season...",
-    body: `<p>Dear Partner,</p><p>We're pleased to announce updated commission rates for the summer 2026 season. Key changes include:</p><ul><li>Package holidays: 12% → 14% commission</li><li>Premium resorts: 15% → 16% commission</li><li>Long-haul destinations: Additional 2% bonus</li></ul><p>These rates are effective from 1st March 2026. Please update your systems accordingly.</p><p>Best regards,<br/>TUI Partner Team</p>`,
-    date: "2026-02-25T08:15:00",
-    read: false,
-    starred: false,
-    folder: "inbox",
-    labels: ["commission"],
-  },
-  {
-    id: "3",
-    from: { name: "James Love", email: "james@tinastraveldeals.co.uk" },
-    to: [{ name: "You", email: "agent@tinastraveldeals.co.uk" }],
-    subject: "RE: Client Follow-Up - Mr & Mrs Henderson",
-    preview: "Just spoken to the Hendersons, they're happy with the revised quote. Can you process the booking?",
-    body: `<p>Hi,</p><p>Just spoken to the Hendersons, they're happy with the revised quote for the Canary Islands package. Can you process the booking today?</p><p>Details:</p><ul><li>Resort: H10 Rubicon Palace, Lanzarote</li><li>Dates: 15th-22nd July 2026</li><li>2 adults, 1 child (age 8)</li><li>All Inclusive</li><li>Total: £3,240</li></ul><p>They want to pay the deposit today (£150pp) and the balance by 1st May.</p><p>Cheers,<br/>James</p>`,
-    date: "2026-02-24T16:42:00",
-    read: true,
-    starred: false,
-    folder: "inbox",
-    labels: ["booking"],
-    replies: [
-      {
-        id: "3r1",
-        from: { name: "You", email: "agent@tinastraveldeals.co.uk" },
-        body: "Great news! I'll get the booking processed this afternoon. Will send confirmation to the Hendersons by EOD.",
-        date: "2026-02-24T17:10:00",
-      },
-    ],
-  },
-  {
-    id: "4",
-    from: { name: "Casey Ashman", email: "casey@tinastraveldeals.co.uk" },
-    to: [{ name: "You", email: "agent@tinastraveldeals.co.uk" }],
-    subject: "Social Media Post Approval - Turkey Deals",
-    preview: "Can you review the Turkey deals post before I schedule it for tomorrow morning?",
-    body: `<p>Hi,</p><p>Can you review the Turkey deals post before I schedule it for tomorrow morning? I've attached the images we discussed.</p><p>Copy: "🌞 Last-minute Turkey deals from just £399pp! 5* All Inclusive in Antalya, flying from Newcastle. Limited availability — DM us to book!"</p><p>Let me know if any changes needed.</p><p>Thanks,<br/>Casey</p>`,
-    date: "2026-02-24T14:20:00",
-    read: true,
-    starred: false,
-    folder: "inbox",
-    labels: ["social"],
-    attachments: [
-      { name: "turkey-deal-1.jpg", size: "1.2 MB", type: "image" },
-      { name: "turkey-deal-2.jpg", size: "980 KB", type: "image" },
-    ],
-  },
-  {
-    id: "5",
-    from: { name: "Mr David Wilson", email: "david.wilson@gmail.com" },
-    to: [{ name: "You", email: "agent@tinastraveldeals.co.uk" }],
-    subject: "Complaint - Airport Transfer Issue",
-    preview: "I need to raise a formal complaint about the airport transfer that was arranged for our recent trip...",
-    body: `<p>Dear Travel Team,</p><p>I need to raise a formal complaint about the airport transfer that was arranged for our recent trip to Tenerife (Booking Ref: TTD-2026-1847).</p><p>The transfer was 45 minutes late arriving at the airport, and the driver took us to the wrong hotel initially. This caused significant stress at the start of our holiday.</p><p>I would appreciate a response within 48 hours with details of how you plan to resolve this matter.</p><p>Regards,<br/>David Wilson</p>`,
-    date: "2026-02-24T11:05:00",
-    read: false,
-    starred: true,
-    folder: "inbox",
-    labels: ["complaint", "urgent"],
-  },
-  {
-    id: "6",
-    from: { name: "You", email: "agent@tinastraveldeals.co.uk" },
-    to: [{ name: "Mrs Patricia Green", email: "pat.green@outlook.com" }],
-    subject: "Your Cruise Quote - Mediterranean 14 Nights",
-    preview: "Dear Mrs Green, Thank you for your enquiry. Please find attached the quote for your Mediterranean cruise...",
-    body: `<p>Dear Mrs Green,</p><p>Thank you for your enquiry regarding a Mediterranean cruise. Please find attached the detailed quote for a 14-night cruise departing from Southampton on 5th September 2026.</p><p><strong>Package Summary:</strong></p><ul><li>Ship: MSC Virtuosa</li><li>Cabin: Balcony Fantastica</li><li>Itinerary: Southampton → Barcelona → Marseille → Genoa → Naples → Valletta → Southampton</li><li>Price: £2,890 per person (based on 2 sharing)</li><li>Includes: All meals, entertainment, port charges</li></ul><p>This price is valid until 1st March. Would you like to proceed with a deposit?</p><p>Kind regards</p>`,
-    date: "2026-02-24T09:30:00",
-    read: true,
-    starred: false,
-    folder: "sent",
-    labels: ["quote"],
-    attachments: [
-      { name: "cruise-quote-PG-2026.pdf", size: "512 KB", type: "pdf" },
-    ],
-  },
-  {
-    id: "7",
-    from: { name: "You", email: "agent@tinastraveldeals.co.uk" },
-    to: [{ name: "Mr & Mrs Henderson", email: "henderson.family@gmail.com" }],
-    subject: "Booking Confirmation - Lanzarote July 2026",
-    preview: "Dear Mr & Mrs Henderson, I'm pleased to confirm your booking for the H10 Rubicon Palace...",
-    body: `<p>Dear Mr & Mrs Henderson,</p><p>I'm pleased to confirm your booking for the H10 Rubicon Palace, Lanzarote.</p><p><strong>Booking Reference:</strong> TTD-2026-2103</p><p><strong>Details:</strong></p><ul><li>Dates: 15th - 22nd July 2026 (7 nights)</li><li>Hotel: H10 Rubicon Palace ★★★★★</li><li>Room: Family Suite, All Inclusive</li><li>Passengers: 2 Adults, 1 Child (age 8)</li><li>Flights: Newcastle → Arrecife (TUI)</li><li>Total: £3,240</li></ul><p>Deposit of £450 has been received. Balance of £2,790 due by 1st May 2026.</p><p>Kind regards</p>`,
-    date: "2026-02-24T17:30:00",
-    read: true,
-    starred: false,
-    folder: "sent",
-    labels: ["booking"],
-  },
-  {
-    id: "8",
-    from: { name: "You", email: "agent@tinastraveldeals.co.uk" },
-    to: [{ name: "Sarah Thompson", email: "sarah.t@travelcorp.com" }],
-    subject: "Draft: Maldives Quote Options",
-    preview: "Hi Sarah, Thank you for your enquiry about the Maldives honeymoon package. I've put together...",
-    body: `<p>Hi Sarah,</p><p>Thank you for your enquiry about the Maldives honeymoon package. I've put together two options for you:</p><p><strong>Option A - Soneva Fushi</strong></p><ul><li>10 nights in a Water Villa</li><li>Half Board Plus</li><li>Seaplane transfers</li><li>Price: £7,650pp</li></ul><p><strong>Option B - Anantara Veli</strong></p><ul><li>10 nights in an Overwater Bungalow</li><li>All Inclusive</li><li>Speedboat transfer</li><li>Price: £6,890pp</li></ul>`,
-    date: "2026-02-25T10:00:00",
-    read: true,
-    starred: false,
-    folder: "drafts",
-    labels: ["quote"],
-  },
-];
+// Maps UI folder names to IMAP folder paths
+const IMAP_FOLDER: Record<EmailFolder, string> = {
+  inbox: "INBOX",
+  sent: "Sent",
+  drafts: "Drafts",
+  trash: "Trash",
+  archive: "Archive",
+  starred: "INBOX", // fetch inbox and filter by flagged
+};
 
 const LABEL_COLORS: Record<string, string> = {
   enquiry: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
@@ -201,6 +87,23 @@ const LABEL_COLORS: Record<string, string> = {
   urgent: "bg-red-500/15 text-red-600 dark:text-red-400",
   quote: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400",
 };
+
+function mapImapToEmail(msg: ImapMessage, folder: EmailFolder): EmailMessage {
+  const from = msg.from[0] ?? { name: "", address: "" };
+  const flags = Array.isArray(msg.flags) ? msg.flags : [];
+  return {
+    id: String(msg.uid),
+    from: { name: from.name || from.address, email: from.address },
+    to: (msg.to ?? []).map((a) => ({ name: a.name || a.address, email: a.address })),
+    subject: msg.subject ?? "(no subject)",
+    preview: "",
+    body: "",
+    date: msg.date ? new Date(msg.date).toISOString() : new Date().toISOString(),
+    read: flags.includes("\\Seen"),
+    starred: flags.includes("\\Flagged"),
+    folder,
+  };
+}
 
 function formatEmailDate(dateStr: string) {
   const date = new Date(dateStr);
@@ -230,65 +133,279 @@ function getAttachmentIcon(type: string) {
   return <FileText className="h-4 w-4" />;
 }
 
+// ─── Connect Email Form ───────────────────────────────────────────────────────
+
+interface ConnectEmailFormProps {
+  userId: string;
+  onCancel?: () => void;
+}
+
+function ConnectEmailForm({ userId, onCancel }: ConnectEmailFormProps) {
+  const createAccount = useCreateEmailAccount();
+  const [form, setForm] = useState({
+    label: "My Email",
+    emailAddress: "",
+    imapHost: "mail.privateemail.com",
+    imapPort: 993,
+    smtpHost: "mail.privateemail.com",
+    smtpPort: 465,
+    secure: true,
+    username: "",
+    password: "",
+  });
+
+  const set = (key: string, value: string | number | boolean) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await createAccount.mutateAsync({ ...form, userId });
+  };
+
+  return (
+    <section className="flex items-center justify-center h-[calc(100vh-12rem)]" data-testid="section-email-setup">
+      <Card className="glass ringed grain rounded-3xl p-8 w-full max-w-md">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="h-12 w-12 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+            <Mail className="h-6 w-6 text-blue-500" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold">Connect Your Email</h2>
+            <p className="text-xs text-black/50 dark:text-white/50">Enter your Namecheap email credentials</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-black/60 dark:text-white/60 block mb-1">Label</label>
+            <Input
+              value={form.label}
+              onChange={(e) => set("label", e.target.value)}
+              placeholder="e.g. My Business Email"
+              className="h-9 text-sm rounded-xl border-black/10 dark:border-white/10"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-black/60 dark:text-white/60 block mb-1">Email Address</label>
+            <Input
+              type="email"
+              value={form.emailAddress}
+              onChange={(e) => { set("emailAddress", e.target.value); set("username", e.target.value); }}
+              placeholder="you@yourdomain.com"
+              className="h-9 text-sm rounded-xl border-black/10 dark:border-white/10"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-black/60 dark:text-white/60 block mb-1">Password</label>
+            <Input
+              type="password"
+              value={form.password}
+              onChange={(e) => set("password", e.target.value)}
+              placeholder="Your email password"
+              className="h-9 text-sm rounded-xl border-black/10 dark:border-white/10"
+              required
+            />
+          </div>
+
+          <Separator className="bg-black/8 dark:bg-white/8" />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-black/60 dark:text-white/60 block mb-1">IMAP Host</label>
+              <Input
+                value={form.imapHost}
+                onChange={(e) => set("imapHost", e.target.value)}
+                className="h-9 text-xs rounded-xl border-black/10 dark:border-white/10"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-black/60 dark:text-white/60 block mb-1">IMAP Port</label>
+              <Input
+                type="number"
+                value={form.imapPort}
+                onChange={(e) => set("imapPort", parseInt(e.target.value))}
+                className="h-9 text-xs rounded-xl border-black/10 dark:border-white/10"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-black/60 dark:text-white/60 block mb-1">SMTP Host</label>
+              <Input
+                value={form.smtpHost}
+                onChange={(e) => set("smtpHost", e.target.value)}
+                className="h-9 text-xs rounded-xl border-black/10 dark:border-white/10"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-black/60 dark:text-white/60 block mb-1">SMTP Port</label>
+              <Input
+                type="number"
+                value={form.smtpPort}
+                onChange={(e) => set("smtpPort", parseInt(e.target.value))}
+                className="h-9 text-xs rounded-xl border-black/10 dark:border-white/10"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="submit"
+              disabled={createAccount.isPending}
+              className="flex-1 h-10 rounded-xl bg-blue-500 hover:bg-blue-600 text-white gap-2"
+            >
+              {createAccount.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+              Connect Account
+            </Button>
+            {onCancel && (
+              <Button type="button" variant="outline" onClick={onCancel} className="h-10 rounded-xl border-black/10 dark:border-white/10">
+                Cancel
+              </Button>
+            )}
+          </div>
+        </form>
+      </Card>
+    </section>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function EmailInbox() {
+  const { user } = useAuth();
+  const { data: accounts = [], isLoading: accountsLoading } = useEmailAccounts(user?.id ?? "");
+  const account = accounts[0] ?? null;
+
+  const [showSetup, setShowSetup] = useState(false);
   const [folder, setFolder] = useState<EmailFolder>("inbox");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [composing, setComposing] = useState(false);
-  const [emails, setEmails] = useState<EmailMessage[]>(MOCK_EMAILS);
   const [composeData, setComposeData] = useState({ to: "", cc: "", subject: "", body: "" });
   const [replying, setReplying] = useState<"reply" | "reply-all" | "forward" | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [localStarred, setLocalStarred] = useState<Record<string, boolean>>({});
+  const [localRead, setLocalRead] = useState<Record<string, boolean>>({});
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
 
-  const folderCounts = useMemo(() => {
-    const counts: Record<EmailFolder, number> = { inbox: 0, sent: 0, drafts: 0, starred: 0, archive: 0, trash: 0 };
-    emails.forEach((e) => {
-      counts[e.folder]++;
-      if (e.starred) counts.starred++;
-    });
-    return counts;
-  }, [emails]);
+  const deleteAccount = useDeleteEmailAccount(user?.id ?? "");
+  const sendEmail = useSendEmail();
 
-  const unreadCount = useMemo(() => emails.filter((e) => e.folder === "inbox" && !e.read).length, [emails]);
+  const imapFolder = IMAP_FOLDER[folder];
+  const { data: imapMessages = [], isLoading: messagesLoading } = useEmailMessages(
+    account?.id ?? "",
+    imapFolder,
+    !!account && !showSetup,
+  );
+
+  const selectedUid = selectedId ? parseInt(selectedId, 10) : 0;
+  const { data: fullMessage, isLoading: bodyLoading } = useEmailMessage(
+    account?.id ?? "",
+    selectedUid,
+    imapFolder,
+    !!selectedId && !!account,
+  );
+
+  const emails = useMemo(
+    () => imapMessages.filter((m) => !removed.has(String(m.uid))).map((msg) => mapImapToEmail(msg, folder)),
+    [imapMessages, folder, removed],
+  );
 
   const filteredEmails = useMemo(() => {
-    let list = folder === "starred" ? emails.filter((e) => e.starred) : emails.filter((e) => e.folder === folder);
+    let list = emails.map((e) => ({
+      ...e,
+      starred: localStarred[e.id] ?? e.starred,
+      read: localRead[e.id] ?? e.read,
+    }));
+    if (folder === "starred") list = list.filter((e) => e.starred);
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(
         (e) =>
           e.subject.toLowerCase().includes(q) ||
           e.from.name.toLowerCase().includes(q) ||
-          e.from.email.toLowerCase().includes(q) ||
-          e.preview.toLowerCase().includes(q)
+          e.from.email.toLowerCase().includes(q),
       );
     }
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [emails, folder, search]);
+  }, [emails, folder, search, localStarred, localRead]);
 
-  const selectedEmail = useMemo(() => emails.find((e) => e.id === selectedId) || null, [emails, selectedId]);
+  const selectedEmail = useMemo(
+    () => filteredEmails.find((e) => e.id === selectedId) ?? null,
+    [filteredEmails, selectedId],
+  );
+
+  const selectedEmailWithBody = useMemo(() => {
+    if (!selectedEmail) return null;
+    if (!fullMessage) return selectedEmail;
+    return { ...selectedEmail, body: fullMessage.html ?? fullMessage.text ?? "" };
+  }, [selectedEmail, fullMessage]);
+
+  const unreadCount = useMemo(
+    () => emails.filter((e) => !(localRead[e.id] ?? e.read)).length,
+    [emails, localRead],
+  );
+
+  const starredCount = useMemo(
+    () => emails.filter((e) => localStarred[e.id] ?? e.starred).length,
+    [emails, localStarred],
+  );
 
   const toggleStar = (id: string) => {
-    setEmails((prev) => prev.map((e) => (e.id === id ? { ...e, starred: !e.starred } : e)));
+    setLocalStarred((prev) => {
+      const current = prev[id] ?? emails.find((e) => e.id === id)?.starred ?? false;
+      return { ...prev, [id]: !current };
+    });
   };
 
-  const markAsRead = (id: string) => {
-    setEmails((prev) => prev.map((e) => (e.id === id ? { ...e, read: true } : e)));
-  };
+  const markAsRead = (id: string) => setLocalRead((prev) => ({ ...prev, [id]: true }));
 
   const moveToTrash = (id: string) => {
-    setEmails((prev) => prev.map((e) => (e.id === id ? { ...e, folder: "trash" as EmailFolder } : e)));
+    setRemoved((prev) => new Set(prev).add(id));
     if (selectedId === id) setSelectedId(null);
   };
 
   const archiveEmail = (id: string) => {
-    setEmails((prev) => prev.map((e) => (e.id === id ? { ...e, folder: "archive" as EmailFolder } : e)));
+    setRemoved((prev) => new Set(prev).add(id));
     if (selectedId === id) setSelectedId(null);
   };
 
   const openEmail = (email: EmailMessage) => {
     setSelectedId(email.id);
     markAsRead(email.id);
+    setReplying(null);
+    setReplyBody("");
+  };
+
+  const handleSend = async () => {
+    if (!account || !composeData.to || !composeData.subject) return;
+    await sendEmail.mutateAsync({
+      accountId: account.id,
+      payload: {
+        to: composeData.to,
+        cc: composeData.cc || undefined,
+        subject: composeData.subject,
+        html: composeData.body || undefined,
+      },
+    });
+    setComposing(false);
+    setComposeData({ to: "", cc: "", subject: "", body: "" });
+  };
+
+  const handleReply = async () => {
+    if (!account || !selectedEmail || !replyBody) return;
+    await sendEmail.mutateAsync({
+      accountId: account.id,
+      payload: {
+        to: selectedEmail.from.email,
+        subject: `Re: ${selectedEmail.subject}`,
+        text: replyBody,
+      },
+    });
     setReplying(null);
     setReplyBody("");
   };
@@ -301,6 +418,25 @@ export default function EmailInbox() {
     { key: "archive", label: "Archive", icon: <Archive className="h-4 w-4" /> },
     { key: "trash", label: "Trash", icon: <Trash2 className="h-4 w-4" /> },
   ];
+
+  // Loading state
+  if (accountsLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-12rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-black/30 dark:text-white/30" />
+      </div>
+    );
+  }
+
+  // Setup form
+  if (!account || showSetup) {
+    return (
+      <ConnectEmailForm
+        userId={user?.id ?? ""}
+        onCancel={account ? () => setShowSetup(false) : undefined}
+      />
+    );
+  }
 
   return (
     <section className="grid h-[calc(100vh-12rem)] gap-4 lg:grid-cols-[220px_340px_1fr]" data-testid="section-email">
@@ -318,7 +454,7 @@ export default function EmailInbox() {
         <div className="space-y-0.5 flex-1">
           {folders.map((f) => {
             const isActive = folder === f.key;
-            const count = f.key === "inbox" ? unreadCount : f.key === "starred" ? folderCounts.starred : folderCounts[f.key];
+            const count = f.key === "inbox" ? unreadCount : f.key === "starred" ? starredCount : 0;
             return (
               <button
                 key={f.key}
@@ -351,14 +487,22 @@ export default function EmailInbox() {
         </div>
 
         <Separator className="my-2 bg-black/10 dark:bg-white/10" />
-        <div className="space-y-0.5">
-          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">Labels</div>
-          {["enquiry", "booking", "quote", "complaint", "commission"].map((label) => (
-            <div key={label} className="flex items-center gap-2 px-3 py-1.5 text-xs text-black/60 dark:text-white/60">
-              <Tag className="h-3 w-3" />
-              <span className="capitalize">{label}</span>
+
+        {/* Account info */}
+        <div className="px-3 py-2">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40 mb-0.5">Connected</div>
+              <div className="text-xs text-black/70 dark:text-white/70 truncate">{account.emailAddress}</div>
             </div>
-          ))}
+            <button
+              onClick={() => setShowSetup(true)}
+              className="h-7 w-7 rounded-lg flex items-center justify-center text-black/30 hover:text-black hover:bg-black/5 dark:text-white/30 dark:hover:text-white dark:hover:bg-white/5 transition flex-shrink-0"
+              title="Account settings"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </Card>
 
@@ -382,7 +526,12 @@ export default function EmailInbox() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {filteredEmails.length === 0 ? (
+          {messagesLoading ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 py-12 text-black/30 dark:text-white/30">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="text-xs">Loading emails…</span>
+            </div>
+          ) : filteredEmails.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-black/40 dark:text-white/40 gap-2 py-12">
               <Mail className="h-10 w-10" />
               <span className="text-sm">No emails in {folder}</span>
@@ -412,36 +561,23 @@ export default function EmailInbox() {
                       className="hover:scale-110 transition"
                       data-testid={`email-star-${email.id}`}
                     >
-                      <Star className={`h-3.5 w-3.5 ${email.starred ? "fill-amber-400 text-amber-400" : "text-black/20 dark:text-white/20"}`} />
+                      <Star className={`h-3.5 w-3.5 ${(localStarred[email.id] ?? email.starred) ? "fill-amber-400 text-amber-400" : "text-black/20 dark:text-white/20"}`} />
                     </button>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-xs truncate ${!email.read ? "font-semibold text-black dark:text-white" : "font-medium text-black/70 dark:text-white/70"}`}>
-                        {folder === "sent" || folder === "drafts" ? `To: ${email.to[0]?.name}` : email.from.name}
+                      <span className={`text-xs truncate ${!(localRead[email.id] ?? email.read) ? "font-semibold text-black dark:text-white" : "font-medium text-black/70 dark:text-white/70"}`}>
+                        {folder === "sent" || folder === "drafts" ? `To: ${email.to[0]?.name || email.to[0]?.email}` : email.from.name || email.from.email}
                       </span>
-                      <span className="text-[10px] text-black/40 dark:text-white/40 whitespace-nowrap flex items-center gap-1">
-                        {email.attachments && <Paperclip className="h-2.5 w-2.5" />}
+                      <span className="text-[10px] text-black/40 dark:text-white/40 whitespace-nowrap">
                         {formatEmailDate(email.date)}
                       </span>
                     </div>
-                    <div className={`text-xs mt-0.5 truncate ${!email.read ? "font-medium text-black/90 dark:text-white/90" : "text-black/60 dark:text-white/60"}`}>
+                    <div className={`text-xs mt-0.5 truncate ${!(localRead[email.id] ?? email.read) ? "font-medium text-black/90 dark:text-white/90" : "text-black/60 dark:text-white/60"}`}>
                       {email.subject}
                     </div>
-                    <div className="text-[11px] mt-0.5 text-black/40 dark:text-white/40 truncate">
-                      {email.preview}
-                    </div>
-                    {email.labels && email.labels.length > 0 && (
-                      <div className="flex gap-1 mt-1.5">
-                        {email.labels.map((l) => (
-                          <span key={l} className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${LABEL_COLORS[l] || "bg-gray-500/15 text-gray-600"}`}>
-                            {l}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                  {!email.read && (
+                  {!(localRead[email.id] ?? email.read) && (
                     <div className="h-2 w-2 rounded-full bg-[#3b82f6] mt-1.5 flex-shrink-0" />
                   )}
                 </div>
@@ -527,8 +663,13 @@ export default function EmailInbox() {
               </div>
               <div className="border-t border-black/10 px-5 py-3 dark:border-white/10 flex items-center justify-between">
                 <div className="flex gap-2">
-                  <Button className="h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 gap-2 text-sm" data-testid="button-send-email">
-                    <Send className="h-3.5 w-3.5" />
+                  <Button
+                    onClick={handleSend}
+                    disabled={sendEmail.isPending || !composeData.to || !composeData.subject}
+                    className="h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 gap-2 text-sm"
+                    data-testid="button-send-email"
+                  >
+                    {sendEmail.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                     Send
                   </Button>
                   <Button variant="outline" className="h-9 rounded-xl border-black/10 dark:border-white/10 text-sm" data-testid="button-save-draft">
@@ -540,9 +681,6 @@ export default function EmailInbox() {
                   <button className="h-8 w-8 rounded-lg flex items-center justify-center text-black/40 hover:text-black hover:bg-black/5 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 transition">
                     <Paperclip className="h-4 w-4" />
                   </button>
-                  <button className="h-8 w-8 rounded-lg flex items-center justify-center text-black/40 hover:text-black hover:bg-black/5 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 transition">
-                    <Image className="h-4 w-4" />
-                  </button>
                   <button
                     onClick={() => { setComposing(false); setComposeData({ to: "", cc: "", subject: "", body: "" }); }}
                     className="h-8 w-8 rounded-lg flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
@@ -552,9 +690,9 @@ export default function EmailInbox() {
                 </div>
               </div>
             </motion.div>
-          ) : selectedEmail ? (
+          ) : selectedEmailWithBody ? (
             <motion.div
-              key={`email-${selectedEmail.id}`}
+              key={`email-${selectedEmailWithBody.id}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -569,18 +707,18 @@ export default function EmailInbox() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  <div className="text-sm font-semibold truncate max-w-[300px]">{selectedEmail.subject}</div>
+                  <div className="text-sm font-semibold truncate max-w-[300px]">{selectedEmailWithBody.subject}</div>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => archiveEmail(selectedEmail.id)}
+                    onClick={() => archiveEmail(selectedEmailWithBody.id)}
                     className="h-8 w-8 rounded-xl flex items-center justify-center text-black/40 hover:text-black hover:bg-black/5 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 transition"
                     data-testid="button-archive-email"
                   >
                     <Archive className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => moveToTrash(selectedEmail.id)}
+                    onClick={() => moveToTrash(selectedEmailWithBody.id)}
                     className="h-8 w-8 rounded-xl flex items-center justify-center text-black/40 hover:text-red-500 hover:bg-red-50 dark:text-white/40 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition"
                     data-testid="button-trash-email"
                   >
@@ -612,79 +750,34 @@ export default function EmailInbox() {
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div className="flex items-start gap-3">
                     <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-                      {selectedEmail.from.name.charAt(0).toUpperCase()}
+                      {(selectedEmailWithBody.from.name || selectedEmailWithBody.from.email).charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">{selectedEmail.from.name}</span>
-                        {selectedEmail.labels?.map((l) => (
-                          <span key={l} className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${LABEL_COLORS[l] || "bg-gray-500/15 text-gray-600"}`}>
-                            {l}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="text-xs text-black/50 dark:text-white/50">{selectedEmail.from.email}</div>
+                      <div className="text-sm font-semibold">{selectedEmailWithBody.from.name || selectedEmailWithBody.from.email}</div>
+                      <div className="text-xs text-black/50 dark:text-white/50">{selectedEmailWithBody.from.email}</div>
                       <div className="text-xs text-black/40 dark:text-white/40 mt-0.5">
-                        To: {selectedEmail.to.map((t) => t.name || t.email).join(", ")}
-                        {selectedEmail.cc && selectedEmail.cc.length > 0 && ` | Cc: ${selectedEmail.cc.map((c) => c.name || c.email).join(", ")}`}
+                        To: {selectedEmailWithBody.to.map((t) => t.name || t.email).join(", ")}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-black/40 dark:text-white/40 whitespace-nowrap">
                     <Clock className="h-3 w-3" />
-                    {formatFullDate(selectedEmail.date)}
+                    {formatFullDate(selectedEmailWithBody.date)}
                   </div>
                 </div>
 
-                <div
-                  className="prose prose-sm dark:prose-invert max-w-none text-black/80 dark:text-white/80 leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
-                />
-
-                {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
-                  <div className="mt-6">
-                    <div className="text-xs font-semibold text-black/50 dark:text-white/50 mb-2 flex items-center gap-1.5">
-                      <Paperclip className="h-3 w-3" />
-                      {selectedEmail.attachments.length} Attachment{selectedEmail.attachments.length > 1 ? "s" : ""}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedEmail.attachments.map((att, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-2 rounded-xl border border-black/10 bg-black/3 px-3 py-2 dark:border-white/10 dark:bg-white/3 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
-                        >
-                          {getAttachmentIcon(att.type)}
-                          <div>
-                            <div className="text-xs font-medium truncate max-w-[150px]">{att.name}</div>
-                            <div className="text-[10px] text-black/40 dark:text-white/40">{att.size}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                {bodyLoading ? (
+                  <div className="flex items-center gap-2 text-black/30 dark:text-white/30 py-8">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Loading message…</span>
                   </div>
-                )}
-
-                {selectedEmail.replies && selectedEmail.replies.length > 0 && (
-                  <div className="mt-6 space-y-3">
-                    <Separator className="bg-black/10 dark:bg-white/10" />
-                    {selectedEmail.replies.map((reply) => (
-                      <div key={reply.id} className="rounded-2xl border border-black/8 bg-black/2 p-4 dark:border-white/8 dark:bg-white/2">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-[10px] font-medium">
-                              {reply.from.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <span className="text-xs font-semibold">{reply.from.name}</span>
-                              <span className="text-[10px] text-black/40 dark:text-white/40 ml-2">{reply.from.email}</span>
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-black/40 dark:text-white/40">{formatFullDate(reply.date)}</span>
-                        </div>
-                        <div className="text-sm text-black/70 dark:text-white/70 pl-9">{reply.body}</div>
-                      </div>
-                    ))}
-                  </div>
+                ) : selectedEmailWithBody.body ? (
+                  <div
+                    className="prose prose-sm dark:prose-invert max-w-none text-black/80 dark:text-white/80 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: selectedEmailWithBody.body }}
+                  />
+                ) : (
+                  <div className="text-sm text-black/40 dark:text-white/40 italic">No message content</div>
                 )}
 
                 <AnimatePresence>
@@ -699,7 +792,7 @@ export default function EmailInbox() {
                       <div className="rounded-2xl border border-black/10 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2">
                         <div className="flex items-center justify-between mb-3">
                           <div className="text-xs font-semibold text-black/60 dark:text-white/60 flex items-center gap-1.5">
-                            {replying === "reply" && <><Reply className="h-3.5 w-3.5" /> Reply to {selectedEmail.from.name}</>}
+                            {replying === "reply" && <><Reply className="h-3.5 w-3.5" /> Reply to {selectedEmailWithBody.from.name}</>}
                             {replying === "reply-all" && <><ReplyAll className="h-3.5 w-3.5" /> Reply All</>}
                             {replying === "forward" && <><Forward className="h-3.5 w-3.5" /> Forward</>}
                           </div>
@@ -728,8 +821,13 @@ export default function EmailInbox() {
                           data-testid="reply-body"
                         />
                         <div className="flex items-center justify-between mt-2">
-                          <Button className="h-8 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 gap-1.5 text-xs" data-testid="button-send-reply">
-                            <Send className="h-3 w-3" />
+                          <Button
+                            onClick={handleReply}
+                            disabled={sendEmail.isPending || !replyBody}
+                            className="h-8 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 gap-1.5 text-xs"
+                            data-testid="button-send-reply"
+                          >
+                            {sendEmail.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                             Send
                           </Button>
                           <button className="h-7 w-7 rounded-lg flex items-center justify-center text-black/30 hover:text-black hover:bg-black/5 dark:text-white/30 dark:hover:text-white dark:hover:bg-white/5 transition">

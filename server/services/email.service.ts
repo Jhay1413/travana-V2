@@ -151,7 +151,7 @@ export const emailService = {
           to: (envelope.to ?? []).map((a) => ({ name: a.name ?? "", address: a.address ?? "" })),
           date: envelope.date ?? null,
           messageId: envelope.messageId ?? null,
-          flags: msg.flags ?? new Set<string>(),
+          flags: Array.from(msg.flags ?? []) as unknown as Set<string>,
         });
       }
 
@@ -184,7 +184,7 @@ export const emailService = {
           to: (envelope.to ?? []).map((a) => ({ name: a.name ?? "", address: a.address ?? "" })),
           date: envelope.date ?? null,
           messageId: envelope.messageId ?? null,
-          flags: msg.flags ?? new Set<string>(),
+          flags: Array.from(msg.flags ?? []) as unknown as Set<string>,
           html,
           text,
         };

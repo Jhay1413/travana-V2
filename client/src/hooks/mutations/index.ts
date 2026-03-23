@@ -16,3 +16,4 @@ export { useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator } f
 export { useCreateAirport, useDeleteAirport } from "./use-airport-mutations";
 export { useCreateTask, useToggleTask, useDeleteTask } from "./use-task-mutations";
 export { useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "./use-chat-mutations";
+export { useCreateEmailAccount, useDeleteEmailAccount, useSendEmail } from "./use-email-mutations";
