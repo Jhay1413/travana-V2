@@ -22,6 +22,7 @@ import AdminFinancialsTargets from "@/components/admin-financials-targets";
 import PipelineBoard from "@/components/pipeline-board";
 import SocialPostsBoard from "@/components/social-posts-board";
 import TicketsBoard from "@/components/tickets-board";
+import FacebookMessenger from "@/components/facebook-messenger";
 import ChatRichInput from "@/components/chat-rich-input";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { NotificationToast } from "@/components/command-center-shell";
@@ -1358,6 +1359,7 @@ function TopBar({
       leads: "Leads",
       commission: "Commission",
       payouts: "Payouts",
+      "connect-facebook": "Facebook Messenger",
       "connect-instagram": "Instagram",
       "connect-email": "Email",
     };
@@ -3432,6 +3434,10 @@ export default function CommandCenterPage() {
     
     if (active === "connect-email") {
       return <EmailInbox />;
+    }
+
+    if (active === "connect-facebook") {
+      return <FacebookMessenger />;
     }
 
     if (active === "connect-internal-chat") {
