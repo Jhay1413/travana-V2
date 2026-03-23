@@ -34,6 +34,7 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import axios from "@/api/client/axios-client";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 // ─── Field & Table Definitions ────────────────────────────────────────────────
 
@@ -337,31 +338,58 @@ function RelationSelect({
   onChange: (val: any) => void;
   placeholder?: string;
 }) {
-  const baseClass =
-    "w-full h-9 rounded-xl border border-black/10 bg-black/5 px-3 text-sm dark:border-white/10 dark:bg-white/5 focus:outline-none focus:ring-1 focus:ring-ring";
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce the search input
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data: lookupData, isLoading } = useQuery({
-    queryKey: ["relation-lookup", lookupApi],
+    queryKey: ["relation-lookup", lookupApi, debouncedSearch],
     queryFn: async () => {
-      const res = await axios.get(`${lookupApi}?limit=500`);
-      return (res.data as { rows: Record<string, any>[] }).rows ?? [];
+      const params = new URLSearchParams({ limit: "50" });
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      const res = await axios.get(`${lookupApi}?${params}`);
+      const body = res.data as { data?: { rows?: Record<string, any>[] }; rows?: Record<string, any>[] };
+      return body.data?.rows ?? body.rows ?? [];
     },
+    staleTime: 60 * 1000,
+  });
+
+  // Fetch the selected item's label when value is set but not in current results
+  const { data: selectedItem } = useQuery({
+    queryKey: ["relation-lookup-item", lookupApi, value],
+    queryFn: async () => {
+      const res = await axios.get(`${lookupApi}/${value}`);
+      return res.data?.data as Record<string, any> | undefined;
+    },
+    enabled: !!value && !(lookupData ?? []).some((r) => r.id === value),
     staleTime: 5 * 60 * 1000,
   });
 
+  const options = (lookupData ?? []).map((row) => ({
+    value: row.id,
+    label: row[lookupLabelKey] ?? row.id,
+  }));
+
+  const selectedLabel =
+    (lookupData ?? []).find((r) => r.id === value)?.[lookupLabelKey] ??
+    (selectedItem ? selectedItem[lookupLabelKey] : undefined);
+
   return (
-    <select
+    <SearchableSelect
       value={value ?? ""}
-      onChange={(e) => onChange(e.target.value || null)}
-      className={baseClass}
-    >
-      <option value="">{isLoading ? "Loading…" : placeholder ?? "— Select —"}</option>
-      {(lookupData ?? []).map((row) => (
-        <option key={row.id} value={row.id}>
-          {row[lookupLabelKey] ?? row.id}
-        </option>
-      ))}
-    </select>
+      onValueChange={(val) => onChange(val || null)}
+      options={options}
+      placeholder={placeholder ?? "— Select —"}
+      searchPlaceholder="Search…"
+      onSearch={setSearch}
+      isLoading={isLoading}
+      selectedLabel={selectedLabel}
+    />
   );
 }
 

@@ -1,5 +1,6 @@
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
+import { simpleParser } from "mailparser";
 import { emailRepository } from "../repositories/email.repository";
 import { encrypt, decrypt } from "../utils/encryption";
 import { AppError } from "../utils/error-handler";
@@ -168,14 +169,11 @@ export const emailService = {
 
       let result: EmailMessageFull | null = null;
 
-      for await (const msg of client.fetch({ uid: uid }, { envelope: true, flags: true, bodyStructure: true, source: true }, { uid: true })) {
+      for await (const msg of client.fetch({ uid: uid }, { envelope: true, flags: true, source: true }, { uid: true })) {
         const envelope = msg.envelope ?? {};
-        const source = msg.source?.toString("utf8") ?? "";
+        const source = msg.source ?? Buffer.alloc(0);
 
-        // Parse plain text and HTML from raw source (basic extraction)
-        const htmlMatch = source.match(/<html[\s\S]*<\/html>/i);
-        const html = htmlMatch ? htmlMatch[0] : null;
-        const text = html ? null : source.replace(/^[\s\S]*?\r?\n\r?\n/, "").trim() || null;
+        const parsed = await simpleParser(source);
 
         result = {
           uid: msg.uid,
@@ -185,8 +183,8 @@ export const emailService = {
           date: envelope.date ?? null,
           messageId: envelope.messageId ?? null,
           flags: Array.from(msg.flags ?? []) as unknown as Set<string>,
-          html,
-          text,
+          html: parsed.html || null,
+          text: parsed.text || null,
         };
       }
 

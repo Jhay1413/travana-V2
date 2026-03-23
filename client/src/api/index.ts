@@ -27,3 +27,4 @@ export { opportunitiesApi } from "./endpoints/opportunities.api";
 export { searchApi } from "./endpoints/search.api";
 export { announcementApi } from "./endpoints/announcement.api";
 export { emailApi } from "./endpoints/email.api";
+export { facebookApi } from "./endpoints/facebook.api";

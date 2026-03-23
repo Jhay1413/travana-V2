@@ -198,8 +198,8 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
     })) as any
   );
 
-  if (setImageUrls && result.images && result.images.length > 0) {
-    setImageUrls((prev) => [...prev, ...result.images.filter((u: string) => !prev.includes(u))]);
+  if (setImageUrls) {
+    setImageUrls(() => result.images ?? []);
   }
 }
 
@@ -263,9 +263,7 @@ function handleFallbackJson(data: Record<string, any>, deps: JsonImportDeps): vo
         }
       }
     }
-    if (extractedImages.length > 0) {
-      setImageUrls((prev) => [...prev, ...extractedImages.filter((u) => !prev.includes(u))]);
-    }
+    setImageUrls(() => extractedImages);
   }
 
   toast({ title: "JSON imported", description: "Form populated from JSON." });

@@ -1457,6 +1457,23 @@ export const emailAccounts = pgTable("email_accounts", {
 export type EmailAccount = typeof emailAccounts.$inferSelect;
 export type InsertEmailAccount = Omit<typeof emailAccounts.$inferInsert, "id" | "createdAt" | "updatedAt">;
 
+// ─── Facebook Integration ─────────────────────────────────────────────────────
+
+export const facebookPages = pgTable("facebook_pages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  pageId: text("page_id").notNull(),
+  pageName: text("page_name").notNull(),
+  pageCategory: text("page_category"),
+  pageAvatar: text("page_avatar"),
+  encryptedAccessToken: text("encrypted_access_token").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type FacebookPage = typeof facebookPages.$inferSelect;
+export type InsertFacebookPage = Omit<typeof facebookPages.$inferInsert, "id" | "createdAt" | "updatedAt">;
+
 // ─── Targets ───────────────────────────────────────────────────────────
 
 export const shopTargetTable = pgTable("shop_target_table", {

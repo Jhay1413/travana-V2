@@ -12,7 +12,6 @@ import {
   CheckCheck,
   Settings,
   RefreshCw,
-  LogIn,
   Shield,
   Zap,
   ExternalLink,
@@ -20,13 +19,17 @@ import {
   MessageCircle,
   ChevronDown,
   X,
-  Plus,
+  Loader2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/hooks/use-auth";
+import { useFacebookPages, useFacebookConversations, useFacebookMessages } from "@/hooks/queries";
+import { useDisconnectFacebookPage, useSendFacebookMessage } from "@/hooks/mutations";
+import type { FacebookPagePublic, FbConversation, FbMessage } from "@/api/endpoints/facebook.api";
 
 const FacebookIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -40,65 +43,84 @@ const MessengerIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
   </svg>
 );
 
-type View = "connected" | "setup" | "authorizing";
-
-interface Conversation {
-  id: string;
-  name: string;
-  avatar: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
-  online: boolean;
-  pageLabel: string;
+function initials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
-interface Message {
-  id: string;
-  sender: "customer" | "agent";
-  text: string;
-  time: string;
-  status: "sent" | "delivered" | "read";
+function fmtTime(iso: string) {
+  const date = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffHrs = diffMs / (1000 * 60 * 60);
+  if (diffHrs < 1) return `${Math.max(1, Math.floor(diffMs / 60000))}m ago`;
+  if (diffHrs < 24) return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  if (diffHrs < 48) return "Yesterday";
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-const demoConversations: Conversation[] = [
-  { id: "1", name: "Sarah Thompson", avatar: "ST", lastMessage: "Hi, I wanted to ask about the Maldives package you mentioned?", time: "2m ago", unread: 2, online: true, pageLabel: "Apple Travel" },
-  { id: "2", name: "David & Emma Wilson", avatar: "DW", lastMessage: "That's perfect! Can you send over the full itinerary?", time: "15m ago", unread: 0, online: true, pageLabel: "Apple Travel" },
-  { id: "3", name: "James Patterson", avatar: "JP", lastMessage: "We're interested in the Greece cruise for August", time: "1h ago", unread: 1, online: false, pageLabel: "Apple Travel" },
-  { id: "4", name: "Linda McCarthy", avatar: "LM", lastMessage: "Thanks for sending the quote! We'll discuss tonight.", time: "3h ago", unread: 0, online: false, pageLabel: "Apple Holidays" },
-  { id: "5", name: "Robert & Sarah Chen", avatar: "RC", lastMessage: "Is the early bird discount still available?", time: "5h ago", unread: 0, online: false, pageLabel: "Apple Travel" },
-  { id: "6", name: "Margaret O'Brien", avatar: "MO", lastMessage: "Can we change the departure airport to Birmingham?", time: "1d ago", unread: 0, online: false, pageLabel: "Apple Holidays" },
-];
+function fmtMsgTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
 
-const demoMessages: Message[] = [
-  { id: "1", sender: "customer", text: "Hi there! I saw your Maldives all-inclusive package on your page. Could you tell me more about it?", time: "10:23 AM", status: "read" },
-  { id: "2", sender: "agent", text: "Hello Sarah! Great to hear from you 😊 The Maldives package is one of our most popular — it includes 7 nights at a 5-star water villa, all meals, return flights from Manchester, and a sunset dolphin cruise.", time: "10:25 AM", status: "read" },
-  { id: "3", sender: "customer", text: "That sounds amazing! What dates are available and how much is it per person?", time: "10:28 AM", status: "read" },
-  { id: "4", sender: "agent", text: "We have availability in June and September. The price starts from £2,450 per person based on 2 sharing. If you book before the end of this month, there's a £200 early bird discount per person!", time: "10:31 AM", status: "read" },
-  { id: "5", sender: "customer", text: "Oh wow, that's a great deal. My husband and I were looking at September. Can you check exact dates for us?", time: "10:45 AM", status: "read" },
-  { id: "6", sender: "agent", text: "Absolutely! I'll check the best availability for September and send over a full quote. Just to confirm — would you be flying from Manchester or another airport?", time: "10:47 AM", status: "delivered" },
-  { id: "7", sender: "customer", text: "Hi, I wanted to ask about the Maldives package you mentioned?", time: "11:02 AM", status: "sent" },
-];
+// ─── Connected View ───────────────────────────────────────────────────────────
 
-function ConnectedView() {
-  const [selectedConvo, setSelectedConvo] = useState("1");
+function ConnectedView({ pages, onDisconnect }: { pages: FacebookPagePublic[]; onDisconnect: () => void }) {
+  const { user } = useAuth();
+  const userId = user?.id ?? "";
+
+  const [selectedPageId, setSelectedPageId] = useState(pages[0]?.id ?? "");
+  const [selectedConvoId, setSelectedConvoId] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [pageFilter, setPageFilter] = useState("all");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const selectedConversation = demoConversations.find((c) => c.id === selectedConvo);
-  const filteredConversations = demoConversations.filter(
-    (c) => (pageFilter === "all" || c.pageLabel === pageFilter) &&
-      (searchQuery === "" || c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const selectedPage = pages.find((p) => p.id === selectedPageId) ?? pages[0];
+
+  const { data: conversations = [], isLoading: convoLoading, refetch: refetchConvos } = useFacebookConversations(selectedPageId, userId);
+  const selectedConvo = conversations.find((c) => c.id === selectedConvoId) ?? null;
+
+  const { data: messages = [], isLoading: msgLoading } = useFacebookMessages(
+    selectedConvoId ?? "",
+    selectedPageId,
+    userId,
   );
+
+  const sendMsg = useSendFacebookMessage(selectedPageId, selectedConvoId ?? "", userId);
+  const disconnect = useDisconnectFacebookPage(userId);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [selectedConvo]);
+  }, [messages]);
+
+  useEffect(() => {
+    if (conversations.length > 0 && !selectedConvoId) {
+      setSelectedConvoId(conversations[0].id);
+    }
+  }, [conversations]);
+
+  const filteredConversations = conversations.filter((c) =>
+    searchQuery === "" || c.participantName.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
+  const handleSend = async () => {
+    if (!selectedConvo || !messageInput.trim()) return;
+    await sendMsg.mutateAsync({ recipientId: selectedConvo.participantId, text: messageInput.trim() });
+    setMessageInput("");
+  };
+
+  const handleDisconnect = async () => {
+    if (!selectedPage) return;
+    await disconnect.mutateAsync(selectedPage.id);
+    onDisconnect();
+  };
 
   return (
     <div className="flex h-full" data-testid="messenger-connected-view">
+      {/* Conversation list */}
       <div className="w-[340px] flex-none border-r border-black/10 dark:border-white/10 flex flex-col bg-white/50 dark:bg-white/5" data-testid="messenger-conversation-list">
         <div className="p-4 border-b border-black/10 dark:border-white/10 space-y-3">
           <div className="flex items-center justify-between">
@@ -115,10 +137,22 @@ function ConnectedView() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" data-testid="button-messenger-refresh">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-xl"
+                onClick={() => refetchConvos()}
+                data-testid="button-messenger-refresh"
+              >
                 <RefreshCw className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" data-testid="button-messenger-settings">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-xl"
+                onClick={handleDisconnect}
+                data-testid="button-messenger-settings"
+              >
                 <Settings className="w-4 h-4" />
               </Button>
             </div>
@@ -135,89 +169,98 @@ function ConnectedView() {
             />
           </div>
 
-          <div className="flex gap-1">
-            {["all", "Apple Travel", "Apple Holidays"].map((page) => (
-              <button
-                key={page}
-                onClick={() => setPageFilter(page)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                  pageFilter === page
-                    ? "bg-blue-600 text-white"
-                    : "bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/60 hover:bg-black/10 dark:hover:bg-white/15"
-                }`}
-                data-testid={`filter-page-${page.replace(/\s/g, "-").toLowerCase()}`}
-              >
-                {page === "all" ? "All Pages" : page}
-              </button>
-            ))}
-          </div>
+          {/* Page selector */}
+          {pages.length > 1 && (
+            <div className="flex gap-1 flex-wrap">
+              {pages.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => { setSelectedPageId(p.id); setSelectedConvoId(null); }}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                    selectedPageId === p.id
+                      ? "bg-blue-600 text-white"
+                      : "bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/60 hover:bg-black/10"
+                  }`}
+                >
+                  {p.pageName}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {filteredConversations.map((convo) => (
-            <div
-              key={convo.id}
-              onClick={() => setSelectedConvo(convo.id)}
-              className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-black/5 dark:border-white/5 ${
-                selectedConvo === convo.id
-                  ? "bg-blue-500/10 dark:bg-blue-500/15"
-                  : "hover:bg-black/5 dark:hover:bg-white/5"
-              }`}
-              data-testid={`conversation-${convo.id}`}
-            >
-              <div className="relative flex-none">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                  selectedConvo === convo.id
-                    ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                    : "bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/60"
-                }`}>
-                  {convo.avatar}
+          {convoLoading ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-black/30 dark:text-white/30 py-12">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span className="text-xs">Loading conversations…</span>
+            </div>
+          ) : filteredConversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-black/30 dark:text-white/30 py-12">
+              <MessageCircle className="w-8 h-8" />
+              <span className="text-xs">No conversations yet</span>
+            </div>
+          ) : (
+            filteredConversations.map((convo) => (
+              <div
+                key={convo.id}
+                onClick={() => setSelectedConvoId(convo.id)}
+                className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-black/5 dark:border-white/5 ${
+                  selectedConvoId === convo.id
+                    ? "bg-blue-500/10 dark:bg-blue-500/15"
+                    : "hover:bg-black/5 dark:hover:bg-white/5"
+                }`}
+                data-testid={`conversation-${convo.id}`}
+              >
+                <div className="relative flex-none">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                    selectedConvoId === convo.id
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                      : "bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/60"
+                  }`}>
+                    {initials(convo.participantName)}
+                  </div>
                 </div>
-                {convo.online && (
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className={`text-sm truncate ${convo.unread > 0 ? "font-bold" : "font-medium"}`}>
-                    {convo.name}
-                  </span>
-                  <span className="text-[10px] text-black/40 dark:text-white/40 flex-none ml-2">{convo.time}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className={`text-xs truncate ${convo.unread > 0 ? "text-black/70 dark:text-white/70 font-medium" : "text-black/50 dark:text-white/50"}`}>
-                    {convo.lastMessage}
-                  </p>
-                  {convo.unread > 0 && (
-                    <span className="flex-none ml-2 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-                      {convo.unread}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className={`text-sm truncate ${convo.unreadCount > 0 ? "font-bold" : "font-medium"}`}>
+                      {convo.participantName}
                     </span>
+                    <span className="text-[10px] text-black/40 dark:text-white/40 flex-none ml-2">{fmtTime(convo.updatedAt)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs truncate ${convo.unreadCount > 0 ? "text-black/70 dark:text-white/70 font-medium" : "text-black/50 dark:text-white/50"}`}>
+                      {convo.lastMessage || "No messages yet"}
+                    </p>
+                    {convo.unreadCount > 0 && (
+                      <span className="flex-none ml-2 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {convo.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  {selectedPage && (
+                    <span className="text-[10px] text-black/35 dark:text-white/35 mt-0.5 block">{selectedPage.pageName}</span>
                   )}
                 </div>
-                <span className="text-[10px] text-black/35 dark:text-white/35 mt-0.5 block">{convo.pageLabel}</span>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
+      {/* Chat panel */}
       <div className="flex-1 flex flex-col min-w-0" data-testid="messenger-chat-panel">
-        {selectedConversation ? (
+        {selectedConvo ? (
           <>
             <div className="flex-none border-b border-black/10 dark:border-white/10 px-5 py-3 flex items-center justify-between bg-white/50 dark:bg-white/5">
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 flex items-center justify-center text-sm font-bold">
-                    {selectedConversation.avatar}
-                  </div>
-                  {selectedConversation.online && (
-                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900" />
-                  )}
+                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 flex items-center justify-center text-sm font-bold">
+                  {initials(selectedConvo.participantName)}
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold" data-testid="text-chat-name">{selectedConversation.name}</h3>
-                  <span className={`text-xs font-medium ${selectedConversation.online ? "text-emerald-600" : "text-black/40 dark:text-white/40"}`}>
-                    {selectedConversation.online ? "Active now" : "Offline"}
+                  <h3 className="text-sm font-semibold" data-testid="text-chat-name">{selectedConvo.participantName}</h3>
+                  <span className="text-xs text-black/40 dark:text-white/40">
+                    {fmtTime(selectedConvo.updatedAt)}
                   </span>
                 </div>
               </div>
@@ -235,37 +278,40 @@ function ConnectedView() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-              {demoMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.sender === "agent" ? "justify-end" : "justify-start"}`}
-                  data-testid={`message-${msg.id}`}
-                >
-                  <div className="max-w-[70%]">
-                    <div
-                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                        msg.sender === "agent"
-                          ? "bg-blue-600 text-white rounded-br-md"
-                          : "bg-white dark:bg-white/10 text-black dark:text-white border border-black/10 dark:border-white/10 rounded-bl-md shadow-sm"
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
-                    <div className={`flex items-center gap-1 mt-1 ${msg.sender === "agent" ? "justify-end" : ""}`}>
-                      <span className="text-[10px] text-black/40 dark:text-white/40">{msg.time}</span>
-                      {msg.sender === "agent" && (
-                        msg.status === "read" ? (
-                          <CheckCheck className="w-3 h-3 text-blue-400" />
-                        ) : msg.status === "delivered" ? (
-                          <CheckCheck className="w-3 h-3 text-black/30 dark:text-white/30" />
-                        ) : (
-                          <Check className="w-3 h-3 text-black/30 dark:text-white/30" />
-                        )
-                      )}
+              {msgLoading ? (
+                <div className="flex items-center justify-center py-8 text-black/30 dark:text-white/30 gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Loading messages…</span>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex items-center justify-center py-8 text-black/30 dark:text-white/30">
+                  <span className="text-sm">No messages yet</span>
+                </div>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
+                    data-testid={`message-${msg.id}`}
+                  >
+                    <div className="max-w-[70%]">
+                      <div
+                        className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                          msg.senderType === "agent"
+                            ? "bg-blue-600 text-white rounded-br-md"
+                            : "bg-white dark:bg-white/10 text-black dark:text-white border border-black/10 dark:border-white/10 rounded-bl-md shadow-sm"
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                      <div className={`flex items-center gap-1 mt-1 ${msg.senderType === "agent" ? "justify-end" : ""}`}>
+                        <span className="text-[10px] text-black/40 dark:text-white/40">{fmtMsgTime(msg.createdAt)}</span>
+                        {msg.senderType === "agent" && <Check className="w-3 h-3 text-black/30 dark:text-white/30" />}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
               <div ref={messagesEndRef} />
             </div>
 
@@ -284,6 +330,7 @@ function ConnectedView() {
                     type="text"
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                     placeholder="Type a message..."
                     className="flex-1 bg-transparent text-sm outline-none"
                     data-testid="input-message"
@@ -292,8 +339,14 @@ function ConnectedView() {
                     <Smile className="w-4 h-4" />
                   </button>
                 </div>
-                <Button size="icon" className="h-9 w-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-send">
-                  <Send className="w-4 h-4" />
+                <Button
+                  size="icon"
+                  className="h-9 w-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={handleSend}
+                  disabled={!messageInput.trim() || sendMsg.isPending}
+                  data-testid="button-send"
+                >
+                  {sendMsg.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
@@ -302,22 +355,25 @@ function ConnectedView() {
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <MessageCircle className="w-12 h-12 text-black/20 dark:text-white/20 mx-auto mb-3" />
-              <p className="text-sm text-black/50 dark:text-white/50 font-medium" data-testid="text-no-conversation">Select a conversation</p>
+              <p className="text-sm text-black/50 dark:text-white/50 font-medium" data-testid="text-no-conversation">
+                Select a conversation
+              </p>
             </div>
           </div>
         )}
       </div>
 
+      {/* Context panel */}
       <div className="w-[260px] flex-none border-l border-black/10 dark:border-white/10 p-4 overflow-y-auto bg-white/50 dark:bg-white/5" data-testid="messenger-context-panel">
-        {selectedConversation && (
+        {selectedConvo && (
           <div className="space-y-5">
             <div className="text-center">
               <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 flex items-center justify-center text-xl font-bold mx-auto mb-2">
-                {selectedConversation.avatar}
+                {initials(selectedConvo.participantName)}
               </div>
-              <h3 className="text-sm font-bold" data-testid="text-context-name">{selectedConversation.name}</h3>
+              <h3 className="text-sm font-bold" data-testid="text-context-name">{selectedConvo.participantName}</h3>
               <p className="text-xs text-black/50 dark:text-white/50 mt-0.5">
-                {selectedConversation.online ? "Active now" : "Last seen 2h ago"}
+                Last active {fmtTime(selectedConvo.updatedAt)}
               </p>
             </div>
 
@@ -343,52 +399,26 @@ function ConnectedView() {
               </Button>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-[10px] uppercase tracking-wider font-semibold text-black/40 dark:text-white/40">Linked Client</h4>
-              <Card className="rounded-xl p-3 bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
-                    ST
+            {selectedPage && (
+              <div className="space-y-2">
+                <h4 className="text-[10px] uppercase tracking-wider font-semibold text-black/40 dark:text-white/40">Page</h4>
+                <Card className="rounded-xl p-3 bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10">
+                  <div className="flex items-center gap-2">
+                    {selectedPage.pageAvatar ? (
+                      <img src={selectedPage.pageAvatar} alt={selectedPage.pageName} className="w-6 h-6 rounded object-cover" />
+                    ) : (
+                      <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center text-white">
+                        <FacebookIcon className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-semibold" data-testid="text-page-name">{selectedPage.pageName}</p>
+                      <p className="text-[10px] text-black/50 dark:text-white/50">{selectedPage.pageCategory ?? "Business Page"}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold" data-testid="text-linked-client-name">Sarah Thompson</p>
-                    <p className="text-[10px] text-black/50 dark:text-white/50">Client #2847</p>
-                  </div>
-                </div>
-                <div className="space-y-1 text-[10px] text-black/50 dark:text-white/50">
-                  <p>sarah.thompson@email.com</p>
-                  <p>07412 345 678</p>
-                </div>
-              </Card>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="text-[10px] uppercase tracking-wider font-semibold text-black/40 dark:text-white/40">Recent Quotes</h4>
-              <Card className="rounded-xl p-2.5 bg-amber-500/10 border-amber-500/20">
-                <p className="text-xs font-medium" data-testid="text-recent-quote">Maldives All-Inclusive</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">£4,900 pp</span>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">
-                    Pending
-                  </Badge>
-                </div>
-              </Card>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="text-[10px] uppercase tracking-wider font-semibold text-black/40 dark:text-white/40">Page Info</h4>
-              <Card className="rounded-xl p-3 bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center text-white">
-                    <FacebookIcon className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold" data-testid="text-page-name">Apple Travel</p>
-                    <p className="text-[10px] text-black/50 dark:text-white/50">Business Page</p>
-                  </div>
-                </div>
-              </Card>
-            </div>
+                </Card>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -396,7 +426,13 @@ function ConnectedView() {
   );
 }
 
-function SetupView({ onConnect }: { onConnect: () => void }) {
+// ─── Setup View ───────────────────────────────────────────────────────────────
+
+function SetupView({ userId }: { userId: string }) {
+  const handleConnect = () => {
+    window.location.href = `/api/facebook/auth?userId=${userId}`;
+  };
+
   return (
     <div className="flex-1 flex items-center justify-center overflow-y-auto" data-testid="messenger-setup-view">
       <div className="max-w-lg w-full mx-4 py-8">
@@ -423,19 +459,17 @@ function SetupView({ onConnect }: { onConnect: () => void }) {
                 </p>
               </div>
             </div>
-
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-none">
                 <RefreshCw className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold">Auto-Login & Token Refresh</h3>
+                <h3 className="text-sm font-semibold">Long-Lived Access Token</h3>
                 <p className="text-xs text-black/50 dark:text-white/50 mt-0.5">
-                  Stay connected automatically. Your session refreshes in the background — no need to re-login every time.
+                  Your Page token is stored securely and doesn't expire. No need to reconnect every time.
                 </p>
               </div>
             </div>
-
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center flex-none">
                 <Zap className="w-5 h-5 text-violet-600" />
@@ -443,7 +477,7 @@ function SetupView({ onConnect }: { onConnect: () => void }) {
               <div>
                 <h3 className="text-sm font-semibold">Real-Time Messages</h3>
                 <p className="text-xs text-black/50 dark:text-white/50 mt-0.5">
-                  Receive and reply to Messenger conversations instantly, linked to your CRM client profiles.
+                  Conversations refresh automatically every 15 seconds so you never miss a message.
                 </p>
               </div>
             </div>
@@ -453,7 +487,7 @@ function SetupView({ onConnect }: { onConnect: () => void }) {
 
           <div className="p-6 bg-black/[0.02] dark:bg-white/[0.02]">
             <Button
-              onClick={onConnect}
+              onClick={handleConnect}
               className="w-full gap-2.5 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-xl font-semibold shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 h-12"
               data-testid="button-connect-facebook"
             >
@@ -478,78 +512,24 @@ function SetupView({ onConnect }: { onConnect: () => void }) {
   );
 }
 
-function AuthorizingView({ onComplete }: { onComplete: () => void }) {
-  const [step, setStep] = useState(0);
-
-  const steps = [
-    "Connecting to Facebook...",
-    "Authorizing Messenger access...",
-    "Fetching your Pages...",
-    "Syncing conversations...",
-  ];
-
-  useEffect(() => {
-    let current = 0;
-    const interval = setInterval(() => {
-      current++;
-      setStep(current);
-      if (current >= steps.length) {
-        clearInterval(interval);
-        setTimeout(onComplete, 800);
-      }
-    }, 1200);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="flex-1 flex items-center justify-center" data-testid="messenger-authorizing-view">
-      <div className="max-w-md w-full mx-4 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white mx-auto mb-6 shadow-lg shadow-blue-500/25 animate-pulse">
-          <LogIn className="w-7 h-7" />
-        </div>
-        <h2 className="text-xl font-bold mb-2" data-testid="text-authorizing-title">Authorizing...</h2>
-        <p className="text-sm text-black/50 dark:text-white/50 mb-8">Please wait while we connect your Facebook account</p>
-
-        <Card className="glass ringed grain rounded-3xl p-6 text-left space-y-3">
-          {steps.map((s, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-none transition-all ${
-                i < step
-                  ? "bg-emerald-500/15 text-emerald-600"
-                  : i === step
-                  ? "bg-blue-500/15 text-blue-600 animate-pulse"
-                  : "bg-black/5 dark:bg-white/10 text-black/30 dark:text-white/30"
-              }`}>
-                {i < step ? <Check className="w-3.5 h-3.5" /> : <Circle className="w-3 h-3" />}
-              </div>
-              <span className={`text-sm ${
-                i < step
-                  ? "text-emerald-700 dark:text-emerald-400 font-medium"
-                  : i === step
-                  ? "text-blue-700 dark:text-blue-400 font-medium"
-                  : "text-black/40 dark:text-white/40"
-              }`}>
-                {s}
-              </span>
-            </div>
-          ))}
-        </Card>
-
-        <div className="mt-6">
-          <div className="h-1.5 bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-1000"
-              style={{ width: `${(step / steps.length) * 100}%` }}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function FacebookMessenger() {
-  const [view, setView] = useState<View>("setup");
+  const { user } = useAuth();
+  const userId = user?.id ?? "";
+
+  const { data: pages = [], isLoading } = useFacebookPages(userId);
+  const disconnect = useDisconnectFacebookPage(userId);
+
+  const isConnected = pages.length > 0;
+
+  if (isLoading) {
+    return (
+      <section className="flex items-center justify-center h-[calc(100vh-12rem)]">
+        <Loader2 className="w-8 h-8 animate-spin text-black/30 dark:text-white/30" />
+      </section>
+    );
+  }
 
   return (
     <section className="flex flex-col h-[calc(100vh-12rem)] rounded-3xl overflow-hidden border border-black/10 dark:border-white/10 bg-white/50 dark:bg-white/[0.02]" data-testid="section-facebook-messenger">
@@ -561,31 +541,20 @@ export default function FacebookMessenger() {
             </div>
             <h1 className="text-base font-bold" data-testid="text-messenger-header">Facebook Messenger</h1>
           </div>
-          {view === "connected" && (
+          {isConnected && (
             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 gap-1.5">
               <Circle className="w-2 h-2 fill-emerald-500 text-emerald-500" />
-              2 Pages Connected
+              {pages.length} Page{pages.length > 1 ? "s" : ""} Connected
             </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {view === "connected" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl text-xs"
-              onClick={() => setView("setup")}
-              data-testid="button-disconnect"
-            >
-              Disconnect
-            </Button>
           )}
         </div>
       </header>
 
-      {view === "connected" && <ConnectedView />}
-      {view === "setup" && <SetupView onConnect={() => setView("authorizing")} />}
-      {view === "authorizing" && <AuthorizingView onComplete={() => setView("connected")} />}
+      {isConnected ? (
+        <ConnectedView pages={pages} onDisconnect={() => {}} />
+      ) : (
+        <SetupView userId={userId} />
+      )}
     </section>
   );
 }
