@@ -71,6 +71,15 @@ app.use((req, res, next) => {
 (async () => {
   app.use("/api/public/quote", quotePublicRoutes);
 
+  // Facebook webhook & callback must be public (Facebook calls these directly)
+  const { Router } = await import("express");
+  const { facebookController } = await import("./controllers/facebook.controller");
+  const fbPublicRouter = Router();
+  fbPublicRouter.get("/webhook", facebookController.verifyWebhook);
+  fbPublicRouter.post("/webhook", facebookController.receiveWebhook);
+  fbPublicRouter.get("/callback", facebookController.callback);
+  app.use("/api/facebook", fbPublicRouter);
+
   await setupAuth(app);
   registerAuthRoutes(app);
 
