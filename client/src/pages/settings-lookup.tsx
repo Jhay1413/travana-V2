@@ -155,6 +155,8 @@ const TABLE_DEFS: Record<string, TableDef> = {
       { key: "name", label: "Name" },
       { key: "description", label: "Description" },
       { key: "resort_name", label: "Resort" },
+      { key: "destination_name", label: "Destination" },
+      { key: "country_name", label: "Country" },
       { key: "accommodation_type_name", label: "Type" },
     ],
     formFields: [

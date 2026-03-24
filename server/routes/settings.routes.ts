@@ -382,9 +382,13 @@ router.get(
         type_id: accomodation_list.type_id,
         resort_name: resorts.name,
         accommodation_type_name: accomodation_type.type,
+        destination_name: destination.name,
+        country_name: country.country_name,
       })
       .from(accomodation_list)
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .leftJoin(destination, eq(resorts.destination_id, destination.id))
+      .leftJoin(country, eq(destination.country_id, country.id))
       .leftJoin(accomodation_type, eq(accomodation_list.type_id, accomodation_type.id))
       .where(where)
       .orderBy(asc(accomodation_list.name))
