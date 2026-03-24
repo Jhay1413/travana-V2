@@ -5,6 +5,42 @@ import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 import { getUserId } from "../utils/get-user-id";
 
+const QUOTE_STATUS_MAP: Record<string, string> = {
+  "In Play": "QUOTE_IN_PROGRESS",
+  "in play": "QUOTE_IN_PROGRESS",
+  "New Lead": "NEW_LEAD",
+  "NEW_LEAD": "NEW_LEAD",
+  "Quote In Progress": "QUOTE_IN_PROGRESS",
+  "QUOTE_IN_PROGRESS": "QUOTE_IN_PROGRESS",
+  "Quote Call": "QUOTE_CALL",
+  "QUOTE_CALL": "QUOTE_CALL",
+  "Quote Ready": "QUOTE_READY",
+  "QUOTE_READY": "QUOTE_READY",
+  "Awaiting Decision": "AWAITING_DECISION",
+  "AWAITING_DECISION": "AWAITING_DECISION",
+  "Requote": "REQUOTE",
+  "REQUOTE": "REQUOTE",
+  "Won": "WON",
+  "WON": "WON",
+  "Archived": "ARCHIVED",
+  "ARCHIVED": "ARCHIVED",
+  "Lost": "LOST",
+  "LOST": "LOST",
+  "Inactive": "INACTIVE",
+  "INACTIVE": "INACTIVE",
+  "Expired": "EXPIRED",
+  "EXPIRED": "EXPIRED",
+  "accepted": "WON",
+  "draft": "QUOTE_IN_PROGRESS",
+};
+
+function normalizeQuoteStatus(data: any) {
+  if (data.quote_status) {
+    data.quote_status = QUOTE_STATUS_MAP[data.quote_status] || "QUOTE_IN_PROGRESS";
+  }
+  return data;
+}
+
 export const quoteController = {
   listQuotes: asyncHandler(async (req: Request, res: Response) => {
     const { status, transactionId } = req.query;
@@ -59,6 +95,7 @@ export const quoteController = {
       const uploaded = await socialPostService.uploadMedia(files);
       body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
     }
+    normalizeQuoteStatus(body);
     const quote = await newQuoteService.createQuote(body);
     return successResponse(res, quote, "Quote created successfully", 201);
   }),
@@ -77,6 +114,7 @@ export const quoteController = {
       body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
     }
 
+    normalizeQuoteStatus(body);
     const quote = await newQuoteService.createSocialQuote(userId, body);
     return successResponse(res, quote, "Social quote created successfully", 201);
   }),
@@ -89,6 +127,7 @@ export const quoteController = {
 
   updateQuote: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
+    normalizeQuoteStatus(req.body);
     const quote = await newQuoteService.updateQuote(id, req.body);
     return successResponse(res, quote, "Quote updated successfully");
   }),
