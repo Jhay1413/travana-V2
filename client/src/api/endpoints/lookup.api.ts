@@ -17,6 +17,8 @@ export interface LookupResort {
   id: string;
   name: string;
   destination_id: string | null;
+  destination_name: string | null;
+  country_id: string | null;
 }
 
 export interface LookupAccommodation {
@@ -24,7 +26,11 @@ export interface LookupAccommodation {
   type_id: string | null;
   name: string;
   resorts_id: string | null;
+  resort_name: string | null;
   description: string | null;
+  destination_id: string | null;
+  destination_name: string | null;
+  country_id: string | null;
 }
 
 export interface LookupBoardBasis {
@@ -130,12 +136,21 @@ export const lookupApi = {
     const { data } = await axios.get<LookupDestination[]>("/api/lookup/destinations", { params });
     return data;
   },
-  getResorts: async (destinationId?: string): Promise<LookupResort[]> => {
-    const { data } = await axios.get<LookupResort[]>("/api/lookup/resorts", { params: destinationId ? { destinationId } : {} });
+  getResorts: async (destinationId?: string, countryId?: string): Promise<LookupResort[]> => {
+    const params: Record<string, any> = {};
+    if (destinationId) params.destinationId = destinationId;
+    if (countryId) params.countryId = countryId;
+    const { data } = await axios.get<LookupResort[]>("/api/lookup/resorts", { params });
     return data;
   },
-  getAccommodations: async (resortId?: string): Promise<LookupAccommodation[]> => {
-    const { data } = await axios.get<LookupAccommodation[]>("/api/lookup/accommodations", { params: resortId ? { resortId } : {} });
+  getAccommodations: async (resortId?: string, destinationId?: string, countryId?: string, search?: string, limit?: number): Promise<LookupAccommodation[]> => {
+    const params: Record<string, any> = {};
+    if (resortId) params.resortId = resortId;
+    if (destinationId) params.destinationId = destinationId;
+    if (countryId) params.countryId = countryId;
+    if (search) params.search = search;
+    if (limit) params.limit = limit;
+    const { data } = await axios.get<LookupAccommodation[]>("/api/lookup/accommodations", { params });
     return data;
   },
   getBoardBasis: async (): Promise<LookupBoardBasis[]> => {

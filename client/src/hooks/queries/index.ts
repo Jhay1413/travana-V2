@@ -18,7 +18,7 @@ export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries"
 export { useAirports, airportKeys } from "./use-airport-queries";
 export { useAllTasks, useAllTasksExtended, useTasks, useUserTasks, taskKeys } from "./use-task-queries";
 export { useTags, useSearchTags, tagKeys } from "./use-tags";
-export { usePackageTypes, useCountries, useDestinations, useDestinationSearch, useResorts, useAccommodations, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, useAccommodationImages, useLodgeImages, useCruiseLines, useShips, useCruiseItineraries, lookupKeys } from "./use-lookup-queries";
+export { usePackageTypes, useCountries, useDestinations, useDestinationSearch, useResorts, useAccommodations, useAccommodationSearch, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, useAccommodationImages, useLodgeImages, useCruiseLines, useShips, useCruiseItineraries, lookupKeys } from "./use-lookup-queries";
 export { useChatConversations, useChatMessages, chatKeys } from "./use-chat-queries";
 export { useEmailAccounts, useEmailMessages, useEmailMessage, emailKeys } from "./use-email-queries";
 export { useFacebookPages, useFacebookConversations, useFacebookMessages, facebookKeys } from "./use-facebook-queries";

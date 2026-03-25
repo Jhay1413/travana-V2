@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Anchor, Hotel, PawPrint, Plane, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -7,7 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useAirports, useTourOperators, useBoardBasis, useAccommodations, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes, useParks, useLodges, useCruiseLines, useShips, useCruiseItineraries } from "@/hooks/queries";
+import { useAirports, useTourOperators, useBoardBasis, useAccommodationSearch, useCountries, useDestinations, useAllDestinations, useResorts, usePackageTypes, useRoomTypes, useParks, useLodges, useCruiseLines, useShips, useCruiseItineraries } from "@/hooks/queries";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import type { LookupCountry, LookupDestination, LookupResort, LookupAccommodation, LookupBoardBasis } from "@/api/endpoints/lookup.api";
 
@@ -185,12 +185,20 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
   const { data: tourOperatorsData } = useTourOperators();
   const { data: boardBasisData } = useBoardBasis();
   const { data: roomTypeData } = useRoomTypes();
-  const { data: accommodationsData } = useAccommodations(form.resort || undefined);
+  const [accomSearch, setAccomSearch] = useState("");
+  const [accomLabel, setAccomLabel] = useState("");
+  const [resortLabel, setResortLabel] = useState("");
+  const { data: accommodationsData, isFetching: isAccomFetching } = useAccommodationSearch(
+    accomSearch,
+    form.resort || undefined,
+    !form.resort ? (form.destination || undefined) : undefined,
+    !form.resort && !form.destination ? (form.country || undefined) : undefined,
+  );
   const { data: countriesData } = useCountries();
   const { data: packageTypesData } = usePackageTypes();
   const { data: filteredDestinationsData } = useDestinations(form.country || undefined);
   const { data: allDestinationsData } = useAllDestinations();
-  const { data: resortsData } = useResorts(form.destination || undefined);
+  const { data: resortsData } = useResorts(form.destination || undefined, !form.destination ? (form.country || undefined) : undefined);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(form.parkName || undefined);
   const { data: cruiseLinesData } = useCruiseLines();
@@ -351,23 +359,6 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
                 className="h-9 rounded-xl border-black/10 bg-white/70"
                 data-testid={`${prefix}-input-json-upload`}
               />
-            </div>
-          )}
-          {mode === "edit" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Status</Label>
-              <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid={`${prefix}-select-status`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="sent">Sent</SelectItem>
-                  <SelectItem value="accepted">Accepted</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           )}
           {mode === "convert" && (
@@ -746,11 +737,9 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
               <SearchableSelect
                 value={form.country}
                 onValueChange={(v) => {
-                  set("country", v);
-                  set("destination", "");
-                  set("resort", "");
-                  set("accommodation", "");
-                  set("accommodationId", "");
+                  setForm((prev) => ({ ...prev, country: v, destination: "", resort: "", accommodation: "", accommodationId: "" }));
+                  setResortLabel("");
+                  setAccomLabel("");
                 }}
                 options={(countriesData || []).map((c: LookupCountry) => ({ value: c.id, label: c.country_name }))}
                 placeholder="Select country..."
@@ -764,14 +753,17 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
               <SearchableSelect
                 value={form.destination}
                 onValueChange={(v) => {
-                  set("destination", v);
-                  set("resort", "");
-                  set("accommodation", "");
-                  set("accommodationId", "");
                   const selectedDest = (destinationsData || []).find((d: LookupDestination) => d.id === v);
-                  if (selectedDest?.country_id && selectedDest.country_id !== form.country) {
-                    set("country", selectedDest.country_id);
-                  }
+                  setForm((prev) => ({
+                    ...prev,
+                    destination: v,
+                    resort: "",
+                    accommodation: "",
+                    accommodationId: "",
+                    country: selectedDest?.country_id && selectedDest.country_id !== prev.country ? selectedDest.country_id : prev.country,
+                  }));
+                  setResortLabel("");
+                  setAccomLabel("");
                 }}
                 options={(destinationsData || []).map((d: LookupDestination) => ({ value: d.id, label: d.name }))}
                 placeholder="Select destination..."
@@ -784,15 +776,24 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
               <Label className="text-xs font-medium text-black/60">Resort</Label>
               <SearchableSelect
                 value={form.resort}
+                selectedLabel={resortLabel}
                 onValueChange={(v) => {
-                  set("resort", v);
-                  set("accommodation", "");
-                  set("accommodationId", "");
+                  const selectedResort = (resortsData || []).find((r: LookupResort) => r.id === v);
+                  setForm((prev) => ({
+                    ...prev,
+                    resort: v,
+                    accommodation: "",
+                    accommodationId: "",
+                    destination: selectedResort?.destination_id || prev.destination,
+                    country: selectedResort?.country_id || prev.country,
+                  }));
+                  setResortLabel(selectedResort?.name || "");
+                  setAccomLabel("");
                 }}
                 options={(resortsData || []).map((r: LookupResort) => ({ value: r.id, label: r.name }))}
                 placeholder="Select resort..."
                 searchPlaceholder="Search resorts..."
-                emptyMessage={form.destination ? "No resorts found." : "Select a destination first."}
+                emptyMessage={form.destination || form.country ? "No resorts found." : "Select a destination first."}
                 data-testid={`${prefix}-select-resort`}
               />
             </div>
@@ -800,11 +801,27 @@ export function QuoteFormFields({ form, setForm, mode, packageTypeName: external
               <Label className="text-xs font-medium text-black/60">Accommodation</Label>
               <SearchableSelect
                 value={fieldValue(accommodationKey)}
-                onValueChange={(v) => set(accommodationKey, v)}
+                selectedLabel={accomLabel}
+                onSearch={setAccomSearch}
+                isLoading={isAccomFetching}
+                onValueChange={(v) => {
+                  const selected = (accommodationsData || []).find((a: LookupAccommodation) => a.id === v);
+                  setForm((prev) => ({
+                    ...prev,
+                    [accommodationKey]: v,
+                    resort: selected?.resorts_id || prev.resort,
+                    destination: selected?.destination_id || prev.destination,
+                    country: selected?.country_id || prev.country,
+                  }));
+                  if (selected) {
+                    setAccomLabel(selected.name);
+                    if (selected.resort_name) setResortLabel(selected.resort_name);
+                  }
+                }}
                 options={(accommodationsData || []).map((a: LookupAccommodation) => ({ value: a.id, label: a.name }))}
-                placeholder="Select accommodation..."
+                placeholder="Search accommodation..."
                 searchPlaceholder="Search accommodations..."
-                emptyMessage={form.resort ? "No accommodations found." : "Select a resort first."}
+                emptyMessage={!accomSearch && !form.resort && !form.destination && !form.country ? "Type to search accommodations..." : "No accommodations found."}
                 data-testid={`${prefix}-select-accommodation`}
               />
             </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useForm, useFieldArray, useWatch, type Control } from "react-hook-form";
+import { useForm, useFieldArray, useWatch} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus } from "lucide-react";
@@ -29,7 +29,7 @@ import {
   useAirports,
   useTourOperators,
   useBoardBasis,
-  useAccommodations,
+  useAccommodationSearch,
   useCountries,
   useDestinationSearch,
   useResorts,
@@ -86,6 +86,9 @@ export function BookingRHFForm({
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [destSearch, setDestSearch] = useState("");
   const [destLabel, setDestLabel] = useState("");
+  const [accomSearch, setAccomSearch] = useState("");
+  const [accomLabel, setAccomLabel] = useState("");
+  const [resortLabel, setResortLabel] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const skipLodgeResetRef = useRef(false);
   
@@ -116,8 +119,8 @@ export function BookingRHFForm({
   const { data: roomTypeData } = useRoomTypes();
   const { data: countriesData } = useCountries();
   const { data: destinationsData, isFetching: isDestFetching } = useDestinationSearch(destSearch, country || undefined);
-  const { data: resortsData } = useResorts(destination || undefined);
-  const { data: accommodationsData } = useAccommodations(resort || undefined);
+  const { data: resortsData } = useResorts(destination || undefined, !destination ? (country || undefined) : undefined);
+  const { data: accommodationsData, isFetching: isAccomFetching } = useAccommodationSearch(accomSearch, resort || undefined, !resort ? (destination || undefined) : undefined, !resort && !destination ? (country || undefined) : undefined);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(parkId || undefined);
 
@@ -291,30 +294,6 @@ export function BookingRHFForm({
               )}
             />
 
-            <FormField
-              control={control}
-              name="bookingStatus"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Booking Status</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                        <SelectValue placeholder="Select status..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {["BOOKED", "CONFIRMED", "CANCELLED", "COMPLETED"].map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s.charAt(0) + s.slice(1).toLowerCase()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </div>
         </div>
 
@@ -1002,7 +981,15 @@ export function BookingRHFForm({
                           })
                         )}
                         value={field.value ?? ""}
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          setValue("destination", "");
+                          setValue("resort", "");
+                          setValue("accommodationId", "");
+                          setDestLabel("");
+                          setResortLabel("");
+                          setAccomLabel("");
+                        }}
                         placeholder="Select country..."
                       />
                     </FormControl>
@@ -1030,6 +1017,10 @@ export function BookingRHFForm({
                           const label = (destinationsData || []).find((d) => d.id === value)?.name || "";
                           setDestLabel(label);
                           field.onChange(value);
+                          setValue("resort", "");
+                          setValue("accommodationId", "");
+                          setResortLabel("");
+                          setAccomLabel("");
                         }}
                         selectedLabel={destLabel}
                         onSearch={setDestSearch}
@@ -1057,7 +1048,21 @@ export function BookingRHFForm({
                           })
                         )}
                         value={field.value ?? ""}
-                        onValueChange={field.onChange}
+                        selectedLabel={resortLabel}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          setValue("accommodationId", "");
+                          setAccomLabel("");
+                          const selectedResort = (resortsData || []).find((r) => r.id === value);
+                          if (selectedResort?.destination_id) {
+                            setValue("destination", selectedResort.destination_id);
+                            setDestLabel(selectedResort.destination_name || "");
+                          }
+                          if (selectedResort?.country_id) {
+                            setValue("country", selectedResort.country_id);
+                          }
+                          setResortLabel(selectedResort?.name || "");
+                        }}
                         placeholder="Select resort..."
                       />
                     </FormControl>
@@ -1081,8 +1086,29 @@ export function BookingRHFForm({
                           })
                         )}
                         value={field.value ?? ""}
-                        onValueChange={field.onChange}
-                        placeholder="Select accommodation..."
+                        selectedLabel={accomLabel}
+                        onSearch={setAccomSearch}
+                        isLoading={isAccomFetching}
+                        emptyMessage={!accomSearch && !resort && !destination && !country ? "Type to search accommodations..." : "No accommodations found."}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          const selected = (accommodationsData || []).find((a) => a.id === value);
+                          if (selected) {
+                            setAccomLabel(selected.name);
+                            if (selected.resorts_id) {
+                              setValue("resort", selected.resorts_id);
+                              setResortLabel(selected.resort_name || "");
+                            }
+                            if (selected.destination_id) {
+                              setValue("destination", selected.destination_id);
+                              setDestLabel(selected.destination_name || "");
+                            }
+                            if (selected.country_id) {
+                              setValue("country", selected.country_id);
+                            }
+                          }
+                        }}
+                        placeholder="Search accommodation..."
                       />
                     </FormControl>
                     <FormMessage />
@@ -1435,7 +1461,7 @@ export function BookingRHFForm({
         )}
 
         {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
-        <BookingExtrasSection control={control as Control<ExtrasFormValues>} />
+        <BookingExtrasSection control={control as unknown as Control<ExtrasFormValues>} />
 
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
           <SectionHeader icon={DollarSign} title="Pricing" />

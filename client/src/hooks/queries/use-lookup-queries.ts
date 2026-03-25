@@ -8,9 +8,10 @@ export const lookupKeys = {
   destinations: (countryId?: string) => ["lookup", "destinations", countryId] as const,
   allDestinations: ["lookup", "destinations", "all"] as const,
   destinationSearch: (search: string, countryId?: string) => ["lookup", "destinations", "search", search, countryId] as const,
-  resorts: (destinationId?: string) => ["lookup", "resorts", destinationId] as const,
+  resorts: (destinationId?: string, countryId?: string) => ["lookup", "resorts", destinationId, countryId] as const,
   allResorts: ["lookup", "resorts", "all"] as const,
   accommodations: (resortId?: string) => ["lookup", "accommodations", resortId] as const,
+  accommodationSearch: (search: string, resortId?: string, destinationId?: string, countryId?: string) => ["lookup", "accommodations", "search", search, resortId, destinationId, countryId] as const,
   allAccommodations: ["lookup", "accommodations", "all"] as const,
   accommodationTypes: ["lookup", "accommodation-types"] as const,
   boardBasis: ["lookup", "board-basis"] as const,
@@ -50,11 +51,11 @@ export function useDestinations(countryId?: string) {
   });
 }
 
-export function useResorts(destinationId?: string) {
+export function useResorts(destinationId?: string, countryId?: string) {
   return useQuery({
-    queryKey: lookupKeys.resorts(destinationId),
-    queryFn: () => lookupApi.getResorts(destinationId),
-    enabled: !!destinationId,
+    queryKey: lookupKeys.resorts(destinationId, countryId),
+    queryFn: () => lookupApi.getResorts(destinationId, countryId),
+    enabled: !!destinationId || !!countryId,
     staleTime: 1000 * 60 * 30,
   });
 }
@@ -65,6 +66,15 @@ export function useAccommodations(resortId?: string) {
     queryFn: () => lookupApi.getAccommodations(resortId),
     enabled: !!resortId,
     staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useAccommodationSearch(search: string, resortId?: string, destinationId?: string, countryId?: string) {
+  return useQuery({
+    queryKey: lookupKeys.accommodationSearch(search, resortId, destinationId, countryId),
+    queryFn: () => lookupApi.getAccommodations(resortId, destinationId, countryId, search || undefined, search ? 20 : undefined),
+    enabled: !!search || !!resortId || !!destinationId || !!countryId,
+    staleTime: 1000 * 60 * 5,
   });
 }
 

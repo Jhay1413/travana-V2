@@ -207,8 +207,12 @@ function handleFallbackJson(data: Record<string, any>, deps: JsonImportDeps): vo
   const { form, toast, setImageUrls, fallbackFieldMapper } = deps;
   const { setValue } = form;
 
+  let fieldsSet = 0;
   const setIfPresent = (key: string, val: unknown) => {
-    if (val !== undefined && val !== null && val !== "") setValue(key, val as any);
+    if (val !== undefined && val !== null && val !== "") {
+      setValue(key, val as any);
+      fieldsSet++;
+    }
   };
 
   setIfPresent("packageType", data.packageType || data.package_type);
@@ -266,41 +270,87 @@ function handleFallbackJson(data: Record<string, any>, deps: JsonImportDeps): vo
     setImageUrls(() => extractedImages);
   }
 
-  toast({ title: "JSON imported", description: "Form populated from JSON." });
+  if (fieldsSet === 0) {
+    toast({
+      title: "No fields recognised",
+      description: "The JSON file was valid but contained no fields that could be mapped to the form.",
+      variant: "destructive",
+    });
+  } else {
+    toast({ title: "JSON imported", description: `${fieldsSet} field${fieldsSet === 1 ? "" : "s"} populated from JSON.` });
+  }
 }
 
 export function handleJsonUpload(file: File, deps: JsonImportDeps): void {
   const { toast } = deps;
+
+  if (file.size === 0) {
+    toast({ title: "Empty file", description: "The selected file is empty.", variant: "destructive" });
+    return;
+  }
+
+  const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+  if (file.size > MAX_SIZE) {
+    toast({ title: "File too large", description: "JSON file must be under 5 MB.", variant: "destructive" });
+    return;
+  }
+
   const reader = new FileReader();
+
   reader.onload = async (ev) => {
-    const content = (ev.target?.result as string) || "";
+    const content = ev.target?.result;
+
+    if (typeof content !== "string" || content.trim() === "") {
+      toast({ title: "Empty file", description: "The file appears to be empty.", variant: "destructive" });
+      return;
+    }
+
+    let data: unknown;
     try {
-      const data = JSON.parse(content);
-
-      if (isScraperFormat(data)) {
-        try {
-          await handleScraperJson(data, deps);
-        } catch (error) {
-          toast({
-            title: "Error processing JSON",
-            description: error instanceof Error ? error.message : "Failed to map values.",
-            variant: "destructive",
-          });
-        }
-        return;
-      }
-
-      handleFallbackJson(data, deps);
+      data = JSON.parse(content);
     } catch (err) {
       toast({
-        title: "Error parsing JSON",
-        description: err instanceof Error ? err.message : "Unknown error occurred",
+        title: "Invalid JSON",
+        description: err instanceof Error ? err.message : "Could not parse the file as JSON.",
         variant: "destructive",
       });
+      return;
     }
+
+    if (data === null || typeof data !== "object" || Array.isArray(data)) {
+      toast({
+        title: "Invalid JSON format",
+        description: "JSON must be an object (e.g. { ... }), not an array or plain value.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const record = data as Record<string, any>;
+
+    if (isScraperFormat(record)) {
+      try {
+        await handleScraperJson(record, deps);
+      } catch (error) {
+        toast({
+          title: "Error processing JSON",
+          description: error instanceof Error ? error.message : "Failed to map values.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    handleFallbackJson(record, deps);
   };
+
   reader.onerror = () => {
     toast({ title: "Error reading file", description: "Could not read the file.", variant: "destructive" });
   };
+
+  reader.onabort = () => {
+    toast({ title: "File read cancelled", description: "The file read was aborted.", variant: "destructive" });
+  };
+
   reader.readAsText(file);
 }

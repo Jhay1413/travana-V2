@@ -30,7 +30,7 @@ import {
   useAirports,
   useTourOperators,
   useBoardBasis,
-  useAccommodations,
+  useAccommodationSearch,
   useCountries,
   useDestinationSearch,
   useResorts,
@@ -92,6 +92,9 @@ export function QuoteRHFForm({
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [destSearch, setDestSearch] = useState("");
   const [destLabel, setDestLabel] = useState("");
+  const [accomSearch, setAccomSearch] = useState("");
+  const [accomLabel, setAccomLabel] = useState("");
+  const [resortLabel, setResortLabel] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const skipLodgeResetRef = useRef(false);
 
@@ -121,8 +124,8 @@ export function QuoteRHFForm({
   const { data: roomTypeData } = useRoomTypes();
   const { data: countriesData } = useCountries();
   const { data: destinationsData, isFetching: isDestFetching } = useDestinationSearch(destSearch, country || undefined);
-  const { data: resortsData } = useResorts(destination || undefined);
-  const { data: accommodationsData } = useAccommodations(resort || undefined);
+  const { data: resortsData } = useResorts(destination || undefined, !destination ? (country || undefined) : undefined);
+  const { data: accommodationsData, isFetching: isAccomFetching } = useAccommodationSearch(accomSearch, resort || undefined, !resort ? (destination || undefined) : undefined, !resort && !destination ? (country || undefined) : undefined);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(parkId || undefined);
 
@@ -310,31 +313,6 @@ export function QuoteRHFForm({
               )}
             />
 
-            {/* Status */}
-            <FormField
-              control={control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Status</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                        <SelectValue placeholder="Select status..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {["draft", "sent", "accepted", "rejected", "expired"].map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s.charAt(0).toUpperCase() + s.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             {/* Quote Title */}
             <FormField
@@ -1080,6 +1058,9 @@ export function QuoteRHFForm({
                           setValue("destination", "");
                           setValue("resort", "");
                           setValue("accommodationId", "");
+                          setDestLabel("");
+                          setResortLabel("");
+                          setAccomLabel("");
                         }}
                         placeholder="Select country..."
                       />
@@ -1111,6 +1092,8 @@ export function QuoteRHFForm({
                           field.onChange(value);
                           setValue("resort", "");
                           setValue("accommodationId", "");
+                          setResortLabel("");
+                          setAccomLabel("");
                         }}
                         selectedLabel={destLabel}
                         onSearch={setDestSearch}
@@ -1139,9 +1122,20 @@ export function QuoteRHFForm({
                           })
                         )}
                         value={field.value ?? ""}
+                        selectedLabel={resortLabel}
                         onValueChange={(value) => {
                           field.onChange(value);
                           setValue("accommodationId", "");
+                          setAccomLabel("");
+                          const selectedResort = (resortsData || []).find((r) => r.id === value);
+                          if (selectedResort?.destination_id) {
+                            setValue("destination", selectedResort.destination_id);
+                            setDestLabel(selectedResort.destination_name || "");
+                          }
+                          if (selectedResort?.country_id) {
+                            setValue("country", selectedResort.country_id);
+                          }
+                          setResortLabel(selectedResort?.name || "");
                         }}
                         placeholder="Select resort..."
                       />
@@ -1167,8 +1161,29 @@ export function QuoteRHFForm({
                           })
                         )}
                         value={field.value ?? ""}
-                        onValueChange={field.onChange}
-                        placeholder="Select accommodation..."
+                        selectedLabel={accomLabel}
+                        onSearch={setAccomSearch}
+                        isLoading={isAccomFetching}
+                        emptyMessage={!accomSearch && !resort && !destination && !country ? "Type to search accommodations..." : "No accommodations found."}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          const selected = (accommodationsData || []).find((a) => a.id === value);
+                          if (selected) {
+                            setAccomLabel(selected.name);
+                            if (selected.resorts_id) {
+                              setValue("resort", selected.resorts_id);
+                              setResortLabel(selected.resort_name || "");
+                            }
+                            if (selected.destination_id) {
+                              setValue("destination", selected.destination_id);
+                              setDestLabel(selected.destination_name || "");
+                            }
+                            if (selected.country_id) {
+                              setValue("country", selected.country_id);
+                            }
+                          }
+                        }}
+                        placeholder="Search accommodation..."
                       />
                     </FormControl>
                     <FormMessage />
@@ -1530,7 +1545,7 @@ export function QuoteRHFForm({
         )}
 
         {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
-        <QuoteExtrasSection control={control as Control<ExtrasFormValues>} />
+        <QuoteExtrasSection control={control as unknown as Control<ExtrasFormValues>} />
 
         {/* ── PRICING ───────────────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">

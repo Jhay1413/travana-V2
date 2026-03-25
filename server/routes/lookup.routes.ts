@@ -59,10 +59,27 @@ router.get("/destinations", async (req, res) => {
 router.get("/resorts", async (req, res) => {
   try {
     const destinationId = req.query.destinationId as string | undefined;
-    let query = db.select().from(resorts);
-    if (destinationId) {
-      query = query.where(eq(resorts.destination_id, destinationId)) as any;
-    }
+    const countryId = req.query.countryId as string | undefined;
+
+    const conditions = [
+      ...(destinationId ? [eq(resorts.destination_id, destinationId)] : []),
+      ...(countryId ? [eq(destination.country_id, countryId)] : []),
+    ];
+
+    let query = db
+      .select({
+        id: resorts.id,
+        name: resorts.name,
+        destination_id: resorts.destination_id,
+        destination_name: destination.name,
+        country_id: destination.country_id,
+      })
+      .from(resorts)
+      .leftJoin(destination, eq(resorts.destination_id, destination.id));
+
+    if (conditions.length === 1) query = query.where(conditions[0]) as any;
+    else if (conditions.length > 1) query = query.where(and(...conditions)) as any;
+
     const rows = await query.orderBy(resorts.name);
     res.json({ success: true, data: rows });
   } catch (err: any) {
@@ -73,11 +90,41 @@ router.get("/resorts", async (req, res) => {
 router.get("/accommodations", async (req, res) => {
   try {
     const resortId = req.query.resortId as string | undefined;
-    let query = db.select().from(accomodation_list);
-    if (resortId) {
-      query = query.where(eq(accomodation_list.resorts_id, resortId)) as any;
-    }
-    const rows = await query.orderBy(accomodation_list.name);
+    const destinationId = req.query.destinationId as string | undefined;
+    const countryId = req.query.countryId as string | undefined;
+    const search = req.query.search as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+
+    const conditions = [
+      ...(resortId ? [eq(accomodation_list.resorts_id, resortId)] : []),
+      ...(destinationId ? [eq(resorts.destination_id, destinationId)] : []),
+      ...(countryId ? [eq(destination.country_id, countryId)] : []),
+      ...(search ? [ilike(accomodation_list.name, `%${search}%`)] : []),
+    ];
+
+    let query = db
+      .select({
+        id: accomodation_list.id,
+        name: accomodation_list.name,
+        type_id: accomodation_list.type_id,
+        description: accomodation_list.description,
+        resorts_id: accomodation_list.resorts_id,
+        resort_name: resorts.name,
+        destination_id: resorts.destination_id,
+        destination_name: destination.name,
+        country_id: destination.country_id,
+      })
+      .from(accomodation_list)
+      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .leftJoin(destination, eq(resorts.destination_id, destination.id));
+
+    if (conditions.length === 1) query = query.where(conditions[0]) as any;
+    else if (conditions.length > 1) query = query.where(and(...conditions)) as any;
+
+    let ordered = query.orderBy(accomodation_list.name) as any;
+    if (limit) ordered = ordered.limit(limit);
+
+    const rows = await ordered;
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
