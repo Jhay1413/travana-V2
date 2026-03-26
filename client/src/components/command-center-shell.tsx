@@ -1062,7 +1062,7 @@ export function CommandCenterShell({
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">{currentUser?.name ?? "—"}</div>
-          <div className="truncate text-xs text-black/55 dark:text-white/55">{currentUser?.email ?? ""}</div>
+          {role === "Admin" && <div className="truncate text-xs text-black/55 dark:text-white/55">{currentUser?.email ?? ""}</div>}
         </div>
         <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
           {currentUser?.role ?? role}
@@ -1626,7 +1626,7 @@ export function CommandCenterShell({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">{currentUser?.name ?? "—"}</div>
-                  <div className="truncate text-xs text-black/55 dark:text-white/55">{currentUser?.email ?? ""}</div>
+                  {role === "Admin" && <div className="truncate text-xs text-black/55 dark:text-white/55">{currentUser?.email ?? ""}</div>}
                 </div>
                 <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
                   {currentUser?.role ?? role}
@@ -1649,7 +1649,7 @@ export function CommandCenterShell({
           </aside>
 
           <div className="flex flex-col gap-3">
-            <Card className="glass ringed grain rounded-3xl p-4 md:p-5" data-testid="topbar-command-center">
+            <Card className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-[200]" data-testid="topbar-command-center">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">

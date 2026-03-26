@@ -4,10 +4,18 @@ import type { EmailAccountPublic, ImapMessage, ImapMessageFull } from "@/api/end
 
 export const emailKeys = {
   all: ["emails"] as const,
+  sharedAccount: [...["emails"], "shared-account"] as const,
   accounts: (userId: string) => [...emailKeys.all, "accounts", userId] as const,
   messages: (accountId: string, folder: string) => [...emailKeys.all, "messages", accountId, folder] as const,
   message: (accountId: string, uid: number, folder: string) => [...emailKeys.all, "message", accountId, uid, folder] as const,
 };
+
+export function useSharedEmailAccount() {
+  return useQuery<EmailAccountPublic | null>({
+    queryKey: emailKeys.sharedAccount,
+    queryFn: () => emailApi.getSharedAccount(),
+  });
+}
 
 export function useEmailAccounts(userId: string) {
   return useQuery<EmailAccountPublic[]>({

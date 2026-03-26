@@ -4,6 +4,11 @@ import type { EmailAccount, InsertEmailAccount } from "../types/email";
 import { eq } from "drizzle-orm";
 
 export const emailRepository = {
+  async findFirst(): Promise<EmailAccount | undefined> {
+    const results = await db.select().from(emailAccounts).limit(1);
+    return results[0];
+  },
+
   async findAllByUserId(userId: string): Promise<EmailAccount[]> {
     return await db.select().from(emailAccounts).where(eq(emailAccounts.userId, userId));
   },

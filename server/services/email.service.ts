@@ -34,6 +34,13 @@ async function withImap<T>(account: EmailAccount, fn: (client: ImapFlow) => Prom
 // ─── Account Management ───────────────────────────────────────────────────────
 
 export const emailService = {
+  async getSharedAccount(): Promise<Omit<EmailAccount, "encryptedPassword"> | null> {
+    const account = await emailRepository.findFirst();
+    if (!account) return null;
+    const { encryptedPassword: _pwd, ...rest } = account;
+    return rest;
+  },
+
   async listAccounts(userId: string): Promise<Omit<EmailAccount, "encryptedPassword">[]> {
     const accounts = await emailRepository.findAllByUserId(userId);
     return accounts.map(({ encryptedPassword: _pwd, ...rest }) => rest);

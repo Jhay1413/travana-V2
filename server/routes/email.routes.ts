@@ -12,6 +12,7 @@ import {
 const router = Router();
 
 // ─── Account Management ───────────────────────────────────────────────────────
+router.get("/accounts/shared", emailController.getSharedAccount);
 router.get("/accounts/user/:userId", emailController.listAccounts);
 router.get("/accounts/:id", emailController.getAccount);
 router.post("/accounts", validate(createEmailAccountValidator), emailController.createAccount);

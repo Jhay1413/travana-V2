@@ -1,0 +1,209 @@
+Build a premium, mobile-first frontend website for a travel business opportunity brand called “Travana”.
+
+The design style must be inspired by:
+- journeyfuse.com (clean, lifestyle-driven, aspirational)
+- foratravel.com (premium, editorial, modern startup feel)
+
+The goal is to convert visitors into self-employed travel agents.
+
+-----------------------------------
+TECH STACK
+-----------------------------------
+- React (Vite)
+- Tailwind CSS
+- Framer Motion (smooth, premium animations)
+
+-----------------------------------
+DESIGN DIRECTION
+-----------------------------------
+- Mobile-first (primary focus)
+- Clean, minimal, premium aesthetic
+- Large typography
+- Soft gradients and subtle motion
+- High-end startup feel (Airbnb / Revolut style)
+- Lots of whitespace
+- Smooth scrolling and transitions
+
+Color palette:
+- White base
+- Soft blues / ocean tones
+- Light gradients
+- Minimal dark accents
+
+Font:
+- Inter or similar modern sans-serif
+
+-----------------------------------
+PAGE STRUCTURE
+-----------------------------------
+
+1. HERO SECTION (VERY IMPORTANT)
+- Full screen height
+- Headline:
+  “Build Your Own Travel Business”
+- Subheadline:
+  “Sell ready-made travel deals, work from your phone, and earn commission with Travana”
+- CTA:
+  “Join Now”
+- Secondary CTA:
+  “See How It Works”
+- Background:
+  - Soft animated gradient OR travel lifestyle imagery
+- Add subtle floating animation elements
+
+-----------------------------------
+
+2. TRUST / SOCIAL PROOF BAR
+- “Join 100+ travel agents”
+- “New deals added daily”
+- “Work from anywhere”
+
+Minimal, clean strip
+
+-----------------------------------
+
+3. HOW IT WORKS (3 STEPS)
+- Post Deals
+- Get Messages
+- Close & Earn
+
+Design:
+- Horizontal scroll on mobile
+- Animated icons
+- Clean cards
+
+-----------------------------------
+
+4. LIFESTYLE SECTION (INSPIRED BY JOURNEYFUSE)
+- Focus on freedom:
+  “Work from anywhere”
+  “Earn on your terms”
+- Use image + text split layout
+- Smooth scroll animations
+
+-----------------------------------
+
+5. WHAT YOU GET (PREMIUM FEATURES)
+
+Grid of cards:
+- Ready-made deals
+- One-click posting
+- AI captions & replies
+- Built-in CRM system
+- Training & scripts
+- Supportive community
+
+Cards should:
+- Have hover/tap animation
+- Feel modern and clean
+
+-----------------------------------
+
+6. COMMUNITY SECTION (INSPIRED BY FORA)
+- “You’re not doing this alone”
+- Show:
+  - Testimonials (placeholder)
+  - Agent wins
+- Clean editorial style layout
+
+-----------------------------------
+
+7. FIRST SALE SIMPLIFIED
+- Visual step breakdown:
+  1. Post 3 deals
+  2. Reply to messages
+  3. Close your first booking
+
+Keep it extremely simple and visual
+
+-----------------------------------
+
+8. JOIN NOW WIZARD (CORE FEATURE)
+
+Create a beautiful multi-step onboarding wizard:
+
+Step 1:
+- Name
+- Email
+
+Step 2:
+- Phone number
+- Location
+
+Step 3:
+- Motivation (buttons):
+  - Extra income
+  - Full-time income
+  - Love travel
+
+Step 4:
+- Confirmation screen:
+  “You’re almost ready to start 🚀”
+
+Final Step:
+- Submit
+
+REQUIREMENTS:
+- Animated transitions between steps
+- Progress bar at top
+- Mobile-first inputs
+- Clean UI
+- Feels like a premium app experience
+
+-----------------------------------
+
+9. STICKY MOBILE CTA
+- Bottom fixed button:
+  “Join Travana”
+- Always visible on mobile
+
+-----------------------------------
+
+10. FINAL CTA SECTION
+- “Start your journey with Travana”
+- Strong CTA button
+
+-----------------------------------
+
+ANIMATIONS (IMPORTANT)
+-----------------------------------
+- Use Framer Motion for:
+  - Fade-in sections
+  - Slide-up cards
+  - Smooth transitions
+- Keep animations subtle and premium (not flashy)
+
+-----------------------------------
+
+USER EXPERIENCE
+-----------------------------------
+- Fast loading
+- Simple navigation
+- No clutter
+- Focus on conversion
+- Clear CTA throughout
+
+-----------------------------------
+
+OUTPUT
+-----------------------------------
+- Fully working React frontend
+- Component-based structure
+- Clean, reusable code
+- Ready for backend integration
+
+-----------------------------------
+
+IMPORTANT
+-----------------------------------
+This is a high-converting landing page.
+
+Prioritize:
+- Clarity
+- Simplicity
+- Premium feel
+- Mobile experience
+
+Avoid:
+- Overcomplicated layouts
+- Too much text

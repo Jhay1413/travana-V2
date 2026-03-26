@@ -6,6 +6,11 @@ import { asyncHandler } from "../utils/async-handler";
 export const emailController = {
   // ─── Accounts ──────────────────────────────────────────────────────────────
 
+  getSharedAccount: asyncHandler(async (_req: Request, res: Response) => {
+    const account = await emailService.getSharedAccount();
+    return successResponse(res, account, "Shared email account retrieved successfully");
+  }),
+
   listAccounts: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.params.userId as string;
     const accounts = await emailService.listAccounts(userId);

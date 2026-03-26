@@ -52,6 +52,11 @@ export interface SendEmailPayload {
 }
 
 export const emailApi = {
+  getSharedAccount: async (): Promise<EmailAccountPublic | null> => {
+    const { data } = await axiosClient.get<EmailAccountPublic | null>("/api/emails/accounts/shared");
+    return data;
+  },
+
   listAccounts: async (userId: string): Promise<EmailAccountPublic[]> => {
     const { data } = await axiosClient.get<EmailAccountPublic[]>(`/api/emails/accounts/user/${userId}`);
     return data;

@@ -317,7 +317,14 @@ export const uploadOnlySocialsMedia = async (
 };
 
 export const uploadMultipleOnlySocialsMedia = async (
-  files: (Express.Multer.File | string)[]
+  files: (Express.Multer.File | string)[],
+  batchSize = 2
 ): Promise<OnlySocialsMediaUploadResponse[]> => {
-  return await Promise.all(files.map((file) => uploadOnlySocialsMedia(file)));
+  const results: OnlySocialsMediaUploadResponse[] = [];
+  for (let i = 0; i < files.length; i += batchSize) {
+    const batch = files.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map((file) => uploadOnlySocialsMedia(file)));
+    results.push(...batchResults);
+  }
+  return results;
 };

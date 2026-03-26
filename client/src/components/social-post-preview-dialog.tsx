@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { format, parse, isValid } from "date-fns";
 import { Reorder } from "framer-motion";
 import {
   Dialog,
@@ -9,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import {
   useSavePost,
@@ -20,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Copy,
   CalendarClock,
+  Calendar as CalendarIcon,
   Sparkles,
   Hash,
   Type,
@@ -102,6 +106,7 @@ export function SocialPostPreviewDialog({
   const [subtitle, setSubtitle] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [existingImages, setExistingImages] = useState<ExistingImage[]>([]);
   const [pendingFiles, setPendingFiles] = useState<LocalImage[]>([]);
@@ -671,13 +676,45 @@ export function SocialPostPreviewDialog({
                       {selectedUrlCount} accommodation image{selectedUrlCount > 1 ? "s" : ""} will be downloaded and uploaded to OnlySocials
                     </p>
                   )}
-                  <Input
-                    type="datetime-local"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="rounded-xl bg-slate-50 dark:bg-slate-900 border-black/6 dark:border-white/6"
-                    data-testid="input-schedule-date"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      type="datetime-local"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="rounded-xl bg-slate-50 dark:bg-slate-900 border-black/6 dark:border-white/6 flex-1"
+                      data-testid="input-schedule-date"
+                    />
+                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-10 w-10 rounded-xl border-black/6 dark:border-white/6 bg-slate-50 dark:bg-slate-900 shrink-0"
+                          data-testid="button-calendar-picker"
+                        >
+                          <CalendarIcon className="h-4 w-4 text-orange-500" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 z-[9999]" align="end">
+                        <Calendar
+                          mode="single"
+                          selected={scheduleDate ? (() => { const d = new Date(scheduleDate); return isValid(d) ? d : undefined; })() : undefined}
+                          onSelect={(day) => {
+                            if (!day) return;
+                            const timeMatch = scheduleDate.match(/T(\d{2}:\d{2})/);
+                            const time = timeMatch ? timeMatch[1] : "09:00";
+                            const pad = (n: number) => String(n).padStart(2, "0");
+                            setScheduleDate(
+                              `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}T${time}`
+                            );
+                            setCalendarOpen(false);
+                          }}
+                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                   <div className="flex gap-3">
                     <Button
                       onClick={handleSaveAndSchedule}
