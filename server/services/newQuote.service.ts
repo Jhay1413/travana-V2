@@ -105,8 +105,8 @@ export const newQuoteService = {
     return await newQuoteRepository.findByStatus(status);
   },
 
-  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none") {
-    return await newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter);
+  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "") {
+    return await newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search);
   },
 
   async getQuoteById(id: string) {

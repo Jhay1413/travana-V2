@@ -16,7 +16,7 @@ import type {
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, desc, sql, and, inArray, isNotNull, gte, lte } from "drizzle-orm";
+import { eq, desc, sql, and, or, inArray, isNotNull, gte, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -105,8 +105,9 @@ export const newQuoteRepository = {
     return await db.select().from(quote).where(sql`${quote.quote_status} = ${status}`).orderBy(desc(quote.date_created));
   },
 
-  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none") {
+  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "") {
     const offset = page * pageSize;
+    const searchPattern = search.trim() ? `%${search.trim().toLowerCase()}%` : null;
 
     // When scheduledOnly, pre-fetch quote IDs that have a scheduled deal (optionally filtered by date range)
     let scheduledQuoteIdSet: Set<string> | null = null;
@@ -126,9 +127,25 @@ export const newQuoteRepository = {
     }
 
     // Step 1: Get paginated quote IDs first
-    const whereCondition = scheduledQuoteIdSet
-      ? and(eq(quote.isFreeQuote, true), eq(quote.is_active, true), inArray(quote.id, [...scheduledQuoteIdSet]))
-      : and(eq(quote.isFreeQuote, true), eq(quote.is_active, true));
+    const searchCondition = searchPattern
+      ? or(
+          sql`LOWER(${quote.title}) LIKE ${searchPattern}`,
+          sql`EXISTS (SELECT 1 FROM ${tour_operator} WHERE ${tour_operator.id} = ${quote.main_tour_operator_id} AND LOWER(${tour_operator.name}) LIKE ${searchPattern})`,
+          sql`EXISTS (SELECT 1 FROM ${quote_accomodation} JOIN ${accomodation_list} ON ${quote_accomodation.accomodation_id} = ${accomodation_list.id} WHERE ${quote_accomodation.quote_id} = ${quote.id} AND LOWER(${accomodation_list.name}) LIKE ${searchPattern})`,
+          sql`EXISTS (SELECT 1 FROM ${quote_accomodation} JOIN ${accomodation_list} ON ${quote_accomodation.accomodation_id} = ${accomodation_list.id} JOIN ${resorts} ON ${accomodation_list.resorts_id} = ${resorts.id} JOIN ${destination} ON ${resorts.destination_id} = ${destination.id} WHERE ${quote_accomodation.quote_id} = ${quote.id} AND LOWER(${destination.name}) LIKE ${searchPattern})`,
+          sql`EXISTS (SELECT 1 FROM ${quote_accomodation} JOIN ${accomodation_list} ON ${quote_accomodation.accomodation_id} = ${accomodation_list.id} JOIN ${resorts} ON ${accomodation_list.resorts_id} = ${resorts.id} JOIN ${destination} ON ${resorts.destination_id} = ${destination.id} JOIN ${country} ON ${destination.country_id} = ${country.id} WHERE ${quote_accomodation.quote_id} = ${quote.id} AND LOWER(${country.country_name}) LIKE ${searchPattern})`,
+          sql`EXISTS (SELECT 1 FROM ${quote_flights} JOIN ${airport} ON ${quote_flights.departing_airport_id} = ${airport.id} WHERE ${quote_flights.quote_id} = ${quote.id} AND LOWER(${airport.airport_name}) LIKE ${searchPattern})`
+        )
+      : undefined;
+
+    const baseConditions = [
+      eq(quote.isFreeQuote, true),
+      eq(quote.is_active, true),
+      ...(scheduledQuoteIdSet ? [inArray(quote.id, [...scheduledQuoteIdSet])] : []),
+      ...(searchCondition ? [searchCondition] : []),
+    ];
+
+    const whereCondition = and(...baseConditions);
 
     const quoteIds = await db
       .select({ id: quote.id })

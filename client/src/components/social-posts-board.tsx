@@ -154,51 +154,29 @@ export default function SocialPostsBoard() {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const generatePost = useGeneratePost();
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", viewMode === "scheduled" ? scheduleFilter : "none");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", viewMode === "scheduled" ? scheduleFilter : "none", debouncedSearch);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  const PAGE_SIZE = 12;
-
-  // Scroll-based infinite load — disabled while a search is active
-  useEffect(() => {
-    if (!loadMoreRef.current || !hasNextPage || isFetchingNextPage || searchQuery.trim()) return;
-    const observer = new IntersectionObserver((entries) => { if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); }, { threshold: 0.1 });
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, searchQuery]);
-
-  // When searching, silently fetch more pages until filtered results >= PAGE_SIZE or no more pages
-  useEffect(() => {
-    if (!searchQuery.trim()) return;
-    if (!hasNextPage || isFetchingNextPage) return;
-    if (filteredPosts.length < PAGE_SIZE) {
-      fetchNextPage();
-    }
-  }, [filteredPosts.length, searchQuery, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  const socialPosts = useMemo<SocialPost[]>(() => {
+  const filteredPosts = useMemo<SocialPost[]>(() => {
     if (!data?.pages) return [];
     const allQuotes: SocialPost[] = [];
     data.pages.forEach((page) => { page.quotes.forEach((quote) => { allQuotes.push({ quote: quote as EnrichedQuote, clientId: quote.client_id || "" }); }); });
     return allQuotes;
   }, [data]);
 
-  const filteredPosts = useMemo(() => {
-    let result = socialPosts;
-
-    if (searchQuery.trim()) {
-      const needle = searchQuery.trim().toLowerCase();
-      result = result.filter(({ quote: q }) =>
-        (q.title || "").toLowerCase().includes(needle) ||
-        getHotelName(q).toLowerCase().includes(needle) ||
-        getDepartingAirport(q).toLowerCase().includes(needle) ||
-        getSubtitle(q).toLowerCase().includes(needle) ||
-        (q.main_tour_operator_name || "").toLowerCase().includes(needle)
-      );
-    }
-
-    return result;
-  }, [socialPosts, searchQuery]);
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasNextPage || isFetchingNextPage) return;
+    const observer = new IntersectionObserver((entries) => { if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); }, { threshold: 0.1 });
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleGeneratePost = async (quote: EnrichedQuote) => {
     const imageUrl = getFirstImage(quote);
