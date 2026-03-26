@@ -157,12 +157,24 @@ export default function SocialPostsBoard() {
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", viewMode === "scheduled" ? scheduleFilter : "none");
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
+  const PAGE_SIZE = 12;
+
+  // Scroll-based infinite load — disabled while a search is active
   useEffect(() => {
-    if (!loadMoreRef.current || !hasNextPage || isFetchingNextPage) return;
+    if (!loadMoreRef.current || !hasNextPage || isFetchingNextPage || searchQuery.trim()) return;
     const observer = new IntersectionObserver((entries) => { if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); }, { threshold: 0.1 });
     observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, searchQuery]);
+
+  // When searching, silently fetch more pages until filtered results >= PAGE_SIZE or no more pages
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+    if (!hasNextPage || isFetchingNextPage) return;
+    if (filteredPosts.length < PAGE_SIZE) {
+      fetchNextPage();
+    }
+  }, [filteredPosts.length, searchQuery, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const socialPosts = useMemo<SocialPost[]>(() => {
     if (!data?.pages) return [];
