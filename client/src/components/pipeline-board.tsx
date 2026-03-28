@@ -19,6 +19,17 @@ import {
   Clock,
   Layers,
   SlidersHorizontal,
+  X,
+  Phone,
+  Mail,
+  Home,
+  Plane,
+  Bed,
+  ArrowRight,
+  ExternalLink,
+  Tag,
+  Hash,
+  FileText,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
@@ -32,8 +43,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePipelineColumn, useNeonClients, useCurrentUser, transactionKeys } from "@/hooks/queries";
+import { usePipelineColumn, useNeonClients, useNeonClient, useCurrentUser, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction, useConvertToBooking } from "@/hooks/mutations";
+import type { NeonClient } from "@/types/neon-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
@@ -152,9 +164,10 @@ interface CardProps {
   stage: PipelineStage;
   clientName: string;
   onDragStart: (t: Transaction, s: PipelineStage) => void;
+  onCardClick: (t: Transaction, s: PipelineStage) => void;
 }
 
-function DealCard({ transaction: t, stage, clientName, onDragStart }: CardProps) {
+function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick }: CardProps) {
   const [, setLocation] = useLocation();
   const [isDragging, setIsDragging] = useState(false);
   const profit = getTransactionProfit(t);
@@ -197,7 +210,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart }: CardProps)
         onDragStart(t, stage);
       }}
       onDragEnd={() => setIsDragging(false)}
-      onClick={(e) => { if (isDragging || (e.target as HTMLElement).closest("button")) return; setLocation(navUrl()); }}
+      onClick={(e) => { if (isDragging || (e.target as HTMLElement).closest("button")) return; onCardClick(t, stage); }}
       data-testid={`pipeline-card-${t.id}`}
     >
       <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full" style={{ backgroundColor: hex }} />
@@ -285,6 +298,7 @@ interface ColProps {
   getClientName: (id: string | null) => string;
   onDragStart: (t: Transaction, s: PipelineStage) => void;
   onDrop: (id: string, from: PipelineStage, to: PipelineStage) => void;
+  onCardClick: (t: Transaction, s: PipelineStage) => void;
   isDragActive: boolean;
   dragFromStage: PipelineStage | null;
   hasNextPage: boolean;
@@ -295,7 +309,7 @@ interface ColProps {
 
 const PAGE_SIZE = 10;
 
-function StageColumn({ stage, transactions, total, totalValue, totalProfit, getClientName, onDragStart, onDrop, isDragActive, dragFromStage, hasNextPage, isFetchingNextPage, fetchNextPage, isLoading }: ColProps) {
+function StageColumn({ stage, transactions, total, totalValue, totalProfit, getClientName, onDragStart, onDrop, onCardClick, isDragActive, dragFromStage, hasNextPage, isFetchingNextPage, fetchNextPage, isLoading }: ColProps) {
   const [isOver, setIsOver] = useState(false);
   const [page, setPage] = useState(0);
   const hex = STAGE_HEX[stage];
@@ -358,7 +372,7 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
         ) : (
           <>
             {visible.map((tx) => (
-              <DealCard key={tx.id} transaction={tx} stage={stage} clientName={getClientName(tx.client_id)} onDragStart={onDragStart} />
+              <DealCard key={tx.id} transaction={tx} stage={stage} clientName={getClientName(tx.client_id)} onDragStart={onDragStart} onCardClick={onCardClick} />
             ))}
             {isFetchingNextPage && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-gray-300" /></div>}
             {(canPrev || canNext) && (
@@ -374,6 +388,231 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
         )}
       </div>
     </div>
+  );
+}
+
+interface DetailPanelProps {
+  transaction: Transaction;
+  stage: PipelineStage;
+  clientName: string;
+  onClose: () => void;
+}
+
+function DetailRow({ label, value, icon: Icon }: { label: string; value: string | null | undefined; icon?: any }) {
+  if (!value || value === "NULL") return null;
+  return (
+    <div className="flex items-start gap-2.5 py-2">
+      {Icon && <Icon className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />}
+      <div className="min-w-0">
+        <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">{label}</p>
+        <p className="text-[13px] text-gray-800 mt-0.5">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-2 mt-5 mb-2">
+      <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{title}</h4>
+      <div className="flex-1 h-px bg-gray-100" />
+    </div>
+  );
+}
+
+function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: DetailPanelProps) {
+  const [, setLocation] = useLocation();
+  const { data: client } = useNeonClient(t.client_id || "");
+  const value = getTransactionValue(t);
+  const profit = getTransactionProfit(t);
+  const { dest, country } = getDest(t);
+  const tourOp = getTourOp(t);
+  const hex = STAGE_HEX[stage];
+
+  const navUrl = () => {
+    if (!t.client_id) return "/pipeline";
+    if (stage === "Enquiry" && t.enquiry) return `/clients/${t.client_id}/enquiries/${t.enquiry.id}`;
+    if ((stage === "Quoted" || stage === "In Play") && t.quotes?.length) {
+      const main = t.quotes.find(q => !q.isQuoteCopy) || t.quotes[0];
+      return `/clients/${t.client_id}/quotes/${main.id}`;
+    }
+    if (stage === "Booked" && t.booking) return `/clients/${t.client_id}/bookings/${t.booking.id}`;
+    return `/clients/${t.client_id}`;
+  };
+
+  const enquiry = t.enquiry;
+  const quote = t.quotes?.[0];
+  const booking = t.booking;
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/20 z-40 transition-opacity" onClick={onClose} data-testid="panel-backdrop" />
+      <div className="fixed top-0 right-0 bottom-0 w-[420px] bg-white z-50 shadow-2xl border-l border-gray-200 flex flex-col animate-in slide-in-from-right duration-300" data-testid="transaction-detail-panel">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: hex }} />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{stage}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => { onClose(); setLocation(navUrl()); }} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" data-testid="button-open-full">
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" data-testid="button-close-panel">
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <h3 className="text-lg font-bold text-gray-900 mb-0.5">{clientName}</h3>
+          <p className="text-sm font-semibold text-gray-700">{getTransactionTitle(t)}</p>
+
+          <div className="flex items-center gap-3 mt-3 mb-1">
+            <div className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg">
+              <span className="text-gray-400 text-sm">£</span>
+              <span className="font-bold text-sm text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
+            </div>
+            {profit > 0 && (
+              <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-lg">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-sm font-semibold text-emerald-600">{formatCurrency(profit)}</span>
+              </div>
+            )}
+          </div>
+
+          {client && (
+            <>
+              <SectionHeader title="Customer" />
+              <div className="bg-gray-50 rounded-xl p-3.5 space-y-0.5">
+                <DetailRow label="Name" value={[client.title !== "NULL" ? client.title : "", client.firstName, client.surename].filter(Boolean).join(" ")} icon={Users} />
+                <DetailRow label="Phone" value={client.phoneNumber} icon={Phone} />
+                <DetailRow label="Email" value={client.email} icon={Mail} />
+                <DetailRow label="Address" value={[client.houseNumber, client.street, client.city, client.post_code].filter(v => v && v !== "NULL").join(", ")} icon={Home} />
+                {client.DOB && client.DOB !== "NULL" && <DetailRow label="Date of Birth" value={formatDate(client.DOB)} icon={Calendar} />}
+              </div>
+            </>
+          )}
+
+          {enquiry && stage === "Enquiry" && (
+            <>
+              <SectionHeader title="Enquiry Details" />
+              <div className="bg-blue-50/50 rounded-xl p-3.5 space-y-0.5">
+                <DetailRow label="Title" value={enquiry.title} icon={FileText} />
+                <DetailRow label="Travel Date" value={formatDate(enquiry.travel_date)} icon={Calendar} />
+                <DetailRow label="Nights" value={enquiry.no_of_nights?.toString()} icon={Bed} />
+                <DetailRow label="Passengers" value={getPax(t)} icon={Users} />
+                <DetailRow label="Budget" value={enquiry.budget ? `£${enquiry.budget}${enquiry.max_budget ? ` – £${enquiry.max_budget}` : ""}` : null} icon={PoundSterling} />
+                <DetailRow label="Holiday Type" value={enquiry.holiday_type_name} icon={Tag} />
+                <DetailRow label="Cabin Type" value={enquiry.cabin_type} icon={Bed} />
+                {enquiry.destinations && enquiry.destinations.length > 0 && (
+                  <DetailRow label="Destinations" value={enquiry.destinations.map(d => d.name).filter(Boolean).join(", ")} icon={MapPin} />
+                )}
+                {enquiry.airports && enquiry.airports.length > 0 && (
+                  <DetailRow label="Airports" value={enquiry.airports.map(a => a.name).filter(Boolean).join(", ")} icon={Plane} />
+                )}
+                {enquiry.accommodations && enquiry.accommodations.length > 0 && (
+                  <DetailRow label="Accommodations" value={enquiry.accommodations.map(a => a.name).filter(Boolean).join(", ")} icon={Bed} />
+                )}
+                <DetailRow label="Status" value={enquiry.status?.replace(/_/g, " ")} icon={Tag} />
+                <DetailRow label="Created" value={formatDate(enquiry.date_created)} icon={Clock} />
+              </div>
+            </>
+          )}
+
+          {quote && (stage === "Quoted" || stage === "In Play") && (
+            <>
+              <SectionHeader title={`Quote Details${(t.quotes?.length || 0) > 1 ? ` (1 of ${t.quotes?.length})` : ""}`} />
+              <div className="bg-amber-50/50 rounded-xl p-3.5 space-y-0.5">
+                <DetailRow label="Title" value={quote.title} icon={FileText} />
+                <DetailRow label="Status" value={(quote as any).quote_status?.replace(/_/g, " ")} icon={Tag} />
+                <DetailRow label="Travel Date" value={formatDate(quote.travel_date)} icon={Calendar} />
+                <DetailRow label="Nights" value={quote.num_of_nights?.toString()} icon={Bed} />
+                <DetailRow label="Passengers" value={getPax(t)} icon={Users} />
+                <DetailRow label="Destination" value={dest !== "TBC" ? dest : null} icon={MapPin} />
+                <DetailRow label="Country" value={country || null} icon={MapPin} />
+                <DetailRow label="Tour Operator" value={tourOp} icon={Building2} />
+                <DetailRow label="Sales Price" value={quote.sales_price ? `£${parseFloat(quote.sales_price).toLocaleString()}` : null} icon={PoundSterling} />
+                <DetailRow label="Commission" value={quote.package_commission ? `£${parseFloat(quote.package_commission).toLocaleString()}` : null} icon={TrendingUp} />
+                <DetailRow label="Price Per Person" value={quote.price_per_person ? `£${parseFloat(quote.price_per_person).toLocaleString()}` : null} icon={PoundSterling} />
+                <DetailRow label="Discounts" value={quote.discounts && parseFloat(quote.discounts) > 0 ? `£${parseFloat(quote.discounts).toLocaleString()}` : null} icon={Tag} />
+                <DetailRow label="Service Charge" value={quote.service_charge && parseFloat(quote.service_charge) > 0 ? `£${parseFloat(quote.service_charge).toLocaleString()}` : null} icon={Hash} />
+                <DetailRow label="Quote Ref" value={(quote as any).quote_ref} icon={Hash} />
+                <DetailRow label="Created" value={formatDate(quote.date_created)} icon={Clock} />
+              </div>
+
+              {quote.flights && quote.flights.length > 0 && (
+                <>
+                  <SectionHeader title="Flights" />
+                  <div className="space-y-2">
+                    {quote.flights.map((f, i) => (
+                      <div key={f.id || i} className="bg-sky-50/50 rounded-xl p-3 space-y-0.5">
+                        <DetailRow label="Flight" value={[f.flight_number, f.flight_ref].filter(Boolean).join(" · ")} icon={Plane} />
+                        <DetailRow label="Departure" value={(f as any).departing_airport_name || f.departing_airport_id} icon={ArrowRight} />
+                        <DetailRow label="Arrival" value={(f as any).arrival_airport_name || f.arrival_airport_id} icon={MapPin} />
+                        <DetailRow label="Departs" value={f.departure_date_time ? formatDate(f.departure_date_time) : null} icon={Calendar} />
+                        <DetailRow label="Cost" value={f.cost ? `£${parseFloat(f.cost).toLocaleString()}` : null} icon={PoundSterling} />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {quote.accommodations && quote.accommodations.length > 0 && (
+                <>
+                  <SectionHeader title="Accommodation" />
+                  <div className="space-y-2">
+                    {quote.accommodations.map((a, i) => (
+                      <div key={a.id || i} className="bg-violet-50/50 rounded-xl p-3 space-y-0.5">
+                        <DetailRow label="Name" value={(a as any).accomodation_name} icon={Bed} />
+                        <DetailRow label="Room Type" value={a.room_type || (a as any).room_type_name} icon={Bed} />
+                        <DetailRow label="Board Basis" value={(a as any).board_basis_name} icon={Tag} />
+                        <DetailRow label="Nights" value={a.no_of_nights?.toString()} icon={Clock} />
+                        <DetailRow label="Check In" value={a.check_in_date_time ? formatDate(a.check_in_date_time) : null} icon={Calendar} />
+                        <DetailRow label="Cost" value={a.cost ? `£${parseFloat(a.cost).toLocaleString()}` : null} icon={PoundSterling} />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {booking && stage === "Booked" && (
+            <>
+              <SectionHeader title="Booking Details" />
+              <div className="bg-emerald-50/50 rounded-xl p-3.5 space-y-0.5">
+                <DetailRow label="Title" value={booking.title} icon={FileText} />
+                <DetailRow label="Status" value={booking.booking_status?.replace(/_/g, " ")} icon={Tag} />
+                <DetailRow label="HAYS Ref" value={booking.hays_ref} icon={Hash} />
+                <DetailRow label="Supplier Ref" value={booking.supplier_ref} icon={Hash} />
+                <DetailRow label="Travel Date" value={formatDate(booking.travel_date)} icon={Calendar} />
+                <DetailRow label="Nights" value={booking.num_of_nights?.toString()} icon={Bed} />
+                <DetailRow label="Passengers" value={getPax(t)} icon={Users} />
+                <DetailRow label="Destination" value={dest !== "TBC" ? dest : null} icon={MapPin} />
+                <DetailRow label="Country" value={country || null} icon={MapPin} />
+                <DetailRow label="Tour Operator" value={tourOp} icon={Building2} />
+                <DetailRow label="Sales Price" value={booking.sales_price ? `£${parseFloat(booking.sales_price).toLocaleString()}` : null} icon={PoundSterling} />
+                <DetailRow label="Commission" value={booking.package_commission ? `£${parseFloat(booking.package_commission).toLocaleString()}` : null} icon={TrendingUp} />
+                <DetailRow label="Created" value={formatDate(booking.date_created)} icon={Clock} />
+              </div>
+            </>
+          )}
+
+          <div className="mt-4 mb-6 flex items-center gap-2 text-[11px] text-gray-400">
+            <Clock className="w-3 h-3" />
+            <span>Last updated {getTimeAgo(t.updated_at || t.created_at)}</span>
+            <span>·</span>
+            <span>Agent: {getAgentName(t)}</span>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50">
+          <Button onClick={() => { onClose(); setLocation(navUrl()); }} className="w-full h-9 rounded-xl bg-gray-900 text-white hover:bg-gray-800 text-sm font-medium" data-testid="button-view-full-details">
+            <ExternalLink className="w-3.5 h-3.5 mr-2" />View Full Details
+          </Button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -404,6 +643,7 @@ export default function PipelineBoard() {
   const [bookingDialog, setBookingDialog] = useState<{ quoteId: string } | null>(null);
   const [haysRef, setHaysRef] = useState("");
   const [tourRef, setTourRef] = useState("");
+  const [selectedDeal, setSelectedDeal] = useState<{ transaction: Transaction; stage: PipelineStage } | null>(null);
 
   useEffect(() => {
     if (currentUser?.id && !selectedAgentId) {
@@ -444,6 +684,10 @@ export default function PipelineBoard() {
 
   const handleDragStart = useCallback((t: Transaction, s: PipelineStage) => {
     setDragState({ active: true, fromStage: s });
+  }, []);
+
+  const handleCardClick = useCallback((t: Transaction, s: PipelineStage) => {
+    setSelectedDeal({ transaction: t, stage: s });
   }, []);
 
   const allTx = useMemo(() => [...eD.items, ...qD.items, ...iD.items, ...bD.items], [eD.items, qD.items, iD.items, bD.items]);
@@ -570,6 +814,7 @@ export default function PipelineBoard() {
                 getClientName={getName}
                 onDragStart={handleDragStart}
                 onDrop={handleDrop}
+                onCardClick={handleCardClick}
                 isDragActive={dragState.active}
                 dragFromStage={dragState.fromStage}
                 hasNextPage={!!q.hasNextPage}
@@ -616,6 +861,15 @@ export default function PipelineBoard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {selectedDeal && (
+        <TransactionDetailPanel
+          transaction={selectedDeal.transaction}
+          stage={selectedDeal.stage}
+          clientName={getName(selectedDeal.transaction.client_id)}
+          onClose={() => setSelectedDeal(null)}
+        />
+      )}
     </>
   );
 }
