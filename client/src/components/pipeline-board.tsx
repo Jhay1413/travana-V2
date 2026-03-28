@@ -465,123 +465,47 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
             </div>
           </div>
 
-          {client && (
-            <>
-              <SectionHeader title="Customer" />
-              <div className="bg-gray-50 rounded-xl p-3.5 space-y-0.5">
-                <DetailRow label="Name" value={[client.title !== "NULL" ? client.title : "", client.firstName, client.surename].filter(Boolean).join(" ")} icon={Users} />
-                <DetailRow label="Phone" value={client.phoneNumber} icon={Phone} />
-                <DetailRow label="Email" value={client.email} icon={Mail} />
-                <DetailRow label="Address" value={[client.houseNumber, client.street, client.city, client.post_code].filter(v => v && v !== "NULL").join(", ")} icon={Home} />
-                {client.DOB && client.DOB !== "NULL" && <DetailRow label="Date of Birth" value={formatDate(client.DOB)} icon={Calendar} />}
-              </div>
-            </>
-          )}
+          {(() => {
+            const title = quote?.title || booking?.title || enquiry?.title || null;
+            const resort = dest !== "TBC" ? dest : null;
+            const costPP = quote?.price_per_person ? `£${parseFloat(quote.price_per_person).toLocaleString()}` : booking?.sales_price && getPax(t) ? `£${Math.round(parseFloat(booking.sales_price) / parseInt(getPax(t) || "1")).toLocaleString()}` : null;
+            const accom = quote?.accommodations?.[0] || booking?.accommodations?.[0];
+            const hotel = (accom as any)?.accomodation_name || null;
+            const roomType = accom?.room_type || (accom as any)?.room_type_name || null;
+            const boardBasis = (accom as any)?.board_basis_name || null;
+            const pax = getPax(t);
+            const nights = quote?.num_of_nights?.toString() || booking?.num_of_nights?.toString() || enquiry?.no_of_nights?.toString() || null;
+            const departure = formatDate(quote?.travel_date || booking?.travel_date || enquiry?.travel_date);
+            const sectionTitle = booking ? "Booking Details" : quote ? "Quote Details" : "Enquiry Details";
 
-          {enquiry && stage === "Enquiry" && (
-            <>
-              <SectionHeader title="Enquiry Details" />
-              <div className="bg-blue-50/50 rounded-xl p-3.5 space-y-0.5">
-                <DetailRow label="Title" value={enquiry.title} icon={FileText} />
-                <DetailRow label="Travel Date" value={formatDate(enquiry.travel_date)} icon={Calendar} />
-                <DetailRow label="Nights" value={enquiry.no_of_nights?.toString()} icon={Bed} />
-                <DetailRow label="Passengers" value={getPax(t)} icon={Users} />
-                <DetailRow label="Budget" value={enquiry.budget ? `£${enquiry.budget}${enquiry.max_budget ? ` – £${enquiry.max_budget}` : ""}` : null} icon={PoundSterling} />
-                <DetailRow label="Holiday Type" value={enquiry.holiday_type_name} icon={Tag} />
-                <DetailRow label="Cabin Type" value={enquiry.cabin_type} icon={Bed} />
-                {enquiry.destinations && enquiry.destinations.length > 0 && (
-                  <DetailRow label="Destinations" value={enquiry.destinations.map(d => d.name).filter(Boolean).join(", ")} icon={MapPin} />
-                )}
-                {enquiry.airports && enquiry.airports.length > 0 && (
-                  <DetailRow label="Airports" value={enquiry.airports.map(a => a.name).filter(Boolean).join(", ")} icon={Plane} />
-                )}
-                {enquiry.accommodations && enquiry.accommodations.length > 0 && (
-                  <DetailRow label="Accommodations" value={enquiry.accommodations.map(a => a.name).filter(Boolean).join(", ")} icon={Bed} />
-                )}
-                <DetailRow label="Status" value={enquiry.status?.replace(/_/g, " ")} icon={Tag} />
-                <DetailRow label="Created" value={formatDate(enquiry.date_created)} icon={Clock} />
-              </div>
-            </>
-          )}
+            const cells: { label: string; val: string | null | undefined }[] = [
+              { label: "Title", val: title },
+              { label: "Resort", val: resort },
+              { label: "Cost Per Person", val: costPP },
+              { label: "Hotel", val: hotel },
+              { label: "Room Type", val: roomType },
+              { label: "Board Basis", val: boardBasis },
+              { label: "Passengers", val: pax },
+              { label: "Nights", val: nights },
+              { label: "Departure", val: departure },
+            ];
 
-          {quote && (stage === "Quoted" || stage === "In Play") && (
-            <>
-              <SectionHeader title={`Quote Details${(t.quotes?.length || 0) > 1 ? ` (1 of ${t.quotes?.length})` : ""}`} />
-              <div className="bg-amber-50/50 rounded-xl p-3.5 space-y-0.5">
-                <DetailRow label="Title" value={quote.title} icon={FileText} />
-                <DetailRow label="Status" value={(quote as any).quote_status?.replace(/_/g, " ")} icon={Tag} />
-                <DetailRow label="Travel Date" value={formatDate(quote.travel_date)} icon={Calendar} />
-                <DetailRow label="Nights" value={quote.num_of_nights?.toString()} icon={Bed} />
-                <DetailRow label="Passengers" value={getPax(t)} icon={Users} />
-                <DetailRow label="Destination" value={dest !== "TBC" ? dest : null} icon={MapPin} />
-                <DetailRow label="Country" value={country || null} icon={MapPin} />
-                <DetailRow label="Tour Operator" value={tourOp} icon={Building2} />
-                <DetailRow label="Sales Price" value={quote.sales_price ? `£${parseFloat(quote.sales_price).toLocaleString()}` : null} icon={PoundSterling} />
-                <DetailRow label="Commission" value={quote.package_commission ? `£${parseFloat(quote.package_commission).toLocaleString()}` : null} icon={TrendingUp} />
-                <DetailRow label="Price Per Person" value={quote.price_per_person ? `£${parseFloat(quote.price_per_person).toLocaleString()}` : null} icon={PoundSterling} />
-                <DetailRow label="Discounts" value={quote.discounts && parseFloat(quote.discounts) > 0 ? `£${parseFloat(quote.discounts).toLocaleString()}` : null} icon={Tag} />
-                <DetailRow label="Service Charge" value={quote.service_charge && parseFloat(quote.service_charge) > 0 ? `£${parseFloat(quote.service_charge).toLocaleString()}` : null} icon={Hash} />
-                <DetailRow label="Quote Ref" value={(quote as any).quote_ref} icon={Hash} />
-                <DetailRow label="Created" value={formatDate(quote.date_created)} icon={Clock} />
-              </div>
-
-              {quote.flights && quote.flights.length > 0 && (
-                <>
-                  <SectionHeader title="Flights" />
-                  <div className="space-y-2">
-                    {quote.flights.map((f, i) => (
-                      <div key={f.id || i} className="bg-sky-50/50 rounded-xl p-3 space-y-0.5">
-                        <DetailRow label="Flight" value={[f.flight_number, f.flight_ref].filter(Boolean).join(" · ")} icon={Plane} />
-                        <DetailRow label="Departure" value={(f as any).departing_airport_name || f.departing_airport_id} icon={ArrowRight} />
-                        <DetailRow label="Arrival" value={(f as any).arrival_airport_name || f.arrival_airport_id} icon={MapPin} />
-                        <DetailRow label="Departs" value={f.departure_date_time ? formatDate(f.departure_date_time) : null} icon={Calendar} />
-                        <DetailRow label="Cost" value={f.cost ? `£${parseFloat(f.cost).toLocaleString()}` : null} icon={PoundSterling} />
+            return (
+              <>
+                <SectionHeader title={sectionTitle} />
+                <div className="bg-gray-50 rounded-xl p-3.5">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+                    {cells.map(c => (
+                      <div key={c.label}>
+                        <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">{c.label}</p>
+                        <p className="text-[13px] text-gray-800 mt-0.5 truncate">{c.val || "—"}</p>
                       </div>
                     ))}
                   </div>
-                </>
-              )}
-
-              {quote.accommodations && quote.accommodations.length > 0 && (
-                <>
-                  <SectionHeader title="Accommodation" />
-                  <div className="space-y-2">
-                    {quote.accommodations.map((a, i) => (
-                      <div key={a.id || i} className="bg-violet-50/50 rounded-xl p-3 space-y-0.5">
-                        <DetailRow label="Name" value={(a as any).accomodation_name} icon={Bed} />
-                        <DetailRow label="Room Type" value={a.room_type || (a as any).room_type_name} icon={Bed} />
-                        <DetailRow label="Board Basis" value={(a as any).board_basis_name} icon={Tag} />
-                        <DetailRow label="Nights" value={a.no_of_nights?.toString()} icon={Clock} />
-                        <DetailRow label="Check In" value={a.check_in_date_time ? formatDate(a.check_in_date_time) : null} icon={Calendar} />
-                        <DetailRow label="Cost" value={a.cost ? `£${parseFloat(a.cost).toLocaleString()}` : null} icon={PoundSterling} />
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {booking && stage === "Booked" && (
-            <>
-              <SectionHeader title="Booking Details" />
-              <div className="bg-emerald-50/50 rounded-xl p-3.5 space-y-0.5">
-                <DetailRow label="Title" value={booking.title} icon={FileText} />
-                <DetailRow label="Status" value={booking.booking_status?.replace(/_/g, " ")} icon={Tag} />
-                <DetailRow label="HAYS Ref" value={booking.hays_ref} icon={Hash} />
-                <DetailRow label="Supplier Ref" value={booking.supplier_ref} icon={Hash} />
-                <DetailRow label="Travel Date" value={formatDate(booking.travel_date)} icon={Calendar} />
-                <DetailRow label="Nights" value={booking.num_of_nights?.toString()} icon={Bed} />
-                <DetailRow label="Passengers" value={getPax(t)} icon={Users} />
-                <DetailRow label="Destination" value={dest !== "TBC" ? dest : null} icon={MapPin} />
-                <DetailRow label="Country" value={country || null} icon={MapPin} />
-                <DetailRow label="Tour Operator" value={tourOp} icon={Building2} />
-                <DetailRow label="Sales Price" value={booking.sales_price ? `£${parseFloat(booking.sales_price).toLocaleString()}` : null} icon={PoundSterling} />
-                <DetailRow label="Commission" value={booking.package_commission ? `£${parseFloat(booking.package_commission).toLocaleString()}` : null} icon={TrendingUp} />
-                <DetailRow label="Created" value={formatDate(booking.date_created)} icon={Clock} />
-              </div>
-            </>
-          )}
+                </div>
+              </>
+            );
+          })()}
 
           <div className="mt-4 mb-6 flex items-center gap-2 text-[11px] text-gray-400">
             <Clock className="w-3 h-3" />
