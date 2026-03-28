@@ -521,22 +521,24 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
             );
           })()}
 
-          {notes && notes.length > 0 && (
-            <>
-              <SectionHeader title="Notes" />
-              <div className="space-y-2">
-                {notes.filter(n => !n.parent_id).slice(0, 5).map(n => (
-                  <div key={n.id} className="bg-amber-50/40 rounded-xl p-3">
-                    <p className="text-[13px] text-gray-700 whitespace-pre-wrap line-clamp-3">{n.content}</p>
-                    <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
-                      <span>{(n as any).created_by_name || "Agent"}</span>
-                      <span>·</span>
-                      <span>{getTimeAgo(n.created_at)}</span>
-                    </div>
+          <SectionHeader title="Notes" />
+          {notes && notes.filter(n => !n.parent_id).length > 0 ? (
+            <div className="space-y-2">
+              {notes.filter(n => !n.parent_id).slice(0, 5).map(n => (
+                <div key={n.id} className="bg-amber-50/40 rounded-xl p-3">
+                  <p className="text-[13px] text-gray-700 whitespace-pre-wrap line-clamp-3">{n.content}</p>
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
+                    <span>{(n as any).created_by_name || (n as any).description || "Agent"}</span>
+                    <span>·</span>
+                    <span>{getTimeAgo(n.created_at)}</span>
                   </div>
-                ))}
-              </div>
-            </>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-xl p-3.5 text-center">
+              <p className="text-[13px] text-gray-400">No notes yet</p>
+            </div>
           )}
 
           <div className="mt-4 mb-6 flex items-center gap-2 text-[11px] text-gray-400">
