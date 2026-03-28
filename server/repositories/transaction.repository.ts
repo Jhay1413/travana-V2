@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
 import { eq, desc, and, sql, inArray, count, or } from "drizzle-orm";
 
@@ -434,10 +434,53 @@ export const transactionRepository = {
     if (!txn) return undefined;
 
     const [enquiryResult] = await db.select().from(enquiry_table).where(eq(enquiry_table.transaction_id, id)).limit(1);
-    const quotes = await db.select().from(quote).where(eq(quote.transaction_id, id));
+    const rawQuotes = await db.select().from(quote).where(eq(quote.transaction_id, id));
     const [bookingResult] = await db.select().from(booking).where(eq(booking.transaction_id, id)).limit(1);
     const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
     const [agent] = txn.user_id ? await db.select().from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];
+
+    const quoteIds = rawQuotes.map(q => q.id);
+    let allAccoms: any[] = [];
+    let allFlights: any[] = [];
+    if (quoteIds.length > 0) {
+      const departAirport = airport;
+      [allAccoms, allFlights] = await Promise.all([
+        db.select({
+          accommodation: quote_accomodation,
+          accomodation_name: accomodation_list.name,
+          board_basis_name: board_basis.type,
+          room_type_name: room_type.name,
+          resort_name: resorts.name,
+          destination_name: destination.name,
+          country_name: country.country_name,
+        })
+          .from(quote_accomodation)
+          .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+          .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+          .leftJoin(destination, eq(resorts.destination_id, destination.id))
+          .leftJoin(country, eq(destination.country_id, country.id))
+          .leftJoin(board_basis, eq(quote_accomodation.board_basis_id, board_basis.id))
+          .leftJoin(room_type, sql`CASE WHEN ${quote_accomodation.room_type} ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN ${quote_accomodation.room_type}::uuid ELSE NULL END = ${room_type.id}`)
+          .where(inArray(quote_accomodation.quote_id, quoteIds)),
+        db.select({
+          flight: quote_flights,
+          departing_airport_name: departAirport.airport_name,
+        })
+          .from(quote_flights)
+          .leftJoin(departAirport, eq(quote_flights.departing_airport_id, departAirport.id))
+          .where(inArray(quote_flights.quote_id, quoteIds)),
+      ]);
+    }
+
+    const quotes = rawQuotes.map(q => ({
+      ...q,
+      accommodations: allAccoms
+        .filter(a => a.accommodation.quote_id === q.id)
+        .map(a => ({ ...a.accommodation, accomodation_name: a.accomodation_name, board_basis_name: a.board_basis_name, room_type_name: a.room_type_name, resort_name: a.resort_name, destination_name: a.destination_name, country_name: a.country_name })),
+      flights: allFlights
+        .filter(f => f.flight.quote_id === q.id)
+        .map(f => ({ ...f.flight, departing_airport_name: f.departing_airport_name })),
+    }));
 
     let enrichedEnquiry: any = enquiryResult || null;
     if (enquiryResult) {
