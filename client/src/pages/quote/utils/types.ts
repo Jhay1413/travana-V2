@@ -84,7 +84,7 @@ export type QuoteDisplay = {
   };
   tags: string[];
   notes: string[];
-  lodge?: { name: string; type: string; code: string };
+  lodge?: { name: string; type: string; code: string; parkName?: string; parkLocation?: string };
   cottage?: { name: string; code: string };
   cruise?: {
     cruiseLine: string;

@@ -52,11 +52,15 @@ function getSubtitle(q: EnrichedQuote): string {
   const parts: string[] = [];
   if (q.country_name) parts.push(q.country_name);
   if (q.destination_name) parts.push(q.destination_name);
+  if (!parts.length && q.park_name) parts.push(q.park_name);
+  if (!parts.length && q.park_location) parts.push(q.park_location);
   return parts.join(" · ") || "—";
 }
 
 function getHotelName(q: EnrichedQuote): string {
   if (q.accommodations && q.accommodations.length > 0) return q.accommodations[0].accomodation_name || "—";
+  if (q.lodge_name) return q.lodge_name;
+  if (q.park_name) return q.park_name;
   return "—";
 }
 

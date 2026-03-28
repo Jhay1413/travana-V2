@@ -442,6 +442,9 @@ export interface EnrichedQuote extends Quote {
   resort_name?: string | null;
   departing_airport_name?: string | null;
   client_id?: string | null;
+  lodge_name?: string | null;
+  park_name?: string | null;
+  park_location?: string | null;
   flights?: EnrichedQuoteFlight[];
   accommodations?: EnrichedQuoteAccommodation[];
   cruises?: EnrichedQuoteCruise[];

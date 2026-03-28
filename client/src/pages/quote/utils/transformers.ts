@@ -132,8 +132,14 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     notes: [],
     pets: apiData.pets || 0,
     lodge:
-      "lodge_type" in apiData && apiData.lodge_type
-        ? { name: "", type: apiData.lodge_type || "", code: "" }
+      apiData.lodge_id
+        ? {
+            name: (apiData as any).lodge_name || "",
+            type: (apiData as any).lodge_type || (apiData as any).lodge_name || "",
+            code: (apiData as any).lodge_code || "",
+            parkName: (apiData as any).park_name || "",
+            parkLocation: (apiData as any).park_location || "",
+          }
         : undefined,
     cruise:
       cruises.length > 0

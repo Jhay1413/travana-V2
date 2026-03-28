@@ -223,6 +223,27 @@ export const newQuoteRepository = {
           ORDER BY li."isPrimary" DESC NULLS LAST
           LIMIT 1
         )`,
+        // Lodge name and park name for hot tub break quotes
+        lodge_name: sql<string | null>`(
+          SELECT l.lodge_name
+          FROM lodges_table l
+          WHERE l.id = ${quote.lodge_id}
+          LIMIT 1
+        )`,
+        park_name: sql<string | null>`(
+          SELECT p.name
+          FROM lodges_table l
+          JOIN park_table p ON p.id = l.park_id
+          WHERE l.id = ${quote.lodge_id}
+          LIMIT 1
+        )`,
+        park_location: sql<string | null>`(
+          SELECT p.county
+          FROM lodges_table l
+          JOIN park_table p ON p.id = l.park_id
+          WHERE l.id = ${quote.lodge_id}
+          LIMIT 1
+        )`,
       })
       .from(quote)
       .where(inArray(quote.id, ids))
@@ -276,6 +297,9 @@ export const newQuoteRepository = {
           dealId: row.deal_id ?? null,
           onlySocialsId: row.only_socials_id ?? null,
           postSchedule: row.post_schedule ? row.post_schedule.toISOString() : null,
+          lodge_name: row.lodge_name ?? null,
+          park_name: row.park_name ?? null,
+          park_location: row.park_location ?? null,
           flights: [],
           accommodations: row.accommodation_id ? [{
             id: row.accommodation_id,
@@ -358,6 +382,10 @@ export const newQuoteRepository = {
         user_id: transaction.user_id,
         lodge_id: quote.lodge_id,
         park_id: lodges.park_id,
+        lodge_name: lodges.lodge_name,
+        lodge_code: lodges.lodge_code,
+        park_name: park.name,
+        park_location: park.county,
       })
       .from(quote)
       .leftJoin(package_type, eq(quote.holiday_type_id, package_type.id))
@@ -511,6 +539,10 @@ export const newQuoteRepository = {
     return {
       ...q.quote,
       park_id: q.park_id,
+      lodge_name: q.lodge_name,
+      lodge_code: q.lodge_code,
+      park_name: q.park_name,
+      park_location: q.park_location,
       holiday_type_name: q.holiday_type_name,
       main_tour_operator_name: q.main_tour_operator_name,
       lead_source: q.lead_source,
