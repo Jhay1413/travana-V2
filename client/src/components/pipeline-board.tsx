@@ -446,8 +446,8 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/20 z-40 transition-opacity" onClick={onClose} data-testid="panel-backdrop" />
-      <div className="fixed top-0 right-0 bottom-0 w-[420px] bg-white z-50 shadow-2xl border-l border-gray-200 flex flex-col animate-in slide-in-from-right duration-300" data-testid="transaction-detail-panel">
+      <div className="fixed inset-0 bg-black/20 z-[500] transition-opacity" onClick={onClose} data-testid="panel-backdrop" />
+      <div className="fixed top-0 right-0 bottom-0 w-[420px] bg-white z-[501] shadow-2xl border-l border-gray-200 flex flex-col animate-in slide-in-from-right duration-300" data-testid="transaction-detail-panel">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: hex }} />
