@@ -222,18 +222,12 @@ function DealCard({ transaction: t, stage, clientName, onDragStart }: CardProps)
           </div>
         </div>
 
-        {/* Row 2: Value + Profit */}
+        {/* Row 2: Value */}
         <div className="flex items-center gap-3 mb-2">
           <div className="flex items-center gap-1">
             <span className="text-gray-400 text-[13px]">£</span>
             <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
           </div>
-          {profit > 0 && (
-            <div className="flex items-center gap-1">
-              <TrendingUp className="w-3 h-3 text-emerald-500" />
-              <span className="text-[12px] text-emerald-600 font-medium">{formatCurrency(profit)}</span>
-            </div>
-          )}
         </div>
 
         {/* Row 3: Tags */}
