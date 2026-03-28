@@ -478,9 +478,11 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
             const booking = tx.booking;
             const enquiry = tx.enquiry;
             const title = quote?.title || booking?.title || enquiry?.title || null;
-            const resort = dest !== "TBC" ? dest : null;
-            const costPP = quote?.price_per_person ? `£${parseFloat(quote.price_per_person).toLocaleString()}` : booking?.sales_price && getPax(tx) ? `£${Math.round(parseFloat(booking.sales_price) / parseInt(getPax(tx) || "1")).toLocaleString()}` : null;
             const accom = quote?.accommodations?.[0] || booking?.accommodations?.[0];
+            const accomDest = (accom as any)?.destination_name || null;
+            const accomResort = (accom as any)?.resort_name || null;
+            const resort = accomDest || accomResort || (dest !== "TBC" ? dest : null);
+            const costPP = quote?.price_per_person ? `£${parseFloat(quote.price_per_person).toLocaleString()}` : booking?.sales_price && getPax(tx) ? `£${Math.round(parseFloat(booking.sales_price) / parseInt(getPax(tx) || "1")).toLocaleString()}` : null;
             const hotel = (accom as any)?.accomodation_name || null;
             const roomType = (accom as any)?.room_type_name || null;
             const boardBasis = (accom as any)?.board_basis_name || null;
