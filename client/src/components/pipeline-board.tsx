@@ -44,7 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePipelineColumn, useNeonClients, useNeonClient, useCurrentUser, useTransaction, transactionKeys } from "@/hooks/queries";
+import { usePipelineColumn, useNeonClients, useNeonClient, useCurrentUser, useTransaction, useNotes, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction, useConvertToBooking } from "@/hooks/mutations";
 import type { NeonClient } from "@/types/neon-client";
 import { useToast } from "@/hooks/use-toast";
@@ -410,6 +410,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
   const [, setLocation] = useLocation();
   const { data: client } = useNeonClient(t.client_id || "");
   const { data: fullTx } = useTransaction(t.id);
+  const { data: notes } = useNotes(t.id);
   const tx = fullTx || t;
   const value = getTransactionValue(tx);
   const profit = getTransactionProfit(tx);
@@ -519,6 +520,24 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
               </>
             );
           })()}
+
+          {notes && notes.length > 0 && (
+            <>
+              <SectionHeader title="Notes" />
+              <div className="space-y-2">
+                {notes.filter(n => !n.parent_id).slice(0, 5).map(n => (
+                  <div key={n.id} className="bg-amber-50/40 rounded-xl p-3">
+                    <p className="text-[13px] text-gray-700 whitespace-pre-wrap line-clamp-3">{n.content}</p>
+                    <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
+                      <span>{(n as any).created_by_name || "Agent"}</span>
+                      <span>·</span>
+                      <span>{getTimeAgo(n.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           <div className="mt-4 mb-6 flex items-center gap-2 text-[11px] text-gray-400">
             <Clock className="w-3 h-3" />
