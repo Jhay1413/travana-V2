@@ -156,8 +156,9 @@ async function enrichTransactions(txns: Transaction[]) {
 async function enrichTransactionsLightweight(txns: Transaction[]) {
   if (txns.length === 0) return [];
   const txnIds = txns.map(t => t.id);
+  const userIds = [...new Set(txns.map(t => t.user_id).filter(Boolean))] as string[];
 
-  const [allEnquiries, allQuotes, allBookings, allPackageTypes] = await Promise.all([
+  const [allEnquiries, allQuotes, allBookings, allPackageTypes, allUsers] = await Promise.all([
     db.select({
       id: enquiry_table.id,
       transaction_id: enquiry_table.transaction_id,
@@ -201,8 +202,18 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       holiday_type_id: booking.holiday_type_id,
     }).from(booking).where(inArray(booking.transaction_id, txnIds)),
     db.select().from(package_type),
+    userIds.length > 0
+      ? db.select({
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          name: user.name,
+          email: user.email,
+        }).from(user).where(inArray(user.id, userIds))
+      : Promise.resolve([]),
   ]);
 
+  const userMap = new Map(allUsers.map((u: any) => [u.id, u]));
   const packageTypeMap = new Map(allPackageTypes.map(pt => [pt.id, pt.name]));
 
   const enquiryMap = new Map<string, any>();
@@ -236,12 +247,14 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
     const quotes = quotesMap.get(txn.id) || [];
     const bookingEntry = bookingMap.get(txn.id) || null;
     const holiday_type_name = enquiry?.holiday_type_name || quotes[0]?.holiday_type_name || bookingEntry?.holiday_type_name || null;
+    const assignedUser = txn.user_id ? (userMap.get(txn.user_id) || null) : null;
     return {
       ...txn,
       holiday_type_name,
       enquiry,
       quotes,
       booking: bookingEntry,
+      assignedUser,
     };
   });
 }

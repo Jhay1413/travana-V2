@@ -131,7 +131,9 @@ export const newQuoteService = {
     const txn = await transactionRepository.findById(quoteFields.transaction_id);
     if (!txn)  throw new AppError("Transaction not found", 404);
 
-    quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child);
+    if (!quoteFields.price_per_person || quoteFields.price_per_person === "0.00" || quoteFields.price_per_person === "0") {
+      quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child);
+    }
 
     const q = await newQuoteRepository.create(quoteFields);
 
