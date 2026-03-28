@@ -206,11 +206,14 @@ function DealCard({ transaction: t, stage, clientName, onDragStart }: CardProps)
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1 min-w-0">
             <h4 className="font-semibold text-[13px] text-gray-900 truncate" data-testid={`pipeline-title-${t.id}`}>{clientName}</h4>
-            <div className="flex items-center gap-1 mt-0.5">
-              <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
-              <span className="text-[12px] text-gray-500 truncate">{dest}</span>
-              {country && country !== dest && <span className="text-[11px] text-gray-400">· {country}</span>}
-            </div>
+            <p className="text-[12px] text-gray-600 truncate mt-0.5 font-medium">{getTransactionTitle(t)}</p>
+            {dest !== "TBC" && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                <span className="text-[12px] text-gray-500 truncate">{dest}</span>
+                {country && country !== dest && <span className="text-[11px] text-gray-400">· {country}</span>}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
             <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); setLocation(navUrl()); }}><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
