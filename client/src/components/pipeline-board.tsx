@@ -526,7 +526,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
             <div className="space-y-2">
               {notes.filter(n => !n.parent_id).slice(0, 5).map(n => (
                 <div key={n.id} className="bg-amber-50/40 rounded-xl p-3">
-                  <p className="text-[13px] text-gray-700 whitespace-pre-wrap line-clamp-3">{n.content}</p>
+                  <p className="text-[13px] text-gray-700 whitespace-pre-wrap line-clamp-3">{(n.content || "").replace(/<[^>]*>/g, "")}</p>
                   <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
                     <span>{(n as any).created_by_name || (n as any).description || "Agent"}</span>
                     <span>·</span>
