@@ -215,63 +215,56 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
     >
       <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full" style={{ backgroundColor: hex }} />
       <div className="p-3.5 pl-4">
-        {/* Row 1: Client name + actions */}
-        <div className="flex items-start justify-between mb-2">
+        {/* Row 1: Client name + time ago */}
+        <div className="flex items-start justify-between mb-1">
           <div className="flex-1 min-w-0">
             <h4 className="font-semibold text-[13px] text-gray-900 truncate" data-testid={`pipeline-title-${t.id}`}>{clientName}</h4>
-            <p className="text-[12px] text-gray-500 truncate mt-0.5 font-medium">{getTransactionTitle(t)}</p>
-            {dest !== "TBC" && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                <span className="text-[12px] text-gray-500 truncate">{dest}</span>
-                {country && country !== dest && <span className="text-[11px] text-gray-400">· {country}</span>}
-              </div>
-            )}
           </div>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
-            <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); setLocation(navUrl()); }}><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
-            <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => e.stopPropagation()}><Pencil className="w-3.5 h-3.5 text-gray-400" /></button>
-            <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="w-3.5 h-3.5 text-gray-400" /></button>
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            <span className="text-[11px] text-gray-400">{getTimeAgo(t.updated_at || t.created_at)}</span>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
+              <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); setLocation(navUrl()); }}><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
+              <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="w-3.5 h-3.5 text-gray-400" /></button>
+            </div>
           </div>
         </div>
 
-        {/* Row 2: Value */}
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex items-center gap-1">
-            <span className="text-gray-400 text-[13px]">£</span>
-            <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
-          </div>
-        </div>
-
-        {/* Row 3: Tags */}
-        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-          {tourOp && (
-            <span className="inline-flex items-center gap-[3px] text-[11px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md truncate max-w-[130px]">
-              <Building2 className="w-3 h-3 flex-shrink-0" />{tourOp}
-            </span>
-          )}
-        </div>
-
-        {/* Row 4: Quotes (only for Quoted/In Play) */}
-        {quoteCount > 0 && (stage === "Quoted" || stage === "In Play") && (
-          <div className="flex items-center gap-1.5 mb-2">
-            <Layers className="w-3 h-3 text-gray-400" />
-            <span className="text-[11px] text-gray-500">{quoteCount} quote{quoteCount > 1 ? "s" : ""}</span>
+        {/* Row 2: Title + destination */}
+        <p className="text-[12px] text-gray-500 truncate font-medium">{getTransactionTitle(t)}</p>
+        {dest !== "TBC" && (
+          <div className="flex items-center gap-1 mt-0.5">
+            <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
+            <span className="text-[12px] text-gray-500 truncate">{dest}</span>
+            {country && country !== dest && <span className="text-[11px] text-gray-400">· {country}</span>}
           </div>
         )}
 
-        {/* Row 5: Footer — agent avatar + time */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-          <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] text-white font-medium">{getAgentInitial(t)}</span>
+        {/* Row 3: Value */}
+        <div className="flex items-center gap-1 mt-1.5 mb-1.5">
+          <span className="text-gray-400 text-[13px]">£</span>
+          <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
+        </div>
+
+        {/* Row 4: Footer — agent + tour op + quotes */}
+        <div className="flex items-center gap-1.5 pt-1.5 border-t border-gray-50 flex-wrap">
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center flex-shrink-0">
+              <span className="text-[9px] text-white font-medium">{getAgentInitial(t)}</span>
             </div>
             <span className="text-[11px] text-gray-500">{getAgentName(t)}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3 text-gray-300" />
-            <span className="text-[11px] text-gray-400">{getTimeAgo(t.updated_at || t.created_at)}</span>
-          </div>
+          {tourOp && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="text-[11px] text-gray-500 truncate max-w-[100px]">{tourOp}</span>
+            </>
+          )}
+          {quoteCount > 0 && (stage === "Quoted" || stage === "In Play") && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="text-[11px] text-gray-500">{quoteCount} quote{quoteCount > 1 ? "s" : ""}</span>
+            </>
+          )}
         </div>
       </div>
     </div>
