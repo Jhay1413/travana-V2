@@ -451,7 +451,12 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <h3 className="text-lg font-bold text-gray-900 mb-0.5">{clientName}</h3>
-          <p className="text-sm font-semibold text-gray-700">{getTransactionTitle(t)}</p>
+          {client?.phoneNumber && client.phoneNumber !== "NULL" && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <Phone className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-sm text-gray-600">{client.phoneNumber}</span>
+            </div>
+          )}
 
           <div className="flex items-center gap-3 mt-3 mb-1">
             <div className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg">
