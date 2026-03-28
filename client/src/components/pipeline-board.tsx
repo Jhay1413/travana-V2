@@ -257,11 +257,6 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
           <div className="flex items-center gap-1.5 mb-2">
             <Layers className="w-3 h-3 text-gray-400" />
             <span className="text-[11px] text-gray-500">{quoteCount} quote{quoteCount > 1 ? "s" : ""}</span>
-            {quoteStatus && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${statusStyle[quoteStatus] || "bg-gray-50 text-gray-500"}`}>
-                {quoteStatus.replace(/_/g, " ")}
-              </span>
-            )}
           </div>
         )}
 
