@@ -463,6 +463,12 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
               <span className="text-gray-400 text-sm">£</span>
               <span className="font-bold text-sm text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
             </div>
+            {profit > 0 && (
+              <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-lg">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-sm font-semibold text-emerald-600">{formatCurrency(profit)}</span>
+              </div>
+            )}
           </div>
 
           {(() => {
