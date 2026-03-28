@@ -18,6 +18,10 @@ export interface GeneratePostParams {
   salesPrice?: string;
   pricePerPerson?: string;
   travelDate: string;
+  quoteType?: string;
+  lodgeName?: string;
+  parkName?: string;
+  parkLocation?: string;
 }
 
 export interface TravelDeal {

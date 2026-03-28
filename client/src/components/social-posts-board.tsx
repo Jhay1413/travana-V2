@@ -183,16 +183,43 @@ export default function SocialPostsBoard() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleGeneratePost = async (quote: EnrichedQuote) => {
+    if (!quote.travel_date) {
+      toast({ title: "Cannot generate post — travel date is missing", variant: "destructive" });
+      return;
+    }
+
     const imageUrl = getFirstImage(quote);
     setPreviewQuoteId(quote.id);
     setPreviewImageUrl(imageUrl);
     setPreviewDeal(null);
     try {
-      const destination = [quote.country_name, quote.destination_name].filter(Boolean).join(", ") || "Unknown";
-      const deal = await generatePost.mutateAsync({ quoteId: quote.id, title: quote.title || "Untitled Deal", destination, nights: quote.num_of_nights, boardBasis: getBoardBasis(quote) !== "—" ? getBoardBasis(quote) : undefined, departureAirport: getDepartingAirport(quote) !== "—" ? getDepartingAirport(quote) : undefined, transferType: quote.transfer_type || undefined, salesPrice: quote.sales_price || undefined, pricePerPerson: quote.price_per_person || undefined, travelDate: quote.travel_date });
+      const isHotTub = quote.quote_type === "hot_tub_break";
+      const destination = isHotTub
+        ? [quote.park_name, quote.park_location].filter(Boolean).join(", ") || "Unknown"
+        : [quote.country_name, quote.destination_name].filter(Boolean).join(", ") || "Unknown";
+      const nights = quote.num_of_nights > 0 ? quote.num_of_nights : 1;
+      const boardBasis = !isHotTub && getBoardBasis(quote) !== "—" ? getBoardBasis(quote) : undefined;
+      const departureAirport = !isHotTub && getDepartingAirport(quote) !== "—" ? getDepartingAirport(quote) : undefined;
+      const deal = await generatePost.mutateAsync({
+        quoteId: quote.id,
+        title: quote.title || "Holiday Deal",
+        destination,
+        nights,
+        boardBasis,
+        departureAirport,
+        transferType: quote.transfer_type || undefined,
+        salesPrice: quote.sales_price || undefined,
+        pricePerPerson: quote.price_per_person || undefined,
+        travelDate: quote.travel_date,
+        quoteType: quote.quote_type,
+        lodgeName: quote.lodge_name || undefined,
+        parkName: quote.park_name || undefined,
+        parkLocation: quote.park_location || undefined,
+      });
       setPreviewDeal(deal);
-    } catch {
-      toast({ title: "Failed to generate post", variant: "destructive" });
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || "Failed to generate post";
+      toast({ title: message, variant: "destructive" });
       setPreviewQuoteId(null);
     }
   };

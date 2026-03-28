@@ -57,7 +57,7 @@ function formatPostHTML(
   return `${tropicalEmoji} ${deal.title} ${tropicalEmoji}<br>
 ${subtitleEmoji} ${subtitle} ${subtitleEmoji}<br>
 <br>
-📅 ${format(new Date(deal.travelDate), "EEE dd MMM yyyy")}<br>
+📅 ${safeDateFormat(deal.travelDate)}<br>
 🌙 ${deal.nights} Nights<br>
 ${deal.boardBasis && deal.boardBasis !== "N/A" ? `🍽️ ${deal.boardBasis}<br>` : ""}
 ${deal.departureAirport && deal.departureAirport !== "N/A" ? `✈️ ${deal.departureAirport}<br>` : ""}
@@ -90,10 +90,22 @@ async function callOpenAI(prompt: string, systemPrompt: string, maxTokens: numbe
       return response.choices[0]?.message?.content?.trim() ?? "";
     } catch (err: any) {
       if (err?.status === 404 && model !== models[models.length - 1]) continue;
+      console.error(`[SocialPost] OpenAI call failed (${model}):`, err?.message ?? err);
       throw err;
     }
   }
   return "";
+}
+
+function safeDateFormat(dateStr: string | null | undefined): string {
+  if (!dateStr) return "TBC";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "TBC";
+    return format(d, "EEE dd MMM yyyy");
+  } catch {
+    return "TBC";
+  }
 }
 
 export interface GeneratePostParams {
@@ -107,6 +119,10 @@ export interface GeneratePostParams {
   salesPrice?: string;
   pricePerPerson?: string;
   travelDate: string;
+  quoteType?: string;
+  lodgeName?: string;
+  parkName?: string;
+  parkLocation?: string;
 }
 
 export const socialPostService = {
@@ -122,43 +138,88 @@ export const socialPostService = {
       salesPrice,
       pricePerPerson,
       travelDate,
+      quoteType,
+      lodgeName,
+      parkName,
+      parkLocation,
     } = params;
 
-    const [subtitle, resortSummary, hashtagsRaw] = await Promise.all([
+    // Sanitise inputs so bad data never crashes the post builder
+    const safeTitle = title?.trim() || "Holiday Deal";
+    const safeDestination = destination?.trim() || "Unknown";
+    const safeNights = Number.isFinite(Number(nights)) && Number(nights) > 0 ? Number(nights) : 1;
+    const safeTravelDate = travelDate || null;
+
+    const isHotTub = quoteType === "hot_tub_break";
+    const locationLabel = isHotTub
+      ? [parkName, parkLocation].filter(Boolean).join(", ") || safeDestination
+      : safeDestination;
+    const propertyLabel = isHotTub
+      ? [lodgeName, parkName].filter(Boolean).join(" at ") || safeTitle
+      : safeTitle;
+
+    const defaultResortSummary = isHotTub
+      ? "🛁 Why You'll Love It:<br>🌿 Surrounded by peaceful countryside<br>🔥 Private hot tub included<br>🛏️ Comfortable lodge accommodation"
+      : "🌞 Why You'll Love It:<br>🏖️ Great destination & atmosphere<br>🏨 Quality accommodation<br>🌴 Memorable holiday experience";
+    const defaultHashtags = isHotTub
+      ? ["#HotTubBreak", "#LodgeBreak", "#UKBreak", "#HolidayPark", "#WeekendGetaway", "#CoupleRetreat", "#HotTub", "#LodgeLife", "#TravelDeals", "#TinasTravelDeals"]
+      : ["#TravelDeals", "#HolidayDeals", "#TravelAgency", "#BookNow", "#HolidayTime", "#TravelLife", "#Vacation", "#HolidayGoals", "#TinasTravelDeals", "#Travel"];
+
+    const [subtitleResult, resortSummaryResult, hashtagsRawResult] = await Promise.allSettled([
       callOpenAI(
-        `Write a short, catchy travel subtitle (max 10 words) for a "${title}" deal to ${destination}. Return ONLY the subtitle text, no quotes.`,
+        isHotTub
+          ? `Write a short, catchy subtitle (max 10 words) for a hot tub lodge break at "${propertyLabel}" in ${locationLabel}. Make it cosy and romantic. Return ONLY the subtitle text, no quotes.`
+          : `Write a short, catchy travel subtitle (max 10 words) for a "${safeTitle}" deal to ${safeDestination}. Return ONLY the subtitle text, no quotes.`,
         "You are a travel copywriter who writes punchy, engaging holiday taglines.",
         30
       ),
       callOpenAI(
-        `Write a brief, engaging resort summary in bullet form using travel icons for "${title}" in ${destination}. Focus on what makes this destination special, the atmosphere, and key amenities.
+        isHotTub
+          ? `Write a brief, engaging lodge summary in bullet form using relevant icons for "${propertyLabel}" in ${locationLabel}. Focus on the cosy atmosphere, hot tub experience, and countryside setting.
+
+It should start with:
+🛁 Why You'll Love It:
+🌿 Surrounded by peaceful countryside
+
+NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`
+          : `Write a brief, engaging resort summary in bullet form using travel icons for "${safeTitle}" in ${safeDestination}. Focus on what makes this destination special, the atmosphere, and key amenities.
 
 It should start with:
 🌞 Why You'll Love It:
 🏖️ Close to golden sands & turquoise waters
 
 NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
-        "You are a travel expert who writes engaging resort and hotel descriptions.",
+        isHotTub
+          ? "You are a travel expert who writes engaging UK lodge and holiday park descriptions."
+          : "You are a travel expert who writes engaging resort and hotel descriptions.",
         200
       ),
       callOpenAI(
-        `Generate 10 relevant Facebook hashtags for a travel deal to ${destination} (${nights} nights). Return ONLY the hashtags separated by spaces, e.g. #TravelDeals #Tenerife`,
+        isHotTub
+          ? `Generate 10 relevant Facebook hashtags for a hot tub lodge break in ${locationLabel} (${safeNights} nights). Return ONLY the hashtags separated by spaces, e.g. #HotTubBreak #LodgeBreak`
+          : `Generate 10 relevant Facebook hashtags for a travel deal to ${safeDestination} (${safeNights} nights). Return ONLY the hashtags separated by spaces, e.g. #TravelDeals #Tenerife`,
         "You are a social media expert for a travel agency.",
         80
       ),
     ]);
 
-    const hashtags = hashtagsRaw
-      .split(/\s+/)
-      .filter((h) => h.startsWith("#"))
-      .slice(0, 12);
+    if (subtitleResult.status === "rejected") console.error("[SocialPost] Subtitle generation failed:", subtitleResult.reason?.message);
+    if (resortSummaryResult.status === "rejected") console.error("[SocialPost] Resort summary generation failed:", resortSummaryResult.reason?.message);
+    if (hashtagsRawResult.status === "rejected") console.error("[SocialPost] Hashtag generation failed:", hashtagsRawResult.reason?.message);
+
+    const subtitle = subtitleResult.status === "fulfilled" && subtitleResult.value ? subtitleResult.value : `${safeTitle} — Book Now`;
+    const resortSummary = resortSummaryResult.status === "fulfilled" && resortSummaryResult.value ? resortSummaryResult.value : defaultResortSummary;
+    const hashtagsRaw = hashtagsRawResult.status === "fulfilled" && hashtagsRawResult.value ? hashtagsRawResult.value : "";
+
+    const parsedHashtags = hashtagsRaw.split(/\s+/).filter((h) => h.startsWith("#")).slice(0, 12);
+    const hashtags = parsedHashtags.length > 0 ? parsedHashtags : defaultHashtags;
 
     const displayPrice = pricePerPerson || salesPrice || null;
 
     const deal: PostDeal = {
-      title,
-      travelDate,
-      nights,
+      title: safeTitle,
+      travelDate: safeTravelDate,
+      nights: safeNights,
       boardBasis: boardBasis || null,
       departureAirport: departureAirport || null,
       luggageTransfers: transferType && transferType !== "none" ? transferType : null,
@@ -169,13 +230,13 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
     return await socialPostRepository.create({
       quote_id: quoteId,
-      title,
+      title: safeTitle,
       subtitle,
       post: postHTML,
       resortSummary,
       hashtags,
-      travelDate,
-      nights,
+      travelDate: safeTravelDate,
+      nights: safeNights,
       boardBasis: boardBasis || null,
       departureAirport: departureAirport || null,
       luggageTransfers: transferType && transferType !== "none" ? transferType : null,
