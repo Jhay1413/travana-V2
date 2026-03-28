@@ -219,7 +219,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1 min-w-0">
             <h4 className="font-semibold text-[13px] text-gray-900 truncate" data-testid={`pipeline-title-${t.id}`}>{clientName}</h4>
-            <p className="text-[12px] text-gray-700 truncate mt-0.5 font-bold">{getTransactionTitle(t)}</p>
+            <p className="text-[12px] text-gray-500 truncate mt-0.5 font-medium">{getTransactionTitle(t)}</p>
             {dest !== "TBC" && (
               <div className="flex items-center gap-1 mt-0.5">
                 <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
