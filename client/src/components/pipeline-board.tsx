@@ -245,9 +245,6 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
 
         {/* Row 3: Tags */}
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-          <span className="inline-flex items-center gap-[3px] text-[11px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md">
-            <Calendar className="w-3 h-3" />{formatDate(getTransactionDate(t))}
-          </span>
           {tourOp && (
             <span className="inline-flex items-center gap-[3px] text-[11px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md truncate max-w-[130px]">
               <Building2 className="w-3 h-3 flex-shrink-0" />{tourOp}
