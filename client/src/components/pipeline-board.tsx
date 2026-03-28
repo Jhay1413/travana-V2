@@ -30,6 +30,7 @@ import {
   Tag,
   Hash,
   FileText,
+  ChevronRight,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
@@ -245,26 +246,29 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
           <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
         </div>
 
-        {/* Row 4: Footer — agent + tour op + quotes */}
-        <div className="flex items-center gap-1.5 pt-1.5 border-t border-gray-50 flex-wrap">
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center flex-shrink-0">
-              <span className="text-[9px] text-white font-medium">{getAgentInitial(t)}</span>
+        {/* Row 4: Footer — agent + tour op + quotes + arrow */}
+        <div className="flex items-center justify-between pt-1.5 border-t border-gray-50">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            <div className="flex items-center gap-1">
+              <div className="w-4 h-4 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center flex-shrink-0">
+                <span className="text-[9px] text-white font-medium">{getAgentInitial(t)}</span>
+              </div>
+              <span className="text-[11px] text-gray-500">{getAgentName(t)}</span>
             </div>
-            <span className="text-[11px] text-gray-500">{getAgentName(t)}</span>
+            {tourOp && (
+              <>
+                <span className="text-gray-300">·</span>
+                <span className="text-[11px] text-gray-500 truncate max-w-[100px]">{tourOp}</span>
+              </>
+            )}
+            {quoteCount > 0 && (stage === "Quoted" || stage === "In Play") && (
+              <>
+                <span className="text-gray-300">·</span>
+                <span className="text-[11px] text-gray-500">{quoteCount} quote{quoteCount > 1 ? "s" : ""}</span>
+              </>
+            )}
           </div>
-          {tourOp && (
-            <>
-              <span className="text-gray-300">·</span>
-              <span className="text-[11px] text-gray-500 truncate max-w-[100px]">{tourOp}</span>
-            </>
-          )}
-          {quoteCount > 0 && (stage === "Quoted" || stage === "In Play") && (
-            <>
-              <span className="text-gray-300">·</span>
-              <span className="text-[11px] text-gray-500">{quoteCount} quote{quoteCount > 1 ? "s" : ""}</span>
-            </>
-          )}
+          <ChevronRight className="w-3.5 h-3.5 text-red-400 flex-shrink-0 ml-1" />
         </div>
       </div>
     </div>
