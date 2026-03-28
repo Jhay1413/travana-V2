@@ -482,7 +482,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
             const costPP = quote?.price_per_person ? `£${parseFloat(quote.price_per_person).toLocaleString()}` : booking?.sales_price && getPax(tx) ? `£${Math.round(parseFloat(booking.sales_price) / parseInt(getPax(tx) || "1")).toLocaleString()}` : null;
             const accom = quote?.accommodations?.[0] || booking?.accommodations?.[0];
             const hotel = (accom as any)?.accomodation_name || null;
-            const roomType = accom?.room_type || (accom as any)?.room_type_name || null;
+            const roomType = (accom as any)?.room_type_name || null;
             const boardBasis = (accom as any)?.board_basis_name || null;
             const pax = getPax(tx);
             const nights = quote?.num_of_nights?.toString() || booking?.num_of_nights?.toString() || enquiry?.no_of_nights?.toString() || null;
