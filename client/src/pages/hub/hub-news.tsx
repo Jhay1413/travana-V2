@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Pin,
@@ -20,7 +20,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
+import { RichTextDisplay } from "@/components/rich-text-editor";
+import { MentionEditor } from "@/components/mention-editor";
 import {
   useAnnouncements,
   useCreateAnnouncement,
@@ -330,193 +331,6 @@ function AnnouncementCard({
 
 type MentionUser = { id: string; name: string; role: string };
 
-function MentionDropdown({
-  query,
-  users,
-  onSelect,
-  position,
-}: {
-  query: string;
-  users: MentionUser[];
-  onSelect: (user: MentionUser) => void;
-  position: { top: number; left: number };
-}) {
-  const filtered = users.filter((u) =>
-    u.name.toLowerCase().includes(query.toLowerCase())
-  ).slice(0, 8);
-
-  if (filtered.length === 0) return null;
-
-  return (
-    <div
-      className="fixed z-[100] max-h-48 min-w-[200px] overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800"
-      style={{ top: position.top, left: position.left }}
-    >
-      {filtered.map((user) => (
-        <button
-          key={user.id}
-          onClick={() => onSelect(user)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
-          data-testid={`mention-option-${user.id}`}
-        >
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-            {user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-          </span>
-          <span className="font-medium text-slate-800 dark:text-slate-200">{user.name}</span>
-          <span className="ml-auto text-[10px] text-slate-400">{user.role}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function MentionableTextarea({
-  content,
-  onChange,
-  placeholder,
-  className,
-  users,
-}: {
-  content: string;
-  onChange: (val: string) => void;
-  placeholder?: string;
-  className?: string;
-  users: MentionUser[];
-}) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionPos, setMentionPos] = useState({ top: 0, left: 0 });
-  const [showMention, setShowMention] = useState(false);
-
-  const handleInput = useCallback(() => {
-    if (!editorRef.current) return;
-    const html = editorRef.current.innerHTML;
-    const text = editorRef.current.innerText;
-    onChange(html === "<br>" ? "" : html);
-
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) {
-      setShowMention(false);
-      return;
-    }
-
-    const range = sel.getRangeAt(0);
-    const textBeforeCursor = getTextBeforeCursor(editorRef.current, range);
-
-    const atMatch = textBeforeCursor.match(/@(\w*)$/);
-    if (atMatch) {
-      setMentionQuery(atMatch[1]);
-      const rect = getCaretRect();
-      if (rect) {
-        setMentionPos({ top: rect.bottom + 4, left: rect.left });
-      }
-      setShowMention(true);
-    } else {
-      setShowMention(false);
-      setMentionQuery(null);
-    }
-  }, [onChange]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (showMention && e.key === "Escape") {
-      setShowMention(false);
-      setMentionQuery(null);
-    }
-  };
-
-  const handleMentionSelect = (user: MentionUser) => {
-    if (!editorRef.current) return;
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-
-    const range = sel.getRangeAt(0);
-    const textNode = range.startContainer;
-    if (textNode.nodeType !== Node.TEXT_NODE) return;
-
-    const text = textNode.textContent || "";
-    const cursorPos = range.startOffset;
-    const atIndex = text.lastIndexOf("@", cursorPos);
-    if (atIndex < 0) return;
-
-    const before = text.substring(0, atIndex);
-    const after = text.substring(cursorPos);
-
-    const mentionSpan = document.createElement("span");
-    mentionSpan.className = "mention inline-block rounded bg-blue-100 px-1 text-blue-700 font-semibold dark:bg-blue-900/40 dark:text-blue-300";
-    mentionSpan.setAttribute("contenteditable", "false");
-    mentionSpan.setAttribute("data-mention-id", user.id);
-    mentionSpan.textContent = `@${user.name}`;
-
-    const parent = textNode.parentNode!;
-    const beforeNode = document.createTextNode(before);
-    const spaceAfter = document.createTextNode("\u00A0" + after);
-
-    parent.replaceChild(spaceAfter, textNode);
-    parent.insertBefore(mentionSpan, spaceAfter);
-    parent.insertBefore(beforeNode, mentionSpan);
-
-    const newRange = document.createRange();
-    newRange.setStart(spaceAfter, 1);
-    newRange.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(newRange);
-
-    setShowMention(false);
-    setMentionQuery(null);
-
-    onChange(editorRef.current.innerHTML);
-  };
-
-  return (
-    <div className="relative">
-      <div
-        ref={editorRef}
-        contentEditable
-        onInput={handleInput}
-        onKeyDown={handleKeyDown}
-        className={cn(
-          "min-h-[180px] rounded-xl border border-black/10 bg-white p-3 text-sm leading-relaxed text-slate-800 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
-          "[&_.mention]:inline-block [&_.mention]:rounded [&_.mention]:bg-blue-100 [&_.mention]:px-1 [&_.mention]:text-blue-700 [&_.mention]:font-semibold dark:[&_.mention]:bg-blue-900/40 dark:[&_.mention]:text-blue-300",
-          "empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none",
-          className
-        )}
-        data-placeholder={placeholder || "Write your announcement... Use @ to mention someone"}
-        data-testid="textarea-announcement-content"
-        suppressContentEditableWarning
-      />
-      {showMention && mentionQuery !== null && (
-        <MentionDropdown
-          query={mentionQuery}
-          users={users}
-          onSelect={handleMentionSelect}
-          position={mentionPos}
-        />
-      )}
-    </div>
-  );
-}
-
-function getTextBeforeCursor(container: HTMLElement, range: Range): string {
-  const preCaretRange = document.createRange();
-  preCaretRange.selectNodeContents(container);
-  preCaretRange.setEnd(range.startContainer, range.startOffset);
-  return preCaretRange.toString();
-}
-
-function getCaretRect(): DOMRect | null {
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0).cloneRange();
-  range.collapse(true);
-  const rects = range.getClientRects();
-  if (rects.length > 0) return rects[0];
-  const span = document.createElement("span");
-  span.textContent = "\u200b";
-  range.insertNode(span);
-  const rect = span.getBoundingClientRect();
-  span.parentNode?.removeChild(span);
-  return rect;
-}
 
 function ImageUploadPreview({
   imageUrl,
@@ -744,11 +558,10 @@ function AnnouncementDialog({
 
           <div>
             <label className="text-xs font-medium text-slate-500 mb-1 block">Content <span className="text-slate-400">(type @ to mention someone)</span></label>
-            <MentionableTextarea
+            <MentionEditor
               content={content}
               onChange={setContent}
-              placeholder="Write your announcement... Use @ to mention someone"
-              className="min-h-[180px] dark:border-slate-700 dark:bg-slate-800"
+              placeholder="Write your announcement... Type @ to mention someone"
               users={mentionUsers}
             />
           </div>

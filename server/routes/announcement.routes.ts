@@ -60,23 +60,31 @@ async function getAllUserIds(): Promise<{ id: string; name: string | null }[]> {
 }
 
 function extractMentions(content: string): string[] {
-  const mentionPattern = /data-mention-id="([^"]+)"[^>]*>@([^<]+)</g;
-  const plainPattern = /@(\w+(?:\s+\w+)?)/g;
-  const mentions: string[] = [];
+  const tiptapPattern = /data-type="mention"[^>]*data-id="([^"]+)"/g;
+  const ids: string[] = [];
   let match;
-  while ((match = mentionPattern.exec(content)) !== null) {
-    if (match[1] === "__all__") {
-      mentions.push("__all__");
-    } else {
-      mentions.push(match[2].trim().toLowerCase());
+  let hasStructuredMentions = false;
+  while ((match = tiptapPattern.exec(content)) !== null) {
+    hasStructuredMentions = true;
+    const id = match[1];
+    if (!ids.includes(id)) ids.push(id);
+  }
+  const legacyPattern = /data-mention-id="([^"]+)"/g;
+  while ((match = legacyPattern.exec(content)) !== null) {
+    hasStructuredMentions = true;
+    const id = match[1];
+    if (!ids.includes(id)) ids.push(id);
+  }
+  if (!hasStructuredMentions) {
+    const stripped = content.replace(/<[^>]*>/g, "");
+    const plainPattern = /@(\w+(?:\s+\w+)?)/g;
+    while ((match = plainPattern.exec(stripped)) !== null) {
+      const name = match[1].trim().toLowerCase();
+      if (name === "everyone" && !ids.includes("__all__")) ids.push("__all__");
+      else if (!ids.includes(name)) ids.push(name);
     }
   }
-  while ((match = plainPattern.exec(content)) !== null) {
-    const name = match[1].trim().toLowerCase();
-    if (name === "everyone") mentions.push("__all__");
-    else if (!mentions.includes(name)) mentions.push(name);
-  }
-  return mentions;
+  return ids;
 }
 
 async function createHubNotification(userId: string, type: string, title: string, message: string, link: string) {
@@ -125,14 +133,25 @@ async function notifyMentionedUsers(content: string, authorId: string, authorNam
   }
 
   for (const mention of mentions) {
-    const matchedUser = allUsers.find(u => {
+    const matchedById = allUsers.find(u => u.id === mention);
+    if (matchedById && matchedById.id !== authorId) {
+      await createHubNotification(
+        matchedById.id,
+        "hub_mention",
+        "You were mentioned in TheHub",
+        `${authorName} mentioned you in a post`,
+        "/hub/news"
+      );
+      continue;
+    }
+    const matchedByName = allUsers.find(u => {
       if (!u.name) return false;
       return u.name.toLowerCase() === mention || 
              u.name.toLowerCase().split(" ")[0] === mention;
     });
-    if (matchedUser && matchedUser.id !== authorId) {
+    if (matchedByName && matchedByName.id !== authorId) {
       await createHubNotification(
-        matchedUser.id,
+        matchedByName.id,
         "hub_mention",
         "You were mentioned in TheHub",
         `${authorName} mentioned you in a post`,
