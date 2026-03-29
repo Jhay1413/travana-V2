@@ -6,7 +6,7 @@ import axios from "@/api/client/axios-client";
 import { authApi, opportunitiesApi, neonClientApi } from "@/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useRole } from "@/hooks/use-role";
-import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useAllTasksExtended, useTickets, useChatConversations, useChatMessages, authKeys } from "@/hooks/queries";
+import { useDashboardStats, useNeonClients, useUsers, useTourOperators, useAirports, useTransactions, useAllTasks, useAllTasksExtended, useTickets, useChatConversations, useChatMessages, authKeys, useUnreadNotifications } from "@/hooks/queries";
 import { useGlobalSearch } from "@/hooks/queries/use-search-queries";
 import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
 import { useCreateUser, useUpdateUser, useDeleteUser, useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator, useCreateAirport, useDeleteAirport, useCreateTask, useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "@/hooks/mutations";
@@ -446,6 +446,13 @@ function ShellNav({
   const { data: sidebarTickets } = useTickets();
   const { data: sidebarChats } = useChatConversations();
   const { data: sidebarCurrentUser } = useCurrentUser();
+  const { data: hubUnreadNotifs } = useUnreadNotifications(sidebarCurrentUser?.id || "");
+  const hubUnreadCount = useMemo(() => {
+    if (!hubUnreadNotifs || !Array.isArray(hubUnreadNotifs)) return 0;
+    return hubUnreadNotifs.filter((n: any) =>
+      n.type === "hub_post" || n.type === "hub_like" || n.type === "hub_share" || n.type === "hub_mention"
+    ).length;
+  }, [hubUnreadNotifs]);
   const openTicketCount = useMemo(() => {
     if (!sidebarTickets || !Array.isArray(sidebarTickets)) return 0;
     return sidebarTickets.filter((t: any) => {
@@ -1017,8 +1024,13 @@ function ShellNav({
             data-testid="link-hub"
           >
             <div className="flex items-center gap-3">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+              <div className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
                 <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
+                {hubUnreadCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white shadow-sm" data-testid="badge-hub-unread">
+                    {hubUnreadCount > 99 ? "99+" : hubUnreadCount}
+                  </span>
+                )}
               </div>
               <div>
                 <div className="text-sm font-semibold" data-testid="text-support-title">TheHub</div>
@@ -2028,6 +2040,13 @@ export default function CommandCenterPage() {
   const [dashNewDueTime, setDashNewDueTime] = useState("09:00");
   const [dashTaskClientId, setDashTaskClientId] = useState<string>("");
   const { data: currentUser } = useCurrentUser();
+  const { data: mobileHubUnread } = useUnreadNotifications(currentUser?.id || "");
+  const mobileHubUnreadCount = useMemo(() => {
+    if (!mobileHubUnread || !Array.isArray(mobileHubUnread)) return 0;
+    return mobileHubUnread.filter((n: any) =>
+      n.type === "hub_post" || n.type === "hub_like" || n.type === "hub_share" || n.type === "hub_mention"
+    ).length;
+  }, [mobileHubUnread]);
   const { toast } = useToast();
   const dashCreateTaskMutation = useCreateTask("client", "");
   const dashTaskPresets = TASK_PRESETS_BY_ENTITY[dashTaskCategory] || TASK_PRESETS_BY_ENTITY.general;
@@ -7202,8 +7221,13 @@ export default function CommandCenterPage() {
                   className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white no-underline"
                   data-testid="mobile-nav-hub"
                 >
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
+                  <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
                     <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
+                    {mobileHubUnreadCount > 0 && (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                        {mobileHubUnreadCount > 99 ? "99+" : mobileHubUnreadCount}
+                      </span>
+                    )}
                   </span>
                   <span className="text-sm font-medium">TheHub</span>
                 </Link>

@@ -3,6 +3,7 @@ import { announcementApi } from "@/api/endpoints/announcement.api";
 
 export const announcementKeys = {
   all: ["announcements"] as const,
+  likes: ["announcement-likes"] as const,
 };
 
 export function useAnnouncements() {
@@ -18,7 +19,10 @@ export function useCreateAnnouncement() {
   return useMutation({
     mutationFn: (input: { title?: string; content: string; category: string; pinned?: boolean }) =>
       announcementApi.create(input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: announcementKeys.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: announcementKeys.all });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
   });
 }
 
@@ -44,5 +48,34 @@ export function useDeleteAnnouncement() {
   return useMutation({
     mutationFn: (id: string) => announcementApi.remove(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: announcementKeys.all }),
+  });
+}
+
+export function useBulkLikes() {
+  return useQuery({
+    queryKey: announcementKeys.likes,
+    queryFn: () => announcementApi.getBulkLikes(),
+    staleTime: 15_000,
+  });
+}
+
+export function useToggleLike() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => announcementApi.toggleLike(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: announcementKeys.likes });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+export function useSharePost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => announcementApi.sharePost(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
   });
 }

@@ -9,6 +9,9 @@ import {
   Pencil,
   Trash2,
   X,
+  Heart,
+  Share2,
+  Copy,
 } from "lucide-react";
 import { HubSectionHeader, HubAvatar, HubBadge } from "@/components/hub-components";
 import { Button } from "@/components/ui/button";
@@ -18,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
-import { useAnnouncements, useCreateAnnouncement, useUpdateAnnouncement, useToggleAnnouncementPin, useDeleteAnnouncement } from "@/hooks/queries/use-announcement-queries";
+import { useAnnouncements, useCreateAnnouncement, useUpdateAnnouncement, useToggleAnnouncementPin, useDeleteAnnouncement, useBulkLikes, useToggleLike, useSharePost } from "@/hooks/queries/use-announcement-queries";
 import { useRole } from "@/hooks/use-role";
 import type { HubAnnouncement } from "@shared/schema";
 import type { HubRole } from "@/data/hub-mock";
@@ -54,6 +57,7 @@ export default function HubNews({ role: hubRole = "Senior Agent" }: { role?: Hub
   const [editingPost, setEditingPost] = useState<HubAnnouncement | null>(null);
 
   const { data: announcements, isLoading } = useAnnouncements();
+  const { data: likesMap } = useBulkLikes();
   const { role: actualRole } = useRole();
 
   const canManage = actualRole === "Admin" || actualRole === "Manager";
@@ -135,6 +139,7 @@ export default function HubNews({ role: hubRole = "Senior Agent" }: { role?: Hub
             index={i}
             canManage={canManage}
             onEdit={(p) => setEditingPost(p)}
+            likeData={likesMap?.[post.id]}
           />
         ))}
       </div>
@@ -160,21 +165,38 @@ function AnnouncementCard({
   index,
   canManage,
   onEdit,
+  likeData,
 }: {
   post: HubAnnouncement;
   index: number;
   canManage: boolean;
   onEdit: (p: HubAnnouncement) => void;
+  likeData?: { count: number; userLiked: boolean };
 }) {
   const { toast } = useToast();
   const togglePin = useToggleAnnouncementPin();
   const deleteAnnouncement = useDeleteAnnouncement();
+  const toggleLike = useToggleLike();
+  const sharePost = useSharePost();
   const initials = (post.authorName || "??")
     .split(" ")
     .map((w) => w[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const likeCount = likeData?.count || 0;
+  const userLiked = likeData?.userLiked || false;
+
+  const handleShare = () => {
+    const url = `${window.location.origin}/hub/news`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast({ title: "Link copied to clipboard" });
+    }).catch(() => {
+      toast({ title: "Failed to copy link", variant: "destructive" });
+    });
+    sharePost.mutate(post.id);
+  };
 
   return (
     <motion.div
@@ -253,6 +275,32 @@ function AnnouncementCard({
           content={post.content}
           className="text-sm leading-relaxed text-slate-700 dark:text-slate-300"
         />
+      </div>
+
+      <div className="mt-4 flex items-center gap-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <button
+          onClick={() => toggleLike.mutate(post.id)}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+            userLiked
+              ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+              : "text-slate-400 hover:bg-slate-50 hover:text-red-500 dark:hover:bg-slate-800 dark:hover:text-red-400"
+          )}
+          data-testid={`button-like-${post.id}`}
+        >
+          <Heart className={cn("h-4 w-4", userLiked && "fill-current")} />
+          {likeCount > 0 && <span>{likeCount}</span>}
+          {!likeCount && <span>Like</span>}
+        </button>
+
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-400 hover:bg-slate-50 hover:text-blue-500 dark:hover:bg-slate-800 dark:hover:text-blue-400 transition-all"
+          data-testid={`button-share-${post.id}`}
+        >
+          <Share2 className="h-4 w-4" />
+          <span>Share</span>
+        </button>
       </div>
     </motion.div>
   );

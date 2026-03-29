@@ -1560,6 +1560,17 @@ export const insertHubAnnouncementSchema = createInsertSchema(hubAnnouncementTab
 export type HubAnnouncement = typeof hubAnnouncementTable.$inferSelect;
 export type InsertHubAnnouncement = z.infer<typeof insertHubAnnouncementSchema>;
 
+export const hubAnnouncementLikesTable = pgTable("hub_announcement_likes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  announcementId: uuid("announcement_id").notNull().references(() => hubAnnouncementTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  uniqueLike: unique().on(table.announcementId, table.userId),
+}));
+
+export type HubAnnouncementLike = typeof hubAnnouncementLikesTable.$inferSelect;
+
 export const quoteViewsTable = pgTable("quote_views", {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   quoteId: uuid("quote_id").notNull().references(() => quote.id, { onDelete: "cascade" }),

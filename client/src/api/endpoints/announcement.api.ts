@@ -27,4 +27,23 @@ export const announcementApi = {
   async remove(id: string): Promise<void> {
     await axios.delete(`${BASE}/${id}`);
   },
+
+  async toggleLike(id: string): Promise<{ liked: boolean }> {
+    const { data } = await axios.post(`${BASE}/${id}/like`);
+    return data;
+  },
+
+  async getLikes(id: string): Promise<{ count: number; userLiked: boolean }> {
+    const { data } = await axios.get(`${BASE}/${id}/likes`);
+    return data;
+  },
+
+  async getBulkLikes(): Promise<Record<string, { count: number; userLiked: boolean }>> {
+    const { data } = await axios.get(`${BASE}/likes/bulk`);
+    return data;
+  },
+
+  async sharePost(id: string): Promise<void> {
+    await axios.post(`${BASE}/${id}/share`);
+  },
 };

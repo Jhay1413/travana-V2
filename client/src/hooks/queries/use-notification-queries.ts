@@ -22,5 +22,6 @@ export function useUnreadNotifications(userId: string) {
     queryKey: notificationKeys.unread(userId),
     queryFn: () => notificationApi.getUnread(userId),
     enabled: !!userId,
+    refetchInterval: 30000,
   });
 }
