@@ -9,7 +9,7 @@ export const announcementApi = {
     return data;
   },
 
-  async create(input: { title?: string; content: string; category: string; pinned?: boolean }): Promise<HubAnnouncement> {
+  async create(input: { title?: string; content: string; category: string; pinned?: boolean; imageUrl?: string }): Promise<HubAnnouncement> {
     const { data } = await axios.post(BASE, input);
     return data;
   },
@@ -45,5 +45,19 @@ export const announcementApi = {
 
   async sharePost(id: string): Promise<void> {
     await axios.post(`${BASE}/${id}/share`);
+  },
+
+  async uploadImage(file: File): Promise<{ imageUrl: string }> {
+    const formData = new FormData();
+    formData.append("image", file);
+    const { data } = await axios.post(`${BASE}/upload-image`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+
+  async getMentionableUsers(): Promise<{ id: string; name: string; role: string }[]> {
+    const { data } = await axios.get(`${BASE}/mentionable-users`);
+    return data;
   },
 };

@@ -1,17 +1,17 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  MessageCircle,
   Pin,
   PinOff,
   Plus,
-  Send,
   Pencil,
   Trash2,
-  X,
   Heart,
   Share2,
-  Copy,
+  ImagePlus,
+  X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { HubSectionHeader, HubAvatar, HubBadge } from "@/components/hub-components";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,18 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
-import { useAnnouncements, useCreateAnnouncement, useUpdateAnnouncement, useToggleAnnouncementPin, useDeleteAnnouncement, useBulkLikes, useToggleLike, useSharePost } from "@/hooks/queries/use-announcement-queries";
+import {
+  useAnnouncements,
+  useCreateAnnouncement,
+  useUpdateAnnouncement,
+  useToggleAnnouncementPin,
+  useDeleteAnnouncement,
+  useBulkLikes,
+  useToggleLike,
+  useSharePost,
+} from "@/hooks/queries/use-announcement-queries";
 import { useRole } from "@/hooks/use-role";
+import { announcementApi } from "@/api/endpoints/announcement.api";
 import type { HubAnnouncement } from "@shared/schema";
 import type { HubRole } from "@/data/hub-mock";
 
@@ -273,9 +283,21 @@ function AnnouncementCard({
       <div className="mt-2">
         <RichTextDisplay
           content={post.content}
-          className="text-sm leading-relaxed text-slate-700 dark:text-slate-300"
+          className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 [&_.mention]:text-blue-600 [&_.mention]:font-semibold"
         />
       </div>
+
+      {post.imageUrl && (
+        <div className="mt-3 overflow-hidden rounded-lg border border-slate-100 dark:border-slate-800">
+          <img
+            src={post.imageUrl}
+            alt={post.title || "Post image"}
+            className="w-full object-cover"
+            style={{ maxHeight: "400px" }}
+            data-testid={`img-news-${post.id}`}
+          />
+        </div>
+      )}
 
       <div className="mt-4 flex items-center gap-4 border-t border-slate-100 pt-3 dark:border-slate-800">
         <button
@@ -306,6 +328,260 @@ function AnnouncementCard({
   );
 }
 
+type MentionUser = { id: string; name: string; role: string };
+
+function MentionDropdown({
+  query,
+  users,
+  onSelect,
+  position,
+}: {
+  query: string;
+  users: MentionUser[];
+  onSelect: (user: MentionUser) => void;
+  position: { top: number; left: number };
+}) {
+  const filtered = users.filter((u) =>
+    u.name.toLowerCase().includes(query.toLowerCase())
+  ).slice(0, 8);
+
+  if (filtered.length === 0) return null;
+
+  return (
+    <div
+      className="fixed z-[100] max-h-48 min-w-[200px] overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800"
+      style={{ top: position.top, left: position.left }}
+    >
+      {filtered.map((user) => (
+        <button
+          key={user.id}
+          onClick={() => onSelect(user)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
+          data-testid={`mention-option-${user.id}`}
+        >
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+            {user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+          </span>
+          <span className="font-medium text-slate-800 dark:text-slate-200">{user.name}</span>
+          <span className="ml-auto text-[10px] text-slate-400">{user.role}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MentionableTextarea({
+  content,
+  onChange,
+  placeholder,
+  className,
+  users,
+}: {
+  content: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  users: MentionUser[];
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionPos, setMentionPos] = useState({ top: 0, left: 0 });
+  const [showMention, setShowMention] = useState(false);
+
+  const handleInput = useCallback(() => {
+    if (!editorRef.current) return;
+    const html = editorRef.current.innerHTML;
+    const text = editorRef.current.innerText;
+    onChange(html === "<br>" ? "" : html);
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      setShowMention(false);
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    const textBeforeCursor = getTextBeforeCursor(editorRef.current, range);
+
+    const atMatch = textBeforeCursor.match(/@(\w*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+      const rect = getCaretRect();
+      if (rect) {
+        setMentionPos({ top: rect.bottom + 4, left: rect.left });
+      }
+      setShowMention(true);
+    } else {
+      setShowMention(false);
+      setMentionQuery(null);
+    }
+  }, [onChange]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showMention && e.key === "Escape") {
+      setShowMention(false);
+      setMentionQuery(null);
+    }
+  };
+
+  const handleMentionSelect = (user: MentionUser) => {
+    if (!editorRef.current) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    const textNode = range.startContainer;
+    if (textNode.nodeType !== Node.TEXT_NODE) return;
+
+    const text = textNode.textContent || "";
+    const cursorPos = range.startOffset;
+    const atIndex = text.lastIndexOf("@", cursorPos);
+    if (atIndex < 0) return;
+
+    const before = text.substring(0, atIndex);
+    const after = text.substring(cursorPos);
+
+    const mentionSpan = document.createElement("span");
+    mentionSpan.className = "mention inline-block rounded bg-blue-100 px-1 text-blue-700 font-semibold dark:bg-blue-900/40 dark:text-blue-300";
+    mentionSpan.setAttribute("contenteditable", "false");
+    mentionSpan.setAttribute("data-mention-id", user.id);
+    mentionSpan.textContent = `@${user.name}`;
+
+    const parent = textNode.parentNode!;
+    const beforeNode = document.createTextNode(before);
+    const spaceAfter = document.createTextNode("\u00A0" + after);
+
+    parent.replaceChild(spaceAfter, textNode);
+    parent.insertBefore(mentionSpan, spaceAfter);
+    parent.insertBefore(beforeNode, mentionSpan);
+
+    const newRange = document.createRange();
+    newRange.setStart(spaceAfter, 1);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+
+    setShowMention(false);
+    setMentionQuery(null);
+
+    onChange(editorRef.current.innerHTML);
+  };
+
+  return (
+    <div className="relative">
+      <div
+        ref={editorRef}
+        contentEditable
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        className={cn(
+          "min-h-[180px] rounded-xl border border-black/10 bg-white p-3 text-sm leading-relaxed text-slate-800 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
+          "[&_.mention]:inline-block [&_.mention]:rounded [&_.mention]:bg-blue-100 [&_.mention]:px-1 [&_.mention]:text-blue-700 [&_.mention]:font-semibold dark:[&_.mention]:bg-blue-900/40 dark:[&_.mention]:text-blue-300",
+          "empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none",
+          className
+        )}
+        data-placeholder={placeholder || "Write your announcement... Use @ to mention someone"}
+        data-testid="textarea-announcement-content"
+        suppressContentEditableWarning
+      />
+      {showMention && mentionQuery !== null && (
+        <MentionDropdown
+          query={mentionQuery}
+          users={users}
+          onSelect={handleMentionSelect}
+          position={mentionPos}
+        />
+      )}
+    </div>
+  );
+}
+
+function getTextBeforeCursor(container: HTMLElement, range: Range): string {
+  const preCaretRange = document.createRange();
+  preCaretRange.selectNodeContents(container);
+  preCaretRange.setEnd(range.startContainer, range.startOffset);
+  return preCaretRange.toString();
+}
+
+function getCaretRect(): DOMRect | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0).cloneRange();
+  range.collapse(true);
+  const rects = range.getClientRects();
+  if (rects.length > 0) return rects[0];
+  const span = document.createElement("span");
+  span.textContent = "\u200b";
+  range.insertNode(span);
+  const rect = span.getBoundingClientRect();
+  span.parentNode?.removeChild(span);
+  return rect;
+}
+
+function ImageUploadPreview({
+  imageUrl,
+  onRemove,
+  imageFile,
+  onScaleChange,
+  scale,
+}: {
+  imageUrl: string;
+  onRemove: () => void;
+  imageFile?: File | null;
+  onScaleChange?: (s: number) => void;
+  scale: number;
+}) {
+  return (
+    <div className="relative mt-3 rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 overflow-hidden">
+      <div className="relative flex items-center justify-center bg-slate-100 dark:bg-slate-900" style={{ maxHeight: "300px", overflow: "hidden" }}>
+        <img
+          src={imageUrl}
+          alt="Preview"
+          className="transition-transform"
+          style={{
+            transform: `scale(${scale})`,
+            maxHeight: "300px",
+            objectFit: "contain",
+            width: "100%",
+          }}
+          data-testid="img-preview-announcement"
+        />
+      </div>
+      <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onScaleChange?.(Math.max(0.3, scale - 0.1))}
+            className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
+            title="Zoom out"
+            data-testid="button-zoom-out"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </button>
+          <span className="text-xs font-medium text-slate-500 w-10 text-center">{Math.round(scale * 100)}%</span>
+          <button
+            type="button"
+            onClick={() => onScaleChange?.(Math.min(2, scale + 0.1))}
+            className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
+            title="Zoom in"
+            data-testid="button-zoom-in"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+          data-testid="button-remove-image"
+        >
+          <X className="h-3 w-3" /> Remove
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AnnouncementDialog({
   open,
   onOpenChange,
@@ -321,12 +597,24 @@ function AnnouncementDialog({
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("general");
   const [pinned, setPinned] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageScale, setImageScale] = useState(1);
+  const [uploading, setUploading] = useState(false);
+  const [mentionUsers, setMentionUsers] = useState<MentionUser[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const createMutation = useCreateAnnouncement();
   const updateMutation = useUpdateAnnouncement();
 
-  const isLoading = createMutation.isPending || updateMutation.isPending;
+  const isLoading = createMutation.isPending || updateMutation.isPending || uploading;
+
+  useEffect(() => {
+    if (open) {
+      announcementApi.getMentionableUsers().then(setMentionUsers).catch(() => {});
+    }
+  }, [open]);
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && post && mode === "edit") {
@@ -334,21 +622,60 @@ function AnnouncementDialog({
       setContent(post.content);
       setCategory(post.category);
       setPinned(post.pinned);
+      setImageUrl(post.imageUrl || null);
+      setImageFile(null);
+      setImageScale(1);
     } else if (isOpen && mode === "create") {
       setTitle("");
       setContent("");
       setCategory("general");
       setPinned(false);
+      setImageUrl(null);
+      setImageFile(null);
+      setImageScale(1);
     }
     onOpenChange(isOpen);
   };
 
-  const handleSubmit = () => {
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Image must be under 5MB", variant: "destructive" });
+      return;
+    }
+    setImageFile(file);
+    setImageUrl(URL.createObjectURL(file));
+    setImageScale(1);
+  };
+
+  const handleRemoveImage = () => {
+    setImageUrl(null);
+    setImageFile(null);
+    setImageScale(1);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleSubmit = async () => {
     if (!content.trim()) return;
+
+    let finalImageUrl = imageUrl;
+    if (imageFile) {
+      try {
+        setUploading(true);
+        const result = await announcementApi.uploadImage(imageFile);
+        finalImageUrl = result.imageUrl;
+      } catch {
+        toast({ title: "Failed to upload image", variant: "destructive" });
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
 
     if (mode === "create") {
       createMutation.mutate(
-        { title: title.trim() || undefined, content, category, pinned },
+        { title: title.trim() || undefined, content, category, pinned, imageUrl: finalImageUrl || undefined },
         {
           onSuccess: () => { toast({ title: "Announcement posted" }); handleOpen(false); },
           onError: () => toast({ title: "Failed to post", variant: "destructive" }),
@@ -356,7 +683,7 @@ function AnnouncementDialog({
       );
     } else if (post) {
       updateMutation.mutate(
-        { id: post.id, title: title.trim() || undefined, content, category, pinned },
+        { id: post.id, title: title.trim() || undefined, content, category, pinned, imageUrl: finalImageUrl || undefined },
         {
           onSuccess: () => { toast({ title: "Announcement updated" }); handleOpen(false); },
           onError: () => toast({ title: "Failed to update", variant: "destructive" }),
@@ -367,7 +694,7 @@ function AnnouncementDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent className="max-w-2xl rounded-2xl">
+      <DialogContent className="max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Post Announcement" : "Edit Announcement"}</DialogTitle>
         </DialogHeader>
@@ -416,13 +743,46 @@ function AnnouncementDialog({
           </div>
 
           <div>
-            <label className="text-xs font-medium text-slate-500 mb-1 block">Content</label>
-            <RichTextEditor
+            <label className="text-xs font-medium text-slate-500 mb-1 block">Content <span className="text-slate-400">(type @ to mention someone)</span></label>
+            <MentionableTextarea
               content={content}
               onChange={setContent}
-              placeholder="Write your announcement..."
+              placeholder="Write your announcement... Use @ to mention someone"
               className="min-h-[180px] dark:border-slate-700 dark:bg-slate-800"
+              users={mentionUsers}
             />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1 block">Image (optional)</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleImageSelect}
+              className="hidden"
+              data-testid="input-announcement-image"
+            />
+            {!imageUrl && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-blue-500"
+                data-testid="button-add-image"
+              >
+                <ImagePlus className="h-5 w-5" />
+                Click to add an image
+              </button>
+            )}
+            {imageUrl && (
+              <ImageUploadPreview
+                imageUrl={imageUrl}
+                onRemove={handleRemoveImage}
+                imageFile={imageFile}
+                scale={imageScale}
+                onScaleChange={setImageScale}
+              />
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -435,7 +795,7 @@ function AnnouncementDialog({
               disabled={!content.trim() || isLoading}
               data-testid="button-submit-announcement"
             >
-              {isLoading ? "Saving..." : mode === "create" ? "Post" : "Save"}
+              {uploading ? "Uploading image..." : isLoading ? "Saving..." : mode === "create" ? "Post" : "Save"}
             </Button>
           </div>
         </div>

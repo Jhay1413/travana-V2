@@ -1,4 +1,6 @@
 import { Router, Request, Response } from "express";
+import multer from "multer";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { announcementRepository } from "../repositories/announcement.repository";
 import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
 import { getUserId } from "../utils/get-user-id";
@@ -6,10 +8,25 @@ import { db } from "../config/database";
 import { user as userTable, hubAnnouncementLikesTable, hubAnnouncementTable, notifications } from "@shared/schema";
 import { eq, and, sql, count } from "drizzle-orm";
 import { notificationRepository } from "../repositories/notification.repository";
+import { s3Client, getS3Bucket } from "../config/s3";
+import { randomUUID } from "crypto";
 
 const router = Router();
 
-async function ensureLikesTable() {
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, WebP and GIF images are allowed"));
+    }
+  },
+});
+
+async function ensureSchema() {
   try {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS hub_announcement_likes (
@@ -20,11 +37,14 @@ async function ensureLikesTable() {
         UNIQUE(announcement_id, user_id)
       )
     `);
+    await db.execute(sql`
+      ALTER TABLE hub_announcements ADD COLUMN IF NOT EXISTS image_url TEXT
+    `);
   } catch (e) {
-    console.error("Failed to ensure likes table:", e);
+    console.error("Failed to ensure announcement schema:", e);
   }
 }
-ensureLikesTable();
+ensureSchema();
 
 router.use(isAuthenticated);
 
@@ -40,11 +60,21 @@ async function getAllUserIds(): Promise<{ id: string; name: string | null }[]> {
 }
 
 function extractMentions(content: string): string[] {
-  const mentionPattern = /@(\w+(?:\s+\w+)?)/g;
+  const mentionPattern = /data-mention-id="([^"]+)"[^>]*>@([^<]+)</g;
+  const plainPattern = /@(\w+(?:\s+\w+)?)/g;
   const mentions: string[] = [];
   let match;
   while ((match = mentionPattern.exec(content)) !== null) {
-    mentions.push(match[1].trim().toLowerCase());
+    if (match[1] === "__all__") {
+      mentions.push("__all__");
+    } else {
+      mentions.push(match[2].trim().toLowerCase());
+    }
+  }
+  while ((match = plainPattern.exec(content)) !== null) {
+    const name = match[1].trim().toLowerCase();
+    if (name === "everyone") mentions.push("__all__");
+    else if (!mentions.includes(name)) mentions.push(name);
   }
   return mentions;
 }
@@ -78,6 +108,22 @@ async function notifyMentionedUsers(content: string, authorId: string, authorNam
   if (mentions.length === 0) return;
 
   const allUsers = await getAllUserIds();
+
+  if (mentions.includes("__all__")) {
+    for (const u of allUsers) {
+      if (u.id !== authorId) {
+        await createHubNotification(
+          u.id,
+          "hub_mention",
+          "You were mentioned in TheHub",
+          `${authorName} mentioned @Everyone in a post`,
+          "/hub/news"
+        );
+      }
+    }
+    return;
+  }
+
   for (const mention of mentions) {
     const matchedUser = allUsers.find(u => {
       if (!u.name) return false;
@@ -115,7 +161,7 @@ router.post("/", async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, message: "Only Admin or Manager can post announcements" });
     }
 
-    const { title, content, category, pinned } = req.body;
+    const { title, content, category, pinned, imageUrl } = req.body;
     if (!content || typeof content !== "string" || !content.trim()) {
       return res.status(400).json({ success: false, message: "Content is required" });
     }
@@ -128,6 +174,7 @@ router.post("/", async (req: Request, res: Response) => {
       category: cat,
       title: title?.trim() || null,
       content: content.trim(),
+      imageUrl: imageUrl || null,
       pinned: !!pinned,
     });
 
@@ -148,6 +195,55 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/upload-image", imageUpload.single("image"), async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: "Not authenticated" });
+
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, message: "No image file provided" });
+
+    const ext = file.originalname.split(".").pop() || "jpg";
+    const key = `hub-images/${randomUUID()}.${ext}`;
+    const bucket = getS3Bucket();
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    }));
+
+    const imageUrl = `https://${bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    res.json({ success: true, data: { imageUrl } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/mentionable-users", async (_req: Request, res: Response) => {
+  try {
+    const users = await db.select({
+      id: userTable.id,
+      name: userTable.name,
+      role: userTable.role,
+    }).from(userTable);
+
+    const mentionables = [
+      { id: "__all__", name: "Everyone", role: "all" },
+      ...users.filter(u => u.name).map(u => ({
+        id: u.id,
+        name: u.name!,
+        role: u.role || "Agent",
+      })),
+    ];
+
+    res.json({ success: true, data: mentionables });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
@@ -158,12 +254,13 @@ router.patch("/:id", async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, message: "Only Admin or Manager can edit announcements" });
     }
 
-    const { title, content, category, pinned } = req.body;
+    const { title, content, category, pinned, imageUrl } = req.body;
     const updates: Record<string, any> = {};
     if (title !== undefined) updates.title = title?.trim() || null;
     if (content !== undefined) updates.content = content.trim();
     if (category !== undefined && VALID_CATEGORIES.includes(category)) updates.category = category;
     if (pinned !== undefined) updates.pinned = !!pinned;
+    if (imageUrl !== undefined) updates.imageUrl = imageUrl || null;
 
     const item = await announcementRepository.update(req.params.id, updates);
     if (!item) return res.status(404).json({ success: false, message: "Announcement not found" });

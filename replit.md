@@ -104,7 +104,7 @@ Schema includes tables for:
 - `notifications` - User notification system
 - `destination_guru` - AI-generated destination intelligence (JSONB data, unique per destination)
 - `feedback` - User feedback/suggestions/bug reports with status tracking
-- `hub_announcements` - TheHUB news & announcements with rich text content, categories, and pinning
+- `hub_announcements` - TheHUB news & announcements with rich text content, categories, pinning, and optional image_url
 - `hub_announcement_likes` - Like tracking for hub announcements (unique per user+announcement)
 - `quote_views` - Customer view tracking for shared quotes (device, browser, IP)
 - `audit_log` - Deletion audit trail for quotes/bookings (entity snapshot, reason, performer)

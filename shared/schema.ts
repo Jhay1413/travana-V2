@@ -1551,6 +1551,7 @@ export const hubAnnouncementTable = pgTable("hub_announcements", {
   category: text("category").notNull().default("general"),
   title: text("title"),
   content: text("content").notNull(),
+  imageUrl: text("image_url"),
   pinned: boolean("pinned").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
