@@ -227,7 +227,7 @@ export function BookingCreateDialog({
       onSuccess: (result) => {
         toast({ title: "Booking created", description: "New booking has been created." });
         onOpenChange(false);
-        onSuccess?.(result?.id || "");
+        onSuccess?.(result?.booking?.id || "");
       },
       onError: (err) => {
         toast({

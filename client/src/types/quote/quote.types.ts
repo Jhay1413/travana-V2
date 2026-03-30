@@ -409,6 +409,7 @@ export interface Booking {
   booking_status: string | null;
   main_tour_operator_id: string | null;
   date_created: string | null;
+  price_per_person: string | null;
 }
 
 // Extended types with joined data from repository
