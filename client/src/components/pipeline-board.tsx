@@ -336,11 +336,11 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
           <span className="text-[12px] font-semibold text-gray-700">{formatCurrency(totalValue)}</span>
           {stage === "Quoted" ? (
             <span className="text-[11px] text-emerald-600 font-medium">
-              Profit: {formatCurrency(totalProfit)} · 20%: {formatCurrency(totalProfit * 0.2)}
+              Profit: {formatCurrency(totalProfit * 0.2)}
             </span>
           ) : stage === "In Play" ? (
             <span className="text-[11px] text-emerald-600 font-medium">
-              Profit: {formatCurrency(totalProfit)} · 28%: {formatCurrency(totalProfit * 0.28)}
+              Profit: {formatCurrency(totalProfit * 0.28)}
             </span>
           ) : (
             <span className="text-[11px] text-emerald-600 font-medium">Profit: {formatCurrency(totalProfit)}</span>
