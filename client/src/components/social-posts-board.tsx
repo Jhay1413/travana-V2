@@ -27,7 +27,7 @@ import type { EnrichedQuote } from "@/types/quote";
 import type { TravelDeal } from "@/api/endpoints/social-post.api";
 
 type ViewMode = "scheduled" | "all";
-type ScheduleFilter = "none" | "this-week" | "next-week" | "next-month";
+type ScheduleFilter = "none" | "today" | "tomorrow" | "this-week" | "next-week" | "next-month" | "specific-date";
 
 interface SocialPost {
   quote: EnrichedQuote;
@@ -153,6 +153,7 @@ export default function SocialPostsBoard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("scheduled");
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("none");
+  const [specificDate, setSpecificDate] = useState<string>("");
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
   const [previewDeal, setPreviewDeal] = useState<TravelDeal | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -165,7 +166,9 @@ export default function SocialPostsBoard() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", viewMode === "scheduled" ? scheduleFilter : "none", debouncedSearch);
+  const activeFilter = viewMode === "scheduled" ? scheduleFilter : "none";
+  const activeSpecificDate = activeFilter === "specific-date" ? specificDate : "";
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, activeSpecificDate);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const filteredPosts = useMemo<SocialPost[]>(() => {
@@ -236,9 +239,12 @@ export default function SocialPostsBoard() {
 
   const scheduleFilterButtons: { label: string; value: ScheduleFilter }[] = [
     { label: "All Scheduled", value: "none" },
+    { label: "Today", value: "today" },
+    { label: "Tomorrow", value: "tomorrow" },
     { label: "This Week", value: "this-week" },
     { label: "Next Week", value: "next-week" },
     { label: "Next Month", value: "next-month" },
+    { label: "Pick Date", value: "specific-date" },
   ];
 
   return (
@@ -293,6 +299,15 @@ export default function SocialPostsBoard() {
                 {btn.label}
               </Button>
             ))}
+            {scheduleFilter === "specific-date" && (
+              <input
+                type="date"
+                value={specificDate}
+                onChange={(e) => setSpecificDate(e.target.value)}
+                className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
+                data-testid="input-specific-date-filter"
+              />
+            )}
           </div>
         )}
       </div>

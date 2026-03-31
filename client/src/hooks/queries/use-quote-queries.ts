@@ -18,10 +18,10 @@ export function useQuotes(filters?: QuoteFilters) {
   });
 }
 
-export function useFreeQuotesInfinite(pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "") {
+export function useFreeQuotesInfinite(pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", specificDate = "") {
   return useInfiniteQuery({
-    queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search],
-    queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search),
+    queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search, specificDate],
+    queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search, specificDate),
     getNextPageParam: (lastPage) => {
       return lastPage.hasMore ? lastPage.page + 1 : undefined;
     },

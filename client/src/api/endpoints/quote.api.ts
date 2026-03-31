@@ -18,10 +18,11 @@ export const quoteApi = {
     return data;
   },
 
-  getFreeQuotes: async (page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = ""): Promise<FreeQuotesResponse> => {
+  getFreeQuotes: async (page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", specificDate = ""): Promise<FreeQuotesResponse> => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (scheduledOnly) params.set("scheduledOnly", "true");
     if (scheduledOnly && scheduleFilter !== "none") params.set("scheduleFilter", scheduleFilter);
+    if (scheduledOnly && scheduleFilter === "specific-date" && specificDate) params.set("specificDate", specificDate);
     if (search) params.set("search", search);
     const { data } = await axiosClient.get<FreeQuotesResponse>(`/api/quotes/free?${params}`);
     return data;

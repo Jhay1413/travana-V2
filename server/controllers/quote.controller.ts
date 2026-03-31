@@ -62,9 +62,10 @@ export const quoteController = {
     const pageSize = parseInt(req.query.pageSize as string) || 12;
     const scheduledOnly = req.query.scheduledOnly === "true";
     const scheduleFilter = (req.query.scheduleFilter as string) || "none";
+    const specificDate = (req.query.specificDate as string) || "";
     const search = (req.query.search as string) || "";
 
-    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search);
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, specificDate);
     
     return successResponse(res, {
       quotes,

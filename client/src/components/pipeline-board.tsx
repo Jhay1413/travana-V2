@@ -524,7 +524,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
                     {cells.map(c => (
                       <div key={c.label}>
                         <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">{c.label}</p>
-                        <p className="text-[13px] text-gray-800 mt-0.5 truncate">{c.val || "—"}</p>
+                        <p className="text-[13px] text-gray-800 mt-0.5 truncate font-semibold">{c.val || "—"}</p>
                       </div>
                     ))}
                   </div>
