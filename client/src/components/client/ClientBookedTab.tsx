@@ -3,6 +3,7 @@ import {
   ImagePlus,
   Pin,
   Plus,
+  UserCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,6 +19,7 @@ interface ClientBookedTabProps {
   client: Client | null;
   userFavorites: Favorite[] | undefined;
   toggleFavoriteMutation: { mutate: (args: { itemType: string; itemId: string; label: string; subtitle: string }) => void };
+  getUserName: (userId: string) => string;
 }
 
 export function ClientBookedTab({
@@ -28,6 +30,7 @@ export function ClientBookedTab({
   client,
   userFavorites,
   toggleFavoriteMutation,
+  getUserName,
 }: ClientBookedTabProps) {
   return (
     <div className="grid gap-3" data-testid="list-booked">
@@ -122,6 +125,11 @@ export function ClientBookedTab({
                               Supplier Ref: <span className="font-semibold text-black/80">{b.supplier_ref}</span>
                             </span>
                           )}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-xs text-black/60" data-testid={`text-booking-agent-${b.id}`}>
+                          <UserCircle className="h-3.5 w-3.5 shrink-0 text-black/40" />
+                          <span>Agent:</span>
+                          <span className="font-semibold text-black/80">{b.user_id ? getUserName(b.user_id) : "Unassigned"}</span>
                         </div>
                       </div>
 

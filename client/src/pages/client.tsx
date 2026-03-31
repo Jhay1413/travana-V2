@@ -349,7 +349,7 @@ export default function ClientPage() {
   const transactions = useMemo(() => transactionsData || [], [transactionsData]);
   const quotes = useMemo(() => transactions.flatMap((t: Transaction) => t.quotes || []), [transactions]);
   const enquiries = useMemo(() => transactions.map((t: Transaction) => t.enquiry).filter(Boolean) as EnquiryTable[], [transactions]);
-  const bookings = useMemo(() => transactions.map((t: Transaction) => t.booking).filter((b): b is NonNullable<Transaction["booking"]> => Boolean(b)), [transactions]);
+  const bookings = useMemo(() => transactions.flatMap((t: Transaction) => t.booking ? [{ ...t.booking, user_id: t.user_id }] : []), [transactions]);
 
   const convertingEnquiryInitialValues = useMemo(() => {
     if (!convertingFromEnquiryTxnId) return undefined;
@@ -805,6 +805,7 @@ export default function ClientPage() {
                     client={client}
                     userFavorites={userFavorites}
                     toggleFavoriteMutation={toggleFavoriteMutation}
+                    getUserName={getUserName}
                   />
                 </TabsContent>
 

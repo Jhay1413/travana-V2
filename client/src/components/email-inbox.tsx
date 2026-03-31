@@ -135,7 +135,7 @@ function getAttachmentIcon(type: string) {
   return <FileText className="h-4 w-4" />;
 }
 
-// ─── Connect Email Form ───────────────────────────────────────────────────────
+// ─── Connect Email Form ────────────────────d ───────────────────────────────────
 
 interface ConnectEmailFormProps {
   userId: string;

@@ -1960,9 +1960,18 @@ export default function CommandCenterPage() {
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
   const [active, setActive] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get("s");
+    if (s) return s;
     if (location === "/clients") return "clients";
     return "overview";
   });
+
+  useEffect(() => {
+    if (window.location.search) {
+      window.history.replaceState(null, "", "/");
+    }
+  }, []);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"whats-on" | "pipeline" | "calendar" | "news" | "daily-goals">("whats-on");
   const [whatsOnFilter, setWhatsOnFilter] = useState<"all" | "today" | "tomorrow" | "this-week" | "custom">("all");

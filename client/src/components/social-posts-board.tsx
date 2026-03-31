@@ -41,6 +41,15 @@ function formatDate(d: string | null | undefined): string {
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+function formatDateTime(d: string | null | undefined): string {
+  if (!d) return "—";
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return "—";
+  const datePart = date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const timePart = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${datePart} ${timePart}`;
+}
+
 function formatPrice(price: string | null | undefined): string {
   if (!price) return "—";
   const num = parseFloat(price);
@@ -123,8 +132,8 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Nights:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-nights-${quote.id}`}>{quote.num_of_nights}</span></div>
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><UtensilsCrossed className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Board:</span><span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-board-${quote.id}`}>{getBoardBasis(quote)}</span></div>
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Date:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-travel-date-${quote.id}`}>{formatDate(quote.travel_date)}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Scheduled:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-scheduled-${quote.id}`}>{formatDate(quote.postSchedule)}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Clock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Created:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-created-${quote.id}`}>{formatDate(quote.date_created)}</span></div>
+          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Scheduled:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-scheduled-${quote.id}`}>{formatDateTime(quote.postSchedule)}</span></div>
+          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Clock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Created:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-created-${quote.id}`}>{formatDateTime(quote.date_created)}</span></div>
         </div>
         {quote.quote_ref && <div className="text-xs text-black/60 dark:text-white/50">View Link: <a href={quote.quote_ref} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline" data-testid={`link-view-${quote.id}`}>View</a></div>}
         <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
@@ -133,7 +142,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
           </Link>
           <div className="mt-4" />
           {isScheduled ? (
-            <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white" data-testid={`button-scheduled-${quote.id}`}><Clock className="w-4 h-4" />{formatDate(quote.postSchedule)}</Button>
+            <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white" data-testid={`button-scheduled-${quote.id}`}><Clock className="w-4 h-4" />{formatDateTime(quote.postSchedule)}</Button>
           ) : hasDeal ? (
             <Button onClick={() => onViewPost(quote)} className="w-full rounded-xl text-sm font-medium gap-2 bg-orange-500 hover:bg-orange-600 text-white" data-testid={`button-schedule-post-${quote.id}`}><CalendarClock className="w-4 h-4" />Schedule Post</Button>
           ) : (

@@ -4,7 +4,7 @@ import type { Ticket as ApiTicket } from "@/types/ticket";
 import type { Quote as ApiQuote, Booking, DealImage } from "@/types/quote";
 
 export type QuoteWithJoins = ApiQuote & { holiday_type_name?: string };
-export type BookingWithJoins = Booking & { images?: DealImage[]; holiday_type_name?: string };
+export type BookingWithJoins = Booking & { images?: DealImage[]; holiday_type_name?: string; user_id?: string };
 
 export type Stage = "Enquiry" | "Quote" | "Booked";
 
