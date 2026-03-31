@@ -31,6 +31,12 @@ import {
   Hash,
   FileText,
   ChevronRight,
+  ArrowUpDown,
+  BarChart3,
+  List,
+  LayoutGrid,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
@@ -578,6 +584,319 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
   );
 }
 
+type ViewMode = "board" | "list" | "forecast";
+
+type SortField = "client" | "title" | "stage" | "value" | "profit" | "date" | "agent";
+type SortDir = "asc" | "desc";
+
+function getStageForTransaction(t: Transaction): PipelineStage {
+  if (t.status === "on_enquiry") return "Enquiry";
+  if (t.status === "on_quote") return "Quoted";
+  if (t.status === "in_play") return "In Play";
+  if (t.status === "on_booking") return "Booked";
+  return "Enquiry";
+}
+
+function PipelineListView({
+  transactions,
+  getClientName,
+  isLoading,
+  onRowClick,
+}: {
+  transactions: Transaction[];
+  getClientName: (id: string | null) => string;
+  isLoading: boolean;
+  onRowClick: (t: Transaction, s: PipelineStage) => void;
+}) {
+  const [, setLocation] = useLocation();
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const toggleSort = (f: SortField) => {
+    if (sortField === f) setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(f); setSortDir("desc"); }
+  };
+
+  const sorted = useMemo(() => {
+    const arr = [...transactions];
+    arr.sort((a, b) => {
+      let va: any, vb: any;
+      switch (sortField) {
+        case "client": va = getClientName(a.client_id); vb = getClientName(b.client_id); break;
+        case "title": va = getTransactionTitle(a); vb = getTransactionTitle(b); break;
+        case "stage": va = a.status; vb = b.status; break;
+        case "value": va = getTransactionValue(a); vb = getTransactionValue(b); break;
+        case "profit": va = getTransactionProfit(a); vb = getTransactionProfit(b); break;
+        case "date": va = getTransactionDate(a) || ""; vb = getTransactionDate(b) || ""; break;
+        case "agent": va = getAgentName(a); vb = getAgentName(b); break;
+      }
+      if (typeof va === "number") return sortDir === "asc" ? va - vb : vb - va;
+      return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+    return arr;
+  }, [transactions, sortField, sortDir, getClientName]);
+
+  const SortHeader = ({ field, label, className = "" }: { field: SortField; label: string; className?: string }) => (
+    <th
+      className={`text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-4 py-3 cursor-pointer hover:text-gray-700 select-none ${className}`}
+      onClick={() => toggleSort(field)}
+      data-testid={`sort-${field}`}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {sortField === field ? (sortDir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-30" />}
+      </div>
+    </th>
+  );
+
+  if (isLoading) return <div className="flex items-center justify-center py-20"><Spinner /></div>;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mx-4 sm:mx-6 mt-4">
+      <div className="overflow-x-auto">
+        <table className="w-full" data-testid="pipeline-list-table">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <SortHeader field="client" label="Client" />
+              <SortHeader field="title" label="Deal" />
+              <SortHeader field="stage" label="Stage" />
+              <SortHeader field="value" label="Value" />
+              <SortHeader field="profit" label="Profit" />
+              <SortHeader field="date" label="Travel Date" />
+              <SortHeader field="agent" label="Agent" />
+              <th className="w-10" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {sorted.length === 0 ? (
+              <tr><td colSpan={8} className="text-center py-12 text-sm text-gray-400">No transactions found</td></tr>
+            ) : sorted.map(tx => {
+              const stage = getStageForTransaction(tx);
+              const value = getTransactionValue(tx);
+              const profit = getTransactionProfit(tx);
+              const { dest } = getDest(tx);
+              const hex = STAGE_HEX[stage];
+              return (
+                <tr
+                  key={tx.id}
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => onRowClick(tx, stage)}
+                  data-testid={`list-row-${tx.id}`}
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[10px] text-white font-medium">{getClientName(tx.client_id)?.[0]?.toUpperCase() || "?"}</span>
+                      </div>
+                      <span className="text-[13px] font-semibold text-gray-900 truncate max-w-[160px]">{getClientName(tx.client_id)}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div>
+                      <p className="text-[13px] text-gray-800 font-medium truncate max-w-[180px]">{getTransactionTitle(tx)}</p>
+                      {dest !== "TBC" && <p className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3" />{dest}</p>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ backgroundColor: `${hex}15`, color: hex }}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hex }} />
+                      {stage}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-[13px] font-bold text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-[13px] font-semibold text-emerald-600">{profit > 0 ? formatCurrency(profit) : "—"}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-[13px] text-gray-600">{formatDate(getTransactionDate(tx))}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[9px] text-white font-medium">{getAgentInitial(tx)}</span>
+                      </div>
+                      <span className="text-[12px] text-gray-600">{getAgentName(tx)}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PipelineForecastView({
+  stageData,
+  isLoading,
+}: {
+  stageData: Record<PipelineStage, { items: Transaction[]; total: number; totalValue: number; totalProfit: number }>;
+  isLoading: boolean;
+}) {
+  if (isLoading) return <div className="flex items-center justify-center py-20"><Spinner /></div>;
+
+  const totalPipelineValue = STAGES.reduce((s, st) => s + stageData[st].totalValue, 0);
+  const totalPipelineProfit = STAGES.reduce((s, st) => s + stageData[st].totalProfit, 0);
+  const totalDeals = STAGES.reduce((s, st) => s + stageData[st].total, 0);
+
+  const allTx = STAGES.flatMap(s => stageData[s].items.map(t => ({ ...t, _stage: s })));
+
+  const monthlyData = useMemo(() => {
+    const months: Record<string, { month: string; enquiry: number; quoted: number; inPlay: number; booked: number; totalValue: number; totalProfit: number; count: number }> = {};
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+      months[key] = { month: label, enquiry: 0, quoted: 0, inPlay: 0, booked: 0, totalValue: 0, totalProfit: 0, count: 0 };
+    }
+    for (const tx of allTx) {
+      const travelDate = getTransactionDate(tx);
+      if (!travelDate) continue;
+      const d = new Date(travelDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!months[key]) continue;
+      const val = getTransactionValue(tx);
+      const prof = getTransactionProfit(tx);
+      months[key].totalValue += val;
+      months[key].totalProfit += prof;
+      months[key].count++;
+      const stage = (tx as any)._stage as PipelineStage;
+      if (stage === "Enquiry") months[key].enquiry += val;
+      else if (stage === "Quoted") months[key].quoted += val;
+      else if (stage === "In Play") months[key].inPlay += val;
+      else if (stage === "Booked") months[key].booked += val;
+    }
+    return Object.values(months);
+  }, [allTx]);
+
+  const maxVal = Math.max(...monthlyData.map(m => m.totalValue), 1);
+
+  const conversionRate = stageData["Booked"].total > 0 && totalDeals > 0
+    ? Math.round((stageData["Booked"].total / totalDeals) * 100) : 0;
+
+  const avgDealSize = totalDeals > 0 ? totalPipelineValue / totalDeals : 0;
+
+  return (
+    <div className="px-4 sm:px-6 mt-4 space-y-5 pb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Pipeline Value", value: formatCurrency(totalPipelineValue), sub: `${totalDeals} deals`, color: "text-gray-900", bg: "bg-white" },
+          { label: "Expected Profit", value: formatCurrency(totalPipelineProfit), sub: "Based on stage %", color: "text-emerald-600", bg: "bg-emerald-50" },
+          { label: "Avg Deal Size", value: formatCurrency(avgDealSize), sub: "Across all stages", color: "text-blue-600", bg: "bg-blue-50" },
+          { label: "Conversion Rate", value: `${conversionRate}%`, sub: `${stageData["Booked"].total} booked of ${totalDeals}`, color: "text-purple-600", bg: "bg-purple-50" },
+        ].map(card => (
+          <div key={card.label} className={`${card.bg} rounded-xl border border-gray-200 p-5`} data-testid={`forecast-card-${card.label.toLowerCase().replace(/\s+/g, "-")}`}>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{card.label}</p>
+            <p className={`text-2xl font-bold mt-1 ${card.color}`}>{card.value}</p>
+            <p className="text-[12px] text-gray-400 mt-1">{card.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-gray-900">6-Month Revenue Forecast</h3>
+            <div className="flex items-center gap-3 text-[10px]">
+              {([["Enquiry", STAGE_HEX.Enquiry], ["Quoted", STAGE_HEX.Quoted], ["In Play", STAGE_HEX["In Play"]], ["Booked", STAGE_HEX.Booked]] as const).map(([label, color]) => (
+                <div key={label} className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="text-gray-500">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-3">
+            {monthlyData.map(m => (
+              <div key={m.month} data-testid={`forecast-month-${m.month}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[12px] font-semibold text-gray-700 w-20">{m.month}</span>
+                  <span className="text-[12px] font-bold text-gray-900">{formatCurrency(m.totalValue)}</span>
+                </div>
+                <div className="h-6 bg-gray-100 rounded-full overflow-hidden flex">
+                  {m.enquiry > 0 && <div className="h-full transition-all" style={{ width: `${(m.enquiry / maxVal) * 100}%`, backgroundColor: STAGE_HEX.Enquiry }} />}
+                  {m.quoted > 0 && <div className="h-full transition-all" style={{ width: `${(m.quoted / maxVal) * 100}%`, backgroundColor: STAGE_HEX.Quoted }} />}
+                  {m.inPlay > 0 && <div className="h-full transition-all" style={{ width: `${(m.inPlay / maxVal) * 100}%`, backgroundColor: STAGE_HEX["In Play"] }} />}
+                  {m.booked > 0 && <div className="h-full transition-all" style={{ width: `${(m.booked / maxVal) * 100}%`, backgroundColor: STAGE_HEX.Booked }} />}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-gray-400">{m.count} deal{m.count !== 1 ? "s" : ""}</span>
+                  {m.totalProfit > 0 && <span className="text-[10px] text-emerald-500">Profit: {formatCurrency(m.totalProfit)}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="text-sm font-bold text-gray-900 mb-3">Stage Breakdown</h3>
+            <div className="space-y-3">
+              {STAGES.map(s => {
+                const d = stageData[s];
+                const pct = totalDeals > 0 ? Math.round((d.total / totalDeals) * 100) : 0;
+                return (
+                  <div key={s} data-testid={`forecast-stage-${s}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STAGE_HEX[s] }} />
+                        <span className="text-[12px] font-semibold text-gray-700">{s}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-bold text-gray-900">{d.total}</span>
+                        <span className="text-[11px] text-gray-400">({pct}%)</span>
+                      </div>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: STAGE_HEX[s] }} />
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-[10px] text-gray-400">Value: {formatCurrency(d.totalValue)}</span>
+                      <span className="text-[10px] text-emerald-500">Profit: {formatCurrency(d.totalProfit)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="text-sm font-bold text-gray-900 mb-3">Pipeline Funnel</h3>
+            <div className="space-y-1">
+              {STAGES.map((s, i) => {
+                const d = stageData[s];
+                const maxStageDeals = Math.max(...STAGES.map(st => stageData[st].total), 1);
+                const w = Math.max((d.total / maxStageDeals) * 100, 8);
+                return (
+                  <div key={s} className="flex items-center gap-3" data-testid={`funnel-${s}`}>
+                    <span className="text-[11px] font-medium text-gray-500 w-14 text-right">{s}</span>
+                    <div className="flex-1 flex justify-center">
+                      <div
+                        className="h-8 rounded-lg flex items-center justify-center transition-all duration-500"
+                        style={{ width: `${w}%`, backgroundColor: STAGE_HEX[s], minWidth: "40px" }}
+                      >
+                        <span className="text-[11px] font-bold text-white">{d.total}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const PIPELINE_PAGE_SIZE = 10;
 
 const QUOTE_STATUS_OPTIONS = [
@@ -597,6 +916,7 @@ export default function PipelineBoard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const [viewMode, setViewMode] = useState<ViewMode>("board");
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "mine">("all");
@@ -674,7 +994,7 @@ export default function PipelineBoard() {
     );
   }, [allTx, updateTransactionMutation, currentUser, toast, queryClient]);
 
-  const isLoading = enquiryQ.isLoading && quoteQ.isLoading && inPlayQ.isLoading && bookingQ.isLoading;
+  const isLoading = enquiryQ.isLoading || quoteQ.isLoading || inPlayQ.isLoading || bookingQ.isLoading;
   const totalDeals = eD.total + qD.total + iD.total + bD.total;
   const totalVal = eD.totalValue + qD.totalValue + iD.totalValue + bD.totalValue;
   const totalProf = eD.totalProfit + qD.totalProfit + iD.totalProfit + bD.totalProfit;
@@ -693,9 +1013,19 @@ export default function PipelineBoard() {
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-gray-900">Pipeline</h2>
                 <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-                  <button className="px-3 py-1.5 rounded-md text-xs font-medium bg-white text-gray-900 shadow-sm">Board</button>
-                  <button className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:text-gray-700">List</button>
-                  <button className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:text-gray-700">Forecast</button>
+                  {(["board", "list", "forecast"] as const).map(v => (
+                    <button
+                      key={v}
+                      onClick={() => setViewMode(v)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${viewMode === v ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                      data-testid={`button-view-${v}`}
+                    >
+                      {v === "board" && <LayoutGrid className="w-3.5 h-3.5" />}
+                      {v === "list" && <List className="w-3.5 h-3.5" />}
+                      {v === "forecast" && <BarChart3 className="w-3.5 h-3.5" />}
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -761,34 +1091,52 @@ export default function PipelineBoard() {
           </div>
         </div>
 
-        {/* ─── Board ─── */}
-        <div className="flex gap-4 p-5 overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
-          {STAGES.map(s => {
-            const q = qMap[s], d = dMap[s];
-            return (
-              <StageColumn
-                key={s}
-                stage={s}
-                transactions={d.items}
-                total={d.total}
-                totalValue={d.totalValue}
-                totalProfit={d.totalProfit}
-                getClientName={getName}
-                onDragStart={handleDragStart}
-                onDrop={handleDrop}
-                onCardClick={handleCardClick}
-                isDragActive={dragState.active}
-                dragFromStage={dragState.fromStage}
-                hasNextPage={!!q.hasNextPage}
-                isFetchingNextPage={q.isFetchingNextPage}
-                fetchNextPage={q.fetchNextPage}
-                isLoading={q.isLoading}
-              />
-            );
-          })}
-        </div>
+        {viewMode === "board" && (
+          <>
+            <div className="flex gap-4 p-5 overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+              {STAGES.map(s => {
+                const q = qMap[s], d = dMap[s];
+                return (
+                  <StageColumn
+                    key={s}
+                    stage={s}
+                    transactions={d.items}
+                    total={d.total}
+                    totalValue={d.totalValue}
+                    totalProfit={d.totalProfit}
+                    getClientName={getName}
+                    onDragStart={handleDragStart}
+                    onDrop={handleDrop}
+                    onCardClick={handleCardClick}
+                    isDragActive={dragState.active}
+                    dragFromStage={dragState.fromStage}
+                    hasNextPage={!!q.hasNextPage}
+                    isFetchingNextPage={q.isFetchingNextPage}
+                    fetchNextPage={q.fetchNextPage}
+                    isLoading={q.isLoading}
+                  />
+                );
+              })}
+            </div>
+            {dragState.active && <p className="text-center text-xs text-gray-400 animate-pulse pb-2">Drag to a column to move this transaction</p>}
+          </>
+        )}
 
-        {dragState.active && <p className="text-center text-xs text-gray-400 animate-pulse pb-2">Drag to a column to move this transaction</p>}
+        {viewMode === "list" && (
+          <PipelineListView
+            transactions={allTx}
+            getClientName={getName}
+            isLoading={isLoading}
+            onRowClick={handleCardClick}
+          />
+        )}
+
+        {viewMode === "forecast" && (
+          <PipelineForecastView
+            stageData={dMap}
+            isLoading={isLoading}
+          />
+        )}
       </div>
 
       {/* ─── Dialogs ─── */}
