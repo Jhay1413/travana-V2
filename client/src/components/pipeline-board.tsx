@@ -246,9 +246,9 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
             <span className="text-gray-400 text-[13px]">£</span>
             <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
           </div>
-          {value > 0 && (stage === "Quoted" || stage === "In Play") && (
+          {(profit > 0 || value > 0) && (stage === "Quoted" || stage === "In Play") && (
             <span className="text-[11px] font-medium text-emerald-600">
-              Profit: {formatCurrency(value * (stage === "Quoted" ? 0.2 : 0.28))}
+              Profit: {formatCurrency((profit > 0 ? profit : value) * (stage === "Quoted" ? 0.2 : 0.28))}
             </span>
           )}
           {profit > 0 && stage !== "Quoted" && stage !== "In Play" && (

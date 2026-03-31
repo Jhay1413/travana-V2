@@ -364,10 +364,11 @@ export const transactionRepository = {
             sql`(${quote.isFreeQuote} IS NOT TRUE)`,
             sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
           ));
-          totalValue = Number(agg?.totalSales || 0);
           const commission = Number(agg?.totalCommission || 0);
+          const sales = Number(agg?.totalSales || 0);
+          totalValue = commission > 0 ? commission : sales;
           const profitPct = status === "on_quote" ? 0.20 : 0.28;
-          totalProfit = commission > 0 ? commission * profitPct : totalValue * profitPct;
+          totalProfit = totalValue * profitPct;
         } else if (status === "on_booking") {
           const [agg] = await db.select({
             totalValue: sql<number>`COALESCE(SUM(COALESCE(${booking.sales_price}, 0)), 0)`,
