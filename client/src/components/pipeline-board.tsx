@@ -240,10 +240,22 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
           </div>
         )}
 
-        {/* Row 3: Value */}
-        <div className="flex items-center gap-1 mt-1.5 mb-1.5">
-          <span className="text-gray-400 text-[13px]">£</span>
-          <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
+        {/* Row 3: Value + potential profit */}
+        <div className="flex items-center gap-2 mt-1.5 mb-1.5">
+          <div className="flex items-center gap-1">
+            <span className="text-gray-400 text-[13px]">£</span>
+            <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
+          </div>
+          {value > 0 && (stage === "Quoted" || stage === "In Play") && (
+            <span className="text-[11px] font-medium text-emerald-600">
+              Profit: {formatCurrency(value * (stage === "Quoted" ? 0.2 : 0.28))}
+            </span>
+          )}
+          {profit > 0 && stage !== "Quoted" && stage !== "In Play" && (
+            <span className="text-[11px] font-medium text-emerald-600">
+              Profit: {formatCurrency(profit)}
+            </span>
+          )}
         </div>
 
         {/* Row 4: Footer — agent + tour op + quotes + arrow */}
