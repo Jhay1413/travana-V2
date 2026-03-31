@@ -96,17 +96,13 @@ function getTransactionValue(t: Transaction): number {
 function getTransactionProfit(t: Transaction): number {
   if (t.quotes?.length) {
     return t.quotes.reduce((s, q) => {
-      const c = parseFloat(q.package_commission || "0") || 0;
-      if (c > 0) return s + c;
-      const p = parseFloat(q.sales_price || "0") || 0;
-      return s + (p > 0 ? p * 0.1 : 0);
+      const pkg = parseFloat((q as any).package_commission || "0") || 0;
+      const svc = parseFloat((q as any).service_commission || "0") || 0;
+      return s + pkg + svc;
     }, 0);
   }
   if (t.booking) {
-    const c = parseFloat(t.booking.package_commission || "0") || 0;
-    if (c > 0) return c;
-    const p = parseFloat(t.booking.sales_price || "0") || 0;
-    return p > 0 ? p * 0.1 : 0;
+    return parseFloat(t.booking.package_commission || "0") || 0;
   }
   return 0;
 }
@@ -132,8 +128,10 @@ function getPax(t: Transaction): string {
 }
 
 function getDest(t: Transaction): { dest: string; country: string } {
-  const dest = t.quotes?.[0]?.destination || t.booking?.destination || (t.enquiry as any)?.destination || "TBC";
-  const country = t.quotes?.[0]?.country || t.booking?.country || (t.enquiry as any)?.country || "";
+  const q0 = t.quotes?.[0] as any;
+  const bk = t.booking as any;
+  const dest = q0?.destination || bk?.destination || (t.enquiry as any)?.destination || "TBC";
+  const country = q0?.country || bk?.country || (t.enquiry as any)?.country || "";
   return { dest, country };
 }
 
@@ -222,7 +220,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
             <h4 className="font-semibold text-[13px] text-gray-900 truncate" data-testid={`pipeline-title-${t.id}`}>{clientName}</h4>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-            <span className="text-[11px] text-gray-400">{getTimeAgo(t.updated_at || t.created_at)}</span>
+            <span className="text-[11px] text-gray-400">{getTimeAgo(t.created_at)}</span>
             <div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
               <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); setLocation(navUrl()); }}><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
               <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="w-3.5 h-3.5 text-gray-400" /></button>
@@ -244,11 +242,11 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
         <div className="flex items-center gap-2 mt-1.5 mb-1.5">
           <div className="flex items-center gap-1">
             <span className="text-gray-400 text-[13px]">£</span>
-            <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
+            <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(profit) : "TBC"}</span>
           </div>
-          {value > 0 && (stage === "Quoted" || stage === "In Play") && (
+          {profit > 0 && (stage === "Quoted" || stage === "In Play") && (
             <span className="text-[11px] font-medium text-emerald-600">
-              Profit: {formatCurrency(value * (stage === "Quoted" ? 0.2 : 0.28))}
+              Profit: {formatCurrency(profit)}
             </span>
           )}
           {profit > 0 && stage === "Booked" && (
@@ -345,8 +343,15 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: hex }} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[12px] font-semibold text-gray-700">{formatCurrency(totalValue)}</span>
-          <span className="text-[11px] text-emerald-600 font-medium">Profit: {formatCurrency(totalProfit)}</span>
+          <span className="text-[12px] font-semibold text-gray-700">{formatCurrency(totalProfit)}</span>
+          {(stage === "Quoted" || stage === "In Play") && (
+            <span className="text-[11px] text-emerald-600 font-medium">
+              Potential: {formatCurrency(totalProfit * (stage === "Quoted" ? 0.2 : 0.28))}
+            </span>
+          )}
+          {(stage === "Enquiry" || stage === "Booked") && (
+            <span className="text-[11px] text-emerald-600 font-medium">Profit: {formatCurrency(totalProfit)}</span>
+          )}
         </div>
       </div>
 
@@ -555,7 +560,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
 
           <div className="mt-4 mb-6 flex items-center gap-2 text-[11px] text-gray-400">
             <Clock className="w-3 h-3" />
-            <span>Last updated {getTimeAgo(tx.updated_at || tx.created_at)}</span>
+            <span>Last updated {getTimeAgo(tx.created_at)}</span>
             <span>·</span>
             <span>Agent: {getAgentName(tx)}</span>
           </div>

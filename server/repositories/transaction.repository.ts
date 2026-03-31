@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
 import { eq, desc, and, sql, inArray, count, or } from "drizzle-orm";
 
@@ -156,7 +156,7 @@ async function enrichTransactions(txns: Transaction[]) {
 async function enrichTransactionsLightweight(txns: Transaction[]) {
   if (txns.length === 0) return [];
   const txnIds = txns.map(t => t.id);
-  const userIds = [...new Set(txns.map(t => t.user_id).filter(Boolean))] as string[];
+  const userIds = Array.from(new Set(txns.map(t => t.user_id).filter(Boolean))) as string[];
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allUsers] = await Promise.all([
     db.select({
@@ -224,11 +224,34 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
     });
   }
 
+  // Fetch additional service commissions per quote
+  const allQuoteIds = allQuotes.map(q => q.id);
+  const serviceCommissionMap = new Map<string, number>();
+  if (allQuoteIds.length > 0) {
+    const [transferRows, carHireRows, attractionRows, loungeRows, parkingRows] = await Promise.all([
+      db.select({ quote_id: quote_transfers.quote_id, commission: quote_transfers.commission })
+        .from(quote_transfers).where(inArray(quote_transfers.quote_id, allQuoteIds)),
+      db.select({ quote_id: quote_car_hire.quote_id, commission: quote_car_hire.commission })
+        .from(quote_car_hire).where(inArray(quote_car_hire.quote_id, allQuoteIds)),
+      db.select({ quote_id: quote_attraction_ticket.quote_id, commission: quote_attraction_ticket.commission })
+        .from(quote_attraction_ticket).where(inArray(quote_attraction_ticket.quote_id, allQuoteIds)),
+      db.select({ quote_id: quote_lounge_pass.quote_id, commission: quote_lounge_pass.commission })
+        .from(quote_lounge_pass).where(inArray(quote_lounge_pass.quote_id, allQuoteIds)),
+      db.select({ quote_id: quote_airport_parking.quote_id, commission: quote_airport_parking.commission })
+        .from(quote_airport_parking).where(inArray(quote_airport_parking.quote_id, allQuoteIds)),
+    ]);
+    for (const row of [...transferRows, ...carHireRows, ...attractionRows, ...loungeRows, ...parkingRows]) {
+      if (!row.quote_id) continue;
+      serviceCommissionMap.set(row.quote_id, (serviceCommissionMap.get(row.quote_id) || 0) + (parseFloat(row.commission || "0") || 0));
+    }
+  }
+
   const quotesMap = new Map<string, any[]>();
   for (const q of allQuotes) {
     const entry = {
       ...q,
       holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
+      service_commission: serviceCommissionMap.get(q.id) || 0,
     };
     if (!quotesMap.has(q.transaction_id)) quotesMap.set(q.transaction_id, []);
     quotesMap.get(q.transaction_id)!.push(entry);
@@ -356,19 +379,45 @@ export const transactionRepository = {
     if (allTxnIds.length > 0) {
       try {
         if (status === "on_quote" || status === "in_play") {
-          const [agg] = await db.select({
-            totalSales: sql<number>`COALESCE(SUM(COALESCE(CAST(NULLIF(NULLIF(${quote.sales_price}::text, ''), ' ') AS NUMERIC), 0)), 0)`,
-            totalCommission: sql<number>`COALESCE(SUM(COALESCE(CAST(NULLIF(NULLIF(${quote.package_commission}::text, ''), ' ') AS NUMERIC), 0)), 0)`,
-          }).from(quote).where(and(
+          const quoteWhere = and(
             inArray(quote.transaction_id, allTxnIds),
             sql`(${quote.isFreeQuote} IS NOT TRUE)`,
             sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
-          ));
-          const commission = Number(agg?.totalCommission || 0);
-          const sales = Number(agg?.totalSales || 0);
-          totalValue = sales;
-          const profitPct = status === "on_quote" ? 0.20 : 0.28;
-          totalProfit = commission > 0 ? commission * profitPct : sales * profitPct;
+          );
+
+          // Get all matching quote IDs for additional service lookups
+          const matchingQuotes = await db
+            .select({ id: quote.id })
+            .from(quote)
+            .where(quoteWhere);
+          const quoteIds = matchingQuotes.map(q => q.id);
+
+          const [agg] = await db.select({
+            totalSales: sql<number>`COALESCE(SUM(COALESCE(CAST(NULLIF(NULLIF(${quote.sales_price}::text, ''), ' ') AS NUMERIC), 0)), 0)`,
+            totalPackageCommission: sql<number>`COALESCE(SUM(COALESCE(CAST(NULLIF(NULLIF(${quote.package_commission}::text, ''), ' ') AS NUMERIC), 0)), 0)`,
+          }).from(quote).where(quoteWhere);
+
+          totalValue = Number(agg?.totalSales || 0);
+          let profit = Number(agg?.totalPackageCommission || 0);
+
+          // Add commissions from additional services
+          if (quoteIds.length > 0) {
+            const serviceCommissions = await Promise.all([
+              db.select({ total: sql<number>`COALESCE(SUM(COALESCE(${quote_transfers.commission}::numeric, 0)), 0)` })
+                .from(quote_transfers).where(inArray(quote_transfers.quote_id, quoteIds)),
+              db.select({ total: sql<number>`COALESCE(SUM(COALESCE(${quote_car_hire.commission}::numeric, 0)), 0)` })
+                .from(quote_car_hire).where(inArray(quote_car_hire.quote_id, quoteIds)),
+              db.select({ total: sql<number>`COALESCE(SUM(COALESCE(${quote_attraction_ticket.commission}::numeric, 0)), 0)` })
+                .from(quote_attraction_ticket).where(inArray(quote_attraction_ticket.quote_id, quoteIds)),
+              db.select({ total: sql<number>`COALESCE(SUM(COALESCE(${quote_lounge_pass.commission}::numeric, 0)), 0)` })
+                .from(quote_lounge_pass).where(inArray(quote_lounge_pass.quote_id, quoteIds)),
+              db.select({ total: sql<number>`COALESCE(SUM(COALESCE(${quote_airport_parking.commission}::numeric, 0)), 0)` })
+                .from(quote_airport_parking).where(inArray(quote_airport_parking.quote_id, quoteIds)),
+            ]);
+            profit += serviceCommissions.reduce((sum, [row]) => sum + Number(row?.total || 0), 0);
+          }
+
+          totalProfit = profit;
         } else if (status === "on_booking") {
           const [agg] = await db.select({
             totalValue: sql<number>`COALESCE(SUM(COALESCE(${booking.sales_price}, 0)), 0)`,

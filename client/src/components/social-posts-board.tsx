@@ -112,8 +112,8 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
       <div className="p-4 pb-5 flex-1 flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold text-black/90 dark:text-white/90 truncate" data-testid={`text-title-${quote.id}`}>Title: <span className="font-semibold">{quote.title || "Untitled"}</span></h3>
-            <p className="text-xs text-black/55 dark:text-white/55 mt-0.5 truncate" data-testid={`text-subtitle-${quote.id}`}>Sub: {getSubtitle(quote)}</p>
+            <h3 className="text-sm font-bold text-black/90 dark:text-white/90 truncate" data-testid={`text-title-${quote.id}`}>{quote.title || "Untitled"}</h3>
+            <p className="text-xs text-black/55 dark:text-white/55 mt-0.5 truncate" data-testid={`text-subtitle-${quote.id}`}>{getSubtitle(quote)}</p>
           </div>
           <Badge className="shrink-0 bg-blue-500 text-white border-0 text-xs font-bold px-3 py-1.5 rounded-lg shadow" data-testid={`badge-price-${quote.id}`}>{pricePerPerson}</Badge>
         </div>
@@ -153,7 +153,8 @@ export default function SocialPostsBoard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("scheduled");
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("none");
-  const [specificDate, setSpecificDate] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
   const [previewDeal, setPreviewDeal] = useState<TravelDeal | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -167,8 +168,39 @@ export default function SocialPostsBoard() {
   }, [searchQuery]);
 
   const activeFilter = viewMode === "scheduled" ? scheduleFilter : "none";
-  const activeSpecificDate = activeFilter === "specific-date" ? specificDate : "";
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, activeSpecificDate);
+
+  function computeDayRange(offsetDays: number): { rangeStart: string; rangeEnd: string } {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    return { rangeStart: start.toISOString(), rangeEnd: end.toISOString() };
+  }
+
+  function computePickerRange(fromStr: string, toStr: string): { rangeStart: string; rangeEnd: string } | null {
+    if (!fromStr) return null;
+    const [fy, fm, fd] = fromStr.split("-").map(Number);
+    const start = new Date(fy, fm - 1, fd, 0, 0, 0, 0);
+    const endStr = toStr || fromStr;
+    const [ty, tm, td] = endStr.split("-").map(Number);
+    const end = new Date(ty, tm - 1, td, 23, 59, 59, 999);
+    return { rangeStart: start.toISOString(), rangeEnd: end.toISOString() };
+  }
+
+  let rangeStart = "";
+  let rangeEnd = "";
+  if (activeFilter === "today") {
+    const r = computeDayRange(0);
+    rangeStart = r.rangeStart; rangeEnd = r.rangeEnd;
+  } else if (activeFilter === "tomorrow") {
+    const r = computeDayRange(1);
+    rangeStart = r.rangeStart; rangeEnd = r.rangeEnd;
+  } else if (activeFilter === "specific-date") {
+    const r = computePickerRange(dateFrom, dateTo);
+    if (r) { rangeStart = r.rangeStart; rangeEnd = r.rangeEnd; }
+  }
+
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const filteredPosts = useMemo<SocialPost[]>(() => {
@@ -237,6 +269,14 @@ export default function SocialPostsBoard() {
     });
   };
 
+  function handleScheduleFilterClick(value: ScheduleFilter) {
+    setScheduleFilter(value);
+    if (value !== "specific-date") {
+      setDateFrom("");
+      setDateTo("");
+    }
+  }
+
   const scheduleFilterButtons: { label: string; value: ScheduleFilter }[] = [
     { label: "All Scheduled", value: "none" },
     { label: "Today", value: "today" },
@@ -293,20 +333,31 @@ export default function SocialPostsBoard() {
                 size="sm"
                 variant={scheduleFilter === btn.value ? "default" : "outline"}
                 className={`rounded-xl text-xs font-medium ${scheduleFilter === btn.value ? "bg-green-500 hover:bg-green-600 text-white" : "border-black/10 dark:border-white/10"}`}
-                onClick={() => setScheduleFilter(btn.value)}
+                onClick={() => handleScheduleFilterClick(btn.value)}
                 data-testid={`button-schedule-filter-${btn.value}`}
               >
                 {btn.label}
               </Button>
             ))}
             {scheduleFilter === "specific-date" && (
-              <input
-                type="date"
-                value={specificDate}
-                onChange={(e) => setSpecificDate(e.target.value)}
-                className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
-                data-testid="input-specific-date-filter"
-              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  data-testid="input-date-from-filter"
+                />
+                <span className="text-xs text-black/50 dark:text-white/50">to</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  data-testid="input-date-to-filter"
+                />
+              </div>
             )}
           </div>
         )}

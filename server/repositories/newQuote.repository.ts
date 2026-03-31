@@ -105,28 +105,19 @@ export const newQuoteRepository = {
     return await db.select().from(quote).where(sql`${quote.quote_status} = ${status}`).orderBy(desc(quote.date_created));
   },
 
-  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "") {
+  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "") {
     const offset = page * pageSize;
     const searchPattern = search.trim() ? `%${search.trim().toLowerCase()}%` : null;
 
-    // When scheduledOnly, pre-fetch quote IDs that have a scheduled deal (optionally filtered by date range)
-    let scheduledQuoteIdSet: Set<string> | null = null;
-    if (scheduledOnly) {
-      const dealConditions: ReturnType<typeof and>[] = [isNotNull(travel_deal.onlySocialsId) as any];
-      const dateRange = getScheduleDateRange(scheduleFilter);
-      if (dateRange) {
-        dealConditions.push(gte(travel_deal.postSchedule, dateRange.start) as any);
-        dealConditions.push(lte(travel_deal.postSchedule, dateRange.end) as any);
-      }
-      const scheduledDeals = await db
-        .select({ quote_id: travel_deal.quote_id })
-        .from(travel_deal)
-        .where(and(...dealConditions));
-      scheduledQuoteIdSet = new Set(scheduledDeals.map(d => d.quote_id).filter(Boolean) as string[]);
-      if (scheduledQuoteIdSet.size === 0) return [];
-    }
+    // Resolve the date range: prefer client-supplied UTC bounds, fall back to server-computed range
+    const clientRange = rangeStart && rangeEnd
+      ? { start: new Date(rangeStart), end: new Date(rangeEnd) }
+      : null;
+    const resolvedRange = clientRange ?? getScheduleDateRange(scheduleFilter);
 
-    // Step 1: Get paginated quote IDs first
+    // Step 1: Get paginated quote IDs using a single query.
+    // For scheduledOnly, INNER JOIN travel_deal so the pagination OFFSET is always
+    // applied over exactly the filtered set — avoids the pre-filter + inArray drift bug.
     const searchCondition = searchPattern
       ? or(
           sql`LOWER(${quote.title}) LIKE ${searchPattern}`,
@@ -138,28 +129,48 @@ export const newQuoteRepository = {
         )
       : undefined;
 
-    const baseConditions = [
+    const baseWhereConditions: any[] = [
       eq(quote.isFreeQuote, true),
       eq(quote.is_active, true),
-      ...(scheduledQuoteIdSet ? [inArray(quote.id, [...scheduledQuoteIdSet])] : []),
       ...(searchCondition ? [searchCondition] : []),
     ];
 
-    const whereCondition = and(...baseConditions);
+    let ids: string[];
 
-    const quoteIds = await db
-      .select({ id: quote.id })
-      .from(quote)
-      .where(whereCondition)
-      .orderBy(desc(quote.date_created))
-      .limit(pageSize)
-      .offset(offset);
+    if (scheduledOnly) {
+      const dealJoinConditions: any[] = [
+        eq(travel_deal.quote_id, quote.id),
+        isNotNull(travel_deal.onlySocialsId),
+        ...(resolvedRange ? [
+          gte(travel_deal.postSchedule, resolvedRange.start),
+          lte(travel_deal.postSchedule, resolvedRange.end),
+        ] : []),
+      ];
 
-    if (quoteIds.length === 0) {
-      return [];
+      // Fetch ALL matching distinct IDs first, then slice for the page.
+      // This avoids SELECT DISTINCT + OFFSET drift when a quote has multiple
+      // matching travel_deal rows — OFFSET on a non-deduplicated set is unreliable.
+      const allRows = await db
+        .selectDistinct({ id: quote.id, date_created: quote.date_created })
+        .from(quote)
+        .innerJoin(travel_deal, and(...dealJoinConditions))
+        .where(and(...baseWhereConditions))
+        .orderBy(desc(quote.date_created));
+
+      ids = allRows.slice(offset, offset + pageSize).map(r => r.id);
+    } else {
+      const rows = await db
+        .select({ id: quote.id })
+        .from(quote)
+        .where(and(...baseWhereConditions))
+        .orderBy(desc(quote.date_created))
+        .limit(pageSize)
+        .offset(offset);
+
+      ids = rows.map(r => r.id);
     }
 
-    const ids = quoteIds.map(q => q.id);
+    if (ids.length === 0) return [];
 
     // Step 2: Fetch all data for these specific quotes using JOINs
     const results = await db
@@ -272,8 +283,14 @@ export const newQuoteRepository = {
       // LEFT JOIN for images
       .leftJoin(quoteImages, eq(quoteImages.quoteId, quote.id))
 
-      // LEFT JOIN for travel deal
-      .leftJoin(travel_deal, eq(travel_deal.quote_id, quote.id))
+      // LEFT JOIN for travel deal — restrict to the scheduled deal when filtering
+      .leftJoin(travel_deal, and(
+        eq(travel_deal.quote_id, quote.id),
+        ...(scheduledOnly ? [isNotNull(travel_deal.onlySocialsId) as any] : []),
+        ...(scheduledOnly && resolvedRange
+          ? [gte(travel_deal.postSchedule, resolvedRange.start) as any, lte(travel_deal.postSchedule, resolvedRange.end) as any]
+          : [])
+      ))
 
       .orderBy(desc(quote.date_created), desc(quoteImages.isPrimary));
 
