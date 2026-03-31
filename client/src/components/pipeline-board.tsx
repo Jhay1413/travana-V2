@@ -344,15 +344,15 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
         </div>
         <div className="flex items-center justify-between">
           {stage !== "Booked" ? (
-            <span className="text-[12px] font-semibold text-gray-700">{formatCurrency(totalProfit)}</span>
+            <span className="text-[12px] font-bold text-gray-700">{formatCurrency(totalProfit)}</span>
           ) : null}
           {(stage === "Quoted" || stage === "In Play") && (
-            <span className="text-[11px] text-emerald-600 font-medium">
+            <span className="text-[12px] text-emerald-600 font-bold">
               Profit: {formatCurrency(totalProfit * (stage === "Quoted" ? 0.2 : 0.28))}
             </span>
           )}
           {(stage === "Enquiry" || stage === "Booked") && (
-            <span className="text-[11px] text-emerald-600 font-medium">Profit: {formatCurrency(totalProfit)}</span>
+            <span className="text-[12px] text-emerald-600 font-bold">Profit: {formatCurrency(totalProfit)}</span>
           )}
         </div>
       </div>
