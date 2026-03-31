@@ -300,7 +300,7 @@ export const transactionRepository = {
       conditions.push(eq(transaction.user_id, agentId));
     }
 
-    if (status === "on_enquiry" || status === "on_quote" || status === "in_play") {
+    if (status === "on_enquiry") {
       conditions.push(sql`${transaction.created_at} >= NOW() - INTERVAL '7 days'`);
     }
 
@@ -357,14 +357,17 @@ export const transactionRepository = {
       try {
         if (status === "on_quote" || status === "in_play") {
           const [agg] = await db.select({
+            totalSales: sql<number>`COALESCE(SUM(COALESCE(${quote.sales_price}, 0)), 0)`,
             totalCommission: sql<number>`COALESCE(SUM(COALESCE(CAST(NULLIF(${quote.package_commission}, '') AS NUMERIC), 0)), 0)`,
           }).from(quote).where(and(
             inArray(quote.transaction_id, allTxnIds),
             sql`(${quote.isFreeQuote} IS NOT TRUE)`,
             sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
           ));
-          totalValue = Number(agg?.totalCommission || 0);
-          totalProfit = totalValue * (status === "on_quote" ? 0.20 : 0.35);
+          totalValue = Number(agg?.totalSales || 0);
+          const commission = Number(agg?.totalCommission || 0);
+          const profitPct = status === "on_quote" ? 0.20 : 0.28;
+          totalProfit = commission > 0 ? commission * profitPct : totalValue * profitPct;
         } else if (status === "on_booking") {
           const [agg] = await db.select({
             totalValue: sql<number>`COALESCE(SUM(COALESCE(${booking.sales_price}, 0)), 0)`,
