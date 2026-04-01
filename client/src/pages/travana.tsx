@@ -324,15 +324,12 @@ function LifestyleSection() {
             transition={{ duration: 0.8 }}
             className="relative order-2 md:order-1"
           >
-            <div className="aspect-[4/3] overflow-hidden relative" style={{ backgroundColor: COLORS.navyLight }}>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center space-y-5 p-8">
-                  <div className="w-20 h-20 mx-auto flex items-center justify-center" style={{ backgroundColor: COLORS.goldMuted }}>
-                    <Globe className="w-10 h-10" style={{ color: COLORS.gold }} />
-                  </div>
-                  <p className="text-2xl text-white" style={{ fontFamily: "'Georgia', serif", fontWeight: 400 }}>Work From Paradise</p>
-                  <p style={{ color: "rgba(255,255,255,0.45)" }}>Your office could be anywhere in the world</p>
-                </div>
+            <div className="aspect-[4/3] overflow-hidden relative">
+              <img src="/images/lifestyle-bg.jpg" alt="Travel advisor enjoying a hot air balloon ride" className="w-full h-full object-cover" />
+              <div className="absolute inset-0" style={{ background: `linear-gradient(to top, ${COLORS.navy}cc 0%, transparent 60%)` }} />
+              <div className="absolute bottom-0 left-0 right-0 p-8">
+                <p className="text-2xl text-white" style={{ fontFamily: "'Georgia', serif", fontWeight: 400 }}>Work From Paradise</p>
+                <p style={{ color: "rgba(255,255,255,0.6)" }}>Your office could be anywhere in the world</p>
               </div>
             </div>
             <motion.div
