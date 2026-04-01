@@ -1161,7 +1161,7 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
                   <div
                     key={ticket.id}
                     onClick={() => handleSelectTicket(ticket.id)}
-                    className={`p-4 cursor-pointer transition-colors ${
+                    className={`py-4 pr-4 pl-6 cursor-pointer transition-colors ${
                       isActive
                         ? "bg-slate-200/80"
                         : "hover:bg-slate-100/60"
