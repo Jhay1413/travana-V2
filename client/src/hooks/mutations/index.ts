@@ -18,3 +18,4 @@ export { useCreateTask, useToggleTask, useDeleteTask } from "./use-task-mutation
 export { useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "./use-chat-mutations";
 export { useCreateEmailAccount, useDeleteEmailAccount, useSendEmail } from "./use-email-mutations";
 export { useDisconnectFacebookPage, useSendFacebookMessage } from "./use-facebook-mutations";
+export { useRegisterAgent } from "./use-registration-mutations";

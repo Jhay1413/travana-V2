@@ -25,6 +25,7 @@ import DestinationGuruPage from "@/pages/destination-guru";
 import FeedbackPage from "@/pages/feedback";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import TravanaPage from "@/pages/travana";
 import { FeedbackButton } from "@/components/feedback-button";
 import { Loader2 } from "lucide-react";
 
@@ -72,6 +73,10 @@ function AuthenticatedRouter() {
 function AppRouter() {
   const { isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
+
+  if (location === "/travana" || location === "/travana/") {
+    return <TravanaPage />;
+  }
 
   if (location.startsWith("/view-quote/")) {
     return (

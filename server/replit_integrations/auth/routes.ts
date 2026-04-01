@@ -7,8 +7,11 @@ import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { registrationController } from "../../controllers/registration.controller";
 
 export function registerAuthRoutes(app: Express): void {
+  app.post("/api/auth/register", registrationController.register);
+
   app.post("/api/auth/login", async (req: any, res) => {
     try {
       const { email, password } = req.body;
