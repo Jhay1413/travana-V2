@@ -329,7 +329,7 @@ function LifestyleSection() {
               <div className="absolute inset-0" style={{ background: `linear-gradient(to top, ${COLORS.navy}cc 0%, transparent 60%)` }} />
               <div className="absolute bottom-0 left-0 right-0 p-8">
                 <p className="text-2xl text-white" style={{ fontFamily: "'Georgia', serif", fontWeight: 400 }}>Work From Paradise</p>
-                <p style={{ color: "rgba(255,255,255,0.6)" }}>Your office could be anywhere in the world</p>
+                <p style={{ color: "rgba(255,255,255,0.6)" }}>Anywhere in the world</p>
               </div>
             </div>
             <motion.div
