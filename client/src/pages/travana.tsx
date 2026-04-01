@@ -123,9 +123,11 @@ function HeroSection({
 }) {
   return (
     <section className="relative min-h-[100svh] flex items-center justify-center overflow-hidden" data-testid="section-hero">
-      <div className="absolute inset-0" style={{ background: `linear-gradient(165deg, ${COLORS.navy} 0%, ${COLORS.navyLight} 50%, #1A3A5C 100%)` }} />
+      <div className="absolute inset-0">
+        <img src="/images/hero-bg.jpg" alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="absolute inset-0" style={{ background: `linear-gradient(165deg, rgba(11,29,46,0.82) 0%, rgba(19,45,70,0.75) 50%, rgba(26,58,92,0.7) 100%)` }} />
       <div className="absolute inset-0 opacity-30" style={{ backgroundImage: "radial-gradient(circle at 70% 30%, rgba(201,169,110,0.15), transparent 50%)" }} />
-      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 80%, rgba(201,169,110,0.1), transparent 50%)" }} />
 
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
