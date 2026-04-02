@@ -27,12 +27,12 @@ export const facebookController = {
     const mode = req.query["hub.mode"] as string;
     const token = req.query["hub.verify_token"] as string;
     const challenge = req.query["hub.challenge"] as string;
-    try {
-      const result = facebookService.verifyWebhook(mode, token, challenge);
-      res.status(200).type("text/plain").send(result);
-    } catch {
-      res.status(403).type("text/plain").send("Forbidden");
+    const expected = process.env.FACEBOOK_VERIFY_TOKEN;
+    console.log(`[FB Webhook] mode=${mode} token=${JSON.stringify(token)} expected=${JSON.stringify(expected)} challenge=${challenge} match=${token === expected}`);
+    if (mode === "subscribe" && token === expected) {
+      return res.status(200).type("text/plain").send(challenge);
     }
+    res.status(403).type("text/plain").send("Forbidden");
   },
 
   // POST /api/facebook/webhook  →  receive events
