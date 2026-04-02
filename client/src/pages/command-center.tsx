@@ -7282,45 +7282,6 @@ export default function CommandCenterPage() {
               <div className="pr-1" data-testid="panel-scroll">
                 {content}
 
-                <div className="mt-3 grid gap-3 md:grid-cols-2" data-testid="section-footer">
-                  <div className="glass ringed grain rounded-3xl p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="text-xs text-black/70 dark:text-white/70" data-testid="text-footer-left-label">
-                          Status
-                        </div>
-                        <div className="text-sm font-semibold" data-testid="text-footer-left-title">
-                          System healthy
-                        </div>
-                        <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-footer-left-sub">
-                          Mock data · UI-only prototype
-                        </div>
-                      </div>
-                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                        <Globe className="h-5 w-5 text-black/70 dark:text-white/80" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="glass ringed grain rounded-3xl p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="text-xs text-black/70 dark:text-white/70" data-testid="text-footer-right-label">
-                          Security
-                        </div>
-                        <div className="text-sm font-semibold" data-testid="text-footer-right-title">
-                          Role-aware surfaces
-                        </div>
-                        <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-footer-right-sub">
-                          Admin, Manager, Agent, Homeworker, Referer
-                        </div>
-                      </div>
-                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-3xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                        <Shield className="h-5 w-5 text-black/70 dark:text-white/80" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
