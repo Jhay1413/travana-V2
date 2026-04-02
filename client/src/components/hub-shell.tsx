@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell,
   BookOpen,
-  Brain,
   ChevronRight,
   GraduationCap,
   LogOut,
@@ -28,7 +27,6 @@ import type { HubRole } from "@/data/hub-mock";
 const NAV_ITEMS = [
   { key: "profiles", label: "My Profile", icon: User, path: "/hub/profiles" },
   { key: "training", label: "Training Centre", icon: GraduationCap, path: "/hub/training" },
-  { key: "ai-intel", label: "AI Destination Intelligence", icon: Brain, path: "/hub/ai-intel" },
   { key: "knowledge", label: "Knowledge Vault", icon: BookOpen, path: "/hub/knowledge" },
   { key: "deals", label: "Deal Wins Wall", icon: Trophy, path: "/hub/deals" },
   { key: "news", label: "News & Announcements", icon: Newspaper, path: "/hub/news" },
