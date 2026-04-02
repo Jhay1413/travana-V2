@@ -283,7 +283,9 @@ export function SocialPostPreviewDialog({
     }
 
     const currentHtml = postRef.current?.innerHTML ?? "";
-    const postScheduleIso = new Date(scheduleDate).toISOString();
+    // Send the local datetime as-is (no UTC conversion) so OnlySocials receives
+    // the exact time the user selected, regardless of server timezone.
+    const postScheduleIso = scheduleDate;
     const existingIds = imageOrder
       .filter((i) => i.type === "existing")
       .map((i) => (i.data as ExistingImage).id);

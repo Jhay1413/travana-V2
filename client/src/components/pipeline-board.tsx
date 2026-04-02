@@ -248,7 +248,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
         <div className="flex items-center gap-2 mt-1.5 mb-1.5">
           <div className="flex items-center gap-1">
             <span className="text-gray-400 text-[13px]">£</span>
-            <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(profit) : "TBC"}</span>
+            <span className="font-semibold text-[13px] text-gray-900">{value > 0 ? formatCurrency(value) : "TBC"}</span>
           </div>
           {profit > 0 && (stage === "Quoted" || stage === "In Play") && (
             <span className="text-[11px] font-medium text-emerald-600">

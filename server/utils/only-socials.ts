@@ -1,4 +1,3 @@
-import { format, parseISO } from "date-fns";
 import { AppError } from "./error-handler";
 import FormData from "form-data";
 import fs from "fs";
@@ -63,9 +62,10 @@ export const scheduleOnlySocialsPost = async (
   postContent: string,
   images: number[]
 ): Promise<{ id: string; uuid: string; name: string; hexColor: string }> => {
-  const scheduleDateTime = parseISO(postSchedule);
-  const scheduleDate = format(scheduleDateTime, "yyyy-MM-dd");
-  const scheduleTime = format(scheduleDateTime, "HH:mm");
+  // Split directly to avoid server-timezone conversion from parseISO + format.
+  // postSchedule is the user's local datetime string e.g. "2026-04-15T14:30".
+  const [scheduleDate, rawTime = "00:00"] = postSchedule.split("T");
+  const scheduleTime = rawTime.substring(0, 5);
   const baseUrl = `${getApiBase()}/posts`;
 
   try {
@@ -133,9 +133,8 @@ export const rescheduleOnlySocialsPost = async (
   postContent: string,
   images: number[]
 ): Promise<{ id: string; uuid: string; name: string; hexColor: string }> => {
-  const scheduleDateTime = parseISO(newPostSchedule);
-  const scheduleDate = format(scheduleDateTime, "yyyy-MM-dd");
-  const scheduleTime = format(scheduleDateTime, "HH:mm");
+  const [scheduleDate, rawTime = "00:00"] = newPostSchedule.split("T");
+  const scheduleTime = rawTime.substring(0, 5);
   const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
 
   try {
