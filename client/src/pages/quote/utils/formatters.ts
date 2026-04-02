@@ -101,11 +101,15 @@ export function splitIsoDateTime(iso: string | null | undefined): {
  */
 export function formatIsoDateTime(isoStr: string | null): string {
   if (!isoStr) return "";
-  const d = new Date(isoStr);
-  if (Number.isNaN(d.getTime())) return isoStr;
-  const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  return `${date} at ${time}`;
+  const parts = isoStr.split("T");
+  const datePart = parts[0] || "";
+  const timePart = (parts[1] || "").slice(0, 5);
+  const [y, m, day] = datePart.split("-");
+  if (!y || !m || !day) return isoStr;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const monthStr = months[parseInt(m, 10) - 1] || m;
+  const d = parseInt(day, 10);
+  return timePart ? `${d} ${monthStr} at ${timePart}` : `${d} ${monthStr}`;
 }
 
 /**
