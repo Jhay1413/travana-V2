@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useLocation, Link } from "wouter";
+import { useCurrentUser } from "@/hooks/queries";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell,
@@ -50,6 +51,10 @@ export function HubShell({
   onRoleChange?: (r: HubRole) => void;
 }) {
   const [location, navigate] = useLocation();
+  const { data: currentUser } = useCurrentUser();
+  const userName = currentUser?.name || "User";
+  const userInitials = userName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+  const userImage = (currentUser as any)?.image || null;
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -213,10 +218,10 @@ export function HubShell({
             <div className="relative">
               <button
                 onClick={() => { setShowProfile(!showProfile); setShowNotifications(false); }}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white shadow-sm"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white shadow-sm overflow-hidden"
                 data-testid="button-hub-profile"
               >
-                SM
+                {userImage ? <img src={userImage} alt={userName} className="h-full w-full object-cover" /> : userInitials}
               </button>
               <AnimatePresence>
                 {showProfile && (
@@ -228,8 +233,8 @@ export function HubShell({
                     data-testid="dropdown-hub-profile"
                   >
                     <div className="px-3 py-2">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">Sarah Mitchell</p>
-                      <p className="text-xs text-slate-500">{role}</p>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{userName}</p>
+                      <p className="text-xs text-slate-500">{currentUser?.role || role}</p>
                     </div>
                     <div className="my-1 border-t border-slate-200 dark:border-slate-700" />
                     <Link href="/hub/profiles" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">
