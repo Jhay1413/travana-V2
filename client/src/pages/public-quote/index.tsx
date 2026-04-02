@@ -53,12 +53,9 @@ function formatDate(dateStr: string | null | undefined): string {
 
 function formatTime(dateTimeStr: string | null | undefined): string {
   if (!dateTimeStr) return "";
-  try {
-    const d = new Date(dateTimeStr);
-    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "";
-  }
+  const tIdx = dateTimeStr.indexOf("T");
+  if (tIdx === -1) return "";
+  return dateTimeStr.substring(tIdx + 1).substring(0, 5);
 }
 
 function formatCurrency(value: string | number): string {
