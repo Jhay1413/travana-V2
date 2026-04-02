@@ -436,8 +436,8 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
   const { data: fullTx } = useTransaction(t.id);
   const { data: notes } = useNotes(t.id);
   const tx = fullTx || t;
-  const value = getTransactionValue(tx);
-  const profit = getTransactionProfit(tx);
+  const value = getTransactionValue(t);
+  const profit = getTransactionProfit(t);
   const { dest, country } = getDest(tx);
   const tourOp = getTourOp(tx);
   const hex = STAGE_HEX[stage];
