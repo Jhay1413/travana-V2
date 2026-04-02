@@ -8,6 +8,7 @@ export interface Ticket {
   priority: string;
   subject: string;
   description: string | null;
+  dueDate: string | null;
   createdAt: string;
   updatedAt: string | null;
   resolvedAt: string | null;

@@ -1087,6 +1087,7 @@ export const tickets = pgTable("tickets", {
   priority: text("priority").notNull().default("Medium"),
   subject: text("subject").notNull(),
   description: text("description"),
+  dueDate: timestamp("due_date", { mode: "string" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),

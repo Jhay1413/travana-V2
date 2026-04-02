@@ -25,6 +25,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -764,6 +765,12 @@ function TicketDetailPanel({
                 <span className="text-slate-400 text-xs font-medium">Created</span>
                 <span className="font-medium text-slate-700 text-xs">{formatDate(ticket.createdAt)}</span>
               </div>
+              {ticket.dueDate && (
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 text-xs font-medium">Due</span>
+                  <span className={cn("font-medium text-xs", new Date(ticket.dueDate) < new Date() && ticket.status !== "Resolved" ? "text-red-600" : "text-slate-700")}>{formatDate(ticket.dueDate)}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -885,6 +892,7 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
     priority: "Medium" as string,
     subject: "",
     description: "",
+    dueDate: "",
   });
 
   const { toast } = useToast();
@@ -916,7 +924,7 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
   }, []);
 
   const resetForm = () => {
-    setFormData({ clientId: "", userId: "", type: "Sales", status: "Open", priority: "Medium", subject: "", description: "" });
+    setFormData({ clientId: "", userId: "", type: "Sales", status: "Open", priority: "Medium", subject: "", description: "", dueDate: "" });
     setCustomerSearch("");
     setSelectedCustomerName("");
     setShowCustomerDropdown(false);
@@ -969,6 +977,7 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
       priority: formData.priority,
       subject: formData.subject,
       description: formData.description || null,
+      dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : null,
     }, {
       onSuccess: async (data: any) => {
         const ticketId = data?.id;
@@ -1312,6 +1321,10 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
             <div className="grid gap-2">
               <Label htmlFor="subject">Subject *</Label>
               <Input id="subject" value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} placeholder="Brief summary of the issue" data-testid="input-subject" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dueDate">Due Date</Label>
+              <Input id="dueDate" type="date" value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} data-testid="input-due-date" />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>

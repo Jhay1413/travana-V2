@@ -19,6 +19,7 @@ function buildTicketWithNamesQuery() {
       priority: tickets.priority,
       subject: tickets.subject,
       description: tickets.description,
+      dueDate: tickets.dueDate,
       createdAt: tickets.createdAt,
       updatedAt: tickets.updatedAt,
       resolvedAt: tickets.resolvedAt,
