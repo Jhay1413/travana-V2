@@ -364,7 +364,7 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
 
       {/* Cards */}
       <div
-        className={`flex-1 space-y-2.5 overflow-y-auto pb-4 pr-1 transition-colors duration-200 ${isOver ? "bg-blue-50/60 rounded-xl" : ""}`}
+        className={`flex-1 space-y-2.5 overflow-y-auto pb-4 pr-1 transition-colors duration-200 no-scrollbar ${isOver ? "bg-blue-50/60 rounded-xl" : ""}`}
         style={{ maxHeight: "calc(100vh - 200px)" }}
       >
         {isOver && (
