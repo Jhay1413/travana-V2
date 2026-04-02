@@ -73,6 +73,9 @@ interface TimelinePost {
   badge?: string;
   destination?: string;
   value?: string;
+  authorName?: string;
+  authorImage?: string | null;
+  authorRole?: string | null;
 }
 
 function formatTimeAgo(dateStr: string | Date | null | undefined): string {
@@ -454,6 +457,11 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
   const [saved, setSaved] = useState(false);
   const [shared, setShared] = useState(false);
 
+  const displayName = post.authorName || profileName;
+  const displayImage = post.authorImage || (post.authorName ? null : profileImage);
+  const displayRole = post.authorRole || (post.authorName ? "" : profileRole);
+  const displayAvatar = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+
   const handleComment = () => {
     if (!commentText.trim()) return;
     onComment(post.id, commentText.trim());
@@ -491,17 +499,17 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            {profileImage ? (
-              <img src={profileImage} alt={profileName} className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+            {displayImage ? (
+              <img src={displayImage} alt={displayName} className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
             ) : (
               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                {profileAvatar}
+                {displayAvatar}
               </div>
             )}
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-900 dark:text-white">{profileName}</span>
-                <HubBadge variant="blue">{profileRole}</HubBadge>
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">{displayName}</span>
+                {displayRole && <HubBadge variant="blue">{displayRole}</HubBadge>}
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-slate-500">{post.date}</span>
@@ -739,7 +747,7 @@ export default function HubProfiles() {
       id: p.id,
       type: p.type || "deal",
       content: p.content,
-      date: formatTimeAgo(p.createdAt),
+      date: p.date || formatTimeAgo(p.createdAt),
       likes: p.likes || 0,
       liked: p.liked || false,
       badge: p.badge || undefined,
@@ -747,6 +755,9 @@ export default function HubProfiles() {
       value: p.value || undefined,
       image: p.image || undefined,
       pinned: p.pinned || false,
+      authorName: p.authorName || undefined,
+      authorImage: p.authorImage || undefined,
+      authorRole: p.authorRole || undefined,
       comments: (p.comments || []).map((c: any) => ({
         author: c.author || "Agent",
         avatar: c.avatar || "A",

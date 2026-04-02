@@ -11,8 +11,24 @@ router.use(isAuthenticated);
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const posts = await db
-      .select()
+      .select({
+        id: hubPostsTable.id,
+        authorId: hubPostsTable.authorId,
+        authorName: hubPostsTable.authorName,
+        type: hubPostsTable.type,
+        content: hubPostsTable.content,
+        image: hubPostsTable.image,
+        badge: hubPostsTable.badge,
+        destination: hubPostsTable.destination,
+        value: hubPostsTable.value,
+        pinned: hubPostsTable.pinned,
+        likes: hubPostsTable.likes,
+        createdAt: hubPostsTable.createdAt,
+        authorImage: userTable.image,
+        authorRole: userTable.role,
+      })
       .from(hubPostsTable)
+      .leftJoin(userTable, eq(hubPostsTable.authorId, userTable.id))
       .orderBy(desc(hubPostsTable.createdAt));
 
     const postIds = posts.map((p) => p.id);
@@ -55,6 +71,7 @@ router.get("/", async (_req: Request, res: Response) => {
       ...p,
       likes: likeCounts[p.id] || 0,
       liked: userLikes.has(p.id),
+      date: formatTimeAgo(p.createdAt),
       comments: comments
         .filter((c) => c.postId === p.id)
         .map((c) => ({
@@ -99,7 +116,7 @@ router.post("/", async (req: Request, res: Response) => {
       })
       .returning();
 
-    res.status(201).json({ success: true, data: { ...post, likes: 0, liked: false, comments: [] } });
+    res.status(201).json({ success: true, data: { ...post, likes: 0, liked: false, comments: [], authorImage: u[0]?.image || null, authorRole: u[0]?.role || null, date: "Just now" } });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
