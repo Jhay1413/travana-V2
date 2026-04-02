@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import defaultCoverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
@@ -43,7 +43,7 @@ import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/compone
 import { agentProfiles } from "@/data/hub-mock";
 import { userProfileApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
-import { useCurrentUser, useMyProfit } from "@/hooks/queries";
+import { useCurrentUser, useMyProfit, useUsers } from "@/hooks/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -257,6 +257,185 @@ function SkillHeatmap({ skills }: { skills: { name: string; level: number }[] })
   );
 }
 
+interface MentionUser {
+  id: string;
+  name: string;
+  image?: string | null;
+  role?: string;
+}
+
+function renderMentionContent(content: string): React.ReactNode {
+  const mentionRegex = /@(\w[\w\s]*?\w|\w)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = mentionRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index));
+    }
+    parts.push(
+      <span key={match.index} className="inline-flex items-center bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 rounded px-1 font-medium cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-500/25 transition" data-testid={`mention-${match[1]}`}>
+        @{match[1]}
+      </span>
+    );
+    lastIndex = mentionRegex.lastIndex;
+  }
+  if (lastIndex < content.length) parts.push(content.slice(lastIndex));
+  return parts.length > 0 ? parts : content;
+}
+
+interface MentionTextareaProps {
+  value: string;
+  onChange: (val: string) => void;
+  users: MentionUser[];
+  placeholder?: string;
+  className?: string;
+  rows?: number;
+  "data-testid"?: string;
+}
+
+function MentionTextarea({ value, onChange, users, placeholder, className, rows, "data-testid": testId }: MentionTextareaProps) {
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState("");
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [cursorPos, setCursorPos] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const filteredUsers = useMemo(() => {
+    if (!mentionFilter) return users.slice(0, 8);
+    const lower = mentionFilter.toLowerCase();
+    return users.filter((u) => u.name.toLowerCase().includes(lower)).slice(0, 8);
+  }, [users, mentionFilter]);
+
+  const getMentionStartPos = useCallback(() => {
+    const before = value.slice(0, cursorPos);
+    const atIdx = before.lastIndexOf("@");
+    if (atIdx === -1) return -1;
+    const between = before.slice(atIdx + 1);
+    if (/\n/.test(between)) return -1;
+    if (atIdx > 0 && /\S/.test(before[atIdx - 1])) return -1;
+    return atIdx;
+  }, [value, cursorPos]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newVal = e.target.value;
+    const newPos = e.target.selectionStart || 0;
+    onChange(newVal);
+    setCursorPos(newPos);
+
+    const before = newVal.slice(0, newPos);
+    const atIdx = before.lastIndexOf("@");
+    if (atIdx !== -1 && (atIdx === 0 || /\s/.test(before[atIdx - 1]))) {
+      const query = before.slice(atIdx + 1);
+      if (!/\n/.test(query) && query.length <= 30) {
+        setMentionFilter(query);
+        setShowMentions(true);
+        setMentionIndex(0);
+        return;
+      }
+    }
+    setShowMentions(false);
+  };
+
+  const insertMention = (user: MentionUser) => {
+    const startPos = getMentionStartPos();
+    if (startPos === -1) return;
+    const beforeAt = value.slice(0, startPos);
+    const afterCursor = value.slice(cursorPos);
+    const newValue = `${beforeAt}@${user.name} ${afterCursor}`;
+    onChange(newValue);
+    setShowMentions(false);
+    setTimeout(() => {
+      const pos = startPos + user.name.length + 2;
+      textareaRef.current?.setSelectionRange(pos, pos);
+      textareaRef.current?.focus();
+    }, 0);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!showMentions || filteredUsers.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setMentionIndex((i) => (i + 1) % filteredUsers.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setMentionIndex((i) => (i - 1 + filteredUsers.length) % filteredUsers.length);
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      insertMention(filteredUsers[mentionIndex]);
+    } else if (e.key === "Escape") {
+      setShowMentions(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showMentions && dropdownRef.current) {
+      const active = dropdownRef.current.querySelector("[data-active='true']");
+      active?.scrollIntoView({ block: "nearest" });
+    }
+  }, [mentionIndex, showMentions]);
+
+  return (
+    <div className="relative">
+      <Textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onClick={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart || 0)}
+        placeholder={placeholder}
+        className={className}
+        rows={rows}
+        data-testid={testId}
+      />
+      <AnimatePresence>
+        {showMentions && filteredUsers.length > 0 && (
+          <motion.div
+            ref={dropdownRef}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 right-0 bottom-full mb-1 z-50 rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900 max-h-52 overflow-y-auto"
+            data-testid="mention-dropdown"
+          >
+            <div className="p-1">
+              <div className="px-2 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Team Members</div>
+              {filteredUsers.map((user, i) => (
+                <button
+                  key={user.id}
+                  onClick={() => insertMention(user)}
+                  data-active={i === mentionIndex ? "true" : "false"}
+                  className={cn(
+                    "flex items-center gap-2.5 w-full rounded-lg px-2 py-2 text-left text-sm transition",
+                    i === mentionIndex
+                      ? "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                      : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                  )}
+                  data-testid={`mention-option-${user.id}`}
+                >
+                  {user.image ? (
+                    <img src={user.image} alt={user.name} className="h-7 w-7 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                      {user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{user.name}</div>
+                    {user.role && <div className="text-[10px] text-slate-400 truncate">{user.role}</div>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 interface TimelinePostCardProps {
   post: TimelinePost;
   onLike: (id: string) => void;
@@ -336,7 +515,7 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
         </div>
 
         <div className="mt-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-          {post.content}
+          {renderMentionContent(post.content)}
         </div>
 
         {post.image && (
@@ -430,7 +609,7 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
                     <div className="flex-1">
                       <div className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
                         <span className="text-xs font-semibold text-slate-900 dark:text-white">{c.author}</span>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{c.text}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{renderMentionContent(c.text)}</p>
                       </div>
                       <div className="flex items-center gap-3 mt-1 px-1">
                         <span className="text-[10px] text-slate-400">{c.date}</span>
@@ -476,6 +655,11 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
 export default function HubProfiles() {
   const { data: currentUser } = useCurrentUser();
   const { data: myProfit } = useMyProfit();
+  const { data: allUsers } = useUsers();
+  const mentionUsers: MentionUser[] = useMemo(() => {
+    if (!allUsers) return [];
+    return allUsers.map((u: any) => ({ id: u.id, name: u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim(), image: u.image || u.profileImageUrl || null, role: u.role || "" }));
+  }, [allUsers]);
   const queryClient = useQueryClient();
   const { data: savedProfile } = useQuery({
     queryKey: ["user-profile", "me"],
@@ -887,10 +1071,11 @@ export default function HubProfiles() {
                       </div>
                     )}
                     <div className="flex-1">
-                      <Textarea
+                      <MentionTextarea
                         value={newPostText}
-                        onChange={(e) => setNewPostText(e.target.value)}
-                        placeholder="Share a deal win, insight, or knowledge..."
+                        onChange={setNewPostText}
+                        users={mentionUsers}
+                        placeholder="Share a deal win, insight, or knowledge... Use @ to tag team members"
                         className="min-h-[40px] rounded-xl bg-slate-100 border-0 text-sm dark:bg-slate-800 resize-none"
                         rows={newPostText.length > 80 ? 3 : 1}
                         data-testid="input-new-post"
