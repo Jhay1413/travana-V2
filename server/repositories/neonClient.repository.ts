@@ -41,14 +41,18 @@ export const neonClientRepository = {
   async findPaginated(page: number, limit: number, search?: string): Promise<{ clients: NeonClient[]; total: number }> {
     const offset = (page - 1) * limit;
 
+    const words = search ? search.trim().split(/\s+/).filter(Boolean) : [];
+    const wordTerms = words.map((w) => `%${w}%`);
+
     const whereClause = search
       ? or(
-          ilike(clientTable.firstName, `%${search}%`),
-          ilike(clientTable.surename, `%${search}%`),
+          ...wordTerms.map((t) => ilike(clientTable.firstName, t)),
+          ...wordTerms.map((t) => ilike(clientTable.surename, t)),
           ilike(clientTable.email, `%${search}%`),
           ilike(clientTable.phoneNumber, `%${search}%`),
           ilike(clientTable.city, `%${search}%`),
           ilike(clientTable.country, `%${search}%`),
+          sql`concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename}) ilike ${`%${search}%`}`,
         )
       : undefined;
 
