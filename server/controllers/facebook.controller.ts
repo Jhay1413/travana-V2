@@ -23,13 +23,17 @@ export const facebookController = {
   }),
 
   // GET /api/facebook/webhook  →  verify webhook
-  verifyWebhook: asyncHandler(async (req: Request, res: Response) => {
+  verifyWebhook: (req: Request, res: Response) => {
     const mode = req.query["hub.mode"] as string;
     const token = req.query["hub.verify_token"] as string;
     const challenge = req.query["hub.challenge"] as string;
-    const result = facebookService.verifyWebhook(mode, token, challenge);
-    res.send(result);
-  }),
+    try {
+      const result = facebookService.verifyWebhook(mode, token, challenge);
+      res.status(200).type("text/plain").send(result);
+    } catch {
+      res.status(403).type("text/plain").send("Forbidden");
+    }
+  },
 
   // POST /api/facebook/webhook  →  receive events
   receiveWebhook: asyncHandler(async (req: Request, res: Response) => {
