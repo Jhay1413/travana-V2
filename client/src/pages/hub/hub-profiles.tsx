@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import coverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
+import defaultCoverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
+import { useHubPosts, useCreateHubPost, useToggleHubPostLike, useAddHubPostComment } from "@/hooks/queries/use-hub-post-queries";
 import {
   Award,
   BookOpen,
@@ -72,6 +73,21 @@ interface TimelinePost {
   badge?: string;
   destination?: string;
   value?: string;
+}
+
+function formatTimeAgo(dateStr: string | Date | null | undefined): string {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 const MOCK_TIMELINE: TimelinePost[] = [
@@ -520,17 +536,47 @@ export default function HubProfiles() {
         specialisation: savedProfile.specialisation || prev.specialisation,
         certifications: savedProfile.certifications || prev.certifications,
       }));
+      if (savedProfile.coverImage) {
+        setActiveCoverImage(savedProfile.coverImage);
+      }
     }
   }, [savedProfile]);
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [activeCoverImage, setActiveCoverImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileTab>("timeline");
-  const [timeline, setTimeline] = useState<TimelinePost[]>(MOCK_TIMELINE);
+  const { data: dbPosts } = useHubPosts();
+  const createPostMutation = useCreateHubPost();
+  const toggleLikeMutation = useToggleHubPostLike();
+  const addCommentMutation = useAddHubPostComment();
+  const timeline: TimelinePost[] = useMemo(() => {
+    if (!dbPosts || dbPosts.length === 0) return MOCK_TIMELINE;
+    return dbPosts.map((p: any) => ({
+      id: p.id,
+      type: p.type || "deal",
+      content: p.content,
+      date: formatTimeAgo(p.createdAt),
+      likes: p.likes || 0,
+      liked: p.liked || false,
+      badge: p.badge || undefined,
+      destination: p.destination || undefined,
+      value: p.value || undefined,
+      image: p.image || undefined,
+      pinned: p.pinned || false,
+      comments: (p.comments || []).map((c: any) => ({
+        author: c.author || "Agent",
+        avatar: c.avatar || "A",
+        text: c.text,
+        date: c.date || "",
+      })),
+    }));
+  }, [dbPosts]);
   const [newPostText, setNewPostText] = useState("");
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const editAvatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState({
     name: profile.name,
     role: profile.role,
@@ -577,6 +623,18 @@ export default function HubProfiles() {
     if (savedUrl) setEditImagePreview(savedUrl);
   };
 
+  const handleCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setActiveCoverImage(previewUrl);
+    const savedUrl = await uploadAvatar(file);
+    if (savedUrl) {
+      setActiveCoverImage(savedUrl);
+      saveProfileMutation.mutate({ coverImage: savedUrl } as any);
+    }
+  };
+
   const openEditProfile = () => {
     setEditForm({
       name: profile.name,
@@ -621,29 +679,11 @@ export default function HubProfiles() {
   const postPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const toggleLike = (id: string) => {
-    setTimeline((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 }
-          : p
-      )
-    );
+    toggleLikeMutation.mutate(id);
   };
 
   const addComment = (postId: string, text: string) => {
-    setTimeline((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              comments: [
-                ...p.comments,
-                { author: profile.name, avatar: profile.avatar, text, date: "Just now" },
-              ],
-            }
-          : p
-      )
-    );
+    addCommentMutation.mutate({ postId, text });
   };
 
   const sharePost = (id: string) => {
@@ -665,18 +705,12 @@ export default function HubProfiles() {
       training: "Training Update",
       milestone: "Milestone",
     };
-    const newPost: TimelinePost = {
-      id: `p-${Date.now()}`,
+    createPostMutation.mutate({
       type: newPostType,
       content: newPostText.trim(),
-      date: "Just now",
-      likes: 0,
-      comments: [],
-      liked: false,
-      badge: badgeMap[newPostType] || undefined,
-      image: newPostImage || undefined,
-    };
-    setTimeline((prev) => [newPost, ...prev]);
+      badge: badgeMap[newPostType] || null,
+      image: newPostImage || null,
+    });
     setNewPostText("");
     setNewPostImage(null);
     setNewPostType("deal");
@@ -703,9 +737,10 @@ export default function HubProfiles() {
     <div data-testid="page-hub-profiles" className="-mt-4 sm:-mt-6 lg:-mt-8 -mx-4 sm:-mx-6 lg:-mx-8">
       {/* Cover Photo */}
       <div className="relative h-48 sm:h-56 lg:h-64 overflow-hidden">
-        <img src={coverImage} alt="Cover" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={activeCoverImage || defaultCoverImage} alt="Cover" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/30 to-transparent" />
-        <button className="absolute top-4 right-4 inline-flex items-center gap-1.5 rounded-lg bg-black/30 backdrop-blur-sm px-3 py-1.5 text-xs text-white hover:bg-black/40 transition" data-testid="button-edit-cover">
+        <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverFileChange} data-testid="input-cover-upload" />
+        <button onClick={() => coverInputRef.current?.click()} className="absolute top-4 right-4 inline-flex items-center gap-1.5 rounded-lg bg-black/30 backdrop-blur-sm px-3 py-1.5 text-xs text-white hover:bg-black/40 transition" data-testid="button-edit-cover">
           <Camera className="h-3.5 w-3.5" />
           Edit Cover
         </button>

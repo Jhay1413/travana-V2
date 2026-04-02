@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
 import { asyncHandler } from "../utils/async-handler";
 import { successResponse } from "../utils/response";
+import { getUserId } from "../utils/get-user-id";
 
 const router = Router();
 router.use(isAuthenticated);
@@ -12,7 +13,7 @@ router.use(isAuthenticated);
 router.get(
   "/me",
   asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req.user as any)?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const [row] = await db.select().from(userProfiles).where(eq(userProfiles.userId, userId));
     return successResponse(res, row || null, "Profile retrieved");
@@ -30,7 +31,7 @@ router.get(
 router.put(
   "/me",
   asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req.user as any)?.id;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
     const { bio, extendedBio, location, specialisation, certifications, coverImage } = req.body;
     const [existing] = await db.select().from(userProfiles).where(eq(userProfiles.userId, userId));

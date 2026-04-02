@@ -1617,3 +1617,42 @@ export const auditLog = pgTable("audit_log", {
 export const insertAuditLogSchema = createInsertSchema(auditLog).omit({ id: true, createdAt: true });
 export type AuditLog = typeof auditLog.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+export const hubPostsTable = pgTable("hub_posts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  authorId: text("author_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  authorName: varchar("author_name", { length: 255 }),
+  type: varchar("type", { length: 50 }).notNull().default("deal"),
+  content: text("content").notNull(),
+  image: text("image"),
+  badge: varchar("badge", { length: 100 }),
+  destination: varchar("destination", { length: 255 }),
+  value: varchar("value", { length: 100 }),
+  pinned: boolean("pinned").default(false),
+  likes: integer("likes").default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const insertHubPostSchema = createInsertSchema(hubPostsTable).omit({ id: true, createdAt: true, likes: true });
+export type HubPost = typeof hubPostsTable.$inferSelect;
+export type InsertHubPost = z.infer<typeof insertHubPostSchema>;
+
+export const hubPostCommentsTable = pgTable("hub_post_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  postId: uuid("post_id").notNull().references(() => hubPostsTable.id, { onDelete: "cascade" }),
+  authorId: text("author_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  authorName: varchar("author_name", { length: 255 }),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export type HubPostComment = typeof hubPostCommentsTable.$inferSelect;
+
+export const hubPostLikesTable = pgTable("hub_post_likes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  postId: uuid("post_id").notNull().references(() => hubPostsTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  uniquePostLike: unique().on(table.postId, table.userId),
+}));

@@ -36,6 +36,7 @@ import feedbackRoutes from "./feedback.routes";
 import announcementRoutes from "./announcement.routes";
 import quoteShareRoutes from "./quote-share.routes";
 import auditRoutes from "./audit.routes";
+import hubPostRoutes from "./hubPost.routes";
 
 const router = Router();
 
@@ -76,5 +77,6 @@ router.use("/feedback", feedbackRoutes);
 router.use("/announcements", announcementRoutes);
 router.use("/quote-share", quoteShareRoutes);
 router.use("/audit", auditRoutes);
+router.use("/hub-posts", hubPostRoutes);
 
 export default router;
