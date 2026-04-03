@@ -519,13 +519,13 @@ function ShellNav({
 
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
       { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
-      { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" />, route: "/destination-guru" },
-      { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
-      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, badge: openTicketCount },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
+      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
+      { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" />, route: "/destination-guru" },
+      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+      { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
     ];
 
     if (role === "Admin") {
@@ -556,13 +556,13 @@ function ShellNav({
             icon: <Users className="h-4 w-4" />,
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
               { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
-              { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" />, route: "/destination-guru" },
-              { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
-              { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, badge: openTicketCount },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
+              { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
+              { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" />, route: "/destination-guru" },
+              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+              { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
             ] as NavItem[],
           },
         ] as NavSection[],
