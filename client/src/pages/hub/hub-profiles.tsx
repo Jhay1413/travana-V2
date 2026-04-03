@@ -5,19 +5,16 @@ import defaultCoverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg"
 import { useHubPosts, useCreateHubPost, useToggleHubPostLike, useAddHubPostComment } from "@/hooks/queries/use-hub-post-queries";
 import {
   Award,
-  BarChart3,
   BookOpen,
   Bookmark,
   Calendar,
   Camera,
   CheckCircle2,
   ChevronDown,
-  CircleDollarSign,
   Clock,
   Edit3,
   ExternalLink,
   FileText,
-  Globe,
   GraduationCap,
   Heart,
   Image,
@@ -31,7 +28,6 @@ import {
   Repeat2,
   Send,
   Share2,
-  Ship,
   Star,
   Target,
   ThumbsUp,
@@ -39,7 +35,6 @@ import {
   TrendingUp,
   Upload,
   Users,
-  UtensilsCrossed,
   Video,
   X,
   Zap,
@@ -48,8 +43,7 @@ import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/compone
 import { agentProfiles } from "@/data/hub-mock";
 import { userProfileApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
-import { useCurrentUser, useMyProfit, useUsers, useTransactions } from "@/hooks/queries";
-import { useAgentTargetsByUserId } from "@/hooks/queries/use-targets-queries";
+import { useCurrentUser, useMyProfit, useUsers } from "@/hooks/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,74 +58,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-type ProfileTab = "timeline" | "performance" | "knowledge" | "training" | "achievements" | "about";
-
-const profileCurrency = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency: "GBP",
-  maximumFractionDigits: 0,
-});
-
-const profileCurrencyFull = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency: "GBP",
-  maximumFractionDigits: 2,
-});
-
-function getProfit(item: any): number {
-  return parseFloat(item.package_commission) || 0;
-}
-
-function ProfileCircularProgress({ value, max, size = 80, strokeWidth = 6 }: { value: number; max: number; size?: number; strokeWidth?: number }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (pct / 100) * circumference;
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth} className="text-slate-100 dark:text-white/10" />
-        <motion.circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="url(#profileTargetGrad)"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-        />
-        <defs>
-          <linearGradient id="profileTargetGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#06b6d4" />
-          </linearGradient>
-        </defs>
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-lg font-bold text-slate-900 dark:text-white">{Math.round(pct)}%</span>
-      </div>
-    </div>
-  );
-}
-
-function ProfileProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  return (
-    <div className="relative w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/10 h-2">
-      <motion.div
-        className={cn("absolute inset-y-0 left-0 rounded-full", color)}
-        initial={{ width: 0 }}
-        animate={{ width: `${pct}%` }}
-        transition={{ duration: 1, ease: [0.25, 0.46, 0.45, 0.94] }}
-      />
-    </div>
-  );
-}
+type ProfileTab = "timeline" | "knowledge" | "training" | "achievements" | "about";
 
 interface TimelinePost {
   id: string;
@@ -737,174 +664,6 @@ export default function HubProfiles() {
   const { data: currentUser } = useCurrentUser();
   const { data: myProfit } = useMyProfit();
   const { data: allUsers } = useUsers();
-  const userId = currentUser?.id || "";
-  const { data: agentTargetsData } = useAgentTargetsByUserId(userId);
-  const { data: transactionsData } = useTransactions(
-    userId ? { agentId: userId } : undefined,
-    { enabled: !!userId }
-  );
-
-  const myPerformanceStats = useMemo(() => {
-    if (!transactionsData || !userId) return null;
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayOfWeek = now.getDay() || 7;
-    const weekStart = new Date(todayStart);
-    weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    let agentTarget = 0;
-    if (agentTargetsData) {
-      const targets = Array.isArray(agentTargetsData) ? agentTargetsData : [agentTargetsData];
-      const currentTarget = targets.find((t: any) => t.year === now.getFullYear() && t.month === (now.getMonth() + 1));
-      agentTarget = currentTarget ? parseFloat(currentTarget.targetAmount) || 0 : 0;
-    }
-
-    let todayProfit = 0;
-    let weekProfit = 0;
-    let monthProfit = 0;
-    let monthBookings = 0;
-    let monthRevenue = 0;
-
-    for (const t of transactionsData) {
-      if (!t.booking) continue;
-      const bDate = new Date(t.booking.date_created || t.created_at);
-      const profit = getProfit(t.booking);
-      if (bDate >= todayStart) todayProfit += profit;
-      if (bDate >= weekStart) weekProfit += profit;
-      if (bDate >= monthStart && bDate < monthEnd) {
-        monthProfit += profit;
-        monthBookings += 1;
-        monthRevenue += parseFloat(t.booking.sales_price) || 0;
-      }
-    }
-
-    let openQuotesValue = 0;
-    let monthQuotes = 0;
-    for (const t of transactionsData) {
-      for (const q of (t.quotes || []).filter((q: any) => q.is_active !== false)) {
-        const qDate = new Date(q.date_created || t.created_at);
-        if (qDate >= monthStart && qDate < monthEnd) {
-          monthQuotes += 1;
-          const status = (q.quote_status || "").toUpperCase();
-          if (!["BOOKED", "BOOKING_CONFIRMED", "LOST"].includes(status)) {
-            openQuotesValue += parseFloat(q.package_commission) || 0;
-          }
-        }
-      }
-    }
-
-    const avgBookingProfit = monthBookings > 0 ? monthProfit / monthBookings : 0;
-
-    return {
-      todayProfit,
-      weekProfit,
-      monthProfit,
-      salesTarget: agentTarget,
-      avgBookingProfit,
-      monthBookings,
-      monthQuotes,
-      monthRevenue,
-      openQuotesValue,
-    };
-  }, [transactionsData, agentTargetsData, userId]);
-
-  const myDestinationRevenue = useMemo(() => {
-    if (!transactionsData || !userId) return [];
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const destMap = new Map<string, { name: string; revenue: number; bookings: number }>();
-
-    for (const t of transactionsData) {
-      if (!t.booking) continue;
-      const bDate = new Date(t.booking.date_created || t.created_at);
-      if (bDate < monthStart || bDate >= monthEnd) continue;
-
-      let destName: string | null = null;
-      if (t.booking.accommodations?.[0]?.destination_name) {
-        destName = t.booking.accommodations[0].destination_name;
-      } else if (t.booking.title) {
-        destName = t.booking.title;
-      }
-      if (!destName && t.enquiry?.destinations?.[0]?.name) {
-        destName = t.enquiry.destinations[0].name;
-      }
-      if (!destName) destName = "Unspecified";
-
-      if (!destMap.has(destName)) {
-        destMap.set(destName, { name: destName, revenue: 0, bookings: 0 });
-      }
-      const entry = destMap.get(destName)!;
-      entry.revenue += getProfit(t.booking);
-      entry.bookings += 1;
-    }
-
-    return Array.from(destMap.values())
-      .filter(d => d.name !== "Unspecified")
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [transactionsData, userId]);
-
-  const myBoardBasisRevenue = useMemo(() => {
-    if (!transactionsData || !userId) return [];
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const bbMap = new Map<string, { name: string; revenue: number; count: number }>();
-
-    for (const t of transactionsData) {
-      if (!t.booking) continue;
-      const bDate = new Date(t.booking.date_created || t.created_at);
-      if (bDate < monthStart || bDate >= monthEnd) continue;
-
-      let boardBasis: string | null = null;
-      if (t.booking.accommodations?.[0]?.board_basis_name) {
-        boardBasis = t.booking.accommodations[0].board_basis_name;
-      } else if (t.quotes?.[0]?.accommodations?.[0]?.board_basis_name) {
-        boardBasis = t.quotes[0].accommodations[0].board_basis_name;
-      }
-      if (!boardBasis) boardBasis = "Not Specified";
-
-      if (!bbMap.has(boardBasis)) {
-        bbMap.set(boardBasis, { name: boardBasis, revenue: 0, count: 0 });
-      }
-      const entry = bbMap.get(boardBasis)!;
-      entry.revenue += getProfit(t.booking);
-      entry.count += 1;
-    }
-
-    return Array.from(bbMap.values())
-      .filter(b => b.name !== "Not Specified")
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [transactionsData, userId]);
-
-  const myHolidayTypeRevenue = useMemo(() => {
-    if (!transactionsData || !userId) return [];
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const htMap = new Map<string, { name: string; revenue: number; bookings: number; commission: number }>();
-
-    for (const t of transactionsData) {
-      if (!t.booking) continue;
-      const bDate = new Date(t.booking.date_created || t.created_at);
-      if (bDate < monthStart || bDate >= monthEnd) continue;
-
-      const htName = (t as any).holiday_type_name || "Other";
-
-      if (!htMap.has(htName)) {
-        htMap.set(htName, { name: htName, revenue: 0, bookings: 0, commission: 0 });
-      }
-      const entry = htMap.get(htName)!;
-      entry.revenue += parseFloat(t.booking.sales_price) || 0;
-      entry.commission += getProfit(t.booking);
-      entry.bookings += 1;
-    }
-
-    return Array.from(htMap.values())
-      .sort((a, b) => b.commission - a.commission);
-  }, [transactionsData, userId]);
   const mentionUsers: MentionUser[] = useMemo(() => {
     if (!allUsers) return [];
     return allUsers.map((u: any) => ({ id: u.id, name: u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim(), image: u.image || u.profileImageUrl || null, role: u.role || "" }));
@@ -1163,7 +922,6 @@ export default function HubProfiles() {
 
   const tabs: { key: ProfileTab; label: string; icon: React.ElementType }[] = [
     { key: "timeline", label: "Timeline", icon: FileText },
-    { key: "performance", label: "Performance", icon: BarChart3 },
     { key: "knowledge", label: "Knowledge", icon: BookOpen },
     { key: "training", label: "Training", icon: GraduationCap },
     { key: "achievements", label: "Achievements", icon: Trophy },
@@ -1277,61 +1035,6 @@ export default function HubProfiles() {
                     <p className="text-[10px] text-slate-500 uppercase tracking-wider">Profit This Month</p>
                   </div>
                 </div>
-
-                {myPerformanceStats && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4" data-testid="profile-performance-cards">
-                    <div className="relative overflow-hidden rounded-xl border border-slate-200/80 p-3.5 bg-white/80 dark:bg-white/5 dark:border-white/10">
-                      <div className="absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-[0.08] bg-emerald-500" />
-                      <div className="relative flex items-start justify-between">
-                        <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400" data-testid="stat-label-today">Today's Profit</p>
-                          <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5" data-testid="stat-value-today">{profileCurrency.format(myPerformanceStats.todayProfit)}</p>
-                        </div>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-sm">
-                          <CircleDollarSign className="h-4 w-4 text-white" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="relative overflow-hidden rounded-xl border border-slate-200/80 p-3.5 bg-white/80 dark:bg-white/5 dark:border-white/10">
-                      <div className="absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-[0.08] bg-blue-500" />
-                      <div className="relative flex items-start justify-between">
-                        <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400" data-testid="stat-label-week">This Week</p>
-                          <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5" data-testid="stat-value-week">{profileCurrency.format(myPerformanceStats.weekProfit)}</p>
-                        </div>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm">
-                          <TrendingUp className="h-4 w-4 text-white" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="relative overflow-hidden rounded-xl border border-slate-200/80 p-3.5 bg-white/80 dark:bg-white/5 dark:border-white/10">
-                      <div className="absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-[0.08] bg-violet-500" />
-                      <div className="relative flex items-start justify-between">
-                        <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400" data-testid="stat-label-month">This Month</p>
-                          <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5" data-testid="stat-value-month">{profileCurrency.format(myPerformanceStats.monthProfit)}</p>
-                          <p className="text-[10px] text-slate-400">{myPerformanceStats.salesTarget > 0 ? `${Math.round((myPerformanceStats.monthProfit / myPerformanceStats.salesTarget) * 100)}% of target` : "No target set"}</p>
-                        </div>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm">
-                          <BarChart3 className="h-4 w-4 text-white" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="relative overflow-hidden rounded-xl border border-slate-200/80 p-3.5 bg-white/80 dark:bg-white/5 dark:border-white/10">
-                      <div className="absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-[0.08] bg-amber-500" />
-                      <div className="relative flex items-start justify-between">
-                        <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400" data-testid="stat-label-target">Sales Target</p>
-                          <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5" data-testid="stat-value-target">{profileCurrency.format(myPerformanceStats.salesTarget)}</p>
-                          <p className="text-[10px] text-slate-400">{profileCurrency.format(myPerformanceStats.monthProfit)} achieved</p>
-                        </div>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 shadow-sm">
-                          <Target className="h-4 w-4 text-white" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1558,181 +1261,6 @@ export default function HubProfiles() {
                   </div>
                 </div>
               </div>
-            </motion.div>
-          )}
-
-          {activeTab === "performance" && (
-            <motion.div key="performance" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6" data-testid="panel-profile-performance">
-              {myPerformanceStats && (
-                <>
-                  <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-3">
-                        <ProfileCircularProgress value={myPerformanceStats.salesTarget > 0 ? myPerformanceStats.monthProfit : 0} max={myPerformanceStats.salesTarget > 0 ? myPerformanceStats.salesTarget : 1} size={64} strokeWidth={5} />
-                        <div>
-                          <h3 className="text-sm font-semibold text-slate-900 dark:text-white" data-testid="text-target-progress-title">Monthly Target Progress</h3>
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {profileCurrency.format(myPerformanceStats.monthProfit)} of {profileCurrency.format(myPerformanceStats.salesTarget)} · {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-center">
-                          <p className="text-xl font-bold text-slate-900 dark:text-white" data-testid="stat-avg-booking-profit">{profileCurrencyFull.format(myPerformanceStats.avgBookingProfit)}</p>
-                          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Avg Booking Profit</p>
-                        </div>
-                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
-                        <div className="text-center">
-                          <p className="text-xl font-bold text-slate-900 dark:text-white" data-testid="stat-booking-count">{myPerformanceStats.monthBookings}</p>
-                          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Bookings</p>
-                        </div>
-                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
-                        <div className="text-center">
-                          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400" data-testid="stat-open-quotes">{profileCurrencyFull.format(myPerformanceStats.openQuotesValue)}</p>
-                          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Open Quotes Value</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-6 lg:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-500/10">
-                          <Globe className="h-3.5 w-3.5 text-blue-500" />
-                        </div>
-                        Profit by Destination
-                      </h3>
-                      {myDestinationRevenue.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center dark:border-slate-700">
-                          <p className="text-xs text-slate-400">No destination data this month</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4" data-testid="list-profile-destination-revenue">
-                          {myDestinationRevenue.slice(0, 5).map((dest, i) => (
-                            <motion.div
-                              key={dest.name}
-                              className="space-y-2"
-                              initial={{ opacity: 0, x: -12 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: i * 0.08, duration: 0.4 }}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{dest.name}</span>
-                                <span className="text-sm tabular-nums font-semibold text-slate-900 dark:text-white">{profileCurrency.format(dest.revenue)}</span>
-                              </div>
-                              <ProfileProgressBar value={dest.revenue} max={myDestinationRevenue[0]?.revenue || 1} color="bg-gradient-to-r from-blue-500 to-cyan-400" />
-                              <p className="text-[10px] text-slate-400">{dest.bookings} booking{dest.bookings !== 1 ? "s" : ""}</p>
-                            </motion.div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-500/10">
-                          <UtensilsCrossed className="h-3.5 w-3.5 text-amber-500" />
-                        </div>
-                        Profit by Board Basis
-                      </h3>
-                      {myBoardBasisRevenue.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center dark:border-slate-700">
-                          <p className="text-xs text-slate-400">No board basis data this month</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4" data-testid="list-profile-board-basis-revenue">
-                          {myBoardBasisRevenue.map((bb, i) => (
-                            <motion.div
-                              key={bb.name}
-                              className="space-y-2"
-                              initial={{ opacity: 0, x: -12 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: i * 0.08, duration: 0.4 }}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{bb.name}</span>
-                                <span className="text-sm tabular-nums font-semibold text-slate-900 dark:text-white">{profileCurrency.format(bb.revenue)}</span>
-                              </div>
-                              <ProfileProgressBar value={bb.revenue} max={myBoardBasisRevenue[0]?.revenue || 1} color="bg-gradient-to-r from-amber-500 to-orange-400" />
-                              <p className="text-[10px] text-slate-400">{bb.count} booking{bb.count !== 1 ? "s" : ""}</p>
-                            </motion.div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                    <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-500/10">
-                        <Ship className="h-3.5 w-3.5 text-violet-500" />
-                      </div>
-                      Holiday Type Breakdown
-                    </h3>
-                    {myHolidayTypeRevenue.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center dark:border-slate-700">
-                        <p className="text-xs text-slate-400">No holiday type data this month</p>
-                      </div>
-                    ) : (
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="list-profile-holiday-type-revenue">
-                        {myHolidayTypeRevenue.map((ht, i) => {
-                          const gradients = [
-                            "from-blue-500 to-cyan-400",
-                            "from-violet-500 to-purple-400",
-                            "from-amber-500 to-orange-400",
-                            "from-emerald-500 to-teal-400",
-                            "from-rose-500 to-pink-400",
-                            "from-indigo-500 to-blue-400",
-                          ];
-                          const bgStyles = [
-                            "border-blue-100 bg-gradient-to-br from-blue-50/80 to-cyan-50/40 dark:border-blue-500/20 dark:from-blue-500/5 dark:to-cyan-500/5",
-                            "border-violet-100 bg-gradient-to-br from-violet-50/80 to-purple-50/40 dark:border-violet-500/20 dark:from-violet-500/5 dark:to-purple-500/5",
-                            "border-amber-100 bg-gradient-to-br from-amber-50/80 to-orange-50/40 dark:border-amber-500/20 dark:from-amber-500/5 dark:to-orange-500/5",
-                            "border-emerald-100 bg-gradient-to-br from-emerald-50/80 to-teal-50/40 dark:border-emerald-500/20 dark:from-emerald-500/5 dark:to-teal-500/5",
-                            "border-rose-100 bg-gradient-to-br from-rose-50/80 to-pink-50/40 dark:border-rose-500/20 dark:from-rose-500/5 dark:to-pink-500/5",
-                            "border-indigo-100 bg-gradient-to-br from-indigo-50/80 to-blue-50/40 dark:border-indigo-500/20 dark:from-indigo-500/5 dark:to-blue-500/5",
-                          ];
-                          const colorIdx = i % gradients.length;
-                          const maxHTCommission = Math.max(...myHolidayTypeRevenue.map(h => h.commission), 1);
-
-                          return (
-                            <motion.div
-                              key={ht.name}
-                              className={cn("rounded-xl border p-5", bgStyles[colorIdx])}
-                              initial={{ opacity: 0, scale: 0.92 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ delay: i * 0.08, duration: 0.4 }}
-                              data-testid={`card-profile-holiday-type-${ht.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
-                            >
-                              <p className="text-sm font-semibold text-slate-900 dark:text-white">{ht.name}</p>
-                              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{profileCurrency.format(ht.commission)}</p>
-                              <div className="mt-3">
-                                <ProfileProgressBar
-                                  value={ht.commission}
-                                  max={maxHTCommission}
-                                  color={cn("bg-gradient-to-r", gradients[colorIdx])}
-                                />
-                              </div>
-                              <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500">
-                                <span>{ht.bookings} booking{ht.bookings !== 1 ? "s" : ""}</span>
-                                <span className="tabular-nums">{profileCurrency.format(ht.revenue)} rev</span>
-                              </div>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {!myPerformanceStats && (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
-                  <BarChart3 className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-400">Loading performance data...</p>
-                </div>
-              )}
             </motion.div>
           )}
 
