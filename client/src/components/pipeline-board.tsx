@@ -317,6 +317,9 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
   const isTarget = isDragActive && dragFromStage !== stage;
   const progress = Math.min((total / 20) * 100, 100);
 
+  const cardTotalValue = useMemo(() => transactions.reduce((s, tx) => s + getTransactionValue(tx), 0), [transactions]);
+  const cardTotalProfit = useMemo(() => transactions.reduce((s, tx) => s + getTransactionProfit(tx), 0), [transactions]);
+
   const start = page * PAGE_SIZE;
   const end = start + PAGE_SIZE;
   const visible = transactions.slice(start, end);
@@ -348,8 +351,8 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: hex }} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[12px] font-bold text-gray-700">{formatCurrency(totalValue)}</span>
-          <span className="text-[12px] text-emerald-600 font-bold">Profit: {formatCurrency(totalProfit)}</span>
+          <span className="text-[12px] font-bold text-gray-700">{formatCurrency(cardTotalValue)}</span>
+          <span className="text-[12px] text-emerald-600 font-bold">Profit: {formatCurrency(cardTotalProfit)}</span>
         </div>
       </div>
 
