@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
-import { MessageCircle, Send, Loader2, Inbox, ChevronRight, Home } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { MessageCircle, Send, Loader2, Inbox, ChevronRight, Home, Bell, BellOff } from "lucide-react";
 import { useLocation } from "wouter";
 import PortalLayout from "./portal-layout";
-import { usePortalMessages, useSendMessage, type PortalMessage } from "@/hooks/use-portal-api";
+import { usePortalMessages, useSendMessage, getPortalToken, type PortalMessage } from "@/hooks/use-portal-api";
 
 function GlassCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -18,6 +18,113 @@ function Skeleton({ className = "" }: { className?: string }) {
 }
 
 const fallbackMessages: PortalMessage[] = [];
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+function pushAvailable(): boolean {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+function NotificationCard({ onEnabled }: { onEnabled: () => void }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleEnable = async () => {
+    setStatus("loading");
+    setErrorMsg("");
+    try {
+      const token = getPortalToken();
+      if (!token) { setStatus("error"); setErrorMsg("Not logged in"); return; }
+
+      const reg = await navigator.serviceWorker.register("/portal-sw.js");
+      await navigator.serviceWorker.ready;
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setStatus("error");
+        setErrorMsg(permission === "denied" ? "Notifications blocked. Check your browser settings." : "Permission not granted");
+        return;
+      }
+
+      const resp = await fetch("/api/portal/push/vapid-key");
+      const { publicKey } = await resp.json();
+      if (!publicKey) { setStatus("error"); setErrorMsg("Server config error"); return; }
+
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      }
+
+      const subResp = await fetch("/api/portal/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ subscription: sub.toJSON() }),
+      });
+
+      if (!subResp.ok) {
+        const errData = await subResp.json().catch(() => ({}));
+        setStatus("error");
+        setErrorMsg(errData.error || "Subscription failed");
+        return;
+      }
+
+      setStatus("idle");
+      onEnabled();
+    } catch (err: any) {
+      console.error("Push enable error:", err);
+      setStatus("error");
+      setErrorMsg(err?.message || "Something went wrong");
+    }
+  };
+
+  if (!pushAvailable()) return null;
+  if (typeof Notification !== "undefined" && Notification.permission === "denied") return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mx-4 mb-3"
+    >
+      <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-400/30 rounded-2xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0">
+            <Bell className="w-5 h-5 text-purple-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-white mb-0.5">Enable notifications</p>
+            <p className="text-xs text-white/50 mb-3">Get notified instantly when your travel agent replies</p>
+            {errorMsg && (
+              <p className="text-xs text-red-400 mb-2">{errorMsg}</p>
+            )}
+            <button
+              onClick={handleEnable}
+              disabled={status === "loading"}
+              className="bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
+              data-testid="button-enable-push-messages"
+            >
+              {status === "loading" ? (
+                <><Loader2 className="w-3 h-3 animate-spin" /> Enabling...</>
+              ) : (
+                <><Bell className="w-3 h-3" /> Turn on notifications</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 function formatTime(dateStr: string): string {
   try {
@@ -49,8 +156,23 @@ export default function PortalMessagesPage() {
   const { data: apiMessages, isLoading, isError } = usePortalMessages();
   const [localMessages, setLocalMessages] = useState<PortalMessage[]>([]);
   const [input, setInput] = useState("");
+  const [pushEnabled, setPushEnabled] = useState(true);
   const sendMutation = useSendMessage();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pushAvailable()) { setPushEnabled(true); return; }
+    if (Notification.permission === "granted") {
+      navigator.serviceWorker.getRegistration("/portal-sw.js").then(reg => {
+        if (reg) reg.pushManager.getSubscription().then(sub => setPushEnabled(!!sub));
+        else setPushEnabled(false);
+      });
+    } else if (Notification.permission === "denied") {
+      setPushEnabled(true);
+    } else {
+      setPushEnabled(false);
+    }
+  }, []);
 
   const baseMessages = apiMessages ?? (isError ? fallbackMessages : []);
   const apiIds = new Set(baseMessages.map(m => m.text));
@@ -108,6 +230,10 @@ export default function PortalMessagesPage() {
             <h1 className="text-xl font-bold text-white" data-testid="text-messages-title">Messages</h1>
           </div>
         </div>
+
+        {!pushEnabled && (
+          <NotificationCard onEnabled={() => setPushEnabled(true)} />
+        )}
 
         <div className="flex-1 overflow-y-auto px-4">
           {loading ? (

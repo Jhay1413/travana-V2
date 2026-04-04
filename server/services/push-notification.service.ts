@@ -17,6 +17,7 @@ export const pushNotificationService = {
   },
 
   async subscribe(clientId: string, subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<void> {
+    console.log(`[Push] Subscribing client ${clientId}, endpoint: ${subscription.endpoint.substring(0, 60)}...`);
     await db
       .delete(pushSubscriptions)
       .where(eq(pushSubscriptions.endpoint, subscription.endpoint));
@@ -29,6 +30,7 @@ export const pushNotificationService = {
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth,
       });
+    console.log(`[Push] Subscription saved for client ${clientId}`);
   },
 
   async unsubscribe(clientId: string, endpoint: string): Promise<void> {
@@ -48,6 +50,7 @@ export const pushNotificationService = {
       .from(pushSubscriptions)
       .where(eq(pushSubscriptions.clientId, clientId));
 
+    console.log(`[Push] Sending to client ${clientId}, found ${subs.length} subscription(s)`);
     if (subs.length === 0) return;
 
     const jsonPayload = JSON.stringify(payload);
