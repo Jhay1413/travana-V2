@@ -119,15 +119,28 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }, [setLocation]);
 
   useEffect(() => {
+    const token = getPortalToken();
+    if (!token) return;
+
     if (!pushSupported()) {
+      console.log("[Push] Not supported in this browser/context", {
+        sw: "serviceWorker" in navigator,
+        push: "PushManager" in window,
+        notif: "Notification" in window,
+      });
       setPushState("unsupported");
+      if (!bannerDismissed.current) {
+        setTimeout(() => setShowBanner(true), 2000);
+      }
       return;
     }
     if (Notification.permission === "denied") {
+      console.log("[Push] Permission denied");
       setPushState("denied");
       return;
     }
     checkExistingSubscription().then(active => {
+      console.log("[Push] Existing subscription:", active);
       if (active) {
         setPushState("on");
       } else {
@@ -178,20 +191,21 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
       <div className="fixed top-0 left-0 right-0 z-40 px-4 pt-3 flex justify-end gap-2">
-        {pushState !== "unknown" && pushState !== "unsupported" && (
+        {pushState !== "unknown" && (
           <button
-            onClick={handleTogglePush}
+            onClick={pushState === "unsupported" || pushState === "denied" ? undefined : handleTogglePush}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-xs ${
               pushState === "on"
                 ? "text-emerald-400 hover:bg-emerald-400/10"
-                : pushState === "denied"
-                ? "text-red-400/50 cursor-not-allowed"
+                : pushState === "denied" || pushState === "unsupported"
+                ? "text-white/20 cursor-not-allowed"
                 : "text-white/40 hover:text-white/70 hover:bg-white/[0.06]"
             }`}
-            disabled={pushState === "denied"}
+            disabled={pushState === "denied" || pushState === "unsupported"}
             title={
               pushState === "on" ? "Notifications enabled — tap to disable"
                 : pushState === "denied" ? "Notifications blocked in browser settings"
+                : pushState === "unsupported" ? "Notifications not supported here"
                 : "Enable notifications"
             }
             data-testid="button-toggle-push"
@@ -220,8 +234,17 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             <div className="backdrop-blur-xl bg-purple-500/20 border border-purple-400/30 rounded-2xl px-4 py-3 flex items-center gap-3">
               <Bell className="w-5 h-5 text-purple-300 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white">Get notified</p>
-                <p className="text-xs text-white/60">We'll let you know when your agent replies</p>
+                {pushState === "unsupported" ? (
+                  <>
+                    <p className="text-sm font-medium text-white">Notifications</p>
+                    <p className="text-xs text-white/60">Open this page in your phone's browser (Safari/Chrome) to enable push notifications</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-white">Get notified</p>
+                    <p className="text-xs text-white/60">We'll let you know when your agent replies</p>
+                  </>
+                )}
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
@@ -229,15 +252,17 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                   className="text-xs text-white/40 hover:text-white/70 px-2 py-1"
                   data-testid="button-dismiss-push"
                 >
-                  Later
+                  {pushState === "unsupported" ? "OK" : "Later"}
                 </button>
-                <button
-                  onClick={handleEnableNotifications}
-                  className="text-xs bg-purple-500 hover:bg-purple-400 text-white px-3 py-1 rounded-xl font-medium transition-colors"
-                  data-testid="button-enable-push"
-                >
-                  Enable
-                </button>
+                {pushState !== "unsupported" && (
+                  <button
+                    onClick={handleEnableNotifications}
+                    className="text-xs bg-purple-500 hover:bg-purple-400 text-white px-3 py-1 rounded-xl font-medium transition-colors"
+                    data-testid="button-enable-push"
+                  >
+                    Enable
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>
