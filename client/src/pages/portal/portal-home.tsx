@@ -280,11 +280,11 @@ function PushNotificationPrompt() {
       }
 
       const vapidRes = await fetch("/api/portal/push/vapid-key");
-      const { key } = await vapidRes.json();
+      const { publicKey } = await vapidRes.json();
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: key,
+        applicationServerKey: publicKey,
       });
 
       const token = getPortalToken();
