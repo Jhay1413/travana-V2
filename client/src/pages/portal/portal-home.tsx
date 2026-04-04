@@ -230,7 +230,12 @@ function PushNotificationPrompt() {
     if (!("Notification" in window)) missing.push("Notification");
 
     if (missing.length > 0) {
-      setErrorMsg(`Push not available (missing: ${missing.join(", ")})`);
+      const inIframe = window.self !== window.top;
+      if (inIframe) {
+        setErrorMsg("Open this site directly in your browser (not inside an app preview) to enable notifications.");
+      } else {
+        setErrorMsg("Your browser doesn't support push notifications. Try opening this page in Chrome or Safari on your phone.");
+      }
       setShow(true);
       return;
     }
