@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, FileText, Briefcase, Tag, MessageCircle, LogOut } from "lucide-react";
+import { Home, FileText, Briefcase, Tag, MessageCircle, LogOut, Bell, BellOff } from "lucide-react";
 import { getPortalToken, setPortalToken, clearPortalToken } from "@/hooks/use-portal-api";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -13,21 +13,24 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return arr;
 }
 
-async function subscribeToPush() {
+function pushSupported(): boolean {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+async function doSubscribe(): Promise<boolean> {
   try {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     const token = getPortalToken();
-    if (!token) return;
+    if (!token) return false;
 
     const reg = await navigator.serviceWorker.register("/portal-sw.js");
     await navigator.serviceWorker.ready;
 
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") return;
+    if (permission !== "granted") return false;
 
     const resp = await fetch("/api/portal/push/vapid-key");
     const { publicKey } = await resp.json();
-    if (!publicKey) return;
+    if (!publicKey) return false;
 
     let subscription = await reg.pushManager.getSubscription();
     if (!subscription) {
@@ -45,8 +48,43 @@ async function subscribeToPush() {
       },
       body: JSON.stringify({ subscription: subscription.toJSON() }),
     });
+    return true;
   } catch (err) {
     console.warn("Push subscription failed:", err);
+    return false;
+  }
+}
+
+async function doUnsubscribe(): Promise<void> {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/portal-sw.js");
+    if (reg) {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        const token = getPortalToken();
+        if (token) {
+          await fetch("/api/portal/push/unsubscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          }).catch(() => {});
+        }
+        await sub.unsubscribe().catch(() => {});
+      }
+    }
+  } catch {}
+}
+
+async function checkExistingSubscription(): Promise<boolean> {
+  try {
+    if (!pushSupported()) return false;
+    if (Notification.permission !== "granted") return false;
+    const reg = await navigator.serviceWorker.getRegistration("/portal-sw.js");
+    if (!reg) return false;
+    const sub = await reg.pushManager.getSubscription();
+    return !!sub;
+  } catch {
+    return false;
   }
 }
 
@@ -60,7 +98,9 @@ const tabs = [
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
-  const pushSubscribed = useRef(false);
+  const [pushState, setPushState] = useState<"unknown" | "unsupported" | "off" | "on" | "denied">("unknown");
+  const [showBanner, setShowBanner] = useState(false);
+  const bannerDismissed = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -79,34 +119,52 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }, [setLocation]);
 
   useEffect(() => {
-    if (pushSubscribed.current) return;
-    const token = getPortalToken();
-    if (!token) return;
-    pushSubscribed.current = true;
-    subscribeToPush();
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      if ("serviceWorker" in navigator && "PushManager" in window) {
-        const reg = await navigator.serviceWorker.getRegistration("/portal-sw.js");
-        if (reg) {
-          const sub = await reg.pushManager.getSubscription();
-          if (sub) {
-            const token = getPortalToken();
-            if (token) {
-              await fetch("/api/portal/push/unsubscribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ endpoint: sub.endpoint }),
-              }).catch(() => {});
-            }
-            await sub.unsubscribe().catch(() => {});
-          }
+    if (!pushSupported()) {
+      setPushState("unsupported");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setPushState("denied");
+      return;
+    }
+    checkExistingSubscription().then(active => {
+      if (active) {
+        setPushState("on");
+      } else {
+        setPushState("off");
+        if (!bannerDismissed.current && Notification.permission === "default") {
+          setTimeout(() => setShowBanner(true), 2000);
         }
       }
-    } catch {}
-    pushSubscribed.current = false;
+    });
+  }, []);
+
+  const handleEnableNotifications = useCallback(async () => {
+    setShowBanner(false);
+    bannerDismissed.current = true;
+    const ok = await doSubscribe();
+    setPushState(ok ? "on" : (Notification.permission === "denied" ? "denied" : "off"));
+  }, []);
+
+  const handleDismissBanner = useCallback(() => {
+    setShowBanner(false);
+    bannerDismissed.current = true;
+  }, []);
+
+  const handleTogglePush = useCallback(async () => {
+    if (pushState === "on") {
+      await doUnsubscribe();
+      setPushState("off");
+    } else {
+      const ok = await doSubscribe();
+      setPushState(ok ? "on" : (Notification.permission === "denied" ? "denied" : "off"));
+    }
+  }, [pushState]);
+
+  const handleLogout = async () => {
+    if (pushSupported()) {
+      await doUnsubscribe();
+    }
     clearPortalToken();
     setLocation("/portal/login");
   };
@@ -119,7 +177,28 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
-      <div className="fixed top-0 left-0 right-0 z-40 px-4 pt-3 flex justify-end">
+      <div className="fixed top-0 left-0 right-0 z-40 px-4 pt-3 flex justify-end gap-2">
+        {pushState !== "unknown" && pushState !== "unsupported" && (
+          <button
+            onClick={handleTogglePush}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-xs ${
+              pushState === "on"
+                ? "text-emerald-400 hover:bg-emerald-400/10"
+                : pushState === "denied"
+                ? "text-red-400/50 cursor-not-allowed"
+                : "text-white/40 hover:text-white/70 hover:bg-white/[0.06]"
+            }`}
+            disabled={pushState === "denied"}
+            title={
+              pushState === "on" ? "Notifications enabled — tap to disable"
+                : pushState === "denied" ? "Notifications blocked in browser settings"
+                : "Enable notifications"
+            }
+            data-testid="button-toggle-push"
+          >
+            {pushState === "on" ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
+          </button>
+        )}
         <button
           onClick={handleLogout}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-all text-xs"
@@ -129,6 +208,41 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           Sign out
         </button>
       </div>
+
+      <AnimatePresence>
+        {showBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            className="fixed top-12 left-3 right-3 z-50"
+          >
+            <div className="backdrop-blur-xl bg-purple-500/20 border border-purple-400/30 rounded-2xl px-4 py-3 flex items-center gap-3">
+              <Bell className="w-5 h-5 text-purple-300 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">Get notified</p>
+                <p className="text-xs text-white/60">We'll let you know when your agent replies</p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={handleDismissBanner}
+                  className="text-xs text-white/40 hover:text-white/70 px-2 py-1"
+                  data-testid="button-dismiss-push"
+                >
+                  Later
+                </button>
+                <button
+                  onClick={handleEnableNotifications}
+                  className="text-xs bg-purple-500 hover:bg-purple-400 text-white px-3 py-1 rounded-xl font-medium transition-colors"
+                  data-testid="button-enable-push"
+                >
+                  Enable
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="pb-24">
         <AnimatePresence mode="wait">
