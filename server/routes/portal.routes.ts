@@ -3,7 +3,7 @@ import { db } from "../config/database";
 import {
   quote, quote_accomodation, accomodation_list, resorts, destination, country,
   quoteImages, accommodation_images, clientTable, transaction, booking,
-  portalMessages, webauthnCredentials,
+  portalMessages, webauthnCredentials, pushSubscriptions,
 } from "@shared/schema";
 import { eq, and, desc, isNotNull, inArray, sql, asc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -12,6 +12,7 @@ import crypto from "crypto";
 import { getUserId } from "../utils/get-user-id";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
 import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
+import { pushNotificationService } from "../services/push-notification.service";
 
 const portalRouter = Router();
 
@@ -522,6 +523,37 @@ portalRouter.post("/interest", portalAuth, async (req: Request, res: Response) =
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to record interest" });
+  }
+});
+
+portalRouter.get("/push/vapid-key", (req: Request, res: Response) => {
+  res.json({ publicKey: pushNotificationService.getPublicKey() });
+});
+
+portalRouter.post("/push/subscribe", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { subscription } = req.body;
+    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      return res.status(400).json({ error: "Invalid subscription" });
+    }
+    await pushNotificationService.subscribe(clientId, subscription);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Push subscribe error:", err);
+    res.status(500).json({ error: "Failed to subscribe" });
+  }
+});
+
+portalRouter.post("/push/unsubscribe", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { endpoint } = req.body;
+    if (!endpoint) return res.status(400).json({ error: "Endpoint required" });
+    await pushNotificationService.unsubscribe(clientId, endpoint);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to unsubscribe" });
   }
 });
 

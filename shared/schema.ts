@@ -1672,6 +1672,15 @@ export const portalMessages = pgTable("portal_messages", {
 });
 export type PortalMessageRow = typeof portalMessages.$inferSelect;
 
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
 export const webauthnCredentials = pgTable("webauthn_credentials", {
   id: uuid("id").primaryKey().defaultRandom(),
   clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),

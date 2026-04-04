@@ -114,6 +114,7 @@ Schema includes tables for:
 - `chat_participants` - Chat conversation membership
 - `chat_messages` - Chat message content with sender tracking
 - `webauthn_credentials` - Biometric login credentials for portal clients (WebAuthn/Passkeys)
+- `push_subscriptions` - Web Push notification subscriptions for portal clients (endpoint, p256dh, auth keys)
 
 #### Client Portal Authentication
 - **PIN Login**: Clients log in with email + 4-digit PIN (bcrypt-hashed, stored in `client_table.portal_pin`)
@@ -122,8 +123,8 @@ Schema includes tables for:
 - **Portal Middleware**: `portalAuth` middleware on protected routes extracts clientId from Bearer token
 - **PIN Management**: Agents set/change/remove client PINs from the client detail page (Portal Access section above Contact Details)
 - **Portal Routes**: All at `/api/portal/*` (registered before auth middleware in `server/index.ts`)
-  - Public: `/login`, `/webauthn/login`, `/webauthn/check`, `/deals`, `/has-pin/:clientId`, `/set-pin`, `/remove-pin`
-  - Protected (JWT): `/user`, `/quotes`, `/bookings`, `/messages`, `/message`, `/quote-request`, `/interest`, `/webauthn/register`
+  - Public: `/login`, `/webauthn/login`, `/webauthn/check`, `/deals`, `/has-pin/:clientId`, `/set-pin`, `/remove-pin`, `/push/vapid-key`
+  - Protected (JWT): `/user`, `/quotes`, `/bookings`, `/messages`, `/message`, `/quote-request`, `/interest`, `/webauthn/register`, `/push/subscribe`, `/push/unsubscribe`
 - **Real Data**: Portal quotes/bookings pull from `transaction` → `quote`/`booking` tables using `transaction.client_id`
 
 #### Portal-to-Internal Chat Bridge
@@ -134,6 +135,14 @@ Schema includes tables for:
 - **Participant Reconciliation**: On each message, participants are reconciled to the current intended agent set (adds new, removes stale)
 - **Frontend**: Portal conversations display with green "PORTAL" badge and emerald-colored message bubbles in the Live Chat section
 - **Frontend**: `use-portal-api.ts` hooks use `portalFetch()` with Bearer token auth; 401 auto-redirects to login
+
+#### Web Push Notifications (Portal)
+- **Service Worker**: `client/public/portal-sw.js` handles push events and notification clicks (navigates to `/portal/messages`)
+- **Backend Service**: `server/services/push-notification.service.ts` manages subscriptions and sends push via `web-push` library
+- **VAPID Keys**: Stored in `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` env vars
+- **Subscription Flow**: Portal layout auto-registers service worker and subscribes on mount (with permission prompt); logout unsubscribes both client-side and server-side
+- **Trigger**: `bridgeAgentReplyToPortal()` in portal-chat-bridge sends push notification to client after writing portal message
+- **Security**: Subscribe deletes any existing subscription for same endpoint before inserting (prevents cross-account leakage); unsubscribe enforces clientId ownership
 
 #### Quote Sharing System
 - Quotes can be shared via unique 6-char tokens stored in `quote_table.quote_token`

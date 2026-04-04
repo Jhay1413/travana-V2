@@ -5,6 +5,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { notificationRepository } from "../repositories/notification.repository";
+import { pushNotificationService } from "./push-notification.service";
 
 const PORTAL_SENDER_PREFIX = "portal-client:";
 
@@ -243,6 +244,16 @@ export async function bridgeAgentReplyToPortal(
       agentName,
       text: plainText,
     });
+
+    try {
+      await pushNotificationService.sendToClient(conv.portalClientId, {
+        title: `Message from ${agentName || "Your Travel Agent"}`,
+        body: plainText.length > 120 ? plainText.slice(0, 117) + "..." : plainText,
+        url: "/portal/messages",
+      });
+    } catch (pushErr) {
+      console.error("Push notification error (non-blocking):", pushErr);
+    }
   } catch (err) {
     console.error("Agent-to-portal bridge error:", err);
   }

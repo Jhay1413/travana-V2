@@ -1,8 +1,54 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Home, FileText, Briefcase, Tag, MessageCircle, LogOut } from "lucide-react";
 import { getPortalToken, setPortalToken, clearPortalToken } from "@/hooks/use-portal-api";
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+async function subscribeToPush() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    const token = getPortalToken();
+    if (!token) return;
+
+    const reg = await navigator.serviceWorker.register("/portal-sw.js");
+    await navigator.serviceWorker.ready;
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+
+    const resp = await fetch("/api/portal/push/vapid-key");
+    const { publicKey } = await resp.json();
+    if (!publicKey) return;
+
+    let subscription = await reg.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    }
+
+    await fetch("/api/portal/push/subscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ subscription: subscription.toJSON() }),
+    });
+  } catch (err) {
+    console.warn("Push subscription failed:", err);
+  }
+}
 
 const tabs = [
   { key: "home", label: "Home", icon: Home, path: "/portal" },
@@ -14,6 +60,7 @@ const tabs = [
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
+  const pushSubscribed = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -31,7 +78,35 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     }
   }, [setLocation]);
 
-  const handleLogout = () => {
+  useEffect(() => {
+    if (pushSubscribed.current) return;
+    const token = getPortalToken();
+    if (!token) return;
+    pushSubscribed.current = true;
+    subscribeToPush();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        const reg = await navigator.serviceWorker.getRegistration("/portal-sw.js");
+        if (reg) {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            const token = getPortalToken();
+            if (token) {
+              await fetch("/api/portal/push/unsubscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ endpoint: sub.endpoint }),
+              }).catch(() => {});
+            }
+            await sub.unsubscribe().catch(() => {});
+          }
+        }
+      }
+    } catch {}
+    pushSubscribed.current = false;
     clearPortalToken();
     setLocation("/portal/login");
   };
