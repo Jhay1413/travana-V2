@@ -53,7 +53,9 @@ export default function PortalMessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const baseMessages = apiMessages ?? (isError ? fallbackMessages : []);
-  const allMessages = [...baseMessages, ...localMessages];
+  const apiIds = new Set(baseMessages.map(m => m.text));
+  const pendingLocal = localMessages.filter(m => !apiIds.has(m.text));
+  const allMessages = [...baseMessages, ...pendingLocal];
   const loading = isLoading;
 
   useEffect(() => {

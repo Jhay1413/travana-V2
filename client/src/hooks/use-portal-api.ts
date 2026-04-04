@@ -144,6 +144,7 @@ export function usePortalMessages() {
     queryFn: () => portalFetch("/api/portal/messages"),
     retry: false,
     enabled: !!getPortalToken(),
+    refetchInterval: 5000,
   });
 }
 
