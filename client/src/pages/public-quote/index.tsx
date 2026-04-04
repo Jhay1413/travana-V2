@@ -990,6 +990,10 @@ export default function PublicQuotePage() {
     );
   }
 
+  return <PublicQuoteContent quote={quote} token={token} />;
+}
+
+export function PublicQuoteContent({ quote, token }: { quote: PublicQuoteData; token: string }) {
   return (
     <div className="min-h-screen bg-[#0a0a0f]" data-testid="page-public-quote">
       <HeroSection quote={quote} images={quote.images} />
