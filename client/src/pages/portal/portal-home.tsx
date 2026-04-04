@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import {
   FileText, Briefcase, Tag, MessageCircle, Plus,
   Plane, Calendar, Users, MapPin, X, Send, Loader2,
-  Heart, ArrowRight, Sparkles, ChevronRight, ChevronLeft, Eye,
+  Heart, ArrowRight, Sparkles, ChevronRight, ChevronLeft, Eye, Bell,
 } from "lucide-react";
 import PortalLayout from "./portal-layout";
 import defaultHeroBg from "@assets/Maldives_1773092726855.png";
@@ -15,6 +15,7 @@ import {
   usePortalMessages,
   usePortalDeals,
   useSubmitQuoteRequest,
+  getPortalToken,
   type PortalDeal,
   type PortalQuote,
 } from "@/hooks/use-portal-api";
@@ -214,6 +215,129 @@ function DealsCarousel({ deals }: { deals: PortalDeal[] }) {
   );
 }
 
+function PushNotificationPrompt() {
+  const [show, setShow] = useState(false);
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    const token = getPortalToken();
+    if (!token) return;
+
+    const missing: string[] = [];
+    if (!("serviceWorker" in navigator)) missing.push("ServiceWorker");
+    if (!("PushManager" in window)) missing.push("PushManager");
+    if (!("Notification" in window)) missing.push("Notification");
+
+    if (missing.length > 0) {
+      setErrorMsg(`Push not available (missing: ${missing.join(", ")})`);
+      setShow(true);
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      setErrorMsg("Notifications blocked. Please enable them in your browser settings.");
+      setShow(true);
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      navigator.serviceWorker.getRegistration("/portal-sw.js").then(reg => {
+        if (reg) {
+          reg.pushManager.getSubscription().then(sub => {
+            if (!sub) setShow(true);
+          });
+        } else {
+          setShow(true);
+        }
+      });
+    } else {
+      setShow(true);
+    }
+  }, []);
+
+  const handleEnable = async () => {
+    setStatus("loading");
+    try {
+      const reg = await navigator.serviceWorker.register("/portal-sw.js", { scope: "/" });
+      await navigator.serviceWorker.ready;
+
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        setErrorMsg("Permission was not granted.");
+        setStatus("error");
+        return;
+      }
+
+      const vapidRes = await fetch("/api/portal/push/vapid-key");
+      const { key } = await vapidRes.json();
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key,
+      });
+
+      const token = getPortalToken();
+      const saveRes = await fetch("/api/portal/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(sub.toJSON()),
+      });
+
+      if (!saveRes.ok) throw new Error(`Save failed: ${saveRes.status}`);
+
+      setStatus("done");
+      setTimeout(() => setShow(false), 1500);
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Unknown error");
+      setStatus("error");
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600/30 to-blue-600/30 border border-purple-500/30 p-4"
+      data-testid="push-notification-prompt"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-purple-500/30 flex items-center justify-center shrink-0">
+          <Bell className="w-5 h-5 text-purple-300" />
+        </div>
+        <div className="flex-1 min-w-0">
+          {status === "done" ? (
+            <p className="text-green-400 text-sm font-medium">Notifications enabled!</p>
+          ) : errorMsg ? (
+            <>
+              <p className="text-white text-sm font-semibold">Notifications</p>
+              <p className="text-red-300 text-xs mt-1">{errorMsg}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-white text-sm font-semibold">Stay Updated</p>
+              <p className="text-white/60 text-xs mt-0.5">Get notified when your agent replies</p>
+              <button
+                onClick={handleEnable}
+                disabled={status === "loading"}
+                className="mt-2 px-4 py-1.5 rounded-lg bg-purple-500 text-white text-xs font-semibold hover:bg-purple-400 transition-colors disabled:opacity-50"
+                data-testid="button-enable-push"
+              >
+                {status === "loading" ? "Enabling..." : "Turn on Notifications"}
+              </button>
+            </>
+          )}
+        </div>
+        <button onClick={() => setShow(false)} className="text-white/40 hover:text-white/70">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function PortalHomePage() {
   const [, setLocation] = useLocation();
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -298,6 +422,7 @@ export default function PortalHomePage() {
         </div>
 
         <div className="px-4 pt-5 space-y-6">
+          <PushNotificationPrompt />
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowQuoteForm(true)}
