@@ -3519,8 +3519,11 @@ export default function CommandCenterPage() {
                 </div>
               ) : (
                 (chatConversations || []).map((conv: any) => {
+                  const isPortalConv = !!conv.portalClientId;
                   const otherParticipants = (conv.participants || []).filter((p: any) => p.userId !== currentUserId);
-                  const displayName = conv.type === "group" ? (conv.name || "Group Chat") : (otherParticipants[0]?.userName || "Unknown");
+                  const displayName = isPortalConv
+                    ? (conv.portalClientName || "Portal Client")
+                    : conv.type === "group" ? (conv.name || "Group Chat") : (otherParticipants[0]?.userName || "Unknown");
                   const initials = displayName.split(" ").map((w: string) => w[0]).join("").substring(0, 2).toUpperCase();
                   const isSelected = chatSelectedConversation === conv.id;
                   const lastMsg = conv.lastMessage;
@@ -3534,13 +3537,22 @@ export default function CommandCenterPage() {
                       data-testid={`chat-conv-${conv.id}`}
                     >
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-                        isSelected ? "bg-[#3b82f6] text-white" : "bg-black/10 text-black/60 dark:bg-white/10 dark:text-white/60"
+                        isPortalConv
+                          ? (isSelected ? "bg-emerald-500 text-white" : "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400")
+                          : (isSelected ? "bg-[#3b82f6] text-white" : "bg-black/10 text-black/60 dark:bg-white/10 dark:text-white/60")
                       }`}>
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
-                          <span className="truncate text-sm font-medium">{displayName}</span>
+                          <span className="truncate text-sm font-medium flex items-center gap-1.5">
+                            {displayName}
+                            {isPortalConv && (
+                              <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                PORTAL
+                              </span>
+                            )}
+                          </span>
                           {lastMsg && (
                             <span className="shrink-0 text-[10px] text-black/40 dark:text-white/40">
                               {new Date(lastMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -3578,17 +3590,30 @@ export default function CommandCenterPage() {
               <>
                 {(() => {
                   const conv = (chatConversations || []).find((c: any) => c.id === chatSelectedConversation);
+                  const isPortalConvHeader = !!conv?.portalClientId;
                   const otherParticipants = (conv?.participants || []).filter((p: any) => p.userId !== currentUserId);
-                  const displayName = conv?.type === "group" ? (conv.name || "Group Chat") : (otherParticipants[0]?.userName || "Unknown");
+                  const displayName = isPortalConvHeader
+                    ? (conv?.portalClientName || "Portal Client")
+                    : conv?.type === "group" ? (conv.name || "Group Chat") : (otherParticipants[0]?.userName || "Unknown");
+                  const subtitle = isPortalConvHeader
+                    ? "Portal Client Chat"
+                    : conv?.type === "group" ? `${(conv.participants || []).length} members` : "Direct message";
                   return (
                     <div className="flex items-center gap-3 border-b border-black/10 px-4 py-3 dark:border-white/10">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#3b82f6] text-sm font-semibold text-white">
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white ${isPortalConvHeader ? "bg-emerald-500" : "bg-[#3b82f6]"}`}>
                         {displayName.split(" ").map((w: string) => w[0]).join("").substring(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold truncate" data-testid="text-chat-header-name">{displayName}</div>
+                        <div className="text-sm font-semibold truncate flex items-center gap-1.5" data-testid="text-chat-header-name">
+                          {displayName}
+                          {isPortalConvHeader && (
+                            <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                              PORTAL
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground">
-                          {conv?.type === "group" ? `${(conv.participants || []).length} members` : "Direct message"}
+                          {subtitle}
                         </div>
                       </div>
                       <Button
@@ -3612,16 +3637,23 @@ export default function CommandCenterPage() {
                   ) : (
                     (chatMessages || []).map((msg: any) => {
                       const isOwn = msg.senderId === currentUserId;
+                      const isPortalMsg = typeof msg.senderId === "string" && msg.senderId.startsWith("portal-client:");
+                      const selectedConv = (chatConversations || []).find((c: any) => c.id === chatSelectedConversation);
+                      const portalClientDisplayName = selectedConv?.portalClientName || "Portal Client";
                       const isImage = msg.fileType?.startsWith("image/");
                       return (
                         <div key={msg.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`} data-testid={`chat-msg-${msg.id}`}>
                           <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
                             isOwn
                               ? "bg-[#3b82f6] text-white"
-                              : "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                              : isPortalMsg
+                                ? "bg-emerald-500/10 text-black dark:text-white border border-emerald-500/20"
+                                : "bg-black/5 text-black dark:bg-white/10 dark:text-white"
                           }`}>
                             {!isOwn && (
-                              <div className="mb-0.5 text-[11px] font-semibold text-[#3b82f6]">{msg.senderName || "Unknown"}</div>
+                              <div className={`mb-0.5 text-[11px] font-semibold ${isPortalMsg ? "text-emerald-600 dark:text-emerald-400" : "text-[#3b82f6]"}`}>
+                                {isPortalMsg ? portalClientDisplayName : (msg.senderName || "Unknown")}
+                              </div>
                             )}
                             {msg.fileUrl && (
                               <div className="mb-1.5">

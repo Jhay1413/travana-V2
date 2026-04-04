@@ -1,6 +1,7 @@
 import { chatRepository } from "../repositories/chat.repository";
 import { notificationRepository } from "../repositories/notification.repository";
 import { AppError } from "../utils/error-handler";
+import { bridgeAgentReplyToPortal, isPortalSender } from "./portal-chat-bridge";
 
 export const chatService = {
   async getConversations(userId: string) {
@@ -90,6 +91,10 @@ export const chatService = {
             });
           } catch {}
         }
+      }
+      if (!isPortalSender(senderId)) {
+        const senderUser = participants.find(pp => pp.userId === senderId);
+        bridgeAgentReplyToPortal(conversationId, senderId, senderUser?.userName || "Agent", content);
       }
     } catch {}
 

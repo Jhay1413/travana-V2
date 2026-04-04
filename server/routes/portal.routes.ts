@@ -11,6 +11,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { getUserId } from "../utils/get-user-id";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
+import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
 
 const portalRouter = Router();
 
@@ -467,11 +468,14 @@ portalRouter.post("/message", portalAuth, async (req: Request, res: Response) =>
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ error: "Message text required" });
 
+    const trimmed = text.trim();
     await db.insert(portalMessages).values({
       clientId,
       sender: "client",
-      text: text.trim(),
+      text: trimmed,
     });
+
+    await bridgePortalMessageToChat(clientId, trimmed, false);
 
     res.json({ success: true });
   } catch (err: any) {
@@ -485,11 +489,14 @@ portalRouter.post("/quote-request", portalAuth, async (req: Request, res: Respon
     const { clientId } = (req as any).portalClient;
     const { destination, dates, travellers, notes } = req.body;
 
+    const messageText = `📋 Quote Request:\n• Destination: ${destination || "Not specified"}\n• Dates: ${dates || "Flexible"}\n• Travellers: ${travellers || "Not specified"}\n• Notes: ${notes || "None"}`;
     await db.insert(portalMessages).values({
       clientId,
       sender: "client",
-      text: `📋 Quote Request:\n• Destination: ${destination || "Not specified"}\n• Dates: ${dates || "Flexible"}\n• Travellers: ${travellers || "Not specified"}\n• Notes: ${notes || "None"}`,
+      text: messageText,
     });
+
+    await bridgePortalMessageToChat(clientId, messageText, false);
 
     res.json({ success: true });
   } catch (err: any) {
@@ -503,11 +510,14 @@ portalRouter.post("/interest", portalAuth, async (req: Request, res: Response) =
     const { clientId } = (req as any).portalClient;
     const { dealId } = req.body;
 
+    const messageText = `❤️ Interested in deal: ${dealId}`;
     await db.insert(portalMessages).values({
       clientId,
       sender: "client",
-      text: `❤️ Interested in deal: ${dealId}`,
+      text: messageText,
     });
+
+    await bridgePortalMessageToChat(clientId, messageText, true);
 
     res.json({ success: true });
   } catch (err: any) {

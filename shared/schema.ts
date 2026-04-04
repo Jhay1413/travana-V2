@@ -1402,6 +1402,8 @@ export const chatConversations = pgTable("chat_conversations", {
   type: text("type").notNull().default("direct"),
   name: text("name"),
   createdBy: text("created_by"),
+  portalClientId: uuid("portal_client_id"),
+  portalClientName: text("portal_client_name"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -110,6 +110,9 @@ Schema includes tables for:
 - `audit_log` - Deletion audit trail for quotes/bookings (entity snapshot, reason, performer)
 - `quote_customer_actions` - Customer responses to shared quotes (accepted/changes_requested)
 - `portal_messages` - Client-agent messaging for portal (sender, agent_name, text)
+- `chat_conversations` - Internal live chat conversations (type, name, portalClientId, portalClientName for portal-linked chats)
+- `chat_participants` - Chat conversation membership
+- `chat_messages` - Chat message content with sender tracking
 - `webauthn_credentials` - Biometric login credentials for portal clients (WebAuthn/Passkeys)
 
 #### Client Portal Authentication
@@ -122,6 +125,14 @@ Schema includes tables for:
   - Public: `/login`, `/webauthn/login`, `/webauthn/check`, `/deals`, `/has-pin/:clientId`, `/set-pin`, `/remove-pin`
   - Protected (JWT): `/user`, `/quotes`, `/bookings`, `/messages`, `/message`, `/quote-request`, `/interest`, `/webauthn/register`
 - **Real Data**: Portal quotes/bookings pull from `transaction` → `quote`/`booking` tables using `transaction.client_id`
+
+#### Portal-to-Internal Chat Bridge
+- **Bridge Service**: `server/services/portal-chat-bridge.ts` bidirectionally syncs portal messages with the internal live chat system
+- **Portal → Chat**: When a portal client sends a message/quote-request/interest, it creates or reuses a `chat_conversations` entry (keyed by `portalClientId` with unique index), adds the appropriate agent(s) as participants, inserts a `chat_messages` row with synthetic senderId `portal-client:{clientId}`, and creates notifications
+- **Chat → Portal**: When an agent replies in a portal-linked conversation, `bridgeAgentReplyToPortal()` writes a corresponding `portal_messages` row so the client sees the reply
+- **Agent Routing**: Messages from clients with transactions route to the transaction's `user_id` (assigned agent); deal interest or unassigned clients route to all active agents
+- **Participant Reconciliation**: On each message, participants are reconciled to the current intended agent set (adds new, removes stale)
+- **Frontend**: Portal conversations display with green "PORTAL" badge and emerald-colored message bubbles in the Live Chat section
 - **Frontend**: `use-portal-api.ts` hooks use `portalFetch()` with Bearer token auth; 401 auto-redirects to login
 
 #### Quote Sharing System
