@@ -1,0 +1,16 @@
+{
+  "name": "Tina's Travel Deals Portal",
+  "short_name": "Travel Portal",
+  "description": "Your personal travel portal — quotes, bookings, and messages",
+  "start_url": "/portal",
+  "display": "standalone",
+  "background_color": "#0f0a1e",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

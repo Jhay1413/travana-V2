@@ -231,10 +231,15 @@ function PushNotificationPrompt() {
 
     if (missing.length > 0) {
       const inIframe = window.self !== window.top;
+      const ua = navigator.userAgent || "";
+      const isIOS = /iPhone|iPad|iPod/.test(ua);
+      const isSafari = /Safari/.test(ua) && !/CriOS|Chrome/.test(ua);
       if (inIframe) {
-        setErrorMsg("Open this site directly in your browser (not inside an app preview) to enable notifications.");
+        setErrorMsg("Open this site directly in your browser to enable notifications.");
+      } else if (isIOS) {
+        setErrorMsg("On iPhone, add this site to your Home Screen first (tap Share → Add to Home Screen), then open it from there to enable notifications.");
       } else {
-        setErrorMsg("Your browser doesn't support push notifications. Try opening this page in Chrome or Safari on your phone.");
+        setErrorMsg(`Push not supported. Browser: ${ua.slice(0, 80)}`);
       }
       setShow(true);
       return;
