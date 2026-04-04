@@ -101,46 +101,6 @@ function requireStaffAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-portalRouter.post("/set-pin", requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId, pin } = req.body;
-    if (!clientId || !pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      return res.status(400).json({ error: "Valid 4-digit PIN required" });
-    }
-
-    const hash = await bcrypt.hash(pin, 10);
-    await db.update(clientTable).set({ portalPin: hash }).where(eq(clientTable.id, clientId));
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Set PIN error:", err);
-    res.status(500).json({ error: "Failed to set PIN" });
-  }
-});
-
-portalRouter.post("/remove-pin", requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = req.body;
-    if (!clientId) return res.status(400).json({ error: "clientId required" });
-    await db.update(clientTable).set({ portalPin: null }).where(eq(clientTable.id, clientId));
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Remove PIN error:", err);
-    res.status(500).json({ error: "Failed to remove PIN" });
-  }
-});
-
-portalRouter.get("/has-pin/:clientId", requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const [client] = await db
-      .select({ portalPin: clientTable.portalPin })
-      .from(clientTable)
-      .where(eq(clientTable.id, req.params.clientId))
-      .limit(1);
-    res.json({ hasPin: !!client?.portalPin });
-  } catch (err: any) {
-    res.status(500).json({ error: "Failed to check PIN" });
-  }
-});
 
 portalRouter.post("/webauthn/register", portalAuth, async (req: Request, res: Response) => {
   try {
@@ -546,6 +506,49 @@ portalRouter.post("/interest", portalAuth, async (req: Request, res: Response) =
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to record interest" });
+  }
+});
+
+export const portalStaffRouter = Router();
+
+portalStaffRouter.get("/has-pin/:clientId", requireStaffAuth, async (req: Request, res: Response) => {
+  try {
+    const [client] = await db
+      .select({ portalPin: clientTable.portalPin })
+      .from(clientTable)
+      .where(eq(clientTable.id, req.params.clientId))
+      .limit(1);
+    res.json({ hasPin: !!client?.portalPin });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to check PIN" });
+  }
+});
+
+portalStaffRouter.post("/set-pin", requireStaffAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId, pin } = req.body;
+    if (!clientId || !pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+      return res.status(400).json({ error: "Valid 4-digit PIN required" });
+    }
+
+    const hash = await bcrypt.hash(pin, 10);
+    await db.update(clientTable).set({ portalPin: hash }).where(eq(clientTable.id, clientId));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Set PIN error:", err);
+    res.status(500).json({ error: "Failed to set PIN" });
+  }
+});
+
+portalStaffRouter.post("/remove-pin", requireStaffAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId) return res.status(400).json({ error: "clientId required" });
+    await db.update(clientTable).set({ portalPin: null }).where(eq(clientTable.id, clientId));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Remove PIN error:", err);
+    res.status(500).json({ error: "Failed to remove PIN" });
   }
 });
 

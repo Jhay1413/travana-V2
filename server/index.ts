@@ -8,7 +8,7 @@ import { taskRepository } from "./repositories/task.repository";
 import { checkStaleTickets } from "./services/ticket-notification.service";
 import { expireStaleEnquiriesAndQuotes } from "./services/expiry.service";
 import quotePublicRoutes from "./routes/quote-public.routes";
-import portalRoutes from "./routes/portal.routes";
+import portalRoutes, { portalStaffRouter } from "./routes/portal.routes";
 import cron from "node-cron";
 
 const app = express();
@@ -84,6 +84,8 @@ app.use((req, res, next) => {
 
   await setupAuth(app);
   registerAuthRoutes(app);
+
+  app.use("/api/portal", portalStaffRouter);
 
   app.use("/api", routes);
 
