@@ -1,0 +1,151 @@
+🎯 CORE PURPOSE
+
+Create a client-facing app that:
+
+Displays quotes created by agents in the CRM
+Displays confirmed bookings
+Shows deals (based on “free quotes” in the CRM)
+Allows customers to request quotes and message agents
+
+The CRM is the single source of truth. This app is the presentation layer.
+
+🧱 TECH STACK
+React (Vite)
+Tailwind CSS
+React Router
+PWA support (installable)
+Axios or fetch for API calls
+🔐 AUTHENTICATION
+Simple login system (email + magic link or token-based)
+Store auth token in localStorage
+All API requests must include:
+Authorization: Bearer {token}
+
+If user is not logged in:
+
+Allow limited access OR redirect to login screen
+🔗 BACKEND API ASSUMPTIONS
+
+The CRM provides API endpoints.
+
+Use these placeholder endpoints:
+
+GET /api/user
+GET /api/quotes
+GET /api/bookings
+GET /api/deals (free quotes)
+POST /api/quote-request
+POST /api/interest
+POST /api/message
+🧾 QUOTES (CORE FEATURE)
+
+Quotes are created by agents in the CRM.
+
+Each quote includes:
+
+id
+destination
+hotel_name
+price
+dates
+image_url
+quote_url (link to live quote page)
+expiry_date
+
+Frontend must:
+
+Fetch and display all quotes for logged-in user
+Show as mobile-friendly cards
+Calculate and display countdown timer from expiry_date
+Open quote_url when user clicks “View Quote”
+🧳 BOOKINGS
+
+Each booking includes:
+
+id
+destination
+hotel_name
+dates
+booking_reference
+documents_url
+
+Frontend must:
+
+Display bookings in card format
+Allow user to open documents_url
+🔥 DEALS (IMPORTANT LOGIC)
+
+Deals are not separate data.
+
+They are:
+→ “Free quotes” from the CRM
+
+Each deal includes:
+
+id
+destination
+hotel_name
+price
+image_url
+
+Frontend must:
+
+Display deals in a scrollable list
+CTA: “I want this deal”
+→ Send POST /api/interest with deal ID
+📱 APP SCREENS
+
+Build the following screens:
+
+Dashboard
+My Quotes
+Request Quote
+Messages
+My Bookings
+Deals & Offers
+Notifications
+
+Use bottom navigation bar for switching between screens.
+
+🔄 DATA FLOW
+
+On app load:
+
+Fetch user data
+Fetch quotes
+Fetch bookings
+Fetch deals
+
+Each screen must:
+
+Dynamically render API data
+Handle loading states
+Handle empty states
+💬 USER ACTIONS
+
+Implement:
+
+“I’m Interested”
+→ POST /api/interest
+“Request Quote”
+→ POST /api/quote-request
+Messaging
+→ POST /api/message
+Quote view tracking (optional)
+→ POST /api/interaction
+🎨 UI REQUIREMENTS
+Mobile-first design
+Clean, modern (fintech style)
+Card-based layout
+Sticky bottom navigation
+Smooth transitions
+Fast loading
+⚠️ IMPORTANT CONSTRAINTS
+Do NOT build booking or quote logic
+Do NOT duplicate CRM data
+Always fetch live data from API
+Keep code modular and scalable
+🚀 OUTPUT
+Fully working frontend app
+Connected to API structure
+Ready to plug into real CRM endpoints
