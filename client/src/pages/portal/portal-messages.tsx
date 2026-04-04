@@ -206,14 +206,12 @@ export default function PortalMessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!pushAvailable()) { setPushEnabled(true); return; }
+    if (!pushAvailable()) { setPushEnabled(false); return; }
     if (Notification.permission === "granted") {
       navigator.serviceWorker.getRegistration("/portal-sw.js").then(reg => {
         if (reg) reg.pushManager.getSubscription().then(sub => setPushEnabled(!!sub));
         else setPushEnabled(false);
       });
-    } else if (Notification.permission === "denied") {
-      setPushEnabled(true);
     } else {
       setPushEnabled(false);
     }
