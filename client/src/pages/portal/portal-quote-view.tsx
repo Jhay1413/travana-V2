@@ -25,15 +25,15 @@ export default function PortalQuoteViewPage() {
 
   return (
     <PortalLayout>
-      <div className="px-4 pt-6">
+      <div className="relative z-50 px-4 pt-6">
         <div className="flex items-center gap-1.5 mb-4 text-xs" data-testid="breadcrumb-quote-view">
-          <button onClick={() => setLocation("/portal")} className="text-white/40 hover:text-white/70 transition-colors flex items-center gap-1">
+          <a href="/portal" onClick={(e) => { e.preventDefault(); setLocation("/portal"); }} className="text-purple-400/70 hover:text-purple-300 transition-colors flex items-center gap-1 underline underline-offset-2 cursor-pointer">
             <Home className="w-3 h-3" /> Home
-          </button>
+          </a>
           <ChevronRight className="w-3 h-3 text-white/20" />
-          <button onClick={() => setLocation("/portal/quotes")} className="text-white/40 hover:text-white/70 transition-colors">
+          <a href="/portal/quotes" onClick={(e) => { e.preventDefault(); setLocation("/portal/quotes"); }} className="text-purple-400/70 hover:text-purple-300 transition-colors underline underline-offset-2 cursor-pointer">
             Quotes
-          </button>
+          </a>
           <ChevronRight className="w-3 h-3 text-white/20" />
           <span className="text-white/70 truncate max-w-[150px]">{quote?.title || "Quote"}</span>
         </div>
