@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { getUserId } from "../utils/get-user-id";
+import { quotePublicRepository } from "../repositories/quote-public.repository";
 
 const portalRouter = Router();
 
@@ -334,7 +335,7 @@ portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
       }
     }
 
-    const mapped = results.map(r => {
+    const mapped = await Promise.all(results.map(async (r) => {
       const dest = r.destinationName && r.countryName
         ? `${r.destinationName}, ${r.countryName}`
         : r.countryName || r.destinationName || "TBC";
@@ -342,6 +343,11 @@ portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
       const nights = r.numNights || 7;
       const travelMs = new Date(travelDate).getTime();
       const returnDate = new Date(travelMs + nights * 86400000).toISOString().split("T")[0];
+
+      let token = r.quoteToken;
+      if (!token) {
+        token = await quotePublicRepository.setToken(r.quoteId);
+      }
 
       return {
         id: r.quoteId,
@@ -353,9 +359,9 @@ portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
         return_date: returnDate,
         expiry_date: r.dateExpiry ? new Date(r.dateExpiry).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString(),
         image_url: imageMap[r.quoteId] || "",
-        quote_url: r.quoteToken ? `/view-quote/${r.quoteToken}` : `/portal/quotes`,
+        quote_url: `/portal/quote/${token}`,
       };
-    });
+    }));
 
     res.json(mapped);
   } catch (err: any) {
