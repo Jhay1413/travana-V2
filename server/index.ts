@@ -8,6 +8,7 @@ import { taskRepository } from "./repositories/task.repository";
 import { checkStaleTickets } from "./services/ticket-notification.service";
 import { expireStaleEnquiriesAndQuotes } from "./services/expiry.service";
 import quotePublicRoutes from "./routes/quote-public.routes";
+import portalRoutes from "./routes/portal.routes";
 import cron from "node-cron";
 
 const app = express();
@@ -70,6 +71,7 @@ app.use((req, res, next) => {
 
 (async () => {
   app.use("/api/public/quote", quotePublicRoutes);
+  app.use("/api/portal", portalRoutes);
 
   // Facebook webhook & callback must be public (Facebook calls these directly)
   const { Router } = await import("express");

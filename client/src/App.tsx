@@ -26,6 +26,13 @@ import FeedbackPage from "@/pages/feedback";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import TravanaRouter from "@/pages/travana";
+import PortalLoginPage from "@/pages/portal/portal-login";
+import PortalHomePage from "@/pages/portal/portal-home";
+import PortalQuotesPage from "@/pages/portal/portal-quotes";
+import PortalBookingsPage from "@/pages/portal/portal-bookings";
+import PortalDealsPage from "@/pages/portal/portal-deals";
+import PortalMessagesPage from "@/pages/portal/portal-messages";
+import PortalQuoteViewPage from "@/pages/portal/portal-quote-view";
 import { FeedbackButton } from "@/components/feedback-button";
 import { Loader2 } from "lucide-react";
 
@@ -73,6 +80,21 @@ function AuthenticatedRouter() {
 function AppRouter() {
   const { isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
+
+  if (location === "/portal" || location.startsWith("/portal/")) {
+    return (
+      <Switch>
+        <Route path="/portal/login" component={PortalLoginPage} />
+        <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
+        <Route path="/portal/quotes" component={PortalQuotesPage} />
+        <Route path="/portal/bookings" component={PortalBookingsPage} />
+        <Route path="/portal/deals" component={PortalDealsPage} />
+        <Route path="/portal/messages" component={PortalMessagesPage} />
+        <Route path="/portal" component={PortalHomePage} />
+        <Route path="/portal/:rest*" component={PortalHomePage} />
+      </Switch>
+    );
+  }
 
   if (location === "/travana" || location.startsWith("/travana/")) {
     return <TravanaRouter />;
