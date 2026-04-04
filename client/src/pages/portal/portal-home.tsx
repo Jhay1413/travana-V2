@@ -37,32 +37,7 @@ function formatCurrency(value: number): string {
 
 const fallbackDeals: PortalDeal[] = [];
 
-const fallbackQuotes: PortalQuote[] = [
-  {
-    id: "1",
-    title: "Maldives Paradise Escape",
-    destination: "Maldives",
-    hotel: "Soneva Fushi Resort",
-    price: 4299,
-    travel_date: "2025-08-15",
-    return_date: "2025-08-22",
-    expiry_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    image_url: "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=600&h=400&fit=crop",
-    quote_url: "/portal/quote/demo-1",
-  },
-  {
-    id: "2",
-    title: "Santorini Summer Getaway",
-    destination: "Greece",
-    hotel: "Mystique Luxury Hotel",
-    price: 2850,
-    travel_date: "2025-07-10",
-    return_date: "2025-07-17",
-    expiry_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    image_url: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=600&h=400&fit=crop",
-    quote_url: "/portal/quote/demo-2",
-  },
-];
+const fallbackQuotes: PortalQuote[] = [];
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";

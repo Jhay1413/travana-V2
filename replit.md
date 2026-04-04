@@ -109,6 +109,20 @@ Schema includes tables for:
 - `quote_views` - Customer view tracking for shared quotes (device, browser, IP)
 - `audit_log` - Deletion audit trail for quotes/bookings (entity snapshot, reason, performer)
 - `quote_customer_actions` - Customer responses to shared quotes (accepted/changes_requested)
+- `portal_messages` - Client-agent messaging for portal (sender, agent_name, text)
+- `webauthn_credentials` - Biometric login credentials for portal clients (WebAuthn/Passkeys)
+
+#### Client Portal Authentication
+- **PIN Login**: Clients log in with email + 4-digit PIN (bcrypt-hashed, stored in `client_table.portal_pin`)
+- **Biometric Login**: After first PIN login, WebAuthn/Passkeys registration for Face ID/fingerprint
+- **JWT Tokens**: Portal auth uses JWT tokens (30-day expiry) with `clientId` + `email` payload
+- **Portal Middleware**: `portalAuth` middleware on protected routes extracts clientId from Bearer token
+- **PIN Management**: Agents set/change/remove client PINs from the client detail page (Portal Access section above Contact Details)
+- **Portal Routes**: All at `/api/portal/*` (registered before auth middleware in `server/index.ts`)
+  - Public: `/login`, `/webauthn/login`, `/webauthn/check`, `/deals`, `/has-pin/:clientId`, `/set-pin`, `/remove-pin`
+  - Protected (JWT): `/user`, `/quotes`, `/bookings`, `/messages`, `/message`, `/quote-request`, `/interest`, `/webauthn/register`
+- **Real Data**: Portal quotes/bookings pull from `transaction` → `quote`/`booking` tables using `transaction.client_id`
+- **Frontend**: `use-portal-api.ts` hooks use `portalFetch()` with Bearer token auth; 401 auto-redirects to login
 
 #### Quote Sharing System
 - Quotes can be shared via unique 6-char tokens stored in `quote_table.quote_token`

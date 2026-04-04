@@ -134,7 +134,7 @@ export default function ClientPage() {
             </TabsList>
 
             <TabsContent value="overview">
-              <ClientOverview client={client} />
+              <ClientOverview client={client} clientId={clientId} />
             </TabsContent>
 
             <TabsContent value="enquiries">

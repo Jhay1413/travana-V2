@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mail, ArrowRight, CheckCircle, Loader2, Sparkles } from "lucide-react";
-import { usePortalLogin, setPortalToken, getPortalToken } from "@/hooks/use-portal-api";
+import { Mail, Lock, ArrowRight, Loader2, Sparkles, Fingerprint, Eye, EyeOff } from "lucide-react";
+import { usePortalLogin, setPortalToken, getPortalToken, usePortalBiometricLogin } from "@/hooks/use-portal-api";
 import { useLocation } from "wouter";
 
 function GlassCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -12,11 +12,47 @@ function GlassCard({ children, className = "" }: { children: React.ReactNode; cl
   );
 }
 
+function PinInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+    onChange(v);
+  };
+
+  return (
+    <div className="relative mb-4">
+      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+      <input
+        type="password"
+        inputMode="numeric"
+        maxLength={4}
+        value={value}
+        onChange={handleChange}
+        placeholder="4-digit PIN"
+        className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white/[0.06] border border-white/[0.1] text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-all tracking-[0.5em] text-center text-lg"
+        data-testid="input-pin"
+      />
+      <div className="flex justify-center gap-2 mt-2">
+        {[0, 1, 2, 3].map(i => (
+          <div
+            key={i}
+            className={`w-3 h-3 rounded-full transition-all duration-200 ${
+              i < value.length ? "bg-purple-500 scale-110" : "bg-white/10"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PortalLoginPage() {
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+  const [showBiometric, setShowBiometric] = useState(false);
   const [, setLocation] = useLocation();
   const loginMutation = usePortalLogin();
+  const biometricLogin = usePortalBiometricLogin();
 
   useEffect(() => {
     if (getPortalToken()) {
@@ -30,25 +66,133 @@ export default function PortalLoginPage() {
       setPortalToken(urlToken);
       setLocation("/portal");
     }
+
+    const savedClientId = localStorage.getItem("portal_client_id");
+    const savedEmail = localStorage.getItem("portal_email");
+    if (savedClientId && savedEmail) {
+      setEmail(savedEmail);
+      checkBiometric(savedClientId);
+    }
   }, [setLocation]);
+
+  const checkBiometric = async (clientId: string) => {
+    try {
+      const res = await fetch("/api/portal/webauthn/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId }),
+      });
+      const data = await res.json();
+      if (data.hasBiometric) {
+        setShowBiometric(true);
+      }
+    } catch {}
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || !pin || pin.length !== 4) return;
+    setError("");
+
     try {
-      const result = await loginMutation.mutateAsync(email);
+      const result = await loginMutation.mutateAsync({ email, pin });
       if (result?.token) {
+        localStorage.setItem("portal_client_id", result.clientId);
+        localStorage.setItem("portal_email", email);
+
+        if (!result.hasBiometric && "credentials" in navigator) {
+          try {
+            await registerBiometric(result.token, result.clientId);
+          } catch {}
+        }
+
         setLocation("/portal");
-        return;
       }
-    } catch {
+    } catch (err: any) {
+      setError(err?.message?.includes("401")
+        ? "Incorrect email or PIN"
+        : err?.message?.includes("Portal access")
+        ? "Portal access not set up. Please contact your travel agent."
+        : "Login failed. Please try again.");
     }
-    setSent(true);
   };
 
-  const handleDemoLogin = () => {
-    setPortalToken("demo_token_" + Date.now());
-    setLocation("/portal");
+  const registerBiometric = async (token: string, clientId: string) => {
+    if (!window.PublicKeyCredential) return;
+
+    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if (!available) return;
+
+    try {
+      const challenge = new Uint8Array(32);
+      crypto.getRandomValues(challenge);
+
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: "Apple Travel Portal", id: window.location.hostname },
+          user: {
+            id: new TextEncoder().encode(clientId),
+            name: email,
+            displayName: email,
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: "public-key" },
+            { alg: -257, type: "public-key" },
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform",
+            userVerification: "required",
+          },
+          timeout: 60000,
+        },
+      }) as PublicKeyCredential;
+
+      if (credential) {
+        const credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+        const response = credential.response as AuthenticatorAttestationResponse;
+        const pubKey = btoa(String.fromCharCode(...new Uint8Array(response.getPublicKey?.() || new ArrayBuffer(0))));
+
+        await fetch("/api/portal/webauthn/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            credentialId: credId,
+            publicKey: pubKey || "platform-verified",
+            deviceName: navigator.userAgent.includes("iPhone") ? "iPhone" :
+                        navigator.userAgent.includes("Android") ? "Android" : "Device",
+          }),
+        });
+
+        localStorage.setItem("portal_credential_id", credId);
+      }
+    } catch {}
+  };
+
+  const handleBiometricLogin = async () => {
+    const savedClientId = localStorage.getItem("portal_client_id");
+    const savedCredentialId = localStorage.getItem("portal_credential_id");
+    if (!savedClientId || !savedCredentialId) {
+      setShowBiometric(false);
+      return;
+    }
+
+    setError("");
+    try {
+      const result = await biometricLogin.mutateAsync({
+        clientId: savedClientId,
+        credentialId: savedCredentialId,
+      });
+      if (result?.token) {
+        setLocation("/portal");
+      }
+    } catch {
+      setError("Biometric login failed. Please use your PIN.");
+      setShowBiometric(false);
+    }
   };
 
   return (
@@ -73,7 +217,32 @@ export default function PortalLoginPage() {
         </div>
 
         <GlassCard className="p-6 md:p-8">
-          {!sent ? (
+          {showBiometric ? (
+            <div className="text-center">
+              <p className="text-white/70 text-sm mb-6">Welcome back! Use biometrics to sign in.</p>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleBiometricLogin}
+                disabled={biometricLogin.isPending}
+                className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/30 border border-white/20 flex items-center justify-center mx-auto mb-4 hover:from-purple-500/40 hover:to-blue-500/40 transition-all"
+                data-testid="button-biometric-login"
+              >
+                {biometricLogin.isPending ? (
+                  <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                ) : (
+                  <Fingerprint className="w-10 h-10 text-purple-400" />
+                )}
+              </motion.button>
+              <p className="text-white/40 text-xs mb-4">Tap to use Face ID / Fingerprint</p>
+              <button
+                onClick={() => setShowBiometric(false)}
+                className="text-sm text-purple-400 hover:text-purple-300 transition-colors underline underline-offset-4"
+                data-testid="button-use-pin"
+              >
+                Use PIN instead
+              </button>
+            </div>
+          ) : (
             <form onSubmit={handleSubmit}>
               <label className="block text-sm font-medium text-white/70 mb-2" htmlFor="email">
                 Email address
@@ -91,47 +260,45 @@ export default function PortalLoginPage() {
                   data-testid="input-email"
                 />
               </div>
+
+              <label className="block text-sm font-medium text-white/70 mb-2">
+                4-digit PIN
+              </label>
+              <PinInput value={pin} onChange={setPin} />
+
+              {error && (
+                <motion.p
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-red-400 text-sm text-center mb-4"
+                  data-testid="text-error"
+                >
+                  {error}
+                </motion.p>
+              )}
+
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 type="submit"
-                disabled={loginMutation.isPending || !email}
+                disabled={loginMutation.isPending || !email || pin.length !== 4}
                 className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-opacity"
-                data-testid="button-send-link"
+                data-testid="button-login"
               >
                 {loginMutation.isPending ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
-                    Send Magic Link
+                    Sign In
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </motion.button>
             </form>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-4"
-            >
-              <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
-              <h2 className="text-lg font-semibold text-white mb-2" data-testid="text-link-sent">Check your email</h2>
-              <p className="text-white/50 text-sm mb-4">
-                We've sent a magic link to <span className="text-white/80">{email}</span>
-              </p>
-              <button
-                onClick={handleDemoLogin}
-                className="text-sm text-purple-400 hover:text-purple-300 transition-colors underline underline-offset-4"
-                data-testid="button-demo-login"
-              >
-                Demo: Skip to portal
-              </button>
-            </motion.div>
           )}
         </GlassCard>
 
         <p className="text-center text-white/30 text-xs mt-6">
-          Your travel agent will send you a link to access your portal
+          Your travel agent will set up your PIN to access the portal
         </p>
       </motion.div>
     </div>

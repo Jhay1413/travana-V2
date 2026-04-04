@@ -12,6 +12,9 @@ export function setPortalToken(token: string) {
 
 export function clearPortalToken() {
   localStorage.removeItem(PORTAL_TOKEN_KEY);
+  localStorage.removeItem("portal_client_id");
+  localStorage.removeItem("portal_email");
+  localStorage.removeItem("portal_credential_id");
 }
 
 async function portalFetch(url: string, options: RequestInit = {}) {
@@ -24,8 +27,14 @@ async function portalFetch(url: string, options: RequestInit = {}) {
     headers["Authorization"] = `Bearer ${token}`;
   }
   const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    clearPortalToken();
+    window.location.href = "/portal/login";
+    throw new Error("Session expired");
+  }
   if (!res.ok) {
-    throw new Error(`Portal API error: ${res.status}`);
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Portal API error: ${res.status}`);
   }
   return res.json();
 }
@@ -34,6 +43,8 @@ export interface PortalUser {
   firstName: string;
   lastName: string;
   email: string;
+  phone?: string;
+  avatarUrl?: string;
 }
 
 export interface PortalQuote {
@@ -162,15 +173,45 @@ export function useSendMessage() {
 }
 
 export function usePortalLogin() {
-  return useMutation<{ token?: string }, Error, string>({
-    mutationFn: async (email: string) => {
+  return useMutation<
+    { token: string; clientId: string; firstName: string; hasBiometric: boolean },
+    Error,
+    { email: string; pin: string }
+  >({
+    mutationFn: async ({ email, pin }) => {
       const res = await fetch("/api/portal/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, pin }),
       });
       if (!res.ok) {
-        throw new Error(`Login error: ${res.status}`);
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Login error: ${res.status}`);
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data?.token) {
+        setPortalToken(data.token);
+      }
+    },
+  });
+}
+
+export function usePortalBiometricLogin() {
+  return useMutation<
+    { token: string; clientId: string; firstName: string },
+    Error,
+    { clientId: string; credentialId: string }
+  >({
+    mutationFn: async ({ clientId, credentialId }) => {
+      const res = await fetch("/api/portal/webauthn/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, credentialId }),
+      });
+      if (!res.ok) {
+        throw new Error("Biometric login failed");
       }
       return res.json();
     },

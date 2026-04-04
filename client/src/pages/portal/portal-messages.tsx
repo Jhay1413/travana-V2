@@ -17,28 +17,7 @@ function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-white/[0.08] rounded-2xl ${className}`} />;
 }
 
-const fallbackMessages: PortalMessage[] = [
-  {
-    id: "1",
-    sender: "agent",
-    agent_name: "Tina",
-    text: "Hi there! I've put together a fantastic Maldives package for you. Have a look at the quote and let me know your thoughts!",
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "2",
-    sender: "client",
-    text: "That looks amazing! Could we possibly extend it to 10 nights?",
-    timestamp: new Date(Date.now() - 1.5 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "3",
-    sender: "agent",
-    agent_name: "Tina",
-    text: "Absolutely! I'll update the quote with 10 nights and send you a revised version. I might also be able to get a better room rate for the longer stay.",
-    timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-  },
-];
+const fallbackMessages: PortalMessage[] = [];
 
 function formatTime(dateStr: string): string {
   try {

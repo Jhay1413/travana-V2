@@ -1,9 +1,228 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../config/database";
-import { quote, quote_accomodation, accomodation_list, resorts, destination, country, quoteImages, accommodation_images } from "@shared/schema";
-import { eq, and, desc, isNotNull, inArray, sql } from "drizzle-orm";
+import {
+  quote, quote_accomodation, accomodation_list, resorts, destination, country,
+  quoteImages, accommodation_images, clientTable, transaction, booking,
+  portalMessages, webauthnCredentials,
+} from "@shared/schema";
+import { eq, and, desc, isNotNull, inArray, sql, asc } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import { getUserId } from "../utils/get-user-id";
 
 const portalRouter = Router();
+
+const JWT_SECRET = (() => {
+  const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || "";
+  return crypto.createHash("sha256").update("portal-jwt-" + dbUrl).digest("hex").slice(0, 64);
+})();
+
+interface PortalTokenPayload {
+  clientId: string;
+  email: string;
+}
+
+function signPortalToken(payload: PortalTokenPayload): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
+}
+
+function verifyPortalToken(token: string): PortalTokenPayload | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as PortalTokenPayload;
+  } catch {
+    return null;
+  }
+}
+
+function portalAuth(req: Request, res: Response, next: NextFunction) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const payload = verifyPortalToken(auth.slice(7));
+  if (!payload) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+  (req as any).portalClient = payload;
+  next();
+}
+
+portalRouter.post("/login", async (req: Request, res: Response) => {
+  try {
+    const { email, pin } = req.body;
+    if (!email || !pin) {
+      return res.status(400).json({ error: "Email and PIN are required" });
+    }
+
+    const [client] = await db
+      .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, portalPin: clientTable.portalPin })
+      .from(clientTable)
+      .where(eq(clientTable.email, email.toLowerCase().trim()))
+      .limit(1);
+
+    if (!client) {
+      return res.status(401).json({ error: "No account found with that email" });
+    }
+    if (!client.portalPin) {
+      return res.status(401).json({ error: "Portal access not set up. Please contact your travel agent." });
+    }
+
+    const valid = await bcrypt.compare(pin, client.portalPin);
+    if (!valid) {
+      return res.status(401).json({ error: "Incorrect PIN" });
+    }
+
+    const token = signPortalToken({ clientId: client.id, email: client.email || "" });
+
+    const creds = await db
+      .select({ id: webauthnCredentials.id })
+      .from(webauthnCredentials)
+      .where(eq(webauthnCredentials.clientId, client.id))
+      .limit(1);
+
+    res.json({
+      token,
+      clientId: client.id,
+      firstName: client.firstName,
+      hasBiometric: creds.length > 0,
+    });
+  } catch (err: any) {
+    console.error("Portal login error:", err);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+function requireStaffAuth(req: Request, res: Response, next: NextFunction) {
+  const userId = getUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Staff authentication required" });
+  }
+  next();
+}
+
+portalRouter.post("/set-pin", requireStaffAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId, pin } = req.body;
+    if (!clientId || !pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+      return res.status(400).json({ error: "Valid 4-digit PIN required" });
+    }
+
+    const hash = await bcrypt.hash(pin, 10);
+    await db.update(clientTable).set({ portalPin: hash }).where(eq(clientTable.id, clientId));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Set PIN error:", err);
+    res.status(500).json({ error: "Failed to set PIN" });
+  }
+});
+
+portalRouter.post("/remove-pin", requireStaffAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId) return res.status(400).json({ error: "clientId required" });
+    await db.update(clientTable).set({ portalPin: null }).where(eq(clientTable.id, clientId));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Remove PIN error:", err);
+    res.status(500).json({ error: "Failed to remove PIN" });
+  }
+});
+
+portalRouter.get("/has-pin/:clientId", requireStaffAuth, async (req: Request, res: Response) => {
+  try {
+    const [client] = await db
+      .select({ portalPin: clientTable.portalPin })
+      .from(clientTable)
+      .where(eq(clientTable.id, req.params.clientId))
+      .limit(1);
+    res.json({ hasPin: !!client?.portalPin });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to check PIN" });
+  }
+});
+
+portalRouter.post("/webauthn/register", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { credentialId, publicKey, deviceName } = req.body;
+    if (!credentialId || !publicKey) {
+      return res.status(400).json({ error: "Missing credential data" });
+    }
+
+    await db.insert(webauthnCredentials).values({
+      clientId,
+      credentialId,
+      publicKey,
+      deviceName: deviceName || "Unknown device",
+      counter: 0,
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("WebAuthn register error:", err);
+    res.status(500).json({ error: "Failed to register biometric" });
+  }
+});
+
+portalRouter.post("/webauthn/login", async (req: Request, res: Response) => {
+  try {
+    const { credentialId, clientId } = req.body;
+    if (!credentialId || !clientId) {
+      return res.status(400).json({ error: "Missing credential data" });
+    }
+
+    const [cred] = await db
+      .select()
+      .from(webauthnCredentials)
+      .where(and(
+        eq(webauthnCredentials.clientId, clientId),
+        eq(webauthnCredentials.credentialId, credentialId),
+      ))
+      .limit(1);
+
+    if (!cred) {
+      return res.status(401).json({ error: "Biometric not recognized" });
+    }
+
+    const [client] = await db
+      .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName })
+      .from(clientTable)
+      .where(eq(clientTable.id, clientId))
+      .limit(1);
+
+    if (!client) {
+      return res.status(401).json({ error: "Client not found" });
+    }
+
+    await db
+      .update(webauthnCredentials)
+      .set({ counter: sql`${webauthnCredentials.counter} + 1` })
+      .where(eq(webauthnCredentials.id, cred.id));
+
+    const token = signPortalToken({ clientId: client.id, email: client.email || "" });
+    res.json({ token, clientId: client.id, firstName: client.firstName });
+  } catch (err: any) {
+    console.error("WebAuthn login error:", err);
+    res.status(500).json({ error: "Biometric login failed" });
+  }
+});
+
+portalRouter.post("/webauthn/check", async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId) return res.json({ hasBiometric: false });
+
+    const creds = await db
+      .select({ id: webauthnCredentials.id, deviceName: webauthnCredentials.deviceName })
+      .from(webauthnCredentials)
+      .where(eq(webauthnCredentials.clientId, clientId));
+
+    res.json({ hasBiometric: creds.length > 0, devices: creds });
+  } catch {
+    res.json({ hasBiometric: false });
+  }
+});
 
 portalRouter.get("/deals", async (_req: Request, res: Response) => {
   try {
@@ -88,36 +307,246 @@ portalRouter.get("/deals", async (_req: Request, res: Response) => {
   }
 });
 
-portalRouter.post("/login", (_req: Request, res: Response) => {
-  res.json({ token: "demo-portal-token" });
+portalRouter.get("/user", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const [client] = await db
+      .select({
+        firstName: clientTable.firstName,
+        lastName: clientTable.surename,
+        email: clientTable.email,
+        phone: clientTable.phoneNumber,
+        avatarUrl: clientTable.avatarUrl,
+      })
+      .from(clientTable)
+      .where(eq(clientTable.id, clientId))
+      .limit(1);
+
+    if (!client) return res.status(404).json({ error: "Client not found" });
+    res.json(client);
+  } catch (err: any) {
+    console.error("Portal user error:", err);
+    res.status(500).json({ error: "Failed to load user" });
+  }
 });
 
-portalRouter.get("/user", (_req: Request, res: Response) => {
-  res.json({ firstName: "Traveller", lastName: "", email: "" });
+portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+
+    const results = await db
+      .select({
+        quoteId: quote.id,
+        title: quote.title,
+        salesPrice: quote.sales_price,
+        travelDate: quote.travel_date,
+        numNights: quote.num_of_nights,
+        dateExpiry: quote.date_expiry,
+        quoteToken: quote.quote_token,
+        accommodationName: accomodation_list.name,
+        destinationName: destination.name,
+        countryName: country.country_name,
+      })
+      .from(transaction)
+      .innerJoin(quote, eq(quote.transaction_id, transaction.id))
+      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
+      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .leftJoin(destination, eq(resorts.destination_id, destination.id))
+      .leftJoin(country, eq(destination.country_id, country.id))
+      .where(and(
+        eq(transaction.client_id, clientId),
+        eq(quote.is_active, true),
+      ))
+      .orderBy(desc(quote.date_created));
+
+    const quoteIds = results.map(r => r.quoteId);
+    let imageMap: Record<string, string> = {};
+    if (quoteIds.length > 0) {
+      const images = await db
+        .select({ quoteId: quoteImages.quoteId, url: quoteImages.url, isPrimary: quoteImages.isPrimary })
+        .from(quoteImages)
+        .where(inArray(quoteImages.quoteId, quoteIds));
+      for (const img of images) {
+        if (img.quoteId && (!imageMap[img.quoteId] || img.isPrimary)) {
+          imageMap[img.quoteId] = img.url;
+        }
+      }
+    }
+
+    const mapped = results.map(r => {
+      const dest = r.destinationName && r.countryName
+        ? `${r.destinationName}, ${r.countryName}`
+        : r.countryName || r.destinationName || "TBC";
+      const travelDate = r.travelDate;
+      const nights = r.numNights || 7;
+      const travelMs = new Date(travelDate).getTime();
+      const returnDate = new Date(travelMs + nights * 86400000).toISOString().split("T")[0];
+
+      return {
+        id: r.quoteId,
+        title: r.title || `${dest} Getaway`,
+        destination: dest,
+        hotel: r.accommodationName || "",
+        price: parseFloat(r.salesPrice || "0"),
+        travel_date: travelDate,
+        return_date: returnDate,
+        expiry_date: r.dateExpiry ? new Date(r.dateExpiry).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString(),
+        image_url: imageMap[r.quoteId] || "",
+        quote_url: r.quoteToken ? `/view-quote/${r.quoteToken}` : `/portal/quotes`,
+      };
+    });
+
+    res.json(mapped);
+  } catch (err: any) {
+    console.error("Portal quotes error:", err);
+    res.status(500).json({ error: "Failed to load quotes" });
+  }
 });
 
-portalRouter.get("/quotes", (_req: Request, res: Response) => {
-  res.json([]);
+portalRouter.get("/bookings", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+
+    const results = await db
+      .select({
+        bookingId: booking.id,
+        title: booking.title,
+        haysRef: booking.hays_ref,
+        supplierRef: booking.supplier_ref,
+        salesPrice: booking.sales_price,
+        travelDate: booking.travel_date,
+        numNights: booking.num_of_nights,
+        accommodationName: accomodation_list.name,
+        destinationName: destination.name,
+        countryName: country.country_name,
+      })
+      .from(transaction)
+      .innerJoin(booking, eq(booking.transaction_id, transaction.id))
+      .leftJoin(
+        quote_accomodation,
+        sql`${quote_accomodation.quote_id} = (
+          SELECT q.id FROM quote_table q
+          WHERE q.transaction_id = ${transaction.id}
+          AND q.is_active = true
+          ORDER BY q.date_created DESC LIMIT 1
+        ) AND ${quote_accomodation.is_primary} = true`
+      )
+      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .leftJoin(destination, eq(resorts.destination_id, destination.id))
+      .leftJoin(country, eq(destination.country_id, country.id))
+      .where(and(
+        eq(transaction.client_id, clientId),
+        eq(booking.is_active, true),
+      ))
+      .orderBy(desc(booking.travel_date));
+
+    const mapped = results.map(r => {
+      const dest = r.destinationName && r.countryName
+        ? `${r.destinationName}, ${r.countryName}`
+        : r.countryName || r.destinationName || "TBC";
+      const nights = r.numNights || 7;
+      const travelMs = new Date(r.travelDate).getTime();
+      const returnDate = new Date(travelMs + nights * 86400000).toISOString().split("T")[0];
+
+      return {
+        id: r.bookingId,
+        destination: dest,
+        hotel: r.accommodationName || r.title || "",
+        travel_date: r.travelDate,
+        return_date: returnDate,
+        booking_reference: r.haysRef || r.supplierRef || "",
+        image_url: "",
+        documents_url: "#",
+      };
+    });
+
+    res.json(mapped);
+  } catch (err: any) {
+    console.error("Portal bookings error:", err);
+    res.status(500).json({ error: "Failed to load bookings" });
+  }
 });
 
-portalRouter.get("/bookings", (_req: Request, res: Response) => {
-  res.json([]);
+portalRouter.get("/messages", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+
+    const msgs = await db
+      .select()
+      .from(portalMessages)
+      .where(eq(portalMessages.clientId, clientId))
+      .orderBy(asc(portalMessages.createdAt))
+      .limit(100);
+
+    const mapped = msgs.map(m => ({
+      id: m.id,
+      sender: m.sender as "agent" | "client",
+      agent_name: m.agentName || undefined,
+      text: m.text,
+      timestamp: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
+    }));
+
+    res.json(mapped);
+  } catch (err: any) {
+    console.error("Portal messages error:", err);
+    res.status(500).json({ error: "Failed to load messages" });
+  }
 });
 
-portalRouter.get("/messages", (_req: Request, res: Response) => {
-  res.json([]);
+portalRouter.post("/message", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: "Message text required" });
+
+    await db.insert(portalMessages).values({
+      clientId,
+      sender: "client",
+      text: text.trim(),
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Portal send message error:", err);
+    res.status(500).json({ error: "Failed to send message" });
+  }
 });
 
-portalRouter.post("/quote-request", (_req: Request, res: Response) => {
-  res.json({ success: true });
+portalRouter.post("/quote-request", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { destination, dates, travellers, notes } = req.body;
+
+    await db.insert(portalMessages).values({
+      clientId,
+      sender: "client",
+      text: `📋 Quote Request:\n• Destination: ${destination || "Not specified"}\n• Dates: ${dates || "Flexible"}\n• Travellers: ${travellers || "Not specified"}\n• Notes: ${notes || "None"}`,
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Quote request error:", err);
+    res.status(500).json({ error: "Failed to submit quote request" });
+  }
 });
 
-portalRouter.post("/interest", (_req: Request, res: Response) => {
-  res.json({ success: true });
-});
+portalRouter.post("/interest", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { dealId } = req.body;
 
-portalRouter.post("/message", (_req: Request, res: Response) => {
-  res.json({ success: true });
+    await db.insert(portalMessages).values({
+      clientId,
+      sender: "client",
+      text: `❤️ Interested in deal: ${dealId}`,
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to record interest" });
+  }
 });
 
 export default portalRouter;

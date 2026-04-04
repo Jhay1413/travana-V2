@@ -82,6 +82,7 @@ export const clientTable = pgTable("client_table", {
   post_code: varchar(),
   avatarUrl: varchar(),
   badge: varchar(),
+  portalPin: varchar("portal_pin"),
   createdAt: timestamp().notNull().defaultNow(),
   referrerId: text("referrerId").references(() => user.id, { onDelete: "set null" }),
 });
@@ -1657,3 +1658,24 @@ export const hubPostLikesTable = pgTable("hub_post_likes", {
 }, (table) => ({
   uniquePostLike: unique().on(table.postId, table.userId),
 }));
+
+export const portalMessages = pgTable("portal_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  sender: varchar("sender", { length: 10 }).notNull(),
+  agentId: text("agent_id").references(() => user.id, { onDelete: "set null" }),
+  agentName: varchar("agent_name", { length: 255 }),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+export type PortalMessageRow = typeof portalMessages.$inferSelect;
+
+export const webauthnCredentials = pgTable("webauthn_credentials", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  credentialId: text("credential_id").notNull(),
+  publicKey: text("public_key").notNull(),
+  counter: integer("counter").notNull().default(0),
+  deviceName: varchar("device_name", { length: 255 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});

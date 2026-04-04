@@ -24,18 +24,7 @@ function formatDate(dateStr: string): string {
   }
 }
 
-const fallbackBookings: PortalBooking[] = [
-  {
-    id: "1",
-    destination: "Tenerife, Spain",
-    hotel: "Hard Rock Hotel Tenerife",
-    travel_date: "2025-06-20",
-    return_date: "2025-06-27",
-    booking_reference: "TT-2025-4829",
-    image_url: "https://images.unsplash.com/photo-1548574505-5e239809ee19?w=600&h=400&fit=crop",
-    documents_url: "#",
-  },
-];
+const fallbackBookings: PortalBooking[] = [];
 
 function BookingCardSkeleton() {
   return (
