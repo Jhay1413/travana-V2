@@ -33,8 +33,23 @@ function pushAvailable(): boolean {
 }
 
 function NotificationCard({ onEnabled }: { onEnabled: () => void }) {
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "unsupported">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    const missing: string[] = [];
+    if (!("serviceWorker" in navigator)) missing.push("ServiceWorker");
+    if (!("PushManager" in window)) missing.push("PushManager");
+    if (!("Notification" in window)) missing.push("Notification");
+    if (missing.length > 0) {
+      setStatus("unsupported");
+      setErrorMsg(`Not available in this browser (missing: ${missing.join(", ")}). Try Chrome or Safari on your phone.`);
+    } else if (Notification.permission === "denied") {
+      setStatus("error");
+      setErrorMsg("Notifications blocked. Go to your browser settings for this site and allow notifications.");
+    }
+  }, []);
 
   const handleEnable = async () => {
     setStatus("loading");
@@ -43,26 +58,46 @@ function NotificationCard({ onEnabled }: { onEnabled: () => void }) {
       const token = getPortalToken();
       if (!token) { setStatus("error"); setErrorMsg("Not logged in"); return; }
 
-      const reg = await navigator.serviceWorker.register("/portal-sw.js");
-      await navigator.serviceWorker.ready;
+      let reg: ServiceWorkerRegistration;
+      try {
+        reg = await navigator.serviceWorker.register("/portal-sw.js");
+        await navigator.serviceWorker.ready;
+      } catch (e: any) {
+        setStatus("error");
+        setErrorMsg(`Service worker failed: ${e?.message || "unknown"}`);
+        return;
+      }
 
-      const permission = await Notification.requestPermission();
+      let permission: NotificationPermission;
+      try {
+        permission = await Notification.requestPermission();
+      } catch (e: any) {
+        setStatus("error");
+        setErrorMsg(`Permission request failed: ${e?.message || "unknown"}`);
+        return;
+      }
       if (permission !== "granted") {
         setStatus("error");
-        setErrorMsg(permission === "denied" ? "Notifications blocked. Check your browser settings." : "Permission not granted");
+        setErrorMsg(permission === "denied" ? "Notifications blocked. Check your browser settings." : "Permission not granted — please tap 'Allow' when prompted.");
         return;
       }
 
       const resp = await fetch("/api/portal/push/vapid-key");
       const { publicKey } = await resp.json();
-      if (!publicKey) { setStatus("error"); setErrorMsg("Server config error"); return; }
+      if (!publicKey) { setStatus("error"); setErrorMsg("Server config error — VAPID key missing"); return; }
 
       let sub = await reg.pushManager.getSubscription();
       if (!sub) {
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
-        });
+        try {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+        } catch (e: any) {
+          setStatus("error");
+          setErrorMsg(`Push subscribe failed: ${e?.message || "unknown"}`);
+          return;
+        }
       }
 
       const subResp = await fetch("/api/portal/push/subscribe", {
@@ -74,7 +109,7 @@ function NotificationCard({ onEnabled }: { onEnabled: () => void }) {
       if (!subResp.ok) {
         const errData = await subResp.json().catch(() => ({}));
         setStatus("error");
-        setErrorMsg(errData.error || "Subscription failed");
+        setErrorMsg(errData.error || "Subscription failed on server");
         return;
       }
 
@@ -87,8 +122,7 @@ function NotificationCard({ onEnabled }: { onEnabled: () => void }) {
     }
   };
 
-  if (!pushAvailable()) return null;
-  if (typeof Notification !== "undefined" && Notification.permission === "denied") return null;
+  if (dismissed) return null;
 
   return (
     <motion.div
@@ -107,18 +141,29 @@ function NotificationCard({ onEnabled }: { onEnabled: () => void }) {
             {errorMsg && (
               <p className="text-xs text-red-400 mb-2">{errorMsg}</p>
             )}
-            <button
-              onClick={handleEnable}
-              disabled={status === "loading"}
-              className="bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
-              data-testid="button-enable-push-messages"
-            >
-              {status === "loading" ? (
-                <><Loader2 className="w-3 h-3 animate-spin" /> Enabling...</>
-              ) : (
-                <><Bell className="w-3 h-3" /> Turn on notifications</>
+            <div className="flex gap-2">
+              {status !== "unsupported" && (
+                <button
+                  onClick={handleEnable}
+                  disabled={status === "loading"}
+                  className="bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
+                  data-testid="button-enable-push-messages"
+                >
+                  {status === "loading" ? (
+                    <><Loader2 className="w-3 h-3 animate-spin" /> Enabling...</>
+                  ) : (
+                    <><Bell className="w-3 h-3" /> Turn on notifications</>
+                  )}
+                </button>
               )}
-            </button>
+              <button
+                onClick={() => setDismissed(true)}
+                className="text-white/40 hover:text-white/60 text-xs px-3 py-2 transition-colors"
+                data-testid="button-dismiss-push-messages"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         </div>
       </div>

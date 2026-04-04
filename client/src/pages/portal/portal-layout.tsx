@@ -129,9 +129,6 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         notif: "Notification" in window,
       });
       setPushState("unsupported");
-      if (!bannerDismissed.current) {
-        setTimeout(() => setShowBanner(true), 2000);
-      }
       return;
     }
     if (Notification.permission === "denied") {
