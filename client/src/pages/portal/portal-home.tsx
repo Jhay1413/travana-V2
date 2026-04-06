@@ -292,7 +292,7 @@ function PushNotificationPrompt() {
       const saveRes = await fetch("/api/portal/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(sub.toJSON()),
+        body: JSON.stringify({ subscription: sub.toJSON() }),
       });
 
       if (!saveRes.ok) throw new Error(`Save failed: ${saveRes.status}`);
