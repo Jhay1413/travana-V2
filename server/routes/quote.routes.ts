@@ -87,7 +87,7 @@ router.post("/:id/portal-push", async (req: Request, res: Response) => {
     if (!q) return res.status(404).json({ error: "Quote not found" });
 
     const sent = await pushNotificationService.sendToAll({
-      title: "🌴 New Holiday Deal!",
+      title: "Latest Holiday Deals from Tinas Travel",
       body: q.title || "Check out our latest travel deal!",
       url: "/portal",
     });
