@@ -30,7 +30,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { EnrichedQuote } from "@/types/quote";
 import type { TravelDeal } from "@/api/endpoints/social-post.api";
 
-type ViewMode = "scheduled" | "all";
+type ViewMode = "scheduled" | "all" | "portal";
 type ScheduleFilter = "none" | "today" | "tomorrow" | "this-week" | "next-week" | "next-month" | "specific-date";
 
 interface SocialPost {
@@ -253,8 +253,9 @@ export default function SocialPostsBoard() {
     if (!data?.pages) return [];
     const allQuotes: SocialPost[] = [];
     data.pages.forEach((page) => { page.quotes.forEach((quote) => { allQuotes.push({ quote: quote as EnrichedQuote, clientId: quote.client_id || "" }); }); });
+    if (viewMode === "portal") return allQuotes.filter((p) => p.quote.show_on_portal);
     return allQuotes;
-  }, [data]);
+  }, [data, viewMode]);
 
   useEffect(() => {
     if (!loadMoreRef.current || !hasNextPage || isFetchingNextPage) return;
@@ -381,6 +382,15 @@ export default function SocialPostsBoard() {
             </Button>
             <Button
               size="sm"
+              variant={viewMode === "portal" ? "default" : "outline"}
+              className={`rounded-xl text-xs font-medium ${viewMode === "portal" ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
+              onClick={() => { setViewMode("portal"); setScheduleFilter("none"); }}
+              data-testid="button-view-portal"
+            >
+              <Globe className="w-3.5 h-3.5 mr-1" />Portal Posts
+            </Button>
+            <Button
+              size="sm"
               className="rounded-xl text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white gap-1.5"
               onClick={() => setCreateDialogOpen(true)}
               data-testid="button-create-social-post"
@@ -441,7 +451,7 @@ export default function SocialPostsBoard() {
           <CalendarClock className="w-12 h-12 mx-auto text-black/20 dark:text-white/20 mb-3" />
           <p className="text-sm font-medium text-black/60 dark:text-white/60">No posts found</p>
           <p className="text-xs text-black/40 dark:text-white/40 mt-1">
-            {viewMode === "scheduled" ? "No scheduled posts match your filters" : "Try adjusting your search"}
+            {viewMode === "scheduled" ? "No scheduled posts match your filters" : viewMode === "portal" ? "No posts have been added to the portal yet" : "Try adjusting your search"}
           </p>
         </div>
       ) : (
