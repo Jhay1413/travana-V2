@@ -49,8 +49,8 @@ export default function PortalSetupWizard() {
   const [installed, setInstalled] = useState(false);
   const [notifStatus, setNotifStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [notifError, setNotifError] = useState("");
-  const [showInstallTip, setShowInstallTip] = useState(false);
   const hasPush = pushSupported();
+  const [showInstallTip, setShowInstallTip] = useState(platform === "ios" && !hasPush);
 
   useEffect(() => {
     const token = getPortalToken();
@@ -242,10 +242,21 @@ export default function PortalSetupWizard() {
                         </p>
                       </>
                     ) : (
-                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                        <p className="text-amber-300 text-xs">
-                          Notifications aren't available in this browser. Try opening this page directly in Chrome or Safari (not inside another app).
-                        </p>
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-2">
+                        {platform === "ios" ? (
+                          <>
+                            <p className="text-amber-300 text-xs font-medium">
+                              On iPhone, Apple requires you to install this app first.
+                            </p>
+                            <p className="text-white/40 text-xs">
+                              Use the "Add to Home Screen" option below, then open the app from your Home Screen. Notifications will work after that.
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-amber-300 text-xs">
+                            Notifications aren't available in this browser. Try opening this page directly in Chrome or Safari.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

@@ -238,7 +238,7 @@ function PushNotificationPrompt() {
       if (inIframe) {
         setErrorMsg("Open this site directly in your browser to enable notifications.");
       } else if (isIOS) {
-        setErrorMsg("Notifications aren't available in this browser. Try opening this page directly in Safari (not inside another app).");
+        setErrorMsg("On iPhone, Apple requires you to install this app first. Tap Share → Add to Home Screen in Safari, then open the app from your Home Screen.");
       } else {
         setErrorMsg(`Push not supported. Browser: ${ua.slice(0, 80)}`);
       }
