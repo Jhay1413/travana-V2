@@ -7,6 +7,7 @@ import {
   Heart, ArrowRight, Sparkles, ChevronRight, ChevronLeft, Eye, Bell,
 } from "lucide-react";
 import PortalLayout from "./portal-layout";
+import PortalSetupWizard from "./portal-setup-wizard";
 import defaultHeroBg from "@assets/Maldives_1773092726855.png";
 import {
   usePortalUser,
@@ -385,6 +386,7 @@ export default function PortalHomePage() {
 
   return (
     <PortalLayout>
+      <PortalSetupWizard />
       <div className="max-w-lg mx-auto">
         <div className="relative overflow-hidden rounded-b-[2rem]">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 border-b border-white/[0.12] backdrop-blur-xl" />
