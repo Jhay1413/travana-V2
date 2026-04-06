@@ -60,7 +60,19 @@ router.patch("/:id/portal-visibility", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { show_on_portal } = req.body;
-    await db.update(quote).set({ show_on_portal: !!show_on_portal }).where(eq(quote.id, id));
+    const updates: Record<string, any> = { show_on_portal: !!show_on_portal };
+
+    if (show_on_portal) {
+      const [existing] = await db.select({ token: quote.quote_token }).from(quote).where(eq(quote.id, id)).limit(1);
+      if (!existing?.token) {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        let token = "";
+        for (let i = 0; i < 8; i++) token += chars[Math.floor(Math.random() * chars.length)];
+        updates.quote_token = token;
+      }
+    }
+
+    await db.update(quote).set(updates).where(eq(quote.id, id));
     res.json({ success: true, show_on_portal: !!show_on_portal });
   } catch (err: any) {
     console.error("Portal visibility toggle error:", err);

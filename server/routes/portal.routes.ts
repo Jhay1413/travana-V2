@@ -207,9 +207,9 @@ portalRouter.get("/deals", async (_req: Request, res: Response) => {
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(eq(quote.isFreeQuote, true), eq(quote.is_active, true), isNotNull(quote.quote_token), eq(quote.show_on_portal, true)))
+      .where(and(eq(quote.is_active, true), isNotNull(quote.quote_token), eq(quote.show_on_portal, true)))
       .orderBy(desc(quote.date_created))
-      .limit(20);
+      .limit(5);
 
     const quoteIds = results.map((r) => r.id);
     let imageMap: Record<string, string> = {};
