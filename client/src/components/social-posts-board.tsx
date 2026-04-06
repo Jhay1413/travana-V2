@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
+import { useFreeQuotesInfinite, quoteKeys } from "@/hooks/queries/use-quote-queries";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGeneratePost } from "@/hooks/mutations/use-social-post-mutations";
 import axiosClient from "@/api/client/axios-client";
 import { useToast } from "@/hooks/use-toast";
@@ -196,6 +197,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
 
 export default function SocialPostsBoard() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("scheduled");
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("none");
@@ -320,10 +322,11 @@ export default function SocialPostsBoard() {
     try {
       await axiosClient.patch(`/api/quotes/${quoteId}/portal-visibility`, { show_on_portal: checked });
       toast({ title: checked ? "Added to portal" : "Removed from portal" });
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     } catch {
       toast({ title: "Failed to update portal visibility", variant: "destructive" });
     }
-  }, [toast]);
+  }, [toast, queryClient]);
 
   const handlePushNotify = useCallback(async (quoteId: string) => {
     try {
