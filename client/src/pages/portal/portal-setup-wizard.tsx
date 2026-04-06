@@ -243,16 +243,9 @@ export default function PortalSetupWizard() {
                       </>
                     ) : (
                       <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                        {platform === "ios" && !standalone ? (
-                          <p className="text-amber-300 text-xs">
-                            On iPhone, notifications require this app to be on your Home Screen.
-                            Use the install option below first, then re-open the app.
-                          </p>
-                        ) : (
-                          <p className="text-amber-300 text-xs">
-                            Notifications aren't available in this browser. Try Chrome on your computer or Android phone.
-                          </p>
-                        )}
+                        <p className="text-amber-300 text-xs">
+                          Notifications aren't available in this browser. Try opening this page directly in Chrome or Safari (not inside another app).
+                        </p>
                       </div>
                     )}
                   </div>
