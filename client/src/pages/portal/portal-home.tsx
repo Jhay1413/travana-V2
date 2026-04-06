@@ -218,6 +218,171 @@ function DealsCarousel({ deals }: { deals: PortalDeal[] }) {
   );
 }
 
+function QuotesCarousel({ quotes }: { quotes: PortalQuote[] }) {
+  const [current, setCurrent] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchStartX = useRef(0);
+
+  const count = quotes.length;
+  const [direction, setDirection] = useState(0);
+
+  useEffect(() => {
+    if (current >= count) setCurrent(0);
+  }, [count, current]);
+
+  const navigate = useCallback((idx: number, dir: number) => {
+    const next = ((idx % count) + count) % count;
+    setDirection(dir);
+    setCurrent(next);
+  }, [count]);
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setDirection(1);
+      setCurrent((c) => (c + 1) % count);
+    }, 5000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [count]);
+
+  const resetAutoPlay = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setDirection(1);
+      setCurrent((c) => (c + 1) % count);
+    }, 5000);
+  }, [count]);
+
+  const handlePrev = () => { navigate(current - 1, -1); resetAutoPlay(); };
+  const handleNext = () => { navigate(current + 1, 1); resetAutoPlay(); };
+  const handleDot = (i: number) => { navigate(i, i > current ? 1 : -1); resetAutoPlay(); };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) handleNext();
+      else handlePrev();
+    }
+  };
+
+  if (count === 0) return null;
+  const quote = quotes[current] ?? quotes[0];
+
+  const variants = {
+    enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (dir: number) => ({ x: dir > 0 ? -300 : 300, opacity: 0 }),
+  };
+
+  return (
+    <div className="relative" data-testid="quotes-carousel">
+      <div
+        className="relative overflow-hidden rounded-3xl"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{ minHeight: 290 }}
+      >
+        <AnimatePresence initial={false} custom={direction} mode="popLayout">
+          <motion.div
+            key={quote.id}
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.8 }}
+            className="absolute inset-0"
+          >
+            <GlassCard className="overflow-hidden h-full" data-testid={`home-quote-carousel-${quote.id}`}>
+              <div className="relative h-44">
+                <img
+                  src={quote.image_url || defaultHeroBg}
+                  alt={quote.destination}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                {quote.price > 0 && (
+                  <span className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 text-white text-[10px] font-bold">
+                    {formatCurrency(quote.price)}
+                  </span>
+                )}
+                <div className="absolute bottom-2.5 left-3 right-3">
+                  <p className="text-white font-semibold text-sm leading-snug">{quote.title}</p>
+                  <p className="text-white/50 text-[11px] flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-2.5 h-2.5" /> {quote.destination}
+                  </p>
+                </div>
+              </div>
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-2.5 text-white/50 text-[11px]">
+                  {quote.hotel && (
+                    <span className="flex items-center gap-1 truncate">
+                      <MapPin className="w-2.5 h-2.5 shrink-0" /> {quote.hotel}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 shrink-0">
+                    {quote.travel_date && <><Calendar className="w-2.5 h-2.5" /> {formatDate(quote.travel_date)}</>}
+                  </span>
+                </div>
+                <a
+                  href={quote.quote_url}
+                  className="w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 bg-gradient-to-r from-purple-500/80 to-blue-500/80 text-white hover:from-purple-500 hover:to-blue-500 transition-all"
+                  data-testid={`home-view-quote-${quote.id}`}
+                >
+                  <Eye className="w-3 h-3" /> View Quote
+                </a>
+              </div>
+            </GlassCard>
+          </motion.div>
+        </AnimatePresence>
+
+        {count > 1 && (
+          <>
+            <button
+              onClick={handlePrev}
+              className="absolute left-2 w-8 h-8 rounded-full backdrop-blur-md bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/60 transition-all z-10"
+              style={{ top: "5.5rem" }}
+              data-testid="quotes-carousel-prev"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleNext}
+              className="absolute right-2 w-8 h-8 rounded-full backdrop-blur-md bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/60 transition-all z-10"
+              style={{ top: "5.5rem" }}
+              data-testid="quotes-carousel-next"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {count > 1 && (
+        <div className="flex justify-center gap-1.5 mt-3">
+          {quotes.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => handleDot(i)}
+              className={`rounded-full transition-all duration-300 ${
+                i === current
+                  ? "w-6 h-1.5 bg-gradient-to-r from-purple-500 to-blue-500"
+                  : "w-1.5 h-1.5 bg-white/20 hover:bg-white/40"
+              }`}
+              data-testid={`quotes-carousel-dot-${i}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PushNotificationPrompt() {
   const [show, setShow] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -371,7 +536,7 @@ export default function PortalHomePage() {
 
   const deals = apiDeals ?? (dealsError ? fallbackDeals : []);
   const resolvedQuotes = quotes && quotes.length > 0 ? quotes : fallbackQuotes;
-  const latestQuotes = resolvedQuotes.slice(0, 2);
+  const latestQuotes = resolvedQuotes.slice(0, 5);
 
   const handleSubmitQuote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,42 +637,13 @@ export default function PortalHomePage() {
                 </button>
               </div>
 
-              <div className="space-y-3">
-                {latestQuotes.map((quote, idx) => (
-                  <motion.div
-                    key={quote.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 + idx * 0.08 }}
-                  >
-                    <GlassCard className="p-3 flex items-center gap-3" data-testid={`home-quote-${quote.id}`}>
-                      <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0">
-                        {quote.image_url ? (
-                          <img src={quote.image_url} alt={quote.destination} className="w-full h-full object-cover" loading="lazy" />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-purple-900/60 via-blue-900/40 to-[#0a0a0f] flex items-center justify-center">
-                            <Plane className="w-6 h-6 text-white/20" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium text-sm truncate">{quote.title}</p>
-                        <p className="text-white/40 text-xs flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-2.5 h-2.5" /> {quote.destination}
-                        </p>
-                        <p className="text-white font-semibold text-sm mt-1">{formatCurrency(quote.price)}</p>
-                      </div>
-                      <a
-                        href={quote.quote_url}
-                        className="w-9 h-9 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0 hover:bg-purple-500/30 transition-colors"
-                        data-testid={`home-view-quote-${quote.id}`}
-                      >
-                        <Eye className="w-4 h-4 text-purple-400" />
-                      </a>
-                    </GlassCard>
-                  </motion.div>
-                ))}
-              </div>
+              {quotesLoading ? (
+                <div className="relative overflow-hidden rounded-3xl">
+                  <Skeleton className="h-[290px] w-full" />
+                </div>
+              ) : (
+                <QuotesCarousel quotes={latestQuotes} />
+              )}
             </motion.div>
           )}
 
@@ -527,8 +663,9 @@ export default function PortalHomePage() {
             </div>
 
             {dealsLoading ? (
-              <div className="relative overflow-hidden rounded-3xl">
-                <Skeleton className="h-[290px] w-full" />
+              <div className="space-y-3">
+                <Skeleton className="h-[72px] w-full" />
+                <Skeleton className="h-[72px] w-full" />
               </div>
             ) : deals.length === 0 ? (
               <GlassCard className="p-6 text-center">
@@ -536,7 +673,50 @@ export default function PortalHomePage() {
                 <p className="text-white/50 text-sm">No deals right now — check back soon!</p>
               </GlassCard>
             ) : (
-              <DealsCarousel deals={deals} />
+              <div className="space-y-3">
+                {deals.map((deal, idx) => (
+                  <motion.div
+                    key={deal.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 + idx * 0.08 }}
+                  >
+                    <GlassCard className="p-3 flex items-center gap-3" data-testid={`home-deal-${deal.id}`}>
+                      <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0">
+                        {deal.image_url ? (
+                          <img src={deal.image_url} alt={deal.destination} className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-amber-900/60 via-orange-900/40 to-[#0a0a0f] flex items-center justify-center">
+                            <Tag className="w-6 h-6 text-white/20" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium text-sm truncate">{deal.title}</p>
+                        <p className="text-white/40 text-xs flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-2.5 h-2.5" /> {deal.destination}
+                        </p>
+                        {deal.price > 0 && (
+                          <p className="text-white font-semibold text-sm mt-1">{formatCurrency(deal.price)}</p>
+                        )}
+                      </div>
+                      {deal.quote_url ? (
+                        <a
+                          href={deal.quote_url}
+                          className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0 hover:bg-amber-500/30 transition-colors"
+                          data-testid={`home-view-deal-${deal.id}`}
+                        >
+                          <Eye className="w-4 h-4 text-amber-400" />
+                        </a>
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0">
+                          <Eye className="w-4 h-4 text-white/20" />
+                        </div>
+                      )}
+                    </GlassCard>
+                  </motion.div>
+                ))}
+              </div>
             )}
           </motion.div>
 
