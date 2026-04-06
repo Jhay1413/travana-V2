@@ -130,7 +130,7 @@ export default function PortalLoginPage() {
       const credential = await navigator.credentials.create({
         publicKey: {
           challenge,
-          rp: { name: "Apple Travel Portal", id: window.location.hostname },
+          rp: { name: "Tinas Travel", id: window.location.hostname },
           user: {
             id: new TextEncoder().encode(clientId),
             name: email,

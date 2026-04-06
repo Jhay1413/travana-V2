@@ -1,7 +1,7 @@
 {
-  "name": "Tina's Travel Deals Portal",
-  "short_name": "Travel Portal",
-  "description": "Your personal travel portal — quotes, bookings, and messages",
+  "name": "Tinas Travel",
+  "short_name": "Tinas Travel",
+  "description": "Your personal travel portal — quotes, bookings, and messages from Tinas Travel",
   "start_url": "/portal",
   "display": "standalone",
   "background_color": "#0f0a1e",
