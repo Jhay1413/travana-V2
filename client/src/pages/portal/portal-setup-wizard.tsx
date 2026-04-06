@@ -311,10 +311,10 @@ export default function PortalSetupWizard() {
                                         <p className="text-amber-300 text-[11px] font-medium text-center">Use Safari for this step</p>
                                       </div>
                                       <InstallStep num={1} icon={<ArrowUpFromLine className="w-3.5 h-3.5" />}>
-                                        Tap <span className="text-blue-400 font-semibold">Share</span> button at the bottom
+                                        Tap <span className="inline-flex items-center gap-1 bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[11px] font-medium"><ArrowUpFromLine className="w-3 h-3" /></span> at the bottom of the screen
                                       </InstallStep>
                                       <InstallStep num={2} icon={<Plus className="w-3.5 h-3.5" />}>
-                                        Tap <span className="text-white font-semibold">"Add to Home Screen"</span>
+                                        Tap <span className="inline-flex items-center gap-1 bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[11px] font-medium"><Plus className="w-3 h-3" /></span> bottom right &amp; then <span className="text-white font-semibold">"Add to Home Screen"</span>
                                       </InstallStep>
                                       <InstallStep num={3} icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
                                         Tap <span className="text-white font-semibold">"Add"</span> and open from Home Screen
