@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
 import { useGeneratePost } from "@/hooks/mutations/use-social-post-mutations";
+import axiosClient from "@/api/client/axios-client";
 import { useToast } from "@/hooks/use-toast";
 import { SocialPostPreviewDialog } from "@/components/social-post-preview-dialog";
 import { QuoteCreateDialog } from "@/components/quote-create-dialog";
@@ -22,7 +23,10 @@ import {
   Sparkles,
   Clock,
   Plus,
+  Bell,
+  Globe,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { EnrichedQuote } from "@/types/quote";
 import type { TravelDeal } from "@/api/endpoints/social-post.api";
 
@@ -93,7 +97,7 @@ function getFirstImage(q: EnrichedQuote): string | null {
 }
 
 
-function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; }) {
+function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPortalToggle, onPushNotify }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; onPortalToggle: (quoteId: string, checked: boolean) => void; onPushNotify: (quoteId: string) => void; }) {
   const { quote } = post;
   const imageUrl = getFirstImage(quote);
   const tourOp = quote.main_tour_operator_name;
@@ -102,6 +106,8 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
   // Use deal state from the enriched quote (joined from travel_deal)
   const isScheduled = !!quote.onlySocialsId;
   const hasDeal = !!quote.dealId;
+  const [portalChecked, setPortalChecked] = useState(!!quote.show_on_portal);
+  const [pushSending, setPushSending] = useState(false);
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="glass ringed grain rounded-2xl overflow-hidden flex flex-col" data-testid={`card-social-post-${quote.id}`}>
@@ -136,6 +142,37 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating }: { po
           <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Clock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Created:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-created-${quote.id}`}>{formatDateTime(quote.date_created)}</span></div>
         </div>
         {quote.quote_ref && <div className="text-xs text-black/60 dark:text-white/50">View Link: <a href={quote.quote_ref} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline" data-testid={`link-view-${quote.id}`}>View</a></div>}
+        <div className="space-y-2 mt-1">
+          <label className="flex items-center gap-2 cursor-pointer" data-testid={`checkbox-portal-${quote.id}`}>
+            <Checkbox
+              checked={portalChecked}
+              onCheckedChange={(checked) => {
+                const val = !!checked;
+                setPortalChecked(val);
+                onPortalToggle(quote.id, val);
+              }}
+              className="h-4 w-4"
+            />
+            <Globe className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="text-xs text-black/70 dark:text-white/70 font-medium">Add to Portal</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer" data-testid={`checkbox-push-${quote.id}`}>
+            <Checkbox
+              checked={pushSending}
+              onCheckedChange={() => {
+                if (pushSending) return;
+                setPushSending(true);
+                onPushNotify(quote.id);
+                setTimeout(() => setPushSending(false), 3000);
+              }}
+              className="h-4 w-4"
+            />
+            <Bell className="w-3.5 h-3.5 text-amber-500" />
+            <span className="text-xs text-black/70 dark:text-white/70 font-medium">
+              {pushSending ? "Sending..." : "Push Notification to Portal"}
+            </span>
+          </label>
+        </div>
         <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
           <Link href={`/social-posts/quotes/${quote.id}`}>
             <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2" data-testid={`button-view-quote-${quote.id}`}><Eye className="w-4 h-4" />View Quote</Button>
@@ -278,6 +315,25 @@ export default function SocialPostsBoard() {
     });
   };
 
+  const handlePortalToggle = useCallback(async (quoteId: string, checked: boolean) => {
+    try {
+      await axiosClient.patch(`/api/quotes/${quoteId}/portal-visibility`, { show_on_portal: checked });
+      toast({ title: checked ? "Added to portal" : "Removed from portal" });
+    } catch {
+      toast({ title: "Failed to update portal visibility", variant: "destructive" });
+    }
+  }, [toast]);
+
+  const handlePushNotify = useCallback(async (quoteId: string) => {
+    try {
+      const res = await axiosClient.post(`/api/quotes/${quoteId}/portal-push`);
+      const sent = res?.data?.sent ?? res?.sent ?? 0;
+      toast({ title: `Push notification sent to ${sent} device${sent !== 1 ? "s" : ""}` });
+    } catch {
+      toast({ title: "Failed to send push notification", variant: "destructive" });
+    }
+  }, [toast]);
+
   function handleScheduleFilterClick(value: ScheduleFilter) {
     setScheduleFilter(value);
     if (value !== "specific-date") {
@@ -391,7 +447,7 @@ export default function SocialPostsBoard() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence mode="popLayout">
-            {filteredPosts.map((post) => (<SocialPostCard key={post.quote.id} post={post} onGeneratePost={handleGeneratePost} onViewPost={handleViewPost} isGenerating={generatePost.isPending && previewQuoteId === post.quote.id} />))}
+            {filteredPosts.map((post) => (<SocialPostCard key={post.quote.id} post={post} onGeneratePost={handleGeneratePost} onViewPost={handleViewPost} isGenerating={generatePost.isPending && previewQuoteId === post.quote.id} onPortalToggle={handlePortalToggle} onPushNotify={handlePushNotify} />))}
           </AnimatePresence>
         </div>
       )}

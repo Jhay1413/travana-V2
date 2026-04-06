@@ -1,9 +1,13 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import multer from "multer";
 import { quoteController } from "../controllers/quote.controller";
 import { quoteImageController } from "../controllers/quote-image.controller";
 import { validate } from "../middlewares/validation.middleware";
 import { addImagesValidator } from "../validators/quote-image.validator";
+import { db } from "../config/database";
+import { quote } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { pushNotificationService } from "../services/push-notification.service";
 
 const router = Router();
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -51,5 +55,36 @@ router.patch("/:quoteId/images/:imageId/primary", quoteImageController.setPrimar
 // Tag management
 router.put("/:id/tags", quoteController.updateQuoteTags);
 router.get("/:id/tags", quoteController.getQuoteTags);
+
+router.patch("/:id/portal-visibility", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { show_on_portal } = req.body;
+    await db.update(quote).set({ show_on_portal: !!show_on_portal }).where(eq(quote.id, id));
+    res.json({ success: true, show_on_portal: !!show_on_portal });
+  } catch (err: any) {
+    console.error("Portal visibility toggle error:", err);
+    res.status(500).json({ error: "Failed to update portal visibility" });
+  }
+});
+
+router.post("/:id/portal-push", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const [q] = await db.select({ title: quote.title, show_on_portal: quote.show_on_portal }).from(quote).where(eq(quote.id, id)).limit(1);
+    if (!q) return res.status(404).json({ error: "Quote not found" });
+
+    const sent = await pushNotificationService.sendToAll({
+      title: "🌴 New Holiday Deal!",
+      body: q.title || "Check out our latest travel deal!",
+      url: "/portal",
+    });
+
+    res.json({ success: true, sent });
+  } catch (err: any) {
+    console.error("Portal push broadcast error:", err);
+    res.status(500).json({ error: "Failed to send push notifications" });
+  }
+});
 
 export default router;

@@ -39,6 +39,37 @@ export const pushNotificationService = {
       .where(and(eq(pushSubscriptions.clientId, clientId), eq(pushSubscriptions.endpoint, endpoint)));
   },
 
+  async sendToAll(payload: { title: string; body: string; icon?: string; url?: string }): Promise<number> {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+      console.warn("VAPID keys not configured, skipping push notification");
+      return 0;
+    }
+
+    const subs = await db.select().from(pushSubscriptions);
+    console.log(`[Push] Broadcasting to all, found ${subs.length} subscription(s)`);
+    if (subs.length === 0) return 0;
+
+    const jsonPayload = JSON.stringify(payload);
+    let sent = 0;
+
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          jsonPayload,
+        );
+        sent++;
+      } catch (err: any) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
+        } else {
+          console.error("Push broadcast failed:", err.statusCode || err.message);
+        }
+      }
+    }
+    return sent;
+  },
+
   async sendToClient(clientId: string, payload: { title: string; body: string; icon?: string; url?: string }): Promise<void> {
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       console.warn("VAPID keys not configured, skipping push notification");
