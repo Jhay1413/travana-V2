@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Tag, MapPin, Calendar, Plane, Eye, Inbox, ChevronRight, Home } from "lucide-react";
+import { Tag, MapPin, Calendar, Eye, Inbox, ChevronRight, Home, Heart } from "lucide-react";
 import { useLocation } from "wouter";
 import PortalLayout from "./portal-layout";
-import { usePortalDeals, type PortalDeal } from "@/hooks/use-portal-api";
+import { usePortalDeals, useSubmitInterest, type PortalDeal } from "@/hooks/use-portal-api";
 import defaultHeroBg from "@assets/Maldives_1773092726855.png";
 
 function GlassCard({ children, className = "", ...rest }: { children: React.ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
@@ -43,6 +44,8 @@ export default function PortalDealsPage() {
   const [, setLocation] = useLocation();
   const { data: apiDeals, isLoading } = usePortalDeals();
   const deals = apiDeals ?? [];
+  const interestMutation = useSubmitInterest();
+  const [interestedDeals, setInterestedDeals] = useState<Set<string>>(new Set());
 
   return (
     <PortalLayout>
@@ -69,8 +72,8 @@ export default function PortalDealsPage() {
         ) : deals.length === 0 ? (
           <GlassCard className="p-8 text-center">
             <Inbox className="w-12 h-12 text-white/20 mx-auto mb-3" />
-            <p className="text-white/60 font-medium mb-1" data-testid="text-empty-deals">No quotes available</p>
-            <p className="text-white/40 text-sm">Check back soon for new holiday quotes</p>
+            <p className="text-white/60 font-medium mb-1" data-testid="text-empty-deals">No deals available</p>
+            <p className="text-white/40 text-sm">Check back soon for new holiday deals</p>
           </GlassCard>
         ) : (
           <div className="space-y-4">
@@ -115,19 +118,38 @@ export default function PortalDealsPage() {
                         {deal.num_nights ? ` · ${deal.num_nights} nights` : ""}
                       </span>
                     </div>
-                    {deal.quote_url ? (
-                      <a
-                        href={deal.quote_url}
-                        className="w-full py-2.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500/80 to-blue-500/80 text-white hover:from-purple-500 hover:to-blue-500 transition-all"
-                        data-testid={`button-view-quote-${deal.id}`}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (!interestedDeals.has(deal.id)) {
+                            interestMutation.mutate(deal.id, {
+                              onSuccess: () => {
+                                setInterestedDeals(prev => new Set(prev).add(deal.id));
+                              },
+                            });
+                          }
+                        }}
+                        disabled={interestedDeals.has(deal.id) || interestMutation.isPending}
+                        className={`flex-1 py-2.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
+                          interestedDeals.has(deal.id)
+                            ? "bg-pink-500/20 text-pink-300 border border-pink-500/30"
+                            : "bg-gradient-to-r from-pink-500/80 to-rose-500/80 text-white hover:from-pink-500 hover:to-rose-500"
+                        }`}
+                        data-testid={`button-interest-${deal.id}`}
                       >
-                        <Eye className="w-4 h-4" /> View Quote
-                      </a>
-                    ) : (
-                      <span className="w-full py-2.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 bg-white/[0.06] text-white/40">
-                        Quote Unavailable
-                      </span>
-                    )}
+                        <Heart className={`w-4 h-4 ${interestedDeals.has(deal.id) ? "fill-pink-300" : ""}`} />
+                        {interestedDeals.has(deal.id) ? "Interested!" : "I'm Interested"}
+                      </button>
+                      {deal.quote_url && (
+                        <a
+                          href={deal.quote_url}
+                          className="flex-1 py-2.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500/80 to-blue-500/80 text-white hover:from-purple-500 hover:to-blue-500 transition-all"
+                          data-testid={`button-view-deal-${deal.id}`}
+                        >
+                          <Eye className="w-4 h-4" /> View Deal
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </GlassCard>
               </motion.div>

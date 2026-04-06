@@ -101,9 +101,9 @@ function DealsCarousel({ deals }: { deals: PortalDeal[] }) {
   const deal = deals[current] ?? deals[0];
 
   const variants = {
-    enter: (dir: number) => ({ x: dir > 0 ? "100%" : "-100%", opacity: 0.3 }),
+    enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
     center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? "-100%" : "100%", opacity: 0.3 }),
+    exit: (dir: number) => ({ x: dir > 0 ? -300 : 300, opacity: 0 }),
   };
 
   return (
@@ -114,7 +114,7 @@ function DealsCarousel({ deals }: { deals: PortalDeal[] }) {
         onTouchEnd={handleTouchEnd}
         style={{ minHeight: 290 }}
       >
-        <AnimatePresence initial={false} custom={direction}>
+        <AnimatePresence initial={false} custom={direction} mode="popLayout">
           <motion.div
             key={deal.id}
             custom={direction}
@@ -122,7 +122,7 @@ function DealsCarousel({ deals }: { deals: PortalDeal[] }) {
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.8 }}
             className="absolute inset-0"
           >
             <GlassCard className="overflow-hidden h-full" data-testid={`home-deal-${deal.id}`}>
@@ -162,13 +162,13 @@ function DealsCarousel({ deals }: { deals: PortalDeal[] }) {
                   <a
                     href={deal.quote_url}
                     className="w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 bg-gradient-to-r from-purple-500/80 to-blue-500/80 text-white hover:from-purple-500 hover:to-blue-500 transition-all"
-                    data-testid={`home-view-quote-${deal.id}`}
+                    data-testid={`home-view-deal-${deal.id}`}
                   >
-                    <Eye className="w-3 h-3" /> View Quote
+                    <Eye className="w-3 h-3" /> View Deal
                   </a>
                 ) : (
                   <span className="w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 bg-white/[0.06] text-white/40">
-                    Quote Unavailable
+                    Deal Unavailable
                   </span>
                 )}
               </div>
@@ -180,14 +180,16 @@ function DealsCarousel({ deals }: { deals: PortalDeal[] }) {
           <>
             <button
               onClick={handlePrev}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full backdrop-blur-md bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/60 transition-all z-10"
+              className="absolute left-2 w-8 h-8 rounded-full backdrop-blur-md bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/60 transition-all z-10"
+              style={{ top: "5.5rem" }}
               data-testid="carousel-prev"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={handleNext}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full backdrop-blur-md bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/60 transition-all z-10"
+              className="absolute right-2 w-8 h-8 rounded-full backdrop-blur-md bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/60 transition-all z-10"
+              style={{ top: "5.5rem" }}
               data-testid="carousel-next"
             >
               <ChevronRight className="w-4 h-4" />
@@ -454,40 +456,11 @@ export default function PortalHomePage() {
             </div>
           </motion.button>
 
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-amber-400" />
-                <h2 className="text-base font-bold text-white">Latest Deals</h2>
-              </div>
-              <button onClick={() => setLocation("/portal/deals")} className="text-xs text-purple-400 flex items-center gap-1 hover:text-purple-300 transition-colors" data-testid="link-view-all-deals">
-                View all <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-
-            {dealsLoading ? (
-              <div className="relative overflow-hidden rounded-3xl">
-                <Skeleton className="h-[290px] w-full" />
-              </div>
-            ) : deals.length === 0 ? (
-              <GlassCard className="p-6 text-center">
-                <Tag className="w-8 h-8 text-white/15 mx-auto mb-2" />
-                <p className="text-white/50 text-sm">No deals right now — check back soon!</p>
-              </GlassCard>
-            ) : (
-              <DealsCarousel deals={deals} />
-            )}
-          </motion.div>
-
           {latestQuotes.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
+              transition={{ delay: 0.15 }}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -505,7 +478,7 @@ export default function PortalHomePage() {
                     key={quote.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 + idx * 0.08 }}
+                    transition={{ delay: 0.2 + idx * 0.08 }}
                   >
                     <GlassCard className="p-3 flex items-center gap-3" data-testid={`home-quote-${quote.id}`}>
                       <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0">
@@ -537,6 +510,35 @@ export default function PortalHomePage() {
               </div>
             </motion.div>
           )}
+
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-amber-400" />
+                <h2 className="text-base font-bold text-white">Latest Deals</h2>
+              </div>
+              <button onClick={() => setLocation("/portal/deals")} className="text-xs text-purple-400 flex items-center gap-1 hover:text-purple-300 transition-colors" data-testid="link-view-all-deals">
+                View all <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+
+            {dealsLoading ? (
+              <div className="relative overflow-hidden rounded-3xl">
+                <Skeleton className="h-[290px] w-full" />
+              </div>
+            ) : deals.length === 0 ? (
+              <GlassCard className="p-6 text-center">
+                <Tag className="w-8 h-8 text-white/15 mx-auto mb-2" />
+                <p className="text-white/50 text-sm">No deals right now — check back soon!</p>
+              </GlassCard>
+            ) : (
+              <DealsCarousel deals={deals} />
+            )}
+          </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 15 }}
