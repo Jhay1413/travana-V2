@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Tag, MapPin, Calendar, Eye, Inbox, ChevronRight, Home, Heart } from "lucide-react";
+import { Tag, MapPin, Calendar, Eye, Inbox, ChevronRight, Home, Heart, RefreshCw } from "lucide-react";
 import { useLocation } from "wouter";
 import PortalLayout from "./portal-layout";
 import { usePortalDeals, useSubmitInterest, type PortalDeal } from "@/hooks/use-portal-api";
@@ -42,7 +42,7 @@ function DealCardSkeleton() {
 
 export default function PortalDealsPage() {
   const [, setLocation] = useLocation();
-  const { data: apiDeals, isLoading } = usePortalDeals();
+  const { data: apiDeals, isLoading, refetch: refetchDeals } = usePortalDeals();
   const deals = apiDeals ?? [];
   const interestMutation = useSubmitInterest();
   const [interestedDeals, setInterestedDeals] = useState<Set<string>>(new Set());
@@ -57,11 +57,20 @@ export default function PortalDealsPage() {
           <ChevronRight className="w-3 h-3 text-white/20" />
           <span className="text-white/70">Latest Deals</span>
         </div>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/30 to-orange-500/30 flex items-center justify-center">
-            <Tag className="w-5 h-5 text-amber-400" />
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/30 to-orange-500/30 flex items-center justify-center">
+              <Tag className="w-5 h-5 text-amber-400" />
+            </div>
+            <h1 className="text-xl font-bold text-white" data-testid="text-deals-title">Latest Deals</h1>
           </div>
-          <h1 className="text-xl font-bold text-white" data-testid="text-deals-title">Latest Deals</h1>
+          <button
+            onClick={() => refetchDeals()}
+            className="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.12] transition-all active:scale-90"
+            data-testid="button-refresh-deals"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
         </div>
 
         {isLoading ? (

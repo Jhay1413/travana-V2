@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import {
   FileText, Briefcase, Tag, MessageCircle, Plus,
   Plane, Calendar, Users, MapPin, X, Send, Loader2,
-  Heart, ArrowRight, Sparkles, ChevronRight, ChevronLeft, Eye, Bell,
+  Heart, ArrowRight, Sparkles, ChevronRight, ChevronLeft, Eye, Bell, RefreshCw,
 } from "lucide-react";
 import PortalLayout from "./portal-layout";
 import PortalSetupWizard from "./portal-setup-wizard";
@@ -525,7 +525,7 @@ export default function PortalHomePage() {
   const { data: quotes, isLoading: quotesLoading, isError: quotesError } = usePortalQuotes();
   const { data: bookings, isLoading: bookingsLoading } = usePortalBookings();
   const { data: messages, isLoading: messagesLoading } = usePortalMessages();
-  const { data: apiDeals, isLoading: dealsLoading, isError: dealsError } = usePortalDeals();
+  const { data: apiDeals, isLoading: dealsLoading, isError: dealsError, refetch: refetchDeals } = usePortalDeals();
   const quoteRequestMutation = useSubmitQuoteRequest();
 
   const statsLoading = userLoading || quotesLoading || bookingsLoading || messagesLoading;
@@ -657,9 +657,18 @@ export default function PortalHomePage() {
                 <Tag className="w-4 h-4 text-amber-400" />
                 <h2 className="text-base font-bold text-white">Latest Deals</h2>
               </div>
-              <button onClick={() => setLocation("/portal/deals")} className="text-xs text-purple-400 flex items-center gap-1 hover:text-purple-300 transition-colors" data-testid="link-view-all-deals">
-                View all <ArrowRight className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => refetchDeals()}
+                  className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.12] transition-all active:scale-90"
+                  data-testid="button-refresh-deals-home"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setLocation("/portal/deals")} className="text-xs text-purple-400 flex items-center gap-1 hover:text-purple-300 transition-colors" data-testid="link-view-all-deals">
+                  View all <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
             </div>
 
             {dealsLoading ? (
