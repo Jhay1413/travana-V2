@@ -135,6 +135,9 @@ export function usePortalDeals() {
     queryFn: () => portalFetch("/api/portal/deals"),
     retry: false,
     enabled: !!getPortalToken(),
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
+    staleTime: 0,
   });
 }
 
