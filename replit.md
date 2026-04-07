@@ -144,6 +144,16 @@ Schema includes tables for:
 - **Trigger**: `bridgeAgentReplyToPortal()` in portal-chat-bridge sends push notification to client after writing portal message
 - **Security**: Subscribe deletes any existing subscription for same endpoint before inserting (prevents cross-account leakage); unsubscribe enforces clientId ownership
 
+#### Public Website API (External Travel Website)
+- Routes: `server/routes/website-public.routes.ts`, registered at `/api/public/website/*` before auth middleware
+- CORS enabled (`Access-Control-Allow-Origin: *`) for cross-origin access from separate website project
+- `GET /api/public/website/deals?page=0&limit=20&sort=newest|price_asc|price_desc&search=term` — Paginated portal deals (show_on_portal + active + has token) with images
+- `GET /api/public/website/deals/:token` — Single deal detail with destination guru AI data
+- `GET /api/public/website/destinations` — All destination guru entries (name + country)
+- `GET /api/public/website/destinations/:name` — Full destination guru data + related deals
+- `GET /api/public/website/stats` — Quick counts of deals and destinations
+- All responses use `{ success, data }` envelope format
+
 #### Quote Sharing System
 - Quotes can be shared via unique 6-char tokens stored in `quote_table.quote_token`
 - Public API: `/api/public/quote/:token` (no auth required, registered before auth middleware in `server/index.ts`)
