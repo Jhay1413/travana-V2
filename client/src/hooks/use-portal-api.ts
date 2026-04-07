@@ -94,12 +94,20 @@ export interface PortalMessage {
   timestamp: string;
 }
 
+export interface PortalTag {
+  id: string;
+  name: string;
+}
+
 export const portalKeys = {
   user: ["portal", "user"] as const,
   quotes: ["portal", "quotes"] as const,
   bookings: ["portal", "bookings"] as const,
   deals: ["portal", "deals"] as const,
   messages: ["portal", "messages"] as const,
+  allTags: ["portal", "allTags"] as const,
+  myTags: ["portal", "myTags"] as const,
+  hasTags: ["portal", "hasTags"] as const,
 };
 
 export function usePortalUser() {
@@ -198,6 +206,45 @@ export function usePortalLogin() {
       if (data?.token) {
         setPortalToken(data.token);
       }
+    },
+  });
+}
+
+export function usePortalAllTags() {
+  return useQuery<PortalTag[]>({
+    queryKey: portalKeys.allTags,
+    queryFn: () => portalFetch("/api/portal/tags"),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function usePortalMyTags() {
+  return useQuery<PortalTag[]>({
+    queryKey: portalKeys.myTags,
+    queryFn: () => portalFetch("/api/portal/my-tags"),
+    retry: false,
+    enabled: !!getPortalToken(),
+  });
+}
+
+export function usePortalHasTags() {
+  return useQuery<{ hasTags: boolean }>({
+    queryKey: portalKeys.hasTags,
+    queryFn: () => portalFetch("/api/portal/has-tags"),
+    retry: false,
+    enabled: !!getPortalToken(),
+  });
+}
+
+export function useSavePortalTags() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (tagIds: string[]) =>
+      portalFetch("/api/portal/my-tags", { method: "POST", body: JSON.stringify({ tagIds }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: portalKeys.myTags });
+      queryClient.invalidateQueries({ queryKey: portalKeys.hasTags });
     },
   });
 }

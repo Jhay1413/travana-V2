@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Home, FileText, Briefcase, Tag, MessageCircle, LogOut, Bell, BellOff } from "lucide-react";
-import { getPortalToken, setPortalToken, clearPortalToken } from "@/hooks/use-portal-api";
+import { getPortalToken, setPortalToken, clearPortalToken, usePortalHasTags } from "@/hooks/use-portal-api";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -102,6 +102,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const [showBanner, setShowBanner] = useState(false);
   const bannerDismissed = useRef(false);
 
+  const { data: hasTagsData, isSuccess: hasTagsLoaded } = usePortalHasTags();
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get("token");
@@ -117,6 +119,12 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       setLocation("/portal/login");
     }
   }, [setLocation]);
+
+  useEffect(() => {
+    if (hasTagsLoaded && hasTagsData?.hasTags === false) {
+      setLocation("/portal/tags");
+    }
+  }, [hasTagsLoaded, hasTagsData, setLocation]);
 
   useEffect(() => {
     const token = getPortalToken();

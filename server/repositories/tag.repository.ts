@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { tags, quoteTags } from "@shared/schema";
+import { tags, quoteTags, clientTags } from "@shared/schema";
 import { eq, ilike, sql, and } from "drizzle-orm";
 
 export const tagRepository = {
@@ -160,5 +160,41 @@ export const tagRepository = {
    */
   async deleteUnusedTags() {
     await db.delete(tags).where(eq(tags.usageCount, 0));
+  },
+
+  /**
+   * Get tags selected by a client
+   */
+  async getClientTags(clientId: string) {
+    return await db
+      .select({ id: tags.id, name: tags.name })
+      .from(clientTags)
+      .innerJoin(tags, eq(clientTags.tagId, tags.id))
+      .where(eq(clientTags.clientId, clientId))
+      .orderBy(tags.name);
+  },
+
+  /**
+   * Replace all tags for a client
+   */
+  async setClientTags(clientId: string, tagIds: string[]) {
+    await db.delete(clientTags).where(eq(clientTags.clientId, clientId));
+    if (tagIds.length > 0) {
+      await db.insert(clientTags).values(
+        tagIds.map(tagId => ({ clientId, tagId }))
+      );
+    }
+  },
+
+  /**
+   * Check if a client has any tags selected
+   */
+  async clientHasTags(clientId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: clientTags.id })
+      .from(clientTags)
+      .where(eq(clientTags.clientId, clientId))
+      .limit(1);
+    return !!row;
   },
 };

@@ -29,4 +29,16 @@ export const tagService = {
   async addQuoteTags(quoteId: string, tagNames: string[]) {
     await tagRepository.addTagsToQuote(quoteId, tagNames);
   },
+
+  async getClientTags(clientId: string) {
+    return await tagRepository.getClientTags(clientId);
+  },
+
+  async setClientTags(clientId: string, tagIds: string[]) {
+    await tagRepository.setClientTags(clientId, tagIds);
+  },
+
+  async clientHasTags(clientId: string): Promise<boolean> {
+    return await tagRepository.clientHasTags(clientId);
+  },
 };

@@ -13,6 +13,7 @@ import { getUserId } from "../utils/get-user-id";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
 import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
 import { pushNotificationService } from "../services/push-notification.service";
+import { tagService } from "../services/tag.service";
 
 const portalRouter = Router();
 
@@ -523,6 +524,53 @@ portalRouter.post("/interest", portalAuth, async (req: Request, res: Response) =
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to record interest" });
+  }
+});
+
+portalRouter.get("/tags", async (_req: Request, res: Response) => {
+  try {
+    const allTags = await tagService.getAllTags();
+    res.json(allTags);
+  } catch (err: any) {
+    console.error("Portal tags error:", err);
+    res.status(500).json({ error: "Failed to load tags" });
+  }
+});
+
+portalRouter.get("/has-tags", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const hasTags = await tagService.clientHasTags(clientId);
+    res.json({ hasTags });
+  } catch (err: any) {
+    console.error("Portal has-tags error:", err);
+    res.status(500).json({ error: "Failed to check tags" });
+  }
+});
+
+portalRouter.get("/my-tags", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const myTags = await tagService.getClientTags(clientId);
+    res.json(myTags);
+  } catch (err: any) {
+    console.error("Portal my-tags error:", err);
+    res.status(500).json({ error: "Failed to load your tags" });
+  }
+});
+
+portalRouter.post("/my-tags", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { tagIds } = req.body;
+    if (!Array.isArray(tagIds) || tagIds.length === 0) {
+      return res.status(400).json({ error: "At least one tag is required" });
+    }
+    await tagService.setClientTags(clientId, tagIds);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Portal set tags error:", err);
+    res.status(500).json({ error: "Failed to save tags" });
   }
 });
 

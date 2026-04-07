@@ -33,6 +33,7 @@ import PortalBookingsPage from "@/pages/portal/portal-bookings";
 import PortalDealsPage from "@/pages/portal/portal-deals";
 import PortalMessagesPage from "@/pages/portal/portal-messages";
 import PortalQuoteViewPage from "@/pages/portal/portal-quote-view";
+import PortalTagsPage from "@/pages/portal/portal-tags";
 import { FeedbackButton } from "@/components/feedback-button";
 import { Loader2 } from "lucide-react";
 
@@ -85,6 +86,7 @@ function AppRouter() {
     return (
       <Switch>
         <Route path="/portal/login" component={PortalLoginPage} />
+        <Route path="/portal/tags" component={PortalTagsPage} />
         <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
         <Route path="/portal/quotes" component={PortalQuotesPage} />
         <Route path="/portal/bookings" component={PortalBookingsPage} />

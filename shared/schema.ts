@@ -1320,6 +1320,18 @@ export const insertQuoteTagSchema = createInsertSchema(quoteTags);
 export type QuoteTag = typeof quoteTags.$inferSelect;
 export type InsertQuoteTag = z.infer<typeof insertQuoteTagSchema>;
 
+export const clientTags = pgTable("client_tags", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: 'cascade' }),
+  tagId: uuid("tag_id").notNull().references(() => tags.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  unique_client_tag: unique().on(table.clientId, table.tagId)
+}));
+
+export const insertClientTagSchema = createInsertSchema(clientTags);
+export type ClientTag = typeof clientTags.$inferSelect;
+export type InsertClientTag = z.infer<typeof insertClientTagSchema>;
 
 export const tourOperators = pgTable("tour_operators", {
   id: varchar("id").primaryKey(),
