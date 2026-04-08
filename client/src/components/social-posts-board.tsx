@@ -26,6 +26,7 @@ import {
   Plus,
   Bell,
   Globe,
+  Star,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { EnrichedQuote } from "@/types/quote";
@@ -98,7 +99,7 @@ function getFirstImage(q: EnrichedQuote): string | null {
 }
 
 
-function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPortalToggle, onPushNotify }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; onPortalToggle: (quoteId: string, checked: boolean) => void; onPushNotify: (quoteId: string) => void; }) {
+function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPortalToggle, onPushNotify, onFeaturedToggle }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; onPortalToggle: (quoteId: string, checked: boolean) => void; onPushNotify: (quoteId: string) => void; onFeaturedToggle: (quoteId: string, checked: boolean) => void; }) {
   const { quote } = post;
   const imageUrl = getFirstImage(quote);
   const tourOp = quote.main_tour_operator_name;
@@ -108,6 +109,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
   const isScheduled = !!quote.onlySocialsId;
   const hasDeal = !!quote.dealId;
   const [portalChecked, setPortalChecked] = useState(!!quote.show_on_portal);
+  const [featuredChecked, setFeaturedChecked] = useState(!!quote.is_featured);
   const [pushSending, setPushSending] = useState(false);
 
   return (
@@ -156,6 +158,19 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
             />
             <Globe className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-xs text-black/70 dark:text-white/70 font-medium">Add to Portal</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer" data-testid={`checkbox-featured-${quote.id}`}>
+            <Checkbox
+              checked={featuredChecked}
+              onCheckedChange={(checked) => {
+                const val = !!checked;
+                setFeaturedChecked(val);
+                onFeaturedToggle(quote.id, val);
+              }}
+              className="h-4 w-4"
+            />
+            <Star className="w-3.5 h-3.5 text-yellow-500" />
+            <span className="text-xs text-black/70 dark:text-white/70 font-medium">Featured Deal</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer" data-testid={`checkbox-push-${quote.id}`}>
             <Checkbox
@@ -328,6 +343,16 @@ export default function SocialPostsBoard() {
     }
   }, [toast, queryClient]);
 
+  const handleFeaturedToggle = useCallback(async (quoteId: string, checked: boolean) => {
+    try {
+      await axiosClient.patch(`/api/quotes/${quoteId}/featured`, { is_featured: checked });
+      toast({ title: checked ? "Marked as featured deal" : "Removed from featured deals" });
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
+    } catch {
+      toast({ title: "Failed to update featured status", variant: "destructive" });
+    }
+  }, [toast, queryClient]);
+
   const handlePushNotify = useCallback(async (quoteId: string) => {
     try {
       const res = await axiosClient.post(`/api/quotes/${quoteId}/portal-push`);
@@ -460,7 +485,7 @@ export default function SocialPostsBoard() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence mode="popLayout">
-            {filteredPosts.map((post) => (<SocialPostCard key={post.quote.id} post={post} onGeneratePost={handleGeneratePost} onViewPost={handleViewPost} isGenerating={generatePost.isPending && previewQuoteId === post.quote.id} onPortalToggle={handlePortalToggle} onPushNotify={handlePushNotify} />))}
+            {filteredPosts.map((post) => (<SocialPostCard key={post.quote.id} post={post} onGeneratePost={handleGeneratePost} onViewPost={handleViewPost} isGenerating={generatePost.isPending && previewQuoteId === post.quote.id} onPortalToggle={handlePortalToggle} onPushNotify={handlePushNotify} onFeaturedToggle={handleFeaturedToggle} />))}
           </AnimatePresence>
         </div>
       )}

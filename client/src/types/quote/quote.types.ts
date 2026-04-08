@@ -227,6 +227,8 @@ export interface Quote {
   quote_ref: string | null;
   isQuoteCopy: boolean | null;
   isFreeQuote: boolean | null;
+  show_on_portal: boolean | null;
+  is_featured: boolean | null;
   flights?: QuoteFlight[];
   accommodations?: QuoteAccommodation[];
   transfers?: QuoteTransfer[];

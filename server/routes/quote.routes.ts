@@ -80,6 +80,18 @@ router.patch("/:id/portal-visibility", async (req: Request, res: Response) => {
   }
 });
 
+router.patch("/:id/featured", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { is_featured } = req.body;
+    await db.update(quote).set({ is_featured: !!is_featured }).where(eq(quote.id, id));
+    res.json({ success: true, is_featured: !!is_featured });
+  } catch (err: any) {
+    console.error("Featured toggle error:", err);
+    res.status(500).json({ error: "Failed to update featured status" });
+  }
+});
+
 router.post("/:id/portal-push", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
