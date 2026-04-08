@@ -9,10 +9,17 @@ export const publicDealsController = {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
     const sortBy = (req.query.sort as string) || "newest";
     const category = (req.query.category as string || "").trim();
-    const countryRaw = (req.query.country as string || "").trim();
-    const countries = countryRaw ? countryRaw.split(",").map((c) => c.trim()).filter(Boolean) : undefined;
-    const tagsRaw = (req.query.tags as string || "").trim();
-    const tags = tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : undefined;
+    const countryParam = req.query.country;
+    const countries = Array.isArray(countryParam)
+      ? (countryParam as string[]).map((c) => c.trim()).filter(Boolean)
+      : countryParam ? (countryParam as string).split(",").map((c) => c.trim()).filter(Boolean)
+      : undefined;
+
+    const tagsParam = req.query.tags;
+    const tags = Array.isArray(tagsParam)
+      ? (tagsParam as string[]).map((t) => t.trim()).filter(Boolean)
+      : tagsParam ? (tagsParam as string).split(",").map((t) => t.trim()).filter(Boolean)
+      : undefined;
 
     const validSorts = ["newest", "price_asc", "price_desc"];
     if (!validSorts.includes(sortBy)) {
