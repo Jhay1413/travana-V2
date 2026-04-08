@@ -86,9 +86,12 @@ async function enrichRows(rows: any[], detail = false) {
 
   const guruMap: Record<string, unknown> = {};
   for (const g of guruRows) {
-    // Key by the queried name (deal's destination) so formatDeal lookup always hits
     guruMap[g.queryName] = g.data;
   }
+
+  console.log("[enrichRows] destNames:", destNames);
+  console.log("[enrichRows] guruRows:", guruRows.map(g => ({ queryName: g.queryName, destination: g.destination })));
+  console.log("[enrichRows] guruMap keys:", Object.keys(guruMap));
 
   return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap, guruMap, tagsMap, detail));
 }
