@@ -978,9 +978,11 @@ export default function TicketPage() {
                     {ticket.subject}
                   </h1>
                   {ticket.description && (
-                    <p className="text-black/60 mt-2" data-testid="text-ticket-description">
-                      {ticket.description}
-                    </p>
+                    <div
+                      className="text-black/60 mt-2 prose prose-sm max-w-none dark:prose-invert"
+                      data-testid="text-ticket-description"
+                      dangerouslySetInnerHTML={{ __html: ticket.description }}
+                    />
                   )}
                 </div>
 

@@ -20,6 +20,7 @@ function formatDeal(
   includesMap: Record<string, string[]>,
   guruMap: Record<string, unknown>,
   tagsMap: Record<string, string[]>,
+  detail = false,
 ) {
   const { destination: dest, country: ctry } = resolveDestination(r);
   const images = imageMap[r.id] || [];
@@ -55,15 +56,17 @@ function formatDeal(
     highlights: guruData?.mustDo
       ? (guruData.mustDo as any[]).slice(0, 5).map((m: any) => m.name)
       : [],
-    destinationGuru: guruData ?? null,
     featured: r.isFeatured ?? false,
     active: r.isActive ?? true,
     createdAt: r.dateCreated ? new Date(r.dateCreated).toISOString() : null,
-    tags: tagsMap[r.id] || [],
+    ...(detail && {
+      tags: tagsMap[r.id] || [],
+      destinationGuru: guruData ?? null,
+    }),
   };
 }
 
-async function enrichRows(rows: any[]) {
+async function enrichRows(rows: any[], detail = false) {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
@@ -78,7 +81,7 @@ async function enrichRows(rows: any[]) {
     publicDealsRepository.fetchAirportsByQuoteIds(ids),
     publicDealsRepository.fetchIncludesByQuoteIds(ids),
     publicDealsRepository.fetchGuruByDestinations(destNames),
-    publicDealsRepository.fetchTagsByQuoteIds(ids),
+    detail ? publicDealsRepository.fetchTagsByQuoteIds(ids) : Promise.resolve({} as Record<string, string[]>),
   ]);
 
   const guruMap: Record<string, unknown> = {};
@@ -86,7 +89,7 @@ async function enrichRows(rows: any[]) {
     if (g.destination) guruMap[g.destination.toLowerCase()] = g.data;
   }
 
-  return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap, guruMap, tagsMap));
+  return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap, guruMap, tagsMap, detail));
 }
 
 export const publicDealsService = {
@@ -114,7 +117,7 @@ export const publicDealsService = {
   async getDealById(id: string) {
     const row = await publicDealsRepository.findDealById(id);
     if (!row) return null;
-    const [deal] = await enrichRows([row]);
+    const [deal] = await enrichRows([row], true);
     return deal;
   },
 
