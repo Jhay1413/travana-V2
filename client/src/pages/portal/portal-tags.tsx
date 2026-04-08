@@ -1,14 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Check, Tag } from "lucide-react";
-import { usePortalAllTags, useSavePortalTags } from "@/hooks/use-portal-api";
+import { Check, Tag, ArrowLeft } from "lucide-react";
+import { usePortalAllTags, usePortalMyTags, useSavePortalTags } from "@/hooks/use-portal-api";
 
 export default function PortalTagsPage() {
   const [, setLocation] = useLocation();
-  const { data: allTags = [], isLoading } = usePortalAllTags();
+  const { data: allTags = [], isLoading: allLoading } = usePortalAllTags();
+  const { data: myTags = [], isLoading: myLoading } = usePortalMyTags();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [initialised, setInitialised] = useState(false);
   const saveTags = useSavePortalTags();
+
+  const isEditMode = myTags.length > 0;
+
+  useEffect(() => {
+    if (!myLoading && !initialised) {
+      setSelected(new Set(myTags.map(t => t.id)));
+      setInitialised(true);
+    }
+  }, [myTags, myLoading, initialised]);
 
   function toggleTag(id: string) {
     setSelected(prev => {
@@ -27,6 +38,8 @@ export default function PortalTagsPage() {
     setLocation("/portal");
   }
 
+  const isLoading = allLoading || myLoading;
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col">
       <div className="flex-1 px-5 pt-16 pb-8 flex flex-col">
@@ -36,12 +49,25 @@ export default function PortalTagsPage() {
           transition={{ duration: 0.4 }}
           className="mb-8"
         >
+          {isEditMode && (
+            <button
+              onClick={() => setLocation("/portal")}
+              className="flex items-center gap-1.5 text-white/40 hover:text-white/70 text-sm mb-6 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+          )}
           <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center mb-5">
             <Tag className="w-6 h-6 text-purple-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">What are you into?</h1>
+          <h1 className="text-2xl font-bold text-white mb-2">
+            {isEditMode ? "Travel Interests" : "What are you into?"}
+          </h1>
           <p className="text-white/50 text-sm leading-relaxed">
-            Pick your travel interests so we can show you the most relevant deals and recommendations.
+            {isEditMode
+              ? "Update your interests to get the most relevant deals."
+              : "Pick your travel interests so we can show you the most relevant deals and recommendations."}
           </p>
         </motion.div>
 
@@ -91,7 +117,7 @@ export default function PortalTagsPage() {
           disabled={selected.size === 0 || saveTags.isPending}
           className="w-full py-4 rounded-2xl font-semibold text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed bg-purple-500 hover:bg-purple-400 active:scale-[0.98] text-white"
         >
-          {saveTags.isPending ? "Saving…" : "Continue"}
+          {saveTags.isPending ? "Saving…" : isEditMode ? "Save Interests" : "Continue"}
         </button>
       </div>
     </div>

@@ -15,6 +15,7 @@ import {
   usePortalBookings,
   usePortalMessages,
   usePortalDeals,
+  usePortalMyTags,
   useSubmitQuoteRequest,
   getPortalToken,
   type PortalDeal,
@@ -526,6 +527,7 @@ export default function PortalHomePage() {
   const { data: bookings, isLoading: bookingsLoading } = usePortalBookings();
   const { data: messages, isLoading: messagesLoading } = usePortalMessages();
   const { data: apiDeals, isLoading: dealsLoading, isError: dealsError, refetch: refetchDeals } = usePortalDeals();
+  const { data: myTags = [] } = usePortalMyTags();
   const quoteRequestMutation = useSubmitQuoteRequest();
 
   const statsLoading = userLoading || quotesLoading || bookingsLoading || messagesLoading;
@@ -535,6 +537,10 @@ export default function PortalHomePage() {
   const greeting = user?.firstName ? `Hello, ${user.firstName}` : "Hello, Traveller";
 
   const deals = apiDeals ?? (dealsError ? fallbackDeals : []);
+  const myTagNames = myTags.map((t) => t.name);
+  const forYouDeals = myTagNames.length > 0
+    ? deals.filter((d) => d.tags?.some((t) => myTagNames.includes(t)))
+    : [];
   const resolvedQuotes = quotes && quotes.length > 0 ? quotes : fallbackQuotes;
   const latestQuotes = resolvedQuotes.slice(0, 5);
 
@@ -647,6 +653,74 @@ export default function PortalHomePage() {
             </motion.div>
           )}
 
+          {forYouDeals.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.22 }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <h2 className="text-base font-bold text-white">For You</h2>
+                </div>
+                <button onClick={() => setLocation("/portal/deals")} className="text-xs text-purple-400 flex items-center gap-1 hover:text-purple-300 transition-colors">
+                  View all <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="space-y-3 mb-6">
+                {forYouDeals.map((deal, idx) => (
+                  <motion.div
+                    key={deal.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.27 + idx * 0.08 }}
+                  >
+                    <GlassCard className="p-3 flex items-center gap-3">
+                      <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0">
+                        {deal.image_url ? (
+                          <img src={deal.image_url} alt={deal.destination} className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-purple-900/60 via-fuchsia-900/40 to-[#0a0a0f] flex items-center justify-center">
+                            <Sparkles className="w-6 h-6 text-white/20" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium text-sm truncate">{deal.title}</p>
+                        <p className="text-white/40 text-xs flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-2.5 h-2.5" /> {deal.destination}
+                        </p>
+                        {deal.tags?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {deal.tags.filter((t) => myTagNames.includes(t)).map((t) => (
+                              <span key={t} className="px-1.5 py-0 rounded-md bg-purple-500/20 border border-purple-400/30 text-purple-300 text-[10px]">{t}</span>
+                            ))}
+                          </div>
+                        )}
+                        {deal.price > 0 && (
+                          <p className="text-white font-semibold text-sm mt-1">{formatCurrency(deal.price)}</p>
+                        )}
+                      </div>
+                      {deal.quote_url ? (
+                        <a
+                          href={deal.quote_url}
+                          className="w-9 h-9 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0 hover:bg-purple-500/30 transition-colors"
+                        >
+                          <Eye className="w-4 h-4 text-purple-400" />
+                        </a>
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0">
+                          <Eye className="w-4 h-4 text-white/20" />
+                        </div>
+                      )}
+                    </GlassCard>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -727,6 +801,48 @@ export default function PortalHomePage() {
                 ))}
               </div>
             )}
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.32 }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-purple-400" />
+                <h2 className="text-base font-bold text-white">Travel Interests</h2>
+              </div>
+              <button
+                onClick={() => setLocation("/portal/tags")}
+                className="text-xs text-purple-400 flex items-center gap-1 hover:text-purple-300 transition-colors"
+                data-testid="link-edit-interests"
+              >
+                Edit <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            <GlassCard className="p-4">
+              {myTags.length === 0 ? (
+                <button
+                  onClick={() => setLocation("/portal/tags")}
+                  className="w-full text-center text-white/40 text-sm hover:text-white/60 transition-colors"
+                  data-testid="button-add-interests"
+                >
+                  + Add your travel interests
+                </button>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {myTags.map(tag => (
+                    <span
+                      key={tag.id}
+                      className="px-3 py-1 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs font-medium"
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
           </motion.div>
 
           <motion.div

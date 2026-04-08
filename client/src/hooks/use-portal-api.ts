@@ -83,7 +83,7 @@ export interface PortalDeal {
   num_nights: number | null;
   image_url: string;
   quote_url: string | null;
-  tag?: string;
+  tags: string[];
 }
 
 export interface PortalMessage {

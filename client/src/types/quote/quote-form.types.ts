@@ -171,6 +171,7 @@ export const quoteFormSchema = z.object({
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
   })).default([]),
+  tags: z.array(z.string()).default([]),
 });
 
 // ─── Inferred Types ───────────────────────────────────────────────────────────
@@ -243,6 +244,7 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   loungePasses: [],
   airportParkings: [],
   extraAccommodations: [],
+  tags: [],
 };
 
 // ─── Component Prop Types ─────────────────────────────────────────────────────

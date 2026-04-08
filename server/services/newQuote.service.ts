@@ -414,6 +414,7 @@ export const newQuoteService = {
       embarkation, debarkation, cruiseExtras, cruiseOnly,
       lead_source,
       images,
+      tags,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...quoteFields
     } = data;
@@ -493,6 +494,10 @@ export const newQuoteService = {
     }
     if (extraAccommodations !== undefined) {
       await newQuoteRepository.replaceExtraAccommodations(id, extraAccommodations);
+    }
+
+    if (tags !== undefined) {
+      await tagService.updateQuoteTags(id, tags);
     }
 
     if (images && images.length > 0) {

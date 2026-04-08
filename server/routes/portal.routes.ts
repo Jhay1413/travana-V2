@@ -3,7 +3,7 @@ import { db } from "../config/database";
 import {
   quote, quote_accomodation, accomodation_list, resorts, destination, country,
   quoteImages, accommodation_images, clientTable, transaction, booking,
-  portalMessages, webauthnCredentials, pushSubscriptions,
+  portalMessages, webauthnCredentials, pushSubscriptions, quoteTags, tags,
 } from "@shared/schema";
 import { eq, and, desc, isNotNull, inArray, sql, asc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -208,11 +208,26 @@ portalRouter.get("/deals", async (_req: Request, res: Response) => {
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(eq(quote.is_active, true), isNotNull(quote.quote_token), eq(quote.show_on_portal, true)))
+      .where(and(eq(quote.is_active, true), isNotNull(quote.quote_token), eq(quote.show_on_portal, true), eq(quote.isFreeQuote, true)))
       .orderBy(desc(quote.date_created))
       .limit(5);
 
     const quoteIds = results.map((r) => r.id);
+
+    // Fetch tags for each deal
+    let tagMap: Record<string, string[]> = {};
+    if (quoteIds.length > 0) {
+      const tagRows = await db
+        .select({ quoteId: quoteTags.quoteId, tagName: tags.name })
+        .from(quoteTags)
+        .innerJoin(tags, eq(quoteTags.tagId, tags.id))
+        .where(inArray(quoteTags.quoteId, quoteIds));
+      for (const row of tagRows) {
+        if (!tagMap[row.quoteId]) tagMap[row.quoteId] = [];
+        tagMap[row.quoteId].push(row.tagName);
+      }
+    }
+
     let imageMap: Record<string, string> = {};
     if (quoteIds.length > 0) {
       const images = await db
@@ -262,6 +277,7 @@ portalRouter.get("/deals", async (_req: Request, res: Response) => {
       num_nights: r.numNights,
       image_url: imageMap[r.id] || "",
       quote_url: r.token ? `/portal/quote/${r.token}` : null,
+      tags: tagMap[r.id] ?? [],
     }));
 
     res.json(deals);

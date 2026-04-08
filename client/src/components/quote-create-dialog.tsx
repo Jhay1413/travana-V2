@@ -197,6 +197,11 @@ export function buildQuotePayload(
   }
 
   Object.assign(payload, buildExtrasPayload(values));
+
+  if (values.tags?.length) {
+    payload.tags = values.tags;
+  }
+
   return payload;
 }
 

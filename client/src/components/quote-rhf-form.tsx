@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useForm, useFieldArray, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, ImagePlus, ExternalLink } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, ImagePlus, ExternalLink, Tag } from "lucide-react";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { QuoteExtrasSection } from "@/components/quote-extras-section";
 import type { ExtrasFormValues } from "@/types/booking";
@@ -43,6 +43,7 @@ import {
   useCruiseItineraries,
   lookupKeys,
 } from "@/hooks/queries";
+import { useTags } from "@/hooks/queries/use-tags";
 import { useToast } from "@/hooks/use-toast";
 
 const emptyFlightLeg: FlightLegValue = {
@@ -71,6 +72,58 @@ function SectionHeader({
       <Icon className="h-4 w-4" />
       {title}
     </div>
+  );
+}
+
+// ─── Tag Selector ─────────────────────────────────────────────────────────────
+
+function TagSelectorSection({ control }: { control: any }) {
+  const { data: allTagsData = [] } = useTags();
+  const allTagNames: string[] = allTagsData.map((t: any) => t.name);
+
+  return (
+    <FormField
+      control={control}
+      name="tags"
+      render={({ field }) => {
+        const selected: string[] = field.value ?? [];
+        const toggle = (name: string) => {
+          if (selected.includes(name)) {
+            field.onChange(selected.filter((t) => t !== name));
+          } else {
+            field.onChange([...selected, name]);
+          }
+        };
+        if (allTagNames.length === 0) return <FormItem />;
+        return (
+          <FormItem>
+            <div className="rounded-2xl border border-black/10 bg-white/60 p-3">
+              <SectionHeader icon={Tag} title="Tags" />
+              <div className="flex flex-wrap gap-1.5">
+                {allTagNames.map((name) => {
+                  const isSelected = selected.includes(name);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => toggle(name)}
+                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                        isSelected
+                          ? "border-blue-500/30 bg-blue-500/10 text-blue-700"
+                          : "border-black/10 bg-white/70 text-black/50 hover:border-black/20 hover:text-black/70"
+                      }`}
+                    >
+                      {isSelected && <span className="mr-1 text-blue-500">✓</span>}
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </FormItem>
+        );
+      }}
+    />
   );
 }
 
@@ -1636,6 +1689,9 @@ export function QuoteRHFForm({
             return null;
           })()}
         </div>
+
+        {/* ── TAGS ──────────────────────────────────────────────────────────── */}
+        <TagSelectorSection control={control} />
 
         {/* ── ACTIONS ───────────────────────────────────────────────────────── */}
         <div className="flex justify-end gap-2 pt-1">

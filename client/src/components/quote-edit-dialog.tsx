@@ -336,6 +336,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
         commission: parseFloat(String(a.commission || 0)) || 0,
         isIncludedInPackage: a.is_included_in_package ?? true,
       })),
+    tags: (quoteData.tags || []) as string[],
   };
 }
 
@@ -440,6 +441,9 @@ function buildUpdatePayload(
   }
 
   Object.assign(payload, buildExtrasPayload(values));
+
+  payload.tags = values.tags ?? [];
+
   return payload;
 }
 

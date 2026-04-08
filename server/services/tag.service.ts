@@ -41,4 +41,12 @@ export const tagService = {
   async clientHasTags(clientId: string): Promise<boolean> {
     return await tagRepository.clientHasTags(clientId);
   },
+
+  async getBookingTags(bookingId: string) {
+    return await tagRepository.getBookingTags(bookingId);
+  },
+
+  async updateBookingTags(bookingId: string, tagNames: string[]) {
+    await tagRepository.replaceBookingTags(bookingId, tagNames);
+  },
 };

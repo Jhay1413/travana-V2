@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { tags, quoteTags, clientTags } from "@shared/schema";
+import { tags, quoteTags, clientTags, bookingTags } from "@shared/schema";
 import { eq, ilike, sql, and } from "drizzle-orm";
 
 export const tagRepository = {
@@ -183,6 +183,62 @@ export const tagRepository = {
       await db.insert(clientTags).values(
         tagIds.map(tagId => ({ clientId, tagId }))
       );
+    }
+  },
+
+  /**
+   * Get tags for a specific booking
+   */
+  async getBookingTags(bookingId: string) {
+    return await db
+      .select({ id: tags.id, name: tags.name })
+      .from(bookingTags)
+      .innerJoin(tags, eq(bookingTags.tagId, tags.id))
+      .where(eq(bookingTags.bookingId, bookingId))
+      .orderBy(tags.name);
+  },
+
+  /**
+   * Replace all tags for a booking (using tag names, upserts as needed)
+   */
+  async replaceBookingTags(bookingId: string, newTagNames: string[]) {
+    const currentTagRelations = await db
+      .select({ tagId: bookingTags.tagId, tagName: tags.name })
+      .from(bookingTags)
+      .innerJoin(tags, eq(bookingTags.tagId, tags.id))
+      .where(eq(bookingTags.bookingId, bookingId));
+
+    const currentTagNames = currentTagRelations.map(t => t.tagName);
+    const toRemove = currentTagRelations.filter(t => !newTagNames.includes(t.tagName));
+    const toAdd = newTagNames.filter(n => !currentTagNames.includes(n));
+
+    for (const { tagId } of toRemove) {
+      await db.delete(bookingTags).where(
+        and(eq(bookingTags.bookingId, bookingId), eq(bookingTags.tagId, tagId))
+      );
+      await db.update(tags)
+        .set({ usageCount: sql`GREATEST(${tags.usageCount} - 1, 0)` })
+        .where(eq(tags.id, tagId));
+    }
+
+    for (const name of toAdd) {
+      if (!name.trim()) continue;
+      const [existing] = await db.select().from(tags).where(ilike(tags.name, name.trim())).limit(1);
+      let tagId: string;
+      if (existing) {
+        tagId = existing.id;
+      } else {
+        const [newTag] = await db.insert(tags).values({ name: name.trim(), usageCount: 0 }).returning();
+        tagId = newTag.id;
+      }
+      const [already] = await db.select({ id: bookingTags.id }).from(bookingTags)
+        .where(and(eq(bookingTags.bookingId, bookingId), eq(bookingTags.tagId, tagId))).limit(1);
+      if (!already) {
+        await db.insert(bookingTags).values({ bookingId, tagId });
+        await db.update(tags)
+          .set({ usageCount: sql`${tags.usageCount} + 1`, lastUsedAt: new Date() })
+          .where(eq(tags.id, tagId));
+      }
     }
   },
 
