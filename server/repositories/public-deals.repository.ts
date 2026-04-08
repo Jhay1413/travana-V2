@@ -6,7 +6,7 @@ import {
   quoteImages, accommodation_images, destinationGuruTable,
   package_type, airport, board_basis, cottages, lodges, park,
 } from "@shared/schema";
-import { eq, and, desc, asc, isNotNull, inArray, ilike, sql, or } from "drizzle-orm";
+import { eq, and, desc, asc, isNotNull, inArray, ilike, sql, or, SQL } from "drizzle-orm";
 
 const departAirport = alias(airport, "depart_airport");
 
@@ -44,7 +44,6 @@ function selectDealFields() {
     parkLocation: park.location,
     cottageLocation: cottages.location,
     cruiseName: quote_cruise.cruise_name,
-    guruData: destinationGuruTable.data,
   };
 }
 
@@ -62,11 +61,7 @@ function buildBaseQuery() {
     .leftJoin(cottages, eq(cottages.id, quote.cottage_id))
     .leftJoin(lodges, eq(lodges.id, quote.lodge_id))
     .leftJoin(park, eq(park.id, lodges.park_id))
-    .leftJoin(quote_cruise, eq(quote_cruise.quote_id, quote.id))
-    .leftJoin(
-      destinationGuruTable,
-      sql`${destinationGuruTable.destination} ILIKE ${destination.name} OR ${destination.name} ILIKE '%' || ${destinationGuruTable.destination} || '%'`,
-    );
+    .leftJoin(quote_cruise, eq(quote_cruise.quote_id, quote.id));
 }
 
 export const publicDealsRepository = {
@@ -115,7 +110,6 @@ export const publicDealsRepository = {
         FROM quote_table q
         LEFT JOIN package_type_table pt ON pt.id = q.holiday_type_id
         WHERE q.is_active = true
-          AND q.quote_token IS NOT NULL
           AND q."isFreeQuote" = true
           AND pt.name IS NOT NULL
         ORDER BY pt.name, q.sales_price::numeric ASC
@@ -198,6 +192,19 @@ export const publicDealsRepository = {
     return map;
   },
 
+  async fetchGuruByDestinations(names: string[]): Promise<Array<{ destination: string; data: unknown }>> {
+    if (names.length === 0) return [];
+    const unique = Array.from(new Set(names.filter(Boolean)));
+    const conditions: SQL[] = unique.flatMap((name) => [
+      ilike(destinationGuruTable.destination, name),
+      sql`${name} ILIKE '%' || ${destinationGuruTable.destination} || '%'`,
+    ]);
+    return db
+      .select({ destination: destinationGuruTable.destination, data: destinationGuruTable.data })
+      .from(destinationGuruTable)
+      .where(or(...conditions));
+  },
+
   async findAllDestinations() {
     return db
       .select({ destination: destinationGuruTable.destination, country: destinationGuruTable.country, id: destinationGuruTable.id })
@@ -220,7 +227,7 @@ export const publicDealsRepository = {
   async getStats() {
     const [[dealCount], [destCount]] = await Promise.all([
       db.select({ count: sql<number>`count(*)::int` }).from(quote)
-        .where(and(eq(quote.is_active, true), isNotNull(quote.quote_token), eq(quote.isFreeQuote, true))),
+        .where(and(eq(quote.is_active, true), eq(quote.isFreeQuote, true))),
       db.select({ count: sql<number>`count(*)::int` }).from(destinationGuruTable),
     ]);
     return { totalDeals: dealCount?.count || 0, totalDestinations: destCount?.count || 0 };

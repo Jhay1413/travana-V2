@@ -18,10 +18,11 @@ function formatDeal(
   imageMap: Record<string, string[]>,
   airportMap: Record<string, string>,
   includesMap: Record<string, string[]>,
+  guruMap: Record<string, unknown>,
 ) {
   const { destination: dest, country: ctry } = resolveDestination(r);
   const images = imageMap[r.id] || [];
-  const guruData = r.guruData as any;
+  const guruData = dest ? (guruMap[dest.toLowerCase()] as any) : null;
 
   const returnDate =
     r.travelDate && r.numNights
@@ -62,13 +63,25 @@ async function enrichRows(rows: any[]) {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
-  const [imageMap, airportMap, includesMap] = await Promise.all([
+  const destNames = Array.from(new Set(
+    rows
+      .filter((r) => r.quoteType !== "hot_tub_break" && r.quoteType !== "cruise" && r.destinationName)
+      .map((r) => r.destinationName as string),
+  ));
+
+  const [imageMap, airportMap, includesMap, guruRows] = await Promise.all([
     publicDealsRepository.fetchImagesByQuoteIds(ids),
     publicDealsRepository.fetchAirportsByQuoteIds(ids),
     publicDealsRepository.fetchIncludesByQuoteIds(ids),
+    publicDealsRepository.fetchGuruByDestinations(destNames),
   ]);
 
-  return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap));
+  const guruMap: Record<string, unknown> = {};
+  for (const g of guruRows) {
+    if (g.destination) guruMap[g.destination.toLowerCase()] = g.data;
+  }
+
+  return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap, guruMap));
 }
 
 export const publicDealsService = {
