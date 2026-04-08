@@ -55,6 +55,7 @@ function formatDeal(
     highlights: guruData?.mustDo
       ? (guruData.mustDo as any[]).slice(0, 5).map((m: any) => m.name)
       : [],
+    destinationGuru: guruData ?? null,
     featured: r.isFeatured ?? false,
     active: r.isActive ?? true,
     createdAt: r.dateCreated ? new Date(r.dateCreated).toISOString() : null,
@@ -97,7 +98,7 @@ export const publicDealsService = {
     const hasMore = rows.length > limit;
     const deals = await enrichRows(rows.slice(0, limit));
 
-    return { deals, page, hasMore, filters: { country: rest.country, tags: rest.tags } };
+    return { deals, page, hasMore, filters: { countries: rest.countries, tags: rest.tags } };
   },
 
   async getLatestDeals(limit: number) {

@@ -13,7 +13,7 @@ const departAirport = alias(airport, "depart_airport");
 
 export interface DealFilters {
   category?: string;
-  country?: string;
+  countries?: string[];
   tags?: string[];
   sortBy?: "newest" | "price_asc" | "price_desc";
   limit?: number;
@@ -69,23 +69,26 @@ function buildBaseQuery() {
 
 export const publicDealsRepository = {
   async findDeals(filters: DealFilters) {
-    const { category, country: countryFilter, tags: tagsFilter, sortBy = "newest", limit = 20, offset = 0, featuredOnly = false } = filters;
+    const { category, countries: countriesFilter, tags: tagsFilter, sortBy = "newest", limit = 20, offset = 0, featuredOnly = false } = filters;
 
     const conditions = baseConditions();
     if (category) conditions.push(ilike(package_type.name, category));
     if (featuredOnly) conditions.push(eq(quote.is_featured, true));
-    if (countryFilter) conditions.push(ilike(country.country_name, countryFilter));
+    if (countriesFilter && countriesFilter.length > 0) {
+      conditions.push(or(...countriesFilter.map((c) => ilike(country.country_name, c)))!);
+    }
     if (tagsFilter && tagsFilter.length > 0) {
-      for (const tag of tagsFilter) {
-        conditions.push(
-          exists(
-            db.select({ one: sql`1` })
-              .from(quoteTags)
-              .innerJoin(tags, eq(tags.id, quoteTags.tagId))
-              .where(and(eq(quoteTags.quoteId, quote.id), ilike(tags.name, tag)))
-          )
-        );
-      }
+      conditions.push(
+        exists(
+          db.select({ one: sql`1` })
+            .from(quoteTags)
+            .innerJoin(tags, eq(tags.id, quoteTags.tagId))
+            .where(and(
+              eq(quoteTags.quoteId, quote.id),
+              or(...tagsFilter.map((tag) => ilike(tags.name, tag)))
+            ))
+        )
+      );
     }
 
     const orderClause =
