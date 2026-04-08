@@ -246,9 +246,13 @@ export const transactionService = {
         status: 'on_quote',
       }).returning();
 
+      const defaultExpiry = new Date();
+      defaultExpiry.setDate(defaultExpiry.getDate() + 7);
+
       const quoteValues: Record<string, unknown> = {
         ...quoteFields,
         transaction_id: txn.id,
+        date_expiry: quoteFields.date_expiry ?? defaultExpiry,
       };
       if (quoteValues.date_expiry) quoteValues.date_expiry = toDateOrNull(quoteValues.date_expiry);
       if (quoteValues.deleted_at) quoteValues.deleted_at = toDateOrNull(quoteValues.deleted_at);

@@ -79,6 +79,8 @@ export default function QuotePage() {
   const [showGuruSheet, setShowGuruSheet] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
+  const [showExpiryDialog, setShowExpiryDialog] = useState(false);
+  const [expiryDate, setExpiryDate] = useState("");
   const adminDeleteQuoteMutation = useAdminDeleteQuote();
   const [convertHaysRef, setConvertHaysRef] = useState("");
   const [convertTourRef, setConvertTourRef] = useState("");
@@ -341,6 +343,38 @@ export default function QuotePage() {
                     View Link
                   </a>
                 )}
+                {(() => {
+                  const now = new Date();
+                  const expiry = quoteData?.date_expiry ? new Date(quoteData.date_expiry) : null;
+                  if (!expiry) {
+                    const created = quoteData?.date_created ? new Date(quoteData.date_created) : null;
+                    if (created && (now.getTime() - created.getTime()) > 7 * 24 * 60 * 60 * 1000) {
+                      return (
+                        <span className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600" data-testid="pill-expiry-expired">
+                          Expired
+                        </span>
+                      );
+                    }
+                    return null;
+                  }
+                  const diffMs = expiry.getTime() - now.getTime();
+                  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                  if (diffDays < 0) return (
+                    <span className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600" data-testid="pill-expiry-expired">
+                      Expired
+                    </span>
+                  );
+                  if (diffDays <= 2) return (
+                    <span className="inline-flex items-center rounded-full border border-orange-500/25 bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-600" data-testid="pill-expiry-soon">
+                      Expires in {diffDays}d
+                    </span>
+                  );
+                  return (
+                    <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" data-testid="pill-expiry-active">
+                      Expires in {diffDays}d
+                    </span>
+                  );
+                })()}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
                 <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
@@ -355,6 +389,19 @@ export default function QuotePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2" data-testid="row-quote-actions">
+            <button
+              type="button"
+              onClick={() => {
+                const current = quoteData?.date_expiry ? new Date(quoteData.date_expiry).toISOString().split("T")[0] : "";
+                setExpiryDate(current);
+                setShowExpiryDialog(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+              data-testid="button-update-expiry"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Update Expiry
+            </button>
             <button
               type="button"
               onClick={() =>
@@ -1233,6 +1280,54 @@ export default function QuotePage() {
                 }}
               >
                 {adminDeleteQuoteMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showExpiryDialog} onOpenChange={setShowExpiryDialog}>
+        <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-update-expiry">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Update Expiry Date</DialogTitle>
+            <DialogDescription className="text-xs text-black/55">
+              Set a new expiry date for this quote.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-3 grid gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Expiry Date</Label>
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="h-9 w-full rounded-xl border border-black/10 bg-white/70 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                data-testid="input-expiry-date"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="h-9 flex-1 rounded-xl border-black/10" onClick={() => setShowExpiryDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="h-9 flex-1 rounded-xl bg-gray-900 text-white hover:bg-gray-800"
+                disabled={!expiryDate || updateQuoteMutation.isPending}
+                data-testid="button-confirm-expiry"
+                onClick={() => {
+                  updateQuoteMutation.mutate(
+                    { id: quoteId, data: { date_expiry: new Date(expiryDate).toISOString() } as any },
+                    {
+                      onSuccess: () => {
+                        setShowExpiryDialog(false);
+                        queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+                        toast({ title: "Expiry date updated" });
+                      },
+                      onError: () => toast({ title: "Failed to update expiry", variant: "destructive" }),
+                    }
+                  );
+                }}
+              >
+                {updateQuoteMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Save"}
               </Button>
             </div>
           </div>

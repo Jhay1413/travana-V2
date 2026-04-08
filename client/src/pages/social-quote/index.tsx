@@ -9,6 +9,7 @@ import {
   Pin,
   Star,
   Tag,
+  Trash2,
   X,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,7 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
-import { useUpdateQuote } from "@/hooks/mutations";
+import { useUpdateQuote, useDeleteQuote } from "@/hooks/mutations";
 import { useSetPrimaryQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
 import type { Favorite } from "@/api/endpoints/favorite.api";
 import { useQuoteData } from "@/pages/quote/hooks";
@@ -54,9 +55,11 @@ export default function SocialQuotePage() {
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const tagSuggestionsRef = useRef<HTMLDivElement>(null);
   const updateQuoteMutation = useUpdateQuote();
+  const deleteQuoteMutation = useDeleteQuote();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -199,6 +202,48 @@ export default function SocialQuotePage() {
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </Button>
+            {!showDeleteConfirm ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-2xl border-red-200 bg-white/70 text-red-600 hover:bg-red-50 hover:border-red-300"
+                data-testid="button-delete-social-quote"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+            ) : (
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  className="h-9 rounded-2xl bg-red-600 text-white hover:bg-red-700"
+                  data-testid="button-delete-social-quote-confirm"
+                  disabled={deleteQuoteMutation.isPending}
+                  onClick={async () => {
+                    try {
+                      await deleteQuoteMutation.mutateAsync(quoteId);
+                      toast({ title: "Quote deleted" });
+                      setLocation("/social-posts");
+                    } catch {
+                      toast({ title: "Failed to delete quote", variant: "destructive" });
+                      setShowDeleteConfirm(false);
+                    }
+                  }}
+                >
+                  {deleteQuoteMutation.isPending ? "Deleting..." : "Confirm"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-2xl border-black/10 bg-white/70"
+                  data-testid="button-delete-social-quote-cancel"
+                  onClick={() => setShowDeleteConfirm(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
             <Button
               size="sm"
               variant="outline"

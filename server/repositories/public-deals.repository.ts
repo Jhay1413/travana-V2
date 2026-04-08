@@ -5,13 +5,16 @@ import {
   accomodation_list, resorts, destination, country,
   quoteImages, accommodation_images, destinationGuruTable,
   package_type, airport, board_basis, cottages, lodges, park,
+  quoteTags, tags,
 } from "@shared/schema";
-import { eq, and, desc, asc, isNotNull, inArray, ilike, sql, or, SQL } from "drizzle-orm";
+import { eq, and, desc, asc, isNotNull, inArray, ilike, sql, or, exists, SQL } from "drizzle-orm";
 
 const departAirport = alias(airport, "depart_airport");
 
 export interface DealFilters {
   category?: string;
+  country?: string;
+  tags?: string[];
   sortBy?: "newest" | "price_asc" | "price_desc";
   limit?: number;
   offset?: number;
@@ -66,11 +69,24 @@ function buildBaseQuery() {
 
 export const publicDealsRepository = {
   async findDeals(filters: DealFilters) {
-    const { category, sortBy = "newest", limit = 20, offset = 0, featuredOnly = false } = filters;
+    const { category, country: countryFilter, tags: tagsFilter, sortBy = "newest", limit = 20, offset = 0, featuredOnly = false } = filters;
 
     const conditions = baseConditions();
     if (category) conditions.push(ilike(package_type.name, category));
     if (featuredOnly) conditions.push(eq(quote.is_featured, true));
+    if (countryFilter) conditions.push(ilike(country.country_name, countryFilter));
+    if (tagsFilter && tagsFilter.length > 0) {
+      for (const tag of tagsFilter) {
+        conditions.push(
+          exists(
+            db.select({ one: sql`1` })
+              .from(quoteTags)
+              .innerJoin(tags, eq(tags.id, quoteTags.tagId))
+              .where(and(eq(quoteTags.quoteId, quote.id), ilike(tags.name, tag)))
+          )
+        );
+      }
+    }
 
     const orderClause =
       sortBy === "price_asc" ? [asc(quote.sales_price)] :
@@ -239,6 +255,59 @@ export const publicDealsRepository = {
       db.select({ count: sql<number>`count(*)::int` }).from(destinationGuruTable),
     ]);
     return { totalDeals: dealCount?.count || 0, totalDestinations: destCount?.count || 0 };
+  },
+
+  async findDealFilters(): Promise<{ countries: string[]; popularTags: { tag: string; count: number }[] }> {
+    const base = baseConditions();
+
+    const [countryRows, tagRows] = await Promise.all([
+      db
+        .selectDistinct({ name: country.country_name })
+        .from(quote)
+        .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
+        .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+        .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+        .leftJoin(destination, eq(resorts.destination_id, destination.id))
+        .leftJoin(country, eq(destination.country_id, country.id))
+        .where(and(...base, isNotNull(country.country_name)))
+        .orderBy(asc(country.country_name)),
+
+      db
+        .select({
+          tag: tags.name,
+          count: sql<number>`count(${quoteTags.quoteId})::int`,
+        })
+        .from(tags)
+        .innerJoin(quoteTags, eq(quoteTags.tagId, tags.id))
+        .innerJoin(quote, eq(quote.id, quoteTags.quoteId))
+        .where(and(...base))
+        .groupBy(tags.name)
+        .orderBy(desc(sql<number>`count(${quoteTags.quoteId})`))
+        .limit(10),
+    ]);
+
+    return {
+      countries: countryRows.map((r) => r.name).filter((n): n is string => !!n),
+      popularTags: tagRows.map((r) => ({ tag: r.tag, count: r.count })),
+    };
+  },
+
+  async fetchTagsByQuoteIds(quoteIds: string[]): Promise<Record<string, string[]>> {
+    if (quoteIds.length === 0) return {};
+
+    const rows = await db
+      .select({ quoteId: quoteTags.quoteId, tagName: tags.name })
+      .from(quoteTags)
+      .innerJoin(tags, eq(tags.id, quoteTags.tagId))
+      .where(inArray(quoteTags.quoteId, quoteIds));
+
+    const map: Record<string, string[]> = {};
+    for (const r of rows) {
+      if (!r.quoteId) continue;
+      if (!map[r.quoteId]) map[r.quoteId] = [];
+      map[r.quoteId].push(r.tagName);
+    }
+    return map;
   },
 
   async fetchIncludesByQuoteIds(quoteIds: string[]): Promise<Record<string, string[]>> {

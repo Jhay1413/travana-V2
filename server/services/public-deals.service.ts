@@ -19,6 +19,7 @@ function formatDeal(
   airportMap: Record<string, string>,
   includesMap: Record<string, string[]>,
   guruMap: Record<string, unknown>,
+  tagsMap: Record<string, string[]>,
 ) {
   const { destination: dest, country: ctry } = resolveDestination(r);
   const images = imageMap[r.id] || [];
@@ -42,6 +43,7 @@ function formatDeal(
     description: guruData?.travelInfo?.summary || null,
     shortDescription: guruData?.tagline || null,
     price: parseFloat(r.salesPrice || "0"),
+    pricePerPerson: r.pricePerPerson ? parseFloat(r.pricePerPerson) : null,
     originalPrice: r.pricePerPerson ? parseFloat(r.pricePerPerson) : null,
     imageUrl: images[0] || null,
     imageUrls: images,
@@ -56,6 +58,7 @@ function formatDeal(
     featured: r.isFeatured ?? false,
     active: r.isActive ?? true,
     createdAt: r.dateCreated ? new Date(r.dateCreated).toISOString() : null,
+    tags: tagsMap[r.id] || [],
   };
 }
 
@@ -69,11 +72,12 @@ async function enrichRows(rows: any[]) {
       .map((r) => r.destinationName as string),
   ));
 
-  const [imageMap, airportMap, includesMap, guruRows] = await Promise.all([
+  const [imageMap, airportMap, includesMap, guruRows, tagsMap] = await Promise.all([
     publicDealsRepository.fetchImagesByQuoteIds(ids),
     publicDealsRepository.fetchAirportsByQuoteIds(ids),
     publicDealsRepository.fetchIncludesByQuoteIds(ids),
     publicDealsRepository.fetchGuruByDestinations(destNames),
+    publicDealsRepository.fetchTagsByQuoteIds(ids),
   ]);
 
   const guruMap: Record<string, unknown> = {};
@@ -81,7 +85,7 @@ async function enrichRows(rows: any[]) {
     if (g.destination) guruMap[g.destination.toLowerCase()] = g.data;
   }
 
-  return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap, guruMap));
+  return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap, guruMap, tagsMap));
 }
 
 export const publicDealsService = {
@@ -93,7 +97,7 @@ export const publicDealsService = {
     const hasMore = rows.length > limit;
     const deals = await enrichRows(rows.slice(0, limit));
 
-    return { deals, page, hasMore };
+    return { deals, page, hasMore, filters: { country: rest.country, tags: rest.tags } };
   },
 
   async getLatestDeals(limit: number) {
@@ -119,6 +123,10 @@ export const publicDealsService = {
 
   async getDestinationByName(name: string) {
     return publicDealsRepository.findDestinationByName(name);
+  },
+
+  async getDealFilters() {
+    return publicDealsRepository.findDealFilters();
   },
 
   async getStats() {

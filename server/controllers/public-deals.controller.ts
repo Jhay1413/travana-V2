@@ -9,6 +9,9 @@ export const publicDealsController = {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
     const sortBy = (req.query.sort as string) || "newest";
     const category = (req.query.category as string || "").trim();
+    const country = (req.query.country as string || "").trim();
+    const tagsRaw = (req.query.tags as string || "").trim();
+    const tags = tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : undefined;
 
     const validSorts = ["newest", "price_asc", "price_desc"];
     if (!validSorts.includes(sortBy)) {
@@ -20,6 +23,8 @@ export const publicDealsController = {
       limit,
       sortBy: sortBy as "newest" | "price_asc" | "price_desc",
       category: category || undefined,
+      country: country || undefined,
+      tags,
     });
 
     return successResponse(res, result);
@@ -59,6 +64,11 @@ export const publicDealsController = {
 
     const { deals } = await publicDealsService.getDeals({ limit: 20, sortBy: "newest" });
     return successResponse(res, { destination: guru.destination, country: guru.country, guru: guru.data, deals });
+  }),
+
+  getDealFilters: asyncHandler(async (_req: Request, res: Response) => {
+    const filters = await publicDealsService.getDealFilters();
+    return successResponse(res, filters);
   }),
 
   getStats: asyncHandler(async (_req: Request, res: Response) => {

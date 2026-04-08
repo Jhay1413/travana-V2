@@ -5,7 +5,7 @@ import {
   quoteImages, accommodation_images, clientTable, transaction, booking,
   portalMessages, webauthnCredentials, pushSubscriptions, quoteTags, tags,
 } from "@shared/schema";
-import { eq, and, desc, isNotNull, inArray, sql, asc } from "drizzle-orm";
+import { eq, and, desc, isNotNull, inArray, sql, asc, ilike, exists } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -188,8 +188,79 @@ portalRouter.post("/webauthn/check", async (req: Request, res: Response) => {
   }
 });
 
-portalRouter.get("/deals", async (_req: Request, res: Response) => {
+// Returns available countries and most-popular tags for the deals filter UI
+portalRouter.get("/deals/filters", async (_req: Request, res: Response) => {
   try {
+    const baseWhere = and(
+      eq(quote.is_active, true),
+      isNotNull(quote.quote_token),
+      eq(quote.show_on_portal, true),
+      eq(quote.isFreeQuote, true),
+    );
+
+    const [countryRows, tagRows] = await Promise.all([
+      db
+        .selectDistinct({ country: country.country_name })
+        .from(quote)
+        .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
+        .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+        .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+        .leftJoin(destination, eq(resorts.destination_id, destination.id))
+        .leftJoin(country, eq(destination.country_id, country.id))
+        .where(and(baseWhere, isNotNull(country.country_name)))
+        .orderBy(asc(country.country_name)),
+
+      db
+        .select({
+          tag: tags.name,
+          count: sql<number>`count(${quoteTags.quoteId})::int`,
+        })
+        .from(tags)
+        .innerJoin(quoteTags, eq(quoteTags.tagId, tags.id))
+        .innerJoin(quote, eq(quote.id, quoteTags.quoteId))
+        .where(and(
+          eq(quote.is_active, true),
+          isNotNull(quote.quote_token),
+          eq(quote.show_on_portal, true),
+          eq(quote.isFreeQuote, true),
+        ))
+        .groupBy(tags.name)
+        .orderBy(desc(sql`count(${quoteTags.quoteId})`))
+        .limit(10),
+    ]);
+
+    res.json({
+      countries: countryRows.map((r) => r.country).filter(Boolean),
+      popularTags: tagRows.map((r) => ({ tag: r.tag, count: r.count })),
+    });
+  } catch (err: any) {
+    console.error("Error fetching deal filters:", err);
+    res.status(500).json({ error: "Failed to load filters" });
+  }
+});
+
+portalRouter.get("/deals", async (req: Request, res: Response) => {
+  try {
+    const filterCountry = ((req.query.country as string) || "").trim();
+    const filterTag = ((req.query.tag as string) || "").trim();
+
+    const baseConditions = and(
+      eq(quote.is_active, true),
+      isNotNull(quote.quote_token),
+      eq(quote.show_on_portal, true),
+      eq(quote.isFreeQuote, true),
+      filterCountry ? ilike(country.country_name, filterCountry) : undefined,
+      filterTag
+        ? exists(
+            db
+              .select({ one: sql`1` })
+              .from(quoteTags)
+              .innerJoin(tags, eq(tags.id, quoteTags.tagId))
+              .where(and(eq(quoteTags.quoteId, quote.id), ilike(tags.name, filterTag)))
+          )
+        : undefined,
+    );
+
     const results = await db
       .select({
         id: quote.id,
@@ -208,9 +279,9 @@ portalRouter.get("/deals", async (_req: Request, res: Response) => {
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(eq(quote.is_active, true), isNotNull(quote.quote_token), eq(quote.show_on_portal, true), eq(quote.isFreeQuote, true)))
+      .where(baseConditions)
       .orderBy(desc(quote.date_created))
-      .limit(5);
+      .limit(50);
 
     const quoteIds = results.map((r) => r.id);
 
@@ -271,6 +342,7 @@ portalRouter.get("/deals", async (_req: Request, res: Response) => {
       token: r.token,
       title: r.title || `${r.destinationName || r.countryName || "Holiday"} Getaway`,
       destination: r.destinationName && r.countryName ? `${r.destinationName}, ${r.countryName}` : r.countryName || r.destinationName || "TBC",
+      country: r.countryName || null,
       hotel: r.accommodationName || "",
       price: parseFloat(r.salesPrice || "0"),
       travel_date: r.travelDate,

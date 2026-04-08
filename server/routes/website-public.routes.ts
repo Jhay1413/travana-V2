@@ -15,6 +15,7 @@ websitePublicRouter.get("/deals", publicDealsController.getDeals);
 websitePublicRouter.get("/deals/latest", publicDealsController.getLatestDeals);
 websitePublicRouter.get("/deals/featured", publicDealsController.getFeaturedDeals);
 websitePublicRouter.get("/deals/categories", publicDealsController.getCategories);
+websitePublicRouter.get("/deals/filters", publicDealsController.getDealFilters);
 websitePublicRouter.get("/deals/:id", publicDealsController.getDealById);
 
 websitePublicRouter.get("/destinations", publicDealsController.getAllDestinations);

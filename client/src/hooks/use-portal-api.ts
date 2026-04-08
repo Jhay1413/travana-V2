@@ -76,6 +76,7 @@ export interface PortalDeal {
   token: string;
   title: string;
   destination: string;
+  country: string | null;
   hotel: string;
   price: number;
   original_price?: number;
@@ -99,11 +100,17 @@ export interface PortalTag {
   name: string;
 }
 
+export interface PortalDealFilters {
+  countries: string[];
+  popularTags: { tag: string; count: number }[];
+}
+
 export const portalKeys = {
   user: ["portal", "user"] as const,
   quotes: ["portal", "quotes"] as const,
   bookings: ["portal", "bookings"] as const,
-  deals: ["portal", "deals"] as const,
+  deals: (country?: string, tag?: string) => ["portal", "deals", country ?? "", tag ?? ""] as const,
+  dealFilters: ["portal", "dealFilters"] as const,
   messages: ["portal", "messages"] as const,
   allTags: ["portal", "allTags"] as const,
   myTags: ["portal", "myTags"] as const,
@@ -137,15 +144,28 @@ export function usePortalBookings() {
   });
 }
 
-export function usePortalDeals() {
+export function usePortalDeals(country?: string, tag?: string) {
+  const params = new URLSearchParams();
+  if (country) params.set("country", country);
+  if (tag) params.set("tag", tag);
+  const qs = params.toString();
   return useQuery<PortalDeal[]>({
-    queryKey: portalKeys.deals,
-    queryFn: () => portalFetch("/api/portal/deals"),
+    queryKey: portalKeys.deals(country, tag),
+    queryFn: () => portalFetch(`/api/portal/deals${qs ? `?${qs}` : ""}`),
     retry: false,
     enabled: !!getPortalToken(),
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
     staleTime: 0,
+  });
+}
+
+export function usePortalDealFilters() {
+  return useQuery<PortalDealFilters>({
+    queryKey: portalKeys.dealFilters,
+    queryFn: () => portalFetch("/api/portal/deals/filters"),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
