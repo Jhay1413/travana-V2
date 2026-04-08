@@ -25,7 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote } from "@/hooks/mutations";
-import { useUploadQuoteImages, useAddQuoteImageUrls } from "@/hooks/mutations/use-quote-image-mutations";
+import { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
 import { useQuote } from "@/hooks/queries";
 import { usePackageTypes } from "@/hooks/queries";
 import { QuoteRHFForm } from "./quote-rhf-form";
@@ -180,6 +180,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     passengersAdults: quoteData.adult || 2,
     passengersChildren: quoteData.child || 0,
     passengersInfants: quoteData.infant || 0,
+    childAges: (quoteData.passengers || []).filter((p: any) => p.type === "child").map((p: any) => p.age || 0),
     transferType: quoteData.transfer_type || "",
     preBookedSeats: quoteData.pre_booked_seats || "",
     flightMeals: quoteData.flight_meals ? "Yes" : "",
@@ -369,6 +370,7 @@ function buildUpdatePayload(
     adult: values.passengersAdults,
     child: values.passengersChildren,
     infant: values.passengersInfants,
+    childAges: values.childAges ?? [],
     transfer_type: values.transferType || null,
     pre_booked_seats: values.preBookedSeats || null,
     flight_meals: values.flightMeals === "Yes",
@@ -459,20 +461,29 @@ export function QuoteEditDialog({
   const updateQuote = useUpdateQuote();
   const uploadImages = useUploadQuoteImages();
   const addImageUrls = useAddQuoteImageUrls();
+  const deleteImage = useDeleteQuoteImage();
   const { data: packageTypesData } = usePackageTypes();
   const { data: quoteData, isLoading, isError } = useQuote(quoteId);
   const defaultValues = quoteData ? buildDefaultValues(quoteData) : undefined;
+  const existingImages = (quoteData?.images || []).map((img: any) => ({ id: img.id, url: img.image_url }));
 
-  const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
+  const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[] }) => {
     const payload = buildUpdatePayload(values, packageTypesData);
     const imageFiles = images?.files || [];
     const imageUrls = images?.urls || [];
+    const deletedImageIds = images?.deletedImageIds || [];
 
     updateQuote.mutate(
       { id: quoteId, data: payload },
       {
         onSuccess: async () => {
           let imageUploadFailed = false;
+
+          if (deletedImageIds.length > 0) {
+            await Promise.allSettled(
+              deletedImageIds.map((imageId) => deleteImage.mutateAsync({ quoteId, imageId }))
+            );
+          }
 
           if (imageFiles.length > 0) {
             try {
@@ -536,6 +547,7 @@ export function QuoteEditDialog({
               <QuoteRHFForm
                 key={quoteId + open}
                 defaultValues={defaultValues}
+                existingImages={existingImages}
                 onSubmit={handleSubmit}
                 isLoading={updateQuote.isPending}
                 submitLabel="Save Changes"

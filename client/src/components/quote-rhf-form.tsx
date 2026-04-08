@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useFieldArray, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -135,6 +136,7 @@ export function QuoteRHFForm({
   isLoading,
   submitLabel = "Save",
   onCancel,
+  existingImages = [],
 }: QuoteRHFFormProps) {
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
@@ -143,6 +145,8 @@ export function QuoteRHFForm({
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
+  const [existingImagesState, setExistingImagesState] = useState<{ id: string; url: string }[]>(existingImages);
   const [destSearch, setDestSearch] = useState("");
   const [destLabel, setDestLabel] = useState("");
   const [accomSearch, setAccomSearch] = useState("");
@@ -168,6 +172,8 @@ export function QuoteRHFForm({
   const discount = watch("discount");
   const serviceCharge = watch("serviceCharge");
   const commission = watch("commission");
+  const checkInDate = watch("checkInDate");
+  const nights = watch("nights");
 
   // ── Lookup data ──────────────────────────────────────────────────────────
   const { data: packageTypesData } = usePackageTypes();
@@ -256,6 +262,18 @@ export function QuoteRHFForm({
     }
   }, [tourOperatorId, packageType, price, discount, serviceCharge, tourOperatorsData, form, setValue]);
 
+  // ── Flight date sync from check-in date ──────────────────────────────────
+  useEffect(() => {
+    if (!checkInDate) return;
+    const date = parseISO(checkInDate);
+    if (!isValid(date)) return;
+    setValue("outboundDepartDate", checkInDate, { shouldDirty: true });
+    const nightCount = Number(nights) || 0;
+    if (nightCount > 0) {
+      setValue("inboundDepartDate", format(addDays(date, nightCount), "yyyy-MM-dd"), { shouldDirty: true });
+    }
+  }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Options ───────────────────────────────────────────────────────────────
   const airportOptions = (airportsData || []).map(
     (a: { id: string; airport_name: string; airport_code?: string | null }) => ({
@@ -267,6 +285,11 @@ export function QuoteRHFForm({
 
   // ── JSON upload ───────────────────────────────────────────────────────────
   const handleJsonUpload = (file: File) => {
+    // Clear all existing images and stage them for deletion before importing new ones
+    setDeletedImageIds((prev) => [...prev, ...existingImagesState.map((i) => i.id)]);
+    setExistingImagesState([]);
+    setImageFiles([]);
+
     handleJsonUploadUtil(file, {
       form,
       airportsData,
@@ -298,7 +321,7 @@ export function QuoteRHFForm({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((values) => onSubmit(values, { files: imageFiles, urls: imageUrls }))} className="space-y-4">
+      <form onSubmit={form.handleSubmit((values) => onSubmit(values, { files: imageFiles, urls: imageUrls, deletedImageIds }))} className="space-y-4">
 
         {/* ── JSON IMPORT ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-end">
@@ -517,6 +540,33 @@ export function QuoteRHFForm({
                 Add images
               </Button>
             </div>
+
+            {existingImagesState.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                {existingImagesState.map((img) => (
+                  <div key={img.id} className="group relative overflow-hidden rounded-xl border border-black/10">
+                    <img
+                      src={img.url}
+                      alt="Existing image"
+                      className="h-20 w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeletedImageIds((prev) => [...prev, img.id]);
+                        setExistingImagesState((prev) => prev.filter((i) => i.id !== img.id));
+                      }}
+                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white">
+                      Saved
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {(imageFiles.length > 0 || imageUrls.length > 0) && (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
@@ -1795,6 +1845,18 @@ function ConnectingLegFields({
           render={({ field }) => (
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Depart Time</FormLabel>
+              <FormControl>
+                <Input type="time" {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`${prefix}.arriveTime` as any}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs font-medium text-black/60">Arrive Time</FormLabel>
               <FormControl>
                 <Input type="time" {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
               </FormControl>

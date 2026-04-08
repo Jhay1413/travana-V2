@@ -415,6 +415,7 @@ export const newQuoteService = {
       lead_source,
       images,
       tags,
+      childAges,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...quoteFields
     } = data;
@@ -494,6 +495,10 @@ export const newQuoteService = {
     }
     if (extraAccommodations !== undefined) {
       await newQuoteRepository.replaceExtraAccommodations(id, extraAccommodations);
+    }
+
+    if (childAges !== undefined) {
+      await newQuoteRepository.replaceChildPassengers(id, "quote", childAges);
     }
 
     if (tags !== undefined) {

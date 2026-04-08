@@ -284,6 +284,7 @@ export const bookingService = {
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+      childAges,
       ...bookingFields
     } = data;
 
@@ -347,6 +348,10 @@ export const bookingService = {
     }
     if (extraAccommodations !== undefined) {
       await bookingRepository.replaceExtraAccommodations(id, extraAccommodations);
+    }
+
+    if (childAges !== undefined) {
+      await newQuoteRepository.replaceChildPassengers(id, "booking", childAges);
     }
 
     return await bookingRepository.findWithDetails(id);

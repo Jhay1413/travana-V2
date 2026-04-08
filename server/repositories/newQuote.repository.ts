@@ -700,6 +700,20 @@ export const newQuoteRepository = {
     await db.delete(passengers).where(eq(passengers.id, id));
   },
 
+  async replaceChildPassengers(ownerId: string, ownerType: "quote" | "booking", ages: number[]): Promise<void> {
+    if (ownerType === "quote") {
+      await db.delete(passengers).where(and(eq(passengers.quote_id, ownerId), eq(passengers.type, "child")));
+      if (ages.length > 0) {
+        await db.insert(passengers).values(ages.map(age => ({ quote_id: ownerId, type: "child", age })));
+      }
+    } else {
+      await db.delete(passengers).where(and(eq(passengers.booking_id, ownerId), eq(passengers.type, "child")));
+      if (ages.length > 0) {
+        await db.insert(passengers).values(ages.map(age => ({ booking_id: ownerId, type: "child", age })));
+      }
+    }
+  },
+
   async upsertFlightByType(quoteId: string, flightType: string, data: Partial<InsertQuoteFlight>, legOrder: number = 0): Promise<QuoteFlight> {
     const converted = convertFlightDates(data as Record<string, unknown>) as Partial<InsertQuoteFlight>;
     const existing = await db.select().from(quote_flights)

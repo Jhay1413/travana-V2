@@ -354,10 +354,7 @@ export const transactionRepository = {
           SELECT ${quote.transaction_id} FROM ${quote}
           WHERE ${quote.isFreeQuote} IS NOT TRUE
           AND ${quote.quote_status}::text IN (${sql.join(ACTIVE_STATUSES.map(s => sql`${s}`), sql`, `)})
-          AND (
-            ${quote.date_expiry} >= NOW()
-            OR (${quote.date_expiry} IS NULL AND ${quote.date_created} >= NOW() - INTERVAL '7 days')
-          )
+          AND ${quote.date_created} >= NOW() - INTERVAL '7 days'
         )`
       );
       if (quoteStatusFilter) {
@@ -375,10 +372,7 @@ export const transactionRepository = {
         sql`${transaction.id} IN (
           SELECT ${quote.transaction_id} FROM ${quote}
           WHERE ${quote.isFreeQuote} IS NOT TRUE
-          AND (
-            ${quote.date_expiry} >= NOW()
-            OR (${quote.date_expiry} IS NULL AND ${quote.date_created} >= NOW() - INTERVAL '7 days')
-          )
+          AND ${quote.date_created} >= NOW() - INTERVAL '7 days'
         )`
       );
     }

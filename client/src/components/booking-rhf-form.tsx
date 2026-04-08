@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useFieldArray, useWatch} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -162,7 +163,8 @@ export function BookingRHFForm({
   const discount = watch("discount");
   const serviceCharge = watch("serviceCharge");
   const commission = watch("commission");
-
+  const checkInDate = watch("checkInDate");
+  const nights = watch("nights");
 
   // ── Lookup data ──────────────────────────────────────────────────────────
   const { data: packageTypesData } = usePackageTypes();
@@ -248,6 +250,18 @@ export function BookingRHFForm({
       }
     }
   }, [tourOperatorId, packageType, price, discount, serviceCharge, tourOperatorsData, form, setValue]);
+
+  // ── Flight date sync from check-in date ──────────────────────────────────
+  useEffect(() => {
+    if (!checkInDate) return;
+    const date = parseISO(checkInDate);
+    if (!isValid(date)) return;
+    setValue("outboundDepartDate", checkInDate, { shouldDirty: true });
+    const nightCount = Number(nights) || 0;
+    if (nightCount > 0) {
+      setValue("inboundDepartDate", format(addDays(date, nightCount), "yyyy-MM-dd"), { shouldDirty: true });
+    }
+  }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Options ───────────────────────────────────────────────────────────────
   const airportOptions = (airportsData || []).map(
@@ -1707,6 +1721,18 @@ function BookingConnectingLegFields({
           render={({ field }) => (
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Depart Time</FormLabel>
+              <FormControl>
+                <Input type="time" {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`${prefix}.arriveTime` as any}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs font-medium text-black/60">Arrive Time</FormLabel>
               <FormControl>
                 <Input type="time" {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
               </FormControl>

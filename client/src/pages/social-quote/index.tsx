@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import { useUpdateQuote } from "@/hooks/mutations";
+import { useSetPrimaryQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
 import type { Favorite } from "@/api/endpoints/favorite.api";
 import { useQuoteData } from "@/pages/quote/hooks";
 import { currency, formatUKDate, formatLeadSource } from "@/pages/quote/utils";
@@ -46,6 +47,7 @@ export default function SocialQuotePage() {
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const setPrimaryImage = useSetPrimaryQuoteImage();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const [newTag, setNewTag] = useState("");
@@ -271,8 +273,17 @@ export default function SocialQuotePage() {
                           type="button"
                           className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
                           data-testid={`button-social-quote-gallery-image-${idx}`}
-                          onClick={() => {}}
-                          title="Gallery image"
+                          disabled={setPrimaryImage.isPending}
+                          onClick={() => {
+                            setPrimaryImage.mutate(
+                              { quoteId, imageId: img.id },
+                              {
+                                onSuccess: () => toast({ title: "Main image updated" }),
+                                onError: () => toast({ title: "Failed to update main image", variant: "destructive" }),
+                              }
+                            );
+                          }}
+                          title="Set as main image"
                         >
                           <img
                             src={img.url}
@@ -280,10 +291,11 @@ export default function SocialQuotePage() {
                             className="absolute inset-0 h-full w-full object-cover"
                             data-testid={`img-social-quote-gallery-${idx}`}
                           />
-                          <div
-                            className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100"
-                            aria-hidden
-                          />
+                          <div className="absolute inset-0 flex items-end justify-center bg-black/0 pb-1.5 opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
+                            <span className="flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white">
+                              <Star className="h-2.5 w-2.5" /> Set Main
+                            </span>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -399,7 +411,7 @@ export default function SocialQuotePage() {
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-passengers">
                             <div className="text-xs font-semibold text-black/65">Passengers</div>
                             <div className="text-xs font-semibold text-black">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
+                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children${quote.passengers.childAges?.length ? ` (${quote.passengers.childAges.join(", ")})` : ""}` : ""}
                             </div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-nights">
@@ -452,7 +464,7 @@ export default function SocialQuotePage() {
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-passengers">
                             <div className="text-xs font-semibold text-black/65">Passengers</div>
                             <div className="text-xs font-semibold text-black">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
+                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children${quote.passengers.childAges?.length ? ` (${quote.passengers.childAges.join(", ")})` : ""}` : ""}
                             </div>
                           </div>
                         </div>

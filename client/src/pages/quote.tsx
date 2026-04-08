@@ -846,7 +846,7 @@ export default function QuotePage() {
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
                             <div className="text-xs font-semibold text-black" data-testid="text-itinerary-passengers-value">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
+                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children${quote.passengers.childAges?.length ? ` (${quote.passengers.childAges.join(", ")})` : ""}` : ""}
                             </div>
                           </div>
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-nights">
@@ -899,7 +899,7 @@ export default function QuotePage() {
                           <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
                             <div className="text-xs font-semibold text-black" data-testid="text-itinerary-passengers-value">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children` : ""}
+                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children${quote.passengers.childAges?.length ? ` (${quote.passengers.childAges.join(", ")})` : ""}` : ""}
                             </div>
                           </div>
                         </div>
