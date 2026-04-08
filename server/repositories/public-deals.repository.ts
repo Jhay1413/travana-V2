@@ -112,6 +112,14 @@ export const publicDealsRepository = {
         WHERE q.is_active = true
           AND q."isFreeQuote" = true
           AND pt.name IS NOT NULL
+          AND (
+            EXISTS (SELECT 1 FROM quote_images qi WHERE qi.quote_id = q.id)
+            OR EXISTS (
+              SELECT 1 FROM quote_accomodation qa
+              INNER JOIN accommodation_images ai ON ai.accommodation_id = qa.accomodation_id
+              WHERE qa.quote_id = q.id AND qa.is_primary = true
+            )
+          )
         ORDER BY pt.name, q.sales_price::numeric ASC
       `),
     ]);
