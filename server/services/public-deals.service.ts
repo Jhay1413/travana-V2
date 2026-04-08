@@ -24,7 +24,7 @@ function formatDeal(
 ) {
   const { destination: dest, country: ctry } = resolveDestination(r);
   const images = imageMap[r.id] || [];
-  const guruData = dest ? (guruMap[dest.toLowerCase()] as any) : null;
+  const guruData = dest ? ((guruMap[dest] ?? guruMap[dest.toLowerCase()]) as any) ?? null : null;
 
   const returnDate =
     r.travelDate && r.numNights
@@ -86,7 +86,8 @@ async function enrichRows(rows: any[], detail = false) {
 
   const guruMap: Record<string, unknown> = {};
   for (const g of guruRows) {
-    if (g.destination) guruMap[g.destination.toLowerCase()] = g.data;
+    // Key by the queried name (deal's destination) so formatDeal lookup always hits
+    guruMap[g.queryName] = g.data;
   }
 
   return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap, guruMap, tagsMap, detail));

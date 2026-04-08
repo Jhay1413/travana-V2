@@ -1649,7 +1649,7 @@ export function CommandCenterShell({
           </aside>
 
           <div className="flex flex-col gap-3">
-            <Card className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-[200]" data-testid="topbar-command-center">
+            <Card className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-[40]" data-testid="topbar-command-center">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">

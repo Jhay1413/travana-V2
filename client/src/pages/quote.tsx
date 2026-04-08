@@ -1339,7 +1339,7 @@ export default function QuotePage() {
           <SheetHeader className="sr-only">
             <SheetTitle>Destination Guru</SheetTitle>
           </SheetHeader>
-          <div className="p-5">
+          <div className="p-5 pt-10">
             {guruRecord ? (
               <DestinationGuru
                 destination={guruDestination}

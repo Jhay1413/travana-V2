@@ -219,17 +219,22 @@ export const publicDealsRepository = {
     return map;
   },
 
-  async fetchGuruByDestinations(names: string[]): Promise<Array<{ destination: string; data: unknown }>> {
+  async fetchGuruByDestinations(names: string[]): Promise<Array<{ destination: string; data: unknown; queryName: string }>> {
     if (names.length === 0) return [];
     const unique = Array.from(new Set(names.filter(Boolean)));
-    const conditions: SQL[] = unique.flatMap((name) => [
-      ilike(destinationGuruTable.destination, name),
-      sql`${name} ILIKE '%' || ${destinationGuruTable.destination} || '%'`,
-    ]);
-    return db
-      .select({ destination: destinationGuruTable.destination, data: destinationGuruTable.data })
-      .from(destinationGuruTable)
-      .where(or(...conditions));
+    const results: Array<{ destination: string; data: unknown; queryName: string }> = [];
+    for (const name of unique) {
+      const [row] = await db
+        .select({ destination: destinationGuruTable.destination, data: destinationGuruTable.data })
+        .from(destinationGuruTable)
+        .where(or(
+          ilike(destinationGuruTable.destination, name),
+          sql`${name} ILIKE '%' || ${destinationGuruTable.destination} || '%'`
+        ))
+        .limit(1);
+      if (row) results.push({ ...row, queryName: name });
+    }
+    return results;
   },
 
   async findAllDestinations() {
