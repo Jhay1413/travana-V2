@@ -104,11 +104,14 @@ export const tagRepository = {
       .innerJoin(tags, eq(quoteTags.tagId, tags.id))
       .where(eq(quoteTags.quoteId, quoteId));
 
-    const currentTagNames = currentTagRelations.map(t => t.tagName);
+    const currentTagNames = currentTagRelations.map(t => t.tagName.toLowerCase());
+    const normalizedNew = newTagNames.map(n => n.trim().toLowerCase());
 
-    // Find tags to remove and add
-    const toRemove = currentTagNames.filter(t => !newTagNames.includes(t));
-    const toAdd = newTagNames.filter(t => !currentTagNames.includes(t));
+    // Find tags to remove and add (case-insensitive comparison)
+    const toRemove = currentTagRelations
+      .filter(t => !normalizedNew.includes(t.tagName.toLowerCase()))
+      .map(t => t.tagName);
+    const toAdd = newTagNames.filter(n => !currentTagNames.includes(n.trim().toLowerCase()));
 
     // Remove old tags
     if (toRemove.length > 0) {
@@ -208,9 +211,11 @@ export const tagRepository = {
       .innerJoin(tags, eq(bookingTags.tagId, tags.id))
       .where(eq(bookingTags.bookingId, bookingId));
 
-    const currentTagNames = currentTagRelations.map(t => t.tagName);
-    const toRemove = currentTagRelations.filter(t => !newTagNames.includes(t.tagName));
-    const toAdd = newTagNames.filter(n => !currentTagNames.includes(n));
+    const currentTagNames = currentTagRelations.map(t => t.tagName.toLowerCase());
+    const normalizedNew = newTagNames.map(n => n.trim().toLowerCase());
+
+    const toRemove = currentTagRelations.filter(t => !normalizedNew.includes(t.tagName.toLowerCase()));
+    const toAdd = newTagNames.filter(n => !currentTagNames.includes(n.trim().toLowerCase()));
 
     for (const { tagId } of toRemove) {
       await db.delete(bookingTags).where(

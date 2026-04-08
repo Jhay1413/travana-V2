@@ -7,7 +7,7 @@ import {
   quoteImages, accommodation_images, destinationGuruTable,
   package_type, airport, board_basis, cottages, lodges, park,
 } from "@shared/schema";
-import { eq, and, desc, asc, isNotNull, inArray, or, ilike, sql, SQL } from "drizzle-orm";
+import { eq, and, desc, asc, isNotNull, inArray, or, ilike, sql } from "drizzle-orm";
 
 const websitePublicRouter = Router();
 
@@ -200,7 +200,7 @@ async function fetchIncludes(quoteIds: string[]): Promise<Record<string, string[
       .leftJoin(board_basis, eq(board_basis.id, quote_accomodation.board_basis_id))
       .where(
         and(
-          inArray(quote_accomodation.quote_id as any, quoteIds),
+          sql`${quote_accomodation.quote_id} = ANY(${quoteIds})`,
           eq(quote_accomodation.is_included_in_package, true),
         ),
       ),
@@ -227,7 +227,7 @@ async function fetchIncludes(quoteIds: string[]): Promise<Record<string, string[
 }
 
 async function fetchGuruData(destNames: (string | null)[]): Promise<Record<string, any>> {
-  const unique = [...new Set(destNames.filter((n): n is string => !!n))];
+  const unique = Array.from(new Set(destNames.filter((n): n is string => !!n)));
   if (unique.length === 0) return {};
 
   const allGurus = await db.select().from(destinationGuruTable);
