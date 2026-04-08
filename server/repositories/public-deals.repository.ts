@@ -135,7 +135,7 @@ export const publicDealsRepository = {
           eq(accommodation_images.accommodation_id, quote_accomodation.accomodation_id),
         )
         .where(and(
-          sql`${quote_accomodation.quote_id} = ANY(${quoteIds})`,
+          inArray(quote_accomodation.quote_id, quoteIds),
           eq(quote_accomodation.is_primary, true),
         )),
     ]);
@@ -180,7 +180,7 @@ export const publicDealsRepository = {
       })
       .from(quote_flights)
       .innerJoin(departAirport, eq(departAirport.id, quote_flights.departing_airport_id))
-      .where(sql`${quote_flights.quote_id} = ANY(${quoteIds})`)
+      .where(inArray(quote_flights.quote_id, quoteIds))
       .orderBy(quote_flights.leg_order);
 
     const map: Record<string, string> = {};
@@ -241,7 +241,7 @@ export const publicDealsRepository = {
         .select({ quoteId: quote_flights.quote_id })
         .from(quote_flights)
         .where(and(
-          sql`${quote_flights.quote_id} = ANY(${quoteIds})`,
+          inArray(quote_flights.quote_id, quoteIds),
           eq(quote_flights.is_included_in_package, true),
         )),
       db
@@ -253,7 +253,7 @@ export const publicDealsRepository = {
         .from(quote_accomodation)
         .leftJoin(board_basis, eq(board_basis.id, quote_accomodation.board_basis_id))
         .where(and(
-          sql`${quote_accomodation.quote_id} = ANY(${quoteIds})`,
+          inArray(quote_accomodation.quote_id, quoteIds),
           eq(quote_accomodation.is_included_in_package, true),
         )),
     ]);
