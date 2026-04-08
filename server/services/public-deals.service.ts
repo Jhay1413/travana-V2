@@ -59,9 +59,9 @@ function formatDeal(
     featured: r.isFeatured ?? false,
     active: r.isActive ?? true,
     createdAt: r.dateCreated ? new Date(r.dateCreated).toISOString() : null,
+    destinationGuru: guruData !== undefined ? guruData : null,
     ...(detail && {
       tags: tagsMap[r.id] || [],
-      destinationGuru: guruData ?? null,
     }),
   };
 }
