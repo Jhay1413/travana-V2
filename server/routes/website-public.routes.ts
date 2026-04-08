@@ -29,7 +29,6 @@ function baseConditions() {
   return [
     eq(quote.is_active, true),
     isNotNull(quote.quote_token),
-    eq(quote.show_on_portal, true),
     eq(quote.isFreeQuote, true),
   ];
 }
@@ -57,6 +56,7 @@ function selectDealFields() {
     cottageLocation: cottages.location,
     // cruise destination
     cruiseName: quote_cruise.cruise_name,
+    isFeatured: quote.is_featured,
   };
 }
 
@@ -287,6 +287,7 @@ function buildDeal(
     highlights: guruData?.mustDo
       ? (guruData.mustDo as any[]).slice(0, 5).map((m) => m.name)
       : [],
+    featured: r.isFeatured ?? false,
     active: r.isActive ?? true,
     createdAt: r.dateCreated ? new Date(r.dateCreated).toISOString() : null,
   };
@@ -369,6 +370,22 @@ websitePublicRouter.get("/deals/latest", async (req: Request, res: Response) => 
   }
 });
 
+// GET /deals/featured  — must be defined before /deals/:id
+websitePublicRouter.get("/deals/featured", async (_req: Request, res: Response) => {
+  try {
+    const baseQ = db.select(selectDealFields()).from(quote);
+    const rows = await applyDealJoins(baseQ)
+      .where(and(...baseConditions(), eq(quote.is_featured, true)))
+      .orderBy(desc(quote.date_created));
+
+    const deals = await buildDealsResponse(rows);
+    res.json({ data: deals });
+  } catch (err: any) {
+    console.error("Public featured deals error:", err);
+    res.status(500).json({ error: "Failed to load featured deals" });
+  }
+});
+
 // GET /deals/categories  — must be defined before /deals/:id
 websitePublicRouter.get("/deals/categories", async (_req: Request, res: Response) => {
   try {
@@ -393,7 +410,6 @@ websitePublicRouter.get("/deals/categories", async (_req: Request, res: Response
       LEFT JOIN package_type_table pt ON pt.id = q.holiday_type_id
       WHERE q.is_active = true
         AND q.quote_token IS NOT NULL
-        AND q.show_on_portal = true
         AND q."isFreeQuote" = true
         AND pt.name IS NOT NULL
       ORDER BY pt.name, q.sales_price::numeric ASC

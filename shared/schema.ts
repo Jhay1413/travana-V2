@@ -624,6 +624,7 @@ export const quote = pgTable('quote_table', {
   quote_sent_at: timestamp('quote_sent_at', { precision: 0, withTimezone: true }),
   quote_sent_via: varchar('quote_sent_via'),
   show_on_portal: boolean('show_on_portal').default(false),
+  is_featured: boolean('is_featured').default(false),
 });
 
 export const insertQuoteSchema = createInsertSchema(quote).omit({ id: true, date_created: true });
