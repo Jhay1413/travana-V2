@@ -435,6 +435,13 @@ export const newQuoteService = {
       }
     }
 
+    // Convert date_expiry string to Date object for Drizzle timestamp column
+    if ('date_expiry' in quoteData && quoteData.date_expiry) {
+      quoteData.date_expiry = new Date(quoteData.date_expiry as unknown as string);
+    } else if ('date_expiry' in quoteData && !quoteData.date_expiry) {
+      quoteData.date_expiry = null;
+    }
+
     // Whenever date_expiry is updated, reset is_expired to false
     if ('date_expiry' in quoteData) {
       quoteData.is_expired = false;
