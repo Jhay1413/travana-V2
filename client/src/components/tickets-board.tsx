@@ -634,7 +634,7 @@ function TicketDetailPanel({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="description">Description</Label>
-                <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={4} data-testid="input-edit-description" />
+                <RichTextEditor content={formData.description ?? ""} onChange={(html) => setFormData({ ...formData, description: html })} placeholder="Detailed description of the ticket" data-testid="input-edit-description" />
               </div>
             </div>
           </div>
@@ -782,7 +782,7 @@ function TicketDetailPanel({
                   Description
                 </h3>
                 <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm text-sm text-slate-700 leading-relaxed" data-testid="text-ticket-description">
-                  {ticket.description}
+                  <RichTextDisplay content={ticket.description} />
                 </div>
               </div>
             )}
@@ -1328,7 +1328,7 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Detailed description of the ticket" rows={4} data-testid="input-description" />
+              <RichTextEditor content={formData.description ?? ""} onChange={(html) => setFormData({ ...formData, description: html })} placeholder="Detailed description of the ticket" data-testid="input-description" />
             </div>
             <div className="grid gap-2">
               <Label>Attachments</Label>
