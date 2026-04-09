@@ -427,11 +427,17 @@ export const newQuoteService = {
       'lodge_id', 'quote_type', 'deal_type', 'pre_booked_seats', 'flight_meals',
       'infant', 'child', 'adult', 'title', 'price_per_person', 'lodge_type',
       'transfer_type', 'quote_status', 'main_tour_operator_id', 'quote_ref',
+      'date_expiry',
     ];
     for (const key of directFields) {
       if (key in quoteFields) {
         (quoteData[key] as InsertQuote[typeof key]) = (quoteFields as Record<string, unknown>)[key] as InsertQuote[typeof key];
       }
+    }
+
+    // Whenever date_expiry is updated, reset is_expired to false
+    if ('date_expiry' in quoteData) {
+      quoteData.is_expired = false;
     }
 
     // Recalculate price_per_person if any of the pricing/passenger fields changed

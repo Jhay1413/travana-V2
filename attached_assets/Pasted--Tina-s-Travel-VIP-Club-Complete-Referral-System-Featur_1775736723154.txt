@@ -1,0 +1,132 @@
+"""
+Tina's Travel VIP Club - Complete Referral System
+
+Features:
+- Referral tracking and reward calculation (25% of profit minus 10%)
+- Tier system with bonuses: VIP Member, VIP Gold, VIP Elite
+- Wallet management: Pending rewards → Available
+- Client notifications for new rewards and tier upgrades
+- Supports rewards as cash or travel credit
+- Modular: can integrate with existing CRM / booking systems
+
+AUTHOR: Programmer: [Name]
+DATE: [Insert Date]
+"""
+
+# -----------------------------
+# CONFIGURATION
+# -----------------------------
+PROFIT_DEDUCTION_PERCENT = 10       # Deduct 10% before calculating referral reward
+REFERRAL_PERCENT = 25               # 25% of adjusted profit
+BONUS_GOLD = 10                     # Extra % for Gold tier
+BONUS_ELITE = 20                    # Extra % for Elite tier
+
+TIERS = {
+    "VIP Member": {"min_referrals": 1, "max_referrals": 2, "bonus_percent": 0},
+    "VIP Gold": {"min_referrals": 3, "max_referrals": 5, "bonus_percent": BONUS_GOLD},
+    "VIP Elite": {"min_referrals": 6, "max_referrals": 999, "bonus_percent": BONUS_ELITE}
+}
+
+NOTIFICATION_NEW_REWARD = "Congrats {name}! You earned £{amount} for referring {referee}. It is now available in your wallet."
+NOTIFICATION_TIER_UP = "Amazing {name}! You leveled up to {tier} in Tina's Travel VIP Club! Extra perks unlocked."
+
+# -----------------------------
+# FUNCTIONS
+# -----------------------------
+def calculate_referral_reward(profit, tier_bonus=0):
+    """
+    Calculate referral reward:
+    - Deduct PROFIT_DEDUCTION_PERCENT
+    - Take REFERRAL_PERCENT
+    - Apply tier bonus
+    """
+    adjusted_profit = profit * (1 - PROFIT_DEDUCTION_PERCENT / 100)
+    reward = adjusted_profit * (REFERRAL_PERCENT / 100)
+    reward += reward * (tier_bonus / 100)
+    return round(reward, 2)
+
+def determine_tier(referral_count):
+    """Return tier name based on number of referrals"""
+    for tier_name, tier_info in TIERS.items():
+        if tier_info["min_referrals"] <= referral_count <= tier_info["max_referrals"]:
+            return tier_name
+    return "VIP Member"
+
+def process_referral(referrer, referee_name, profit):
+    """
+    Process a referral:
+    - Calculates reward
+    - Adds to pending wallet
+    - Updates referrals list
+    - Checks for tier upgrade
+    - Sends notifications
+    """
+    current_tier = referrer["tier"]
+    tier_bonus = TIERS[current_tier]["bonus_percent"]
+    reward = calculate_referral_reward(profit, tier_bonus)
+
+    # Add reward to pending wallet
+    referrer["wallet_pending"] += reward
+    referrer["referrals"].append(referee_name)
+
+    # Notify client
+    print(NOTIFICATION_NEW_REWARD.format(name=referrer["name"], amount=reward, referee=referee_name))
+
+    # Check for tier upgrade
+    new_tier = determine_tier(len(referrer["referrals"]))
+    if new_tier != current_tier:
+        referrer["tier"] = new_tier
+        print(NOTIFICATION_TIER_UP.format(name=referrer["name"], tier=new_tier))
+
+def release_pending_rewards(client):
+    """
+    Moves all pending rewards to available wallet.
+    Should run at payout time (e.g., 8 weeks before travel)
+    """
+    client["wallet_available"] += client["wallet_pending"]
+    client["wallet_pending"] = 0
+
+def use_wallet(client, amount, usage_type="booking"):
+    """
+    Apply available wallet balance:
+    - usage_type: 'booking' or 'cash'
+    """
+    if amount > client["wallet_available"]:
+        print(f"Insufficient balance in wallet for {client['name']}. Available: £{client['wallet_available']}")
+        return False
+    client["wallet_available"] -= amount
+    if usage_type == "booking":
+        print(f"£{amount} applied to {client['name']}'s booking.")
+    else:
+        print(f"£{amount} paid out to {client['name']} as cash.")
+    return True
+
+# -----------------------------
+# EXAMPLE CLIENTS
+# -----------------------------
+clients = {
+    "Alice": {"name": "Alice", "tier": "VIP Member", "referrals": [], "wallet_pending": 0.0, "wallet_available": 0.0},
+    "Bob": {"name": "Bob", "tier": "VIP Member", "referrals": [], "wallet_pending": 0.0, "wallet_available": 0.0},
+    "Charlie": {"name": "Charlie", "tier": "VIP Member", "referrals": [], "wallet_pending": 0.0, "wallet_available": 0.0}
+}
+
+# -----------------------------
+# EXAMPLE WORKFLOW
+# -----------------------------
+# Alice refers Bob
+process_referral(clients["Alice"], "Bob", profit=175)
+
+# Bob refers Charlie
+process_referral(clients["Bob"], "Charlie", profit=200)
+
+# Release pending rewards (simulate 8 weeks before travel)
+for client in clients.values():
+    release_pending_rewards(client)
+
+# Example usage of wallet
+use_wallet(clients["Alice"], 40, usage_type="booking")
+use_wallet(clients["Bob"], 50, usage_type="cash")
+
+# -----------------------------
+# END OF SYSTEM
+# -----------------------------

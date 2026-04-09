@@ -16,6 +16,7 @@ function resolveDestination(r: any): { destination: string | null; country: stri
 function formatDeal(
   r: any,
   imageMap: Record<string, string[]>,
+  primaryMap: Record<string, string>,
   airportMap: Record<string, string>,
   includesMap: Record<string, string[]>,
   guruMap: Record<string, unknown>,
@@ -46,7 +47,7 @@ function formatDeal(
     price: parseFloat(r.salesPrice || "0"),
     pricePerPerson: r.pricePerPerson ? parseFloat(r.pricePerPerson) : null,
     originalPrice: r.pricePerPerson ? parseFloat(r.pricePerPerson) : null,
-    imageUrl: images[0] || null,
+    imageUrl: primaryMap[r.id] || images[0] || null,
     imageUrls: images,
     nights: r.numNights ?? null,
     departureDate: r.travelDate || null,
@@ -76,7 +77,7 @@ async function enrichRows(rows: any[], detail = false) {
       .map((r) => r.destinationName as string),
   ));
 
-  const [imageMap, airportMap, includesMap, guruRows, tagsMap] = await Promise.all([
+  const [{ imageMap, primaryMap }, airportMap, includesMap, guruRows, tagsMap] = await Promise.all([
     publicDealsRepository.fetchImagesByQuoteIds(ids),
     publicDealsRepository.fetchAirportsByQuoteIds(ids),
     publicDealsRepository.fetchIncludesByQuoteIds(ids),
@@ -93,7 +94,7 @@ async function enrichRows(rows: any[], detail = false) {
   console.log("[enrichRows] guruRows:", guruRows.map(g => ({ queryName: g.queryName, destination: g.destination })));
   console.log("[enrichRows] guruMap keys:", Object.keys(guruMap));
 
-  return rows.map((r) => formatDeal(r, imageMap, airportMap, includesMap, guruMap, tagsMap, detail));
+  return rows.map((r) => formatDeal(r, imageMap, primaryMap, airportMap, includesMap, guruMap, tagsMap, detail));
 }
 
 export const publicDealsService = {
@@ -146,9 +147,9 @@ export const publicDealsService = {
     if (catRows.length === 0) return [];
 
     const repIds = repRows.map((r) => r.id);
-    const imageMap = await publicDealsRepository.fetchImagesByQuoteIds(repIds);
+    const { imageMap, primaryMap } = await publicDealsRepository.fetchImagesByQuoteIds(repIds);
     const imageByCategory: Record<string, string | null> = Object.fromEntries(
-      repRows.map((r) => [r.category, (imageMap[r.id] || [])[0] || null]),
+      repRows.map((r) => [r.category, primaryMap[r.id] || (imageMap[r.id] || [])[0] || null]),
     );
 
     return catRows.map((cat) => ({

@@ -213,4 +213,16 @@ export const transactionController = {
     const stats = await transactionService.getStats();
     return successResponse(res, stats, "Transaction stats retrieved successfully");
   }),
+
+  getExpiringQuotes: asyncHandler(async (req: Request, res: Response) => {
+    const sessionUserId = getUserId(req as any);
+    let agentId = req.query.agentId && typeof req.query.agentId === "string" ? req.query.agentId : undefined;
+    if (sessionUserId) {
+      const sessionUser = await authStorage.getUser(sessionUserId);
+      const isRestricted = sessionUser?.role !== "Admin" && sessionUser?.role !== "Manager";
+      if (isRestricted) agentId = sessionUserId;
+    }
+    const quotes = await transactionService.getExpiringQuotes(agentId);
+    return successResponse(res, quotes, "Expiring quotes retrieved successfully");
+  }),
 };

@@ -10,6 +10,7 @@ export const transactionKeys = {
   detail: (id: string) => [...transactionKeys.details(), id] as const,
   stats: () => [...transactionKeys.all, "stats"] as const,
   pipeline: (status: string, agentId?: string, quoteStatus?: string) => [...transactionKeys.all, "pipeline", status, agentId, quoteStatus] as const,
+  expiringQuotes: (agentId?: string) => [...transactionKeys.all, "expiring-quotes", agentId] as const,
 };
 
 export function useTransactions(filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string }, options?: { enabled?: boolean }) {
@@ -49,5 +50,13 @@ export function useTransactionStats() {
   return useQuery({
     queryKey: transactionKeys.stats(),
     queryFn: () => transactionApi.getStats(),
+  });
+}
+
+export function useExpiringQuotes(agentId?: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: transactionKeys.expiringQuotes(agentId),
+    queryFn: () => transactionApi.getExpiringQuotes(agentId),
+    enabled: options?.enabled ?? true,
   });
 }

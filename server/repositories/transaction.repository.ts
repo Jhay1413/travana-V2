@@ -1,7 +1,7 @@
 import { db } from "../config/database";
 import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
-import { eq, desc, and, sql, inArray, count, or } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte } from "drizzle-orm";
 
 async function enrichTransactions(txns: Transaction[]) {
   if (txns.length === 0) return [];
@@ -354,7 +354,10 @@ export const transactionRepository = {
           SELECT ${quote.transaction_id} FROM ${quote}
           WHERE ${quote.isFreeQuote} IS NOT TRUE
           AND ${quote.quote_status}::text IN (${sql.join(ACTIVE_STATUSES.map(s => sql`${s}`), sql`, `)})
-          AND ${quote.date_created} >= NOW() - INTERVAL '7 days'
+          AND (
+            ${quote.date_created} >= NOW() - INTERVAL '7 days'
+            OR (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= NOW())
+          )
         )`
       );
       if (quoteStatusFilter) {
@@ -372,7 +375,10 @@ export const transactionRepository = {
         sql`${transaction.id} IN (
           SELECT ${quote.transaction_id} FROM ${quote}
           WHERE ${quote.isFreeQuote} IS NOT TRUE
-          AND ${quote.date_created} >= NOW() - INTERVAL '7 days'
+          AND (
+            ${quote.date_created} >= NOW() - INTERVAL '7 days'
+            OR (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= NOW())
+          )
         )`
       );
     }
@@ -579,6 +585,50 @@ export const transactionRepository = {
       client: client || null,
       agent: agent || null,
     };
+  },
+
+  async findExpiringQuotes(agentId?: string) {
+    const now = new Date();
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const conditions = [
+      eq(transaction.is_active, true),
+      eq(transaction.status, 'on_quote'),
+      eq(quote.is_active, true),
+      eq(quote.is_expired, false),
+      eq(quote.isFreeQuote, false),
+      eq(quote.isQuoteCopy, false),
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+      sql`(
+        (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} <= ${sevenDaysFromNow})
+        OR
+        (${quote.date_expiry} IS NULL AND ${quote.date_created} < ${sevenDaysAgo})
+      )`,
+    ];
+
+    if (agentId) {
+      conditions.push(eq(transaction.user_id, agentId));
+    }
+
+    const rows = await db
+      .select({
+        quoteId: quote.id,
+        clientId: transaction.client_id,
+        clientFirstName: clientTable.firstName,
+        clientSurename: clientTable.surename,
+        clientTitle: clientTable.title,
+        salesPrice: quote.sales_price,
+        dateCreated: quote.date_created,
+        dateExpiry: quote.date_expiry,
+        transactionId: transaction.id,
+      })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(and(...conditions));
+
+    return rows;
   },
 
   async getStats() {

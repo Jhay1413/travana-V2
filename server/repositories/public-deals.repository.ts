@@ -155,8 +155,8 @@ export const publicDealsRepository = {
     return { catRows, repRows: repResult.rows };
   },
 
-  async fetchImagesByQuoteIds(quoteIds: string[]): Promise<Record<string, string[]>> {
-    if (quoteIds.length === 0) return {};
+  async fetchImagesByQuoteIds(quoteIds: string[]): Promise<{ imageMap: Record<string, string[]>; primaryMap: Record<string, string> }> {
+    if (quoteIds.length === 0) return { imageMap: {}, primaryMap: {} };
 
     const [directImages, accomImages] = await Promise.all([
       db
@@ -203,7 +203,7 @@ export const publicDealsRepository = {
       }
     }
 
-    return imageMap;
+    return { imageMap, primaryMap };
   },
 
   async fetchAirportsByQuoteIds(quoteIds: string[]): Promise<Record<string, string>> {

@@ -704,4 +704,31 @@ export const transactionService = {
   async getStats() {
     return await transactionRepository.getStats();
   },
+
+  async getExpiringQuotes(agentId?: string) {
+    const now = new Date();
+    const rows = await transactionRepository.findExpiringQuotes(agentId);
+    return rows.map(r => {
+      const expiryDate = r.dateExpiry
+        ? new Date(r.dateExpiry)
+        : new Date(new Date(r.dateCreated!).getTime() + 7 * 24 * 60 * 60 * 1000);
+      const status: "expired" | "near_expiry" = expiryDate < now ? "expired" : "near_expiry";
+      const clientName = [
+        r.clientTitle && r.clientTitle !== "NULL" ? r.clientTitle : null,
+        r.clientFirstName,
+        r.clientSurename,
+      ].filter(Boolean).join(" ") || "Unknown Client";
+      return {
+        id: r.quoteId,
+        clientId: r.clientId,
+        clientName,
+        salesPrice: r.salesPrice,
+        dateCreated: r.dateCreated,
+        dateExpiry: r.dateExpiry,
+        expiryDate: expiryDate.toISOString(),
+        status,
+        transactionId: r.transactionId,
+      };
+    });
+  },
 };

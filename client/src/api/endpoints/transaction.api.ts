@@ -56,4 +56,20 @@ export const transactionApi = {
     const { data } = await axiosClient.get("/api/transactions/stats");
     return data;
   },
+
+  getExpiringQuotes: async (agentId?: string) => {
+    const params = agentId ? `?agentId=${agentId}` : "";
+    const { data } = await axiosClient.get(`/api/transactions/expiring-quotes${params}`);
+    return data as {
+      id: string;
+      clientId: string | null;
+      clientName: string;
+      salesPrice: string | null;
+      dateCreated: string | null;
+      dateExpiry: string | null;
+      expiryDate: string;
+      status: "expired" | "near_expiry";
+      transactionId: string;
+    }[];
+  },
 };
