@@ -71,11 +71,20 @@ export const publicDealsRepository = {
   async findDeals(filters: DealFilters) {
     const { category, countries: countriesFilter, tags: tagsFilter, sortBy = "newest", limit = 20, offset = 0, featuredOnly = false } = filters;
 
+    console.log("[findDeals] country filter received:", countriesFilter ?? "none");
+
     const conditions = baseConditions();
     if (category) conditions.push(ilike(package_type.name, category));
     if (featuredOnly) conditions.push(eq(quote.is_featured, true));
     if (countriesFilter && countriesFilter.length > 0) {
-      conditions.push(or(...countriesFilter.map((c) => ilike(country.country_name, c)))!);
+      const countryMatches = countriesFilter.map((c) => ilike(country.country_name, c));
+      const isUK = countriesFilter.some((c) =>
+        c.toLowerCase() === "united kingdom" || c.toLowerCase() === "uk"
+      );
+      const countryCondition = isUK
+        ? or(...countryMatches, eq(quote.quote_type, "hot_tub_break"))!
+        : or(...countryMatches)!;
+      conditions.push(countryCondition);
     }
     if (tagsFilter && tagsFilter.length > 0) {
       conditions.push(
