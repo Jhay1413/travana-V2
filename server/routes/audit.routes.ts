@@ -4,7 +4,7 @@ import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
 import { getUserId } from "../utils/get-user-id";
 import { db } from "../config/database";
 import { quote, transaction, clientTable, user as userTable, booking, auditLog } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, isNull, and } from "drizzle-orm";
 
 const router = Router();
 
@@ -46,7 +46,7 @@ router.post("/delete-quote/:id", async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "Reason is required" });
     }
 
-    const [quoteData] = await db.select().from(quote).where(eq(quote.id, id)).limit(1);
+    const [quoteData] = await db.select().from(quote).where(and(eq(quote.id, id), isNull(quote.deleted_at))).limit(1);
     if (!quoteData) {
       return res.status(404).json({ success: false, error: "Quote not found" });
     }
@@ -77,7 +77,7 @@ router.post("/delete-quote/:id", async (req: Request, res: Response) => {
         clientId,
         clientName,
       });
-      await tx.delete(quote).where(eq(quote.id, id));
+      await tx.update(quote).set({ deleted_at: new Date(), deleted_by_v2: userId, is_active: false }).where(eq(quote.id, id));
     });
 
     res.json({ success: true, message: "Quote deleted successfully" });

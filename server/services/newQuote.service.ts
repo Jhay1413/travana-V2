@@ -542,6 +542,8 @@ export const newQuoteService = {
   },
 
   async deleteQuote(id: string) {
+    const existing = await newQuoteRepository.findById(id);
+    if (!existing) throw new AppError("Quote not found", 404);
     await newQuoteRepository.remove(id);
   },
 

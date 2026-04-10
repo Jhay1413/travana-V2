@@ -16,7 +16,7 @@ import type {
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, desc, sql, and, or, inArray, isNotNull, gte, lte } from "drizzle-orm";
+import { eq, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -89,20 +89,20 @@ function getScheduleDateRange(filter: string): { start: Date; end: Date } | null
 
 export const newQuoteRepository = {
   async findById(id: string): Promise<Quote | undefined> {
-    const [result] = await db.select().from(quote).where(eq(quote.id, id)).limit(1);
+    const [result] = await db.select().from(quote).where(and(eq(quote.id, id), isNull(quote.deleted_at))).limit(1);
     return result;
   },
 
   async findByTransactionId(transactionId: string): Promise<Quote[]> {
-    return await db.select().from(quote).where(eq(quote.transaction_id, transactionId)).orderBy(desc(quote.date_created));
+    return await db.select().from(quote).where(and(eq(quote.transaction_id, transactionId), isNull(quote.deleted_at))).orderBy(desc(quote.date_created));
   },
 
   async findAll(): Promise<Quote[]> {
-    return await db.select().from(quote).where(eq(quote.isFreeQuote, false)).orderBy(desc(quote.date_created));
+    return await db.select().from(quote).where(and(eq(quote.isFreeQuote, false), isNull(quote.deleted_at))).orderBy(desc(quote.date_created));
   },
 
   async findByStatus(status: Quote['quote_status']): Promise<Quote[]> {
-    return await db.select().from(quote).where(sql`${quote.quote_status} = ${status}`).orderBy(desc(quote.date_created));
+    return await db.select().from(quote).where(and(sql`${quote.quote_status} = ${status}`, isNull(quote.deleted_at))).orderBy(desc(quote.date_created));
   },
 
   async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "") {
@@ -386,7 +386,7 @@ export const newQuoteRepository = {
   },
 
   async remove(id: string): Promise<void> {
-    await db.delete(quote).where(eq(quote.id, id));
+    await db.update(quote).set({ deleted_at: new Date(), is_active: false }).where(eq(quote.id, id));
   },
 
   async findWithDetails(id: string) {
