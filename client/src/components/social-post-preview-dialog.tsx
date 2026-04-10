@@ -36,9 +36,17 @@ import {
   Building2,
   TreePine,
   CheckCircle2,
+  ArrowLeftRight,
+  Car,
+  Ticket,
+  Coffee,
+  ParkingSquare,
+  Hotel,
+  PackagePlus,
 } from "lucide-react";
 import type { TravelDeal, QuoteImageSource } from "@/api/endpoints/social-post.api";
 import { socialPostApi } from "@/api/endpoints/social-post.api";
+import { useQuote } from "@/hooks/queries";
 
 interface LocalImage {
   localId: string;
@@ -123,6 +131,7 @@ export function SocialPostPreviewDialog({
     rescheduleOnOnlySocials.isPending;
 
   const { data: mediaData } = usePostMedia(travelDeal?.id, open && isScheduled);
+  const { data: quoteData } = useQuote(quoteId ?? "");
 
   useEffect(() => {
     if (travelDeal) {
