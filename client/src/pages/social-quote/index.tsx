@@ -138,6 +138,17 @@ export default function SocialQuotePage() {
                   </span>
                 </div>
                 <StatusPill status={quote.status} />
+                {rawData?.quote_ref && (
+                  <a
+                    href={rawData.quote_ref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-500 hover:underline"
+                    data-testid="link-view-social-quote"
+                  >
+                    View
+                  </a>
+                )}
               </div>
               <div
                 className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55"

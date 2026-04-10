@@ -438,7 +438,7 @@ export const transactionService = {
     const normalizedOutboundConnecting = outboundConnectingSource.map(normalizeFlightInput);
     const normalizedInboundConnecting = inboundConnectingSource.map(normalizeFlightInput);
 
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [txn] = await tx.insert(transaction).values({
         ...transactionData,
         status: 'on_booking',
