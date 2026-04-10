@@ -396,11 +396,11 @@ export const newQuoteService = {
     const payload: CreateQuotePayload = {
       ...(sourceInsertData as InsertQuote),
       ...(data as Partial<InsertQuote>),
+      ...sourceExtras,
       transaction_id: sourceQuote.transaction_id, // Keep same transaction
       isQuoteCopy: true, // Mark as duplicate (original has false)
       images: mergedImages,
       tags: sourceDetails?.tags ?? [],
-      ...sourceExtras,
     };
 
     const duplicatedQuote = await newQuoteService.createQuote(payload);

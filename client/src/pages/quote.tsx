@@ -120,6 +120,11 @@ export default function QuotePage() {
   const { data: guruRecord } = useDestinationGuruSearch(guruDestination);
   const generateGuruMutation = useGenerateDestinationGuru();
 
+  const quoteImageUrls = useMemo(
+    () => (quoteData?.images ?? []).map((img) => img.image_url).filter((url): url is string => Boolean(url)),
+    [quoteData?.images],
+  );
+
   // Convert quote data to form values for copying
   const quoteToFormValues = useMemo(() => {
     if (!quoteData) return {};
@@ -1108,13 +1113,13 @@ export default function QuotePage() {
           open={showCopyDialog}
           onOpenChange={setShowCopyDialog}
           initialValues={quoteToFormValues}
-          initialImages={(quoteData.images ?? []).map((img) => img.image_url).filter((url): url is string => Boolean(url))}
+          initialImages={quoteImageUrls}
           onSuccess={(newQuoteId) => {
             setShowCopyDialog(false);
             queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });
             queryClient.invalidateQueries({ queryKey: transactionKeys.all });
             toast({ title: "Quote copied successfully" });
-            setLocation(`/clients/${clientId}/quotes/${newQuoteId}`);
+            setLocation(clientId ? `/clients/${clientId}/quotes/${newQuoteId}` : `/quotes/${newQuoteId}`);
           }}
         />
       )}
