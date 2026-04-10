@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useFieldArray, type Control } from "react-hook-form";
 import type { ExtrasFormValues } from "@/types/booking";
 import {
@@ -28,6 +29,7 @@ import {
   useTourOperators,
   useBoardBasis,
   useAccommodations,
+  useAccommodationSearch,
   useRoomTypes,
 } from "@/hooks/queries";
 
@@ -449,16 +451,20 @@ function AirportParkingExtra({ control, index, tourOperatorOptions, airportOptio
 
 // ─── Extra Accommodation ──────────────────────────────────────────────────────
 
-function ExtraAccommodationExtra({ control, index, tourOperatorOptions, boardBasisOptions, accommodationOptions, roomTypeOptions, onRemove }: {
+function ExtraAccommodationExtra({ control, index, tourOperatorOptions, boardBasisOptions, roomTypeOptions, onRemove }: {
   control: Control<ExtrasFormValues>;
   index: number;
   tourOperatorOptions: { value: string; label: string }[];
   boardBasisOptions: { value: string; label: string }[];
-  accommodationOptions: { value: string; label: string }[];
   roomTypeOptions: { value: string; label: string }[];
   onRemove: () => void;
 }) {
   const p = `extraAccommodations.${index}`;
+  const [accomSearch, setAccomSearch] = useState("");
+  const [accomLabel, setAccomLabel] = useState("");
+  const { data: accommodationsData, isFetching: isAccomFetching } = useAccommodationSearch(accomSearch);
+  const accommodationOptions = (accommodationsData || []).map((a: any) => ({ value: a.id, label: a.name || a.id }));
+
   return (
     <ExtraCard icon={Hotel} title={`Extra Accommodation ${index + 1}`} iconColor="text-blue-600" onRemove={onRemove}>
       <p className="text-[10px] text-black/40 dark:text-white/40 -mt-1">Will be added with <span className="font-semibold">is_primary = false</span></p>
@@ -467,7 +473,20 @@ function ExtraAccommodationExtra({ control, index, tourOperatorOptions, boardBas
           <FormItem className="sm:col-span-2">
             <FormLabel className="text-xs font-medium text-black/60">Accommodation</FormLabel>
             <FormControl>
-              <SearchableSelect options={accommodationOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Search accommodation" />
+              <SearchableSelect
+                options={accommodationOptions}
+                value={field.value ?? ""}
+                onValueChange={(val) => {
+                  field.onChange(val);
+                  const selected = accommodationsData?.find((a: any) => a.id === val);
+                  if (selected) setAccomLabel(selected.name || selected.id);
+                }}
+                onSearch={setAccomSearch}
+                isLoading={isAccomFetching}
+                selectedLabel={accomLabel}
+                emptyMessage={!accomSearch ? "Type to search accommodations..." : "No accommodations found."}
+                placeholder="Search accommodation"
+              />
             </FormControl>
           </FormItem>
         )} />
@@ -529,13 +548,11 @@ export function QuoteExtrasSection({ control }: { control: Control<ExtrasFormVal
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
   const { data: boardBasisData } = useBoardBasis();
-  const { data: accommodationsData } = useAccommodations();
   const { data: roomTypesData } = useRoomTypes();
 
   const airportOptions = (airportsData || []).map((a: any) => ({ value: a.id, label: a.airport_name || a.id }));
   const tourOperatorOptions = (tourOperatorsData || []).map((op: any) => ({ value: op.id, label: op.name || op.id }));
   const boardBasisOptions = (boardBasisData || []).map((b: any) => ({ value: b.id, label: b.type || b.id }));
-  const accommodationOptions = (accommodationsData || []).map((a: any) => ({ value: a.id, label: a.name || a.id }));
   const roomTypeOptions = (roomTypesData || []).map((r: any) => ({ value: r.id, label: r.name || r.type || r.id }));
 
   const { fields: transfers, append: addTransfer, remove: removeTransfer } = useFieldArray({ control, name: "transfers" });
@@ -611,7 +628,7 @@ export function QuoteExtrasSection({ control }: { control: Control<ExtrasFormVal
             <AirportParkingExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} airportOptions={airportOptions} onRemove={() => removeAirportParking(idx)} />
           ))}
           {extraAccommodations.map((field, idx) => (
-            <ExtraAccommodationExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} boardBasisOptions={boardBasisOptions} accommodationOptions={accommodationOptions} roomTypeOptions={roomTypeOptions} onRemove={() => removeExtraAccommodation(idx)} />
+            <ExtraAccommodationExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} boardBasisOptions={boardBasisOptions} roomTypeOptions={roomTypeOptions} onRemove={() => removeExtraAccommodation(idx)} />
           ))}
         </div>
       )}
