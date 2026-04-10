@@ -256,6 +256,7 @@ export interface QuoteRHFFormProps {
   submitLabel?: string;
   onCancel?: () => void;
   existingImages?: { id: string; url: string }[];
+  initialImageUrls?: string[];
 }
 
 export interface QuoteEditDialogProps {
@@ -273,5 +274,6 @@ export interface QuoteCreateDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: (quoteId: string) => void;
   initialValues?: Partial<QuoteFormValues>;
+  initialImages?: string[];
   socialPost?: boolean;
 }

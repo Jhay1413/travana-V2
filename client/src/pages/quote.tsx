@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useQuote, useBooking, useClient, useNeonClient, useTags, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
-import { useDuplicateQuote, useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote, useAdminDeleteQuote } from "@/hooks/mutations";
+import { useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote, useAdminDeleteQuote } from "@/hooks/mutations";
 import { useSetPrimaryQuoteImage, useUploadQuoteImages, useDeleteQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
@@ -62,7 +62,6 @@ export default function QuotePage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
-  const duplicateQuoteMutation = useDuplicateQuote();
   const updateTagsMutation = useUpdateQuoteTags();
   const updateTransactionMutation = useUpdateTransaction();
   const convertToBookingMutation = useConvertToBooking();
@@ -233,6 +232,7 @@ export default function QuotePage() {
       discount: parseFloat(quoteData.discounts || "0"),
       serviceCharge: parseFloat(quoteData.service_charge || "0"),
       pricePerPerson: 0,
+      tags: quoteData.tags || [],
     };
   }, [quoteData]);
 
@@ -820,19 +820,7 @@ export default function QuotePage() {
                                         setDeleteReason("");
                                         setShowDeleteDialog(true);
                                       } else {
-                                        duplicateQuoteMutation.mutate(
-                                          { id: quoteId, data: {} },
-                                          {
-                                            onSuccess: (newQuote) => {
-                                              queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                                              toast({ title: "Quote duplicated successfully" });
-                                              setLocation(clientId ? `/clients/${clientId}/quotes/${newQuote.id}` : `/quotes/${newQuote.id}`);
-                                            },
-                                            onError: () => {
-                                              toast({ title: "Failed to duplicate quote", variant: "destructive" });
-                                            },
-                                          }
-                                        );
+                                        setShowCopyDialog(true);
                                       }
                                     }}
                                   >
@@ -1120,6 +1108,7 @@ export default function QuotePage() {
           open={showCopyDialog}
           onOpenChange={setShowCopyDialog}
           initialValues={quoteToFormValues}
+          initialImages={(quoteData.images ?? []).map((img) => img.image_url).filter((url): url is string => Boolean(url))}
           onSuccess={(newQuoteId) => {
             setShowCopyDialog(false);
             queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });

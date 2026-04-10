@@ -137,6 +137,7 @@ export function QuoteRHFForm({
   submitLabel = "Save",
   onCancel,
   existingImages = [],
+  initialImageUrls = [],
 }: QuoteRHFFormProps) {
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
@@ -144,7 +145,7 @@ export function QuoteRHFForm({
   });
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>(initialImageUrls);
   const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
   const [existingImagesState, setExistingImagesState] = useState<{ id: string; url: string }[]>(existingImages);
   const [destSearch, setDestSearch] = useState("");

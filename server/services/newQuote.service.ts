@@ -399,6 +399,7 @@ export const newQuoteService = {
       transaction_id: sourceQuote.transaction_id, // Keep same transaction
       isQuoteCopy: true, // Mark as duplicate (original has false)
       images: mergedImages,
+      tags: sourceDetails?.tags ?? [],
       ...sourceExtras,
     };
 

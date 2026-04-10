@@ -213,6 +213,7 @@ export function QuoteCreateDialog({
   onOpenChange,
   onSuccess,
   initialValues,
+  initialImages,
   socialPost = false,
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
@@ -367,6 +368,7 @@ export function QuoteCreateDialog({
               isLoading={isSubmitting}
               submitLabel={socialPost ? "Create Social Post" : "Create Quote"}
               onCancel={() => onOpenChange(false)}
+              initialImageUrls={initialImages}
             />
           </div>
         </ScrollArea>
