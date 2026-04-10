@@ -465,6 +465,9 @@ export function QuoteEditDialog({
   const { data: packageTypesData } = usePackageTypes();
   const { data: quoteData, isLoading, isError } = useQuote(quoteId);
   const defaultValues = quoteData ? buildDefaultValues(quoteData) : undefined;
+  const initialExtraAccomLabels = (quoteData?.accommodations || [])
+    .filter((a: any) => !a.is_primary)
+    .map((a: any) => a.accomodation_name || "");
   const existingImages = (quoteData?.images || []).map((img: any) => ({ id: img.id, url: img.image_url }));
 
   const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[] }) => {
@@ -548,6 +551,7 @@ export function QuoteEditDialog({
                 key={quoteId + open}
                 defaultValues={defaultValues}
                 existingImages={existingImages}
+                initialExtraAccomLabels={initialExtraAccomLabels}
                 onSubmit={handleSubmit}
                 isLoading={updateQuote.isPending}
                 submitLabel="Save Changes"

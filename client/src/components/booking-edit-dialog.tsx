@@ -375,6 +375,9 @@ export function BookingEditDialog({
   const { data: packageTypesData } = usePackageTypes();
   const { data: bookingData, isLoading, isError } = useBooking(bookingId);
   const defaultValues = bookingData ? buildDefaultValues(bookingData) : undefined;
+  const initialExtraAccomLabels = (bookingData?.accommodations || [])
+    .filter((a: any) => !a.is_primary)
+    .map((a: any) => a.accomodation_name || "");
 
   const handleSubmit = async (values: BookingFormValues) => {
     const payload = buildUpdatePayload(values, packageTypesData);
@@ -423,6 +426,7 @@ export function BookingEditDialog({
               <BookingRHFForm
                 key={bookingId + open}
                 defaultValues={defaultValues}
+                initialExtraAccomLabels={initialExtraAccomLabels}
                 onSubmit={handleSubmit}
                 isLoading={updateBooking.isPending}
                 submitLabel="Save Changes"

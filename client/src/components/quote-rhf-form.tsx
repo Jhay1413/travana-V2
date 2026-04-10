@@ -138,6 +138,7 @@ export function QuoteRHFForm({
   onCancel,
   existingImages = [],
   initialImageUrls = [],
+  initialExtraAccomLabels = [],
 }: QuoteRHFFormProps) {
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
@@ -1649,7 +1650,7 @@ export function QuoteRHFForm({
         )}
 
         {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
-        <QuoteExtrasSection control={control as unknown as Control<ExtrasFormValues>} />
+        <QuoteExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} />
 
         {/* ── PRICING ───────────────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">

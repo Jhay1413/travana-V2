@@ -257,6 +257,7 @@ export interface QuoteRHFFormProps {
   onCancel?: () => void;
   existingImages?: { id: string; url: string }[];
   initialImageUrls?: string[];
+  initialExtraAccomLabels?: string[];
 }
 
 export interface QuoteEditDialogProps {

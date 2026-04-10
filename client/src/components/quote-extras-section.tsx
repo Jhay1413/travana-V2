@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useFieldArray, type Control } from "react-hook-form";
+import { useState, useEffect } from "react";
+import { useFieldArray, useFormContext, type Control } from "react-hook-form";
 import type { ExtrasFormValues } from "@/types/booking";
 import {
   ArrowLeftRight,
@@ -28,7 +28,6 @@ import {
   useAirports,
   useTourOperators,
   useBoardBasis,
-  useAccommodations,
   useAccommodationSearch,
   useRoomTypes,
 } from "@/hooks/queries";
@@ -88,7 +87,7 @@ function FieldGrid({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">{children}</div>;
 }
 
-function IncludedToggle({ control, name }: { control: Control<ExtrasFormValues>; name: any }) {
+function IncludedToggle({ control, name, onInclude }: { control: Control<ExtrasFormValues>; name: any; onInclude?: () => void }) {
   return (
     <FormField
       control={control}
@@ -96,7 +95,13 @@ function IncludedToggle({ control, name }: { control: Control<ExtrasFormValues>;
       render={({ field }) => (
         <FormItem className="flex items-center gap-2 pt-1">
           <FormControl>
-            <Switch checked={field.value} onCheckedChange={field.onChange} />
+            <Switch
+              checked={field.value}
+              onCheckedChange={(checked) => {
+                field.onChange(checked);
+                if (checked) onInclude?.();
+              }}
+            />
           </FormControl>
           <FormLabel className="text-xs font-medium text-black/60 cursor-pointer">Included in package</FormLabel>
         </FormItem>
@@ -154,10 +159,12 @@ function BookingRefTourOpFields({ control, prefix, tourOperatorOptions }: { cont
 
 // ─── Transfer Extra ───────────────────────────────────────────────────────────
 
-function TransferExtra({ control, index, tourOperatorOptions, onRemove }: {
+function TransferExtra({ control, index, tourOperatorOptions, mainTourOperatorId, setValue, onRemove }: {
   control: Control<ExtrasFormValues>;
   index: number;
   tourOperatorOptions: { value: string; label: string }[];
+  mainTourOperatorId: string;
+  setValue: (name: any, value: any) => void;
   onRemove: () => void;
 }) {
   const p = `transfers.${index}`;
@@ -209,17 +216,23 @@ function TransferExtra({ control, index, tourOperatorOptions, onRemove }: {
           </FormItem>
         )} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
+        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
+        setValue(`${p}.cost`, 0);
+        setValue(`${p}.commission`, 0);
+      }} />
     </ExtraCard>
   );
 }
 
 // ─── Car Hire Extra ───────────────────────────────────────────────────────────
 
-function CarHireExtra({ control, index, tourOperatorOptions, onRemove }: {
+function CarHireExtra({ control, index, tourOperatorOptions, mainTourOperatorId, setValue, onRemove }: {
   control: Control<ExtrasFormValues>;
   index: number;
   tourOperatorOptions: { value: string; label: string }[];
+  mainTourOperatorId: string;
+  setValue: (name: any, value: any) => void;
   onRemove: () => void;
 }) {
   const p = `carHires.${index}`;
@@ -277,17 +290,23 @@ function CarHireExtra({ control, index, tourOperatorOptions, onRemove }: {
         <BookingRefTourOpFields control={control} prefix={p} tourOperatorOptions={tourOperatorOptions} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
+        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
+        setValue(`${p}.cost`, 0);
+        setValue(`${p}.commission`, 0);
+      }} />
     </ExtraCard>
   );
 }
 
 // ─── Attraction Ticket Extra ──────────────────────────────────────────────────
 
-function AttractionTicketExtra({ control, index, tourOperatorOptions, onRemove }: {
+function AttractionTicketExtra({ control, index, tourOperatorOptions, mainTourOperatorId, setValue, onRemove }: {
   control: Control<ExtrasFormValues>;
   index: number;
   tourOperatorOptions: { value: string; label: string }[];
+  mainTourOperatorId: string;
+  setValue: (name: any, value: any) => void;
   onRemove: () => void;
 }) {
   const p = `attractionTickets.${index}`;
@@ -315,18 +334,24 @@ function AttractionTicketExtra({ control, index, tourOperatorOptions, onRemove }
         <BookingRefTourOpFields control={control} prefix={p} tourOperatorOptions={tourOperatorOptions} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
+        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
+        setValue(`${p}.cost`, 0);
+        setValue(`${p}.commission`, 0);
+      }} />
     </ExtraCard>
   );
 }
 
 // ─── Lounge Pass Extra ────────────────────────────────────────────────────────
 
-function LoungePassExtra({ control, index, tourOperatorOptions, airportOptions, onRemove }: {
+function LoungePassExtra({ control, index, tourOperatorOptions, airportOptions, mainTourOperatorId, setValue, onRemove }: {
   control: Control<ExtrasFormValues>;
   index: number;
   tourOperatorOptions: { value: string; label: string }[];
   airportOptions: { value: string; label: string }[];
+  mainTourOperatorId: string;
+  setValue: (name: any, value: any) => void;
   onRemove: () => void;
 }) {
   const p = `loungePasses.${index}`;
@@ -362,18 +387,24 @@ function LoungePassExtra({ control, index, tourOperatorOptions, airportOptions, 
           </FormItem>
         )} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
+        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
+        setValue(`${p}.cost`, 0);
+        setValue(`${p}.commission`, 0);
+      }} />
     </ExtraCard>
   );
 }
 
 // ─── Airport Parking Extra ────────────────────────────────────────────────────
 
-function AirportParkingExtra({ control, index, tourOperatorOptions, airportOptions, onRemove }: {
+function AirportParkingExtra({ control, index, tourOperatorOptions, airportOptions, mainTourOperatorId, setValue, onRemove }: {
   control: Control<ExtrasFormValues>;
   index: number;
   tourOperatorOptions: { value: string; label: string }[];
   airportOptions: { value: string; label: string }[];
+  mainTourOperatorId: string;
+  setValue: (name: any, value: any) => void;
   onRemove: () => void;
 }) {
   const p = `airportParkings.${index}`;
@@ -444,24 +475,32 @@ function AirportParkingExtra({ control, index, tourOperatorOptions, airportOptio
         <BookingRefTourOpFields control={control} prefix={p} tourOperatorOptions={tourOperatorOptions} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
+        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
+        setValue(`${p}.cost`, 0);
+        setValue(`${p}.commission`, 0);
+      }} />
     </ExtraCard>
   );
 }
 
 // ─── Extra Accommodation ──────────────────────────────────────────────────────
 
-function ExtraAccommodationExtra({ control, index, tourOperatorOptions, boardBasisOptions, roomTypeOptions, onRemove }: {
+function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOptions, boardBasisOptions, roomTypeOptions, mainTourOperatorId, setValue, onRemove }: {
   control: Control<ExtrasFormValues>;
   index: number;
+  initialLabel?: string;
   tourOperatorOptions: { value: string; label: string }[];
   boardBasisOptions: { value: string; label: string }[];
   roomTypeOptions: { value: string; label: string }[];
+  mainTourOperatorId: string;
+  setValue: (name: any, value: any) => void;
   onRemove: () => void;
 }) {
   const p = `extraAccommodations.${index}`;
   const [accomSearch, setAccomSearch] = useState("");
-  const [accomLabel, setAccomLabel] = useState("");
+  const [accomLabel, setAccomLabel] = useState(initialLabel ?? "");
+  useEffect(() => { if (initialLabel && !accomLabel) setAccomLabel(initialLabel); }, [initialLabel]);
   const { data: accommodationsData, isFetching: isAccomFetching } = useAccommodationSearch(accomSearch);
   const accommodationOptions = (accommodationsData || []).map((a: any) => ({ value: a.id, label: a.name || a.id }));
 
@@ -537,14 +576,19 @@ function ExtraAccommodationExtra({ control, index, tourOperatorOptions, boardBas
         <BookingRefTourOpFields control={control} prefix={p} tourOperatorOptions={tourOperatorOptions} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
+        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
+        setValue(`${p}.cost`, 0);
+        setValue(`${p}.commission`, 0);
+      }} />
     </ExtraCard>
   );
 }
 
 // ─── Main Extras Section ──────────────────────────────────────────────────────
 
-export function QuoteExtrasSection({ control }: { control: Control<ExtrasFormValues> }) {
+export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourOperatorId = "" }: { control: Control<ExtrasFormValues>; initialAccomLabels?: string[]; mainTourOperatorId?: string }) {
+  const { setValue } = useFormContext();
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
   const { data: boardBasisData } = useBoardBasis();
@@ -613,22 +657,22 @@ export function QuoteExtrasSection({ control }: { control: Control<ExtrasFormVal
       {totalExtras > 0 && (
         <div className="space-y-3">
           {transfers.map((field, idx) => (
-            <TransferExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} onRemove={() => removeTransfer(idx)} />
+            <TransferExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} onRemove={() => removeTransfer(idx)} />
           ))}
           {carHires.map((field, idx) => (
-            <CarHireExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} onRemove={() => removeCarHire(idx)} />
+            <CarHireExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} onRemove={() => removeCarHire(idx)} />
           ))}
           {attractionTickets.map((field, idx) => (
-            <AttractionTicketExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} onRemove={() => removeAttractionTicket(idx)} />
+            <AttractionTicketExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} onRemove={() => removeAttractionTicket(idx)} />
           ))}
           {loungePasses.map((field, idx) => (
-            <LoungePassExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} airportOptions={airportOptions} onRemove={() => removeLoungePass(idx)} />
+            <LoungePassExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} airportOptions={airportOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} onRemove={() => removeLoungePass(idx)} />
           ))}
           {airportParkings.map((field, idx) => (
-            <AirportParkingExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} airportOptions={airportOptions} onRemove={() => removeAirportParking(idx)} />
+            <AirportParkingExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} airportOptions={airportOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} onRemove={() => removeAirportParking(idx)} />
           ))}
           {extraAccommodations.map((field, idx) => (
-            <ExtraAccommodationExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} boardBasisOptions={boardBasisOptions} roomTypeOptions={roomTypeOptions} onRemove={() => removeExtraAccommodation(idx)} />
+            <ExtraAccommodationExtra key={field.id} control={control} index={idx} initialLabel={initialAccomLabels[idx]} tourOperatorOptions={tourOperatorOptions} boardBasisOptions={boardBasisOptions} roomTypeOptions={roomTypeOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} onRemove={() => removeExtraAccommodation(idx)} />
           ))}
         </div>
       )}

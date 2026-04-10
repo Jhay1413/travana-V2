@@ -131,6 +131,7 @@ export function BookingRHFForm({
   isLoading,
   submitLabel = "Save",
   onCancel,
+  initialExtraAccomLabels = [],
 }: BookingRHFFormProps) {
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -1528,7 +1529,7 @@ export function BookingRHFForm({
         )}
 
         {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
-        <BookingExtrasSection control={control as unknown as Control<ExtrasFormValues>} />
+        <BookingExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} />
 
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
           <SectionHeader icon={DollarSign} title="Pricing" />

@@ -243,6 +243,7 @@ export interface BookingRHFFormProps {
   isLoading?: boolean;
   submitLabel?: string;
   onCancel?: () => void;
+  initialExtraAccomLabels?: string[];
 }
 
 export interface BookingCreateDialogProps {
