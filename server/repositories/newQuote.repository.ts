@@ -381,7 +381,7 @@ export const newQuoteRepository = {
   },
 
   async update(id: string, data: Partial<InsertQuote>): Promise<Quote | undefined> {
-    const [result] = await db.update(quote).set(data).where(eq(quote.id, id)).returning();
+    const [result] = await db.update(quote).set(data).where(and(eq(quote.id, id), isNull(quote.deleted_at))).returning();
     return result;
   },
 
@@ -410,7 +410,7 @@ export const newQuoteRepository = {
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
       .leftJoin(lodges, eq(quote.lodge_id, lodges.id))
       .leftJoin(park, eq(lodges.park_id, park.id))
-      .where(eq(quote.id, id))
+      .where(and(eq(quote.id, id), isNull(quote.deleted_at)))
       .limit(1);
 
     if (!q) return undefined;

@@ -138,7 +138,7 @@ export default function SocialQuotePage() {
                   </span>
                 </div>
                 <StatusPill status={quote.status} />
-                {rawData?.quote_ref && (
+                {rawData && 'quote_ref' in rawData && rawData.quote_ref && (
                   <a
                     href={rawData.quote_ref}
                     target="_blank"

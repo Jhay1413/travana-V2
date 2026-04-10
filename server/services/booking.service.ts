@@ -35,6 +35,7 @@ interface BookingRelationData {
   loungePasses?: Record<string, unknown>[];
   airportParkings?: Record<string, unknown>[];
   extraAccommodations?: Record<string, unknown>[];
+  childAges?: any[];
 }
 
 type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;

@@ -11,7 +11,8 @@ async function enrichTransactions(txns: Transaction[]) {
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
     db.select().from(quote).where(and(
       inArray(quote.transaction_id, txnIds),
-      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+      isNull(quote.deleted_at)
     )),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
     db.select().from(package_type),
@@ -187,7 +188,8 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       inArray(quote.transaction_id, txnIds),
       sql`(${quote.isFreeQuote} IS NOT TRUE)`,
       sql`(${quote.isQuoteCopy} IS NOT TRUE)`,
-      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+      isNull(quote.deleted_at)
     )),
     db.select({
       id: booking.id,
@@ -354,6 +356,7 @@ export const transactionRepository = {
           SELECT ${quote.transaction_id} FROM ${quote}
           WHERE ${quote.isFreeQuote} IS NOT TRUE
           AND ${quote.quote_status}::text IN (${sql.join(ACTIVE_STATUSES.map(s => sql`${s}`), sql`, `)})
+          AND ${quote.deleted_at} IS NULL
           AND (
             ${quote.date_created} >= NOW() - INTERVAL '7 days'
             OR (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= NOW())
@@ -365,6 +368,7 @@ export const transactionRepository = {
           sql`${transaction.id} IN (
             SELECT ${quote.transaction_id} FROM ${quote}
             WHERE ${quote.quote_status}::text = ${quoteStatusFilter}
+            AND ${quote.deleted_at} IS NULL
           )`
         );
       }
@@ -375,6 +379,7 @@ export const transactionRepository = {
         sql`${transaction.id} IN (
           SELECT ${quote.transaction_id} FROM ${quote}
           WHERE ${quote.isFreeQuote} IS NOT TRUE
+          AND ${quote.deleted_at} IS NULL
           AND (
             ${quote.date_created} >= NOW() - INTERVAL '7 days'
             OR (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= NOW())
@@ -400,6 +405,7 @@ export const transactionRepository = {
             inArray(quote.transaction_id, allTxnIds),
             sql`(${quote.isFreeQuote} IS NOT TRUE)`,
             sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+            isNull(quote.deleted_at),
           );
 
           // Get all matching quote IDs for additional service lookups
@@ -504,7 +510,7 @@ export const transactionRepository = {
     if (!txn) return undefined;
 
     const [enquiryResult] = await db.select().from(enquiry_table).where(eq(enquiry_table.transaction_id, id)).limit(1);
-    const rawQuotes = await db.select().from(quote).where(eq(quote.transaction_id, id));
+    const rawQuotes = await db.select().from(quote).where(and(eq(quote.transaction_id, id), isNull(quote.deleted_at)));
     const [bookingResult] = await db.select().from(booking).where(eq(booking.transaction_id, id)).limit(1);
     const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
     const [agent] = txn.user_id ? await db.select().from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];

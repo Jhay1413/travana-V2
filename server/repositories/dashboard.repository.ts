@@ -1,6 +1,6 @@
 import { db } from "../config/database";
 import { clientTable, transaction, quote, booking, user as userTable } from "@shared/schema";
-import { sql, eq, and, gte, lte, ne } from "drizzle-orm";
+import { sql, eq, and, gte, lte, ne, isNull } from "drizzle-orm";
 
 export const dashboardRepository = {
   async getStats(): Promise<{
@@ -23,11 +23,11 @@ export const dashboardRepository = {
       }).from(transaction),
       db.select({
         total: sql<number>`count(*)`,
-      }).from(quote),
+      }).from(quote).where(isNull(quote.deleted_at)),
       db.select({
         total: sql<number>`COALESCE(SUM(CAST(${quote.sales_price} AS DECIMAL)), 0)`,
         avg: sql<number>`COALESCE(AVG(CAST(${quote.sales_price} AS DECIMAL)), 0)`,
-      }).from(quote),
+      }).from(quote).where(isNull(quote.deleted_at)),
     ]);
 
     return {

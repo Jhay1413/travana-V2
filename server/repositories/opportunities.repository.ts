@@ -1,6 +1,6 @@
 import { db } from "../config/database";
 import { enquiry_table, quote, booking, transaction, clientTable, user } from "@shared/schema";
-import { eq, and, sql, ilike, or, gte, lte, count } from "drizzle-orm";
+import { eq, and, sql, ilike, or, gte, lte, count, isNull } from "drizzle-orm";
 
 export interface OpportunityFilters {
   page: number;
@@ -131,7 +131,7 @@ export const opportunitiesRepository = {
     const { page, limit, status, search, dateRange, agentId, sortBy = "newest" } = filters;
     const offset = (page - 1) * limit;
 
-    const conditions: any[] = [eq(transaction.is_active, true), eq(quote.isFreeQuote, false)];
+    const conditions: any[] = [eq(transaction.is_active, true), eq(quote.isFreeQuote, false), isNull(quote.deleted_at)];
 
     if (status && status !== "all") conditions.push(eq(quote.quote_status, status));
     if (agentId && agentId !== "all") conditions.push(eq(transaction.user_id, agentId));
