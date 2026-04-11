@@ -108,11 +108,11 @@ const STATUS_CONFIG = {
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function TierProgressCard({ vip }: { vip: PortalVipStatus }) {
+function TierProgressCard({ vip, referralCount }: { vip: PortalVipStatus; referralCount: number }) {
   const tier = (vip.vipTier ?? "not_enrolled") as Tier;
   const cfg = TIER_CONFIG[tier];
   const Icon = cfg.icon;
-  const total = vip.totalReferrals ?? 0;
+  const total = referralCount;
 
   const progressPct = cfg.nextTier
     ? Math.min(100, (total / cfg.nextAt) * 100)
@@ -563,7 +563,7 @@ export default function PortalReferralsPage() {
           <div className="space-y-4">
             {/* VIP Tier Card */}
             <div className="relative overflow-hidden rounded-3xl">
-              <TierProgressCard vip={vipData} />
+              <TierProgressCard vip={vipData} referralCount={activeReferrals.length} />
             </div>
 
             {/* Balance Cards */}
