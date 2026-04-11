@@ -20,6 +20,7 @@ export interface NeonClient {
   badge: string | null;
   createdAt: string;
   referrerId: string | null;
+  referredByClientId: string | null;
 }
 
 export interface NeonClientImportRow {
