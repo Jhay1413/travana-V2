@@ -268,6 +268,7 @@ export const bookingService = {
           travelDate: b.travel_date ?? undefined,
           commission: b.package_commission ?? undefined,
         });
+        await vipEnrollmentService.enrollClient(client.referredByClientId);
       }
     }
 
@@ -310,6 +311,7 @@ export const bookingService = {
           travelDate: b.travel_date ?? undefined,
           commission: b.package_commission ?? undefined,
         });
+        await vipEnrollmentService.enrollClient(client.referredByClientId);
       }
     }
 

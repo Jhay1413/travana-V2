@@ -680,6 +680,7 @@ export const transactionService = {
             travelDate: result.booking.travel_date ?? undefined,
             commission: result.booking.package_commission ?? undefined,
           });
+          await vipEnrollmentService.enrollClient(client.referredByClientId);
         }
 
         const bookingCount = await bookingRepository.countByClientId(result.transaction.client_id);
