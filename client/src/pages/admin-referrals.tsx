@@ -475,7 +475,7 @@ function PayoutRow({
 
 type Tab = "referrals" | "payouts";
 
-export default function AdminReferralsPage() {
+export function AdminReferrals() {
   const [tab, setTab] = useState<Tab>("referrals");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dueFilter, setDueFilter] = useState("all");
@@ -533,8 +533,8 @@ export default function AdminReferralsPage() {
   }
 
   return (
-    <CommandCenterShell title="VIP Referrals" theme="light" filterSlot={<></>} onRoleChange={() => {}}>
-      <div className="mx-auto w-full max-w-5xl px-4 py-6 space-y-6">
+    <>
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 space-y-6">
 
         {/* Page heading */}
         <div>
@@ -700,6 +700,14 @@ export default function AdminReferralsPage() {
         open={!!processPayoutFor}
         onClose={() => setProcessPayoutFor(null)}
       />
+    </>
+  );
+}
+
+export default function AdminReferralsPage() {
+  return (
+    <CommandCenterShell title="VIP Referrals" theme="light" filterSlot={<></>} onRoleChange={() => {}}>
+      <AdminReferrals />
     </CommandCenterShell>
   );
 }

@@ -19,6 +19,7 @@ import AdminOverview from "@/components/admin-overview";
 import { AdminAuditPanel } from "@/components/admin-audit-panel";
 import AdminFinancials from "@/components/admin-financials";
 import AdminFinancialsTargets from "@/components/admin-financials-targets";
+import { AdminReferrals } from "@/pages/admin-referrals";
 import PipelineBoard from "@/components/pipeline-board";
 import SocialPostsBoard from "@/components/social-posts-board";
 import TicketsBoard from "@/components/tickets-board";
@@ -99,6 +100,7 @@ import {
   Pencil,
   PanelLeftClose,
   PanelLeftOpen,
+  Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -546,6 +548,7 @@ function ShellNav({
                   { key: "financials-targets", label: "Targets Admin", icon: <Target className="h-4 w-4" /> },
                 ] },
               ] },
+              { key: "referrals", label: "Referrals", icon: <Gift className="h-4 w-4" /> },
               { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
               { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" />, subGroups: settingsSubGroups },
             ] as NavItem[],
@@ -6861,6 +6864,10 @@ export default function CommandCenterPage() {
             )}
           </section>
         );
+      }
+
+      if (active === "referrals") {
+        return <AdminReferrals />;
       }
 
       if (active === "audit") {

@@ -345,6 +345,28 @@ export function useSetReferralPayoutType() {
   });
 }
 
+export interface WalletPayoutResult {
+  success: boolean;
+  referralCount: number;
+  totalAmount: string;
+  payoutType: "bank_transfer" | "booking_credit";
+}
+
+export function useRequestWalletPayout() {
+  const queryClient = useQueryClient();
+  return useMutation<WalletPayoutResult, Error, { payoutType: "bank_transfer" | "booking_credit" }>({
+    mutationFn: ({ payoutType }) =>
+      portalFetch("/api/portal/wallet/request-payout", {
+        method: "POST",
+        body: JSON.stringify({ payoutType }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: portalKeys.referrals });
+      queryClient.invalidateQueries({ queryKey: portalKeys.vip });
+    },
+  });
+}
+
 export function usePortalBiometricLogin() {
   return useMutation<
     { token: string; clientId: string; firstName: string },

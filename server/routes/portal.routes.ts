@@ -748,6 +748,45 @@ portalRouter.get("/vip/payouts", portalAuth, async (req: Request, res: Response)
   }
 });
 
+portalRouter.post("/wallet/request-payout", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { payoutType } = req.body;
+
+    if (!payoutType || !["bank_transfer", "booking_credit"].includes(payoutType)) {
+      return res.status(400).json({ error: "Invalid payout type. Must be bank_transfer or booking_credit." });
+    }
+
+    const referrals = await referralService.getReferralsByReferrer(clientId);
+    const eligible = referrals.filter((r: any) => r.referralStatus === "IN_WALLET");
+
+    if (eligible.length === 0) {
+      return res.status(400).json({ error: "No referrals available in wallet to request payout for." });
+    }
+
+    await Promise.all(
+      eligible.map((r: any) =>
+        referralService.updatePayoutType(r.id, payoutType)
+      )
+    );
+
+    const totalAmount = eligible.reduce(
+      (sum: number, r: any) => sum + parseFloat(r.payoutAmount ?? "0"),
+      0
+    );
+
+    res.json({
+      success: true,
+      referralCount: eligible.length,
+      totalAmount: totalAmount.toFixed(2),
+      payoutType,
+    });
+  } catch (err: any) {
+    console.error("Portal wallet payout request error:", err);
+    res.status(500).json({ error: "Failed to submit payout request." });
+  }
+});
+
 // ── End VIP Referral Portal Endpoints ──────────────────────────────────────
 
 export const portalStaffRouter = Router();

@@ -3,16 +3,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Gift, Home, ChevronRight, Star, Crown, Shield, Clock, CheckCircle,
   Wallet, TrendingUp, User, Calendar, CreditCard, Banknote, X, AlertCircle,
-  ChevronDown, Inbox,
+  ChevronDown, Inbox, ArrowDownToLine, ArrowUpFromLine, History,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import PortalLayout from "./portal-layout";
 import {
   usePortalVipStatus,
   usePortalReferrals,
-  useSetReferralPayoutType,
+  usePortalPayouts,
+  useRequestWalletPayout,
   type PortalReferral,
   type PortalVipStatus,
+  type PortalPayout,
 } from "@/hooks/use-portal-api";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -243,36 +245,25 @@ function BalanceCards({
   );
 }
 
-// ── Redeem Modal ───────────────────────────────────────────────────────────
+// ── Wallet Modal ───────────────────────────────────────────────────────────
 
-function RedeemModal({
+function WalletModal({
   referrals,
   onClose,
 }: {
   referrals: PortalReferral[];
   onClose: () => void;
 }) {
-  const setPayoutType = useSetReferralPayoutType();
+  const requestPayout = useRequestWalletPayout();
   const eligible = referrals.filter((r) => r.referralStatus === "IN_WALLET");
-  const [selections, setSelections] = useState<Record<string, "bank_transfer" | "booking_credit">>(() => {
-    const init: Record<string, "bank_transfer" | "booking_credit"> = {};
-    eligible.forEach((r) => {
-      init[r.id] = r.payoutType ?? "bank_transfer";
-    });
-    return init;
-  });
-  const [saved, setSaved] = useState(false);
+  const [method, setMethod] = useState<"bank_transfer" | "booking_credit">("bank_transfer");
+  const [done, setDone] = useState(false);
 
   const totalAvailable = eligible.reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
 
-  async function handleSave() {
-    const changed = eligible.filter((r) => selections[r.id] !== r.payoutType);
-    await Promise.all(
-      changed.map((r) =>
-        setPayoutType.mutateAsync({ id: r.id, payoutType: selections[r.id] })
-      )
-    );
-    setSaved(true);
+  async function handleRequest() {
+    await requestPayout.mutateAsync({ payoutType: method });
+    setDone(true);
   }
 
   return (
@@ -295,8 +286,8 @@ function RedeemModal({
 
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-white font-bold text-lg">Redeem Rewards</h2>
-            <p className="text-white/40 text-sm">Total available: <span className="text-emerald-400 font-semibold">£{totalAvailable.toFixed(2)}</span></p>
+            <h2 className="text-white font-bold text-lg">Wallet Payout</h2>
+            <p className="text-white/40 text-sm">{eligible.length} referral{eligible.length !== 1 ? "s" : ""} ready</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/[0.08] flex items-center justify-center text-white/50 hover:text-white">
             <X className="w-4 h-4" />
@@ -309,15 +300,19 @@ function RedeemModal({
             <p className="text-white/50 font-medium">Nothing to redeem yet</p>
             <p className="text-white/30 text-sm mt-1">Rewards become available 8 weeks before your friend's travel date</p>
           </div>
-        ) : saved ? (
+        ) : done ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="text-center py-8"
           >
             <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-            <p className="text-white font-semibold text-lg">Preferences saved!</p>
-            <p className="text-white/40 text-sm mt-1">Your agent will be in touch to process your reward.</p>
+            <p className="text-white font-semibold text-lg">Payout requested!</p>
+            <p className="text-emerald-400 font-bold text-2xl mt-1">£{totalAvailable.toFixed(2)}</p>
+            <p className="text-white/40 text-sm mt-2">
+              {method === "bank_transfer" ? "Bank transfer" : "Booking credit"} · {eligible.length} referral{eligible.length !== 1 ? "s" : ""}
+            </p>
+            <p className="text-white/30 text-xs mt-3">Your agent will be in touch to process your payment.</p>
             <button
               onClick={onClose}
               className="mt-5 px-6 py-2.5 rounded-2xl bg-white/[0.08] text-white text-sm font-medium hover:bg-white/[0.12] transition-all"
@@ -327,59 +322,69 @@ function RedeemModal({
           </motion.div>
         ) : (
           <>
-            <div className="space-y-3 mb-5">
+            {/* Wallet balance hero */}
+            <div className="bg-gradient-to-br from-emerald-500/15 to-teal-500/15 border border-emerald-500/20 rounded-2xl p-5 mb-5 text-center">
+              <Wallet className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
+              <p className="text-emerald-400 font-bold text-3xl">£{totalAvailable.toFixed(2)}</p>
+              <p className="text-white/40 text-xs mt-1">Total wallet balance across {eligible.length} referral{eligible.length !== 1 ? "s" : ""}</p>
+            </div>
+
+            {/* Referral breakdown */}
+            <div className="space-y-2 mb-5">
+              <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Included referrals</p>
               {eligible.map((r) => (
-                <GlassCard key={r.id} className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-white/40" />
-                      <span className="text-white font-medium text-sm">{r.referredName}</span>
-                    </div>
-                    <span className="text-emerald-400 font-bold">{formatCurrency(r.payoutAmount)}</span>
+                <div key={r.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <User className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
+                    <span className="text-white/70 text-sm truncate">{r.referredName}</span>
+                    {r.travelDate && (
+                      <span className="text-white/30 text-xs hidden sm:block">· {formatDate(r.travelDate)}</span>
+                    )}
                   </div>
-                  <p className="text-white/30 text-xs mb-3 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    Travel: {formatDate(r.travelDate)}
-                  </p>
-                  {/* Payout method toggle */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setSelections((s) => ({ ...s, [r.id]: "bank_transfer" }))}
-                      className={`flex items-center gap-2 py-2 px-3 rounded-xl text-xs font-medium transition-all border ${
-                        selections[r.id] === "bank_transfer"
-                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
-                          : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/60"
-                      }`}
-                    >
-                      <Banknote className="w-3.5 h-3.5" />
-                      Bank Transfer
-                    </button>
-                    <button
-                      onClick={() => setSelections((s) => ({ ...s, [r.id]: "booking_credit" }))}
-                      className={`flex items-center gap-2 py-2 px-3 rounded-xl text-xs font-medium transition-all border ${
-                        selections[r.id] === "booking_credit"
-                          ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
-                          : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/60"
-                      }`}
-                    >
-                      <CreditCard className="w-3.5 h-3.5" />
-                      Booking Credit
-                    </button>
-                  </div>
-                </GlassCard>
+                  <span className="text-emerald-400 font-semibold text-sm flex-shrink-0">{formatCurrency(r.payoutAmount)}</span>
+                </div>
               ))}
             </div>
 
+            {/* Single method selector */}
+            <div className="mb-5">
+              <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Payout method</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setMethod("bank_transfer")}
+                  className={`flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl text-sm font-medium transition-all border ${
+                    method === "bank_transfer"
+                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                      : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/60"
+                  }`}
+                >
+                  <Banknote className="w-5 h-5" />
+                  Bank Transfer
+                </button>
+                <button
+                  onClick={() => setMethod("booking_credit")}
+                  className={`flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl text-sm font-medium transition-all border ${
+                    method === "booking_credit"
+                      ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                      : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/60"
+                  }`}
+                >
+                  <CreditCard className="w-5 h-5" />
+                  Booking Credit
+                </button>
+              </div>
+            </div>
+
             <motion.button
-              onClick={handleSave}
-              disabled={setPayoutType.isPending}
+              onClick={handleRequest}
+              disabled={requestPayout.isPending}
               whileTap={{ scale: 0.98 }}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold text-sm disabled:opacity-50 transition-all"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-sm disabled:opacity-50 transition-all"
             >
-              {setPayoutType.isPending ? "Saving…" : "Save Preferences"}
+              {requestPayout.isPending ? "Requesting…" : `Request £${totalAvailable.toFixed(2)} Payout`}
             </motion.button>
             <p className="text-white/30 text-xs text-center mt-3">
-              Your agent will process your payment after confirming your details.
+              Applies to all {eligible.length} referral{eligible.length !== 1 ? "s" : ""} in your wallet. Your agent will confirm before processing.
             </p>
           </>
         )}
@@ -491,6 +496,182 @@ function ReferralCard({ referral, index }: { referral: PortalReferral; index: nu
   );
 }
 
+// ── Wallet Tab ─────────────────────────────────────────────────────────────
+
+type WalletEntry =
+  | { type: "credit"; id: string; referredName: string; amount: string; date: string | null }
+  | { type: "payout"; id: string; referredName: string; amount: string; date: string | null; method: string };
+
+function WalletTab({
+  referrals,
+  payouts,
+  totalEarnings,
+  onRedeem,
+  availableCount,
+}: {
+  referrals: PortalReferral[];
+  payouts: PortalPayout[];
+  totalEarnings: string;
+  onRedeem: () => void;
+  availableCount: number;
+}) {
+  const walletBalance = referrals
+    .filter((r) => r.referralStatus === "IN_WALLET")
+    .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
+
+  const pendingBalance = referrals
+    .filter((r) => r.referralStatus === "PENDING")
+    .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
+
+  const totalPaid = parseFloat(totalEarnings || "0");
+
+  // Build chronological transaction history
+  const entries: WalletEntry[] = [];
+
+  // Credits: every referral that entered IN_WALLET (status is IN_WALLET or PAID)
+  referrals
+    .filter((r) => r.referralStatus === "IN_WALLET" || r.referralStatus === "PAID")
+    .forEach((r) => {
+      entries.push({
+        type: "credit",
+        id: `credit-${r.id}`,
+        referredName: r.referredName,
+        amount: r.payoutAmount ?? "0",
+        date: r.payoutTriggerDate ?? r.createdAt,
+      });
+    });
+
+  // Payouts: processed vip_payout records
+  payouts
+    .filter((p) => p.status === "processed")
+    .forEach((p) => {
+      const referral = referrals.find((r) => r.id === p.referralId);
+      entries.push({
+        type: "payout",
+        id: `payout-${p.id}`,
+        referredName: referral?.referredName ?? "Referral",
+        amount: p.amount,
+        date: p.processedAt ?? p.createdAt,
+        method: p.method,
+      });
+    });
+
+  // Sort newest first
+  entries.sort((a, b) => {
+    const da = a.date ? new Date(a.date).getTime() : 0;
+    const db = b.date ? new Date(b.date).getTime() : 0;
+    return db - da;
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Balance hero */}
+      <GlassCard className="p-5 border border-emerald-500/20 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 pointer-events-none" />
+        <div className="relative">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-white/50 text-xs font-medium uppercase tracking-wide">Wallet Balance</p>
+            <Wallet className="w-4 h-4 text-emerald-400" />
+          </div>
+          <p className="text-emerald-400 font-bold text-4xl mb-1">£{walletBalance.toFixed(2)}</p>
+          <p className="text-white/30 text-xs">
+            {availableCount} referral{availableCount !== 1 ? "s" : ""} ready to redeem
+          </p>
+
+          {/* Mini stats row */}
+          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/[0.06]">
+            <div>
+              <p className="text-white/30 text-[10px] uppercase tracking-wide">Pending</p>
+              <p className="text-amber-400 font-semibold text-sm">£{pendingBalance.toFixed(2)}</p>
+              <p className="text-white/20 text-[10px]">Awaiting release</p>
+            </div>
+            <div>
+              <p className="text-white/30 text-[10px] uppercase tracking-wide">Total Paid Out</p>
+              <p className="text-blue-400 font-semibold text-sm">£{totalPaid.toFixed(2)}</p>
+              <p className="text-white/20 text-[10px]">Lifetime earnings</p>
+            </div>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* Redeem button — only shown when there's balance */}
+      {walletBalance > 0 && (
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onRedeem}
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+        >
+          <ArrowUpFromLine className="w-4 h-4" />
+          Request Payout · £{walletBalance.toFixed(2)}
+        </motion.button>
+      )}
+
+      {/* Transaction history */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <History className="w-4 h-4 text-white/30" />
+          <p className="text-white/70 text-sm font-semibold">Transaction History</p>
+        </div>
+
+        {entries.length === 0 ? (
+          <GlassCard className="p-8 text-center">
+            <Wallet className="w-10 h-10 text-white/20 mx-auto mb-3" />
+            <p className="text-white/50 font-medium text-sm">No wallet activity yet</p>
+            <p className="text-white/30 text-xs mt-1">
+              Commissions appear here once your referrals are released (8 weeks before travel).
+            </p>
+          </GlassCard>
+        ) : (
+          <div className="space-y-2">
+            {entries.map((entry, idx) => (
+              <motion.div
+                key={entry.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.04 }}
+              >
+                <GlassCard className={`px-4 py-3 border ${entry.type === "credit" ? "border-emerald-500/10" : "border-blue-500/10"}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                        entry.type === "credit"
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "bg-blue-500/15 text-blue-400"
+                      }`}>
+                        {entry.type === "credit"
+                          ? <ArrowDownToLine className="w-4 h-4" />
+                          : <ArrowUpFromLine className="w-4 h-4" />
+                        }
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-white/80 text-sm font-medium truncate">
+                          {entry.type === "credit" ? "Commission credited" : "Payout processed"}
+                        </p>
+                        <p className="text-white/30 text-xs truncate">
+                          {entry.referredName}
+                          {entry.type === "payout" && (
+                            <span className="ml-1">· {entry.method === "bank_transfer" ? "Bank transfer" : "Booking credit"}</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-3">
+                      <p className={`font-semibold text-sm ${entry.type === "credit" ? "text-emerald-400" : "text-blue-400"}`}>
+                        {entry.type === "credit" ? "+" : "−"}£{parseFloat(entry.amount).toFixed(2)}
+                      </p>
+                      <p className="text-white/25 text-[10px]">{formatDate(entry.date)}</p>
+                    </div>
+                  </div>
+                </GlassCard>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Page skeletons ─────────────────────────────────────────────────────────
 
 function PageSkeleton() {
@@ -518,14 +699,18 @@ const DEFAULT_VIP: PortalVipStatus = {
   totalEarnings: "0.00",
 };
 
+type PageTab = "referrals" | "wallet";
+
 export default function PortalReferralsPage() {
   const [, setLocation] = useLocation();
   const [showRedeem, setShowRedeem] = useState(false);
+  const [tab, setTab] = useState<PageTab>("referrals");
 
   const { data: vip, isLoading: vipLoading } = usePortalVipStatus();
   const { data: referrals = [], isLoading: referralsLoading } = usePortalReferrals();
+  const { data: payouts = [], isLoading: payoutsLoading } = usePortalPayouts();
 
-  const loading = vipLoading || referralsLoading;
+  const loading = vipLoading || referralsLoading || payoutsLoading;
   const vipData = vip ?? DEFAULT_VIP;
 
   const activeReferrals = referrals.filter((r) => r.referralStatus !== "VOIDED");
@@ -547,7 +732,7 @@ export default function PortalReferralsPage() {
         </div>
 
         {/* Page header */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500/30 to-pink-500/30 flex items-center justify-center">
             <Gift className="w-5 h-5 text-purple-400" />
           </div>
@@ -557,86 +742,149 @@ export default function PortalReferralsPage() {
           </div>
         </div>
 
+        {/* Tab switcher */}
+        <div className="flex items-center gap-1 bg-white/[0.05] border border-white/[0.08] rounded-2xl p-1 mb-5">
+          <button
+            onClick={() => setTab("referrals")}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+              tab === "referrals"
+                ? "bg-white/[0.10] text-white"
+                : "text-white/40 hover:text-white/60"
+            }`}
+          >
+            <Gift className="w-3.5 h-3.5" />
+            Referrals
+            {activeReferrals.length > 0 && (
+              <span className="w-4 h-4 rounded-full bg-white/10 text-white/60 text-[10px] flex items-center justify-center">
+                {activeReferrals.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setTab("wallet")}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+              tab === "wallet"
+                ? "bg-white/[0.10] text-white"
+                : "text-white/40 hover:text-white/60"
+            }`}
+          >
+            <Wallet className="w-3.5 h-3.5" />
+            Wallet
+            {availableCount > 0 && (
+              <span className="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-400 text-[10px] flex items-center justify-center">
+                {availableCount}
+              </span>
+            )}
+          </button>
+        </div>
+
         {loading ? (
           <PageSkeleton />
         ) : (
-          <div className="space-y-4">
-            {/* VIP Tier Card */}
-            <div className="relative overflow-hidden rounded-3xl">
-              <TierProgressCard vip={vipData} referralCount={activeReferrals.length} />
-            </div>
-
-            {/* Balance Cards */}
-            <BalanceCards referrals={referrals} totalEarnings={vipData.totalEarnings} />
-
-            {/* Redeem Button */}
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setShowRedeem(true)}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-            >
-              <Wallet className="w-4 h-4" />
-              Redeem Rewards
-              {availableCount > 0 && (
-                <span className="ml-1 w-5 h-5 rounded-full bg-white/20 text-white text-xs flex items-center justify-center">
-                  {availableCount}
-                </span>
-              )}
-            </motion.button>
-
-            {/* How it works */}
-            <GlassCard className="p-4">
-              <p className="text-white/60 text-xs font-medium mb-2">How it works</p>
-              <div className="space-y-2">
-                {[
-                  { step: "1", text: "Tell a friend to mention your name when booking" },
-                  { step: "2", text: "Your referral is logged and tracked" },
-                  { step: "3", text: "8 weeks before their trip, your reward is released" },
-                  { step: "4", text: "Choose bank transfer or booking credit" },
-                ].map((item) => (
-                  <div key={item.step} className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {item.step}
-                    </span>
-                    <p className="text-white/40 text-xs leading-relaxed">{item.text}</p>
-                  </div>
-                ))}
-              </div>
-            </GlassCard>
-
-            {/* Recent Referrals */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-white/70 text-sm font-semibold">Your Referrals</p>
-                {activeReferrals.length > 0 && (
-                  <span className="text-white/30 text-xs">{activeReferrals.length} total</span>
-                )}
-              </div>
-
-              {activeReferrals.length === 0 ? (
-                <GlassCard className="p-8 text-center">
-                  <Inbox className="w-10 h-10 text-white/20 mx-auto mb-3" />
-                  <p className="text-white/50 font-medium text-sm">No referrals yet</p>
-                  <p className="text-white/30 text-xs mt-1">
-                    When your agent logs a referral for you, it will appear here.
-                  </p>
-                </GlassCard>
-              ) : (
-                <div className="space-y-2">
-                  {activeReferrals.map((referral, idx) => (
-                    <ReferralCard key={referral.id} referral={referral} index={idx} />
-                  ))}
+          <AnimatePresence mode="wait">
+            {tab === "referrals" ? (
+              <motion.div
+                key="referrals"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.18 }}
+                className="space-y-4"
+              >
+                {/* VIP Tier Card */}
+                <div className="relative overflow-hidden rounded-3xl">
+                  <TierProgressCard vip={vipData} referralCount={activeReferrals.length} />
                 </div>
-              )}
-            </div>
-          </div>
+
+                {/* Balance Cards */}
+                <BalanceCards referrals={referrals} totalEarnings={vipData.totalEarnings} />
+
+                {/* Redeem Button */}
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowRedeem(true)}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Redeem Rewards
+                  {availableCount > 0 && (
+                    <span className="ml-1 w-5 h-5 rounded-full bg-white/20 text-white text-xs flex items-center justify-center">
+                      {availableCount}
+                    </span>
+                  )}
+                </motion.button>
+
+                {/* How it works */}
+                <GlassCard className="p-4">
+                  <p className="text-white/60 text-xs font-medium mb-2">How it works</p>
+                  <div className="space-y-2">
+                    {[
+                      { step: "1", text: "Tell a friend to mention your name when booking" },
+                      { step: "2", text: "Your referral is logged and tracked" },
+                      { step: "3", text: "8 weeks before their trip, your reward is released" },
+                      { step: "4", text: "Choose bank transfer or booking credit" },
+                    ].map((item) => (
+                      <div key={item.step} className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                          {item.step}
+                        </span>
+                        <p className="text-white/40 text-xs leading-relaxed">{item.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </GlassCard>
+
+                {/* Referral list */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-white/70 text-sm font-semibold">Your Referrals</p>
+                    {activeReferrals.length > 0 && (
+                      <span className="text-white/30 text-xs">{activeReferrals.length} total</span>
+                    )}
+                  </div>
+
+                  {activeReferrals.length === 0 ? (
+                    <GlassCard className="p-8 text-center">
+                      <Inbox className="w-10 h-10 text-white/20 mx-auto mb-3" />
+                      <p className="text-white/50 font-medium text-sm">No referrals yet</p>
+                      <p className="text-white/30 text-xs mt-1">
+                        When your agent logs a referral for you, it will appear here.
+                      </p>
+                    </GlassCard>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeReferrals.map((referral, idx) => (
+                        <ReferralCard key={referral.id} referral={referral} index={idx} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="wallet"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.18 }}
+              >
+                <WalletTab
+                  referrals={referrals}
+                  payouts={payouts}
+                  totalEarnings={vipData.totalEarnings}
+                  onRedeem={() => setShowRedeem(true)}
+                  availableCount={availableCount}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         )}
       </div>
 
-      {/* Redeem Modal */}
+      {/* Wallet Modal */}
       <AnimatePresence>
         {showRedeem && (
-          <RedeemModal referrals={referrals} onClose={() => setShowRedeem(false)} />
+          <WalletModal referrals={referrals} onClose={() => setShowRedeem(false)} />
         )}
       </AnimatePresence>
     </PortalLayout>
