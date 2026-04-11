@@ -105,6 +105,38 @@ export interface PortalDealFilters {
   popularTags: { tag: string; count: number }[];
 }
 
+export interface PortalVipStatus {
+  vipTier: "standard" | "gold" | "elite" | "not_enrolled";
+  vipEnrolledAt: string | null;
+  totalReferrals: number;
+  totalEarnings: string;
+}
+
+export interface PortalReferral {
+  id: string;
+  referredName: string;
+  referredEmail?: string | null;
+  referredPhone?: string | null;
+  referralStatus: "PENDING" | "IN_WALLET" | "PAID" | "VOIDED";
+  travelDate?: string | null;
+  payoutTriggerDate?: string | null;
+  payoutAmount?: string | null;
+  payoutType?: "bank_transfer" | "booking_credit" | null;
+  paidAt?: string | null;
+  isDue: boolean;
+  createdAt: string;
+}
+
+export interface PortalPayout {
+  id: string;
+  referralId: string;
+  amount: string;
+  method: "bank_transfer" | "booking_credit";
+  status: "pending" | "processed";
+  processedAt?: string | null;
+  createdAt: string;
+}
+
 export const portalKeys = {
   user: ["portal", "user"] as const,
   quotes: ["portal", "quotes"] as const,
@@ -115,6 +147,9 @@ export const portalKeys = {
   allTags: ["portal", "allTags"] as const,
   myTags: ["portal", "myTags"] as const,
   hasTags: ["portal", "hasTags"] as const,
+  vip: ["portal", "vip"] as const,
+  referrals: ["portal", "referrals"] as const,
+  payouts: ["portal", "payouts"] as const,
 };
 
 export function usePortalUser() {
@@ -265,6 +300,47 @@ export function useSavePortalTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: portalKeys.myTags });
       queryClient.invalidateQueries({ queryKey: portalKeys.hasTags });
+    },
+  });
+}
+
+export function usePortalVipStatus() {
+  return useQuery<PortalVipStatus>({
+    queryKey: portalKeys.vip,
+    queryFn: () => portalFetch("/api/portal/vip"),
+    retry: false,
+    enabled: !!getPortalToken(),
+  });
+}
+
+export function usePortalReferrals() {
+  return useQuery<PortalReferral[]>({
+    queryKey: portalKeys.referrals,
+    queryFn: () => portalFetch("/api/portal/vip/referrals"),
+    retry: false,
+    enabled: !!getPortalToken(),
+  });
+}
+
+export function usePortalPayouts() {
+  return useQuery<PortalPayout[]>({
+    queryKey: portalKeys.payouts,
+    queryFn: () => portalFetch("/api/portal/vip/payouts"),
+    retry: false,
+    enabled: !!getPortalToken(),
+  });
+}
+
+export function useSetReferralPayoutType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payoutType }: { id: string; payoutType: "bank_transfer" | "booking_credit" }) =>
+      portalFetch(`/api/referrals/${id}/payout-type`, {
+        method: "PATCH",
+        body: JSON.stringify({ payoutType }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: portalKeys.referrals });
     },
   });
 }

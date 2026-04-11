@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, FileText, Briefcase, Tag, MessageCircle, LogOut, Bell, BellOff } from "lucide-react";
+import { Home, FileText, Briefcase, Tag, MessageCircle, LogOut, Bell, BellOff, Gift } from "lucide-react";
 import { getPortalToken, setPortalToken, clearPortalToken, usePortalHasTags } from "@/hooks/use-portal-api";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -94,6 +94,7 @@ const tabs = [
   { key: "bookings", label: "Bookings", icon: Briefcase, path: "/portal/bookings" },
   { key: "deals", label: "Deals", icon: Tag, path: "/portal/deals" },
   { key: "messages", label: "Messages", icon: MessageCircle, path: "/portal/messages" },
+  { key: "referrals", label: "Rewards", icon: Gift, path: "/portal/referrals" },
 ];
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {

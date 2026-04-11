@@ -34,6 +34,7 @@ import PortalDealsPage from "@/pages/portal/portal-deals";
 import PortalMessagesPage from "@/pages/portal/portal-messages";
 import PortalQuoteViewPage from "@/pages/portal/portal-quote-view";
 import PortalTagsPage from "@/pages/portal/portal-tags";
+import PortalReferralsPage from "@/pages/portal/portal-referrals";
 import { FeedbackButton } from "@/components/feedback-button";
 import { Loader2 } from "lucide-react";
 
@@ -92,6 +93,7 @@ function AppRouter() {
         <Route path="/portal/bookings" component={PortalBookingsPage} />
         <Route path="/portal/deals" component={PortalDealsPage} />
         <Route path="/portal/messages" component={PortalMessagesPage} />
+        <Route path="/portal/referrals" component={PortalReferralsPage} />
         <Route path="/portal" component={PortalHomePage} />
         <Route path="/portal/:rest*" component={PortalHomePage} />
       </Switch>
