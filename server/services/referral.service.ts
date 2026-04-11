@@ -40,6 +40,7 @@ export const referralService = {
 
   async createReferral(data: {
     referrerClientId: string;
+    referredClientId?: string;
     referredName: string;
     referredEmail?: string;
     referredPhone?: string;
@@ -56,6 +57,7 @@ export const referralService = {
 
     return referralRepository.create({
       referrerClientId: data.referrerClientId,
+      referredClientId: data.referredClientId,
       referredName: data.referredName,
       referredEmail: data.referredEmail,
       referredPhone: data.referredPhone,

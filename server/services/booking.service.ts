@@ -256,12 +256,18 @@ export const bookingService = {
       const client = await neonClientRepository.findById(txn.client_id);
       await vipEnrollmentService.enrollClient(txn.client_id);
 
-      // If this client was originally referred by another client, link the referral
+      // Auto-create referral for every booking when a referrer is set
       if (client?.referredByClientId) {
-        await vipEnrollmentService.handleReferredClientBooked(
-          txn.client_id,
-          client.referredByClientId
-        );
+        await referralService.createReferral({
+          referrerClientId: client.referredByClientId,
+          referredClientId: txn.client_id,
+          referredName: `${client.firstName} ${client.surename}`.trim(),
+          referredEmail: client.email ?? undefined,
+          referredPhone: client.phoneNumber ?? undefined,
+          transactionId: q.transaction_id,
+          travelDate: b.travel_date ?? undefined,
+          commission: b.package_commission ?? undefined,
+        });
       }
     }
 
@@ -292,12 +298,18 @@ export const bookingService = {
       const client = await neonClientRepository.findById(txn.client_id);
       await vipEnrollmentService.enrollClient(txn.client_id);
 
-      // If this client was originally referred by another client, link the referral
+      // Auto-create referral for every booking when a referrer is set
       if (client?.referredByClientId) {
-        await vipEnrollmentService.handleReferredClientBooked(
-          txn.client_id,
-          client.referredByClientId
-        );
+        await referralService.createReferral({
+          referrerClientId: client.referredByClientId,
+          referredClientId: txn.client_id,
+          referredName: `${client.firstName} ${client.surename}`.trim(),
+          referredEmail: client.email ?? undefined,
+          referredPhone: client.phoneNumber ?? undefined,
+          transactionId: data.transaction_id,
+          travelDate: b.travel_date ?? undefined,
+          commission: b.package_commission ?? undefined,
+        });
       }
     }
 
