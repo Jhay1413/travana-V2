@@ -6,12 +6,19 @@ export interface AdminVipPayout {
   clientId: string;
   clientName: string | null;
   clientPhone: string | null;
+  clientEmail: string | null;
   amount: string;
   method: "bank_transfer" | "booking_credit";
   status: "pending" | "processed";
   notes: string | null;
   processedAt: string | null;
   createdAt: string;
+  referredName: string | null;
+  referredEmail: string | null;
+  referredPhone: string | null;
+  referralStatus: string | null;
+  travelDate: string | null;
+  transactionId: string | null;
 }
 
 export interface CreateVipPayoutData {

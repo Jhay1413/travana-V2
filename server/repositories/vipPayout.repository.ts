@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { vip_payout, clientTable } from "@shared/schema";
+import { vip_payout, clientTable, referral } from "@shared/schema";
 import type { InsertVipPayout, VipPayout } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -29,9 +29,17 @@ export const vipPayoutRepository = {
         clientFirstName: clientTable.firstName,
         clientSurname: clientTable.surename,
         clientEmail: clientTable.email,
+        clientPhone: clientTable.phoneNumber,
+        referredName: referral.referredName,
+        referredEmail: referral.referredEmail,
+        referredPhone: referral.referredPhone,
+        referralStatus: referral.referralStatus,
+        travelDate: referral.travelDate,
+        transactionId: referral.transactionId,
       })
       .from(vip_payout)
       .leftJoin(clientTable, eq(vip_payout.clientId, clientTable.id))
+      .leftJoin(referral, eq(vip_payout.referralId, referral.id))
       .orderBy(vip_payout.createdAt);
   },
 

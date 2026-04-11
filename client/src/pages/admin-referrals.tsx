@@ -418,9 +418,15 @@ function PayoutRow({
       >
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm text-black/80">{payout.clientName ?? "Unknown client"}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <MethodIcon className="h-3 w-3 text-black/40" />
             <span className="text-xs text-black/40">{methodLabel}</span>
+            {payout.referredName && (
+              <>
+                <span className="text-black/20">·</span>
+                <span className="text-xs text-black/40">Referred: <span className="text-black/60 font-medium">{payout.referredName}</span></span>
+              </>
+            )}
           </div>
         </div>
 
@@ -438,9 +444,35 @@ function PayoutRow({
         <div className="border-t border-black/[0.06] px-4 py-4 bg-black/[0.01]">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm mb-4">
             <div>
-              <p className="text-xs text-black/40 mb-0.5">Client Phone</p>
+              <p className="text-xs text-black/40 mb-0.5">Referrer Phone</p>
               <p className="font-medium text-black/70">{payout.clientPhone ?? "—"}</p>
             </div>
+            <div>
+              <p className="text-xs text-black/40 mb-0.5">Referrer Email</p>
+              <p className="font-medium text-black/70">{payout.clientEmail ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-black/40 mb-0.5">Referred Client</p>
+              <p className="font-medium text-black/70">{payout.referredName ?? "—"}</p>
+            </div>
+            {payout.referredEmail && (
+              <div>
+                <p className="text-xs text-black/40 mb-0.5">Referred Email</p>
+                <p className="font-medium text-black/70">{payout.referredEmail}</p>
+              </div>
+            )}
+            {payout.travelDate && (
+              <div>
+                <p className="text-xs text-black/40 mb-0.5">Travel Date</p>
+                <p className="font-medium text-black/70">{formatDate(payout.travelDate)}</p>
+              </div>
+            )}
+            {payout.referralStatus && (
+              <div>
+                <p className="text-xs text-black/40 mb-0.5">Referral Status</p>
+                <p className="font-medium text-black/70">{payout.referralStatus}</p>
+              </div>
+            )}
             <div>
               <p className="text-xs text-black/40 mb-0.5">Created</p>
               <p className="font-medium text-black/70">{formatDate(payout.createdAt)}</p>
