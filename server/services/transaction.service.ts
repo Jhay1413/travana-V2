@@ -4,6 +4,9 @@ import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { bookingRepository } from "../repositories/booking.repository";
 import { taskService } from "./task.service";
 import { newQuoteService } from "./newQuote.service";
+import { referralService } from "./referral.service";
+import { vipEnrollmentService } from "./vipEnrollment.service";
+import { neonClientRepository } from "../repositories/neonClient.repository";
 import { AppError } from "../utils/error-handler";
 import type {
   InsertTransaction,
@@ -657,6 +660,34 @@ export const transactionService = {
           is_included_in_package: (a.is_included_in_package as boolean) ?? true,
           is_primary: false,
         } as import("@shared/schema").InsertBookingAccomodation);
+      }
+    }
+
+    // Post-booking: VIP enrollment + referral auto-creation
+    if (result.transaction.client_id) {
+      try {
+        const client = await neonClientRepository.findById(result.transaction.client_id);
+        await vipEnrollmentService.enrollClient(result.transaction.client_id);
+
+        if (client?.referredByClientId) {
+          await referralService.createReferral({
+            referrerClientId: client.referredByClientId,
+            referredClientId: result.transaction.client_id,
+            referredName: `${client.firstName} ${client.surename}`.trim(),
+            referredEmail: client.email ?? undefined,
+            referredPhone: client.phoneNumber ?? undefined,
+            transactionId: result.transaction.id,
+            travelDate: result.booking.travel_date ?? undefined,
+            commission: result.booking.package_commission ?? undefined,
+          });
+        }
+
+        const bookingCount = await bookingRepository.countByClientId(result.transaction.client_id);
+        if (bookingCount >= 3) {
+          await neonClientRepository.update(result.transaction.client_id, { badge: 'VIP Client' });
+        }
+      } catch (err) {
+        console.error("Post-booking referral/VIP error (non-fatal):", err);
       }
     }
 
