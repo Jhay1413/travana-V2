@@ -2,6 +2,8 @@ import { bookingRepository } from "../repositories/booking.repository";
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
 import { neonClientRepository } from "../repositories/neonClient.repository";
+import { vipEnrollmentService } from "./vipEnrollment.service";
+import { referralService } from "./referral.service";
 import { AppError } from "../utils/error-handler";
 import type {
   InsertBooking,
@@ -243,11 +245,23 @@ export const bookingService = {
     await newQuoteRepository.update(quoteId, { quote_status: 'WON' });
     await transactionRepository.update(q.transaction_id, { status: 'on_booking' });
 
-    // Check if client should be upgraded to VIP (3+ bookings)
     if (txn.client_id) {
+      // Badge upgrade (3+ bookings)
       const bookingCount = await bookingRepository.countByClientId(txn.client_id);
       if (bookingCount >= 3) {
         await neonClientRepository.update(txn.client_id, { badge: 'VIP Client' });
+      }
+
+      // Enroll client into VIP referral club on first booking
+      const client = await neonClientRepository.findById(txn.client_id);
+      await vipEnrollmentService.enrollClient(txn.client_id);
+
+      // If this client was originally referred by another client, link the referral
+      if (client?.referredByClientId) {
+        await vipEnrollmentService.handleReferredClientBooked(
+          txn.client_id,
+          client.referredByClientId
+        );
       }
     }
 
@@ -267,11 +281,23 @@ export const bookingService = {
     });
     await transactionRepository.update(data.transaction_id, { status: 'on_booking' });
 
-    // Check if client should be upgraded to VIP (3+ bookings)
     if (txn.client_id) {
+      // Badge upgrade (3+ bookings)
       const bookingCount = await bookingRepository.countByClientId(txn.client_id);
       if (bookingCount >= 3) {
         await neonClientRepository.update(txn.client_id, { badge: 'VIP Client' });
+      }
+
+      // Enroll client into VIP referral club on first booking
+      const client = await neonClientRepository.findById(txn.client_id);
+      await vipEnrollmentService.enrollClient(txn.client_id);
+
+      // If this client was originally referred by another client, link the referral
+      if (client?.referredByClientId) {
+        await vipEnrollmentService.handleReferredClientBooked(
+          txn.client_id,
+          client.referredByClientId
+        );
       }
     }
 
@@ -359,6 +385,11 @@ export const bookingService = {
   },
 
   async deleteBooking(id: string) {
+    const booking = await bookingRepository.findById(id);
+    if (booking?.transaction_id) {
+      // Void any referrals tied to this transaction (cancellation = no commission)
+      await referralService.voidReferralsByTransaction(booking.transaction_id);
+    }
     await bookingRepository.remove(id);
   },
 

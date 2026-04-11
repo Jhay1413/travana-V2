@@ -5,6 +5,8 @@ import {
   quoteImages, accommodation_images, clientTable, transaction, booking,
   portalMessages, webauthnCredentials, pushSubscriptions, quoteTags, tags,
 } from "@shared/schema";
+import { referralService } from "../services/referral.service";
+import { vipPayoutService } from "../services/vipPayout.service";
 import { eq, and, desc, isNotNull, inArray, sql, asc, ilike, exists } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -692,6 +694,61 @@ portalRouter.post("/push/unsubscribe", portalAuth, async (req: Request, res: Res
     res.status(500).json({ error: "Failed to unsubscribe" });
   }
 });
+
+// ── VIP Referral Portal Endpoints ──────────────────────────────────────────
+
+portalRouter.get("/vip", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const [client] = await db
+      .select({
+        vipTier: clientTable.vipTier,
+        vipEnrolledAt: clientTable.vipEnrolledAt,
+        totalReferrals: clientTable.totalReferrals,
+      })
+      .from(clientTable)
+      .where(eq(clientTable.id, clientId))
+      .limit(1);
+
+    if (!client) return res.status(404).json({ error: "Client not found" });
+
+    const totalEarnings = await vipPayoutService.getTotalEarningsByClient(clientId);
+
+    res.json({
+      vipTier: client.vipTier ?? "not_enrolled",
+      vipEnrolledAt: client.vipEnrolledAt,
+      totalReferrals: client.totalReferrals,
+      totalEarnings: totalEarnings.toFixed(2),
+    });
+  } catch (err: any) {
+    console.error("Portal VIP status error:", err);
+    res.status(500).json({ error: "Failed to load VIP status" });
+  }
+});
+
+portalRouter.get("/vip/referrals", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const referrals = await referralService.getReferralsByReferrer(clientId);
+    res.json(referrals);
+  } catch (err: any) {
+    console.error("Portal VIP referrals error:", err);
+    res.status(500).json({ error: "Failed to load referrals" });
+  }
+});
+
+portalRouter.get("/vip/payouts", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const payouts = await vipPayoutService.getPayoutsByClient(clientId);
+    res.json(payouts);
+  } catch (err: any) {
+    console.error("Portal VIP payouts error:", err);
+    res.status(500).json({ error: "Failed to load payouts" });
+  }
+});
+
+// ── End VIP Referral Portal Endpoints ──────────────────────────────────────
 
 export const portalStaffRouter = Router();
 

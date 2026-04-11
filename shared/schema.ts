@@ -9,9 +9,12 @@ export const enquiry_status_enum = pgEnum('enquiry_status_enum', ['NEW_LEAD', 'A
 export const budget_type_enum = pgEnum('budget_type_enum', ['PER_PERSON', 'PACKAGE']);
 export const quote_status_enum = pgEnum('quote_status_enum', ['NEW_LEAD', 'QUOTE_IN_PROGRESS', 'QUOTE_CALL', 'QUOTE_READY', 'AWAITING_DECISION', 'REQUOTE', 'WON', 'ARCHIVED', 'LOST', 'INACTIVE', 'EXPIRED']);
 export const booking_status_enum = pgEnum('booking_status_enum', ['BOOKED', 'LOST']);
-export const referral_status_enum = pgEnum('referral_status_enum', ['PENDING', 'RELEASED', 'REJECTED']);
+export const referral_status_enum = pgEnum('referral_status_enum', ['PENDING', 'RELEASED', 'REJECTED', 'IN_WALLET', 'PAID', 'VOIDED']);
 export const referral_request_status_enum = pgEnum('referral_request_status_enum', ['PENDING', 'APPROVED', 'REJECTED']);
 export const owner_type_enum = pgEnum('owner_type_enum', ['package_holiday', 'hot_tub_break', 'cruise']);
+export const vip_tier_enum = pgEnum('vip_tier_enum', ['standard', 'gold', 'elite']);
+export const payout_type_enum = pgEnum('payout_type_enum', ['bank_transfer', 'booking_credit']);
+export const payout_status_enum = pgEnum('payout_status_enum', ['pending', 'processed']);
 
 export const sessions = pgTable("sessions", {
   sid: varchar("sid").primaryKey(),
@@ -85,6 +88,10 @@ export const clientTable = pgTable("client_table", {
   portalPin: varchar("portal_pin"),
   createdAt: timestamp().notNull().defaultNow(),
   referrerId: text("referrerId").references(() => user.id, { onDelete: "set null" }),
+  vipTier: vip_tier_enum("vipTier"),
+  vipEnrolledAt: timestamp("vipEnrolledAt"),
+  totalReferrals: integer("totalReferrals").default(0).notNull(),
+  referredByClientId: uuid("referredByClientId"),
 });
 
 export const insertClientTableSchema = createInsertSchema(clientTable).omit({ id: true, createdAt: true });
@@ -1053,11 +1060,19 @@ export type Task = typeof task.$inferSelect;
 
 export const referral = pgTable('referral', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
-  referrerId: text("referrerId").references(() => user.id, { onDelete: "set null" }),
-  transactionId: uuid("transactionId").references(() => transaction.id, { onDelete: "cascade" }),
-  referralStatus: referral_status_enum("referralStatus").default('PENDING'),
-  potentialCommission: numeric("potentialCommission"),
+  referrerClientId: uuid("referrerClientId").references(() => clientTable.id, { onDelete: "set null" }),
+  referredClientId: uuid("referredClientId").references(() => clientTable.id, { onDelete: "set null" }),
+  transactionId: uuid("transactionId").references(() => transaction.id, { onDelete: "set null" }),
+  referredName: varchar("referredName").notNull(),
+  referredEmail: varchar("referredEmail"),
+  referredPhone: varchar("referredPhone"),
+  referralStatus: referral_status_enum("referralStatus").default('PENDING').notNull(),
   commission: numeric("commission"),
+  payoutAmount: numeric("payoutAmount"),
+  travelDate: date("travelDate"),
+  payoutTriggerDate: date("payoutTriggerDate"),
+  payoutType: payout_type_enum("payoutType"),
+  paidAt: timestamp("paidAt"),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
 });
@@ -1066,19 +1081,21 @@ export const insertReferralSchema = createInsertSchema(referral).omit({ id: true
 export type InsertReferral = z.infer<typeof insertReferralSchema>;
 export type Referral = typeof referral.$inferSelect;
 
-export const referral_request = pgTable('referral_request', {
+export const vip_payout = pgTable('vip_payout', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
-  referrerId: text("referrerId").references(() => user.id, { onDelete: "cascade" }),
-  referredStatus: referral_request_status_enum("referredStatus").default('PENDING'),
+  referralId: uuid("referralId").references(() => referral.id, { onDelete: "cascade" }).notNull(),
+  clientId: uuid("clientId").references(() => clientTable.id, { onDelete: "set null" }),
+  amount: numeric("amount").notNull(),
+  method: payout_type_enum("method").notNull(),
+  status: payout_status_enum("status").default('pending').notNull(),
   notes: varchar("notes"),
+  processedAt: timestamp("processedAt"),
   createdAt: timestamp("createdAt").defaultNow(),
-  updatedAt: timestamp("updatedAt").defaultNow(),
-  clientId: uuid("clientId").references(() => clientTable.id, { onDelete: "cascade" }),
 });
 
-export const insertReferralRequestSchema = createInsertSchema(referral_request).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertReferralRequest = z.infer<typeof insertReferralRequestSchema>;
-export type ReferralRequest = typeof referral_request.$inferSelect;
+export const insertVipPayoutSchema = createInsertSchema(vip_payout).omit({ id: true, createdAt: true });
+export type InsertVipPayout = z.infer<typeof insertVipPayoutSchema>;
+export type VipPayout = typeof vip_payout.$inferSelect;
 
 export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
