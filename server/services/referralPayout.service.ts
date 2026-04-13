@@ -35,8 +35,18 @@ export const referralPayoutService = {
       );
     }
 
+    // Skip any referral that already has an active payout request (idempotency guard)
+    const deduped = (
+      await Promise.all(
+        eligible.map(async (r: any) => {
+          const existing = await referralPayoutRepository.findByReferralId(r.id);
+          return existing && existing.status === "requested" ? null : r;
+        })
+      )
+    ).filter(Boolean);
+
     const created = await Promise.all(
-      eligible.map((r: any) =>
+      deduped.map((r: any) =>
         referralPayoutRepository.create({
           referral_id: r.id,
           client_id: referrerClientId,
@@ -46,7 +56,7 @@ export const referralPayoutService = {
       )
     );
 
-    const totalAmount = eligible.reduce(
+    const totalAmount = deduped.reduce(
       (sum: number, r: any) => sum + parseFloat(r.payoutAmount ?? "0"),
       0
     );

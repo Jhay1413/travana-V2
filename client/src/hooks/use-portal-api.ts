@@ -381,7 +381,7 @@ export interface WalletWithdrawResult {
   success: boolean;
   referralCount: number;
   totalAmount: string;
-  payoutType: "bank_transfer" | "booking_credit";
+  method: "bank_transfer" | "booking_credit";
 }
 
 /** Client requests payout for eligible (PENDING + isDue) referrals → moves them to RELEASED for admin approval */
@@ -392,6 +392,7 @@ export function useRequestWalletPayout() {
       portalFetch("/api/portal/wallet/request-payout", { method: "POST" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: portalKeys.referrals });
+      queryClient.invalidateQueries({ queryKey: portalKeys.payoutRequests });
     },
   });
 }

@@ -1,7 +1,7 @@
 import { db } from "../config/database";
 import { referral_withdrawal, clientTable, referral, booking } from "@shared/schema";
 import type { InsertReferralWithdrawal, ReferralWithdrawal } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export const referralWithdrawalRepository = {
   async create(data: InsertReferralWithdrawal): Promise<ReferralWithdrawal> {
@@ -110,9 +110,12 @@ export const referralWithdrawalRepository = {
     const rows = await db
       .select({ amount: referral_withdrawal.amount })
       .from(referral_withdrawal)
-      .where(eq(referral_withdrawal.client_id, clientId));
-    return rows
-      .filter((r: any) => r.status === "processed")
-      .reduce((sum, r) => sum + parseFloat(r.amount ?? "0"), 0);
+      .where(
+        and(
+          eq(referral_withdrawal.client_id, clientId),
+          eq(referral_withdrawal.status, "processed")
+        )
+      );
+    return rows.reduce((sum, r) => sum + parseFloat(r.amount ?? "0"), 0);
   },
 };

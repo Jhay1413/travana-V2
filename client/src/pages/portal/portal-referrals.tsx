@@ -10,7 +10,6 @@ import PortalLayout from "./portal-layout";
 import {
   usePortalVipStatus,
   usePortalReferrals,
-  usePortalPayoutRequests,
   usePortalWithdrawals,
   useRequestWalletPayout,
   useRequestWalletWithdraw,
@@ -358,23 +357,43 @@ function RequestPayoutModal({ referrals, onClose }: { referrals: PortalReferral[
 
 // ── Withdraw Modal (IN_WALLET → choose method + bank details, agent processes → PAID) ────
 
-function WithdrawModal({ referrals, onClose }: { referrals: PortalReferral[]; onClose: () => void }) {
+function WithdrawModal({
+  referrals,
+  withdrawals,
+  onClose,
+}: {
+  referrals: PortalReferral[];
+  withdrawals: PortalWithdrawal[];
+  onClose: () => void;
+}) {
   const withdraw = useRequestWalletWithdraw();
-  const eligible = referrals.filter((r) => r.referralStatus === "IN_WALLET");
+  // Exclude referrals that already have a pending withdrawal
+  const pendingReferralIds = new Set(
+    withdrawals.filter((w) => w.status === "pending").map((w) => w.referral_id)
+  );
+  const eligible = referrals.filter(
+    (r) => r.referralStatus === "IN_WALLET" && !pendingReferralIds.has(r.id)
+  );
   const [method, setMethod] = useState<"bank_transfer" | "booking_credit">("bank_transfer");
   const [accountName, setAccountName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [sortCode, setSortCode] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   const totalAvailable = eligible.reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
 
   async function handleWithdraw() {
+    setValidationError(null);
     const payload: WithdrawRequestData = { method };
     if (method === "bank_transfer") {
-      payload.account_name = accountName || undefined;
-      payload.account_number = accountNumber || undefined;
-      payload.sort_code = sortCode || undefined;
+      if (!accountName.trim() || !accountNumber.trim() || !sortCode.trim()) {
+        setValidationError("Please fill in all bank details before withdrawing.");
+        return;
+      }
+      payload.account_name = accountName.trim();
+      payload.account_number = accountNumber.trim();
+      payload.sort_code = sortCode.trim();
     }
     await withdraw.mutateAsync(payload);
     setDone(true);
@@ -489,9 +508,9 @@ function WithdrawModal({ referrals, onClose }: { referrals: PortalReferral[]; on
             </div>
           )}
 
-          {withdraw.isError && (
+          {(validationError || withdraw.isError) && (
             <div className="mb-3 px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/25 text-red-400 text-sm text-center">
-              {(withdraw.error as Error)?.message ?? "Something went wrong. Please try again."}
+              {validationError ?? (withdraw.error as Error)?.message ?? "Something went wrong. Please try again."}
             </div>
           )}
           <motion.button
@@ -1137,7 +1156,7 @@ export default function PortalReferralsPage() {
       {/* Withdraw Modal */}
       <AnimatePresence>
         {showWithdraw && (
-          <WithdrawModal referrals={referrals} onClose={() => setShowWithdraw(false)} />
+          <WithdrawModal referrals={referrals} withdrawals={withdrawals} onClose={() => setShowWithdraw(false)} />
         )}
       </AnimatePresence>
     </PortalLayout>
