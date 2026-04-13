@@ -9,7 +9,6 @@ export const createReferralValidator = z.object({
     transactionId: z.string().uuid().optional(),
     travelDate: z.string().optional(),
     commission: z.string().optional(),
-    payoutType: z.enum(["bank_transfer", "booking_credit"]).optional(),
   }),
 });
 
@@ -18,7 +17,6 @@ export const updateReferralValidator = z.object({
   body: z.object({
     travelDate: z.string().optional(),
     commission: z.string().optional(),
-    payoutType: z.enum(["bank_transfer", "booking_credit"]).optional(),
     referredEmail: z.string().email().optional(),
     referredPhone: z.string().optional(),
   }),
@@ -28,13 +26,6 @@ export const updateReferralStatusValidator = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
     status: z.enum(["PENDING", "IN_WALLET", "PAID", "VOIDED"]),
-  }),
-});
-
-export const updatePayoutTypeValidator = z.object({
-  params: z.object({ id: z.string().uuid() }),
-  body: z.object({
-    payoutType: z.enum(["bank_transfer", "booking_credit"]),
   }),
 });
 

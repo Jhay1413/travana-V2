@@ -8,6 +8,13 @@
       "when": 1773014359293,
       "tag": "0000_romantic_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1744588800000,
+      "tag": "0001_referral_payout_withdrawal",
+      "breakpoints": true
     }
   ]
 }

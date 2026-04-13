@@ -47,7 +47,6 @@ export const referralService = {
     transactionId?: string;
     travelDate?: string;
     commission?: string;
-    payoutType?: "bank_transfer" | "booking_credit";
   }) {
     const payoutTriggerDate = data.travelDate
       ? calculatePayoutTriggerDate(data.travelDate)
@@ -66,7 +65,6 @@ export const referralService = {
       payoutTriggerDate,
       commission: data.commission,
       payoutAmount,
-      payoutType: data.payoutType,
       referralStatus: "PENDING",
     });
   },
@@ -95,23 +93,16 @@ export const referralService = {
     return updated;
   },
 
-  async updatePayoutType(id: string, payoutType: "bank_transfer" | "booking_credit") {
-    const existing = await referralRepository.findById(id);
-    if (!existing) throw new AppError("Referral not found", 404);
-
-    if (existing.referralStatus === "PAID") {
-      throw new AppError("Cannot change payout type of a paid referral", 400);
-    }
-
-    return referralRepository.updatePayoutType(id, payoutType);
-  },
+  /**
+   * Client requests payout: handled in referralPayoutService.requestPayouts()
+   * Admin approve/reject: handled in referralPayoutService.approvePayout() / rejectPayout()
+   */
 
   async updateReferral(
     id: string,
     data: {
       travelDate?: string;
       commission?: string;
-      payoutType?: "bank_transfer" | "booking_credit";
       referredEmail?: string;
       referredPhone?: string;
     }
@@ -133,7 +124,6 @@ export const referralService = {
       ...(payoutTriggerDate ? { payoutTriggerDate } : {}),
       ...(data.commission ? { commission: data.commission } : {}),
       ...(payoutAmount ? { payoutAmount } : {}),
-      ...(data.payoutType ? { payoutType: data.payoutType } : {}),
       ...(data.referredEmail ? { referredEmail: data.referredEmail } : {}),
       ...(data.referredPhone ? { referredPhone: data.referredPhone } : {}),
     });

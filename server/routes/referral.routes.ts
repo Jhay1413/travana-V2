@@ -5,7 +5,6 @@ import {
   createReferralValidator,
   updateReferralValidator,
   updateReferralStatusValidator,
-  updatePayoutTypeValidator,
   referralIdParamValidator,
   referrerClientParamValidator,
 } from "../validators/referral.validator";
@@ -24,14 +23,11 @@ router.get("/:id", validate(referralIdParamValidator), referralController.getRef
 // Admin: log a new referral at time of friend's booking
 router.post("/", validate(createReferralValidator), referralController.createReferral);
 
-// Admin: update referral details (travel date, commission, payout type)
+// Admin: update referral details (travel date, commission)
 router.patch("/:id", validate(updateReferralValidator), referralController.updateReferral);
 
-// Admin: update referral status (PENDING → IN_WALLET → PAID / VOIDED)
+// Admin: update referral status manually (emergency override)
 router.patch("/:id/status", validate(updateReferralStatusValidator), referralController.updateStatus);
-
-// Client/Admin: set preferred payout method
-router.patch("/:id/payout-type", validate(updatePayoutTypeValidator), referralController.updatePayoutType);
 
 // Admin: void/delete a referral (e.g. cancelled trip)
 router.delete("/:id", validate(referralIdParamValidator), referralController.deleteReferral);

@@ -121,20 +121,36 @@ export interface PortalReferral {
   travelDate?: string | null;
   payoutTriggerDate?: string | null;
   payoutAmount?: string | null;
-  payoutType?: "bank_transfer" | "booking_credit" | null;
   paidAt?: string | null;
   isDue: boolean;
   createdAt: string;
 }
 
-export interface PortalPayout {
+export interface PortalPayoutRequest {
   id: string;
-  referralId: string;
+  referral_id: string;
+  amount: string;
+  status: "requested" | "approved" | "rejected";
+  notes: string | null;
+  requested_at: string;
+  approved_at: string | null;
+  rejected_at: string | null;
+}
+
+export interface PortalWithdrawal {
+  id: string;
+  referral_id: string;
   amount: string;
   method: "bank_transfer" | "booking_credit";
-  status: "pending" | "processed";
-  processedAt?: string | null;
-  createdAt: string;
+  status: "pending" | "processed" | "rejected";
+  account_name: string | null;
+  account_number: string | null;
+  sort_code: string | null;
+  transfer_reference: string | null;
+  booking_id: string | null;
+  credit_note: string | null;
+  requested_at: string;
+  processed_at: string | null;
 }
 
 export const portalKeys = {
@@ -149,7 +165,8 @@ export const portalKeys = {
   hasTags: ["portal", "hasTags"] as const,
   vip: ["portal", "vip"] as const,
   referrals: ["portal", "referrals"] as const,
-  payouts: ["portal", "payouts"] as const,
+  payoutRequests: ["portal", "payoutRequests"] as const,
+  withdrawals: ["portal", "withdrawals"] as const,
 };
 
 export function usePortalUser() {
@@ -310,6 +327,8 @@ export function usePortalVipStatus() {
     queryFn: () => portalFetch("/api/portal/vip"),
     retry: false,
     enabled: !!getPortalToken(),
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000,
   });
 }
 
@@ -319,49 +338,84 @@ export function usePortalReferrals() {
     queryFn: () => portalFetch("/api/portal/vip/referrals"),
     retry: false,
     enabled: !!getPortalToken(),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000,
+    staleTime: 0,
   });
 }
 
-export function usePortalPayouts() {
-  return useQuery<PortalPayout[]>({
-    queryKey: portalKeys.payouts,
-    queryFn: () => portalFetch("/api/portal/vip/payouts"),
+export function usePortalPayoutRequests() {
+  return useQuery<PortalPayoutRequest[]>({
+    queryKey: portalKeys.payoutRequests,
+    queryFn: () => portalFetch("/api/portal/vip/payout-requests"),
     retry: false,
     enabled: !!getPortalToken(),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000,
+    staleTime: 0,
   });
 }
 
-export function useSetReferralPayoutType() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, payoutType }: { id: string; payoutType: "bank_transfer" | "booking_credit" }) =>
-      portalFetch(`/api/referrals/${id}/payout-type`, {
-        method: "PATCH",
-        body: JSON.stringify({ payoutType }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: portalKeys.referrals });
-    },
+export function usePortalWithdrawals() {
+  return useQuery<PortalWithdrawal[]>({
+    queryKey: portalKeys.withdrawals,
+    queryFn: () => portalFetch("/api/portal/vip/withdrawals"),
+    retry: false,
+    enabled: !!getPortalToken(),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000,
+    staleTime: 0,
   });
 }
 
 export interface WalletPayoutResult {
+  success: boolean;
+  count: number;
+  totalAmount: string;
+}
+
+export interface WalletWithdrawResult {
   success: boolean;
   referralCount: number;
   totalAmount: string;
   payoutType: "bank_transfer" | "booking_credit";
 }
 
+/** Client requests payout for eligible (PENDING + isDue) referrals → moves them to RELEASED for admin approval */
 export function useRequestWalletPayout() {
   const queryClient = useQueryClient();
-  return useMutation<WalletPayoutResult, Error, { payoutType: "bank_transfer" | "booking_credit" }>({
-    mutationFn: ({ payoutType }) =>
-      portalFetch("/api/portal/wallet/request-payout", {
+  return useMutation<WalletPayoutResult, Error, void>({
+    mutationFn: () =>
+      portalFetch("/api/portal/wallet/request-payout", { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: portalKeys.referrals });
+    },
+  });
+}
+
+export interface WithdrawRequestData {
+  method: "bank_transfer" | "booking_credit";
+  account_name?: string;
+  account_number?: string;
+  sort_code?: string;
+  booking_id?: string;
+}
+
+/** Client requests withdrawal of their IN_WALLET balance via chosen method */
+export function useRequestWalletWithdraw() {
+  const queryClient = useQueryClient();
+  return useMutation<WalletWithdrawResult, Error, WithdrawRequestData>({
+    mutationFn: (data) =>
+      portalFetch("/api/portal/wallet/withdraw", {
         method: "POST",
-        body: JSON.stringify({ payoutType }),
+        body: JSON.stringify(data),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: portalKeys.referrals });
+      queryClient.invalidateQueries({ queryKey: portalKeys.withdrawals });
       queryClient.invalidateQueries({ queryKey: portalKeys.vip });
     },
   });

@@ -39,9 +39,8 @@ export const referralController = {
   }),
 
   updatePayoutType: asyncHandler(async (req: Request, res: Response) => {
-    const id = String(req.params.id);
-    const referral = await referralService.updatePayoutType(id, req.body.payoutType);
-    return successResponse(res, referral, "Payout type updated successfully");
+    // Kept for backward-compat; no-op — withdrawal method is now set on referral_withdrawal
+    return successResponse(res, {}, "No longer used — set method on the withdrawal request");
   }),
 
   deleteReferral: asyncHandler(async (req: Request, res: Response) => {

@@ -29,7 +29,6 @@ export const referralRepository = {
         referredPhone: referral.referredPhone,
         travelDate: referral.travelDate,
         payoutTriggerDate: referral.payoutTriggerDate,
-        payoutType: referral.payoutType,
         payoutAmount: referral.payoutAmount,
         commission: referral.commission,
         paidAt: referral.paidAt,
@@ -95,18 +94,6 @@ export const referralRepository = {
         updatedAt: new Date(),
         ...(status === "PAID" ? { paidAt: new Date() } : {}),
       })
-      .where(eq(referral.id, id))
-      .returning();
-    return result;
-  },
-
-  async updatePayoutType(
-    id: string,
-    payoutType: "bank_transfer" | "booking_credit"
-  ): Promise<Referral> {
-    const [result] = await db
-      .update(referral)
-      .set({ payoutType, updatedAt: new Date() })
       .where(eq(referral.id, id))
       .returning();
     return result;

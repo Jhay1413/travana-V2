@@ -23,17 +23,6 @@ export function useUpdateReferralStatus() {
   });
 }
 
-export function useUpdateReferralPayoutType() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, payoutType }: { id: string; payoutType: "bank_transfer" | "booking_credit" }) =>
-      referralApi.updatePayoutType(id, payoutType),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: referralKeys.all });
-    },
-  });
-}
-
 export function useUpdateReferral() {
   const queryClient = useQueryClient();
   return useMutation({

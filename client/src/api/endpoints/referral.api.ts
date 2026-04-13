@@ -13,7 +13,6 @@ export interface AdminReferral {
   travelDate: string | null;
   commission: string | null;
   payoutAmount: string | null;
-  payoutType: "bank_transfer" | "booking_credit" | null;
   referralStatus: "PENDING" | "IN_WALLET" | "PAID" | "VOIDED";
   payoutTriggerDate: string | null;
   isDue: boolean;
@@ -29,7 +28,6 @@ export interface CreateReferralData {
   transactionId?: string;
   travelDate?: string;
   commission?: string;
-  payoutType?: "bank_transfer" | "booking_credit";
 }
 
 export const referralApi = {
@@ -55,11 +53,6 @@ export const referralApi = {
 
   updateStatus: async (id: string, status: AdminReferral["referralStatus"]): Promise<AdminReferral> => {
     const { data } = await axiosClient.patch<AdminReferral>(`/api/referrals/${id}/status`, { referralStatus: status });
-    return data;
-  },
-
-  updatePayoutType: async (id: string, payoutType: "bank_transfer" | "booking_credit"): Promise<AdminReferral> => {
-    const { data } = await axiosClient.patch<AdminReferral>(`/api/referrals/${id}/payout-type`, { payoutType });
     return data;
   },
 

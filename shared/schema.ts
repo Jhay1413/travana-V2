@@ -9,12 +9,13 @@ export const enquiry_status_enum = pgEnum('enquiry_status_enum', ['NEW_LEAD', 'A
 export const budget_type_enum = pgEnum('budget_type_enum', ['PER_PERSON', 'PACKAGE']);
 export const quote_status_enum = pgEnum('quote_status_enum', ['NEW_LEAD', 'QUOTE_IN_PROGRESS', 'QUOTE_CALL', 'QUOTE_READY', 'AWAITING_DECISION', 'REQUOTE', 'WON', 'ARCHIVED', 'LOST', 'INACTIVE', 'EXPIRED']);
 export const booking_status_enum = pgEnum('booking_status_enum', ['BOOKED', 'LOST']);
-export const referral_status_enum = pgEnum('referral_status_enum', ['PENDING', 'RELEASED', 'REJECTED', 'IN_WALLET', 'PAID', 'VOIDED']);
+export const referral_status_enum = pgEnum('referral_status_enum', ['PENDING', 'IN_WALLET', 'PAID', 'VOIDED']);
 export const referral_request_status_enum = pgEnum('referral_request_status_enum', ['PENDING', 'APPROVED', 'REJECTED']);
 export const owner_type_enum = pgEnum('owner_type_enum', ['package_holiday', 'hot_tub_break', 'cruise']);
 export const vip_tier_enum = pgEnum('vip_tier_enum', ['standard', 'gold', 'elite']);
-export const payout_type_enum = pgEnum('payout_type_enum', ['bank_transfer', 'booking_credit']);
-export const payout_status_enum = pgEnum('payout_status_enum', ['pending', 'processed']);
+export const withdrawal_method_enum = pgEnum('withdrawal_method_enum', ['bank_transfer', 'booking_credit']);
+export const referral_payout_status_enum = pgEnum('referral_payout_status_enum', ['requested', 'approved', 'rejected']);
+export const referral_withdrawal_status_enum = pgEnum('referral_withdrawal_status_enum', ['pending', 'processed', 'rejected']);
 
 export const sessions = pgTable("sessions", {
   sid: varchar("sid").primaryKey(),
@@ -1071,7 +1072,6 @@ export const referral = pgTable('referral', {
   payoutAmount: numeric("payoutAmount"),
   travelDate: date("travelDate"),
   payoutTriggerDate: date("payoutTriggerDate"),
-  payoutType: payout_type_enum("payoutType"),
   paidAt: timestamp("paidAt"),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
@@ -1081,21 +1081,48 @@ export const insertReferralSchema = createInsertSchema(referral).omit({ id: true
 export type InsertReferral = z.infer<typeof insertReferralSchema>;
 export type Referral = typeof referral.$inferSelect;
 
-export const vip_payout = pgTable('vip_payout', {
+// Tracks the client payout request lifecycle (client requests → admin approves/rejects → wallet credited)
+export const referral_payout = pgTable('referral_payout', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
-  referralId: uuid("referralId").references(() => referral.id, { onDelete: "cascade" }).notNull(),
-  clientId: uuid("clientId").references(() => clientTable.id, { onDelete: "set null" }),
+  referral_id: uuid("referral_id").references(() => referral.id, { onDelete: "cascade" }).notNull(),
+  client_id: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
   amount: numeric("amount").notNull(),
-  method: payout_type_enum("method").notNull(),
-  status: payout_status_enum("status").default('pending').notNull(),
+  status: referral_payout_status_enum("status").default('requested').notNull(),
   notes: varchar("notes"),
-  processedAt: timestamp("processedAt"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  requested_at: timestamp("requested_at").defaultNow(),
+  approved_at: timestamp("approved_at"),
+  rejected_at: timestamp("rejected_at"),
 });
 
-export const insertVipPayoutSchema = createInsertSchema(vip_payout).omit({ id: true, createdAt: true });
-export type InsertVipPayout = z.infer<typeof insertVipPayoutSchema>;
-export type VipPayout = typeof vip_payout.$inferSelect;
+export const insertReferralPayoutSchema = createInsertSchema(referral_payout).omit({ id: true, requested_at: true });
+export type InsertReferralPayout = z.infer<typeof insertReferralPayoutSchema>;
+export type ReferralPayout = typeof referral_payout.$inferSelect;
+
+// Tracks the client withdrawal request (bank transfer or booking credit)
+export const referral_withdrawal = pgTable('referral_withdrawal', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  referral_id: uuid("referral_id").references(() => referral.id, { onDelete: "cascade" }).notNull(),
+  client_id: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
+  amount: numeric("amount").notNull(),
+  method: withdrawal_method_enum("method").notNull(),
+  status: referral_withdrawal_status_enum("status").default('pending').notNull(),
+  // Bank transfer fields
+  account_name: varchar("account_name"),
+  account_number: varchar("account_number"),
+  sort_code: varchar("sort_code"),
+  transfer_reference: varchar("transfer_reference"),
+  // Booking credit fields
+  booking_id: uuid("booking_id").references(() => booking.id, { onDelete: "set null" }),
+  credit_note: varchar("credit_note"),
+  // General
+  notes: varchar("notes"),
+  requested_at: timestamp("requested_at").defaultNow(),
+  processed_at: timestamp("processed_at"),
+});
+
+export const insertReferralWithdrawalSchema = createInsertSchema(referral_withdrawal).omit({ id: true, requested_at: true });
+export type InsertReferralWithdrawal = z.infer<typeof insertReferralWithdrawalSchema>;
+export type ReferralWithdrawal = typeof referral_withdrawal.$inferSelect;
 
 export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

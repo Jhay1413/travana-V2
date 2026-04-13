@@ -10,11 +10,14 @@ import PortalLayout from "./portal-layout";
 import {
   usePortalVipStatus,
   usePortalReferrals,
-  usePortalPayouts,
+  usePortalPayoutRequests,
+  usePortalWithdrawals,
   useRequestWalletPayout,
+  useRequestWalletWithdraw,
   type PortalReferral,
   type PortalVipStatus,
-  type PortalPayout,
+  type PortalWithdrawal,
+  type WithdrawRequestData,
 } from "@/hooks/use-portal-api";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -101,10 +104,10 @@ const TIER_CONFIG: Record<Tier, {
   },
 };
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<PortalReferral["referralStatus"], { label: string; color: string; bg: string; icon: React.ElementType }> = {
   PENDING: { label: "Pending", color: "text-amber-400", bg: "bg-amber-500/15", icon: Clock },
-  IN_WALLET: { label: "In Wallet", color: "text-emerald-400", bg: "bg-emerald-500/15", icon: Wallet },
-  PAID: { label: "Paid", color: "text-blue-400", bg: "bg-blue-500/15", icon: CheckCircle },
+  IN_WALLET: { label: "In Your Wallet", color: "text-emerald-400", bg: "bg-emerald-500/15", icon: Wallet },
+  PAID: { label: "Paid Out", color: "text-blue-400", bg: "bg-blue-500/15", icon: CheckCircle },
   VOIDED: { label: "Voided", color: "text-white/30", bg: "bg-white/5", icon: X },
 };
 
@@ -245,27 +248,9 @@ function BalanceCards({
   );
 }
 
-// ── Wallet Modal ───────────────────────────────────────────────────────────
+// ── Shared bottom-sheet wrapper ────────────────────────────────────────────
 
-function WalletModal({
-  referrals,
-  onClose,
-}: {
-  referrals: PortalReferral[];
-  onClose: () => void;
-}) {
-  const requestPayout = useRequestWalletPayout();
-  const eligible = referrals.filter((r) => r.referralStatus === "IN_WALLET");
-  const [method, setMethod] = useState<"bank_transfer" | "booking_credit">("bank_transfer");
-  const [done, setDone] = useState(false);
-
-  const totalAvailable = eligible.reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
-
-  async function handleRequest() {
-    await requestPayout.mutateAsync({ payoutType: method });
-    setDone(true);
-  }
-
+function BottomSheet({ title: _title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-end justify-center"
@@ -281,115 +266,305 @@ function WalletModal({
         exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
-        {/* Handle */}
         <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-5" />
-
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="text-white font-bold text-lg">Wallet Payout</h2>
-            <p className="text-white/40 text-sm">{eligible.length} referral{eligible.length !== 1 ? "s" : ""} ready</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/[0.08] flex items-center justify-center text-white/50 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {eligible.length === 0 ? (
-          <div className="text-center py-8">
-            <Wallet className="w-10 h-10 text-white/20 mx-auto mb-3" />
-            <p className="text-white/50 font-medium">Nothing to redeem yet</p>
-            <p className="text-white/30 text-sm mt-1">Rewards become available 8 weeks before your friend's travel date</p>
-          </div>
-        ) : done ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center py-8"
-          >
-            <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-            <p className="text-white font-semibold text-lg">Payout requested!</p>
-            <p className="text-emerald-400 font-bold text-2xl mt-1">£{totalAvailable.toFixed(2)}</p>
-            <p className="text-white/40 text-sm mt-2">
-              {method === "bank_transfer" ? "Bank transfer" : "Booking credit"} · {eligible.length} referral{eligible.length !== 1 ? "s" : ""}
-            </p>
-            <p className="text-white/30 text-xs mt-3">Your agent will be in touch to process your payment.</p>
-            <button
-              onClick={onClose}
-              className="mt-5 px-6 py-2.5 rounded-2xl bg-white/[0.08] text-white text-sm font-medium hover:bg-white/[0.12] transition-all"
-            >
-              Close
-            </button>
-          </motion.div>
-        ) : (
-          <>
-            {/* Wallet balance hero */}
-            <div className="bg-gradient-to-br from-emerald-500/15 to-teal-500/15 border border-emerald-500/20 rounded-2xl p-5 mb-5 text-center">
-              <Wallet className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-              <p className="text-emerald-400 font-bold text-3xl">£{totalAvailable.toFixed(2)}</p>
-              <p className="text-white/40 text-xs mt-1">Total wallet balance across {eligible.length} referral{eligible.length !== 1 ? "s" : ""}</p>
-            </div>
-
-            {/* Referral breakdown */}
-            <div className="space-y-2 mb-5">
-              <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Included referrals</p>
-              {eligible.map((r) => (
-                <div key={r.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <User className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
-                    <span className="text-white/70 text-sm truncate">{r.referredName}</span>
-                    {r.travelDate && (
-                      <span className="text-white/30 text-xs hidden sm:block">· {formatDate(r.travelDate)}</span>
-                    )}
-                  </div>
-                  <span className="text-emerald-400 font-semibold text-sm flex-shrink-0">{formatCurrency(r.payoutAmount)}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Single method selector */}
-            <div className="mb-5">
-              <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Payout method</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setMethod("bank_transfer")}
-                  className={`flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl text-sm font-medium transition-all border ${
-                    method === "bank_transfer"
-                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
-                      : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/60"
-                  }`}
-                >
-                  <Banknote className="w-5 h-5" />
-                  Bank Transfer
-                </button>
-                <button
-                  onClick={() => setMethod("booking_credit")}
-                  className={`flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl text-sm font-medium transition-all border ${
-                    method === "booking_credit"
-                      ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
-                      : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/60"
-                  }`}
-                >
-                  <CreditCard className="w-5 h-5" />
-                  Booking Credit
-                </button>
-              </div>
-            </div>
-
-            <motion.button
-              onClick={handleRequest}
-              disabled={requestPayout.isPending}
-              whileTap={{ scale: 0.98 }}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-sm disabled:opacity-50 transition-all"
-            >
-              {requestPayout.isPending ? "Requesting…" : `Request £${totalAvailable.toFixed(2)} Payout`}
-            </motion.button>
-            <p className="text-white/30 text-xs text-center mt-3">
-              Applies to all {eligible.length} referral{eligible.length !== 1 ? "s" : ""} in your wallet. Your agent will confirm before processing.
-            </p>
-          </>
-        )}
+        {children}
       </motion.div>
     </motion.div>
+  );
+}
+
+// ── Request Payout Modal (PENDING+isDue → RELEASED, awaiting admin approval) ──
+
+function RequestPayoutModal({ referrals, onClose }: { referrals: PortalReferral[]; onClose: () => void }) {
+  const requestPayout = useRequestWalletPayout();
+  const eligible = referrals.filter((r) => r.referralStatus === "PENDING" && r.isDue);
+  const [done, setDone] = useState(false);
+
+  const totalAmount = eligible.reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
+
+  async function handleRequest() {
+    await requestPayout.mutateAsync();
+    setDone(true);
+  }
+
+  return (
+    <BottomSheet title="Request Payout" onClose={onClose}>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-white font-bold text-lg">Request Payout</h2>
+          <p className="text-white/40 text-sm">{eligible.length} eligible referral{eligible.length !== 1 ? "s" : ""}</p>
+        </div>
+        <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/[0.08] flex items-center justify-center text-white/50 hover:text-white">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {eligible.length === 0 ? (
+        <div className="text-center py-8">
+          <Clock className="w-10 h-10 text-white/20 mx-auto mb-3" />
+          <p className="text-white/50 font-medium">No eligible referrals</p>
+          <p className="text-white/30 text-sm mt-1">Rewards become available 8 weeks before your friend's travel date</p>
+        </div>
+      ) : done ? (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-8">
+          <CheckCircle className="w-12 h-12 text-violet-400 mx-auto mb-3" />
+          <p className="text-white font-semibold text-lg">Payout requested!</p>
+          <p className="text-violet-400 font-bold text-2xl mt-1">£{totalAmount.toFixed(2)}</p>
+          <p className="text-white/30 text-xs mt-3">Your agent will review and approve your payout. Once approved, it'll appear in your wallet.</p>
+          <button onClick={onClose} className="mt-5 px-6 py-2.5 rounded-2xl bg-white/[0.08] text-white text-sm font-medium hover:bg-white/[0.12] transition-all">
+            Close
+          </button>
+        </motion.div>
+      ) : (
+        <>
+          <div className="bg-gradient-to-br from-violet-500/15 to-purple-500/15 border border-violet-500/20 rounded-2xl p-4 mb-5 text-center">
+            <ArrowUpFromLine className="w-5 h-5 text-violet-400 mx-auto mb-2" />
+            <p className="text-violet-400 font-bold text-3xl">£{totalAmount.toFixed(2)}</p>
+            <p className="text-white/40 text-xs mt-1">Total across {eligible.length} referral{eligible.length !== 1 ? "s" : ""}</p>
+          </div>
+
+          <div className="space-y-2 mb-5">
+            <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Eligible referrals</p>
+            {eligible.map((r) => (
+              <div key={r.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <User className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-white/70 text-sm truncate">{r.referredName}</p>
+                    {r.travelDate && <p className="text-white/25 text-[10px]">Travel: {formatDate(r.travelDate)}</p>}
+                  </div>
+                </div>
+                <span className="text-violet-400 font-semibold text-sm flex-shrink-0">{formatCurrency(r.payoutAmount)}</span>
+              </div>
+            ))}
+          </div>
+
+          <motion.button
+            onClick={handleRequest}
+            disabled={requestPayout.isPending}
+            whileTap={{ scale: 0.98 }}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-500 to-purple-500 text-white font-semibold text-sm disabled:opacity-50 transition-all"
+          >
+            {requestPayout.isPending ? "Submitting…" : `Submit Payout Request · £${totalAmount.toFixed(2)}`}
+          </motion.button>
+          <p className="text-white/30 text-xs text-center mt-3">
+            Your agent will review and credit your wallet once approved.
+          </p>
+        </>
+      )}
+    </BottomSheet>
+  );
+}
+
+// ── Withdraw Modal (IN_WALLET → choose method + bank details, agent processes → PAID) ────
+
+function WithdrawModal({ referrals, onClose }: { referrals: PortalReferral[]; onClose: () => void }) {
+  const withdraw = useRequestWalletWithdraw();
+  const eligible = referrals.filter((r) => r.referralStatus === "IN_WALLET");
+  const [method, setMethod] = useState<"bank_transfer" | "booking_credit">("bank_transfer");
+  const [accountName, setAccountName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [sortCode, setSortCode] = useState("");
+  const [done, setDone] = useState(false);
+
+  const totalAvailable = eligible.reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
+
+  async function handleWithdraw() {
+    const payload: WithdrawRequestData = { method };
+    if (method === "bank_transfer") {
+      payload.account_name = accountName || undefined;
+      payload.account_number = accountNumber || undefined;
+      payload.sort_code = sortCode || undefined;
+    }
+    await withdraw.mutateAsync(payload);
+    setDone(true);
+  }
+
+  return (
+    <BottomSheet title="Withdraw" onClose={onClose}>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-white font-bold text-lg">Withdraw Funds</h2>
+          <p className="text-white/40 text-sm">{eligible.length} referral{eligible.length !== 1 ? "s" : ""} in wallet</p>
+        </div>
+        <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/[0.08] flex items-center justify-center text-white/50 hover:text-white">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {eligible.length === 0 ? (
+        <div className="text-center py-8">
+          <Wallet className="w-10 h-10 text-white/20 mx-auto mb-3" />
+          <p className="text-white/50 font-medium">Wallet is empty</p>
+          <p className="text-white/30 text-sm mt-1">Request a payout from your eligible referrals first</p>
+        </div>
+      ) : done ? (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-8">
+          <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
+          <p className="text-white font-semibold text-lg">Withdrawal requested!</p>
+          <p className="text-emerald-400 font-bold text-2xl mt-1">£{totalAvailable.toFixed(2)}</p>
+          <p className="text-white/40 text-sm mt-2">{method === "bank_transfer" ? "Bank transfer" : "Booking credit"}</p>
+          <p className="text-white/30 text-xs mt-3">Your agent will process your payment shortly.</p>
+          <button onClick={onClose} className="mt-5 px-6 py-2.5 rounded-2xl bg-white/[0.08] text-white text-sm font-medium hover:bg-white/[0.12] transition-all">
+            Close
+          </button>
+        </motion.div>
+      ) : (
+        <>
+          <div className="bg-gradient-to-br from-emerald-500/15 to-teal-500/15 border border-emerald-500/20 rounded-2xl p-4 mb-5 text-center">
+            <Wallet className="w-5 h-5 text-emerald-400 mx-auto mb-2" />
+            <p className="text-emerald-400 font-bold text-3xl">£{totalAvailable.toFixed(2)}</p>
+            <p className="text-white/40 text-xs mt-1">Available across {eligible.length} referral{eligible.length !== 1 ? "s" : ""}</p>
+          </div>
+
+          <div className="space-y-2 mb-5">
+            <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Breakdown</p>
+            {eligible.map((r) => (
+              <div key={r.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <User className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
+                  <span className="text-white/70 text-sm truncate">{r.referredName}</span>
+                </div>
+                <span className="text-emerald-400 font-semibold text-sm flex-shrink-0">{formatCurrency(r.payoutAmount)}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mb-5">
+            <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">How would you like it?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setMethod("bank_transfer")}
+                className={`flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl text-sm font-medium transition-all border ${
+                  method === "bank_transfer"
+                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                    : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/60"
+                }`}
+              >
+                <Banknote className="w-5 h-5" />
+                Bank Transfer
+              </button>
+              <button
+                onClick={() => setMethod("booking_credit")}
+                className={`flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl text-sm font-medium transition-all border ${
+                  method === "booking_credit"
+                    ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                    : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/60"
+                }`}
+              >
+                <CreditCard className="w-5 h-5" />
+                Booking Credit
+              </button>
+            </div>
+          </div>
+
+          {/* Bank details — only for bank transfer */}
+          {method === "bank_transfer" && (
+            <div className="mb-5 space-y-3">
+              <p className="text-white/40 text-xs font-medium uppercase tracking-wide">Your Bank Details</p>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder="Account holder name"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.10] text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500/50"
+                />
+                <input
+                  type="text"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  placeholder="Account number"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.10] text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500/50"
+                />
+                <input
+                  type="text"
+                  value={sortCode}
+                  onChange={(e) => setSortCode(e.target.value)}
+                  placeholder="Sort code (e.g. 12-34-56)"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.10] text-white placeholder-white/30 text-sm focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+              <p className="text-white/25 text-xs">Your agent will transfer directly to this account.</p>
+            </div>
+          )}
+
+          {withdraw.isError && (
+            <div className="mb-3 px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/25 text-red-400 text-sm text-center">
+              {(withdraw.error as Error)?.message ?? "Something went wrong. Please try again."}
+            </div>
+          )}
+          <motion.button
+            onClick={handleWithdraw}
+            disabled={withdraw.isPending}
+            whileTap={{ scale: 0.98 }}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-sm disabled:opacity-50 transition-all"
+          >
+            {withdraw.isPending ? "Requesting…" : `Withdraw £${totalAvailable.toFixed(2)}`}
+          </motion.button>
+          <p className="text-white/30 text-xs text-center mt-3">
+            Your agent will process your payment after confirming your details.
+          </p>
+        </>
+      )}
+    </BottomSheet>
+  );
+}
+
+// ── Referral Progress ──────────────────────────────────────────────────────
+
+const PROGRESS_STEPS: { key: PortalReferral["referralStatus"]; label: string }[] = [
+  { key: "PENDING", label: "Logged" },
+  { key: "IN_WALLET", label: "In Wallet" },
+  { key: "PAID", label: "Paid Out" },
+];
+
+function ReferralProgress({ status }: { status: PortalReferral["referralStatus"] }) {
+  const activeIdx = PROGRESS_STEPS.findIndex((s) => s.key === status);
+  return (
+    <div className="flex items-center gap-1 py-3">
+      {PROGRESS_STEPS.map((step, i) => {
+        const done = i < activeIdx;
+        const active = i === activeIdx;
+        return (
+          <div key={step.key} className="flex items-center flex-1 min-w-0">
+            <div className="flex flex-col items-center flex-1 min-w-0">
+              <div
+                className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                  done
+                    ? "bg-emerald-500/30 border border-emerald-500/50"
+                    : active
+                    ? "bg-violet-500/30 border border-violet-400/60 ring-2 ring-violet-400/20"
+                    : "bg-white/[0.05] border border-white/[0.1]"
+                }`}
+              >
+                {done ? (
+                  <CheckCircle className="w-2.5 h-2.5 text-emerald-400" />
+                ) : active ? (
+                  <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                ) : (
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                )}
+              </div>
+              <span
+                className={`text-[10px] mt-1 text-center truncate w-full px-0.5 ${
+                  done ? "text-emerald-400/70" : active ? "text-violet-300 font-medium" : "text-white/20"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+            {i < PROGRESS_STEPS.length - 1 && (
+              <div
+                className={`h-px flex-1 mx-1 -mt-4 transition-all ${
+                  done ? "bg-emerald-500/30" : "bg-white/[0.07]"
+                }`}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -453,6 +628,10 @@ function ReferralCard({ referral, index }: { referral: PortalReferral; index: nu
               className="overflow-hidden"
             >
               <div className="px-4 pb-4 pt-0 border-t border-white/[0.06] space-y-2 text-sm">
+                {/* Progress steps */}
+                {referral.referralStatus !== "VOIDED" && (
+                  <ReferralProgress status={referral.referralStatus} />
+                )}
                 {referral.referredEmail && (
                   <div className="flex justify-between">
                     <span className="text-white/40">Email</span>
@@ -469,12 +648,6 @@ function ReferralCard({ referral, index }: { referral: PortalReferral; index: nu
                   <div className="flex justify-between">
                     <span className="text-white/40">Payout due</span>
                     <span className="text-white/70">{formatDate(referral.payoutTriggerDate)}</span>
-                  </div>
-                )}
-                {referral.payoutType && (
-                  <div className="flex justify-between">
-                    <span className="text-white/40">Payout method</span>
-                    <span className="text-white/70 capitalize">{referral.payoutType.replace("_", " ")}</span>
                   </div>
                 )}
                 {referral.paidAt && (
@@ -500,28 +673,40 @@ function ReferralCard({ referral, index }: { referral: PortalReferral; index: nu
 
 type WalletEntry =
   | { type: "credit"; id: string; referredName: string; amount: string; date: string | null }
-  | { type: "payout"; id: string; referredName: string; amount: string; date: string | null; method: string };
+  | { type: "withdrawal"; id: string; referredName: string; amount: string; date: string | null; method: string; status: "pending" | "processed" | "rejected" };
 
 function WalletTab({
   referrals,
-  payouts,
+  withdrawals,
   totalEarnings,
-  onRedeem,
-  availableCount,
+  onRequestPayout,
+  onWithdraw,
 }: {
   referrals: PortalReferral[];
-  payouts: PortalPayout[];
+  withdrawals: PortalWithdrawal[];
   totalEarnings: string;
-  onRedeem: () => void;
-  availableCount: number;
+  onRequestPayout: () => void;
+  onWithdraw: () => void;
 }) {
   const walletBalance = referrals
     .filter((r) => r.referralStatus === "IN_WALLET")
     .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
 
+  // Referrals that are IN_WALLET but already have a pending withdrawal
+  const pendingWithdrawalReferralIds = new Set(
+    withdrawals.filter((w) => w.status === "pending").map((w) => w.referral_id)
+  );
+  const withdrawableBalance = referrals
+    .filter((r) => r.referralStatus === "IN_WALLET" && !pendingWithdrawalReferralIds.has(r.id))
+    .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
+
   const pendingBalance = referrals
     .filter((r) => r.referralStatus === "PENDING")
     .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
+
+  const pendingWithdrawalBalance = withdrawals
+    .filter((w) => w.status === "pending")
+    .reduce((sum, w) => sum + parseFloat(w.amount ?? "0"), 0);
 
   const totalPaid = parseFloat(totalEarnings || "0");
 
@@ -541,20 +726,18 @@ function WalletTab({
       });
     });
 
-  // Payouts: processed vip_payout records
-  payouts
-    .filter((p) => p.status === "processed")
-    .forEach((p) => {
-      const referral = referrals.find((r) => r.id === p.referralId);
-      entries.push({
-        type: "payout",
-        id: `payout-${p.id}`,
-        referredName: referral?.referredName ?? "Referral",
-        amount: p.amount,
-        date: p.processedAt ?? p.createdAt,
-        method: p.method,
-      });
+  // Withdrawals: all referral_withdrawal records
+  withdrawals.forEach((w) => {
+    entries.push({
+      type: "withdrawal",
+      id: `withdrawal-${w.id}`,
+      referredName: "Withdrawal",
+      amount: w.amount,
+      date: w.processed_at ?? w.requested_at,
+      method: w.method,
+      status: w.status,
     });
+  });
 
   // Sort newest first
   entries.sort((a, b) => {
@@ -563,6 +746,8 @@ function WalletTab({
     return db - da;
   });
 
+  const pendingWithdrawals = withdrawals.filter((w) => w.status === "pending");
+
   return (
     <div className="space-y-4">
       {/* Balance hero */}
@@ -570,20 +755,22 @@ function WalletTab({
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 pointer-events-none" />
         <div className="relative">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-white/50 text-xs font-medium uppercase tracking-wide">Wallet Balance</p>
+            <p className="text-white/50 text-xs font-medium uppercase tracking-wide">Available Balance</p>
             <Wallet className="w-4 h-4 text-emerald-400" />
           </div>
-          <p className="text-emerald-400 font-bold text-4xl mb-1">£{walletBalance.toFixed(2)}</p>
+          <p className="text-emerald-400 font-bold text-4xl mb-1">£{withdrawableBalance.toFixed(2)}</p>
           <p className="text-white/30 text-xs">
-            {availableCount} referral{availableCount !== 1 ? "s" : ""} ready to redeem
+            {withdrawableBalance > 0
+              ? `${referrals.filter((r) => r.referralStatus === "IN_WALLET" && !pendingWithdrawalReferralIds.has(r.id)).length} referral${referrals.filter((r) => r.referralStatus === "IN_WALLET" && !pendingWithdrawalReferralIds.has(r.id)).length !== 1 ? "s" : ""} ready to withdraw`
+              : "No available balance"}
           </p>
 
           {/* Mini stats row */}
           <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/[0.06]">
             <div>
-              <p className="text-white/30 text-[10px] uppercase tracking-wide">Pending</p>
+              <p className="text-white/30 text-[10px] uppercase tracking-wide">Unreleased</p>
               <p className="text-amber-400 font-semibold text-sm">£{pendingBalance.toFixed(2)}</p>
-              <p className="text-white/20 text-[10px]">Awaiting release</p>
+              <p className="text-white/20 text-[10px]">Not yet due</p>
             </div>
             <div>
               <p className="text-white/30 text-[10px] uppercase tracking-wide">Total Paid Out</p>
@@ -594,17 +781,48 @@ function WalletTab({
         </div>
       </GlassCard>
 
-      {/* Redeem button — only shown when there's balance */}
-      {walletBalance > 0 && (
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={onRedeem}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-        >
-          <ArrowUpFromLine className="w-4 h-4" />
-          Request Payout · £{walletBalance.toFixed(2)}
-        </motion.button>
+      {/* Pending withdrawal banner — shown when client is waiting for agent to process */}
+      {pendingWithdrawalBalance > 0 && (
+        <GlassCard className="p-4 border border-orange-500/25 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/8 to-amber-500/8 pointer-events-none" />
+          <div className="relative flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-orange-500/15 flex items-center justify-center flex-shrink-0">
+              <ArrowUpFromLine className="w-4 h-4 text-orange-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-orange-300 font-semibold text-sm">Withdrawal Pending</p>
+              <p className="text-white/40 text-xs mt-0.5">
+                £{pendingWithdrawalBalance.toFixed(2)} · {pendingWithdrawals[0]?.method === "bank_transfer" ? "Bank transfer" : "Booking credit"} · Awaiting agent approval
+              </p>
+            </div>
+            <span className="text-orange-400 font-bold text-base flex-shrink-0">£{pendingWithdrawalBalance.toFixed(2)}</span>
+          </div>
+        </GlassCard>
       )}
+
+      {/* Action buttons */}
+      <div className="space-y-2">
+        {referrals.filter((r) => r.referralStatus === "PENDING" && r.isDue).length > 0 && (
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={onRequestPayout}
+            className="w-full py-3 rounded-2xl bg-gradient-to-r from-violet-500 to-purple-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+          >
+            <ArrowUpFromLine className="w-4 h-4" />
+            Request Payout · {referrals.filter((r) => r.referralStatus === "PENDING" && r.isDue).length} eligible
+          </motion.button>
+        )}
+        {withdrawableBalance > 0 && (
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={onWithdraw}
+            className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+          >
+            <Wallet className="w-4 h-4" />
+            Withdraw · £{withdrawableBalance.toFixed(2)}
+          </motion.button>
+        )}
+      </div>
 
       {/* Transaction history */}
       <div>
@@ -630,39 +848,65 @@ function WalletTab({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.04 }}
               >
-                <GlassCard className={`px-4 py-3 border ${entry.type === "credit" ? "border-emerald-500/10" : "border-blue-500/10"}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                        entry.type === "credit"
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-blue-500/15 text-blue-400"
-                      }`}>
-                        {entry.type === "credit"
-                          ? <ArrowDownToLine className="w-4 h-4" />
-                          : <ArrowUpFromLine className="w-4 h-4" />
-                        }
+                {(() => {
+                  const isPendingWithdrawal = entry.type === "withdrawal" && entry.status === "pending";
+                  const borderClass = entry.type === "credit"
+                    ? "border-emerald-500/10"
+                    : isPendingWithdrawal
+                    ? "border-amber-500/20"
+                    : "border-blue-500/10";
+                  const iconBg = entry.type === "credit"
+                    ? "bg-emerald-500/15 text-emerald-400"
+                    : isPendingWithdrawal
+                    ? "bg-amber-500/15 text-amber-400"
+                    : "bg-blue-500/15 text-blue-400";
+                  const amountColor = entry.type === "credit"
+                    ? "text-emerald-400"
+                    : isPendingWithdrawal
+                    ? "text-amber-400"
+                    : "text-blue-400";
+                  const label = entry.type === "credit"
+                    ? "Commission credited"
+                    : isPendingWithdrawal
+                    ? "Withdrawal requested"
+                    : "Withdrawal processed";
+                  return (
+                    <GlassCard className={`px-4 py-3 border ${borderClass}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                            {entry.type === "credit"
+                              ? <ArrowDownToLine className="w-4 h-4" />
+                              : <ArrowUpFromLine className="w-4 h-4" />
+                            }
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-white/80 text-sm font-medium truncate">{label}</p>
+                              {isPendingWithdrawal && (
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 flex-shrink-0">
+                                  Pending
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-white/30 text-xs truncate">
+                              {entry.referredName}
+                              {entry.type === "withdrawal" && (
+                                <span className="ml-1">· {entry.method === "bank_transfer" ? "Bank transfer" : "Booking credit"}</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0 ml-3">
+                          <p className={`font-semibold text-sm ${amountColor}`}>
+                            {entry.type === "credit" ? "+" : "−"}£{parseFloat(entry.amount).toFixed(2)}
+                          </p>
+                          <p className="text-white/25 text-[10px]">{formatDate(entry.date)}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-white/80 text-sm font-medium truncate">
-                          {entry.type === "credit" ? "Commission credited" : "Payout processed"}
-                        </p>
-                        <p className="text-white/30 text-xs truncate">
-                          {entry.referredName}
-                          {entry.type === "payout" && (
-                            <span className="ml-1">· {entry.method === "bank_transfer" ? "Bank transfer" : "Booking credit"}</span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right flex-shrink-0 ml-3">
-                      <p className={`font-semibold text-sm ${entry.type === "credit" ? "text-emerald-400" : "text-blue-400"}`}>
-                        {entry.type === "credit" ? "+" : "−"}£{parseFloat(entry.amount).toFixed(2)}
-                      </p>
-                      <p className="text-white/25 text-[10px]">{formatDate(entry.date)}</p>
-                    </div>
-                  </div>
-                </GlassCard>
+                    </GlassCard>
+                  );
+                })()}
               </motion.div>
             ))}
           </div>
@@ -703,17 +947,19 @@ type PageTab = "referrals" | "wallet";
 
 export default function PortalReferralsPage() {
   const [, setLocation] = useLocation();
-  const [showRedeem, setShowRedeem] = useState(false);
+  const [showRequestPayout, setShowRequestPayout] = useState(false);
+  const [showWithdraw, setShowWithdraw] = useState(false);
   const [tab, setTab] = useState<PageTab>("referrals");
 
   const { data: vip, isLoading: vipLoading } = usePortalVipStatus();
   const { data: referrals = [], isLoading: referralsLoading } = usePortalReferrals();
-  const { data: payouts = [], isLoading: payoutsLoading } = usePortalPayouts();
+  const { data: withdrawals = [], isLoading: withdrawalsLoading } = usePortalWithdrawals();
 
-  const loading = vipLoading || referralsLoading || payoutsLoading;
+  const loading = vipLoading || referralsLoading || withdrawalsLoading;
   const vipData = vip ?? DEFAULT_VIP;
 
   const activeReferrals = referrals.filter((r) => r.referralStatus !== "VOIDED");
+  const eligibleCount = referrals.filter((r) => r.referralStatus === "PENDING" && r.isDue).length;
   const availableCount = referrals.filter((r) => r.referralStatus === "IN_WALLET").length;
 
   return (
@@ -770,9 +1016,9 @@ export default function PortalReferralsPage() {
           >
             <Wallet className="w-3.5 h-3.5" />
             Wallet
-            {availableCount > 0 && (
+            {(availableCount > 0 || eligibleCount > 0) && (
               <span className="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-400 text-[10px] flex items-center justify-center">
-                {availableCount}
+                {availableCount || eligibleCount}
               </span>
             )}
           </button>
@@ -799,20 +1045,20 @@ export default function PortalReferralsPage() {
                 {/* Balance Cards */}
                 <BalanceCards referrals={referrals} totalEarnings={vipData.totalEarnings} />
 
-                {/* Redeem Button */}
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowRedeem(true)}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                >
-                  <Wallet className="w-4 h-4" />
-                  Redeem Rewards
-                  {availableCount > 0 && (
+                {/* Request Payout button — only for eligible pending referrals */}
+                {eligibleCount > 0 && (
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowRequestPayout(true)}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-500 to-purple-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                  >
+                    <ArrowUpFromLine className="w-4 h-4" />
+                    Request Payout
                     <span className="ml-1 w-5 h-5 rounded-full bg-white/20 text-white text-xs flex items-center justify-center">
-                      {availableCount}
+                      {eligibleCount}
                     </span>
-                  )}
-                </motion.button>
+                  </motion.button>
+                )}
 
                 {/* How it works */}
                 <GlassCard className="p-4">
@@ -870,10 +1116,10 @@ export default function PortalReferralsPage() {
               >
                 <WalletTab
                   referrals={referrals}
-                  payouts={payouts}
+                  withdrawals={withdrawals}
                   totalEarnings={vipData.totalEarnings}
-                  onRedeem={() => setShowRedeem(true)}
-                  availableCount={availableCount}
+                  onRequestPayout={() => setShowRequestPayout(true)}
+                  onWithdraw={() => setShowWithdraw(true)}
                 />
               </motion.div>
             )}
@@ -881,10 +1127,17 @@ export default function PortalReferralsPage() {
         )}
       </div>
 
-      {/* Wallet Modal */}
+      {/* Request Payout Modal */}
       <AnimatePresence>
-        {showRedeem && (
-          <WalletModal referrals={referrals} onClose={() => setShowRedeem(false)} />
+        {showRequestPayout && (
+          <RequestPayoutModal referrals={referrals} onClose={() => setShowRequestPayout(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* Withdraw Modal */}
+      <AnimatePresence>
+        {showWithdraw && (
+          <WithdrawModal referrals={referrals} onClose={() => setShowWithdraw(false)} />
         )}
       </AnimatePresence>
     </PortalLayout>

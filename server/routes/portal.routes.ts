@@ -6,7 +6,8 @@ import {
   portalMessages, webauthnCredentials, pushSubscriptions, quoteTags, tags,
 } from "@shared/schema";
 import { referralService } from "../services/referral.service";
-import { vipPayoutService } from "../services/vipPayout.service";
+import { referralPayoutService } from "../services/referralPayout.service";
+import { referralWithdrawalService } from "../services/referralWithdrawal.service";
 import { eq, and, desc, isNotNull, inArray, sql, asc, ilike, exists } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -712,7 +713,7 @@ portalRouter.get("/vip", portalAuth, async (req: Request, res: Response) => {
 
     if (!client) return res.status(404).json({ error: "Client not found" });
 
-    const totalEarnings = await vipPayoutService.getTotalEarningsByClient(clientId);
+    const totalEarnings = await referralWithdrawalService.getTotalPaidByClient(clientId);
 
     res.json({
       vipTier: client.vipTier ?? "not_enrolled",
@@ -737,38 +738,80 @@ portalRouter.get("/vip/referrals", portalAuth, async (req: Request, res: Respons
   }
 });
 
-portalRouter.get("/vip/payouts", portalAuth, async (req: Request, res: Response) => {
+// Returns client's referral_payout records (payout request history)
+portalRouter.get("/vip/payout-requests", portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const payouts = await vipPayoutService.getPayoutsByClient(clientId);
+    const payouts = await referralPayoutService.getPayoutsByClient(clientId);
     res.json(payouts);
   } catch (err: any) {
-    console.error("Portal VIP payouts error:", err);
-    res.status(500).json({ error: "Failed to load payouts" });
+    console.error("Portal VIP payout requests error:", err);
+    res.status(500).json({ error: "Failed to load payout requests" });
   }
 });
 
+// Returns client's referral_withdrawal records
+portalRouter.get("/vip/withdrawals", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const withdrawals = await referralWithdrawalService.getWithdrawalsByClient(clientId);
+    res.json(withdrawals);
+  } catch (err: any) {
+    console.error("Portal VIP withdrawals error:", err);
+    res.status(500).json({ error: "Failed to load withdrawals" });
+  }
+});
+
+// Client requests payout for all eligible (PENDING + isDue) referrals
+// Creates referral_payout records (status: requested) for admin to approve
 portalRouter.post("/wallet/request-payout", portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const { payoutType } = req.body;
+    const result = await referralPayoutService.requestPayouts(clientId);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    const status = err?.statusCode ?? 500;
+    res.status(status).json({ error: err.message ?? "Failed to submit payout request." });
+  }
+});
 
-    if (!payoutType || !["bank_transfer", "booking_credit"].includes(payoutType)) {
-      return res.status(400).json({ error: "Invalid payout type. Must be bank_transfer or booking_credit." });
+// Client requests withdrawal of their IN_WALLET balance
+// Creates a referral_withdrawal record with bank details or booking credit selection
+portalRouter.post("/wallet/withdraw", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const {
+      method,
+      account_name,
+      account_number,
+      sort_code,
+      booking_id,
+    } = req.body;
+
+    if (!method || !["bank_transfer", "booking_credit"].includes(method)) {
+      return res.status(400).json({ error: "Invalid method. Must be bank_transfer or booking_credit." });
     }
 
     const referrals = await referralService.getReferralsByReferrer(clientId);
     const eligible = referrals.filter((r: any) => r.referralStatus === "IN_WALLET");
 
     if (eligible.length === 0) {
-      return res.status(400).json({ error: "No referrals available in wallet to request payout for." });
+      return res.status(400).json({ error: "No balance in wallet to withdraw." });
     }
 
-    await Promise.all(
-      eligible.map((r: any) =>
-        referralService.updatePayoutType(r.id, payoutType)
-      )
-    );
+    const created = [];
+    for (const r of eligible) {
+      const w = await referralWithdrawalService.requestWithdrawal({
+        referralId: r.id,
+        clientId,
+        method,
+        account_name,
+        account_number,
+        sort_code,
+        booking_id,
+      });
+      created.push(w);
+    }
 
     const totalAmount = eligible.reduce(
       (sum: number, r: any) => sum + parseFloat(r.payoutAmount ?? "0"),
@@ -777,13 +820,14 @@ portalRouter.post("/wallet/request-payout", portalAuth, async (req: Request, res
 
     res.json({
       success: true,
-      referralCount: eligible.length,
+      referralCount: created.length,
       totalAmount: totalAmount.toFixed(2),
-      payoutType,
+      method,
     });
   } catch (err: any) {
-    console.error("Portal wallet payout request error:", err);
-    res.status(500).json({ error: "Failed to submit payout request." });
+    console.error("Portal wallet withdraw error:", err);
+    const status = err?.statusCode ?? 500;
+    res.status(status).json({ error: err.message ?? "Failed to submit withdrawal request." });
   }
 });
 

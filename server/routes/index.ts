@@ -38,7 +38,8 @@ import quoteShareRoutes from "./quote-share.routes";
 import auditRoutes from "./audit.routes";
 import hubPostRoutes from "./hubPost.routes";
 import referralRoutes from "./referral.routes";
-import vipPayoutRoutes from "./vipPayout.routes";
+import referralPayoutRoutes from "./referralPayout.routes";
+import referralWithdrawalRoutes from "./referralWithdrawal.routes";
 
 const router = Router();
 
@@ -81,6 +82,7 @@ router.use("/quote-share", quoteShareRoutes);
 router.use("/audit", auditRoutes);
 router.use("/hub-posts", hubPostRoutes);
 router.use("/referrals", referralRoutes);
-router.use("/vip-payouts", vipPayoutRoutes);
+router.use("/referral-payouts", referralPayoutRoutes);
+router.use("/referral-withdrawals", referralWithdrawalRoutes);
 
 export default router;
