@@ -280,12 +280,24 @@ function RequestPayoutModal({ referrals, onClose }: { referrals: PortalReferral[
   const requestPayout = useRequestWalletPayout();
   const eligible = referrals.filter((r) => r.referralStatus === "PENDING" && r.isDue);
   const [done, setDone] = useState(false);
+  const [alreadyPending, setAlreadyPending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const totalAmount = eligible.reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
 
   async function handleRequest() {
-    await requestPayout.mutateAsync();
-    setDone(true);
+    try {
+      setErrorMsg(null);
+      await requestPayout.mutateAsync();
+      setDone(true);
+    } catch (err: any) {
+      const msg = err?.message || "";
+      if (msg.toLowerCase().includes("already pending")) {
+        setAlreadyPending(true);
+      } else {
+        setErrorMsg(msg || "Something went wrong. Please try again.");
+      }
+    }
   }
 
   return (
@@ -306,6 +318,16 @@ function RequestPayoutModal({ referrals, onClose }: { referrals: PortalReferral[
           <p className="text-white/50 font-medium">No eligible referrals</p>
           <p className="text-white/30 text-sm mt-1">Rewards become available 8 weeks before your friend's travel date</p>
         </div>
+      ) : alreadyPending ? (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-8">
+          <Clock className="w-12 h-12 text-amber-400 mx-auto mb-3" />
+          <p className="text-white font-semibold text-lg">Request already submitted</p>
+          <p className="text-amber-400 font-bold text-2xl mt-1">£{totalAmount.toFixed(2)}</p>
+          <p className="text-white/40 text-sm mt-3">Your payout request is being reviewed by your agent. You'll be notified once it's approved.</p>
+          <button onClick={onClose} className="mt-5 px-6 py-2.5 rounded-2xl bg-white/[0.08] text-white text-sm font-medium hover:bg-white/[0.12] transition-all">
+            Close
+          </button>
+        </motion.div>
       ) : done ? (
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-8">
           <CheckCircle className="w-12 h-12 text-violet-400 mx-auto mb-3" />
@@ -339,6 +361,12 @@ function RequestPayoutModal({ referrals, onClose }: { referrals: PortalReferral[
               </div>
             ))}
           </div>
+
+          {errorMsg && (
+            <div className="mb-4 rounded-xl bg-red-500/15 border border-red-500/20 px-4 py-3 text-red-400 text-sm text-center">
+              {errorMsg}
+            </div>
+          )}
 
           <motion.button
             onClick={handleRequest}
