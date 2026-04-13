@@ -44,7 +44,12 @@ import tinasLogo from "@assets/Tinas-Travel-Logo-Red-Orange-Final-2_177328532923
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
   try {
-    const d = new Date(dateStr);
+    // Parse date parts directly from the string to avoid browser timezone conversion.
+    // new Date("2025-12-15T00:30:00") is treated as UTC and shifts to local time,
+    // which can change the displayed date for clients in different timezones.
+    const datePart = dateStr.includes("T") ? dateStr.substring(0, 10) : dateStr.substring(0, 10);
+    const [year, month, day] = datePart.split("-").map(Number);
+    const d = new Date(year, month - 1, day); // local date, no UTC conversion
     return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   } catch {
     return dateStr;

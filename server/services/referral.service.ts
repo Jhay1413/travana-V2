@@ -4,14 +4,14 @@ import { AppError } from "../utils/error-handler";
 
 /**
  * Commission formula:
- *   payoutAmount = commission × 0.90 × 0.25
- *   (gross commission minus 10% Hays fee, then 25% reward to referrer)
+ *   referralPayout = (commission × 0.25) − (commission × 0.10)
+ *   i.e. 25% referral share, then deduct 10% Hays fee from that share
  */
 function calculatePayoutAmount(commission: string | null | undefined): string {
   if (!commission) return "0.00";
   const gross = parseFloat(commission);
   if (isNaN(gross)) return "0.00";
-  return (gross * 0.9 * 0.25).toFixed(2);
+  return ((gross * 0.25) - (gross * 0.10)).toFixed(2);
 }
 
 /**
@@ -161,5 +161,23 @@ export const referralService = {
         await vipEnrollmentService.recalculateTier(existing.referrerClientId);
       }
     }
+  },
+
+  /**
+   * When booking commission is updated, recalculate the linked referral's
+   * commission and payoutAmount — but only if the referral is still PENDING
+   * (not yet approved into wallet). IN_WALLET and PAID amounts are locked.
+   */
+  async syncCommissionByTransaction(transactionId: string, newCommission: string) {
+    const existing = await referralRepository.findByTransactionId(transactionId);
+    if (!existing) return; // no referral linked to this booking
+
+    if (existing.referralStatus !== "PENDING") return; // locked once approved
+
+    const newPayoutAmount = calculatePayoutAmount(newCommission);
+    await referralRepository.update(existing.id, {
+      commission: newCommission,
+      payoutAmount: newPayoutAmount,
+    });
   },
 };

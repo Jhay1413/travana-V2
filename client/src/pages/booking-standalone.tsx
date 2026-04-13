@@ -21,6 +21,8 @@ import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { Favorite } from "@/api/endpoints/favorite.api";
 import type { DealImage } from "@/types/quote";
 import { transformQuoteData, currency, formatUKDate, formatLeadSource } from "@/components/quote/quote-types";
+
+const currencyPence = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
 import { QuoteSummaryTimeline } from "@/components/quote/QuoteSummaryTimeline";
@@ -711,10 +713,20 @@ export default function BookingPage() {
 
                       <div className="my-1 h-px w-full bg-black/10" data-testid="separator-booking-summary" />
 
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-booking-summary-total-commission">
-                        <div className="text-xs font-semibold text-black/70" data-testid="text-booking-summary-total-commission-label">Total commission</div>
-                        <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-total-commission-value">
-                          {currency.format(booking.commissions.totalCommission)}
+                      <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2" data-testid="row-booking-summary-referral-payout">
+                        <div className="text-xs font-semibold text-amber-700" data-testid="text-booking-summary-referral-payout-label">
+                          Referral payout (25%)
+                          <span className="ml-1 font-normal text-amber-500/70">est.</span>
+                        </div>
+                        <div className="text-xs font-semibold text-amber-700" data-testid="text-booking-summary-referral-payout-value">
+                          {currencyPence.format(booking.commissions.referralPayout)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-booking-summary-net-commission">
+                        <div className="text-xs font-semibold text-black/70" data-testid="text-booking-summary-net-commission-label">Net commission</div>
+                        <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-net-commission-value">
+                          {currencyPence.format(booking.commissions.netCommission)}
                         </div>
                       </div>
                     </div>

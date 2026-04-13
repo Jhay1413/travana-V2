@@ -393,6 +393,14 @@ export const bookingService = {
       await newQuoteRepository.replaceChildPassengers(id, "booking", childAges);
     }
 
+    // Sync referral commission if package_commission changed and booking has a transaction
+    if (bookingData.package_commission !== undefined && b.transaction_id) {
+      await referralService.syncCommissionByTransaction(
+        b.transaction_id,
+        String(bookingData.package_commission)
+      );
+    }
+
     return await bookingRepository.findWithDetails(id);
   },
 

@@ -7,11 +7,14 @@ export const currency = new Intl.NumberFormat("en-GB", {
 });
 
 export function formatUKDate(input: string) {
-  const date = new Date(input);
-  if (Number.isNaN(date.getTime())) return input;
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yyyy = date.getFullYear();
+  const datePart = input.includes("T") ? input.substring(0, 10) : input.substring(0, 10);
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return input;
+  const d = new Date(year, month - 1, day);
+  if (Number.isNaN(d.getTime())) return input;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
@@ -41,7 +44,10 @@ export function splitIsoDateTime(iso: string): { date: string; time: string } {
 }
 
 export function formatTimelineDate(dateStr: string) {
-  const d = new Date(dateStr);
+  const datePart = dateStr.includes("T") ? dateStr.substring(0, 10) : dateStr.substring(0, 10);
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return dateStr;
+  const d = new Date(year, month - 1, day);
   if (Number.isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
@@ -122,6 +128,9 @@ export type QuoteDisplay = {
     discounts: number;
     serviceCharge: number;
     totalCommission: number;
+    haysDeduction: number;
+    netCommission: number;
+    referralPayout: number;
     agentSplitPercent: number;
     agentSplitValue: number;
     netToAgency: number;
@@ -268,7 +277,10 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
       commissionValue: (packageCommission - serviceCharge) + discounts,
       discounts: discounts,
       serviceCharge: serviceCharge,
-      totalCommission: packageCommission ,
+      totalCommission: packageCommission,
+      haysDeduction: parseFloat((packageCommission * 0.10).toFixed(2)),
+      netCommission: parseFloat((packageCommission * 0.85).toFixed(2)),
+      referralPayout: parseFloat(((packageCommission * 0.25) - (packageCommission * 0.10)).toFixed(2)),
       agentSplitPercent: 0,
       agentSplitValue: 0,
       netToAgency: packageCommission,
