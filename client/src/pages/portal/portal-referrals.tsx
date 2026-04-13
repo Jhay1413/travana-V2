@@ -261,7 +261,7 @@ function BottomSheet({ title: _title, onClose, children }: { title: string; onCl
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <motion.div
-        className="relative w-full max-w-lg bg-[#0f0f1a] border border-white/[0.12] rounded-t-3xl p-5 pb-8 max-h-[85vh] overflow-y-auto"
+        className="relative w-full max-w-lg bg-[#0f0f1a] border border-white/[0.12] rounded-t-3xl p-5 pb-28 max-h-[85vh] overflow-y-auto"
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
