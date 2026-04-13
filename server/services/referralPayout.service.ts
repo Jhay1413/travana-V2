@@ -45,6 +45,13 @@ export const referralPayoutService = {
       )
     ).filter(Boolean);
 
+    if (deduped.length === 0) {
+      throw new AppError(
+        "A payout request is already pending for your eligible referrals. Please wait for your agent to review it.",
+        400
+      );
+    }
+
     const created = await Promise.all(
       deduped.map((r: any) =>
         referralPayoutRepository.create({

@@ -10,10 +10,12 @@ import PortalLayout from "./portal-layout";
 import {
   usePortalVipStatus,
   usePortalReferrals,
+  usePortalPayoutRequests,
   usePortalWithdrawals,
   useRequestWalletPayout,
   useRequestWalletWithdraw,
   type PortalReferral,
+  type PortalPayoutRequest,
   type PortalVipStatus,
   type PortalWithdrawal,
   type WithdrawRequestData,
@@ -696,12 +698,14 @@ type WalletEntry =
 
 function WalletTab({
   referrals,
+  payoutRequests,
   withdrawals,
   totalEarnings,
   onRequestPayout,
   onWithdraw,
 }: {
   referrals: PortalReferral[];
+  payoutRequests: PortalPayoutRequest[];
   withdrawals: PortalWithdrawal[];
   totalEarnings: string;
   onRequestPayout: () => void;
@@ -799,6 +803,43 @@ function WalletTab({
           </div>
         </div>
       </GlassCard>
+
+      {/* Pending payout requests — shown when client has submitted but admin hasn't approved yet */}
+      {payoutRequests.filter((p) => p.status === "requested").length > 0 && (
+        <GlassCard className="p-4 border border-violet-500/25 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/8 to-purple-500/8 pointer-events-none" />
+          <div className="relative">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-violet-500/15 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-4 h-4 text-violet-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-violet-300 font-semibold text-sm">Payout Request Pending</p>
+                <p className="text-white/40 text-xs mt-0.5">Awaiting agent review · usually within 1–2 business days</p>
+              </div>
+              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-violet-500/20 text-violet-300 flex-shrink-0">
+                {payoutRequests.filter((p) => p.status === "requested").length} request{payoutRequests.filter((p) => p.status === "requested").length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {payoutRequests
+                .filter((p) => p.status === "requested")
+                .map((p) => {
+                  const linked = referrals.find((r) => r.id === p.referral_id);
+                  return (
+                    <div key={p.id} className="flex items-center justify-between bg-white/[0.04] rounded-xl px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <User className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
+                        <span className="text-white/60 text-sm truncate">{linked?.referredName ?? "Referral"}</span>
+                      </div>
+                      <span className="text-violet-400 font-semibold text-sm flex-shrink-0">£{parseFloat(p.amount).toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </GlassCard>
+      )}
 
       {/* Pending withdrawal banner — shown when client is waiting for agent to process */}
       {pendingWithdrawalBalance > 0 && (
@@ -972,9 +1013,10 @@ export default function PortalReferralsPage() {
 
   const { data: vip, isLoading: vipLoading } = usePortalVipStatus();
   const { data: referrals = [], isLoading: referralsLoading } = usePortalReferrals();
+  const { data: payoutRequests = [], isLoading: payoutRequestsLoading } = usePortalPayoutRequests();
   const { data: withdrawals = [], isLoading: withdrawalsLoading } = usePortalWithdrawals();
 
-  const loading = vipLoading || referralsLoading || withdrawalsLoading;
+  const loading = vipLoading || referralsLoading || payoutRequestsLoading || withdrawalsLoading;
   const vipData = vip ?? DEFAULT_VIP;
 
   const activeReferrals = referrals.filter((r) => r.referralStatus !== "VOIDED");
@@ -1135,6 +1177,7 @@ export default function PortalReferralsPage() {
               >
                 <WalletTab
                   referrals={referrals}
+                  payoutRequests={payoutRequests}
                   withdrawals={withdrawals}
                   totalEarnings={vipData.totalEarnings}
                   onRequestPayout={() => setShowRequestPayout(true)}
