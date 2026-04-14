@@ -384,138 +384,138 @@ function QuotesCarousel({ quotes }: { quotes: PortalQuote[] }) {
   );
 }
 
-function PushNotificationPrompt() {
-  const [show, setShow] = useState(false);
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
+// function PushNotificationPrompt() {
+//   const [show, setShow] = useState(false);
+//   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+//   const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
-    const token = getPortalToken();
-    if (!token) return;
+//   useEffect(() => {
+//     const token = getPortalToken();
+//     if (!token) return;
 
-    const missing: string[] = [];
-    if (!("serviceWorker" in navigator)) missing.push("ServiceWorker");
-    if (!("PushManager" in window)) missing.push("PushManager");
-    if (!("Notification" in window)) missing.push("Notification");
+//     const missing: string[] = [];
+//     if (!("serviceWorker" in navigator)) missing.push("ServiceWorker");
+//     if (!("PushManager" in window)) missing.push("PushManager");
+//     if (!("Notification" in window)) missing.push("Notification");
 
-    if (missing.length > 0) {
-      const inIframe = window.self !== window.top;
-      const ua = navigator.userAgent || "";
-      const isIOS = /iPhone|iPad|iPod/.test(ua);
-      const isSafari = /Safari/.test(ua) && !/CriOS|Chrome/.test(ua);
-      if (inIframe) {
-        setErrorMsg("Open this site directly in your browser to enable notifications.");
-      } else if (isIOS) {
-        setErrorMsg("On iPhone, Apple requires you to install this app first. Tap Share → Add to Home Screen in Safari, then open the app from your Home Screen.");
-      } else {
-        setErrorMsg(`Push not supported. Browser: ${ua.slice(0, 80)}`);
-      }
-      setShow(true);
-      return;
-    }
+//     if (missing.length > 0) {
+//       const inIframe = window.self !== window.top;
+//       const ua = navigator.userAgent || "";
+//       const isIOS = /iPhone|iPad|iPod/.test(ua);
+//       const isSafari = /Safari/.test(ua) && !/CriOS|Chrome/.test(ua);
+//       if (inIframe) {
+//         setErrorMsg("Open this site directly in your browser to enable notifications.");
+//       } else if (isIOS) {
+//         setErrorMsg("On iPhone, Apple requires you to install this app first. Tap Share → Add to Home Screen in Safari, then open the app from your Home Screen.");
+//       } else {
+//         setErrorMsg(`Push not supported. Browser: ${ua.slice(0, 80)}`);
+//       }
+//       setShow(true);
+//       return;
+//     }
 
-    if (Notification.permission === "denied") {
-      setErrorMsg("Notifications blocked. Please enable them in your browser settings.");
-      setShow(true);
-      return;
-    }
+//     if (Notification.permission === "denied") {
+//       setErrorMsg("Notifications blocked. Please enable them in your browser settings.");
+//       setShow(true);
+//       return;
+//     }
 
-    if (Notification.permission === "granted") {
-      navigator.serviceWorker.getRegistration("/portal-sw.js").then(reg => {
-        if (reg) {
-          reg.pushManager.getSubscription().then(sub => {
-            if (!sub) setShow(true);
-          });
-        } else {
-          setShow(true);
-        }
-      });
-    } else {
-      setShow(true);
-    }
-  }, []);
+//     if (Notification.permission === "granted") {
+//       navigator.serviceWorker.getRegistration("/portal-sw.js").then(reg => {
+//         if (reg) {
+//           reg.pushManager.getSubscription().then(sub => {
+//             if (!sub) setShow(true);
+//           });
+//         } else {
+//           setShow(true);
+//         }
+//       });
+//     } else {
+//       setShow(true);
+//     }
+//   }, []);
 
-  const handleEnable = async () => {
-    setStatus("loading");
-    try {
-      const reg = await navigator.serviceWorker.register("/portal-sw.js", { scope: "/" });
-      await navigator.serviceWorker.ready;
+//   const handleEnable = async () => {
+//     setStatus("loading");
+//     try {
+//       const reg = await navigator.serviceWorker.register("/portal-sw.js", { scope: "/" });
+//       await navigator.serviceWorker.ready;
 
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") {
-        setErrorMsg("Permission was not granted.");
-        setStatus("error");
-        return;
-      }
+//       const perm = await Notification.requestPermission();
+//       if (perm !== "granted") {
+//         setErrorMsg("Permission was not granted.");
+//         setStatus("error");
+//         return;
+//       }
 
-      const vapidRes = await fetch("/api/portal/push/vapid-key");
-      const { publicKey } = await vapidRes.json();
+//       const vapidRes = await fetch("/api/portal/push/vapid-key");
+//       const { publicKey } = await vapidRes.json();
 
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: publicKey,
-      });
+//       const sub = await reg.pushManager.subscribe({
+//         userVisibleOnly: true,
+//         applicationServerKey: publicKey,
+//       });
 
-      const token = getPortalToken();
-      const saveRes = await fetch("/api/portal/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ subscription: sub.toJSON() }),
-      });
+//       const token = getPortalToken();
+//       const saveRes = await fetch("/api/portal/push/subscribe", {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+//         body: JSON.stringify({ subscription: sub.toJSON() }),
+//       });
 
-      if (!saveRes.ok) throw new Error(`Save failed: ${saveRes.status}`);
+//       if (!saveRes.ok) throw new Error(`Save failed: ${saveRes.status}`);
 
-      setStatus("done");
-      setTimeout(() => setShow(false), 1500);
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Unknown error");
-      setStatus("error");
-    }
-  };
+//       setStatus("done");
+//       setTimeout(() => setShow(false), 1500);
+//     } catch (err: any) {
+//       setErrorMsg(err?.message || "Unknown error");
+//       setStatus("error");
+//     }
+//   };
 
-  if (!show) return null;
+//   if (!show) return null;
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600/30 to-blue-600/30 border border-purple-500/30 p-4"
-      data-testid="push-notification-prompt"
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-purple-500/30 flex items-center justify-center shrink-0">
-          <Bell className="w-5 h-5 text-purple-300" />
-        </div>
-        <div className="flex-1 min-w-0">
-          {status === "done" ? (
-            <p className="text-green-400 text-sm font-medium">Notifications enabled!</p>
-          ) : errorMsg ? (
-            <>
-              <p className="text-white text-sm font-semibold">Notifications</p>
-              <p className="text-red-300 text-xs mt-1">{errorMsg}</p>
-            </>
-          ) : (
-            <>
-              <p className="text-white text-sm font-semibold">Stay Updated</p>
-              <p className="text-white/60 text-xs mt-0.5">Get notified when your agent replies</p>
-              <button
-                onClick={handleEnable}
-                disabled={status === "loading"}
-                className="mt-2 px-4 py-1.5 rounded-lg bg-purple-500 text-white text-xs font-semibold hover:bg-purple-400 transition-colors disabled:opacity-50"
-                data-testid="button-enable-push"
-              >
-                {status === "loading" ? "Enabling..." : "Turn on Notifications"}
-              </button>
-            </>
-          )}
-        </div>
-        <button onClick={() => setShow(false)} className="text-white/40 hover:text-white/70">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </motion.div>
-  );
-}
+//   return (
+//     <motion.div
+//       initial={{ opacity: 0, y: -10 }}
+//       animate={{ opacity: 1, y: 0 }}
+//       className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600/30 to-blue-600/30 border border-purple-500/30 p-4"
+//       data-testid="push-notification-prompt"
+//     >
+//       <div className="flex items-start gap-3">
+//         <div className="w-10 h-10 rounded-xl bg-purple-500/30 flex items-center justify-center shrink-0">
+//           <Bell className="w-5 h-5 text-purple-300" />
+//         </div>
+//         <div className="flex-1 min-w-0">
+//           {status === "done" ? (
+//             <p className="text-green-400 text-sm font-medium">Notifications enabled!</p>
+//           ) : errorMsg ? (
+//             <>
+//               <p className="text-white text-sm font-semibold">Notifications</p>
+//               <p className="text-red-300 text-xs mt-1">{errorMsg}</p>
+//             </>
+//           ) : (
+//             <>
+//               <p className="text-white text-sm font-semibold">Stay Updated</p>
+//               <p className="text-white/60 text-xs mt-0.5">Get notified when your agent replies</p>
+//               <button
+//                 onClick={handleEnable}
+//                 disabled={status === "loading"}
+//                 className="mt-2 px-4 py-1.5 rounded-lg bg-purple-500 text-white text-xs font-semibold hover:bg-purple-400 transition-colors disabled:opacity-50"
+//                 data-testid="button-enable-push"
+//               >
+//                 {status === "loading" ? "Enabling..." : "Turn on Notifications"}
+//               </button>
+//             </>
+//           )}
+//         </div>
+//         <button onClick={() => setShow(false)} className="text-white/40 hover:text-white/70">
+//           <X className="w-4 h-4" />
+//         </button>
+//       </div>
+//     </motion.div>
+//   );
+// }
 
 export default function PortalHomePage() {
   const [, setLocation] = useLocation();
@@ -602,30 +602,44 @@ export default function PortalHomePage() {
                   </>
                 )}
               </div>
+
+              <div className="grid grid-cols-2 gap-2.5 mt-3">
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setShowQuoteForm(true)}
+                  className="relative overflow-hidden rounded-2xl backdrop-blur-md bg-white/[0.1] border border-white/[0.15] p-3.5 flex items-center gap-3 text-left hover:bg-white/[0.15] transition-colors"
+                  data-testid="button-request-quote-hero"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-purple-500/30 flex items-center justify-center shrink-0">
+                    <Plus className="w-4 h-4 text-purple-300" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white font-semibold text-xs leading-tight">Request a Quote</p>
+                    <p className="text-white/40 text-[10px] mt-0.5 leading-tight">Tell us your dream destination</p>
+                  </div>
+                </motion.button>
+
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setLocation("/portal/referrals")}
+                  className="relative overflow-hidden rounded-2xl backdrop-blur-md bg-white/[0.1] border border-white/[0.15] p-3.5 flex items-center gap-3 text-left hover:bg-white/[0.15] transition-colors"
+                  data-testid="button-vip-referrals-hero"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white font-semibold text-xs leading-tight">VIP Referrals</p>
+                    <p className="text-white/40 text-[10px] mt-0.5 leading-tight">Refer &amp; earn rewards</p>
+                  </div>
+                </motion.button>
+              </div>
             </motion.div>
           </div>
         </div>
 
         <div className="px-4 pt-5 space-y-6">
-          <PushNotificationPrompt />
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setShowQuoteForm(true)}
-            className="w-full"
-            data-testid="button-request-quote"
-          >
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 p-4 flex items-center gap-4">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/4" />
-              <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                <Plus className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-left relative z-10">
-                <p className="text-white font-semibold text-sm">Request a Quote</p>
-                <p className="text-white/60 text-xs">Tell us your dream destination</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-white/40 ml-auto" />
-            </div>
-          </motion.button>
+          {/* <PushNotificationPrompt /> */}
 
           {latestQuotes.length > 0 && (
             <motion.div
@@ -845,7 +859,7 @@ export default function PortalHomePage() {
             </GlassCard>
           </motion.div>
 
-          <motion.div
+          {/* <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
@@ -873,7 +887,7 @@ export default function PortalHomePage() {
                 </motion.button>
               ))}
             </div>
-          </motion.div>
+          </motion.div> */}
         </div>
       </div>
 

@@ -487,6 +487,7 @@ export interface EnrichedBooking extends Booking {
   cruises?: EnrichedQuoteCruise[];
   passengers?: Passenger[];
   images?: DealImage[];
+  hasReferral?: boolean;
 }
 
 export interface TransactionNote {

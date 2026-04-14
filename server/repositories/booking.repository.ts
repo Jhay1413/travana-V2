@@ -5,7 +5,7 @@ import {
   booking_airport_parking, booking_cruise, booking_cruise_item_extra,
   booking_cruise_itinerary, passengers, deal_images, accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
-  transaction, resorts, destination, country, room_type,
+  transaction, resorts, destination, country, room_type, referral,
 } from "@shared/schema";
 import type {
   Booking, InsertBooking, InsertBookingFlight, BookingFlight,
@@ -122,6 +122,7 @@ export const bookingRepository = {
 
     const accomImgsByBookingId = new Map<string, (typeof accommodationImgs)[number][]>();
     for (const img of accommodationImgs) {
+      if (!img.booking_id) continue;
       const list = accomImgsByBookingId.get(img.booking_id) ?? [];
       list.push(img);
       accomImgsByBookingId.set(img.booking_id, list);
@@ -136,7 +137,7 @@ export const bookingRepository = {
 
     return bookings.map(b => {
       const seen = new Set<string>();
-      const images: { id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; s3Key: null }[] = [];
+      const images: { id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; s3Key: string | null }[] = [];
 
       for (const img of dealImgsByBookingId.get(b.id) ?? []) {
         const url = img.image_url || '';
@@ -189,7 +190,10 @@ export const bookingRepository = {
 
     if (!b) return undefined;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, accommodationImgs, lodgeImgs] = await Promise.all([
+    const bookingTransactionId = b.booking.transaction_id;
+    const bookingLodgeId = b.booking.lodge_id;
+
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, referralRows, accommodationImgs, lodgeImgs] = await Promise.all([
       db.select({
         flight: booking_flights,
         departing_airport_name: sql<string>`concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')')`,
@@ -279,6 +283,9 @@ export const bookingRepository = {
 
       db.select().from(passengers).where(eq(passengers.booking_id, id)),
       db.select().from(deal_images).where(eq(deal_images.owner_id, id)),
+      bookingTransactionId
+        ? db.select({ id: referral.id }).from(referral).where(eq(referral.transactionId, bookingTransactionId)).limit(1)
+        : Promise.resolve([]),
 
       // Fetch accommodation images through booking_accomodation junction
       db.select({
@@ -297,13 +304,13 @@ export const bookingRepository = {
         ),
 
       // Fetch lodge images if booking has a lodge
-      b.booking.lodge_id
+      bookingLodgeId
         ? db.select({
             id: lodge_images.id,
             lodge_id: lodge_images.lodge_id,
             image_url: lodge_images.image_url,
             isPrimary: lodge_images.isPrimary,
-          }).from(lodge_images).where(eq(lodge_images.lodge_id, b.booking.lodge_id))
+          }).from(lodge_images).where(eq(lodge_images.lodge_id, bookingLodgeId))
         : Promise.resolve([]),
     ]);
 
@@ -338,6 +345,7 @@ export const bookingRepository = {
       airportParkings: airportParkings.map(p => ({ ...p.airportParking, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
       cruises: cruises.map(c => ({ ...c.cruise, tour_operator_name: c.tour_operator_name })),
       passengers: passengerList,
+      hasReferral: referralRows.length > 0,
       images: (() => {
         const seen = new Set<string>();
         const result: any[] = [];
