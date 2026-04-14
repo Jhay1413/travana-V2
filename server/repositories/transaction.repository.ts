@@ -159,7 +159,9 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
   const txnIds = txns.map(t => t.id);
   const userIds = Array.from(new Set(txns.map(t => t.user_id).filter(Boolean))) as string[];
 
-  const [allEnquiries, allQuotes, allBookings, allPackageTypes, allUsers] = await Promise.all([
+  const clientIds = Array.from(new Set(txns.map(t => t.client_id).filter(Boolean))) as string[];
+
+  const [allEnquiries, allQuotes, allBookings, allPackageTypes, allUsers, allClients] = await Promise.all([
     db.select({
       id: enquiry_table.id,
       transaction_id: enquiry_table.transaction_id,
@@ -213,9 +215,22 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
           email: user.email,
         }).from(user).where(inArray(user.id, userIds))
       : Promise.resolve([]),
+    clientIds.length > 0
+      ? db.select({
+          id: clientTable.id,
+          title: clientTable.title,
+          firstName: clientTable.firstName,
+          surename: clientTable.surename,
+        }).from(clientTable).where(inArray(clientTable.id, clientIds))
+      : Promise.resolve([]),
   ]);
 
   const userMap = new Map(allUsers.map((u: any) => [u.id, u]));
+  const clientNameMap = new Map(allClients.map((c: any) => {
+    const t = c.title && c.title !== "NULL" ? c.title : "";
+    const name = [t, c.firstName, c.surename].filter(Boolean).join(" ").trim();
+    return [c.id, name || null];
+  }));
   const packageTypeMap = new Map(allPackageTypes.map(pt => [pt.id, pt.name]));
 
   const enquiryMap = new Map<string, any>();
@@ -273,9 +288,11 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
     const bookingEntry = bookingMap.get(txn.id) || null;
     const holiday_type_name = enquiry?.holiday_type_name || quotes[0]?.holiday_type_name || bookingEntry?.holiday_type_name || null;
     const assignedUser = txn.user_id ? (userMap.get(txn.user_id) || null) : null;
+    const client_name = txn.client_id ? (clientNameMap.get(txn.client_id) || null) : null;
     return {
       ...txn,
       holiday_type_name,
+      client_name,
       enquiry,
       quotes,
       booking: bookingEntry,

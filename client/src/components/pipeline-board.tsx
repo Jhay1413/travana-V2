@@ -943,16 +943,25 @@ export default function PipelineBoard() {
 
   const [dragState, setDragState] = useState<{ active: boolean; fromStage: PipelineStage | null }>({ active: false, fromStage: null });
 
+  const allTx = useMemo(() => [...eD.items, ...qD.items, ...iD.items, ...bD.items], [eD.items, qD.items, iD.items, bD.items]);
+
   const clientMap = useMemo(() => {
     const m = new Map<string, string>();
+    for (const tx of allTx) {
+      if (tx.client_id && (tx as any).client_name) {
+        m.set(tx.client_id, (tx as any).client_name);
+      }
+    }
     if (neonClientsData?.clients) {
       for (const c of neonClientsData.clients) {
-        const t = c.title && c.title !== "NULL" ? c.title : "";
-        m.set(c.id, [t, c.firstName, c.surename].filter(Boolean).join(" "));
+        if (!m.has(c.id)) {
+          const t = c.title && c.title !== "NULL" ? c.title : "";
+          m.set(c.id, [t, c.firstName, c.surename].filter(Boolean).join(" "));
+        }
       }
     }
     return m;
-  }, [neonClientsData]);
+  }, [allTx, neonClientsData]);
 
   const getName = (id: string | null) => id ? (clientMap.get(id) || "Unknown Client") : "Unknown Client";
 
@@ -963,8 +972,6 @@ export default function PipelineBoard() {
   const handleCardClick = useCallback((t: Transaction, s: PipelineStage) => {
     setSelectedDeal({ transaction: t, stage: s });
   }, []);
-
-  const allTx = useMemo(() => [...eD.items, ...qD.items, ...iD.items, ...bD.items], [eD.items, qD.items, iD.items, bD.items]);
 
   const handleDrop = useCallback((txId: string, from: PipelineStage, to: PipelineStage) => {
     setDragState({ active: false, fromStage: null });
