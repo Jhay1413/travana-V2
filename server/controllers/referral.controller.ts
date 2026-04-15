@@ -27,6 +27,12 @@ export const referralController = {
     return successResponse(res, stats, "Client referral stats retrieved successfully");
   }),
 
+  getClientVipOverview: asyncHandler(async (req: Request, res: Response) => {
+    const clientId = String(req.params.clientId);
+    const overview = await referralService.getVipOverview(clientId);
+    return successResponse(res, overview, "Client VIP overview retrieved successfully");
+  }),
+
   createReferral: asyncHandler(async (req: Request, res: Response) => {
     const referral = await referralService.createReferral(req.body);
     return successResponse(res, referral, "Referral created successfully", 201);

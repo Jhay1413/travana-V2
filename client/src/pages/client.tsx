@@ -56,6 +56,7 @@ import { ClientQuotesTab } from "@/components/client/ClientQuotesTab";
 import { ClientBookedTab } from "@/components/client/ClientBookedTab";
 import { ClientFilesTab } from "@/components/client/ClientFilesTab";
 import { ClientTicketsTab } from "@/components/client/ClientTicketsTab";
+import { ClientVipClubTab } from "@/components/client/ClientVipClubTab";
 
 // ── ReferrerSelector ────────────────────────────────────────────────────────
 
@@ -214,8 +215,8 @@ export default function ClientPage() {
   const { role, setRole } = useRole();
   const [active] = useState<string>("clients");
   const [q, setQ] = useState("");
-  type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets";
-  const validTabs: ClientTab[] = ["overview", "enquiries", "quotes", "booked", "files", "tickets"];
+  type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "vip-club";
+  const validTabs: ClientTab[] = ["overview", "enquiries", "quotes", "booked", "files", "tickets", "vip-club"];
   const [tab, setTab] = useState<ClientTab>(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab") as ClientTab | null;
@@ -897,7 +898,7 @@ export default function ClientPage() {
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
               <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
-                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 rounded-2xl border border-black/10 bg-white/70">
+                <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 rounded-2xl border border-black/10 bg-white/70">
                   <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-overview">
                     Overview
                   </TabsTrigger>
@@ -915,6 +916,9 @@ export default function ClientPage() {
                   </TabsTrigger>
                   <TabsTrigger value="tickets" className="rounded-xl" data-testid="tab-tickets">
                     Tickets
+                  </TabsTrigger>
+                  <TabsTrigger value="vip-club" className="rounded-xl" data-testid="tab-vip-club">
+                    VIP Club
                   </TabsTrigger>
                 </TabsList>
 
@@ -997,6 +1001,10 @@ export default function ClientPage() {
                     filteredTickets={filteredTickets}
                     getUserName={getUserName}
                   />
+                </TabsContent>
+
+                <TabsContent value="vip-club" className="mt-3">
+                  <ClientVipClubTab clientId={clientId} />
                 </TabsContent>
 
               </Tabs>

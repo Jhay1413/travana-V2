@@ -42,6 +42,10 @@ export const referralService = {
     return referralRepository.getStatsByReferrerId(referrerClientId);
   },
 
+  async getVipOverview(referrerClientId: string) {
+    return referralRepository.getVipOverview(referrerClientId);
+  },
+
   async createReferral(data: {
     referrerClientId: string;
     referredClientId?: string;

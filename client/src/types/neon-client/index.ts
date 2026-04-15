@@ -21,6 +21,9 @@ export interface NeonClient {
   createdAt: string;
   referrerId: string | null;
   referredByClientId: string | null;
+  vipTier: "standard" | "gold" | "elite" | null;
+  vipEnrolledAt: string | null;
+  totalReferrals: number;
 }
 
 export interface NeonClientImportRow {

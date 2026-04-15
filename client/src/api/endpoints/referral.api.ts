@@ -26,6 +26,47 @@ export interface ReferralStats {
   overall: number;
 }
 
+export interface VipReferralRow {
+  id: string;
+  referralStatus: "PENDING" | "IN_WALLET" | "PAID" | "VOIDED";
+  referredName: string;
+  referredEmail: string | null;
+  referredPhone: string | null;
+  referredClientId: string | null;
+  referredClientFirstName: string | null;
+  referredClientSurname: string | null;
+  commission: string | null;
+  payoutAmount: string | null;
+  travelDate: string | null;
+  payoutTriggerDate: string | null;
+  paidAt: string | null;
+  createdAt: string | null;
+  transactionId: string | null;
+  isDue: boolean;
+}
+
+export interface VipOverview {
+  vipTier: "standard" | "gold" | "elite" | null;
+  vipEnrolledAt: string | null;
+  dbTotalReferrals: number;
+  stats: {
+    total: number;
+    pendingCount: number;
+    inWalletCount: number;
+    paidCount: number;
+    voidedCount: number;
+    pendingCommission: number;
+    walletCommission: number;
+    paidCommission: number;
+    overallCommission: number;
+    pendingPayout: number;
+    walletPayout: number;
+    paidPayout: number;
+    overallPayout: number;
+  };
+  referrals: VipReferralRow[];
+}
+
 export interface CreateReferralData {
   referrerClientId: string;
   referredClientId?: string;
@@ -55,6 +96,11 @@ export const referralApi = {
 
   getStatsByClient: async (clientId: string): Promise<ReferralStats> => {
     const { data } = await axiosClient.get<ReferralStats>(`/api/referrals/client/${clientId}/stats`);
+    return data;
+  },
+
+  getVipOverview: async (clientId: string): Promise<VipOverview> => {
+    const { data } = await axiosClient.get<VipOverview>(`/api/referrals/client/${clientId}/vip-overview`);
     return data;
   },
 

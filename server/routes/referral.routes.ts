@@ -20,6 +20,9 @@ router.get("/client/:clientId", validate(referrerClientParamValidator), referral
 // Admin: get referral stats for a client (referrer)
 router.get("/client/:clientId/stats", validate(referrerClientParamValidator), referralController.getClientStats);
 
+// Admin: get full VIP club overview for a client
+router.get("/client/:clientId/vip-overview", validate(referrerClientParamValidator), referralController.getClientVipOverview);
+
 // Admin: get single referral
 router.get("/:id", validate(referralIdParamValidator), referralController.getReferralById);
 
