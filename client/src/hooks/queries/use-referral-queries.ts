@@ -6,6 +6,7 @@ export const referralKeys = {
   lists: () => [...referralKeys.all, "list"] as const,
   detail: (id: string) => [...referralKeys.all, "detail", id] as const,
   byClient: (clientId: string) => [...referralKeys.all, "client", clientId] as const,
+  statsByClient: (clientId: string) => [...referralKeys.all, "client", clientId, "stats"] as const,
 };
 
 export function useReferrals() {
@@ -27,6 +28,14 @@ export function useReferralsByClient(clientId: string) {
   return useQuery({
     queryKey: referralKeys.byClient(clientId),
     queryFn: () => referralApi.getByClient(clientId),
+    enabled: !!clientId,
+  });
+}
+
+export function useReferralStatsByClient(clientId: string) {
+  return useQuery({
+    queryKey: referralKeys.statsByClient(clientId),
+    queryFn: () => referralApi.getStatsByClient(clientId),
     enabled: !!clientId,
   });
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   BadgeCheck,
   Clock,
@@ -19,24 +19,10 @@ import type { NeonClient } from "@/types/neon-client";
 import type { EnquiryTable } from "@/types/quote";
 import { currency, type QuoteWithJoins, type BookingWithJoins, type TicketItem, formatUKDate } from "./client-types";
 import type { Client } from "./client-types";
-import { useReferralsByClient } from "@/hooks/queries/use-referral-queries";
+import { useReferralStatsByClient } from "@/hooks/queries/use-referral-queries";
 
 export function ReferralStatsSection({ clientId }: { clientId: string }) {
-  const { data: referrals = [], isLoading } = useReferralsByClient(clientId);
-
-  const stats = useMemo(() => {
-    const total = referrals.length;
-    const pending = referrals
-      .filter((r) => r.referralStatus === "PENDING")
-      .reduce((sum, r) => sum + parseFloat(r.commission || "0"), 0);
-    const wallet = referrals
-      .filter((r) => r.referralStatus === "IN_WALLET")
-      .reduce((sum, r) => sum + parseFloat(r.commission || "0"), 0);
-    const overall = referrals
-      .filter((r) => r.referralStatus !== "VOIDED")
-      .reduce((sum, r) => sum + parseFloat(r.commission || "0"), 0);
-    return { total, pending, wallet, overall };
-  }, [referrals]);
+  const { data: stats, isLoading } = useReferralStatsByClient(clientId);
 
   if (isLoading) {
     return (
@@ -48,7 +34,10 @@ export function ReferralStatsSection({ clientId }: { clientId: string }) {
     );
   }
 
-  if (referrals.length === 0) return null;
+  const total = stats?.total ?? 0;
+  const pending = stats?.pending ?? 0;
+  const wallet = stats?.wallet ?? 0;
+  const overall = stats?.overall ?? 0;
 
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="referral-stats-section">
@@ -62,7 +51,7 @@ export function ReferralStatsSection({ clientId }: { clientId: string }) {
             <Users className="h-3.5 w-3.5 text-purple-600" />
             <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Referred</span>
           </div>
-          <div className="text-xl font-bold text-black/85">{stats.total}</div>
+          <div className="text-xl font-bold text-black/85">{total}</div>
           <div className="text-[10px] text-black/40">Total clients</div>
         </div>
         <div className="flex flex-col gap-1 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3" data-testid="stat-pending-commission">
@@ -70,7 +59,7 @@ export function ReferralStatsSection({ clientId }: { clientId: string }) {
             <TrendingDown className="h-3.5 w-3.5 text-amber-600" />
             <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Pending</span>
           </div>
-          <div className="text-xl font-bold text-black/85">{currency.format(stats.pending)}</div>
+          <div className="text-xl font-bold text-black/85">{currency.format(pending)}</div>
           <div className="text-[10px] text-black/40">Awaiting approval</div>
         </div>
         <div className="flex flex-col gap-1 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-3" data-testid="stat-wallet-balance">
@@ -78,7 +67,7 @@ export function ReferralStatsSection({ clientId }: { clientId: string }) {
             <Wallet className="h-3.5 w-3.5 text-blue-600" />
             <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Wallet</span>
           </div>
-          <div className="text-xl font-bold text-black/85">{currency.format(stats.wallet)}</div>
+          <div className="text-xl font-bold text-black/85">{currency.format(wallet)}</div>
           <div className="text-[10px] text-black/40">Ready to withdraw</div>
         </div>
         <div className="flex flex-col gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3" data-testid="stat-overall-commission">
@@ -86,7 +75,7 @@ export function ReferralStatsSection({ clientId }: { clientId: string }) {
             <CircleDollarSign className="h-3.5 w-3.5 text-emerald-600" />
             <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Overall</span>
           </div>
-          <div className="text-xl font-bold text-black/85">{currency.format(stats.overall)}</div>
+          <div className="text-xl font-bold text-black/85">{currency.format(overall)}</div>
           <div className="text-[10px] text-black/40">All-time commission</div>
         </div>
       </div>

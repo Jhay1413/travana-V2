@@ -38,6 +38,10 @@ export const referralService = {
     return referralRepository.findByReferrerClientId(referrerClientId);
   },
 
+  async getStatsByReferrer(referrerClientId: string) {
+    return referralRepository.getStatsByReferrerId(referrerClientId);
+  },
+
   async createReferral(data: {
     referrerClientId: string;
     referredClientId?: string;

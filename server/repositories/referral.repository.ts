@@ -145,4 +145,28 @@ export const referralRepository = {
   async delete(id: string): Promise<void> {
     await db.delete(referral).where(eq(referral.id, id));
   },
+
+  async getStatsByReferrerId(referrerClientId: string): Promise<{
+    total: number;
+    pending: number;
+    wallet: number;
+    overall: number;
+  }> {
+    const [row] = await db
+      .select({
+        total: sql<string>`COUNT(*)`,
+        pending: sql<string>`SUM(CASE WHEN ${referral.referralStatus} = 'PENDING' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END)`,
+        wallet: sql<string>`SUM(CASE WHEN ${referral.referralStatus} = 'IN_WALLET' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END)`,
+        overall: sql<string>`SUM(CASE WHEN ${referral.referralStatus} != 'VOIDED' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END)`,
+      })
+      .from(referral)
+      .where(eq(referral.referrerClientId, referrerClientId));
+
+    return {
+      total: parseInt(row?.total ?? "0", 10),
+      pending: parseFloat(row?.pending ?? "0"),
+      wallet: parseFloat(row?.wallet ?? "0"),
+      overall: parseFloat(row?.overall ?? "0"),
+    };
+  },
 };

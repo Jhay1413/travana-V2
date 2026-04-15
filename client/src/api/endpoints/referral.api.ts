@@ -19,6 +19,13 @@ export interface AdminReferral {
   createdAt: string;
 }
 
+export interface ReferralStats {
+  total: number;
+  pending: number;
+  wallet: number;
+  overall: number;
+}
+
 export interface CreateReferralData {
   referrerClientId: string;
   referredClientId?: string;
@@ -43,6 +50,11 @@ export const referralApi = {
 
   getByClient: async (clientId: string): Promise<AdminReferral[]> => {
     const { data } = await axiosClient.get<AdminReferral[]>(`/api/referrals/client/${clientId}`);
+    return data;
+  },
+
+  getStatsByClient: async (clientId: string): Promise<ReferralStats> => {
+    const { data } = await axiosClient.get<ReferralStats>(`/api/referrals/client/${clientId}/stats`);
     return data;
   },
 
