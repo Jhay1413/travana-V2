@@ -323,14 +323,17 @@ export default function SocialQuotePage() {
 
                   {galleryImages.length > 0 && (
                     <div className="grid grid-cols-3 gap-1.5" data-testid="grid-social-quote-gallery">
-                      {galleryImages.map((img: { id: string; url: string; isPrimary: boolean | null }, idx: number) => (
+                      {galleryImages.map((img: { id: string; url: string; isPrimary: boolean | null; ownerType?: string }, idx: number) => {
+                        const isQuoteOwned = !img.ownerType || img.ownerType === "quote";
+                        return (
                         <button
                           key={img.id}
                           type="button"
-                          className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] active:scale-[0.99]"
+                          className={`group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] ${isQuoteOwned ? "active:scale-[0.99] cursor-pointer" : "cursor-default"}`}
                           data-testid={`button-social-quote-gallery-image-${idx}`}
-                          disabled={setPrimaryImage.isPending}
+                          disabled={setPrimaryImage.isPending || !isQuoteOwned}
                           onClick={() => {
+                            if (!isQuoteOwned) return;
                             setPrimaryImage.mutate(
                               { quoteId, imageId: img.id },
                               {
@@ -339,7 +342,7 @@ export default function SocialQuotePage() {
                               }
                             );
                           }}
-                          title="Set as main image"
+                          title={isQuoteOwned ? "Set as main image" : "Cannot set accommodation image as main"}
                         >
                           <img
                             src={img.url}
@@ -348,12 +351,15 @@ export default function SocialQuotePage() {
                             data-testid={`img-social-quote-gallery-${idx}`}
                           />
                           <div className="absolute inset-0 flex items-end justify-center bg-black/0 pb-1.5 opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
-                            <span className="flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white">
-                              <Star className="h-2.5 w-2.5" /> Set Main
-                            </span>
+                            {isQuoteOwned && (
+                              <span className="flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white">
+                                <Star className="h-2.5 w-2.5" /> Set Main
+                              </span>
+                            )}
                           </div>
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 

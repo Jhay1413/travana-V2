@@ -37,10 +37,11 @@ export function useQuoteData(quoteId: string, clientId: string, isBooking: boole
   // Get images
   const images = useMemo(() => {
     const imgs = rawData?.images || [];
-    return imgs.map((img: { id: string; image_url: string | null; isPrimary: boolean | null }) => ({
+    return imgs.map((img: { id: string; image_url: string | null; isPrimary: boolean | null; owner_type?: string | null }) => ({
       id: img.id,
       url: img.image_url || "",
       isPrimary: img.isPrimary,
+      ownerType: img.owner_type || "quote",
     }));
   }, [rawData]);
 
