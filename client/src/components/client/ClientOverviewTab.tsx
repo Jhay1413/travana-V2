@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   BadgeCheck,
   Clock,
@@ -10,13 +10,91 @@ import {
   Check,
   X,
   Loader2,
+  Users,
+  Wallet,
+  CircleDollarSign,
+  TrendingDown,
 } from "lucide-react";
 import type { NeonClient } from "@/types/neon-client";
 import type { EnquiryTable } from "@/types/quote";
 import { currency, type QuoteWithJoins, type BookingWithJoins, type TicketItem, formatUKDate } from "./client-types";
 import type { Client } from "./client-types";
+import { useReferralsByClient } from "@/hooks/queries/use-referral-queries";
 
-function PortalPinSection({ clientId }: { clientId: string }) {
+export function ReferralStatsSection({ clientId }: { clientId: string }) {
+  const { data: referrals = [], isLoading } = useReferralsByClient(clientId);
+
+  const stats = useMemo(() => {
+    const total = referrals.length;
+    const pending = referrals
+      .filter((r) => r.referralStatus === "PENDING")
+      .reduce((sum, r) => sum + parseFloat(r.commission || "0"), 0);
+    const wallet = referrals
+      .filter((r) => r.referralStatus === "IN_WALLET")
+      .reduce((sum, r) => sum + parseFloat(r.commission || "0"), 0);
+    const overall = referrals
+      .filter((r) => r.referralStatus !== "VOIDED")
+      .reduce((sum, r) => sum + parseFloat(r.commission || "0"), 0);
+    return { total, pending, wallet, overall };
+  }, [referrals]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 animate-pulse" data-testid="referral-stats-loading">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-16 rounded-2xl border border-black/10 bg-black/[0.03]" />
+        ))}
+      </div>
+    );
+  }
+
+  if (referrals.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="referral-stats-section">
+      <div className="mb-3 flex items-center gap-2">
+        <Users className="h-4 w-4 text-purple-600" />
+        <div className="text-xs font-semibold text-black/80">Referral Summary</div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="flex flex-col gap-1 rounded-xl border border-purple-500/20 bg-purple-500/[0.06] p-3" data-testid="stat-total-referred">
+          <div className="flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5 text-purple-600" />
+            <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Referred</span>
+          </div>
+          <div className="text-xl font-bold text-black/85">{stats.total}</div>
+          <div className="text-[10px] text-black/40">Total clients</div>
+        </div>
+        <div className="flex flex-col gap-1 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3" data-testid="stat-pending-commission">
+          <div className="flex items-center gap-1.5">
+            <TrendingDown className="h-3.5 w-3.5 text-amber-600" />
+            <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Pending</span>
+          </div>
+          <div className="text-xl font-bold text-black/85">{currency.format(stats.pending)}</div>
+          <div className="text-[10px] text-black/40">Awaiting approval</div>
+        </div>
+        <div className="flex flex-col gap-1 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-3" data-testid="stat-wallet-balance">
+          <div className="flex items-center gap-1.5">
+            <Wallet className="h-3.5 w-3.5 text-blue-600" />
+            <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Wallet</span>
+          </div>
+          <div className="text-xl font-bold text-black/85">{currency.format(stats.wallet)}</div>
+          <div className="text-[10px] text-black/40">Ready to withdraw</div>
+        </div>
+        <div className="flex flex-col gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3" data-testid="stat-overall-commission">
+          <div className="flex items-center gap-1.5">
+            <CircleDollarSign className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Overall</span>
+          </div>
+          <div className="text-xl font-bold text-black/85">{currency.format(stats.overall)}</div>
+          <div className="text-[10px] text-black/40">All-time commission</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PortalPinSection({ clientId }: { clientId: string }) {
   const [hasPin, setHasPin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pin, setPin] = useState("");
@@ -187,7 +265,7 @@ export function ClientOverviewTab({
 }: ClientOverviewTabProps) {
   return (
     <div className="grid gap-3" data-testid="panel-overview">
-      {clientId && <PortalPinSection clientId={clientId} />}
+      <ReferralStatsSection clientId={clientId} />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="overview-stats">
         <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-enquiries">
           <div className="text-2xl font-bold text-black/85">{enquiries.length}</div>

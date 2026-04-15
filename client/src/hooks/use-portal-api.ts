@@ -158,6 +158,7 @@ export const portalKeys = {
   quotes: ["portal", "quotes"] as const,
   bookings: ["portal", "bookings"] as const,
   deals: (country?: string, tag?: string) => ["portal", "deals", country ?? "", tag ?? ""] as const,
+  forYouDeals: ["portal", "forYouDeals"] as const,
   dealFilters: ["portal", "dealFilters"] as const,
   messages: ["portal", "messages"] as const,
   allTags: ["portal", "allTags"] as const,
@@ -208,6 +209,16 @@ export function usePortalDeals(country?: string, tag?: string) {
     enabled: !!getPortalToken(),
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
+    staleTime: 0,
+  });
+}
+
+export function usePortalForYouDeals() {
+  return useQuery<PortalDeal[]>({
+    queryKey: portalKeys.forYouDeals,
+    queryFn: () => portalFetch("/api/portal/deals/for-you"),
+    retry: false,
+    enabled: !!getPortalToken(),
     staleTime: 0,
   });
 }

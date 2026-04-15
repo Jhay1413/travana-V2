@@ -15,6 +15,7 @@ import {
   usePortalBookings,
   usePortalMessages,
   usePortalDeals,
+  usePortalForYouDeals,
   usePortalMyTags,
   useSubmitQuoteRequest,
   getPortalToken,
@@ -527,6 +528,7 @@ export default function PortalHomePage() {
   const { data: bookings, isLoading: bookingsLoading } = usePortalBookings();
   const { data: messages, isLoading: messagesLoading } = usePortalMessages();
   const { data: apiDeals, isLoading: dealsLoading, isError: dealsError, refetch: refetchDeals } = usePortalDeals();
+  const { data: forYouDeals = [] } = usePortalForYouDeals();
   const { data: myTags = [] } = usePortalMyTags();
   const quoteRequestMutation = useSubmitQuoteRequest();
 
@@ -538,9 +540,6 @@ export default function PortalHomePage() {
 
   const deals = apiDeals ?? (dealsError ? fallbackDeals : []);
   const myTagNames = myTags.map((t) => t.name);
-  const forYouDeals = myTagNames.length > 0
-    ? deals.filter((d) => d.tags?.some((t) => myTagNames.includes(t)))
-    : [];
   const resolvedQuotes = quotes && quotes.length > 0 ? quotes : fallbackQuotes;
   const latestQuotes = resolvedQuotes.slice(0, 5);
 

@@ -50,7 +50,7 @@ import { UploadFileDialog } from "@/components/client/UploadFileDialog";
 import type { Client as ApiClient } from "@/types/client";
 import { QuoteCreateDialog } from "@/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/components/booking-create-dialog";
-import { ClientOverviewTab } from "@/components/client/ClientOverviewTab";
+import { ClientOverviewTab, PortalPinSection } from "@/components/client/ClientOverviewTab";
 import { ClientEnquiriesTab } from "@/components/client/ClientEnquiriesTab";
 import { ClientQuotesTab } from "@/components/client/ClientQuotesTab";
 import { ClientBookedTab } from "@/components/client/ClientBookedTab";
@@ -755,6 +755,10 @@ export default function ClientPage() {
                   );
                 }}
               />
+
+              <div className="mt-3">
+                <PortalPinSection clientId={clientId} />
+              </div>
 
             </div>
 

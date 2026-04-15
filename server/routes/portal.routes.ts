@@ -3,7 +3,7 @@ import { db } from "../config/database";
 import {
   quote, quote_accomodation, accomodation_list, resorts, destination, country,
   quoteImages, accommodation_images, clientTable, transaction, booking,
-  portalMessages, webauthnCredentials, pushSubscriptions, quoteTags, tags,
+  portalMessages, webauthnCredentials, pushSubscriptions, quoteTags, tags, clientTags,
 } from "@shared/schema";
 import { referralService } from "../services/referral.service";
 import { referralPayoutService } from "../services/referralPayout.service";
@@ -239,6 +239,112 @@ portalRouter.get("/deals/filters", async (_req: Request, res: Response) => {
   } catch (err: any) {
     console.error("Error fetching deal filters:", err);
     res.status(500).json({ error: "Failed to load filters" });
+  }
+});
+
+portalRouter.get("/deals/for-you", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+
+    // Get this client's saved tag IDs
+    const clientTagRows = await db
+      .select({ tagId: clientTags.tagId })
+      .from(clientTags)
+      .where(eq(clientTags.clientId, clientId));
+
+    if (clientTagRows.length === 0) return res.json([]);
+
+    const clientTagIds = clientTagRows.map((r) => r.tagId);
+
+    const results = await db
+      .select({
+        id: quote.id,
+        token: quote.quote_token,
+        title: quote.title,
+        salesPrice: quote.sales_price,
+        travelDate: quote.travel_date,
+        numNights: quote.num_of_nights,
+        accommodationName: accomodation_list.name,
+        destinationName: destination.name,
+        countryName: country.country_name,
+      })
+      .from(quote)
+      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
+      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .leftJoin(destination, eq(resorts.destination_id, destination.id))
+      .leftJoin(country, eq(destination.country_id, country.id))
+      .where(and(
+        eq(quote.is_active, true),
+        isNotNull(quote.quote_token),
+        eq(quote.show_on_portal, true),
+        eq(quote.isFreeQuote, true),
+        exists(
+          db.select({ one: sql`1` })
+            .from(quoteTags)
+            .where(and(eq(quoteTags.quoteId, quote.id), inArray(quoteTags.tagId, clientTagIds)))
+        ),
+      ))
+      .orderBy(desc(quote.date_created))
+      .limit(20);
+
+    const quoteIds = results.map((r) => r.id);
+
+    let tagMap: Record<string, string[]> = {};
+    if (quoteIds.length > 0) {
+      const tagRows = await db
+        .select({ quoteId: quoteTags.quoteId, tagName: tags.name })
+        .from(quoteTags)
+        .innerJoin(tags, eq(quoteTags.tagId, tags.id))
+        .where(inArray(quoteTags.quoteId, quoteIds));
+      for (const row of tagRows) {
+        if (!tagMap[row.quoteId]) tagMap[row.quoteId] = [];
+        tagMap[row.quoteId].push(row.tagName);
+      }
+    }
+
+    let imageMap: Record<string, string> = {};
+    if (quoteIds.length > 0) {
+      const images = await db
+        .select({ quoteId: quoteImages.quoteId, url: quoteImages.url, isPrimary: quoteImages.isPrimary })
+        .from(quoteImages)
+        .where(inArray(quoteImages.quoteId, quoteIds));
+      for (const img of images) {
+        if (img.quoteId && (!imageMap[img.quoteId] || img.isPrimary)) {
+          imageMap[img.quoteId] = img.url;
+        }
+      }
+      const missingImageIds = quoteIds.filter((id) => !imageMap[id]);
+      if (missingImageIds.length > 0) {
+        const accomImages = await db
+          .select({ quoteId: quote_accomodation.quote_id, url: accommodation_images.image_url })
+          .from(quote_accomodation)
+          .innerJoin(accommodation_images, eq(accommodation_images.accommodation_id, quote_accomodation.accomodation_id))
+          .where(and(inArray(quote_accomodation.quote_id, missingImageIds), eq(quote_accomodation.is_primary, true)))
+          .limit(missingImageIds.length);
+        for (const img of accomImages) {
+          if (img.quoteId && !imageMap[img.quoteId]) imageMap[img.quoteId] = img.url;
+        }
+      }
+    }
+
+    res.json(results.map((r) => ({
+      id: r.id,
+      token: r.token,
+      title: r.title || `${r.destinationName || r.countryName || "Holiday"} Getaway`,
+      destination: r.destinationName && r.countryName ? `${r.destinationName}, ${r.countryName}` : r.countryName || r.destinationName || "TBC",
+      country: r.countryName || null,
+      hotel: r.accommodationName || "",
+      price: parseFloat(r.salesPrice || "0"),
+      travel_date: r.travelDate,
+      num_nights: r.numNights,
+      image_url: imageMap[r.id] || "",
+      quote_url: r.token ? `/portal/quote/${r.token}` : null,
+      tags: tagMap[r.id] ?? [],
+    })));
+  } catch (err: any) {
+    console.error("Error fetching for-you deals:", err);
+    res.status(500).json({ error: "Failed to load personalised deals" });
   }
 });
 
