@@ -45,6 +45,7 @@ export function useRescheduleOnOnlySocials() {
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
       queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
+      queryClient.invalidateQueries({ queryKey: socialPostKeys.media(deal.id) });
     },
   });
 }

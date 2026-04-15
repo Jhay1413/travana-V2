@@ -190,7 +190,7 @@ export function SocialPostPreviewDialog({
   }, [open]);
 
   useEffect(() => {
-    if (mediaData) {
+    if (open && mediaData) {
       const mediaArr = Array.isArray(mediaData.media) ? mediaData.media : [];
       if (mediaArr.length > 0) {
         setExistingImages(mediaArr as ExistingImage[]);
@@ -199,7 +199,7 @@ export function SocialPostPreviewDialog({
         setOnlySocialsPostContent(mediaData.postContent);
       }
     }
-  }, [mediaData]);
+  }, [open, mediaData]);
 
   useEffect(() => {
     const items: ImageItem[] = [
