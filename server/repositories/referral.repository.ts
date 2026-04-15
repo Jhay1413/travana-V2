@@ -152,21 +152,25 @@ export const referralRepository = {
     wallet: number;
     overall: number;
   }> {
-    const [row] = await db
+    const [clientCount] = await db
+      .select({ total: sql<string>`COUNT(*)` })
+      .from(clientTable)
+      .where(eq(clientTable.referredByClientId, referrerClientId));
+
+    const [commRow] = await db
       .select({
-        total: sql<string>`COUNT(*)`,
-        pending: sql<string>`SUM(CASE WHEN ${referral.referralStatus} = 'PENDING' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END)`,
-        wallet: sql<string>`SUM(CASE WHEN ${referral.referralStatus} = 'IN_WALLET' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END)`,
-        overall: sql<string>`SUM(CASE WHEN ${referral.referralStatus} != 'VOIDED' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END)`,
+        pending: sql<string>`COALESCE(SUM(CASE WHEN ${referral.referralStatus} = 'PENDING' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END), 0)`,
+        wallet: sql<string>`COALESCE(SUM(CASE WHEN ${referral.referralStatus} = 'IN_WALLET' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END), 0)`,
+        overall: sql<string>`COALESCE(SUM(CASE WHEN ${referral.referralStatus} != 'VOIDED' THEN CAST(COALESCE(${referral.commission}, '0') AS DECIMAL) ELSE 0 END), 0)`,
       })
       .from(referral)
       .where(eq(referral.referrerClientId, referrerClientId));
 
     return {
-      total: parseInt(row?.total ?? "0", 10),
-      pending: parseFloat(row?.pending ?? "0"),
-      wallet: parseFloat(row?.wallet ?? "0"),
-      overall: parseFloat(row?.overall ?? "0"),
+      total: parseInt(clientCount?.total ?? "0", 10),
+      pending: parseFloat(commRow?.pending ?? "0"),
+      wallet: parseFloat(commRow?.wallet ?? "0"),
+      overall: parseFloat(commRow?.overall ?? "0"),
     };
   },
 };
