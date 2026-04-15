@@ -271,7 +271,7 @@ export const bookingService = {
       }
     }
 
-    return b;
+    return { ...b, client_id: txn.client_id ?? null };
   },
 
   async createBooking(data: InsertBooking) {

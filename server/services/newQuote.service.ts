@@ -471,6 +471,12 @@ export const newQuoteService = {
       if (!q) throw new AppError("Quote not found", 404);
     }
 
+    // When marked LOST, deactivate the quote and its parent transaction
+    if (quoteData.quote_status === 'LOST' && q.transaction_id) {
+      await newQuoteRepository.update(id, { is_active: false });
+      await transactionRepository.update(q.transaction_id, { is_active: false });
+    }
+
     // Update lead_source on the transaction table
     if (lead_source !== undefined && q.transaction_id) {
       await transactionRepository.update(q.transaction_id, { lead_source: lead_source as any });

@@ -45,7 +45,7 @@ export default function QuotePage() {
   const params = quoteParams ?? freeQuoteParams;
 
   const { role, actualRole } = useRole();
-  const clientId = params?.clientId ?? "";
+  const clientId = quoteParams?.clientId ?? "";
   const quoteId = params?.quoteId ?? "";
 
   const quoteQuery = useQuote(quoteId);
@@ -1203,13 +1203,18 @@ export default function QuotePage() {
                 convertToBookingMutation.mutate(
                   { quoteId, haysRef: convertHaysRef, supplierRef: convertTourRef },
                   {
-                    onSuccess: () => {
+                    onSuccess: (booking: any) => {
                       setShowConvertDialog(false);
                       setConvertHaysRef("");
                       setConvertTourRef("");
                       queryClient.invalidateQueries({ queryKey: ["quotes"] });
                       toast({ title: "Quote converted to booking" });
-                      setLocation(`/clients/${clientId}/bookings/${quoteId}`);
+                      const targetClientId = clientId || booking?.client_id;
+                      if (targetClientId) {
+                        setLocation(`/clients/${targetClientId}/bookings/${booking.id}`);
+                      } else {
+                        setLocation(`/bookings/${booking.id}`);
+                      }
                     },
                     onError: () => {
                       toast({ title: "Failed to convert", variant: "destructive" });

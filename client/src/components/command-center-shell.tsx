@@ -44,6 +44,7 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  Gift,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
 import { useCurrentUser, useNotifications, useChatConversations } from "@/hooks/queries";
@@ -124,6 +125,8 @@ function getNavRoute(key: string): string {
     hub: "/hub",
     "social-posts": "/social-posts",
     "feedback": "/feedback",
+    "connect-internal-chat": "/?s=connect-internal-chat",
+    "referrals": "/?s=referrals",
   };
   return routes[key] || "/";
 }
@@ -653,13 +656,13 @@ export function CommandCenterShell({
 
     const base: NavItem[] = [
       { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
       { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
-      { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" /> },
-      { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
-      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
+      { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
+      { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" /> },
+      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+      { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
     ];
 
     if (role === "Admin") {
@@ -680,8 +683,8 @@ export function CommandCenterShell({
                   { key: "financials-targets", label: "Targets Admin", icon: <Target className="h-4 w-4" /> },
                 ] },
               ] },
+              { key: "referrals", label: "Referrals", icon: <Gift className="h-4 w-4" /> },
               { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
-              { key: "feedback", label: "Feedback", icon: <MessageSquarePlus className="h-4 w-4" /> },
               { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" />, subGroups: settingsSubGroups },
             ],
           },
@@ -691,13 +694,13 @@ export function CommandCenterShell({
             icon: <Users className="h-4 w-4" />,
             items: [
               { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
               { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
-              { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" /> },
-              { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
-              { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" /> },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
+              { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
+              { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" /> },
+              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+              { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
             ],
           },
         ],
@@ -735,9 +738,19 @@ export function CommandCenterShell({
     return { grouped: false, items: base };
   }, [role, unreadChatCount]);
 
-  const [expandedSections, setExpandedSections] = useState<string[]>([]);
+  const [expandedSections, setExpandedSections] = useState<string[]>(() => {
+    try {
+      const saved = sessionStorage.getItem("admin-nav-expanded");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
 
-  const [expandedNavItems, setExpandedNavItems] = useState<string[]>([]);
+  const [expandedNavItems, setExpandedNavItems] = useState<string[]>(() => {
+    try {
+      const saved = sessionStorage.getItem("nav-items-expanded");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => {

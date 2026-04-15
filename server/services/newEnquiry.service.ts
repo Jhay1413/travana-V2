@@ -1,4 +1,5 @@
 import { enquiryTableRepository } from "../repositories/enquiryTable.repository";
+import { transactionRepository } from "../repositories/transaction.repository";
 import { AppError } from "../utils/error-handler";
 import type { InsertEnquiryTable } from "@shared/schema";
 
@@ -32,6 +33,11 @@ export const newEnquiryService = {
   async updateEnquiry(id: string, data: Partial<InsertEnquiryTable>, relations?: any) {
     const enquiry = await enquiryTableRepository.update(id, data);
     if (!enquiry) throw new AppError("Enquiry not found", 404);
+
+    // When marked LOST, deactivate the parent transaction
+    if (data.status === 'LOST' && enquiry.transaction_id) {
+      await transactionRepository.update(enquiry.transaction_id, { is_active: false });
+    }
 
     if (relations) {
       await enquiryTableRepository.clearRelations(id);

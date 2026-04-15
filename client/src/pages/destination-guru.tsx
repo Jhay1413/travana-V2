@@ -68,7 +68,7 @@ export default function DestinationGuruPage() {
 
   if (selectedDestination) {
     return (
-      <CommandCenterShell role={role} title="Destination Guru" theme="light" onRoleChange={() => {}} filterSlot={<></>}>
+      <CommandCenterShell role={role} active="destination-guru" title="Destination Guru" theme="light" onRoleChange={() => {}} filterSlot={<></>}>
         <div className="px-5 pb-8 pt-5" data-testid="page-destination-guru-detail">
           <Button
             size="sm"
@@ -87,7 +87,7 @@ export default function DestinationGuruPage() {
   }
 
   return (
-    <CommandCenterShell role={role} title="Destination Guru" theme="light" onRoleChange={() => {}} filterSlot={<></>}>
+    <CommandCenterShell role={role} active="destination-guru" title="Destination Guru" theme="light" onRoleChange={() => {}} filterSlot={<></>}>
       <div className="px-5 pb-8 pt-5" data-testid="page-destination-guru">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>

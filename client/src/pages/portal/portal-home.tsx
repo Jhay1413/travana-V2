@@ -18,6 +18,8 @@ import {
   usePortalForYouDeals,
   usePortalMyTags,
   useSubmitQuoteRequest,
+  usePortalVipStatus,
+  usePortalReferrals,
   getPortalToken,
   type PortalDeal,
   type PortalQuote,
@@ -531,6 +533,11 @@ export default function PortalHomePage() {
   const { data: forYouDeals = [] } = usePortalForYouDeals();
   const { data: myTags = [] } = usePortalMyTags();
   const quoteRequestMutation = useSubmitQuoteRequest();
+  const { data: vipStatus } = usePortalVipStatus();
+  const { data: referrals = [] } = usePortalReferrals();
+  const pendingCommission = referrals
+    .filter((r) => r.referralStatus === "PENDING" || r.referralStatus === "IN_WALLET")
+    .reduce((sum, r) => sum + parseFloat(r.payoutAmount || "0"), 0);
 
   const statsLoading = userLoading || quotesLoading || bookingsLoading || messagesLoading;
   const activeQuotes = quotes?.length ?? 0;
@@ -627,9 +634,15 @@ export default function PortalHomePage() {
                   <div className="w-9 h-9 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
                     <Sparkles className="w-4 h-4 text-amber-300" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-white font-semibold text-xs leading-tight">VIP Referrals</p>
-                    <p className="text-white/40 text-[10px] mt-0.5 leading-tight">Refer &amp; earn rewards</p>
+                    {(vipStatus && vipStatus.vipTier !== "not_enrolled") ? (
+                      <p className="text-emerald-300 font-semibold text-[10px] mt-0.5 leading-tight" data-testid="banner-pending-commission">
+                        Pending: {formatCurrency(pendingCommission)}
+                      </p>
+                    ) : (
+                      <p className="text-white/40 text-[10px] mt-0.5 leading-tight">Refer &amp; earn rewards</p>
+                    )}
                   </div>
                 </motion.button>
               </div>

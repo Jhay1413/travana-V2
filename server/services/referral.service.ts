@@ -4,14 +4,16 @@ import { AppError } from "../utils/error-handler";
 
 /**
  * Commission formula:
- *   referralPayout = (commission × 0.25) − (commission × 0.10)
- *   i.e. 25% referral share, then deduct 10% Hays fee from that share
+ *   haysDeduction = commission × 0.10
+ *   afterHays     = commission − haysDeduction
+ *   referralPayout (client gets) = afterHays × 0.25
  */
 function calculatePayoutAmount(commission: string | null | undefined): string {
   if (!commission) return "0.00";
   const gross = parseFloat(commission);
   if (isNaN(gross)) return "0.00";
-  return ((gross * 0.25) - (gross * 0.10)).toFixed(2);
+  const afterHays = gross - gross * 0.10;
+  return (afterHays * 0.25).toFixed(2);
 }
 
 /**
