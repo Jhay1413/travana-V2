@@ -10,9 +10,14 @@ import {
   Calendar,
   Star,
   Gem,
+  Receipt,
+  Phone,
+  Mail,
+  UserPlus,
+  Briefcase,
 } from "lucide-react";
 import { useVipOverview } from "@/hooks/queries/use-referral-queries";
-import type { VipReferralRow } from "@/api/endpoints/referral.api";
+import type { VipTransactionRow } from "@/api/endpoints/referral.api";
 
 const GBP = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 const fmt = (n: number) => GBP.format(n);
@@ -24,7 +29,7 @@ function formatDate(d: string | null | undefined) {
 
 const TIER_CONFIG = {
   standard: {
-    label: "Standard VIP",
+    label: "VIP",
     icon: Star,
     bg: "from-slate-400/20 to-slate-500/20",
     border: "border-slate-400/30",
@@ -59,7 +64,7 @@ const STATUS_CONFIG = {
   VOIDED: { label: "Voided", icon: XCircle, className: "bg-red-50 text-red-600 border-red-200" },
 } as const;
 
-function StatusBadge({ status }: { status: VipReferralRow["referralStatus"] }) {
+function StatusBadge({ status }: { status: VipTransactionRow["referralStatus"] }) {
   const cfg = STATUS_CONFIG[status];
   const Icon = cfg.icon;
   return (
@@ -93,7 +98,8 @@ export function ClientVipClubTab({ clientId }: Props) {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-20 rounded-2xl border border-black/10 bg-black/[0.03]" />)}
         </div>
-        <div className="h-64 rounded-2xl border border-black/10 bg-black/[0.03]" />
+        <div className="h-48 rounded-2xl border border-black/10 bg-black/[0.03]" />
+        <div className="h-48 rounded-2xl border border-black/10 bg-black/[0.03]" />
       </div>
     );
   }
@@ -102,7 +108,8 @@ export function ClientVipClubTab({ clientId }: Props) {
   const tierCfg = tier ? TIER_CONFIG[tier] : null;
   const TierIcon = tierCfg?.icon ?? Star;
   const stats = data?.stats;
-  const referrals = data?.referrals ?? [];
+  const referredClients = data?.referredClients ?? [];
+  const transactionHistory = data?.transactionHistory ?? [];
 
   return (
     <div className="grid gap-3" data-testid="panel-vip-club">
@@ -150,7 +157,7 @@ export function ClientVipClubTab({ clientId }: Props) {
             <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Referred</span>
           </div>
           <div className="text-2xl font-bold text-black/85">{stats?.total ?? 0}</div>
-          <div className="text-[10px] text-black/40">Total referrals logged</div>
+          <div className="text-[10px] text-black/40">Total clients referred</div>
         </div>
         <div className="flex flex-col gap-1 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3" data-testid="vip-stat-pending">
           <div className="flex items-center gap-1.5">
@@ -158,7 +165,7 @@ export function ClientVipClubTab({ clientId }: Props) {
             <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Pending</span>
           </div>
           <div className="text-xl font-bold text-black/85">{fmt(stats?.pendingPayout ?? 0)}</div>
-          <div className="text-[10px] text-black/40">{stats?.pendingCount ?? 0} referrals awaiting</div>
+          <div className="text-[10px] text-black/40">{stats?.pendingCount ?? 0} awaiting payout</div>
         </div>
         <div className="flex flex-col gap-1 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-3" data-testid="vip-stat-wallet">
           <div className="flex items-center gap-1.5">
@@ -178,79 +185,149 @@ export function ClientVipClubTab({ clientId }: Props) {
         </div>
       </div>
 
-      {/* Referrals List */}
-      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="vip-referrals-list">
+      {/* Clients Referred */}
+      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="vip-referred-clients">
         <div className="mb-3 flex items-center gap-2">
-          <Users className="h-4 w-4 text-black/50" />
-          <span className="text-xs font-semibold text-black/80">Referral History</span>
-          {referrals.length > 0 && (
-            <span className="ml-auto rounded-full bg-black/[0.06] px-2 py-0.5 text-[11px] font-semibold text-black/50">
-              {referrals.length}
+          <UserPlus className="h-4 w-4 text-purple-500" />
+          <span className="text-xs font-semibold text-black/80">Clients Referred</span>
+          {referredClients.length > 0 && (
+            <span className="ml-auto rounded-full bg-purple-500/10 px-2 py-0.5 text-[11px] font-semibold text-purple-600">
+              {referredClients.length}
             </span>
           )}
         </div>
 
-        {referrals.length === 0 ? (
+        {referredClients.length === 0 ? (
           <div className="rounded-xl border border-dashed border-black/10 bg-white/40 p-6 text-center">
             <Users className="mx-auto mb-2 h-8 w-8 text-black/15" />
-            <p className="text-sm text-black/45">No referrals logged yet</p>
-            <p className="mt-0.5 text-xs text-black/35">Referrals will appear here when logged against this client</p>
+            <p className="text-sm text-black/45">No clients referred yet</p>
+            <p className="mt-0.5 text-xs text-black/35">Clients referred by this member will appear here</p>
           </div>
         ) : (
           <div className="divide-y divide-black/[0.06]">
-            {referrals.map((r) => (
-              <div key={r.id} className="py-3 first:pt-0 last:pb-0" data-testid={`vip-referral-row-${r.id}`}>
-                <div className="flex items-start justify-between gap-3 flex-wrap">
+            {referredClients.map((c) => {
+              const initials = [c.firstName?.[0], c.surename?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+              const name = [c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown";
+              return (
+                <div key={c.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0" data-testid={`vip-referred-client-${c.id}`}>
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-500/10 text-xs font-bold text-purple-600">
+                    {initials}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-sm font-semibold text-black/85">
-                        {r.referredClientFirstName && r.referredClientSurname
-                          ? `${r.referredClientFirstName} ${r.referredClientSurname}`
-                          : r.referredName}
-                      </span>
-                      <StatusBadge status={r.referralStatus} />
-                      {r.isDue && <DueBadge />}
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-black/50">
-                      {r.referredEmail && <span>{r.referredEmail}</span>}
-                      {r.referredPhone && <span>{r.referredPhone}</span>}
-                      {r.travelDate && (
+                    <div className="text-sm font-semibold text-black/85">{name}</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-black/45">
+                      {c.email && (
                         <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          Travel: {formatDate(r.travelDate)}
+                          <Mail className="h-3 w-3" />{c.email}
                         </span>
                       )}
-                      {r.payoutTriggerDate && r.referralStatus === "PENDING" && (
+                      {c.phoneNumber && (
                         <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          Payout trigger: {formatDate(r.payoutTriggerDate)}
+                          <Phone className="h-3 w-3" />{c.phoneNumber}
                         </span>
                       )}
-                      {r.paidAt && (
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                          Paid: {formatDate(r.paidAt)}
-                        </span>
-                      )}
-                      <span className="text-black/35">Logged {formatDate(r.createdAt)}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    {r.payoutAmount && parseFloat(r.payoutAmount) > 0 && (
-                      <div className="text-sm font-bold text-black/80">
-                        {fmt(parseFloat(r.payoutAmount))}
-                        <span className="ml-1 text-[10px] font-normal text-black/40">payout</span>
+                  {c.createdAt && (
+                    <div className="shrink-0 text-right text-[10px] text-black/35">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Joined {formatDate(c.createdAt)}
                       </div>
-                    )}
-                    {r.commission && parseFloat(r.commission) > 0 && (
-                      <div className="text-xs text-black/40">
-                        Comm: {fmt(parseFloat(r.commission))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Transaction History */}
+      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="vip-transaction-history">
+        <div className="mb-3 flex items-center gap-2">
+          <Receipt className="h-4 w-4 text-emerald-500" />
+          <span className="text-xs font-semibold text-black/80">Transaction History</span>
+          <span className="text-[10px] text-black/35 font-normal">(bookings earning commission)</span>
+          {transactionHistory.length > 0 && (
+            <span className="ml-auto rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-600">
+              {transactionHistory.length}
+            </span>
+          )}
+        </div>
+
+        {transactionHistory.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-black/10 bg-white/40 p-6 text-center">
+            <Briefcase className="mx-auto mb-2 h-8 w-8 text-black/15" />
+            <p className="text-sm text-black/45">No transactions yet</p>
+            <p className="mt-0.5 text-xs text-black/35">Bookings linked to referrals will appear here</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-black/[0.06]">
+            {transactionHistory.map((t) => {
+              const clientName = t.referredClientFirstName && t.referredClientSurname
+                ? `${t.referredClientFirstName} ${t.referredClientSurname}`
+                : t.referredName;
+              const bookingLabel = t.bookingTitle || clientName;
+              const travelDate = t.bookingTravelDate || t.travelDate;
+              const payout = t.payoutAmount ? parseFloat(t.payoutAmount) : 0;
+              const commission = t.commission ? parseFloat(t.commission) : 0;
+              return (
+                <div key={t.id} className="py-3 first:pt-0 last:pb-0" data-testid={`vip-tx-row-${t.id}`}>
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="text-sm font-semibold text-black/85">{bookingLabel}</span>
+                        <StatusBadge status={t.referralStatus} />
+                        {t.isDue && <DueBadge />}
                       </div>
-                    )}
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-black/50">
+                        <span className="text-black/45">Referred: {clientName}</span>
+                        {travelDate && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            Travel: {formatDate(travelDate)}
+                          </span>
+                        )}
+                        {t.bookingHaysRef && (
+                          <span className="text-black/35">Ref: {t.bookingHaysRef}</span>
+                        )}
+                        {t.paidAt && (
+                          <span className="flex items-center gap-1 text-emerald-600">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Paid: {formatDate(t.paidAt)}
+                          </span>
+                        )}
+                        {t.payoutTriggerDate && t.referralStatus === "PENDING" && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Trigger: {formatDate(t.payoutTriggerDate)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      {payout > 0 && (
+                        <div className="text-sm font-bold text-black/80">
+                          {fmt(payout)}
+                          <span className="ml-1 text-[10px] font-normal text-black/40">payout</span>
+                        </div>
+                      )}
+                      {commission > 0 && (
+                        <div className="text-xs text-black/40">
+                          Comm: {fmt(commission)}
+                        </div>
+                      )}
+                      {t.bookingSalesPrice && parseFloat(t.bookingSalesPrice) > 0 && (
+                        <div className="text-[10px] text-black/30">
+                          Booking: {fmt(parseFloat(t.bookingSalesPrice))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

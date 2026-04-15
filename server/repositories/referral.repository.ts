@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { referral, clientTable } from "@shared/schema";
+import { referral, clientTable, booking } from "@shared/schema";
 import type { InsertReferral, Referral } from "@shared/schema";
 import { eq, and, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -187,13 +187,20 @@ export const referralRepository = {
       .from(clientTable)
       .where(eq(clientTable.id, referrerClientId));
 
-    // Total referred count from client_table (source of truth for referral relationships)
-    const [clientCountRow] = await db
-      .select({ total: sql<string>`COUNT(*)` })
+    // Clients referred by this client (from clientTable.referredByClientId)
+    const referredClients = await db
+      .select({
+        id: clientTable.id,
+        firstName: clientTable.firstName,
+        surename: clientTable.surename,
+        email: clientTable.email,
+        phoneNumber: clientTable.phoneNumber,
+        createdAt: clientTable.createdAt,
+      })
       .from(clientTable)
       .where(eq(clientTable.referredByClientId, referrerClientId));
 
-    // Commission/payout stats from referral table (formal payout tracking)
+    // Stats from referral table
     const [statsRow] = await db
       .select({
         pendingCount: sql<string>`COUNT(*) FILTER (WHERE ${referral.referralStatus} = 'PENDING')`,
@@ -212,31 +219,37 @@ export const referralRepository = {
       .from(referral)
       .where(eq(referral.referrerClientId, referrerClientId));
 
-    // Referral rows with enriched data
-    const rows = await db
+    // Transaction history: referral rows joined with booking via transactionId
+    const bookingAlias = alias(booking, "ref_booking");
+    const txRows = await db
       .select({
         id: referral.id,
         referralStatus: referral.referralStatus,
         referredName: referral.referredName,
-        referredEmail: referral.referredEmail,
-        referredPhone: referral.referredPhone,
+        referredClientId: referral.referredClientId,
+        referredClientFirstName: referredClient.firstName,
+        referredClientSurname: referredClient.surename,
         commission: referral.commission,
         payoutAmount: referral.payoutAmount,
         travelDate: referral.travelDate,
         payoutTriggerDate: referral.payoutTriggerDate,
         paidAt: referral.paidAt,
         createdAt: referral.createdAt,
-        referredClientId: referral.referredClientId,
         transactionId: referral.transactionId,
-        referredClientFirstName: referredClient.firstName,
-        referredClientSurname: referredClient.surename,
+        bookingTitle: bookingAlias.title,
+        bookingTravelDate: bookingAlias.travel_date,
+        bookingSalesPrice: bookingAlias.sales_price,
+        bookingCommission: bookingAlias.package_commission,
+        bookingStatus: bookingAlias.booking_status,
+        bookingHaysRef: bookingAlias.hays_ref,
       })
       .from(referral)
       .leftJoin(referredClient, eq(referral.referredClientId, referredClient.id))
-      .where(eq(referral.referrerClientId, referrerClientId))
+      .leftJoin(bookingAlias, eq(bookingAlias.transaction_id, referral.transactionId))
+      .where(and(eq(referral.referrerClientId, referrerClientId), sql`${referral.transactionId} IS NOT NULL`))
       .orderBy(referral.createdAt);
 
-    const referrals = rows.map((r) => ({
+    const transactionHistory = txRows.map((r) => ({
       ...r,
       isDue:
         r.referralStatus === "PENDING" &&
@@ -244,47 +257,12 @@ export const referralRepository = {
         r.payoutTriggerDate <= today,
     }));
 
-    const referralLinkedClientIds = new Set(rows.map(r => r.referredClientId).filter(Boolean));
-    const unlinkedClients = await db
-      .select({
-        id: clientTable.id,
-        firstName: clientTable.firstName,
-        surename: clientTable.surename,
-        email: clientTable.email,
-        phoneNumber: clientTable.phoneNumber,
-        createdAt: clientTable.createdAt,
-      })
-      .from(clientTable)
-      .where(eq(clientTable.referredByClientId, referrerClientId));
-
-    for (const c of unlinkedClients) {
-      if (referralLinkedClientIds.has(c.id)) continue;
-      referrals.push({
-        id: `client-ref-${c.id}`,
-        referralStatus: "PENDING" as const,
-        referredName: [c.firstName, c.surename].filter(Boolean).join(" ") || "Unknown",
-        referredEmail: c.email ?? null,
-        referredPhone: c.phoneNumber ?? null,
-        commission: null,
-        payoutAmount: null,
-        travelDate: null,
-        payoutTriggerDate: null,
-        paidAt: null,
-        createdAt: c.createdAt ?? new Date(),
-        referredClientId: c.id,
-        transactionId: null,
-        referredClientFirstName: c.firstName ?? null,
-        referredClientSurname: c.surename ?? null,
-        isDue: false,
-      });
-    }
-
     return {
       vipTier: clientRow?.vipTier ?? null,
       vipEnrolledAt: clientRow?.vipEnrolledAt ?? null,
       dbTotalReferrals: clientRow?.totalReferrals ?? 0,
       stats: {
-        total: parseInt(clientCountRow?.total ?? "0", 10),
+        total: referredClients.length,
         pendingCount: parseInt(statsRow?.pendingCount ?? "0", 10),
         inWalletCount: parseInt(statsRow?.inWalletCount ?? "0", 10),
         paidCount: parseInt(statsRow?.paidCount ?? "0", 10),
@@ -298,7 +276,8 @@ export const referralRepository = {
         paidPayout: parseFloat(statsRow?.paidPayout ?? "0"),
         overallPayout: parseFloat(statsRow?.overallPayout ?? "0"),
       },
-      referrals,
+      referredClients,
+      transactionHistory,
     };
   },
 };

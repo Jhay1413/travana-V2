@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useCurrentUser } from "./queries";
 import type { Role } from "@/components/command-center-shell";
 
@@ -20,27 +20,17 @@ export function useRole() {
 
   const [rolePreview, setRolePreview] = useState<Role | null>(() => {
     const saved = sessionStorage.getItem(ROLE_KEY);
-    return saved ? (saved as Role) : null;
+    if (saved) return saved as Role;
+    // Default view is always Agent regardless of actual role
+    return "Agent";
   });
 
   const role: Role = rolePreview || actualRole;
 
   const setRole = useCallback((r: Role) => {
-    if (r === actualRole) {
-      sessionStorage.removeItem(ROLE_KEY);
-      setRolePreview(null);
-    } else {
-      sessionStorage.setItem(ROLE_KEY, r);
-      setRolePreview(r);
-    }
-  }, [actualRole]);
-
-  useEffect(() => {
-    if (rolePreview && rolePreview === actualRole) {
-      sessionStorage.removeItem(ROLE_KEY);
-      setRolePreview(null);
-    }
-  }, [actualRole, rolePreview]);
+    sessionStorage.setItem(ROLE_KEY, r);
+    setRolePreview(r);
+  }, []);
 
   return { role, setRole, actualRole };
 }

@@ -26,12 +26,19 @@ export interface ReferralStats {
   overall: number;
 }
 
-export interface VipReferralRow {
+export interface VipReferredClient {
+  id: string;
+  firstName: string | null;
+  surename: string | null;
+  email: string | null;
+  phoneNumber: string | null;
+  createdAt: string | null;
+}
+
+export interface VipTransactionRow {
   id: string;
   referralStatus: "PENDING" | "IN_WALLET" | "PAID" | "VOIDED";
   referredName: string;
-  referredEmail: string | null;
-  referredPhone: string | null;
   referredClientId: string | null;
   referredClientFirstName: string | null;
   referredClientSurname: string | null;
@@ -42,6 +49,12 @@ export interface VipReferralRow {
   paidAt: string | null;
   createdAt: string | null;
   transactionId: string | null;
+  bookingTitle: string | null;
+  bookingTravelDate: string | null;
+  bookingSalesPrice: string | null;
+  bookingCommission: string | null;
+  bookingStatus: string | null;
+  bookingHaysRef: string | null;
   isDue: boolean;
 }
 
@@ -64,7 +77,8 @@ export interface VipOverview {
     paidPayout: number;
     overallPayout: number;
   };
-  referrals: VipReferralRow[];
+  referredClients: VipReferredClient[];
+  transactionHistory: VipTransactionRow[];
 }
 
 export interface CreateReferralData {
