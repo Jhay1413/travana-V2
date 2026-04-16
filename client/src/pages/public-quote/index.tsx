@@ -384,30 +384,77 @@ function DestinationGuruSection({ guru }: { guru: NonNullable<PublicQuoteData["d
 function FlightsSection({ flights }: { flights: PublicQuoteData["flights"] }) {
   if (flights.length === 0) return null;
 
-  const outbound = flights.filter(f => f.flightType === "outbound" || f.legOrder === 1);
-  const inbound = flights.filter(f => f.flightType === "inbound" || f.legOrder === 2);
-  const other = flights.filter(f => !outbound.includes(f) && !inbound.includes(f));
+  const outboundLegs = flights
+    .filter(f => f.flightType === "outbound")
+    .sort((a, b) => (a.legOrder || 0) - (b.legOrder || 0));
+  const inboundLegs = flights
+    .filter(f => f.flightType === "inbound")
+    .sort((a, b) => (a.legOrder || 0) - (b.legOrder || 0));
 
-  const renderFlight = (f: PublicQuoteData["flights"][0], idx: number) => (
-    <div key={idx} className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 p-4 rounded-2xl bg-white/5">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-white/50 mb-1">{f.flightType === "outbound" ? "Departing" : f.flightType === "inbound" ? "Returning" : "Flight"}</p>
-        <p className="text-white font-medium truncate" data-testid={`text-flight-route-${idx}`}>{f.departingAirport || "TBC"}</p>
-        <p className="text-xs text-white/40">{formatDate(f.departureDateTime)} · {formatTime(f.departureDateTime)}</p>
-      </div>
-      <div className="hidden md:flex flex-col items-center gap-1 px-4">
-        <div className="w-24 h-px bg-gradient-to-r from-blue-500/50 to-purple-500/50 relative">
-          <Plane className="w-4 h-4 text-blue-400 absolute -top-2 left-1/2 -translate-x-1/2" />
+  const renderFlightLeg = (f: PublicQuoteData["flights"][0], label: string, legIdx: number) => (
+    <div className="p-4 rounded-2xl bg-white/5">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-white/40 mb-3">{label}</p>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-semibold text-sm truncate" data-testid={`text-flight-from-${legIdx}`}>{f.departingAirport || "TBC"}</p>
+          <p className="text-xs text-white/40 mt-0.5">{formatDate(f.departureDateTime)}</p>
+          <p className="text-base font-mono font-bold text-white/80 mt-1">{formatTime(f.departureDateTime)}</p>
         </div>
-        {f.flightNumber && <span className="text-[10px] text-white/30 mt-1">{f.flightNumber}</span>}
-      </div>
-      <div className="flex-1 min-w-0 md:text-right">
-        <p className="text-sm text-white/50 mb-1">Arriving</p>
-        <p className="text-white font-medium truncate" data-testid={`text-flight-arrival-${idx}`}>{f.arrivalAirport || "TBC"}</p>
-        <p className="text-xs text-white/40">{formatDate(f.arrivalDateTime)} · {formatTime(f.arrivalDateTime)}</p>
+        <div className="flex flex-col items-center gap-1 shrink-0 px-2">
+          <Plane className="w-4 h-4 text-blue-400" />
+          {f.flightNumber && (
+            <span className="text-[10px] text-white/25 font-mono">{f.flightNumber}</span>
+          )}
+          <div className="w-12 h-px bg-gradient-to-r from-blue-500/40 to-purple-500/40" />
+        </div>
+        <div className="flex-1 min-w-0 text-right">
+          <p className="text-white font-semibold text-sm truncate" data-testid={`text-flight-to-${legIdx}`}>{f.arrivalAirport || "TBC"}</p>
+          <p className="text-xs text-white/40 mt-0.5">{formatDate(f.arrivalDateTime)}</p>
+          <p className="text-base font-mono font-bold text-white/80 mt-1">{formatTime(f.arrivalDateTime)}</p>
+        </div>
       </div>
     </div>
   );
+
+  const renderJourney = (legs: PublicQuoteData["flights"], direction: "outbound" | "inbound") => {
+    if (legs.length === 0) return null;
+    const isOutbound = direction === "outbound";
+
+    return (
+      <div className={`rounded-2xl border overflow-hidden ${isOutbound ? "border-blue-500/20" : "border-purple-500/20"}`}>
+        <div className={`flex items-center gap-2 px-4 py-2.5 ${isOutbound ? "bg-blue-500/10" : "bg-purple-500/10"}`}>
+          <Plane className={`w-3.5 h-3.5 ${isOutbound ? "text-blue-400" : "text-purple-400"}`} />
+          <span className={`text-xs font-bold tracking-wide ${isOutbound ? "text-blue-300" : "text-purple-300"}`}>
+            {isOutbound ? "Outbound Journey" : "Return Journey"}
+          </span>
+          {legs.length > 1 && (
+            <span className={`ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full ${isOutbound ? "bg-blue-500/20 text-blue-300/70" : "bg-purple-500/20 text-purple-300/70"}`}>
+              {legs.length} legs
+            </span>
+          )}
+        </div>
+        <div className="p-3 grid gap-1.5">
+          {legs.map((f, i) => {
+            const label = i === 0
+              ? isOutbound ? "Outbound Flight" : "Return Flight"
+              : `Connecting Flight ${i + 1}`;
+            return (
+              <div key={i}>
+                {i > 0 && (
+                  <div className="flex items-center gap-2 my-1.5 px-1">
+                    <div className="flex-1 border-t border-dashed border-white/10" />
+                    <span className="text-[10px] font-semibold text-white/25 uppercase tracking-widest">Connecting</span>
+                    <div className="flex-1 border-t border-dashed border-white/10" />
+                  </div>
+                )}
+                {renderFlightLeg(f, label, i)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <SectionWrapper delay={0.1}>
@@ -418,10 +465,9 @@ function FlightsSection({ flights }: { flights: PublicQuoteData["flights"] }) {
           </div>
           <h2 className="text-xl font-bold text-white" data-testid="text-flights-title">Flights</h2>
         </div>
-        <div className="grid gap-3">
-          {outbound.map((f, i) => renderFlight(f, i))}
-          {inbound.map((f, i) => renderFlight(f, outbound.length + i))}
-          {other.map((f, i) => renderFlight(f, outbound.length + inbound.length + i))}
+        <div className="grid gap-4">
+          {renderJourney(outboundLegs, "outbound")}
+          {renderJourney(inboundLegs, "inbound")}
         </div>
       </GlassCard>
     </SectionWrapper>

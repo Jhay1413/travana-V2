@@ -7,7 +7,7 @@ import {
   package_type, airport, board_basis, cottages, lodges, park,
   quoteTags, tags,
 } from "@shared/schema";
-import { eq, and, desc, asc, isNotNull, inArray, ilike, sql, or, exists, SQL } from "drizzle-orm";
+import { eq, and, desc, asc, isNotNull, inArray, ilike, sql, or, exists, SQL, gte } from "drizzle-orm";
 
 const departAirport = alias(airport, "depart_airport");
 
@@ -25,6 +25,7 @@ function baseConditions() {
   return [
     eq(quote.is_active, true),
     eq(quote.isFreeQuote, true),
+    gte(quote.travel_date, sql`CURRENT_DATE`),
   ];
 }
 

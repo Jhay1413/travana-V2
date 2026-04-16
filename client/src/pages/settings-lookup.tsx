@@ -289,6 +289,64 @@ const TABLE_DEFS: Record<string, TableDef> = {
     ],
     primaryLabel: (r) => r.name ?? "–",
   },
+  "cruise-lines": {
+    label: "Cruise Lines",
+    apiPath: "/api/settings/cruise-lines",
+    navKey: "cruise-lines",
+    displayColumns: [{ key: "name", label: "Name" }],
+    formFields: [
+      { key: "name", label: "Cruise Line Name", type: "text", required: true, placeholder: "e.g. Royal Caribbean, P&O Cruises" },
+    ],
+    primaryLabel: (r) => r.name ?? "–",
+  },
+  "cruise-ships": {
+    label: "Cruise Ships",
+    apiPath: "/api/settings/cruise-ships",
+    navKey: "cruise-ships",
+    displayColumns: [
+      { key: "name", label: "Ship Name" },
+      { key: "cruise_line_name", label: "Cruise Line" },
+    ],
+    formFields: [
+      { key: "name", label: "Ship Name", type: "text", required: true, placeholder: "e.g. Symphony of the Seas" },
+      { key: "cruise_line_id", label: "Cruise Line", type: "relation", lookupApi: "/api/settings/cruise-lines", lookupLabelKey: "name" },
+    ],
+    primaryLabel: (r) => r.name ?? "–",
+  },
+  "cruise-itineraries": {
+    label: "Cruise Itineraries",
+    apiPath: "/api/settings/cruise-itineraries",
+    navKey: "cruise-itineraries",
+    displayColumns: [
+      { key: "itenary", label: "Itinerary Name" },
+      { key: "departure_port", label: "Departure Port" },
+      { key: "date", label: "Date" },
+      { key: "ship_name", label: "Ship" },
+    ],
+    formFields: [
+      { key: "itenary", label: "Itinerary Name", type: "text", placeholder: "e.g. Mediterranean Explorer" },
+      { key: "departure_port", label: "Departure Port", type: "text", required: true, placeholder: "e.g. Southampton" },
+      { key: "date", label: "Departure Date", type: "text", placeholder: "YYYY-MM-DD" },
+      { key: "ship_id", label: "Ship", type: "relation", lookupApi: "/api/settings/cruise-ships", lookupLabelKey: "name" },
+    ],
+    primaryLabel: (r) => r.itenary ?? r.departure_port ?? "–",
+  },
+  "cruise-voyages": {
+    label: "Cruise Voyage Days",
+    apiPath: "/api/settings/cruise-voyages",
+    navKey: "cruise-voyages",
+    displayColumns: [
+      { key: "day_number", label: "Day" },
+      { key: "description", label: "Description" },
+      { key: "itinerary_name", label: "Itinerary" },
+    ],
+    formFields: [
+      { key: "day_number", label: "Day Number", type: "number", required: true, placeholder: "e.g. 1" },
+      { key: "description", label: "Description", type: "text", placeholder: "e.g. At sea, Arrive Naples" },
+      { key: "itinerary_id", label: "Itinerary", type: "relation", lookupApi: "/api/settings/cruise-itineraries", lookupLabelKey: "itenary" },
+    ],
+    primaryLabel: (r) => `Day ${r.day_number ?? "?"}${r.description ? ` – ${r.description}` : ""}`,
+  },
   "room-types": {
     label: "Room Types",
     apiPath: "/api/settings/room-types",

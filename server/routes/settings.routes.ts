@@ -21,6 +21,10 @@ import {
   cruise_extra_item,
   deletion_codes,
   room_type,
+  cruise_line,
+  cruise_ship,
+  cruise_itenary,
+  cruise_voyage,
 } from "@shared/schema";
 
 const router = Router();
@@ -911,6 +915,258 @@ router.delete(
   "/deletion-codes/:id",
   asyncHandler(async (req: Request, res: Response) => {
     await db.delete(deletion_codes).where(eq(deletion_codes.id, req.params.id));
+    res.status(204).send();
+  })
+);
+
+// ─── CRUISE LINES ────────────────────────────────────────────────────────────
+
+router.get(
+  "/cruise-lines",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit, search, offset } = parsePagination(req.query);
+    const where = search ? ilike(cruise_line.name, `%${search}%`) : undefined;
+    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(cruise_line).where(where);
+    const rows = await db.select().from(cruise_line).where(where).orderBy(asc(cruise_line.name)).limit(limit).offset(offset);
+    return successResponse(res, buildPaginatedResponse(rows, Number(count), page, limit), "Cruise lines retrieved");
+  })
+);
+
+router.get(
+  "/cruise-lines/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const [row] = await db.select().from(cruise_line).where(eq(cruise_line.id, req.params.id));
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Cruise line retrieved");
+  })
+);
+
+router.post(
+  "/cruise-lines",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...data } = req.body;
+    const [row] = await db.insert(cruise_line).values(data).returning();
+    return successResponse(res, row, "Cruise line created", 201);
+  })
+);
+
+router.patch(
+  "/cruise-lines/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...updates } = req.body;
+    const [row] = await db.update(cruise_line).set(updates).where(eq(cruise_line.id, req.params.id)).returning();
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Cruise line updated");
+  })
+);
+
+router.delete(
+  "/cruise-lines/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    await db.delete(cruise_line).where(eq(cruise_line.id, req.params.id));
+    res.status(204).send();
+  })
+);
+
+// ─── CRUISE SHIPS ────────────────────────────────────────────────────────────
+
+router.get(
+  "/cruise-ships",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit, search, offset } = parsePagination(req.query);
+    const cruiseLineAlias = cruise_line;
+    const where = search
+      ? or(ilike(cruise_ship.name, `%${search}%`), ilike(cruiseLineAlias.name, `%${search}%`))
+      : undefined;
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(cruise_ship)
+      .leftJoin(cruiseLineAlias, eq(cruise_ship.cruise_line_id, cruiseLineAlias.id))
+      .where(where);
+    const rows = await db
+      .select({
+        id: cruise_ship.id,
+        name: cruise_ship.name,
+        cruise_line_id: cruise_ship.cruise_line_id,
+        cruise_line_name: cruiseLineAlias.name,
+      })
+      .from(cruise_ship)
+      .leftJoin(cruiseLineAlias, eq(cruise_ship.cruise_line_id, cruiseLineAlias.id))
+      .where(where)
+      .orderBy(asc(cruise_ship.name))
+      .limit(limit)
+      .offset(offset);
+    return successResponse(res, buildPaginatedResponse(rows, Number(count), page, limit), "Cruise ships retrieved");
+  })
+);
+
+router.get(
+  "/cruise-ships/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const [row] = await db.select().from(cruise_ship).where(eq(cruise_ship.id, req.params.id));
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Cruise ship retrieved");
+  })
+);
+
+router.post(
+  "/cruise-ships",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...data } = req.body;
+    const [row] = await db.insert(cruise_ship).values(data).returning();
+    return successResponse(res, row, "Cruise ship created", 201);
+  })
+);
+
+router.patch(
+  "/cruise-ships/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...updates } = req.body;
+    const [row] = await db.update(cruise_ship).set(updates).where(eq(cruise_ship.id, req.params.id)).returning();
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Cruise ship updated");
+  })
+);
+
+router.delete(
+  "/cruise-ships/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    await db.delete(cruise_ship).where(eq(cruise_ship.id, req.params.id));
+    res.status(204).send();
+  })
+);
+
+// ─── CRUISE ITINERARIES ──────────────────────────────────────────────────────
+
+router.get(
+  "/cruise-itineraries",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit, search, offset } = parsePagination(req.query);
+    const where = search
+      ? or(ilike(cruise_itenary.itenary, `%${search}%`), ilike(cruise_itenary.departure_port, `%${search}%`))
+      : undefined;
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(cruise_itenary)
+      .leftJoin(cruise_ship, eq(cruise_itenary.ship_id, cruise_ship.id))
+      .where(where);
+    const rows = await db
+      .select({
+        id: cruise_itenary.id,
+        itenary: cruise_itenary.itenary,
+        departure_port: cruise_itenary.departure_port,
+        date: cruise_itenary.date,
+        ship_id: cruise_itenary.ship_id,
+        ship_name: cruise_ship.name,
+      })
+      .from(cruise_itenary)
+      .leftJoin(cruise_ship, eq(cruise_itenary.ship_id, cruise_ship.id))
+      .where(where)
+      .orderBy(asc(cruise_itenary.date))
+      .limit(limit)
+      .offset(offset);
+    return successResponse(res, buildPaginatedResponse(rows, Number(count), page, limit), "Cruise itineraries retrieved");
+  })
+);
+
+router.get(
+  "/cruise-itineraries/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const [row] = await db.select().from(cruise_itenary).where(eq(cruise_itenary.id, req.params.id));
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Cruise itinerary retrieved");
+  })
+);
+
+router.post(
+  "/cruise-itineraries",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...data } = req.body;
+    const [row] = await db.insert(cruise_itenary).values(data).returning();
+    return successResponse(res, row, "Cruise itinerary created", 201);
+  })
+);
+
+router.patch(
+  "/cruise-itineraries/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...updates } = req.body;
+    const [row] = await db.update(cruise_itenary).set(updates).where(eq(cruise_itenary.id, req.params.id)).returning();
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Cruise itinerary updated");
+  })
+);
+
+router.delete(
+  "/cruise-itineraries/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    await db.delete(cruise_itenary).where(eq(cruise_itenary.id, req.params.id));
+    res.status(204).send();
+  })
+);
+
+// ─── CRUISE VOYAGES ──────────────────────────────────────────────────────────
+
+router.get(
+  "/cruise-voyages",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit, search, offset } = parsePagination(req.query);
+    const where = search ? ilike(cruise_voyage.description, `%${search}%`) : undefined;
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(cruise_voyage)
+      .leftJoin(cruise_itenary, eq(cruise_voyage.itinerary_id, cruise_itenary.id))
+      .where(where);
+    const rows = await db
+      .select({
+        id: cruise_voyage.id,
+        day_number: cruise_voyage.day_number,
+        description: cruise_voyage.description,
+        itinerary_id: cruise_voyage.itinerary_id,
+        itinerary_name: cruise_itenary.itenary,
+      })
+      .from(cruise_voyage)
+      .leftJoin(cruise_itenary, eq(cruise_voyage.itinerary_id, cruise_itenary.id))
+      .where(where)
+      .orderBy(asc(cruise_voyage.day_number))
+      .limit(limit)
+      .offset(offset);
+    return successResponse(res, buildPaginatedResponse(rows, Number(count), page, limit), "Cruise voyages retrieved");
+  })
+);
+
+router.get(
+  "/cruise-voyages/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const [row] = await db.select().from(cruise_voyage).where(eq(cruise_voyage.id, req.params.id));
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Cruise voyage retrieved");
+  })
+);
+
+router.post(
+  "/cruise-voyages",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...data } = req.body;
+    const [row] = await db.insert(cruise_voyage).values(data).returning();
+    return successResponse(res, row, "Cruise voyage created", 201);
+  })
+);
+
+router.patch(
+  "/cruise-voyages/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...updates } = req.body;
+    const [row] = await db.update(cruise_voyage).set(updates).where(eq(cruise_voyage.id, req.params.id)).returning();
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Cruise voyage updated");
+  })
+);
+
+router.delete(
+  "/cruise-voyages/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    await db.delete(cruise_voyage).where(eq(cruise_voyage.id, req.params.id));
     res.status(204).send();
   })
 );
