@@ -3,6 +3,8 @@ export interface ChatConversation {
   type: "direct" | "group";
   name: string | null;
   createdBy: string | null;
+  portalClientId: string | null;
+  portalClientName: string | null;
   createdAt: string;
   updatedAt: string;
   participants: ChatParticipantWithUser[];

@@ -2169,6 +2169,7 @@ export default function CommandCenterPage() {
       const from = new Date(socialDateFrom + "T00:00:00");
       const to = new Date(socialDateTo + "T23:59:59.999");
       result = result.filter(({ quote: q }) => {
+        if (!q.date_created) return false;
         const d = new Date(q.date_created);
         return d >= from && d <= to;
       });
@@ -2651,7 +2652,7 @@ export default function CommandCenterPage() {
     }
     if (allTasksData && Array.isArray(allTasksData)) {
       for (const task of allTasksData) {
-        const d = new Date(task.createdAt);
+        const d = task.createdAt ? new Date(task.createdAt) : new Date(0);
         const agentName = task.userId ? (userMap.get(task.userId) || "") : "";
         const resolved = task.entityId ? quoteClientMap.get(task.entityId) : undefined;
         const clientName = task.clientName || resolved?.name || "Unknown Client";

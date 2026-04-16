@@ -7,5 +7,12 @@ export interface TourOperatorCommission {
 export interface TourOperator {
   id: string;
   name: string | null;
-  commissions: TourOperatorCommission[];
+  holidayType: string | null;
+  commissionPercent: string | null;
+  username: string | null;
+  password: string | null;
+  contact: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  commissions?: TourOperatorCommission[];
 }

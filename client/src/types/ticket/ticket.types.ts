@@ -18,4 +18,7 @@ export interface Ticket {
   replyCount?: number;
 }
 
-export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt">;
+export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt" | "dueDate" | "assignedTo"> & {
+  dueDate?: string | null;
+  assignedTo?: string | null;
+};
