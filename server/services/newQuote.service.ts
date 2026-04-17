@@ -56,12 +56,15 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   extraAccommodations?: Record<string, unknown>[];
 };
 
-function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown): string {
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0): string {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
+  const disc = parseFloat(String(discount ?? 0)) || 0;
+  const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
   const adults = parseInt(String(adult ?? 0), 10) || 0;
   const children = parseInt(String(child ?? 0), 10) || 0;
   const total = adults + children;
-  return total > 0 ? (price / total).toFixed(2) : "0.00";
+  const netPrice = price - disc + sc;
+  return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 
 function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
@@ -132,7 +135,7 @@ export const newQuoteService = {
     if (!txn)  throw new AppError("Transaction not found", 404);
 
     if (!quoteFields.price_per_person || quoteFields.price_per_person === "0.00" || quoteFields.price_per_person === "0") {
-      quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child);
+      quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child, quoteFields.discounts, quoteFields.service_charge);
     }
 
     const q = await newQuoteRepository.create(quoteFields);
@@ -449,13 +452,15 @@ export const newQuoteService = {
     }
 
     // Recalculate price_per_person if any of the pricing/passenger fields changed
-    if ('sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData) {
+    if ('sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData || 'discounts' in quoteData || 'service_charge' in quoteData) {
       const current = await newQuoteRepository.findById(id);
       if (current) {
         quoteData.price_per_person = calcPricePerPerson(
           quoteData.sales_price ?? current.sales_price,
           quoteData.adult ?? current.adult,
           quoteData.child ?? current.child,
+          quoteData.discounts ?? current.discounts,
+          quoteData.service_charge ?? current.service_charge,
         );
       }
     }

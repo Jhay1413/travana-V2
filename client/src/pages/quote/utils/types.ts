@@ -82,6 +82,7 @@ export type QuoteDisplay = {
     netToAgency: number;
     totalCommission: number;
   };
+  pricePerPerson: number;
   tags: string[];
   notes: string[];
   lodge?: { name: string; type: string; code: string; parkName?: string; parkLocation?: string };

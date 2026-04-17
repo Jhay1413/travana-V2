@@ -19,12 +19,15 @@ import type {
   InsertBookingCruiseItinerary,
 } from "@shared/schema";
 
-function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown): string {
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0): string {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
+  const disc = parseFloat(String(discount ?? 0)) || 0;
+  const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
   const adults = parseInt(String(adult ?? 0), 10) || 0;
   const children = parseInt(String(child ?? 0), 10) || 0;
   const total = adults + children;
-  return total > 0 ? (price / total).toFixed(2) : "0.00";
+  const netPrice = price - disc + sc;
+  return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 
 interface BookingRelationData {
@@ -95,7 +98,7 @@ export const bookingService = {
       infant: q.infant || 0,
       child: q.child || 0,
       adult: q.adult || 0,
-      price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child),
+      price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child, q.discounts, q.service_charge),
       booking_status: 'BOOKED',
       main_tour_operator_id: q.main_tour_operator_id,
       deal_type: q.deal_type,
@@ -283,7 +286,7 @@ export const bookingService = {
 
     const b = await bookingRepository.create({
       ...data,
-      price_per_person: calcPricePerPerson(data.sales_price, data.adult, data.child),
+      price_per_person: calcPricePerPerson(data.sales_price, data.adult, data.child, data.discounts, data.service_charge),
     });
     await transactionRepository.update(data.transaction_id, { status: 'on_booking' });
 
@@ -343,13 +346,15 @@ export const bookingService = {
     }
 
     // Recalculate price_per_person if any pricing/passenger fields changed
-    if ('sales_price' in bookingData || 'adult' in bookingData || 'child' in bookingData) {
+    if ('sales_price' in bookingData || 'adult' in bookingData || 'child' in bookingData || 'discounts' in bookingData || 'service_charge' in bookingData) {
       const current = await bookingRepository.findById(id);
       if (current) {
         bookingData.price_per_person = calcPricePerPerson(
           bookingData.sales_price ?? current.sales_price,
           bookingData.adult ?? current.adult,
           bookingData.child ?? current.child,
+          bookingData.discounts ?? current.discounts,
+          bookingData.service_charge ?? current.service_charge,
         );
       }
     }

@@ -292,7 +292,7 @@ export default function QuotePage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-base font-semibold" data-testid="text-quote-title">
-                  {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
+                  {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.pricePerPerson)}pp</span>
                 </div>
                 <StatusPill
                   status={quote.status}
@@ -767,7 +767,7 @@ export default function QuotePage() {
                                 return `${nights} nights`;
                               })()}</span>
                               <span className="text-black/25">•</span>
-                              <span>{currency.format(quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1))}pp</span>
+                              <span>{currency.format(quote.pricePerPerson)}pp</span>
                             </span>
                           </div>
                          

@@ -138,7 +138,7 @@ export default function BookingPage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-base font-semibold" data-testid="text-booking-title">
-                  {booking.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(booking.commissions.price / (booking.passengers.adults + booking.passengers.children || 1))}pp</span>
+                  {booking.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(booking.pricePerPerson)}pp</span>
                 </div>
                 <span
                   className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
@@ -400,7 +400,7 @@ export default function BookingPage() {
                                 return `${nights} nights`;
                               })()}</span>
                               <span className="text-black/25">•</span>
-                              <span>{currency.format(booking.commissions.price / (booking.passengers.adults + booking.passengers.children || 1))}pp</span>
+                              <span>{currency.format(booking.pricePerPerson)}pp</span>
                             </span>
                           </div>
                           {booking.quoteLink && booking.quoteLink !== "#" && (

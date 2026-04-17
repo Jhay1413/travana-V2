@@ -317,11 +317,14 @@ export function QuoteRHFForm({
   // ── Price per person calculation ──────────────────────────────────────────
   useEffect(() => {
     const price = Number(form.getValues("price")) || 0;
+    const currentDiscount = Number(form.getValues("discount")) || 0;
+    const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
     const adults = Number(passengersAdults) || 0;
     const children = Number(passengersChildren) || 0;
     const total = adults + children;
-    setValue("pricePerPerson", total > 0 ? parseFloat((price / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren]); // eslint-disable-line react-hooks/exhaustive-deps
+    const netPrice = price - currentDiscount + currentServiceCharge;
+    setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
+  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   useEffect(() => {
@@ -1783,11 +1786,12 @@ export function QuoteRHFForm({
                               }
                             }
                             
-                            // Price per person is fixed by total price (not affected by discount/service charge)
+                            // Price per person = (salesPrice - discount + serviceCharge) / (adults + children)
                             const adults = Number(form.getValues("passengersAdults")) || 0;
                             const children = Number(form.getValues("passengersChildren")) || 0;
                             const total = adults + children;
-                            setValue("pricePerPerson", total > 0 ? parseFloat((currentPrice / total).toFixed(2)) : 0);
+                            const netPrice = currentPrice - currentDiscount + currentServiceCharge;
+                            setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
                           }
                         }}
                         className="h-9 rounded-xl border-black/10 bg-white/70"
@@ -1845,7 +1849,6 @@ export function QuoteRHFForm({
 
 // ─── Connecting Leg Sub-component ────────────────────────────────────────────
 
-import type { Control } from "react-hook-form";
 
 interface ConnectingLegFieldsProps {
   control: Control<QuoteFormValues>;

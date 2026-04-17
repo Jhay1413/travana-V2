@@ -185,9 +185,7 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                 <div className="text-base font-semibold" data-testid="text-quote-title">
                   {quote.quoteTitle},{" "}
                   <span className="text-sm font-semibold text-[#000000]">
-                    {currency.format(
-                      quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1)
-                    )}
+                    {currency.format(quote.pricePerPerson)}
                     pp
                   </span>
                 </div>

@@ -557,61 +557,16 @@ export function CommandCenterShell({
 
   const globalSearchResults = useMemo(() => {
     if (!debouncedSearch || !searchResults) return [] as GlobalSearchResult[];
-    const results: GlobalSearchResult[] = [];
 
-    for (const c of searchResults.clients) {
-      results.push({
-        id: c.id,
-        category: "client",
-        title: c.name,
-        subtitle: c.subtitle,
-        link: `/clients/${c.id}`,
-        badge: "Client",
-        badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/30",
-      });
-    }
-
-    const searchLower = debouncedSearch.toLowerCase();
-    const clientNameMatches = (name: string) =>
-      name.toLowerCase().split(/\s+/).some((word) => word.startsWith(searchLower) || searchLower.startsWith(word));
-
-    const quoteResults = searchResults.quotes.map((q) => {
-      const dest = q.destination || q.country || q.holidayType || "Quote";
-      const formattedPrice = q.salesPrice ? `£${parseFloat(q.salesPrice).toLocaleString("en-GB")}` : "";
-      const formattedDate = q.travelDate ? new Date(q.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
-      return {
-        id: `quote-${q.id}`,
-        category: "quote" as const,
-        title: `${dest}${q.clientName ? ` — ${q.clientName}` : ""}`,
-        subtitle: [q.accommodation, formattedPrice, formattedDate].filter(Boolean).join(" · "),
-        link: q.clientId ? `/clients/${q.clientId}/quotes/${q.id}` : `/quotes/${q.id}`,
-        badge: "Quote",
-        badgeColor: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-        _clientNameMatch: q.clientName ? clientNameMatches(q.clientName) : false,
-      };
-    });
-    quoteResults.sort((a, b) => (b._clientNameMatch ? 1 : 0) - (a._clientNameMatch ? 1 : 0));
-    results.push(...quoteResults.map(({ _clientNameMatch: _, ...r }) => r));
-
-    const bookingResults = searchResults.bookings.map((b) => {
-      const dest = b.destination || b.country || b.holidayType || "Booking";
-      const formattedPrice = b.salesPrice ? `£${parseFloat(b.salesPrice).toLocaleString("en-GB")}` : "";
-      const formattedDate = b.travelDate ? new Date(b.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
-      return {
-        id: `booking-${b.id}`,
-        category: "booking" as const,
-        title: `${dest}${b.clientName ? ` — ${b.clientName}` : ""}`,
-        subtitle: [b.haysRef && `Ref: ${b.haysRef}`, b.accommodation, formattedPrice, formattedDate].filter(Boolean).join(" · "),
-        link: b.clientId ? `/clients/${b.clientId}/bookings/${b.id}` : `/bookings/${b.id}`,
-        badge: "Booking",
-        badgeColor: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
-        _clientNameMatch: b.clientName ? clientNameMatches(b.clientName) : false,
-      };
-    });
-    bookingResults.sort((a, b) => (b._clientNameMatch ? 1 : 0) - (a._clientNameMatch ? 1 : 0));
-    results.push(...bookingResults.map(({ _clientNameMatch: _, ...r }) => r));
-
-    return results;
+    return searchResults.clients.map((c) => ({
+      id: c.id,
+      category: "client" as const,
+      title: c.name,
+      subtitle: c.subtitle,
+      link: `/clients/${c.id}`,
+      badge: "Client",
+      badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/30",
+    }));
   }, [debouncedSearch, searchResults]);
 
   useEffect(() => {
@@ -1693,51 +1648,33 @@ export function CommandCenterShell({
                       <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden max-h-[420px] overflow-y-auto" data-testid="global-search-dropdown">
                         {globalSearchResults.length > 0 ? (
                           <>
-                            {["client", "quote", "booking"].map((cat) => {
-                              const items = globalSearchResults.filter((r) => r.category === cat);
-                              if (items.length === 0) return null;
-                              const catLabel = cat === "client" ? "Clients" : cat === "quote" ? "Quotes" : "Bookings";
-                              const CatIcon = cat === "client" ? Users : cat === "quote" ? Compass : Briefcase;
-                              return (
-                                <div key={cat}>
-                                  <div className="flex items-center gap-2 px-4 py-2 bg-black/[0.03] dark:bg-white/[0.03] border-b border-black/5 dark:border-white/5">
-                                    <CatIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{catLabel}</span>
-                                    <span className="text-[10px] text-muted-foreground/60">({items.length})</span>
+                            {globalSearchResults.map((result) => (
+                              <button
+                                key={result.id}
+                                onClick={() => {
+                                  navigate(result.link);
+                                  setShowSearchResults(false);
+                                  setLocalSearchText("");
+                                  onQuery?.("");
+                                }}
+                                className="w-full px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors"
+                                data-testid={`search-result-${result.id}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-medium text-sm truncate">{result.title}</div>
+                                    {result.subtitle && (
+                                      <div className="text-xs text-black/50 dark:text-white/50 truncate mt-0.5">{result.subtitle}</div>
+                                    )}
                                   </div>
-                                  {items.map((result) => (
-                                    <button
-                                      key={result.id}
-                                      onClick={() => {
-                                        navigate(result.link);
-                                        setShowSearchResults(false);
-                                        setLocalSearchText("");
-                                        onQuery?.("");
-                                      }}
-                                      className="w-full px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors"
-                                      data-testid={`search-result-${result.id}`}
-                                    >
-                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="min-w-0 flex-1">
-                                          <div className="font-medium text-sm truncate">{result.title}</div>
-                                          {result.subtitle && (
-                                            <div className="text-xs text-black/50 dark:text-white/50 truncate mt-0.5">{result.subtitle}</div>
-                                          )}
-                                        </div>
-                                        <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-medium ${result.badgeColor}`}>
-                                          {result.badge}
-                                        </span>
-                                      </div>
-                                    </button>
-                                  ))}
                                 </div>
-                              );
-                            })}
+                              </button>
+                            ))}
                           </>
                         ) : (
                           <div className="p-4">
                             <p className="text-center text-sm text-black/50 dark:text-white/50 mb-3">
-                              No results found for "{localSearchText}"
+                              No results found for {localSearchText}
                             </p>
                             <Button
                               className="w-full h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"

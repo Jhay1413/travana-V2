@@ -135,6 +135,7 @@ export type QuoteDisplay = {
     agentSplitValue: number;
     netToAgency: number;
   };
+  pricePerPerson: number;
   tags: string[];
   notes: string[];
   lodge?: { name: string; type: string; code: string };
@@ -270,6 +271,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
       name: "Agent",
       role: "Agent" as const,
     },
+    pricePerPerson: parseFloat(String(apiData.price_per_person || "0")) || 0,
     commissions: {
       tourOperator: apiData.main_tour_operator_name || "",
       price: salesPrice,

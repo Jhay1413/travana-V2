@@ -129,6 +129,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
       netToAgency: packageCommission,
       totalCommission: packageCommission,
     },
+    pricePerPerson: parseFloat(apiData.price_per_person || "0") || 0,
     notes: [],
     pets: apiData.pets || 0,
     lodge:
