@@ -155,6 +155,25 @@ function getTimeAgo(d: string | null | undefined): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function getQuoteExpiry(t: Transaction): Date | null {
+  const q = t.quotes?.[0];
+  if (!q) return null;
+  if (q.date_expiry) return new Date(q.date_expiry);
+  if (q.date_created) {
+    const d = new Date(q.date_created);
+    d.setDate(d.getDate() + 7);
+    return d;
+  }
+  return null;
+}
+
+function isQuoteNearExpiry(t: Transaction): boolean {
+  const expiry = getQuoteExpiry(t);
+  if (!expiry) return false;
+  const ms = expiry.getTime() - Date.now();
+  return ms > 0 && ms <= 24 * 60 * 60 * 1000;
+}
+
 function getAgentInitial(t: Transaction): string {
   return (t as any).assignedUser?.firstName?.[0]?.toUpperCase() || "?";
 }
@@ -178,6 +197,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
   const profit = getTransactionProfit(t);
   const value = getTransactionValue(t);
   const { dest, country } = getDest(t);
+  const nearExpiry = isQuoteNearExpiry(t);
   const tourOp = getTourOp(t);
   const quoteCount = t.quotes?.length || 0;
   const quoteStatus = (t.quotes?.[0] as any)?.quote_status || null;
@@ -223,7 +243,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
         {/* Row 1: Client name + time ago */}
         <div className="flex items-start justify-between mb-1">
           <div className="flex-1 min-w-0">
-            <h4 className="font-semibold text-[13px] text-gray-900 truncate" data-testid={`pipeline-title-${t.id}`}>{clientName}</h4>
+            <h4 className={`font-semibold text-[13px] truncate ${nearExpiry ? "text-red-600" : "text-gray-900"}`} data-testid={`pipeline-title-${t.id}`}>{clientName}</h4>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
             <span className="text-[11px] text-gray-400">{getTimeAgo(t.created_at)}</span>

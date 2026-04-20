@@ -128,30 +128,30 @@ export default function QuotePage() {
   // Convert quote data to form values for copying
   const quoteToFormValues = useMemo(() => {
     if (!quoteData) return {};
-    
+
     const flights = quoteData.flights || [];
     const accommodations = quoteData.accommodations || [];
     const primaryAccom = accommodations.find((a: any) => a.is_primary) || accommodations[0];
-    
+
     const outboundFlights = flights.filter((f: any) => f.flight_type === "outbound").sort((a: any, b: any) => (a.leg_order || 0) - (b.leg_order || 0));
     const inboundFlights = flights.filter((f: any) => f.flight_type === "inbound").sort((a: any, b: any) => (a.leg_order || 0) - (b.leg_order || 0));
     const outboundFlight = outboundFlights[0];
     const inboundFlight = inboundFlights[0];
-    
+
     const splitDateTime = (iso: string) => {
       if (!iso) return { date: "", time: "" };
       const [date, time] = iso.split("T");
       return { date: date || "", time: time ? time.slice(0, 5) : "" };
     };
-    
+
     const obDepart = splitDateTime(outboundFlight?.departure_date_time || "");
     const obArrive = splitDateTime(outboundFlight?.arrival_date_time || "");
     const ibDepart = splitDateTime(inboundFlight?.departure_date_time || "");
     const ibArrive = splitDateTime(inboundFlight?.arrival_date_time || "");
     const checkIn = splitDateTime(primaryAccom?.check_in_date_time || "");
-    
+
     const childPassengers = (quoteData.passengers || []).filter((p: any) => p.type === "child");
-    
+
     return {
       packageType: quoteData.holiday_type_id || "",
       quoteTitle: quoteData.title || "",
@@ -336,18 +336,7 @@ export default function QuotePage() {
                     Copy Quote
                   </span>
                 )}
-                {quoteData?.quote_ref && (
-                  <a
-                    href={quoteData.quote_ref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-px text-[9px] font-semibold text-blue-600 transition hover:bg-blue-500/20"
-                    data-testid="link-view-supplier-link"
-                  >
-                    <LinkIcon className="h-2.5 w-2.5" />
-                    View Link
-                  </a>
-                )}
+
                 {(() => {
                   const now = new Date();
                   const expiry = quoteData?.date_expiry ? new Date(quoteData.date_expiry) : null;
@@ -768,9 +757,20 @@ export default function QuotePage() {
                               })()}</span>
                               <span className="text-black/25">•</span>
                               <span>{currency.format(quote.pricePerPerson)}pp</span>
+                              {quoteData?.quote_ref && (
+                                <a
+                                  href={quoteData.quote_ref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-px text-[9px] font-semibold text-blue-600 transition hover:bg-blue-500/20"
+                                  data-testid="link-view-supplier-link"
+                                >
+                                  <LinkIcon className="h-2.5 w-2.5" />
+                                  View Link
+                                </a>
+                              )}
                             </span>
                           </div>
-                         
                         </div>
                         <div className="flex items-center gap-2">
                           <UserReassignSelect
@@ -897,6 +897,12 @@ export default function QuotePage() {
                             <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
                             <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
                           </div>
+                          {quoteData?.lodge_code && (
+                            <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lodge-code">
+                              <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lodge-code-label">Lodge Code</div>
+                              <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lodge-code-value">{quoteData.lodge_code}</div>
+                            </div>
+                          )}
                         </div>
                       </>
                     ) : quote.packageType?.toLowerCase().includes("cruise") ? (

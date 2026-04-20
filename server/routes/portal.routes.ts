@@ -277,7 +277,6 @@ portalRouter.get("/deals/for-you", portalAuth, async (req: Request, res: Respons
       .where(and(
         eq(quote.is_active, true),
         isNotNull(quote.quote_token),
-        eq(quote.show_on_portal, true),
         eq(quote.isFreeQuote, true),
         exists(
           db.select({ one: sql`1` })

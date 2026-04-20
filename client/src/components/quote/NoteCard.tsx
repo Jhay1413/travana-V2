@@ -76,10 +76,10 @@ export function NoteCard({
         <div className="flex items-start justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]" data-testid={`note-avatar-${note.id}`}>
-              {(note.agent_id || "A").charAt(0).toUpperCase()}
+              {(note.author_name || "A").charAt(0).toUpperCase()}
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.agent_id || "Agent"}</span>
+              <span className="text-[11px] font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.author_name || "Agent"}</span>
               <span className="ml-1.5 text-[9px] text-black/40" data-testid={`note-time-${note.id}`}>
                 {formatRelativeTime(note.createdAt)}
               </span>
@@ -89,7 +89,7 @@ export function NoteCard({
             <button
               type="button"
               onClick={() => toggleFavoriteMutation.mutate(
-                { itemType: "note", itemId: note.id, label: `Note by ${note.agent_id || "Agent"}`, subtitle: `quoteId:${quoteId}|${(note.content || "").replace(/<[^>]*>/g, "").slice(0, 40)}` },
+                { itemType: "note", itemId: note.id, label: `Note by ${note.author_name || "Agent"}`, subtitle: `quoteId:${quoteId}|${(note.content || "").replace(/<[^>]*>/g, "").slice(0, 40)}` },
                 { onSuccess: (data: { favorited?: boolean }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
               )}
               className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${isNotePinned ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/5 hover:text-black/70"}`}

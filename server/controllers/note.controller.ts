@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { noteService } from "../services/note.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
+import { getUserId } from "../utils/get-user-id";
 
 export const noteController = {
   listByTransactionId: asyncHandler(async (req: Request, res: Response) => {
@@ -11,7 +12,8 @@ export const noteController = {
   }),
 
   createNote: asyncHandler(async (req: Request, res: Response) => {
-    const note = await noteService.createNote(req.body);
+    const agentId = getUserId(req);
+    const note = await noteService.createNote({ ...req.body, agent_id: agentId });
     return successResponse(res, note, "Note created successfully", 201);
   }),
 

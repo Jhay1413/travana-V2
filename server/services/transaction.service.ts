@@ -2,6 +2,7 @@ import { transactionRepository } from "../repositories/transaction.repository";
 import { enquiryTableRepository } from "../repositories/enquiryTable.repository";
 import { newQuoteRepository } from "../repositories/newQuote.repository";
 import { bookingRepository } from "../repositories/booking.repository";
+import { noteRepository } from "../repositories/note.repository";
 import { taskService } from "./task.service";
 import { newQuoteService } from "./newQuote.service";
 import { referralService } from "./referral.service";
@@ -34,7 +35,8 @@ interface CreateEnquiryPayload extends InsertEnquiryTable {
   boardBases?: string[];
   departureAirports?: string[];
   passengers?: EnquiryPassenger[];
-  notes?: string[];
+  notes?: string | string[];
+  agent_id?: string | null;
 }
 
 interface QuoteRelationPayload extends InsertQuote {
@@ -171,8 +173,8 @@ export const transactionService = {
     return await transactionRepository.create(data);
   },
 
-  async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: CreateEnquiryPayload) {
-    const { destinations, resorts, boardBases, departureAirports, passengers, notes, ...enquiryFields } = enquiryData;
+  async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: CreateEnquiryPayload, agentId?: string | null) {
+    const { destinations, resorts, boardBases, departureAirports, passengers, notes, agent_id, ...enquiryFields } = enquiryData;
 
     const txn = await transactionRepository.create({
       ...transactionData,
@@ -208,6 +210,13 @@ export const transactionService = {
       for (const p of passengers) {
         await enquiryTableRepository.addPassenger(enquiry.id, p.type, p.age ?? 0);
       }
+    }
+
+    const noteContents = notes
+      ? (Array.isArray(notes) ? notes : [notes]).filter(Boolean)
+      : [];
+    for (const content of noteContents) {
+      await noteRepository.create({ transaction_id: txn.id, content, agent_id: agentId || agent_id || null });
     }
 
     return { transaction: txn, enquiry };

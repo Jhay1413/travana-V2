@@ -289,7 +289,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     },
     notes: [],
     pets: apiData.pets || 0,
-    lodge: ("lodge_type" in apiData && apiData.lodge_type) ? { name: "", type: apiData.lodge_type || "", code: "" } : undefined,
+    lodge: ("lodge_type" in apiData && apiData.lodge_type) ? { name: ("lodge_name" in apiData ? (apiData as any).lodge_name : "") || "", type: apiData.lodge_type || "", code: ("lodge_code" in apiData ? (apiData as any).lodge_code : "") || "" } : undefined,
     cruise: cruises.length > 0 ? { cruiseLine: cruises[0].cruise_line || "", ship: cruises[0].ship || "", cabinType: cruises[0].cabin_type || "", cruiseName: cruises[0].cruise_name || "", cruiseDate: cruises[0].cruise_date || "", preCruiseStay: cruises[0].pre_cruise_stay || 0, postCruiseStay: cruises[0].post_cruise_stay || 0 } : undefined,
     haysRef: ("hays_ref" in apiData ? apiData.hays_ref : undefined) || undefined,
     supplierRef: ("supplier_ref" in apiData ? apiData.supplier_ref : undefined) || undefined,

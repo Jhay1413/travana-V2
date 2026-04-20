@@ -431,6 +431,7 @@ export default function ClientPage() {
             pre_cruise_stay: data.pre_cruise_stay || undefined,
             post_cruise_stay: data.post_cruise_stay || undefined,
             status: "ACTIVE",
+            notes: typeof data.notes === 'string' && data.notes.trim() ? data.notes.trim() : undefined,
             destinations: Array.isArray(data.destinations) ? data.destinations as any : undefined,
             resorts: Array.isArray(data.resorts) ? data.resorts as any : undefined,
             boardBases: Array.isArray(data.boardBases) ? data.boardBases as any : undefined,
@@ -709,7 +710,7 @@ export default function ClientPage() {
                         value={clientData?.badge || "New Client"}
                         onValueChange={(value) => {
                           if (clientId) {
-                            updateClientMutation.mutate({ id: clientId, data: { clientType: value } });
+                            updateNeonClientMutation.mutate({ id: clientId, data: { badge: value } });
                           }
                         }}
                       >

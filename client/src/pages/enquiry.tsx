@@ -205,9 +205,9 @@ function EnquiryNoteCard({ note, replies, transactionId, currentUserName }: { no
       <div className="rounded-xl border border-black/10 bg-white/60 p-2">
         <div className="flex items-start justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]">{(currentUserName || "A").charAt(0).toUpperCase()}</div>
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]">{(note.author_name || "A").charAt(0).toUpperCase()}</div>
             <div>
-              <span className="text-[11px] font-semibold text-black/80">{currentUserName || "Agent"}</span>
+              <span className="text-[11px] font-semibold text-black/80">{note.author_name || "Agent"}</span>
               <span className="ml-1.5 text-[9px] text-black/40">{formatRelativeTime(note.createdAt)}</span>
             </div>
           </div>
@@ -261,8 +261,8 @@ function EnquiryReplyCard({ reply, transactionId }: { reply: TransactionNote; tr
     <div className="group/reply rounded-xl border border-black/5 bg-white/50 p-2" data-testid={`reply-card-${reply.id}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-[8px] font-bold text-emerald-600">A</div>
-          <span className="text-[10px] font-semibold text-black/70">Agent</span>
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-[8px] font-bold text-emerald-600">{(reply.author_name || "A").charAt(0).toUpperCase()}</div>
+          <span className="text-[10px] font-semibold text-black/70">{reply.author_name || "Agent"}</span>
           <span className="text-[9px] text-black/35">{formatRelativeTime(reply.createdAt)}</span>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 transition group-hover/reply:opacity-100">

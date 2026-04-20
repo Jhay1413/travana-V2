@@ -257,6 +257,7 @@ export function NotificationToast() {
   const [visible, setVisible] = useState(false);
   const shownIdsRef = useRef<Set<string>>(new Set());
   const autoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isHidingRef = useRef(false);
 
   useEffect(() => {
     if (!userId || !notifications.length) return;
@@ -278,12 +279,18 @@ export function NotificationToast() {
   }, [notifications, userId]);
 
   useEffect(() => {
-    if (toastQueue.length > 0 && !visible) {
+    if (toastQueue.length > 0 && !visible && !isHidingRef.current) {
       setVisible(true);
       if (autoHideTimer.current) clearTimeout(autoHideTimer.current);
+      const notifId = toastQueue[0]?.id;
       autoHideTimer.current = setTimeout(() => {
+        isHidingRef.current = true;
         setVisible(false);
-        setTimeout(() => setToastQueue((prev) => prev.slice(1)), 350);
+        if (notifId) markReadMutation.mutate(notifId);
+        setTimeout(() => {
+          setToastQueue((prev) => prev.slice(1));
+          isHidingRef.current = false;
+        }, 350);
       }, 6000);
     }
   }, [toastQueue, visible]);

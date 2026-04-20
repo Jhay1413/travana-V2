@@ -1,9 +1,9 @@
-import { noteRepository } from "../repositories/note.repository";
+import { noteRepository, type NoteWithAuthor } from "../repositories/note.repository";
 import { AppError } from "../utils/error-handler";
 import type { Note, InsertNote } from "@shared/schema";
 
 export const noteService = {
-  async listByTransactionId(transactionId: string): Promise<Note[]> {
+  async listByTransactionId(transactionId: string): Promise<NoteWithAuthor[]> {
     return await noteRepository.findByTransactionId(transactionId);
   },
 

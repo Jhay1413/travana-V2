@@ -496,6 +496,7 @@ export interface TransactionNote {
   content: string | null;
   agent_id: string | null;
   user_id: string | null;
+  author_name: string | null;
   createdAt: string;
   parent_id: string | null;
   transaction_id: string | null;

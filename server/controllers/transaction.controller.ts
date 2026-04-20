@@ -171,7 +171,8 @@ export const transactionController = {
 
     if (enquiry) {
       const normalizedEnquiry = normalizeEnquiry(enquiry);
-      const result = await transactionService.createTransactionWithEnquiry(transactionData, normalizedEnquiry);
+      const agentId = getUserId(req);
+      const result = await transactionService.createTransactionWithEnquiry(transactionData, normalizedEnquiry, agentId);
       return successResponse(res, result, "Transaction with enquiry created successfully", 201);
     }
 

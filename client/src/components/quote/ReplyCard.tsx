@@ -27,9 +27,9 @@ export function ReplyCard({ reply, quoteId }: { reply: TransactionNote; quoteId:
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-[8px] font-bold text-emerald-600">
-            {(reply.agent_id || "A").charAt(0).toUpperCase()}
+            {(reply.author_name || "A").charAt(0).toUpperCase()}
           </div>
-          <span className="text-[10px] font-semibold text-black/70">{reply.agent_id || "Agent"}</span>
+          <span className="text-[10px] font-semibold text-black/70">{reply.author_name || "Agent"}</span>
           <span className="text-[9px] text-black/35">
             {formatRelativeTime(reply.createdAt)}
           </span>
