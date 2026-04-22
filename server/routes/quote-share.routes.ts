@@ -46,9 +46,16 @@ shareRouter.get("/:id/views", async (req: Request, res: Response) => {
     const stats = await quotePublicRepository.getViewStats(req.params.id);
     const sanitized = {
       totalViews: stats.totalViews,
+      uniqueViews: stats.uniqueViews,
       firstViewed: stats.firstViewed,
       lastViewed: stats.lastViewed,
       deviceBreakdown: stats.deviceBreakdown,
+      views: stats.views.map((v) => ({
+        id: v.id,
+        viewedAt: v.viewedAt,
+        deviceType: v.deviceType,
+        browser: v.browser,
+      })),
     };
     res.json({ success: true, data: sanitized });
   } catch (err: any) {

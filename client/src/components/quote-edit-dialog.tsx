@@ -24,7 +24,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
-import { useUpdateQuote } from "@/hooks/mutations";
+import { useUpdateQuote, useUpdateTransaction } from "@/hooks/mutations";
 import { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
 import { useQuote } from "@/hooks/queries";
 import { usePackageTypes } from "@/hooks/queries";
@@ -173,6 +173,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     leadSource: quoteData.lead_source || "",
     status: quoteData.quote_status || "draft",
     tourOperatorId: quoteData.main_tour_operator_id || "",
+    is_test: quoteData.is_test ?? false,
 
     // Travel
     travelDate: quoteData.travel_date?.toString().split("T")[0] || "",
@@ -462,6 +463,7 @@ export function QuoteEditDialog({
   const uploadImages = useUploadQuoteImages();
   const addImageUrls = useAddQuoteImageUrls();
   const deleteImage = useDeleteQuoteImage();
+  const updateTransaction = useUpdateTransaction();
   const { data: packageTypesData } = usePackageTypes();
   const { data: quoteData, isLoading, isError } = useQuote(quoteId);
   const defaultValues = quoteData ? buildDefaultValues(quoteData) : undefined;
@@ -475,6 +477,11 @@ export function QuoteEditDialog({
     const imageFiles = images?.files || [];
     const imageUrls = images?.urls || [];
     const deletedImageIds = images?.deletedImageIds || [];
+
+    // Sync is_test to the transaction if it changed
+    if (quoteData?.transaction_id && values.is_test !== (quoteData.is_test ?? false)) {
+      await updateTransaction.mutateAsync({ id: quoteData.transaction_id, data: { is_test: values.is_test } }).catch(() => {});
+    }
 
     updateQuote.mutate(
       { id: quoteId, data: payload },

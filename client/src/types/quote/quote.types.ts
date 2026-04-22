@@ -437,6 +437,7 @@ export interface EnrichedQuote extends Quote {
   main_tour_operator_name?: string;
   lead_source?: string;
   user_id?: string;
+  is_test?: boolean;
   country_id?: string | null;
   country_name?: string | null;
   destination_id?: string | null;

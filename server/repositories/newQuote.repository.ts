@@ -132,6 +132,7 @@ export const newQuoteRepository = {
     const baseWhereConditions: any[] = [
       eq(quote.isFreeQuote, true),
       eq(quote.is_active, true),
+      eq(transaction.is_test, false),
       ...(searchCondition ? [searchCondition] : []),
     ];
 
@@ -153,6 +154,7 @@ export const newQuoteRepository = {
       const allRows = await db
         .selectDistinct({ id: quote.id, date_created: quote.date_created })
         .from(quote)
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
         .innerJoin(travel_deal, and(...dealJoinConditions))
         .where(and(...baseWhereConditions))
         .orderBy(desc(quote.date_created));
@@ -162,6 +164,7 @@ export const newQuoteRepository = {
       const rows = await db
         .select({ id: quote.id })
         .from(quote)
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
         .where(and(...baseWhereConditions))
         .orderBy(desc(quote.date_created))
         .limit(pageSize)
@@ -397,6 +400,7 @@ export const newQuoteRepository = {
         main_tour_operator_name: tour_operator.name,
         lead_source: transaction.lead_source,
         user_id: transaction.user_id,
+        is_test: transaction.is_test,
         lodge_id: quote.lodge_id,
         park_id: lodges.park_id,
         lodge_name: lodges.lodge_name,

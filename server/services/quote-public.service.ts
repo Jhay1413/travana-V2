@@ -1,5 +1,4 @@
 import { quotePublicRepository } from "../repositories/quote-public.repository";
-import { noteService } from "./note.service";
 import { AppError } from "../utils/error-handler";
 import type { InsertQuoteView } from "@shared/schema";
 
@@ -10,7 +9,7 @@ export const quotePublicService = {
     return data;
   },
 
-  async logView(token: string, viewData: Omit<InsertQuoteView, "quoteId">, timezone?: string) {
+  async logView(token: string, viewData: Omit<InsertQuoteView, "quoteId">) {
     const quoteId = await quotePublicRepository.findQuoteIdByToken(token);
     if (!quoteId) throw new AppError("Quote not found", 404);
 
@@ -24,35 +23,6 @@ export const quotePublicService = {
       "Quote Viewed",
       `A customer just viewed their quote for ${dest}`,
     );
-
-    const transactionId = quoteData?.transactionId;
-    if (transactionId) {
-      const clientName = quoteData?.clientName || "Client";
-      const userId = quoteData?.agentUserId || null;
-
-      const now = new Date();
-      let tz = "UTC";
-      if (timezone) {
-        try {
-          Intl.DateTimeFormat(undefined, { timeZone: timezone });
-          tz = timezone;
-        } catch {
-          // invalid timezone, fall back to UTC
-        }
-      }
-      const timeStr = now
-        .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: tz })
-        .toLowerCase();
-      const when = `at ${timeStr} today`;
-
-      await noteService.createNote({
-        description: "system",
-        content: `${clientName} viewed this quote ${when}`,
-        transaction_id: transactionId,
-        user_id: userId,
-        agent_id: null,
-      });
-    }
 
     return view;
   },

@@ -321,16 +321,19 @@ export const quotePublicRepository = {
   async getViewStats(quoteId: string) {
     const views = await this.getViews(quoteId);
     const deviceBreakdown: Record<string, number> = {};
+    const seenIps = new Set<string>();
     for (const v of views) {
       const dt = v.deviceType || "unknown";
       deviceBreakdown[dt] = (deviceBreakdown[dt] || 0) + 1;
+      if (v.ipAddress) seenIps.add(v.ipAddress);
     }
     return {
       totalViews: views.length,
+      uniqueViews: seenIps.size,
       firstViewed: views.length > 0 ? views[views.length - 1].viewedAt : null,
       lastViewed: views.length > 0 ? views[0].viewedAt : null,
       deviceBreakdown,
-      views: views.slice(0, 20),
+      views,
     };
   },
 

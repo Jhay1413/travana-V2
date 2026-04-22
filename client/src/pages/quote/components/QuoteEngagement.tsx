@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useQuoteViews, useQuoteCustomerActions } from "@/hooks/queries/use-quote-share-queries";
+import { useQuoteViews, useQuoteCustomerActions, type QuoteViewEntry } from "@/hooks/queries/use-quote-share-queries";
 import {
   Eye,
   Monitor,
@@ -9,6 +10,8 @@ import {
   Clock,
   CheckCircle2,
   MessageSquare,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface QuoteEngagementProps {
@@ -56,9 +59,11 @@ const deviceIcons: Record<string, typeof Monitor> = {
 export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
   const { data: viewStats, isLoading: viewsLoading } = useQuoteViews(quoteId);
   const { data: actions, isLoading: actionsLoading } = useQuoteCustomerActions(quoteId);
+  const [showHistory, setShowHistory] = useState(false);
 
   const isLoading = viewsLoading || actionsLoading;
   const totalViews = viewStats?.totalViews || 0;
+  const uniqueViews = viewStats?.uniqueViews || 0;
   const hasData = totalViews > 0 || (actions && actions.length > 0);
 
   if (isLoading) {
@@ -104,6 +109,11 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
               <span className="text-xs font-medium" data-testid="text-view-count">
                 Viewed {totalViews} {totalViews === 1 ? "time" : "times"}
               </span>
+              {uniqueViews > 0 && (
+                <span className="text-[10px] text-black/40" data-testid="text-unique-views">
+                  · {uniqueViews} unique {uniqueViews === 1 ? "visitor" : "visitors"}
+                </span>
+              )}
             </div>
           </div>
 
@@ -137,6 +147,46 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {viewStats.views && viewStats.views.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowHistory(!showHistory)}
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-black/50 hover:text-black/70 transition mt-1"
+                data-testid="btn-toggle-history"
+              >
+                {showHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                {showHistory ? "Hide" : "Show"} view history
+              </button>
+
+              {showHistory && (
+                <div className="mt-2 space-y-1 max-h-48 overflow-y-auto" data-testid="view-history-list">
+                  {viewStats.views.map((v: QuoteViewEntry) => {
+                    const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
+                    return (
+                      <div
+                        key={v.id}
+                        className="flex items-center gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5"
+                        data-testid={`view-entry-${v.id}`}
+                      >
+                        <IconComp className="h-3 w-3 shrink-0 text-black/30" />
+                        <span className="text-[10px] text-black/60 flex-1">
+                          {v.browser || "Unknown browser"}
+                          {v.deviceType && v.deviceType !== "desktop" && (
+                            <span className="text-black/40"> · {v.deviceType}</span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-black/40 shrink-0">
+                          {formatTimeAgo(v.viewedAt)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
