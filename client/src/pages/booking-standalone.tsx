@@ -725,14 +725,14 @@ export default function BookingPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-booking-summary-net-commission">
-                            <div className="text-xs font-semibold text-black/70" data-testid="text-booking-summary-net-commission-label">Net commission</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-net-commission-value">
-                              {currencyPence.format(booking.commissions.netCommission)}
-                            </div>
-                          </div>
                         </>
                       )}
+                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-booking-summary-net-commission">
+                        <div className="text-xs font-semibold text-black/70" data-testid="text-booking-summary-net-commission-label">Net commission</div>
+                        <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-net-commission-value">
+                          {currencyPence.format(booking.commissions.netCommission)}
+                        </div>
+                      </div>
                     </div>
                   </TabsContent>
                 </Tabs>
