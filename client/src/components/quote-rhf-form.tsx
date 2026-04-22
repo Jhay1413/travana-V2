@@ -16,6 +16,7 @@ export type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/types
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -410,8 +411,21 @@ export function QuoteRHFForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit((values) => onSubmit(values, { files: imageFiles, urls: imageUrls, deletedImageIds }))} className="space-y-4">
 
-        {/* ── JSON IMPORT ──────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-end">
+        {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
+        <div className="flex items-center justify-end gap-3">
+          <FormField
+            control={control}
+            name="not_for_social"
+            render={({ field }) => (
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 transition hover:bg-black/[0.03]">
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+                <span className="text-xs font-medium text-black/60 leading-none select-none">Not For Social</span>
+              </label>
+            )}
+          />
           <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
             <Upload className="h-3.5 w-3.5" />
             Import JSON

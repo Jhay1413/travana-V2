@@ -205,8 +205,8 @@ export const newQuoteService = {
     }
 
     // Automatically create a free quote copy (no client, no agent) for every new quote
-    // Skip for test transactions — test data must never reach the social post board
-    if (!quoteFields.isFreeQuote && !txn.is_test) {
+    // Skip for test transactions or quotes explicitly marked not_for_social
+    if (!quoteFields.isFreeQuote && !txn.is_test && !quoteFields.not_for_social) {
       try {
         const freeTxn = await transactionRepository.create({
           status: 'on_quote',

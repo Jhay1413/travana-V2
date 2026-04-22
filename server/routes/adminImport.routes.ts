@@ -23,6 +23,7 @@ import {
   deal_images,
   forwardsReport,
   airport,
+  tags,
 } from "@shared/schema";
 
 const router = Router();
@@ -46,6 +47,7 @@ const tableMap: Record<string, any> = {
   deal_images,
   forwards_report: forwardsReport,
   airport,
+  tags,
 };
 
 const tableConfig: Record<string, { label: string; columns: string[]; searchFields: string[]; dependsOn: string[] }> = {
@@ -67,6 +69,7 @@ const tableConfig: Record<string, { label: string; columns: string[]; searchFiel
   deal_images: { label: "Deal Images", columns: ["id", "image_url", "s3Key", "owner_type", "owner_id", "isPrimary"], searchFields: ["image_url", "owner_type"], dependsOn: [] },
   forwards_report: { label: "Forwards Reports", columns: ["id", "month", "monthName", "year", "target", "company_commission", "agent_commission", "adjustment", "deal_ids", "historical_ids"], searchFields: ["monthName"], dependsOn: [] },
   airport: { label: "Airports", columns: ["id", "airport_name", "airport_code"], searchFields: ["airport_name", "airport_code"], dependsOn: [] },
+  tags: { label: "Tags", columns: ["id", "name", "usageCount", "createdAt", "lastUsedAt"], searchFields: ["name"], dependsOn: [] },
 };
 
 router.use(isAuthenticated);

@@ -174,6 +174,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     status: quoteData.quote_status || "draft",
     tourOperatorId: quoteData.main_tour_operator_id || "",
     is_test: quoteData.is_test ?? false,
+    not_for_social: quoteData.not_for_social ?? false,
 
     // Travel
     travelDate: quoteData.travel_date?.toString().split("T")[0] || "",
@@ -383,6 +384,7 @@ function buildUpdatePayload(
     country: values.country || null,
     destination: values.destination || null,
     resort: values.resort || null,
+    not_for_social: values.not_for_social === true,
   };
 
   if (showFlights) {

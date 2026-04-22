@@ -130,6 +130,7 @@ export function buildQuotePayload(
     lead_source: values.leadSource || undefined,
     quote_status: values.status && values.status !== "draft" ? values.status : "QUOTE_IN_PROGRESS",
     main_tour_operator_id: values.tourOperatorId || undefined,
+    not_for_social: values.not_for_social === true,
     transfer_type: values.transferType || undefined,
     pre_booked_seats: values.preBookedSeats || undefined,
     flight_meals: values.flightMeals === "Yes",

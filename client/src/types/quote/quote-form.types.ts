@@ -173,6 +173,7 @@ export const quoteFormSchema = z.object({
   })).default([]),
   tags: z.array(z.string()).default([]),
   is_test: z.boolean().default(false),
+  not_for_social: z.boolean().default(false),
 });
 
 // ─── Inferred Types ───────────────────────────────────────────────────────────
@@ -247,6 +248,7 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   extraAccommodations: [],
   tags: [],
   is_test: false,
+  not_for_social: false,
 };
 
 // ─── Component Prop Types ─────────────────────────────────────────────────────

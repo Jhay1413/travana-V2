@@ -113,35 +113,6 @@ export function ClientQuotesTab({
                 }),
             },
             {
-              id: "lost",
-              title: "Lost",
-              rows: quotes
-                .filter((q: QuoteWithJoins) => q.quote_status && ["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
-                .map((q: QuoteWithJoins) => {
-                  const salesPrice = parseFloat(q.sales_price || "0");
-                  const discount = parseFloat(q.discounts || "0");
-                  const serviceCharge = parseFloat(q.service_charge || "0");
-                  const netPrice = salesPrice - discount + serviceCharge;
-
-                  return {
-                    id: q.id,
-                    transactionId: q.transaction_id,
-                    title: q.title || q.holiday_type_name || "Trip",
-                    isQuoteCopy: Boolean(q.isQuoteCopy),
-                    destination: q.holiday_type_name || q.quote_type || "—",
-                    travelDate: q.travel_date,
-                    createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
-                    createdAtRaw: q.date_created || "",
-                    status: q.quote_status || "LOST",
-                    totalCost: netPrice,
-                    pricePerPerson: parseFloat(q.price_per_person || "0"),
-                    imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
-                    pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
-                    nights: q.num_of_nights || 0,
-                  };
-                }),
-            },
-            {
               id: "won",
               title: "Won (Bookings)",
               rows: bookings
@@ -169,6 +140,35 @@ export function ClientQuotesTab({
                     haysRef: b.hays_ref,
                     supplierRef: b.supplier_ref,
                     isBooking: true,
+                  };
+                }),
+            },
+            {
+              id: "lost",
+              title: "Lost",
+              rows: quotes
+                .filter((q: QuoteWithJoins) => q.quote_status && ["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
+                .map((q: QuoteWithJoins) => {
+                  const salesPrice = parseFloat(q.sales_price || "0");
+                  const discount = parseFloat(q.discounts || "0");
+                  const serviceCharge = parseFloat(q.service_charge || "0");
+                  const netPrice = salesPrice - discount + serviceCharge;
+
+                  return {
+                    id: q.id,
+                    transactionId: q.transaction_id,
+                    title: q.title || q.holiday_type_name || "Trip",
+                    isQuoteCopy: Boolean(q.isQuoteCopy),
+                    destination: q.holiday_type_name || q.quote_type || "—",
+                    travelDate: q.travel_date,
+                    createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                    createdAtRaw: q.date_created || "",
+                    status: q.quote_status || "LOST",
+                    totalCost: netPrice,
+                    pricePerPerson: parseFloat(q.price_per_person || "0"),
+                    imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
+                    pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
+                    nights: q.num_of_nights || 0,
                   };
                 }),
             },

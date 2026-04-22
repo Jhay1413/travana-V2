@@ -45,6 +45,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Gift,
+  Tag,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
 import { useCurrentUser, useNotifications, useChatConversations } from "@/hooks/queries";
@@ -108,6 +109,7 @@ function getNavRoute(key: string): string {
     "cruise-voyages": "/settings/cruise-voyages",
     "room-types": "/settings/room-types",
     "deletion-codes": "/settings/deletion-codes",
+    "tags": "/settings/tags",
     "destination-guru": "/destination-guru",
     "financials": "/?s=financials",
     "financials-targets": "/?s=financials-targets",
@@ -599,6 +601,7 @@ export function CommandCenterShell({
           { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" /> },
           { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" /> },
           { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
+          { key: "tags", label: "Tags", icon: <Tag className="h-4 w-4" /> },
         ],
       },
       {

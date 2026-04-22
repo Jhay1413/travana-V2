@@ -25,6 +25,7 @@ import {
   cruise_ship,
   cruise_itenary,
   cruise_voyage,
+  tags,
 } from "@shared/schema";
 
 const router = Router();
@@ -1167,6 +1168,55 @@ router.delete(
   "/cruise-voyages/:id",
   asyncHandler(async (req: Request, res: Response) => {
     await db.delete(cruise_voyage).where(eq(cruise_voyage.id, req.params.id));
+    res.status(204).send();
+  })
+);
+
+// ─── TAGS ─────────────────────────────────────────────────────────────────────
+
+router.get(
+  "/tags",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit, search, offset } = parsePagination(req.query);
+    const where = search ? ilike(tags.name, `%${search}%`) : undefined;
+    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(tags).where(where);
+    const rows = await db.select().from(tags).where(where).orderBy(asc(tags.name)).limit(limit).offset(offset);
+    return successResponse(res, buildPaginatedResponse(rows, Number(count), page, limit), "Tags retrieved");
+  })
+);
+
+router.get(
+  "/tags/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const [row] = await db.select().from(tags).where(eq(tags.id, req.params.id));
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Tag retrieved");
+  })
+);
+
+router.post(
+  "/tags",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...data } = req.body;
+    const [row] = await db.insert(tags).values(data).returning();
+    return successResponse(res, row, "Tag created", 201);
+  })
+);
+
+router.patch(
+  "/tags/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id: _id, ...updates } = req.body;
+    const [row] = await db.update(tags).set(updates).where(eq(tags.id, req.params.id)).returning();
+    if (!row) return res.status(404).json({ success: false, message: "Not found" });
+    return successResponse(res, row, "Tag updated");
+  })
+);
+
+router.delete(
+  "/tags/:id",
+  asyncHandler(async (req: Request, res: Response) => {
+    await db.delete(tags).where(eq(tags.id, req.params.id));
     res.status(204).send();
   })
 );

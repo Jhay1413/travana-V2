@@ -122,6 +122,13 @@ const TABLE_DEFS: Record<string, { apiKey: string; label: string; navKey: string
     columns: ["code", "description", "is_used"],
     displayColumns: ["code", "description", "is_used"],
   },
+  tags: {
+    apiKey: "tags",
+    label: "Tags",
+    navKey: "tags",
+    columns: ["name"],
+    displayColumns: ["name", "usageCount", "createdAt"],
+  },
 };
 
 function parseCSV(text: string): Record<string, string>[] {

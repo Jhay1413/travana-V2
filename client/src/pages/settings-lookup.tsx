@@ -379,6 +379,19 @@ const TABLE_DEFS: Record<string, TableDef> = {
     ],
     primaryLabel: (r) => r.code ?? "–",
   },
+  "tags": {
+    label: "Tags",
+    apiPath: "/api/settings/tags",
+    navKey: "tags",
+    displayColumns: [
+      { key: "name", label: "Name" },
+      { key: "usageCount", label: "Usage Count" },
+    ],
+    formFields: [
+      { key: "name", label: "Name", type: "text", required: true, placeholder: "e.g. Beach, Family, Luxury" },
+    ],
+    primaryLabel: (r) => r.name ?? "–",
+  },
 };
 
 const PAGE_SIZE = 25;
