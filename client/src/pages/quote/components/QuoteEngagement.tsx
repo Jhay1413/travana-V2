@@ -1,17 +1,23 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useQuoteViews, useQuoteCustomerActions, type QuoteViewEntry } from "@/hooks/queries/use-quote-share-queries";
+import {
+  useQuoteViews,
+  useQuoteCustomerActions,
+  type QuoteClientViewEntry,
+  type QuotePublicViewEntry,
+} from "@/hooks/queries/use-quote-share-queries";
 import {
   Eye,
   Monitor,
   Smartphone,
   Tablet,
-  Clock,
   CheckCircle2,
   MessageSquare,
   ChevronDown,
   ChevronUp,
+  User,
+  Globe,
 } from "lucide-react";
 
 interface QuoteEngagementProps {
@@ -47,7 +53,7 @@ function formatDateTime(dateStr: string | Date | null): string {
   const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   if (isToday) return `Today at ${time}`;
   if (isYesterday) return `Yesterday at ${time}`;
-  return `${date.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} at ${time}`;
+  return `${date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at ${time}`;
 }
 
 const deviceIcons: Record<string, typeof Monitor> = {
@@ -59,12 +65,14 @@ const deviceIcons: Record<string, typeof Monitor> = {
 export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
   const { data: viewStats, isLoading: viewsLoading } = useQuoteViews(quoteId);
   const { data: actions, isLoading: actionsLoading } = useQuoteCustomerActions(quoteId);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showPublicHistory, setShowPublicHistory] = useState(false);
 
   const isLoading = viewsLoading || actionsLoading;
-  const totalViews = viewStats?.totalViews || 0;
-  const uniqueViews = viewStats?.uniqueViews || 0;
-  const hasData = totalViews > 0 || (actions && actions.length > 0);
+  const clientViews: QuoteClientViewEntry[] = viewStats?.clientViews ?? [];
+  const publicViews: QuotePublicViewEntry[] = viewStats?.publicViews ?? [];
+  const publicViewCount = viewStats?.publicViewCount ?? 0;
+  const uniqueViews = viewStats?.uniqueViews ?? 0;
+  const hasData = clientViews.length > 0 || publicViewCount > 0 || (actions && actions.length > 0);
 
   if (isLoading) {
     return (
@@ -101,13 +109,59 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
         <h3 className="text-sm font-semibold">Quote Engagement</h3>
       </div>
 
-      {totalViews > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between rounded-xl border border-black/5 bg-blue-50/30 px-3 py-2">
+      {/* ── Client Views ─────────────────────────────────────────── */}
+      {clientViews.length > 0 && (
+        <div className="mb-3" data-testid="section-client-views">
+          <div className="flex items-center gap-1.5 mb-2">
+            <User className="h-3 w-3 text-violet-500" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
+              Client Views
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {clientViews.map((v) => {
+              const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
+              return (
+                <div
+                  key={v.id}
+                  className="flex items-start gap-2 rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2"
+                  data-testid={`client-view-${v.id}`}
+                >
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-[9px] font-bold mt-0.5">
+                    {v.viewerName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium text-black/80">
+                      {v.viewerName}
+                    </span>
+                    <span className="text-xs text-black/50"> viewed this quote</span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <IconComp className="h-2.5 w-2.5 text-black/30" />
+                      <span className="text-[10px] text-black/40">{formatDateTime(v.viewedAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Public Views ─────────────────────────────────────────── */}
+      {publicViewCount > 0 && (
+        <div className="mb-3" data-testid="section-public-views">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Globe className="h-3 w-3 text-blue-500" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
+              Public Views
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-black/5 bg-blue-50/30 px-3 py-2 mb-2">
             <div className="flex items-center gap-2">
               <Eye className="h-3.5 w-3.5 text-blue-600" />
-              <span className="text-xs font-medium" data-testid="text-view-count">
-                Viewed {totalViews} {totalViews === 1 ? "time" : "times"}
+              <span className="text-xs font-medium" data-testid="text-public-view-count">
+                Viewed {publicViewCount} {publicViewCount === 1 ? "time" : "times"}
               </span>
               {uniqueViews > 0 && (
                 <span className="text-[10px] text-black/40" data-testid="text-unique-views">
@@ -117,60 +171,27 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
-              <div className="text-[10px] text-black/40 mb-0.5">First viewed</div>
-              <div className="font-medium text-black/70" data-testid="text-first-viewed">
-                {formatDateTime(viewStats.firstViewed)}
-              </div>
-            </div>
-            <div className="rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
-              <div className="text-[10px] text-black/40 mb-0.5">Last viewed</div>
-              <div className="font-medium text-black/70" data-testid="text-last-viewed">
-                {formatDateTime(viewStats.lastViewed)}
-              </div>
-            </div>
-          </div>
-
-          {viewStats.deviceBreakdown && Object.keys(viewStats.deviceBreakdown).length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(viewStats.deviceBreakdown as Record<string, number>).map(([device, count]) => {
-                const IconComp = deviceIcons[device] || Monitor;
-                return (
-                  <div
-                    key={device}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white/70 px-2.5 py-1 text-[10px] font-medium text-black/60"
-                    data-testid={`badge-device-${device}`}
-                  >
-                    <IconComp className="h-3 w-3" />
-                    {device}: {count}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {viewStats.views && viewStats.views.length > 0 && (
-            <div>
+          {publicViews.length > 0 && (
+            <>
               <button
                 type="button"
-                onClick={() => setShowHistory(!showHistory)}
-                className="inline-flex items-center gap-1 text-[10px] font-medium text-black/50 hover:text-black/70 transition mt-1"
-                data-testid="btn-toggle-history"
+                onClick={() => setShowPublicHistory(!showPublicHistory)}
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-black/50 hover:text-black/70 transition"
+                data-testid="btn-toggle-public-history"
               >
-                {showHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                {showHistory ? "Hide" : "Show"} view history
+                {showPublicHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                {showPublicHistory ? "Hide" : "Show"} view history
               </button>
 
-              {showHistory && (
-                <div className="mt-2 space-y-1 max-h-48 overflow-y-auto" data-testid="view-history-list">
-                  {viewStats.views.map((v: QuoteViewEntry) => {
+              {showPublicHistory && (
+                <div className="mt-2 space-y-1 max-h-40 overflow-y-auto" data-testid="public-history-list">
+                  {publicViews.map((v) => {
                     const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
                     return (
                       <div
                         key={v.id}
                         className="flex items-center gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5"
-                        data-testid={`view-entry-${v.id}`}
+                        data-testid={`public-view-${v.id}`}
                       >
                         <IconComp className="h-3 w-3 shrink-0 text-black/30" />
                         <span className="text-[10px] text-black/60 flex-1">
@@ -187,13 +208,14 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
                   })}
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       )}
 
+      {/* ── Customer Responses ───────────────────────────────────── */}
       {actions && actions.length > 0 && (
-        <div className="mt-3 space-y-2">
+        <div className="space-y-2" data-testid="section-customer-actions">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
             Customer Responses
           </div>

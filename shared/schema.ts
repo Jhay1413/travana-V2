@@ -1656,6 +1656,7 @@ export const quoteViewsTable = pgTable("quote_views", {
   deviceType: varchar("device_type", { length: 20 }),
   browser: varchar("browser", { length: 100 }),
   userAgent: text("user_agent"),
+  viewerName: varchar("viewer_name", { length: 200 }),
 });
 
 export const insertQuoteViewSchema = createInsertSchema(quoteViewsTable).omit({ id: true, viewedAt: true });

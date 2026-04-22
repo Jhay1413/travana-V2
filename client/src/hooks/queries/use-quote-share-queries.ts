@@ -1,7 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import axiosClient from "@/api/client/axios-client";
 
-export interface QuoteViewEntry {
+export interface QuoteClientViewEntry {
+  id: string;
+  viewerName: string;
+  viewedAt: string;
+  deviceType: string | null;
+  browser: string | null;
+}
+
+export interface QuotePublicViewEntry {
   id: string;
   viewedAt: string;
   deviceType: string | null;
@@ -11,10 +19,12 @@ export interface QuoteViewEntry {
 export interface QuoteViewStats {
   totalViews: number;
   uniqueViews: number;
+  publicViewCount: number;
   firstViewed: string | null;
   lastViewed: string | null;
   deviceBreakdown: Record<string, number>;
-  views: QuoteViewEntry[];
+  clientViews: QuoteClientViewEntry[];
+  publicViews: QuotePublicViewEntry[];
 }
 
 export const quoteShareKeys = {

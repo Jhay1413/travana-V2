@@ -1012,7 +1012,7 @@ export default function PublicQuotePage() {
   useEffect(() => {
     if (token && !viewLogged.current) {
       viewLogged.current = true;
-      logView.mutate(token);
+      logView.mutate({ token, viewerName: null });
     }
   }, [token]);
 

@@ -327,13 +327,28 @@ export const quotePublicRepository = {
       deviceBreakdown[dt] = (deviceBreakdown[dt] || 0) + 1;
       if (v.ipAddress) seenIps.add(v.ipAddress);
     }
+    const clientViews = views.filter((v) => v.viewerName);
+    const publicViews = views.filter((v) => !v.viewerName);
     return {
       totalViews: views.length,
       uniqueViews: seenIps.size,
+      publicViewCount: publicViews.length,
       firstViewed: views.length > 0 ? views[views.length - 1].viewedAt : null,
       lastViewed: views.length > 0 ? views[0].viewedAt : null,
       deviceBreakdown,
-      views,
+      clientViews: clientViews.map((v) => ({
+        id: v.id,
+        viewerName: v.viewerName!,
+        viewedAt: v.viewedAt,
+        deviceType: v.deviceType,
+        browser: v.browser,
+      })),
+      publicViews: publicViews.map((v) => ({
+        id: v.id,
+        viewedAt: v.viewedAt,
+        deviceType: v.deviceType,
+        browser: v.browser,
+      })),
     };
   },
 

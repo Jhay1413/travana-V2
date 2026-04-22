@@ -7,21 +7,26 @@ import {
   useLogQuoteView,
 } from "@/hooks/queries/use-quote-public-queries";
 import { PublicQuoteContent } from "@/pages/public-quote";
+import { usePortalUser } from "@/hooks/use-portal-api";
 
 export default function PortalQuoteViewPage() {
   const [, params] = useRoute("/portal/quote/:token");
   const token = params?.token || "";
   const [, setLocation] = useLocation();
   const { data: quote, isLoading, error } = usePublicQuote(token);
+  const { data: portalUser } = usePortalUser();
   const logView = useLogQuoteView();
   const viewLogged = useRef(false);
 
   useEffect(() => {
-    if (token && !viewLogged.current) {
+    if (token && !viewLogged.current && portalUser !== undefined) {
       viewLogged.current = true;
-      logView.mutate(token);
+      const viewerName = portalUser
+        ? [portalUser.firstName, portalUser.lastName].filter(Boolean).join(" ") || null
+        : null;
+      logView.mutate({ token, viewerName });
     }
-  }, [token]);
+  }, [token, portalUser]);
 
   return (
     <PortalLayout>
