@@ -37,6 +37,7 @@ import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
 import { QuoteSummaryTimeline } from "@/components/quote/QuoteSummaryTimeline";
 import { StatusPill } from "@/components/quote/StatusPill";
+import { QuoteEngagement } from "@/pages/quote/components";
 
 export default function QuotePage() {
   const [, setLocation] = useLocation();
@@ -1093,6 +1094,8 @@ export default function QuotePage() {
               </Card>
 
               <QuoteTasksSection quoteId={quoteId} entityType="quote" assignedUserId={quoteData?.user_id} />
+
+              <QuoteEngagement quoteId={quoteId} />
 
             </div>
           </div>

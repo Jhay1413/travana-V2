@@ -27,7 +27,7 @@ export function useQuoteViews(quoteId: string) {
     queryKey: quoteShareKeys.views(quoteId),
     queryFn: async () => {
       const res = await axiosClient.get(`/api/quote-share/${quoteId}/views`);
-      return res.data.data;
+      return res.data;
     },
     enabled: !!quoteId,
   });
@@ -38,7 +38,7 @@ export function useQuoteCustomerActions(quoteId: string) {
     queryKey: quoteShareKeys.customerActions(quoteId),
     queryFn: async () => {
       const res = await axiosClient.get(`/api/quote-share/${quoteId}/customer-actions`);
-      return res.data.data;
+      return res.data;
     },
     enabled: !!quoteId,
   });
