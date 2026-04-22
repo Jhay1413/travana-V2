@@ -394,21 +394,22 @@ function FlightsSection({ flights }: { flights: PublicQuoteData["flights"] }) {
   const renderFlightLeg = (f: PublicQuoteData["flights"][0], label: string, legIdx: number) => (
     <div className="p-4 rounded-2xl bg-white/5">
       <p className="text-[11px] font-bold uppercase tracking-widest text-white/40 mb-3">{label}</p>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-white font-semibold text-sm truncate" data-testid={`text-flight-from-${legIdx}`}>{f.departingAirport || "TBC"}</p>
+          <p className="text-white font-semibold text-sm sm:truncate" data-testid={`text-flight-from-${legIdx}`}>{f.departingAirport || "TBC"}</p>
           <p className="text-xs text-white/40 mt-0.5">{formatDate(f.departureDateTime)}</p>
           <p className="text-base font-mono font-bold text-white/80 mt-1">{formatTime(f.departureDateTime)}</p>
         </div>
-        <div className="flex flex-col items-center gap-1 shrink-0 px-2">
-          <Plane className="w-4 h-4 text-blue-400" />
+        <div className="flex items-center sm:flex-col sm:items-center gap-1 sm:shrink-0 sm:px-2">
+          <div className="flex-1 sm:hidden h-px bg-gradient-to-r from-blue-500/40 to-transparent" />
+          <Plane className="w-4 h-4 text-blue-400 shrink-0" />
           {f.flightNumber && (
             <span className="text-[10px] text-white/25 font-mono">{f.flightNumber}</span>
           )}
-          <div className="w-12 h-px bg-gradient-to-r from-blue-500/40 to-purple-500/40" />
+          <div className="flex-1 sm:flex-none sm:w-12 h-px bg-gradient-to-r from-transparent to-purple-500/40 sm:from-blue-500/40 sm:to-purple-500/40" />
         </div>
-        <div className="flex-1 min-w-0 text-right">
-          <p className="text-white font-semibold text-sm truncate" data-testid={`text-flight-to-${legIdx}`}>{f.arrivalAirport || "TBC"}</p>
+        <div className="flex-1 min-w-0 sm:text-right">
+          <p className="text-white font-semibold text-sm sm:truncate" data-testid={`text-flight-to-${legIdx}`}>{f.arrivalAirport || "TBC"}</p>
           <p className="text-xs text-white/40 mt-0.5">{formatDate(f.arrivalDateTime)}</p>
           <p className="text-base font-mono font-bold text-white/80 mt-1">{formatTime(f.arrivalDateTime)}</p>
         </div>

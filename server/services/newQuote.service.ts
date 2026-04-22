@@ -433,7 +433,7 @@ export const newQuoteService = {
       'lodge_id', 'quote_type', 'deal_type', 'pre_booked_seats', 'flight_meals',
       'infant', 'child', 'adult', 'title', 'price_per_person', 'lodge_type',
       'transfer_type', 'quote_status', 'main_tour_operator_id', 'quote_ref',
-      'date_expiry',
+      'date_expiry', 'not_for_social',
     ];
     for (const key of directFields) {
       if (key in quoteFields) {

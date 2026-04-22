@@ -1971,6 +1971,18 @@ function ConnectingLegFields({
         />
         <FormField
           control={control}
+          name={`${prefix}.arriveDate` as any}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs font-medium text-black/60">Arrive Date</FormLabel>
+              <FormControl>
+                <DatePicker value={field.value ?? ""} onChange={field.onChange} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
           name={`${prefix}.arriveTime` as any}
           render={({ field }) => (
             <FormItem>

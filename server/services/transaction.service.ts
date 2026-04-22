@@ -392,32 +392,34 @@ export const transactionService = {
     if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(mainQuoteId, extraAccommodations);
 
     const { transaction: mainTxn } = result;
-    try {
-      const freeTxn = await transactionRepository.create({
-        status: 'on_quote',
-        user_id: mainTxn.user_id,
-      } as InsertTransaction);
+    if (!(quoteFields as any).not_for_social && !transactionData.is_test) {
+      try {
+        const freeTxn = await transactionRepository.create({
+          status: 'on_quote',
+          user_id: mainTxn.user_id,
+        } as InsertTransaction);
 
-      await newQuoteService.createQuote({
-        ...quoteFields,
-        transaction_id: freeTxn.id,
-        isFreeQuote: true,
-        isQuoteCopy: false,
-        outboundFlight: normalizedOutboundFlight,
-        inboundFlight: normalizedInboundFlight,
-        outboundConnectingLegs: normalizedOutboundConnecting,
-        inboundConnectingLegs: normalizedInboundConnecting,
-        primaryAccommodation: primaryAccommodation || undefined,
-        images: normalizeUniqueImageUrls(images),
-        transfers,
-        carHires,
-        attractionTickets,
-        loungePasses,
-        airportParkings,
-        extraAccommodations,
-      } as any);
-    } catch (err) {
-      console.error('🆓 FREE QUOTE - error creating free quote:', err);
+        await newQuoteService.createQuote({
+          ...quoteFields,
+          transaction_id: freeTxn.id,
+          isFreeQuote: true,
+          isQuoteCopy: false,
+          outboundFlight: normalizedOutboundFlight,
+          inboundFlight: normalizedInboundFlight,
+          outboundConnectingLegs: normalizedOutboundConnecting,
+          inboundConnectingLegs: normalizedInboundConnecting,
+          primaryAccommodation: primaryAccommodation || undefined,
+          images: normalizeUniqueImageUrls(images),
+          transfers,
+          carHires,
+          attractionTickets,
+          loungePasses,
+          airportParkings,
+          extraAccommodations,
+        } as any);
+      } catch (err) {
+        console.error('🆓 FREE QUOTE - error creating free quote:', err);
+      }
     }
 
     return result;

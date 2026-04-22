@@ -661,7 +661,8 @@ export default function SettingsLookupPage() {
       const p = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (debouncedSearch) p.set("search", debouncedSearch);
       const res = await axios.get(`${def.apiPath}?${p}`);
-      return res.data as {
+      const payload = res.data?.data ?? res.data;
+      return payload as {
         rows: Record<string, any>[];
         total: number;
         page: number;

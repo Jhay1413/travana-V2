@@ -291,6 +291,7 @@ export default function EmailInbox() {
   const [composeData, setComposeData] = useState({ to: "", cc: "", subject: "", body: "" });
   const [replying, setReplying] = useState<"reply" | "reply-all" | "forward" | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [forwardTo, setForwardTo] = useState("");
   const [localStarred, setLocalStarred] = useState<Record<string, boolean>>({});
   const [localRead, setLocalRead] = useState<Record<string, boolean>>({});
   const [removed, setRemoved] = useState<Set<string>>(new Set());
@@ -380,6 +381,7 @@ export default function EmailInbox() {
     markAsRead(email.id);
     setReplying(null);
     setReplyBody("");
+    setForwardTo("");
   };
 
   const handleSend = async () => {
@@ -398,17 +400,40 @@ export default function EmailInbox() {
   };
 
   const handleReply = async () => {
-    if (!account || !selectedEmail || !replyBody) return;
-    await sendEmail.mutateAsync({
-      accountId: account.id,
-      payload: {
-        to: selectedEmail.from.email,
-        subject: `Re: ${selectedEmail.subject}`,
-        text: replyBody,
-      },
-    });
+    if (!account || !selectedEmail) return;
+    if (replying === "forward") {
+      if (!forwardTo) return;
+      await sendEmail.mutateAsync({
+        accountId: account.id,
+        payload: {
+          to: forwardTo,
+          subject: selectedEmail.subject.startsWith("Fwd:")
+            ? selectedEmail.subject
+            : `Fwd: ${selectedEmail.subject}`,
+          html: replyBody || undefined,
+        },
+      });
+    } else {
+      if (!replyBody) return;
+      const ccRecipients =
+        replying === "reply-all"
+          ? selectedEmail.to.map((r) => r.email).join(", ") || undefined
+          : undefined;
+      await sendEmail.mutateAsync({
+        accountId: account.id,
+        payload: {
+          to: selectedEmail.from.email,
+          cc: ccRecipients,
+          subject: selectedEmail.subject.startsWith("Re:")
+            ? selectedEmail.subject
+            : `Re: ${selectedEmail.subject}`,
+          text: replyBody,
+        },
+      });
+    }
     setReplying(null);
     setReplyBody("");
+    setForwardTo("");
   };
 
   const folders: { key: EmailFolder; label: string; icon: React.ReactNode }[] = [
@@ -818,7 +843,7 @@ export default function EmailInbox() {
                             {replying === "forward" && <><Forward className="h-3.5 w-3.5" /> Forward</>}
                           </div>
                           <button
-                            onClick={() => { setReplying(null); setReplyBody(""); }}
+                            onClick={() => { setReplying(null); setReplyBody(""); setForwardTo(""); }}
                             className="h-6 w-6 rounded-lg flex items-center justify-center text-black/30 hover:text-black dark:text-white/30 dark:hover:text-white transition"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -828,6 +853,8 @@ export default function EmailInbox() {
                           <div className="flex items-center gap-2 mb-2">
                             <span className="text-xs text-black/50 dark:text-white/50">To</span>
                             <Input
+                              value={forwardTo}
+                              onChange={(e) => setForwardTo(e.target.value)}
                               placeholder="recipient@example.com"
                               className="h-7 text-xs rounded-lg border-black/10 bg-white/50 dark:border-white/10 dark:bg-black/20"
                               data-testid="forward-to"
@@ -844,7 +871,7 @@ export default function EmailInbox() {
                         <div className="flex items-center justify-between mt-2">
                           <Button
                             onClick={handleReply}
-                            disabled={sendEmail.isPending || !replyBody}
+                            disabled={sendEmail.isPending || (replying === "forward" ? !forwardTo : !replyBody)}
                             className="h-8 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 gap-1.5 text-xs"
                             data-testid="button-send-reply"
                           >
