@@ -117,10 +117,8 @@ export function usePublicQuote(token: string) {
 
 export function useLogQuoteView() {
   return useMutation({
-    mutationFn: async ({ token, viewerName }: { token: string; viewerName?: string | null }) => {
-      const { data } = await axiosClient.post(`/api/public/quote/${token}/view`, {
-        viewerName: viewerName ?? null,
-      });
+    mutationFn: async ({ token }: { token: string }) => {
+      const { data } = await axiosClient.post(`/api/public/quote/${token}/view`, {});
       return data;
     },
   });

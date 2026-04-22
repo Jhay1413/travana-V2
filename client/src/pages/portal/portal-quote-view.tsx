@@ -2,31 +2,24 @@ import { useRoute, useLocation } from "wouter";
 import { useEffect, useRef } from "react";
 import { Home, ChevronRight, Loader2, X } from "lucide-react";
 import PortalLayout from "./portal-layout";
-import {
-  usePublicQuote,
-  useLogQuoteView,
-} from "@/hooks/queries/use-quote-public-queries";
+import { usePublicQuote } from "@/hooks/queries/use-quote-public-queries";
 import { PublicQuoteContent } from "@/pages/public-quote";
-import { usePortalUser } from "@/hooks/use-portal-api";
+import { useLogPortalQuoteView } from "@/hooks/use-portal-api";
 
 export default function PortalQuoteViewPage() {
   const [, params] = useRoute("/portal/quote/:token");
   const token = params?.token || "";
   const [, setLocation] = useLocation();
   const { data: quote, isLoading, error } = usePublicQuote(token);
-  const { data: portalUser } = usePortalUser();
-  const logView = useLogQuoteView();
+  const logView = useLogPortalQuoteView();
   const viewLogged = useRef(false);
 
   useEffect(() => {
-    if (token && !viewLogged.current && portalUser !== undefined) {
+    if (token && !viewLogged.current) {
       viewLogged.current = true;
-      const viewerName = portalUser
-        ? [portalUser.firstName, portalUser.lastName].filter(Boolean).join(" ") || null
-        : null;
-      logView.mutate({ token, viewerName });
+      logView.mutate(token);
     }
-  }, [token, portalUser]);
+  }, [token]);
 
   return (
     <PortalLayout>

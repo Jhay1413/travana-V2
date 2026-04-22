@@ -179,6 +179,13 @@ export function usePortalUser() {
   });
 }
 
+export function useLogPortalQuoteView() {
+  return useMutation({
+    mutationFn: (token: string) =>
+      portalFetch(`/api/portal/quote/${token}/view`, { method: "POST" }),
+  });
+}
+
 export function usePortalQuotes() {
   return useQuery<PortalQuote[]>({
     queryKey: portalKeys.quotes,

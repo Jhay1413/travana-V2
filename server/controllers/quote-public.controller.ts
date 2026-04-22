@@ -12,7 +12,6 @@ export const quotePublicController = {
 
   logView: asyncHandler(async (req: Request, res: Response) => {
     const { token } = req.params;
-    const { viewerName } = req.body;
     const ua = req.headers["user-agent"] || "";
 
     let deviceType = "desktop";
@@ -37,7 +36,6 @@ export const quotePublicController = {
       deviceType,
       browser,
       userAgent: ua.substring(0, 500),
-      viewerName: typeof viewerName === "string" ? viewerName.substring(0, 200) : null,
     });
 
     return successResponse(res, { viewId: view.id });

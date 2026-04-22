@@ -4,6 +4,7 @@ import {
   quote, quote_accomodation, accomodation_list, resorts, destination, country,
   quoteImages, accommodation_images, clientTable, transaction, booking,
   portalMessages, webauthnCredentials, pushSubscriptions, quoteTags, tags, clientTags,
+  quoteViewsTable,
 } from "@shared/schema";
 import { referralService } from "../services/referral.service";
 import { referralPayoutService } from "../services/referralPayout.service";
@@ -978,6 +979,57 @@ portalStaffRouter.post("/remove-pin", requireStaffAuth, async (req: Request, res
   } catch (err: any) {
     console.error("Remove PIN error:", err);
     res.status(500).json({ error: "Failed to remove PIN" });
+  }
+});
+
+portalRouter.post("/quote/:token/view", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { token } = req.params;
+    const ua = req.headers["user-agent"] || "";
+
+    const [client] = await db
+      .select({ firstName: clientTable.firstName, lastName: clientTable.surename })
+      .from(clientTable)
+      .where(eq(clientTable.id, clientId))
+      .limit(1);
+
+    const viewerName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || null;
+
+    const quoteId = await quotePublicRepository.findQuoteIdByToken(token);
+    if (!quoteId) return res.status(404).json({ error: "Quote not found" });
+
+    let deviceType = "desktop";
+    if (/mobile|android|iphone|ipad/i.test(ua)) {
+      deviceType = /ipad|tablet/i.test(ua) ? "tablet" : "mobile";
+    }
+    let browser = "Unknown";
+    if (/edg/i.test(ua)) browser = "Edge";
+    else if (/chrome/i.test(ua)) browser = "Chrome";
+    else if (/firefox/i.test(ua)) browser = "Firefox";
+    else if (/safari/i.test(ua)) browser = "Safari";
+    else if (/opera|opr/i.test(ua)) browser = "Opera";
+
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
+
+    await quotePublicRepository.logView(quoteId, {
+      ipAddress: ip.substring(0, 45),
+      deviceType,
+      browser,
+      userAgent: ua.substring(0, 500),
+      viewerName,
+    });
+
+    await quotePublicRepository.notifyAgent(
+      quoteId,
+      "Quote Viewed",
+      `${viewerName || "A client"} viewed their quote via the portal`,
+    );
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Portal view error:", err);
+    res.status(500).json({ error: "Failed to log view" });
   }
 });
 
