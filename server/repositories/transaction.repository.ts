@@ -11,7 +11,6 @@ async function enrichTransactions(txns: Transaction[]) {
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
     db.select().from(quote).where(and(
       inArray(quote.transaction_id, txnIds),
-      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
       isNull(quote.deleted_at)
     )),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),

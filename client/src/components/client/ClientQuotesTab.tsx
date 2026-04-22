@@ -113,6 +113,35 @@ export function ClientQuotesTab({
                 }),
             },
             {
+              id: "lost",
+              title: "Lost",
+              rows: quotes
+                .filter((q: QuoteWithJoins) => q.quote_status && ["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status))
+                .map((q: QuoteWithJoins) => {
+                  const salesPrice = parseFloat(q.sales_price || "0");
+                  const discount = parseFloat(q.discounts || "0");
+                  const serviceCharge = parseFloat(q.service_charge || "0");
+                  const netPrice = salesPrice - discount + serviceCharge;
+
+                  return {
+                    id: q.id,
+                    transactionId: q.transaction_id,
+                    title: q.title || q.holiday_type_name || "Trip",
+                    isQuoteCopy: Boolean(q.isQuoteCopy),
+                    destination: q.holiday_type_name || q.quote_type || "—",
+                    travelDate: q.travel_date,
+                    createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
+                    createdAtRaw: q.date_created || "",
+                    status: q.quote_status || "LOST",
+                    totalCost: netPrice,
+                    pricePerPerson: parseFloat(q.price_per_person || "0"),
+                    imageUrl: q.images?.find((img: DealImage) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
+                    pax: `${q.adult || 0}A${(q.child || 0) > 0 ? ` ${q.child}C` : ""}${(q.infant || 0) > 0 ? ` ${q.infant}I` : ""}`,
+                    nights: q.num_of_nights || 0,
+                  };
+                }),
+            },
+            {
               id: "won",
               title: "Won (Bookings)",
               rows: bookings
@@ -216,7 +245,7 @@ export function ClientQuotesTab({
             }
 
             return (
-              <div key={group.id} className="rounded-3xl border border-black/10 bg-white/60 p-2" data-testid={`group-quotes-${group.id}`}>
+              <div key={group.id} className={`rounded-3xl border p-2 ${group.id === "lost" ? "border-rose-500/20 bg-rose-500/[0.04]" : "border-black/10 bg-white/60"}`} data-testid={`group-quotes-${group.id}`}>
                 <div className="flex items-center justify-between gap-3 px-2 py-2" data-testid={`row-quotes-group-header-${group.id}`}>
                   <div className="flex items-center gap-2">
                     <div className="text-xs font-semibold text-black/80" data-testid={`text-quotes-group-title-${group.id}`}>
@@ -326,7 +355,7 @@ export function ClientQuotesTab({
                                   {!isBooking && (
                                     <>
                                       <span className="text-black/25">•</span>
-                                      <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/60" data-testid={`text-quote-status-${q.id}`}>
+                                      <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${q.status === "LOST" ? "border-rose-500/25 bg-rose-500/10 text-rose-700" : "border-black/10 bg-white/70 text-black/60"}`} data-testid={`text-quote-status-${q.id}`}>
                                         {(q.status || "").replace(/_/g, " ")}
                                       </span>
                                     </>
