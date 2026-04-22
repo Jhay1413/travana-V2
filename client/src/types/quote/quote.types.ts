@@ -552,6 +552,7 @@ export interface CreateTransactionData {
   agent_id?: string;
   lead_source?: string;
   user_id: string;
+  is_test?: boolean;
   enquiry?: Partial<EnquiryTable> & EnquiryRelations;
   quote?: Partial<CreateQuoteData> & WithRelations;
   booking?: Partial<Booking> & WithRelations;

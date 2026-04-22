@@ -11,7 +11,7 @@ import {
   fetchOnlySocialsPost,
 } from "../utils/only-socials";
 import { db } from "../config/database";
-import { quote_accomodation, accommodation_images, lodge_images, lodges, quote, accomodation_list, park } from "@shared/schema";
+import { quote_accomodation, accommodation_images, lodge_images, lodges, quote, accomodation_list, park, transaction } from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import type { TravelDeal } from "@shared/schema";
 import type { OnlySocialsMediaUploadResponse, OnlySocialsMediaContent } from "../types/social-post/social-post.types";
@@ -127,6 +127,16 @@ export interface GeneratePostParams {
 
 export const socialPostService = {
   async generatePost(params: GeneratePostParams): Promise<TravelDeal> {
+    const [quoteRow] = await db
+      .select({ is_test: transaction.is_test })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(eq(quote.id, params.quoteId))
+      .limit(1);
+    if (quoteRow?.is_test) {
+      throw new AppError("Cannot generate social post for a test transaction", 400);
+    }
+
     const {
       quoteId,
       title,

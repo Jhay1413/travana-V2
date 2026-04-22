@@ -473,6 +473,7 @@ export const transaction = pgTable('transaction', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   status: transaction_status_enum(),
   is_active: boolean().default(true),
+  is_test: boolean().default(false),
   client_id: uuid().references(() => clientTable.id),
   lead_source: lead_source_enum().default('SHOP'),
   user_id: text().notNull().references(() => user.id),

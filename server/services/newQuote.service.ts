@@ -210,6 +210,7 @@ export const newQuoteService = {
         const freeTxn = await transactionRepository.create({
           status: 'on_quote',
           user_id: txn.user_id,
+          is_test: txn.is_test ?? false,
         } as InsertTransaction);
 
         const freeQ = await newQuoteRepository.create({

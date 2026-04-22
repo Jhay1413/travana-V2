@@ -409,6 +409,7 @@ export default function ClientPage() {
           client_id: clientId,
           user_id: currentUser?.id || "",
           lead_source: undefined,
+          is_test: data.is_test === true,
           enquiry: {
             title: (typeof data.enquiryTitle === 'string' ? data.enquiryTitle : undefined) || (typeof data.title === 'string' ? data.title : undefined) || "",
             holiday_type_id: (typeof data.holidayType === 'string' ? data.holidayType : undefined) || (typeof data.holiday_type_id === 'string' ? data.holiday_type_id : undefined) || "",

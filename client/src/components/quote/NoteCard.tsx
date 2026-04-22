@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pencil, Trash2, Pin, Reply, MessageSquare } from "lucide-react";
+import { Pencil, Trash2, Pin, Reply, MessageSquare, Eye } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateNote, useDeleteNote, useCreateNote } from "@/hooks/mutations";
@@ -15,13 +15,13 @@ export function NoteCard({
   note,
   replies,
   quoteId,
-  currentUserName,
 }: {
   note: TransactionNote;
   replies: TransactionNote[];
   quoteId: string;
-  currentUserName: string;
+  currentUserName?: string;
 }) {
+  const isSystem = note.description === "system";
   const [isEditing, setIsEditing] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(true);
@@ -72,42 +72,56 @@ export function NoteCard({
       className="group"
       data-testid={`note-card-${note.id}`}
     >
-      <div className="rounded-xl border border-black/10 bg-white/60 p-2 text-[20px]">
+      <div className={`rounded-xl border p-2 text-[20px] ${isSystem ? "border-sky-200/60 bg-sky-50/50" : "border-black/10 bg-white/60"}`}>
         <div className="flex items-start justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]" data-testid={`note-avatar-${note.id}`}>
-              {(note.author_name || "A").charAt(0).toUpperCase()}
-            </div>
+            {isSystem ? (
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-sky-500" data-testid={`note-avatar-${note.id}`}>
+                <Eye className="h-2.5 w-2.5" />
+              </div>
+            ) : (
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]" data-testid={`note-avatar-${note.id}`}>
+                {(note.author_name || "A").charAt(0).toUpperCase()}
+              </div>
+            )}
             <div>
-              <span className="text-[11px] font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.author_name || "Agent"}</span>
+              {isSystem ? (
+                <span className="rounded bg-sky-100 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-600" data-testid={`note-author-${note.id}`}>
+                  System
+                </span>
+              ) : (
+                <span className="text-[11px] font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.author_name || "Agent"}</span>
+              )}
               <span className="ml-1.5 text-[9px] text-black/40" data-testid={`note-time-${note.id}`}>
                 {formatRelativeTime(note.createdAt)}
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-            <button
-              type="button"
-              onClick={() => toggleFavoriteMutation.mutate(
-                { itemType: "note", itemId: note.id, label: `Note by ${note.author_name || "Agent"}`, subtitle: `quoteId:${quoteId}|${(note.content || "").replace(/<[^>]*>/g, "").slice(0, 40)}` },
-                { onSuccess: (data: { favorited?: boolean }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
-              )}
-              className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${isNotePinned ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/5 hover:text-black/70"}`}
-              title={isNotePinned ? "Unpin" : "Pin to dashboard"}
-              data-testid={`note-btn-pin-${note.id}`}
-            >
-              <Pin className="h-2.5 w-2.5" />
-            </button>
-            <button type="button" onClick={() => setIsReplying(!isReplying)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Reply" data-testid={`note-btn-reply-${note.id}`}>
-              <Reply className="h-2.5 w-2.5" />
-            </button>
-            <button type="button" onClick={() => setIsEditing(!isEditing)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Edit" data-testid={`note-btn-edit-${note.id}`}>
-              <Pencil className="h-2.5 w-2.5" />
-            </button>
-            <button type="button" onClick={handleDelete} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-rose-50 hover:text-rose-500" title="Delete" data-testid={`note-btn-delete-${note.id}`}>
-              <Trash2 className="h-2.5 w-2.5" />
-            </button>
-          </div>
+          {!isSystem && (
+            <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={() => toggleFavoriteMutation.mutate(
+                  { itemType: "note", itemId: note.id, label: `Note by ${note.author_name || "Agent"}`, subtitle: `quoteId:${quoteId}|${(note.content || "").replace(/<[^>]*>/g, "").slice(0, 40)}` },
+                  { onSuccess: (data: { favorited?: boolean }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                )}
+                className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${isNotePinned ? "text-amber-600 hover:bg-amber-50" : "text-black/40 hover:bg-black/5 hover:text-black/70"}`}
+                title={isNotePinned ? "Unpin" : "Pin to dashboard"}
+                data-testid={`note-btn-pin-${note.id}`}
+              >
+                <Pin className="h-2.5 w-2.5" />
+              </button>
+              <button type="button" onClick={() => setIsReplying(!isReplying)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Reply" data-testid={`note-btn-reply-${note.id}`}>
+                <Reply className="h-2.5 w-2.5" />
+              </button>
+              <button type="button" onClick={() => setIsEditing(!isEditing)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-black/5 hover:text-black/70" title="Edit" data-testid={`note-btn-edit-${note.id}`}>
+                <Pencil className="h-2.5 w-2.5" />
+              </button>
+              <button type="button" onClick={handleDelete} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/40 transition hover:bg-rose-50 hover:text-rose-500" title="Delete" data-testid={`note-btn-delete-${note.id}`}>
+                <Trash2 className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {isEditing ? (

@@ -164,6 +164,7 @@ export const bookingFormSchema = z.object({
     isIncludedInPackage: z.boolean().default(true),
   })).default([]),
   tags: z.array(z.string()).default([]),
+  is_test: z.boolean().default(false),
 });
 
 export type FlightLegValue = z.infer<typeof flightLegSchema>;
@@ -235,6 +236,7 @@ export const defaultBookingFormValues: BookingFormValues = {
   airportParkings: [],
   extraAccommodations: [],
   tags: [],
+  is_test: false,
 };
 
 export interface BookingRHFFormProps {

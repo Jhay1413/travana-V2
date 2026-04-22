@@ -310,6 +310,7 @@ export function QuoteCreateDialog({
         client_id: clientId,
         user_id: userId,
         lead_source: values.leadSource || undefined,
+        is_test: values.is_test === true,
         quote: {
           ...quotePayload,
           quote_status: values.status || "QUOTE_IN_PROGRESS",

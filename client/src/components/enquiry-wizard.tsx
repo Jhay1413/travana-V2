@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
@@ -86,6 +87,7 @@ interface EnquiryForm {
   preCruiseStayDays: string;
   postCruiseStayDays: string;
   destinationLabel: string;
+  is_test: boolean;
 }
 
 const defaultForm: EnquiryForm = {
@@ -120,6 +122,7 @@ const defaultForm: EnquiryForm = {
   preCruiseStayDays: "",
   postCruiseStayDays: "",
   destinationLabel: "",
+  is_test: false,
 };
 
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
@@ -260,6 +263,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
       title: form.enquiryTitle,
       holiday_type_id: form.holidayType,
       notes: form.notes || undefined,
+      is_test: form.is_test,
     };
 
     if (holidayTypeName === "Hot Tub Break") {
@@ -1071,6 +1075,16 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
             </motion.div>
           </AnimatePresence>
         </div>
+
+        {step === 2 && (
+          <div className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 mb-4">
+            <Switch checked={form.is_test} onCheckedChange={(v) => set("is_test", v)} />
+            <div>
+              <p className="text-sm font-medium text-orange-700">Test Enquiry</p>
+              <p className="text-xs text-orange-500">Will not appear in pipeline, stats, or generate social posts</p>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between border-t border-black/10 pt-4" data-testid="row-wizard-actions">
           <Button

@@ -118,7 +118,9 @@ export function usePublicQuote(token: string) {
 export function useLogQuoteView() {
   return useMutation({
     mutationFn: async (token: string) => {
-      const { data } = await axiosClient.post(`/api/public/quote/${token}/view`);
+      const { data } = await axiosClient.post(`/api/public/quote/${token}/view`, {
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
       return data;
     },
   });

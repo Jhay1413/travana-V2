@@ -68,7 +68,7 @@ export const opportunitiesRepository = {
     const { page, limit, status, search, dateRange, agentId, sortBy = "newest" } = filters;
     const offset = (page - 1) * limit;
 
-    const conditions: any[] = [eq(transaction.is_active, true)];
+    const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false)];
 
     if (status && status !== "all") conditions.push(eq(enquiry_table.status, status));
     if (agentId && agentId !== "all") conditions.push(eq(transaction.user_id, agentId));
@@ -131,7 +131,7 @@ export const opportunitiesRepository = {
     const { page, limit, status, search, dateRange, agentId, sortBy = "newest" } = filters;
     const offset = (page - 1) * limit;
 
-    const conditions: any[] = [eq(transaction.is_active, true), eq(quote.isFreeQuote, false), isNull(quote.deleted_at)];
+    const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false), eq(quote.isFreeQuote, false), isNull(quote.deleted_at)];
 
     if (status && status !== "all") conditions.push(eq(quote.quote_status, status));
     if (agentId && agentId !== "all") conditions.push(eq(transaction.user_id, agentId));
@@ -195,7 +195,7 @@ export const opportunitiesRepository = {
     const { page, limit, status, search, dateRange, agentId, sortBy = "newest" } = filters;
     const offset = (page - 1) * limit;
 
-    const conditions: any[] = [eq(transaction.is_active, true)];
+    const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false)];
 
     if (status && status !== "all") conditions.push(eq(booking.booking_status, status));
     if (agentId && agentId !== "all") conditions.push(eq(transaction.user_id, agentId));

@@ -166,6 +166,7 @@ function buildCreatePayload(
     client_id: clientId,
     user_id: userId,
     lead_source: values.leadSource || undefined,
+    is_test: values.is_test === true,
     booking: {
       holiday_type_id: values.packageType,
       hays_ref: values.haysRef || "",

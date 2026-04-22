@@ -15,6 +15,13 @@
       "when": 1744588800000,
       "tag": "0001_referral_payout_withdrawal",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1745280000000,
+      "tag": "0002_add_is_test_to_transaction",
+      "breakpoints": true
     }
   ]
 }

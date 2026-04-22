@@ -131,10 +131,10 @@ export default function QuotePage() {
 
     const flights = quoteData.flights || [];
     const accommodations = quoteData.accommodations || [];
-    const primaryAccom = accommodations.find((a: any) => a.is_primary) || accommodations[0];
+    const primaryAccom = accommodations.find((a) => a.is_primary) || accommodations[0];
 
-    const outboundFlights = flights.filter((f: any) => f.flight_type === "outbound").sort((a: any, b: any) => (a.leg_order || 0) - (b.leg_order || 0));
-    const inboundFlights = flights.filter((f: any) => f.flight_type === "inbound").sort((a: any, b: any) => (a.leg_order || 0) - (b.leg_order || 0));
+    const outboundFlights = flights.filter((f) => f.flight_type === "outbound").sort((a, b) => (a.leg_order || 0) - (b.leg_order || 0));
+    const inboundFlights = flights.filter((f) => f.flight_type === "inbound").sort((a, b) => (a.leg_order || 0) - (b.leg_order || 0));
     const outboundFlight = outboundFlights[0];
     const inboundFlight = inboundFlights[0];
 
@@ -150,7 +150,7 @@ export default function QuotePage() {
     const ibArrive = splitDateTime(inboundFlight?.arrival_date_time || "");
     const checkIn = splitDateTime(primaryAccom?.check_in_date_time || "");
 
-    const childPassengers = (quoteData.passengers || []).filter((p: any) => p.type === "child");
+    const childPassengers = (quoteData.passengers || []).filter((p) => p.type === "child");
 
     return {
       packageType: quoteData.holiday_type_id || "",

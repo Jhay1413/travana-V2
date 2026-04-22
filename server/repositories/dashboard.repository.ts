@@ -20,14 +20,14 @@ export const dashboardRepository = {
         enquiry: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'on_enquiry')`,
         quoted: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'on_quote')`,
         booked: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'on_booking')`,
-      }).from(transaction),
+      }).from(transaction).where(eq(transaction.is_test, false)),
       db.select({
         total: sql<number>`count(*)`,
-      }).from(quote).where(isNull(quote.deleted_at)),
+      }).from(quote).innerJoin(transaction, eq(quote.transaction_id, transaction.id)).where(and(isNull(quote.deleted_at), eq(transaction.is_test, false))),
       db.select({
         total: sql<number>`COALESCE(SUM(CAST(${quote.sales_price} AS DECIMAL)), 0)`,
         avg: sql<number>`COALESCE(AVG(CAST(${quote.sales_price} AS DECIMAL)), 0)`,
-      }).from(quote).where(isNull(quote.deleted_at)),
+      }).from(quote).innerJoin(transaction, eq(quote.transaction_id, transaction.id)).where(and(isNull(quote.deleted_at), eq(transaction.is_test, false))),
     ]);
 
     return {
@@ -73,26 +73,31 @@ export const dashboardRepository = {
         weekProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
         monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
       }).from(booking)
-        .where(gte(booking.date_created, weekStart)),
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .where(and(gte(booking.date_created, weekStart), eq(transaction.is_test, false))),
 
       db.select({
         monthCount: sql<number>`COUNT(*)`,
         monthProfit: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
       }).from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
         .where(and(
           gte(booking.date_created, monthStart),
           sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+          eq(transaction.is_test, false),
         )),
 
       db.select({
         totalCommission: sql<number>`COALESCE(SUM(CAST(${quote.package_commission} AS DECIMAL)), 0)`,
         count: sql<number>`COUNT(*)`,
       }).from(quote)
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
         .where(and(
           gte(quote.date_created, monthStart),
           sql`${quote.date_created} < ${monthEnd.toISOString()}`,
           sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
           sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED', 'LOST'))`,
+          eq(transaction.is_test, false),
         )),
 
       db.select({
@@ -105,6 +110,7 @@ export const dashboardRepository = {
         .where(and(
           gte(booking.date_created, monthStart),
           sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+          eq(transaction.is_test, false),
         ))
         .groupBy(transaction.user_id),
 
@@ -117,6 +123,7 @@ export const dashboardRepository = {
           gte(quote.date_created, monthStart),
           sql`${quote.date_created} < ${monthEnd.toISOString()}`,
           sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+          eq(transaction.is_test, false),
         ))
         .groupBy(transaction.user_id),
 

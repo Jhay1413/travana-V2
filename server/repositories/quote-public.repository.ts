@@ -7,7 +7,7 @@ import {
   accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type,
-  lodges, park, user,
+  lodges, park, user, clientTable,
   quoteViewsTable, quoteCustomerActionsTable, destinationGuruTable,
   notifications,
 } from "@shared/schema";
@@ -57,6 +57,8 @@ export const quotePublicRepository = {
         main_tour_operator_name: tour_operator.name,
         client_id: transaction.client_id,
         user_id: transaction.user_id,
+        client_first_name: clientTable.firstName,
+        client_last_name: clientTable.surename,
         lodge_id: quote.lodge_id,
         park_id: lodges.park_id,
       })
@@ -64,6 +66,7 @@ export const quotePublicRepository = {
       .leftJoin(package_type, eq(quote.holiday_type_id, package_type.id))
       .leftJoin(tour_operator, eq(quote.main_tour_operator_id, tour_operator.id))
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
       .leftJoin(lodges, eq(quote.lodge_id, lodges.id))
       .leftJoin(park, eq(lodges.park_id, park.id))
       .where(eq(quote.quote_token, token))
@@ -207,6 +210,9 @@ export const quotePublicRepository = {
     }
 
     return {
+      transactionId: q.quote.transaction_id,
+      clientName: [q.client_first_name, q.client_last_name].filter(Boolean).join(" ") || null,
+      agentUserId: q.user_id,
       title: q.quote.title || "",
       holidayType: q.holiday_type_name || q.quote.quote_type || "",
       travelDate: q.quote.travel_date,

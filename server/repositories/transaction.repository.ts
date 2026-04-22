@@ -326,7 +326,7 @@ export const transactionRepository = {
   },
 
   async findAllLightweight() {
-    const txns = await db.select().from(transaction).orderBy(desc(transaction.created_at));
+    const txns = await db.select().from(transaction).where(eq(transaction.is_test, false)).orderBy(desc(transaction.created_at));
     return enrichTransactionsLightweight(txns);
   },
 
@@ -340,6 +340,7 @@ export const transactionRepository = {
     const conditions = [
       eq(transaction.status, status as "on_enquiry" | "on_quote" | "in_play" | "on_booking"),
       sql`${transaction.client_id} IS NOT NULL`,
+      eq(transaction.is_test, false),
     ];
     if (agentId) {
       conditions.push(eq(transaction.user_id, agentId));
@@ -649,6 +650,7 @@ export const transactionRepository = {
 
     const conditions = [
       eq(transaction.is_active, true),
+      eq(transaction.is_test, false),
       eq(transaction.status, 'on_quote'),
       eq(quote.is_active, true),
       eq(quote.is_expired, false),
