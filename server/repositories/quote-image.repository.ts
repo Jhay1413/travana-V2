@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { quoteImages } from "@shared/schema";
+import { quoteImages, deal_images } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -46,14 +46,10 @@ export const quoteImageRepository = {
    * Delete a specific image
    */
   async deleteImage(quoteId: string, imageId: string) {
-    await db
-      .delete(quoteImages)
-      .where(
-        and(
-          eq(quoteImages.id, imageId),
-          eq(quoteImages.quoteId, quoteId)
-        )
-      );
+    await Promise.all([
+      db.delete(quoteImages).where(and(eq(quoteImages.id, imageId), eq(quoteImages.quoteId, quoteId))),
+      db.delete(deal_images).where(and(eq(deal_images.id, imageId), eq(deal_images.owner_id, quoteId))),
+    ]);
   },
 
   /**

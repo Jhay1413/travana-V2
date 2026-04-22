@@ -601,7 +601,6 @@ export function CommandCenterShell({
           { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" /> },
           { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" /> },
           { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" /> },
-          { key: "tags", label: "Tags", icon: <Tag className="h-4 w-4" /> },
         ],
       },
       {
@@ -623,6 +622,7 @@ export function CommandCenterShell({
           { key: "cruise-itineraries", label: "Cruise Itineraries", icon: <LifeBuoy className="h-4 w-4" /> },
           { key: "cruise-voyages", label: "Cruise Voyage Days", icon: <LifeBuoy className="h-4 w-4" /> },
           { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" /> },
+          { key: "tags", label: "Tags", icon: <Tag className="h-4 w-4" /> },
         ],
       },
     ];

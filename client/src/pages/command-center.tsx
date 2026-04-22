@@ -101,6 +101,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Gift,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -523,6 +524,7 @@ function ShellNav({
           { key: "cruise-itineraries", label: "Cruise Itineraries", icon: <LifeBuoy className="h-4 w-4" />, route: "/settings/cruise-itineraries" },
           { key: "cruise-voyages", label: "Cruise Voyage Days", icon: <LifeBuoy className="h-4 w-4" />, route: "/settings/cruise-voyages" },
           { key: "room-types", label: "Room Types", icon: <Building2 className="h-4 w-4" />, route: "/settings/room-types" },
+          { key: "tags", label: "Tags", icon: <Tag className="h-4 w-4" />, route: "/settings/tags" },
         ],
       },
     ];
