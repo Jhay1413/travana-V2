@@ -48,8 +48,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useSharedEmailAccount, useEmailMessages, useEmailMessage } from "@/hooks/queries";
-import { useSendEmail } from "@/hooks/mutations";
-import type { ImapMessage } from "@/api/endpoints/email.api";
+import { useCreateEmailAccount, useSendEmail } from "@/hooks/mutations";
+import type { EmailAttachment, ImapMessage } from "@/api/endpoints/email.api";
 
 type EmailFolder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash";
 
@@ -66,7 +66,7 @@ interface EmailMessage {
   starred: boolean;
   folder: EmailFolder;
   labels?: string[];
-  attachments?: { name: string; size: string; type: string }[];
+  attachments?: EmailAttachment[];
 }
 
 // Maps UI folder names to IMAP folder paths
@@ -131,8 +131,25 @@ function formatFullDate(dateStr: string) {
 }
 
 function getAttachmentIcon(type: string) {
-  if (type === "image") return <Image className="h-4 w-4" />;
+  if (type.startsWith("image/")) return <Image className="h-4 w-4" />;
   return <FileText className="h-4 w-4" />;
+}
+
+function downloadAttachment(att: EmailAttachment) {
+  const bytes = Uint8Array.from(atob(att.content), (c) => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: att.contentType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = att.filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ─── Connect Email Form ────────────────────d ───────────────────────────────────
@@ -344,7 +361,11 @@ export default function EmailInbox() {
   const selectedEmailWithBody = useMemo(() => {
     if (!selectedEmail) return null;
     if (!fullMessage) return selectedEmail;
-    return { ...selectedEmail, body: fullMessage.html ?? fullMessage.text ?? "" };
+    return {
+      ...selectedEmail,
+      body: fullMessage.html ?? fullMessage.text ?? "",
+      attachments: fullMessage.attachments ?? [],
+    };
   }, [selectedEmail, fullMessage]);
 
   const unreadCount = useMemo(
@@ -824,6 +845,30 @@ export default function EmailInbox() {
                   />
                 ) : (
                   <div className="text-sm text-black/40 dark:text-white/40 italic">No message content</div>
+                )}
+
+                {!bodyLoading && selectedEmailWithBody.attachments && selectedEmailWithBody.attachments.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8">
+                    <div className="flex items-center gap-1.5 mb-2 text-xs font-medium text-black/50 dark:text-white/50">
+                      <Paperclip className="h-3.5 w-3.5" />
+                      {selectedEmailWithBody.attachments.length} attachment{selectedEmailWithBody.attachments.length > 1 ? "s" : ""}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedEmailWithBody.attachments.map((att, i) => (
+                        <button
+                          key={i}
+                          onClick={() => downloadAttachment(att)}
+                          className="flex items-center gap-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/3 dark:bg-white/3 hover:bg-black/8 dark:hover:bg-white/8 px-3 py-2 text-left transition"
+                        >
+                          <span className="text-black/40 dark:text-white/40">{getAttachmentIcon(att.contentType)}</span>
+                          <div>
+                            <div className="text-xs font-medium text-black/80 dark:text-white/80 max-w-[160px] truncate">{att.filename}</div>
+                            <div className="text-[10px] text-black/40 dark:text-white/40">{formatBytes(att.size)}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 <AnimatePresence>

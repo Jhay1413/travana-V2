@@ -13,11 +13,19 @@ function resolveDestination(r: any): { destination: string | null; country: stri
   return { destination: r.destinationName || null, country: r.countryName || null };
 }
 
+type FlightLeg = {
+  legOrder: number;
+  departureAirport: string | null;
+  arrivalAirport: string | null;
+  departureDateTime: Date | null;
+  arrivalDateTime: Date | null;
+};
+
 function formatDeal(
   r: any,
   imageMap: Record<string, string[]>,
   primaryMap: Record<string, string>,
-  airportMap: Record<string, string>,
+  flightLegsMap: Record<string, FlightLeg[]>,
   includesMap: Record<string, string[]>,
   guruMap: Record<string, unknown>,
   tagsMap: Record<string, string[]>,
@@ -36,6 +44,9 @@ function formatDeal(
         })()
       : null;
 
+  const legs = r.quoteType !== "hot_tub_break" ? (flightLegsMap[r.id] || []) : [];
+  const firstLeg = legs[0] ?? null;
+
   return {
     id: r.id,
     title: r.title || `${dest || "Holiday"} Getaway`,
@@ -52,7 +63,16 @@ function formatDeal(
     nights: r.numNights ?? null,
     departureDate: r.travelDate || null,
     returnDate,
-    departureAirport: r.quoteType !== "hot_tub_break" ? (airportMap[r.id] || null) : null,
+    departureAirport: firstLeg?.departureAirport ?? null,
+    departureDateTime: firstLeg?.departureDateTime ? new Date(firstLeg.departureDateTime).toISOString() : null,
+    arrivalDateTime: firstLeg?.arrivalDateTime ? new Date(firstLeg.arrivalDateTime).toISOString() : null,
+    flightLegs: legs.map((leg) => ({
+      legOrder: leg.legOrder,
+      departureAirport: leg.departureAirport,
+      arrivalAirport: leg.arrivalAirport,
+      departureDateTime: leg.departureDateTime ? new Date(leg.departureDateTime).toISOString() : null,
+      arrivalDateTime: leg.arrivalDateTime ? new Date(leg.arrivalDateTime).toISOString() : null,
+    })),
     includes: includesMap[r.id] || [],
     highlights: guruData?.mustDo
       ? (guruData.mustDo as any[]).slice(0, 5).map((m: any) => m.name)
@@ -77,9 +97,9 @@ async function enrichRows(rows: any[], detail = false) {
       .map((r) => r.destinationName as string),
   ));
 
-  const [{ imageMap, primaryMap }, airportMap, includesMap, guruRows, tagsMap] = await Promise.all([
+  const [{ imageMap, primaryMap }, flightMap, includesMap, guruRows, tagsMap] = await Promise.all([
     publicDealsRepository.fetchImagesByQuoteIds(ids),
-    publicDealsRepository.fetchAirportsByQuoteIds(ids),
+    publicDealsRepository.fetchFlightsByQuoteIds(ids),
     publicDealsRepository.fetchIncludesByQuoteIds(ids),
     publicDealsRepository.fetchGuruByDestinations(destNames),
     detail ? publicDealsRepository.fetchTagsByQuoteIds(ids) : Promise.resolve({} as Record<string, string[]>),
@@ -94,7 +114,7 @@ async function enrichRows(rows: any[], detail = false) {
   console.log("[enrichRows] guruRows:", guruRows.map(g => ({ queryName: g.queryName, destination: g.destination })));
   console.log("[enrichRows] guruMap keys:", Object.keys(guruMap));
 
-  return rows.map((r) => formatDeal(r, imageMap, primaryMap, airportMap, includesMap, guruMap, tagsMap, detail));
+  return rows.map((r) => formatDeal(r, imageMap, primaryMap, flightMap, includesMap, guruMap, tagsMap, detail));
 }
 
 export const publicDealsService = {

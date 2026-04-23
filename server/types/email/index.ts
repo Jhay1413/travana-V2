@@ -1,1 +1,1 @@
-export type { EmailAccount, InsertEmailAccount, EmailMessage, EmailMessageFull, MailboxFolder, SendEmailPayload } from "./email.types";
+export type { EmailAccount, EmailAttachment, InsertEmailAccount, EmailMessage, EmailMessageFull, MailboxFolder, SendEmailPayload } from "./email.types";

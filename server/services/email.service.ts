@@ -4,7 +4,7 @@ import { simpleParser } from "mailparser";
 import { emailRepository } from "../repositories/email.repository";
 import { encrypt, decrypt } from "../utils/encryption";
 import { AppError } from "../utils/error-handler";
-import type { EmailAccount, EmailMessage, EmailMessageFull, MailboxFolder, SendEmailPayload } from "../types/email";
+import type { EmailAccount, EmailAttachment, EmailMessage, EmailMessageFull, MailboxFolder, SendEmailPayload } from "../types/email";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -182,6 +182,13 @@ export const emailService = {
 
         const parsed = await simpleParser(source);
 
+        const attachments: EmailAttachment[] = (parsed.attachments ?? []).map((att) => ({
+          filename: att.filename ?? "attachment",
+          contentType: att.contentType ?? "application/octet-stream",
+          size: att.size ?? att.content?.length ?? 0,
+          content: att.content.toString("base64"),
+        }));
+
         result = {
           uid: msg.uid,
           subject: envelope.subject ?? null,
@@ -192,6 +199,7 @@ export const emailService = {
           flags: Array.from(msg.flags ?? []) as unknown as Set<string>,
           html: parsed.html || null,
           text: parsed.text || null,
+          attachments,
         };
       }
 

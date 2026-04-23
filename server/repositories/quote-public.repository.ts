@@ -12,7 +12,7 @@ import {
   notifications,
 } from "@shared/schema";
 import type { QuoteView, InsertQuoteView, QuoteCustomerAction, InsertQuoteCustomerAction } from "@shared/schema";
-import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, or, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import crypto from "crypto";
 
@@ -190,7 +190,12 @@ export const quotePublicRepository = {
     const destName = accommodations[0]?.destination_name || "";
     let destinationGuru = null;
     if (destName) {
-      const [guruData] = await db.select().from(destinationGuruTable).where(eq(destinationGuruTable.destination, destName)).limit(1);
+      const [guruData] = await db.select().from(destinationGuruTable)
+        .where(or(
+          ilike(destinationGuruTable.destination, destName),
+          sql`${destName} ILIKE '%' || ${destinationGuruTable.destination} || '%'`,
+        ))
+        .limit(1);
       destinationGuru = guruData || null;
     }
 

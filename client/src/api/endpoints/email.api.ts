@@ -25,9 +25,17 @@ export interface ImapMessage {
   flags: string[];
 }
 
+export interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  size: number;
+  content: string; // base64-encoded
+}
+
 export interface ImapMessageFull extends ImapMessage {
   html: string | null;
   text: string | null;
+  attachments: EmailAttachment[];
 }
 
 export interface CreateEmailAccountData {

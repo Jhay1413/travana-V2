@@ -10,6 +10,7 @@ import {
 import { eq, and, desc, asc, isNotNull, inArray, ilike, sql, or, exists, SQL, gte } from "drizzle-orm";
 
 const departAirport = alias(airport, "depart_airport");
+const arriveAirport = alias(airport, "arrive_airport");
 
 export interface DealFilters {
   category?: string;
@@ -207,24 +208,35 @@ export const publicDealsRepository = {
     return { imageMap, primaryMap };
   },
 
-  async fetchAirportsByQuoteIds(quoteIds: string[]): Promise<Record<string, string>> {
+  async fetchFlightsByQuoteIds(quoteIds: string[]): Promise<Record<string, Array<{ legOrder: number; departureAirport: string | null; arrivalAirport: string | null; departureDateTime: Date | null; arrivalDateTime: Date | null }>>> {
     if (quoteIds.length === 0) return {};
 
     const rows = await db
       .select({
         quoteId: quote_flights.quote_id,
-        airportName: departAirport.airport_name,
+        legOrder: quote_flights.leg_order,
+        departureAirport: departAirport.airport_name,
+        arrivalAirport: arriveAirport.airport_name,
+        departureDateTime: quote_flights.departure_date_time,
+        arrivalDateTime: quote_flights.arrival_date_time,
       })
       .from(quote_flights)
-      .innerJoin(departAirport, eq(departAirport.id, quote_flights.departing_airport_id))
+      .leftJoin(departAirport, eq(departAirport.id, quote_flights.departing_airport_id))
+      .leftJoin(arriveAirport, eq(arriveAirport.id, quote_flights.arrival_airport_id))
       .where(inArray(quote_flights.quote_id, quoteIds))
-      .orderBy(quote_flights.leg_order);
+      .orderBy(quote_flights.quote_id, quote_flights.leg_order);
 
-    const map: Record<string, string> = {};
+    const map: Record<string, Array<{ legOrder: number; departureAirport: string | null; arrivalAirport: string | null; departureDateTime: Date | null; arrivalDateTime: Date | null }>> = {};
     for (const r of rows) {
-      if (r.quoteId && !map[r.quoteId] && r.airportName) {
-        map[r.quoteId] = r.airportName;
-      }
+      if (!r.quoteId) continue;
+      if (!map[r.quoteId]) map[r.quoteId] = [];
+      map[r.quoteId].push({
+        legOrder: r.legOrder,
+        departureAirport: r.departureAirport ?? null,
+        arrivalAirport: r.arrivalAirport ?? null,
+        departureDateTime: r.departureDateTime ?? null,
+        arrivalDateTime: r.arrivalDateTime ?? null,
+      });
     }
     return map;
   },
