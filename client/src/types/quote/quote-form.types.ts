@@ -281,4 +281,5 @@ export interface QuoteCreateDialogProps {
   initialValues?: Partial<QuoteFormValues>;
   initialImages?: string[];
   socialPost?: boolean;
+  markAsCopy?: boolean;
 }

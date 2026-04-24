@@ -4,9 +4,12 @@ import {
   ChevronLeft,
   Copy,
   FileText,
+  Loader2,
   Pencil,
   PinOff,
   Pin,
+  Search,
+  Sparkles,
   Star,
   Tag,
   Trash2,
@@ -19,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
@@ -31,6 +35,14 @@ import { currency, formatUKDate, formatLeadSource } from "@/pages/quote/utils";
 import { StatusPill, QuoteSummaryTimeline } from "@/pages/quote/components";
 import { QuoteCreateDialog } from "@/components/quote-create-dialog";
 import { QuoteEditDialog } from "@/components/quote-edit-dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { DestinationGuru } from "@/components/destination-guru";
+import type { DestinationGuruData } from "@/components/destination-guru";
+import { useDestinationGuruSearch } from "@/hooks/queries/use-destination-guru-queries";
+import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-guru-mutations";
+import { useNeonClients } from "@/hooks/queries/use-neon-client-queries";
+import { useCurrentUser } from "@/hooks/queries";
+import type { NeonClient } from "@/types/neon-client/neon-client.types";
 
 export default function SocialQuotePage() {
   const [, setLocation] = useLocation();
@@ -53,9 +65,25 @@ export default function SocialQuotePage() {
   const toggleFavoriteMutation = useToggleFavorite();
   const [newTag, setNewTag] = useState("");
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const [showClientPicker, setShowClientPicker] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+  const [selectedClient, setSelectedClient] = useState<NeonClient | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showGuruSheet, setShowGuruSheet] = useState(false);
+
+  const { data: currentUser } = useCurrentUser();
+  const { data: clientResults, isLoading: clientsLoading } = useNeonClients(
+    showClientPicker ? { search: clientSearch, limit: 10 } : undefined
+  );
+
+  const isHotTub = (rawData as any)?.quote_type === "hot_tub_break" || quote?.packageType?.toLowerCase().includes("hot tub");
+  const guruDestination = isHotTub
+    ? [quote?.lodge?.parkName, quote?.lodge?.parkLocation].filter(Boolean).join(", ")
+    : quote?.destinationName || quote?.destination || "";
+  const { data: guruRecord } = useDestinationGuruSearch(guruDestination);
+  const generateGuruMutation = useGenerateDestinationGuru();
   const tagInputRef = useRef<HTMLInputElement>(null);
   const tagSuggestionsRef = useRef<HTMLDivElement>(null);
   const updateQuoteMutation = useUpdateQuote();
@@ -260,10 +288,23 @@ export default function SocialQuotePage() {
               variant="outline"
               className="h-9 rounded-2xl border-black/10 bg-white/70"
               data-testid="button-copy-social-quote"
-              onClick={() => setShowCreateDialog(true)}
+              onClick={() => {
+                setSelectedClient(null);
+                setClientSearch("");
+                setShowClientPicker(true);
+              }}
             >
               <Copy className="mr-2 h-4 w-4" />
               Copy
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
+              data-testid="button-destination-guru-social-quote"
+              onClick={() => setShowGuruSheet(true)}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Destination Guru
             </Button>
             <Button
               size="sm"
@@ -650,7 +691,113 @@ export default function SocialQuotePage() {
         }}
       />
 
-      {rawData && (() => {
+      <Sheet open={showGuruSheet} onOpenChange={setShowGuruSheet}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0 border-l border-black/10 bg-[#f8f8f8] dark:bg-[#0a0a0a]">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Destination Guru</SheetTitle>
+          </SheetHeader>
+          <div className="p-5 pt-10">
+            {guruRecord ? (
+              <DestinationGuru
+                destination={guruDestination}
+                externalData={(guruRecord as any).data as DestinationGuruData}
+                compact
+                onClose={() => setShowGuruSheet(false)}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Sparkles className="h-10 w-10 text-amber-500 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No intel yet for {guruDestination || "this destination"}</h3>
+                <p className="text-sm text-black/50 dark:text-white/50 mb-6 max-w-sm">
+                  Generate AI-powered destination intelligence including weather, flight times, travel tips, and top activities.
+                </p>
+                <Button
+                  className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-white hover:from-amber-600 hover:to-orange-600"
+                  disabled={!guruDestination || generateGuruMutation.isPending}
+                  data-testid="button-generate-guru-sheet-social-quote"
+                  onClick={() => {
+                    generateGuruMutation.mutate(guruDestination, {
+                      onSuccess: () => {
+                        toast({ title: `Destination intel generated for ${guruDestination}` });
+                      },
+                      onError: (err: any) => {
+                        toast({ title: "Failed to generate", description: err?.message, variant: "destructive" });
+                      },
+                    });
+                  }}
+                >
+                  {generateGuruMutation.isPending ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating…</>
+                  ) : (
+                    <><Sparkles className="mr-2 h-4 w-4" />Generate Intel</>
+                  )}
+                </Button>
+                {generateGuruMutation.isPending && (
+                  <p className="text-xs text-black/40 dark:text-white/40 mt-4 animate-pulse">
+                    AI is researching this destination. This may take 10-20 seconds…
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Client picker — step 1 of copy flow */}
+      <Dialog open={showClientPicker} onOpenChange={(open) => { if (!open) { setShowClientPicker(false); setClientSearch(""); } }}>
+        <DialogContent className="max-w-md rounded-3xl border-black/10 bg-white/95 p-6 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">Copy to client</DialogTitle>
+            <DialogDescription className="text-sm text-black/55">
+              Search and select the client this quote will be copied to.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative mt-2">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
+            <Input
+              autoFocus
+              placeholder="Search by name or email…"
+              className="h-9 rounded-xl border-black/10 bg-white/70 pl-9 text-sm"
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+            />
+          </div>
+          <div className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-black/10">
+            {clientsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner className="h-5 w-5" />
+              </div>
+            ) : (clientResults?.clients ?? []).length === 0 ? (
+              <p className="py-8 text-center text-sm text-black/40">
+                {clientSearch ? "No clients found" : "Start typing to search"}
+              </p>
+            ) : (
+              (clientResults?.clients ?? []).map((client) => (
+                <button
+                  key={client.id}
+                  type="button"
+                  className="flex w-full items-center gap-3 border-b border-black/5 px-4 py-3 text-left transition last:border-0 hover:bg-black/[0.03]"
+                  onClick={() => {
+                    setSelectedClient(client);
+                    setShowClientPicker(false);
+                    setShowCreateDialog(true);
+                  }}
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-xs font-semibold text-black/60">
+                    {client.firstName?.[0]}{client.surename?.[0]}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{client.firstName} {client.surename}</div>
+                    {client.email && <div className="truncate text-xs text-black/45">{client.email}</div>}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {rawData && selectedClient && (() => {
         const splitDT = (iso: string | undefined | null) => {
           if (!iso) return { date: "", time: "" };
           const t = iso.indexOf("T");
@@ -681,8 +828,10 @@ export default function SocialQuotePage() {
         return (
           <QuoteCreateDialog
             open={showCreateDialog}
-            onOpenChange={setShowCreateDialog}
-            transactionId={rawData.transaction_id ?? undefined}
+            onOpenChange={(open) => { if (!open) { setShowCreateDialog(false); setSelectedClient(null); } }}
+            clientId={selectedClient.id}
+            userId={currentUser?.id || ""}
+            markAsCopy={false}
             initialValues={{
               packageType: rawData.holiday_type_id || "",
               quoteTitle: rawData.title || "",

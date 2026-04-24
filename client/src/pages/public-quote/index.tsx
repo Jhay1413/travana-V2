@@ -30,6 +30,13 @@ import {
   X,
   PawPrint,
   Phone,
+  Zap,
+  CreditCard,
+  Languages,
+  ShieldAlert,
+  Droplets,
+  Plug,
+  Info,
 } from "lucide-react";
 import {
   usePublicQuote,
@@ -308,74 +315,259 @@ function ImageGallery({ images }: { images: PublicQuoteData["images"] }) {
   );
 }
 
+type GuruMonthTemp = { month: string; avgHigh: number; avgLow: number; rainfall: number };
+type GuruMustDoItem = {
+  rank: number; name: string; category?: string; shortDesc?: string;
+  price?: string; openingHours?: string; tips?: string; bestFor?: string;
+  duration?: string; address?: string;
+};
+
+function ClimateBar({ entry, maxHigh }: { entry: GuruMonthTemp; maxHigh: number }) {
+  const h = maxHigh > 0 ? Math.max(4, Math.round((entry.avgHigh / maxHigh) * 56)) : 20;
+  const c = entry.avgHigh >= 35 ? "#ef4444" : entry.avgHigh >= 30 ? "#f97316" : entry.avgHigh >= 25 ? "#eab308" : entry.avgHigh >= 20 ? "#22c55e" : entry.avgHigh >= 15 ? "#06b6d4" : "#3b82f6";
+  return (
+    <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+      <span className="text-[9px] text-white/50 font-mono tabular-nums">{entry.avgHigh}°</span>
+      <div className="w-full max-w-[20px] rounded-t" style={{ height: h, backgroundColor: c, opacity: 0.8 }} />
+      <span className="text-[9px] text-white/35">{entry.month}</span>
+    </div>
+  );
+}
+
+function EssentialRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5 border-b border-white/[0.06] last:border-0">
+      <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 mt-0.5">
+        <Icon className="w-3.5 h-3.5 text-[#FF6B35]" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold mb-0.5">{label}</p>
+        <p className="text-sm text-white/70 leading-snug">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 function DestinationGuruSection({ guru }: { guru: NonNullable<PublicQuoteData["destinationGuru"]> }) {
-  const [expanded, setExpanded] = useState(false);
-  const data = typeof guru.data === "string" ? tryParseJson(guru.data) : guru.data;
+  const [guruExpanded, setGuruExpanded] = useState(false);
+  const [openActivities, setOpenActivities] = useState<Set<number>>(new Set());
+
+  const data = (typeof guru.data === "string" ? tryParseJson(guru.data) : guru.data) as any;
   if (!data) return null;
 
-  const sections = [
-    { key: "overview", icon: Globe, label: "Overview", color: "text-blue-400" },
-    { key: "weather", icon: Sun, label: "Weather & Best Time", color: "text-amber-400" },
-    { key: "food", icon: Utensils, label: "Food & Dining", color: "text-orange-400" },
-    { key: "attractions", icon: Landmark, label: "Top Attractions", color: "text-purple-400" },
-    { key: "tips", icon: Heart, label: "Travel Tips", color: "text-pink-400" },
-  ];
+  const toggleActivity = (rank: number) => {
+    setOpenActivities(prev => {
+      const next = new Set(prev);
+      if (next.has(rank)) next.delete(rank); else next.add(rank);
+      return next;
+    });
+  };
 
-  const availableSections = sections.filter(s => data[s.key]);
+  const temps: GuruMonthTemp[] = Array.isArray(data.temperatures) ? data.temperatures : [];
+  const maxHigh = temps.length > 0 ? Math.max(...temps.map((t: GuruMonthTemp) => t.avgHigh)) : 0;
+  const mustDo: GuruMustDoItem[] = Array.isArray(data.mustDo) ? data.mustDo : [];
 
-  if (availableSections.length === 0) return null;
+  const hasMeaningfulData = data.travelInfo || mustDo.length > 0 || data.bestTimeToVisit || data.tagline || data.flightTimesFromUK || temps.length > 0;
+  if (!hasMeaningfulData) return null;
 
   return (
-    <SectionWrapper delay={0.1}>
+    <SectionWrapper delay={0.12}>
       <GlassCard className="p-6 md:p-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-center justify-center">
-              <Globe className="w-5 h-5 text-emerald-400" />
+              {data.heroEmoji ? (
+                <span className="text-xl leading-none">{data.heroEmoji}</span>
+              ) : (
+                <Globe className="w-5 h-5 text-emerald-400" />
+              )}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white" data-testid="text-guru-title">Destination Intelligence</h2>
-              <p className="text-sm text-white/50">{guru.destination}{guru.country ? `, ${guru.country}` : ""}</p>
+              <h2 className="text-xl font-bold text-white" data-testid="text-guru-title">Destination Guide</h2>
+              <p className="text-sm text-white/40">{guru.destination}{guru.country ? `, ${guru.country}` : ""}</p>
             </div>
           </div>
           <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-white/50 hover:text-white transition-colors"
+            onClick={() => setGuruExpanded(e => !e)}
+            className="text-white/40 hover:text-white transition-colors p-1"
             data-testid="button-guru-toggle"
           >
-            {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            <ChevronDown className={`w-10 h-10 transition-transform duration-300 ${guruExpanded ? "rotate-180" : ""}`} />
           </button>
         </div>
 
+        {data.travelInfo.summary && (
+          <p className="text-white/40 text-xs leading-relaxed mt-4 pl-3 border-l-2 border-[#FF6B35]/40">
+            {data.travelInfo.summary}
+          </p>
+        )}
+
         <AnimatePresence>
-          {expanded && (
+          {guruExpanded && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.35 }}
               className="overflow-hidden"
             >
-              <div className="grid gap-4">
-                {availableSections.map(section => (
-                  <div key={section.key} className="rounded-2xl bg-white/5 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <section.icon className={`w-4 h-4 ${section.color}`} />
-                      <h3 className="text-sm font-semibold text-white/90">{section.label}</h3>
+              <div className="mt-6 space-y-5">
+                {data.bestTimeToVisit && (
+                  <div className="p-5 rounded-2xl bg-white/5">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#FF6B35] mb-3">Best Time to Visit</p>
+                    {data.bestTimeToVisit.months && (
+                      <p className="text-white text-2xl font-extrabold tracking-tight mb-2">{data.bestTimeToVisit.months}</p>
+                    )}
+                    {data.bestTimeToVisit.reason && (
+                      <p className="text-white/55 text-sm leading-relaxed mb-4">{data.bestTimeToVisit.reason}</p>
+                    )}
+                    <div className="flex flex-wrap gap-3">
+                      {data.bestTimeToVisit.peakSeason && (
+                        <div className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2">
+                          <Zap className="w-3.5 h-3.5 text-[#FF6B35]" />
+                          <span className="text-xs text-white/50">Peak</span>
+                          <span className="text-xs font-bold text-white">{data.bestTimeToVisit.peakSeason}</span>
+                        </div>
+                      )}
+                      {data.bestTimeToVisit.budgetSeason && (
+                        <div className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2">
+                          <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-xs text-white/50">Best value</span>
+                          <span className="text-xs font-bold text-white">{data.bestTimeToVisit.budgetSeason}</span>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-white/60 leading-relaxed whitespace-pre-line" data-testid={`text-guru-${section.key}`}>
-                      {typeof data[section.key] === "string" ? data[section.key] : JSON.stringify(data[section.key], null, 2)}
-                    </p>
                   </div>
-                ))}
+                )}
+
+                {temps.length > 0 && (
+                  <div className="p-5 rounded-2xl bg-white/5">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#FF6B35] mb-4">Climate by Month</p>
+                    <div className="flex items-end gap-2 justify-between">
+                      {temps.map((t) => <ClimateBar key={t.month} entry={t} maxHigh={maxHigh} />)}
+                    </div>
+                    <p className="text-white/30 text-xs mt-3">Average high °C</p>
+                  </div>
+                )}
+
+                {data.flightTimesFromUK && (
+                  <div className="p-5 rounded-2xl bg-white/5">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#FF6B35] mb-4">Getting There from the UK</p>
+                    <div className="grid grid-cols-3 gap-px bg-white/10 rounded-xl overflow-hidden">
+                      {data.flightTimesFromUK.directHours && (
+                        <div className="bg-[#0a0a0f] px-3 py-4 text-center">
+                          <Clock className="w-4 h-4 text-[#FF6B35] mx-auto mb-2" />
+                          <p className="text-white font-bold text-sm">{data.flightTimesFromUK.directHours}</p>
+                          <p className="text-white/40 text-xs mt-0.5">Flight time</p>
+                        </div>
+                      )}
+                      {data.flightTimesFromUK.airports?.length > 0 && (
+                        <div className="bg-[#0a0a0f] px-3 py-4 text-center">
+                          <MapPin className="w-4 h-4 text-[#FF6B35] mx-auto mb-2" />
+                          <p className="text-white font-bold text-sm">{(data.flightTimesFromUK.airports as string[]).join(", ")}</p>
+                          <p className="text-white/40 text-xs mt-0.5">UK airports</p>
+                        </div>
+                      )}
+                      {data.flightTimesFromUK.airlines?.length > 0 && (
+                        <div className="bg-[#0a0a0f] px-3 py-4 text-center">
+                          <Plane className="w-4 h-4 text-[#FF6B35] mx-auto mb-2" />
+                          <p className="text-white font-bold text-sm">{(data.flightTimesFromUK.airlines as string[]).join(", ")}</p>
+                          <p className="text-white/40 text-xs mt-0.5">Airlines</p>
+                        </div>
+                      )}
+                    </div>
+                    {data.flightTimesFromUK.tips && (
+                      <p className="text-white/40 text-xs leading-relaxed mt-4 pl-3 border-l-2 border-[#FF6B35]/40">
+                        {data.flightTimesFromUK.tips}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {data.travelInfo && (
+                  <div className="p-5 rounded-2xl bg-white/5">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#FF6B35] mb-2">Travel Essentials</p>
+                    {data.travelInfo.currency && <EssentialRow icon={CreditCard} label="Currency" value={data.travelInfo.currency} />}
+                    {data.travelInfo.language && <EssentialRow icon={Languages} label="Language" value={data.travelInfo.language} />}
+                    {data.travelInfo.timezone && <EssentialRow icon={Clock} label="Time Zone" value={data.travelInfo.timezone} />}
+                    {data.travelInfo.visaRequired && <EssentialRow icon={ShieldAlert} label="Visa" value={data.travelInfo.visaRequired} />}
+                    {data.travelInfo.waterSafety && <EssentialRow icon={Droplets} label="Tap Water" value={data.travelInfo.waterSafety} />}
+                    {data.travelInfo.plugType && <EssentialRow icon={Plug} label="Plug Type" value={data.travelInfo.plugType} />}
+                    {data.travelInfo.summary && (
+                      <p className="text-white/40 text-xs leading-relaxed mt-4 pl-3 border-l-2 border-[#FF6B35]/40">
+                        {data.travelInfo.summary}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {mustDo.length > 0 && (
+                  <div className="p-5 rounded-2xl bg-white/5">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#FF6B35] mb-4">Top Things to Do</p>
+                    {mustDo.map((item, idx) => {
+                      const isOpen = openActivities.has(item.rank);
+                      const hasDetails = !!(item.shortDesc || item.tips || item.bestFor || item.price || item.duration || item.openingHours || item.address);
+                      return (
+                        <div key={item.rank} className={idx < mustDo.length - 1 ? "border-b border-white/[0.08]" : ""}>
+                          <button
+                            onClick={() => hasDetails && toggleActivity(item.rank)}
+                            className={`w-full flex gap-5 py-4 text-left transition-opacity ${hasDetails ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+                          >
+                            <div className="text-2xl font-extrabold text-[#FF6B35]/30 leading-none w-7 shrink-0 text-right tabular-nums pt-0.5">
+                              {item.rank}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <h4 className="font-bold text-white text-sm leading-tight">{item.name}</h4>
+                                  {item.category && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF6B35] mt-0.5 inline-block">{item.category}</span>
+                                  )}
+                                </div>
+                                {hasDetails && (
+                                  <ChevronDown className={`w-4 h-4 text-white/40 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                          <div className="overflow-hidden transition-all duration-300 ease-in-out" style={{ maxHeight: isOpen ? "400px" : "0px" }}>
+                            <div className="pb-4" style={{ paddingLeft: "52px" }}>
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {item.price && <span className="text-xs font-bold text-white bg-white/10 px-3 py-1 rounded-full">{item.price}</span>}
+                                {item.duration && (
+                                  <span className="text-xs text-white/50 flex items-center gap-1 bg-white/5 px-3 py-1 rounded-full">
+                                    <Clock className="w-3 h-3" />{item.duration}
+                                  </span>
+                                )}
+                                {item.openingHours && (
+                                  <span className="text-xs text-white/50 flex items-center gap-1 bg-white/5 px-3 py-1 rounded-full">
+                                    <Info className="w-3 h-3" />{item.openingHours}
+                                  </span>
+                                )}
+                              </div>
+                              {item.shortDesc && <p className="text-white/55 text-sm leading-relaxed mb-2">{item.shortDesc}</p>}
+                              {item.tips && <p className="text-white/40 text-xs leading-relaxed italic pl-3 border-l border-[#FF6B35]/30 mb-2">{item.tips}</p>}
+                              {item.bestFor && (
+                                <p className="text-xs text-white/40">
+                                  <span className="text-white/60 font-semibold">Best for: </span>{item.bestFor}
+                                </p>
+                              )}
+                              {item.address && (
+                                <p className="text-xs text-white/35 flex items-center gap-1.5 mt-1.5">
+                                  <MapPin className="w-3 h-3 shrink-0" />{item.address}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {!expanded && availableSections.length > 0 && data.overview && (
-          <p className="text-sm text-white/50 line-clamp-2">{typeof data.overview === "string" ? data.overview : ""}</p>
-        )}
       </GlassCard>
     </SectionWrapper>
   );
@@ -833,8 +1025,8 @@ function ShareSection({ token, quote }: { token: string; quote: PublicQuoteData 
           <button
             onClick={() => handleShare("Copy Link")}
             className={`flex items-center justify-center gap-2 p-3 rounded-2xl border text-sm font-medium transition-all ${copied
-                ? "bg-green-500/10 border-green-500/20 text-green-400"
-                : "bg-white/5 border-white/10 hover:bg-white/10 text-white/80"
+              ? "bg-green-500/10 border-green-500/20 text-green-400"
+              : "bg-white/5 border-white/10 hover:bg-white/10 text-white/80"
               }`}
             data-testid="button-share-copy"
           >
@@ -892,8 +1084,8 @@ function CustomerActionSection({ token }: { token: string }) {
           <button
             onClick={() => setActionType("accepted")}
             className={`p-4 rounded-2xl border-2 transition-all text-left ${actionType === "accepted"
-                ? "border-green-500/50 bg-green-500/10"
-                : "border-white/10 bg-white/5 hover:bg-white/10"
+              ? "border-green-500/50 bg-green-500/10"
+              : "border-white/10 bg-white/5 hover:bg-white/10"
               }`}
             data-testid="button-accept-quote"
           >
@@ -910,8 +1102,8 @@ function CustomerActionSection({ token }: { token: string }) {
           <button
             onClick={() => setActionType("changes_requested")}
             className={`p-4 rounded-2xl border-2 transition-all text-left ${actionType === "changes_requested"
-                ? "border-blue-500/50 bg-blue-500/10"
-                : "border-white/10 bg-white/5 hover:bg-white/10"
+              ? "border-blue-500/50 bg-blue-500/10"
+              : "border-white/10 bg-white/5 hover:bg-white/10"
               }`}
             data-testid="button-request-changes"
           >
@@ -1045,10 +1237,11 @@ export function PublicQuoteContent({ quote, token }: { quote: PublicQuoteData; t
     <div className="min-h-screen bg-[#0a0a0f]" data-testid="page-public-quote">
       <HeroSection quote={quote} images={quote.images} />
 
-      {quote.destinationGuru && (
-        <DestinationGuruSection guru={quote.destinationGuru} />
-      )}
+
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 md:py-12 space-y-6 md:space-y-8">
+        {quote.destinationGuru && (
+          <DestinationGuruSection guru={quote.destinationGuru} />
+        )}
         <ImageGallery images={quote.images} />
 
 

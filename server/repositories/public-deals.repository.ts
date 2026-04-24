@@ -45,6 +45,7 @@ function selectDealFields() {
     category: package_type.name,
     destinationName: destination.name,
     countryName: country.country_name,
+    parkName: park.name,
     parkCity: park.city,
     parkLocation: park.location,
     cottageLocation: cottages.location,
@@ -244,19 +245,25 @@ export const publicDealsRepository = {
   async fetchGuruByDestinations(names: string[]): Promise<Array<{ destination: string; data: unknown; queryName: string }>> {
     if (names.length === 0) return [];
     const unique = Array.from(new Set(names.filter(Boolean)));
-    const results: Array<{ destination: string; data: unknown; queryName: string }> = [];
-    for (const name of unique) {
-      const [row] = await db
-        .select({ destination: destinationGuruTable.destination, data: destinationGuruTable.data })
-        .from(destinationGuruTable)
-        .where(or(
+
+    const rows = await db
+      .select({ destination: destinationGuruTable.destination, data: destinationGuruTable.data })
+      .from(destinationGuruTable)
+      .where(or(...unique.map((name) =>
+        or(
           ilike(destinationGuruTable.destination, name),
           sql`${name} ILIKE '%' || ${destinationGuruTable.destination} || '%'`
-        ))
-        .limit(1);
-      if (row) results.push({ ...row, queryName: name });
-    }
-    return results;
+        )
+      )));
+
+    return rows.flatMap((row) =>
+      unique
+        .filter((name) =>
+          row.destination.toLowerCase() === name.toLowerCase() ||
+          name.toLowerCase().includes(row.destination.toLowerCase())
+        )
+        .map((name) => ({ ...row, queryName: name }))
+    );
   },
 
   async findAllDestinations() {

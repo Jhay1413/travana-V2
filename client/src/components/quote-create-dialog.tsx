@@ -216,6 +216,7 @@ export function QuoteCreateDialog({
   initialValues,
   initialImages,
   socialPost = false,
+  markAsCopy = true,
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
   const createQuote = useCreateQuote();
@@ -266,8 +267,8 @@ export function QuoteCreateDialog({
       return;
     }
 
-    // When converting from enquiry (initialValues present), transactionId is required
-    if (initialValues && Object.keys(initialValues).length > 0 && !transactionId) {
+    // When converting from enquiry, transactionId is required (unless a clientId is present to create a new transaction)
+    if (initialValues && Object.keys(initialValues).length > 0 && !transactionId && !clientId) {
       toast({
         title: "Conversion Error",
         description: "Unable to convert enquiry - transaction ID is missing. Please try again.",
@@ -281,7 +282,7 @@ export function QuoteCreateDialog({
         ...quotePayload,
         transaction_id: transactionId,
         ...(imageUrls.length > 0 && { images: imageUrls }),
-        ...(initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
+        ...(markAsCopy && initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
       } as CreateQuoteData;
 
       let payload: CreateQuoteData | FormData = json;
@@ -316,7 +317,7 @@ export function QuoteCreateDialog({
           ...quotePayload,
           quote_status: values.status || "QUOTE_IN_PROGRESS",
           ...(imageUrls.length > 0 && { images: imageUrls }),
-          ...(initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
+          ...(markAsCopy && initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
         },
       };
 

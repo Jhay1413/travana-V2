@@ -493,6 +493,7 @@ export function CommandCenterShell({
   quoteStatusFilter,
   onQuoteStatusFilterChange,
   createActions,
+  onAddClient,
 }: {
   children: React.ReactNode;
   active?: string;
@@ -509,6 +510,7 @@ export function CommandCenterShell({
   quoteStatusFilter?: string;
   onQuoteStatusFilterChange?: (v: string) => void;
   createActions?: Array<{ label: string; icon?: React.ReactNode; onClick: () => void }>;
+  onAddClient?: () => void;
 }) {
   const [, navigate] = useLocation();
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -1690,7 +1692,11 @@ export function CommandCenterShell({
                               className="w-full h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                               onClick={() => {
                                 setShowSearchResults(false);
-                                navigate("/clients?new=true&name=" + encodeURIComponent(localSearchText || ""));
+                                if (onAddClient) {
+                                  onAddClient();
+                                } else {
+                                  navigate("/clients?new=true&name=" + encodeURIComponent(localSearchText || ""));
+                                }
                               }}
                               data-testid="button-add-client-from-search"
                             >

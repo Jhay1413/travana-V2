@@ -1,13 +1,15 @@
 import { publicDealsRepository, DealFilters } from "../repositories/public-deals.repository";
 
 function resolveDestination(r: any): { destination: string | null; country: string | null } {
-  if (r.quoteType === "hot_tub_break") {
+  const isHotTub = r.quoteType === "hot_tub_break" || r.category?.toLowerCase().includes("hot tub");
+  if (isHotTub) {
     return {
-      destination: r.parkCity || r.parkLocation || r.cottageLocation || null,
+      destination: r.parkName || r.parkCity || r.parkLocation || r.cottageLocation || null,
       country: "United Kingdom",
     };
   }
-  if (r.quoteType === "cruise") {
+  const isCruise = r.quoteType === "cruise" || r.category?.toLowerCase().includes("cruise");
+  if (isCruise) {
     return { destination: r.cruiseName || null, country: null };
   }
   return { destination: r.destinationName || null, country: r.countryName || null };
@@ -33,7 +35,7 @@ function formatDeal(
 ) {
   const { destination: dest, country: ctry } = resolveDestination(r);
   const images = imageMap[r.id] || [];
-  const guruData = dest ? ((guruMap[dest] ?? guruMap[dest.toLowerCase()]) as any) ?? null : null;
+  const guruData = dest ? (guruMap[dest.toLowerCase()] as any) ?? null : null;
 
   const returnDate =
     r.travelDate && r.numNights
@@ -93,8 +95,8 @@ async function enrichRows(rows: any[], detail = false) {
 
   const destNames = Array.from(new Set(
     rows
-      .filter((r) => r.quoteType !== "hot_tub_break" && r.quoteType !== "cruise" && r.destinationName)
-      .map((r) => r.destinationName as string),
+      .map((r) => resolveDestination(r).destination)
+      .filter(Boolean) as string[],
   ));
 
   const [{ imageMap, primaryMap }, flightMap, includesMap, guruRows, tagsMap] = await Promise.all([
@@ -107,12 +109,8 @@ async function enrichRows(rows: any[], detail = false) {
 
   const guruMap: Record<string, unknown> = {};
   for (const g of guruRows) {
-    guruMap[g.queryName] = g.data;
+    guruMap[g.queryName.toLowerCase()] = g.data;
   }
-
-  console.log("[enrichRows] destNames:", destNames);
-  console.log("[enrichRows] guruRows:", guruRows.map(g => ({ queryName: g.queryName, destination: g.destination })));
-  console.log("[enrichRows] guruMap keys:", Object.keys(guruMap));
 
   return rows.map((r) => formatDeal(r, imageMap, primaryMap, flightMap, includesMap, guruMap, tagsMap, detail));
 }

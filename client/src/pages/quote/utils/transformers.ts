@@ -133,7 +133,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     notes: [],
     pets: apiData.pets || 0,
     lodge:
-      apiData.lodge_id
+      (apiData as any).park_id || apiData.lodge_id || (apiData as any).lodge_code
         ? {
             name: (apiData as any).lodge_name || "",
             type: (apiData as any).lodge_type || (apiData as any).lodge_name || "",

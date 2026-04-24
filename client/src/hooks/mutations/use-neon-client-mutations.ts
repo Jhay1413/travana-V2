@@ -3,6 +3,16 @@ import { neonClientApi } from "@/api";
 import { neonClientKeys } from "@/hooks/queries";
 import type { NeonClient, NeonClientImportRow } from "@/types/neon-client";
 
+export function useCreateNeonClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<NeonClient>) => neonClientApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: neonClientKeys.lists() });
+    },
+  });
+}
+
 export function useUpdateNeonClient() {
   const queryClient = useQueryClient();
   return useMutation({

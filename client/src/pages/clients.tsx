@@ -5,6 +5,7 @@ import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Filter,
@@ -24,7 +25,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNeonClients } from "@/hooks/queries";
+import { useCreateNeonClient } from "@/hooks/mutations/use-neon-client-mutations";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 type ClientTier = "Platinum" | "Gold" | "Standard";
@@ -95,6 +100,78 @@ export default function ClientsPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showNewClientDialog, setShowNewClientDialog] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({
+    clientType: "New Client",
+    title: "",
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: "",
+    houseNumber: "",
+    street: "",
+    city: "",
+    country: "",
+    postcode: "",
+  });
+  const [postcodeSearch, setPostcodeSearch] = useState("");
+  const [postcodeLoading, setPostcodeLoading] = useState(false);
+  const [postcodeError, setPostcodeError] = useState("");
+  const [showAddressSection, setShowAddressSection] = useState(false);
+
+  const createNeonClientMutation = useCreateNeonClient();
+
+  const lookupPostcode = async () => {
+    if (!postcodeSearch.trim()) return;
+    setPostcodeLoading(true);
+    setPostcodeError("");
+    try {
+      const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcodeSearch.trim())}`);
+      const data = await response.json();
+      if (data.status === 200 && data.result) {
+        const result = data.result;
+        setNewClientForm((f) => ({
+          ...f,
+          city: result.admin_district || result.primary_care_trust || result.admin_county || "",
+          country: result.country || "United Kingdom",
+          postcode: result.postcode || postcodeSearch.trim(),
+        }));
+        setPostcodeError("Postcode found! Please enter house number and street manually.");
+      } else {
+        setPostcodeError("Postcode not found. Please enter address manually.");
+      }
+    } catch {
+      setPostcodeError("Failed to lookup postcode. Please enter address manually.");
+    } finally {
+      setPostcodeLoading(false);
+    }
+  };
+
+  const handleCreateClient = () => {
+    if (!newClientForm.firstName || !newClientForm.lastName || !newClientForm.phone) return;
+    createNeonClientMutation.mutate({
+      firstName: newClientForm.firstName,
+      surename: newClientForm.lastName,
+      phoneNumber: newClientForm.phone,
+      title: newClientForm.title || undefined,
+      email: newClientForm.email || undefined,
+      badge: newClientForm.clientType || undefined,
+      houseNumber: newClientForm.houseNumber || undefined,
+      street: newClientForm.street || undefined,
+      city: newClientForm.city || undefined,
+      country: newClientForm.country || undefined,
+      post_code: newClientForm.postcode || undefined,
+    } as any, {
+      onSuccess: (newClient) => {
+        setShowNewClientDialog(false);
+        setNewClientForm({ clientType: "New Client", title: "", firstName: "", lastName: "", phone: "", email: "", houseNumber: "", street: "", city: "", country: "", postcode: "" });
+        setPostcodeSearch("");
+        setShowAddressSection(false);
+        setPostcodeError("");
+        navigate(`/clients/${newClient.id}`);
+      },
+    });
+  };
 
   const searchTimeoutRef = useMemo(() => ({ current: null as ReturnType<typeof setTimeout> | null }), []);
 
@@ -163,6 +240,7 @@ export default function ClientsPage() {
       onQuery={handleSearch}
       theme={theme}
       onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+      onAddClient={() => setShowNewClientDialog(true)}
     >
       <div className="space-y-6">
         {/* Import CSV Banner */}
@@ -273,6 +351,7 @@ export default function ClientsPage() {
               size="sm"
               className="gap-2 rounded-full bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
               data-testid="button-add-client"
+              onClick={() => setShowNewClientDialog(true)}
             >
               <Plus className="h-4 w-4" />
               Add Client
@@ -583,6 +662,130 @@ export default function ClientsPage() {
       </div>
 
       <CsvImportDialog open={showImport} onClose={() => setShowImport(false)} />
+
+      <Dialog open={showNewClientDialog} onOpenChange={setShowNewClientDialog}>
+        <DialogContent className="sm:max-w-[500px] rounded-2xl z-[300]">
+          <DialogHeader>
+            <DialogTitle>New Client</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="clientType">Client Type</Label>
+              <Select value={newClientForm.clientType} onValueChange={(v) => setNewClientForm((f) => ({ ...f, clientType: v }))}>
+                <SelectTrigger id="clientType" className="rounded-xl" data-testid="select-client-type">
+                  <SelectValue placeholder="Select client type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Time Waster">Time Waster</SelectItem>
+                  <SelectItem value="New Client">New Client</SelectItem>
+                  <SelectItem value="Repeat Client">Repeat Client</SelectItem>
+                  <SelectItem value="VIP Client">VIP Client</SelectItem>
+                  <SelectItem value="Family Member">Family Member</SelectItem>
+                  <SelectItem value="Banned">Banned</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="title">Title</Label>
+              <Select value={newClientForm.title} onValueChange={(v) => setNewClientForm((f) => ({ ...f, title: v }))}>
+                <SelectTrigger id="title" className="rounded-xl" data-testid="select-title">
+                  <SelectValue placeholder="Select title" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Mr.">Mr.</SelectItem>
+                  <SelectItem value="Mrs">Mrs</SelectItem>
+                  <SelectItem value="Ms">Ms</SelectItem>
+                  <SelectItem value="Miss">Miss</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input id="firstName" value={newClientForm.firstName} onChange={(e) => setNewClientForm((f) => ({ ...f, firstName: e.target.value }))} className="rounded-xl" data-testid="input-first-name" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input id="lastName" value={newClientForm.lastName} onChange={(e) => setNewClientForm((f) => ({ ...f, lastName: e.target.value }))} className="rounded-xl" data-testid="input-last-name" />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="phone">Phone Number *</Label>
+              <Input id="phone" value={newClientForm.phone} onChange={(e) => setNewClientForm((f) => ({ ...f, phone: e.target.value }))} className="rounded-xl" data-testid="input-phone" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email (optional)</Label>
+              <Input id="email" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm((f) => ({ ...f, email: e.target.value }))} className="rounded-xl" data-testid="input-email" />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddressSection(!showAddressSection)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+              data-testid="button-toggle-address"
+            >
+              <ChevronDown className={`h-4 w-4 transition-transform ${showAddressSection ? "rotate-0" : "-rotate-90"}`} />
+              Address (optional)
+            </button>
+            {showAddressSection && (
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="postcodeSearch" className="text-xs">Postcode Search</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="postcodeSearch"
+                      value={postcodeSearch}
+                      onChange={(e) => setPostcodeSearch(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), lookupPostcode())}
+                      placeholder="Enter postcode (e.g. SW1A 1AA)"
+                      className="rounded-xl flex-1"
+                      data-testid="input-postcode-search"
+                    />
+                    <Button type="button" onClick={lookupPostcode} disabled={postcodeLoading || !postcodeSearch.trim()} className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90" data-testid="button-lookup-postcode">
+                      {postcodeLoading ? <span className="flex items-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Looking up...</span> : <><Search className="mr-2 h-4 w-4" />Find</>}
+                    </Button>
+                  </div>
+                  {postcodeError && <p className={`text-xs ${postcodeError.includes("found!") ? "text-green-600" : "text-red-500"}`}>{postcodeError}</p>}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="houseNumber" className="text-xs">House Number</Label>
+                    <Input id="houseNumber" value={newClientForm.houseNumber} onChange={(e) => setNewClientForm((f) => ({ ...f, houseNumber: e.target.value }))} className="rounded-xl" data-testid="input-house-number" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="street" className="text-xs">Street</Label>
+                    <Input id="street" value={newClientForm.street} onChange={(e) => setNewClientForm((f) => ({ ...f, street: e.target.value }))} className="rounded-xl" data-testid="input-street" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="city" className="text-xs">City</Label>
+                    <Input id="city" value={newClientForm.city} onChange={(e) => setNewClientForm((f) => ({ ...f, city: e.target.value }))} className="rounded-xl" data-testid="input-city" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="country" className="text-xs">Country</Label>
+                    <Input id="country" value={newClientForm.country} onChange={(e) => setNewClientForm((f) => ({ ...f, country: e.target.value }))} className="rounded-xl" data-testid="input-country" />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="postcode" className="text-xs">Postcode</Label>
+                  <Input id="postcode" value={newClientForm.postcode} onChange={(e) => setNewClientForm((f) => ({ ...f, postcode: e.target.value }))} className="rounded-xl w-1/2" data-testid="input-postcode" />
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewClientDialog(false)} className="rounded-xl" data-testid="button-cancel-client">Cancel</Button>
+            <Button
+              onClick={handleCreateClient}
+              disabled={!newClientForm.firstName || !newClientForm.lastName || !newClientForm.phone || createNeonClientMutation.isPending}
+              className="rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+              data-testid="button-save-client"
+            >
+              {createNeonClientMutation.isPending ? "Creating..." : "Create Client"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </CommandCenterShell>
   );
 }

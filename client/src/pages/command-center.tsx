@@ -1508,7 +1508,8 @@ function TopBar({
                   className="w-full h-9 rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
                   onClick={() => {
                     setShowSearchResults(false);
-                    navigate("/clients?new=true&name=" + encodeURIComponent(query));
+                    setShowAddressSection(false);
+                    setShowNewClientDialog(true);
                   }}
                   data-testid="button-add-client-from-search"
                 >

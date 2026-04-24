@@ -117,7 +117,10 @@ export default function QuotePage() {
     return transformQuoteData(quoteData);
   }, [quoteData]);
 
-  const guruDestination = quote?.destinationName || quote?.destination || "";
+  const isHotTub = (quoteData as any)?.quote_type === "hot_tub_break" || quote?.packageType?.toLowerCase().includes("hot tub");
+  const guruDestination = isHotTub
+    ? [quote?.lodge?.parkName, quote?.lodge?.parkLocation].filter(Boolean).join(", ")
+    : quote?.destinationName || quote?.destination || "";
   const { data: guruRecord } = useDestinationGuruSearch(guruDestination);
   const generateGuruMutation = useGenerateDestinationGuru();
 
@@ -1351,7 +1354,7 @@ export default function QuotePage() {
             {guruRecord ? (
               <DestinationGuru
                 destination={guruDestination}
-                externalData={guruRecord.data as DestinationGuruData}
+                externalData={(guruRecord as any).data as DestinationGuruData}
                 compact
                 onClose={() => setShowGuruSheet(false)}
               />
