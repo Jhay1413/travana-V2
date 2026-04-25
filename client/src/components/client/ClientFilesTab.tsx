@@ -68,17 +68,22 @@ export function ClientFilesTab({
     <>
       <Card className="rounded-3xl border-black/10 bg-white/70 p-4">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold" data-testid="text-files-title">
-              Files
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900/[0.06] text-slate-700">
+              <FileText className="h-4 w-4" />
             </div>
-            <div className="mt-1 text-xs text-black/55" data-testid="text-files-subtitle">
-              Upload and manage client documents.
+            <div>
+              <div className="text-sm font-semibold tracking-tight text-black/85" data-testid="text-files-title">
+                Files
+              </div>
+              <div className="text-[11px] text-black/50" data-testid="text-files-subtitle">
+                Upload and manage client documents
+              </div>
             </div>
           </div>
           <Button
             size="sm"
-            className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
+            className="h-9 rounded-2xl bg-black px-3 text-white shadow-sm hover:bg-black/90"
             data-testid="button-files-upload"
             onClick={onUploadFile}
           >

@@ -657,7 +657,7 @@ export default function ClientPage() {
               <button
                 type="button"
                 onClick={() => navigate("/clients")}
-                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/80 px-3 py-2 text-xs font-semibold text-black/75 shadow-sm transition hover:-translate-x-0.5 hover:bg-white"
                 data-testid="button-back-clients"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -674,7 +674,7 @@ export default function ClientPage() {
                       { onSuccess: (data: { favorited?: boolean; favorite?: Favorite }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                     );
                   }}
-                  className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isClientPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
+                  className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold shadow-sm transition ${isClientPinned ? "border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-amber-500/5 text-amber-700 hover:from-amber-500/20 hover:to-amber-500/10" : "border-black/10 bg-white/80 text-black/75 hover:bg-white"}`}
                   data-testid="button-pin-client"
                 >
                   {isClientPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
@@ -683,7 +683,7 @@ export default function ClientPage() {
                 <button
                   type="button"
                   onClick={openEditDialog}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/80 px-3 py-2 text-xs font-semibold text-black/75 shadow-sm transition hover:bg-white"
                   data-testid="button-edit-client"
                 >
                   <Pencil className="h-4 w-4" />
@@ -692,21 +692,46 @@ export default function ClientPage() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">
-              <div className="flex items-center gap-3" data-testid="text-client-name">
-                <div
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
-                  aria-hidden
-                  data-testid="avatar-client"
-                >
-                  <UserRound className="h-5 w-5 text-black/70" />
+            <div
+              className="relative mt-4 overflow-hidden rounded-3xl border border-black/10 bg-gradient-to-br from-white via-white to-sky-50/60 p-5 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_10px_30px_-12px_rgba(15,23,42,0.12)]"
+              data-testid="card-client-summary"
+            >
+              <div className="pointer-events-none absolute -right-20 -top-20 h-44 w-44 rounded-full bg-gradient-to-br from-sky-400/20 via-violet-400/10 to-transparent blur-3xl" aria-hidden />
+              <div className="pointer-events-none absolute -left-16 -bottom-16 h-36 w-36 rounded-full bg-gradient-to-br from-violet-400/10 to-transparent blur-3xl" aria-hidden />
+
+              <div className="relative flex items-center gap-4" data-testid="text-client-name">
+                <div className="relative shrink-0">
+                  <div
+                    className="absolute inset-0 -m-0.5 rounded-2xl bg-gradient-to-br from-sky-400/40 via-violet-400/40 to-fuchsia-400/30 blur-sm"
+                    aria-hidden
+                  />
+                  <div
+                    className="relative inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-white/60 bg-gradient-to-br from-sky-500/15 via-violet-500/10 to-fuchsia-500/15 text-slate-800 shadow-inner"
+                    aria-hidden
+                    data-testid="avatar-client"
+                  >
+                    {client ? (
+                      <span className="text-base font-bold tracking-tight">
+                        {client.name
+                          .split(" ")
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((p) => p[0]?.toUpperCase())
+                          .join("") || <UserRound className="h-6 w-6 text-black/60" />}
+                      </span>
+                    ) : (
+                      <UserRound className="h-6 w-6 text-black/60" />
+                    )}
+                  </div>
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-baseline gap-3">
-                    <span className="text-lg font-semibold">{client ? client.name : "Client"}</span>
+                    <span className="truncate text-xl font-semibold tracking-tight text-black/90">
+                      {client ? client.name : "Client"}
+                    </span>
                   </div>
                   {client ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <Select
                         value={clientData?.badge || "New Client"}
                         onValueChange={(value) => {
@@ -742,24 +767,26 @@ export default function ClientPage() {
                 </div>
               </div>
 
-              <ReferrerSelector
-                currentReferredByClientId={clientData?.referredByClientId}
-                excludeClientId={clientId}
-                onSelect={(referredByClientId) => {
-                  updateNeonClientMutation.mutate(
-                    { id: clientId, data: { referredByClientId } },
-                    { onSuccess: () => toast({ title: "Referrer saved" }), onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }) }
-                  );
-                }}
-                onClear={() => {
-                  updateNeonClientMutation.mutate(
-                    { id: clientId, data: { referredByClientId: null } },
-                    { onSuccess: () => toast({ title: "Referrer removed" }), onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }) }
-                  );
-                }}
-              />
+              <div className="relative mt-4">
+                <ReferrerSelector
+                  currentReferredByClientId={clientData?.referredByClientId}
+                  excludeClientId={clientId}
+                  onSelect={(referredByClientId) => {
+                    updateNeonClientMutation.mutate(
+                      { id: clientId, data: { referredByClientId } },
+                      { onSuccess: () => toast({ title: "Referrer saved" }), onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }) }
+                    );
+                  }}
+                  onClear={() => {
+                    updateNeonClientMutation.mutate(
+                      { id: clientId, data: { referredByClientId: null } },
+                      { onSuccess: () => toast({ title: "Referrer removed" }), onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }) }
+                    );
+                  }}
+                />
+              </div>
 
-              <div className="mt-3">
+              <div className="relative mt-3">
                 <PortalPinSection clientId={clientId} />
               </div>
 
@@ -879,37 +906,69 @@ export default function ClientPage() {
 
           <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 lg:col-span-8">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-sm font-semibold" data-testid="text-client-right-title">
-                  Client workspace
+              <div className="flex items-start gap-3">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl border border-black/10 bg-gradient-to-br from-sky-500/12 to-violet-500/10 text-slate-700">
+                  <Sparkles className="h-4 w-4" />
                 </div>
-                <div className="mt-1 text-xs text-black/55" data-testid="text-client-right-subtitle">Knowing you client is the key to Rapport</div>
+                <div>
+                  <div className="text-sm font-semibold tracking-tight text-black/85" data-testid="text-client-right-title">
+                    Client workspace
+                  </div>
+                  <div className="mt-0.5 text-xs text-black/55" data-testid="text-client-right-subtitle">Knowing your client is the key to rapport</div>
+                </div>
               </div>
-              
             </div>
 
-            <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
+            <div className="mt-4 rounded-3xl border border-black/10 bg-gradient-to-b from-white/80 to-white/40 p-2 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset]" data-testid="tabs-client-workspace">
               <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
-                <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 rounded-2xl border border-black/10 bg-white/70">
-                  <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-overview">
+                <TabsList className="flex h-auto w-full flex-wrap gap-1 rounded-2xl border border-black/10 bg-white/70 p-1 sm:grid sm:grid-cols-7 sm:gap-0">
+                  <TabsTrigger
+                    value="overview"
+                    className="flex-1 rounded-xl text-xs font-semibold transition data-[state=active]:bg-gradient-to-br data-[state=active]:from-white data-[state=active]:to-sky-50 data-[state=active]:text-black/90 data-[state=active]:shadow-sm sm:flex-initial"
+                    data-testid="tab-overview"
+                  >
                     Overview
                   </TabsTrigger>
-                  <TabsTrigger value="enquiries" className="rounded-xl" data-testid="tab-enquiries">
+                  <TabsTrigger
+                    value="enquiries"
+                    className="flex-1 rounded-xl text-xs font-semibold transition data-[state=active]:bg-gradient-to-br data-[state=active]:from-white data-[state=active]:to-fuchsia-50 data-[state=active]:text-black/90 data-[state=active]:shadow-sm sm:flex-initial"
+                    data-testid="tab-enquiries"
+                  >
                     Enquiries
                   </TabsTrigger>
-                  <TabsTrigger value="quotes" className="rounded-xl" data-testid="tab-quotes">
+                  <TabsTrigger
+                    value="quotes"
+                    className="flex-1 rounded-xl text-xs font-semibold transition data-[state=active]:bg-gradient-to-br data-[state=active]:from-white data-[state=active]:to-sky-50 data-[state=active]:text-black/90 data-[state=active]:shadow-sm sm:flex-initial"
+                    data-testid="tab-quotes"
+                  >
                     Quotes
                   </TabsTrigger>
-                  <TabsTrigger value="booked" className="rounded-xl" data-testid="tab-booked">
+                  <TabsTrigger
+                    value="booked"
+                    className="flex-1 rounded-xl text-xs font-semibold transition data-[state=active]:bg-gradient-to-br data-[state=active]:from-white data-[state=active]:to-emerald-50 data-[state=active]:text-black/90 data-[state=active]:shadow-sm sm:flex-initial"
+                    data-testid="tab-booked"
+                  >
                     Booked
                   </TabsTrigger>
-                  <TabsTrigger value="files" className="rounded-xl" data-testid="tab-files">
+                  <TabsTrigger
+                    value="files"
+                    className="flex-1 rounded-xl text-xs font-semibold transition data-[state=active]:bg-gradient-to-br data-[state=active]:from-white data-[state=active]:to-slate-50 data-[state=active]:text-black/90 data-[state=active]:shadow-sm sm:flex-initial"
+                    data-testid="tab-files"
+                  >
                     Files
                   </TabsTrigger>
-                  <TabsTrigger value="tickets" className="rounded-xl" data-testid="tab-tickets">
+                  <TabsTrigger
+                    value="tickets"
+                    className="flex-1 rounded-xl text-xs font-semibold transition data-[state=active]:bg-gradient-to-br data-[state=active]:from-white data-[state=active]:to-rose-50 data-[state=active]:text-black/90 data-[state=active]:shadow-sm sm:flex-initial"
+                    data-testid="tab-tickets"
+                  >
                     Tickets
                   </TabsTrigger>
-                  <TabsTrigger value="vip-club" className="rounded-xl" data-testid="tab-vip-club">
+                  <TabsTrigger
+                    value="vip-club"
+                    className="flex-1 rounded-xl text-xs font-semibold transition data-[state=active]:bg-gradient-to-br data-[state=active]:from-white data-[state=active]:to-purple-50 data-[state=active]:text-black/90 data-[state=active]:shadow-sm sm:flex-initial"
+                    data-testid="tab-vip-club"
+                  >
                     VIP Club
                   </TabsTrigger>
                 </TabsList>
