@@ -42,19 +42,11 @@ export function ClientEnquiriesTab({
 }: ClientEnquiriesTabProps) {
   return (
     <div className="grid gap-3" data-testid="list-enquiries">
-      <div className="flex items-start justify-between gap-3 rounded-2xl border border-black/10 bg-gradient-to-br from-fuchsia-500/[0.05] via-white to-white p-3.5">
-        <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-fuchsia-500/12 text-fuchsia-600">
-            <Sparkles className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold tracking-tight text-black/85">Enquiries</div>
-            <div className="text-[11px] text-black/50">Open conversations &amp; trip ideas</div>
-          </div>
-        </div>
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold">Enquiries</div>
         <Button
           size="sm"
-          className="h-9 rounded-2xl bg-black px-3 text-white shadow-sm hover:bg-black/90"
+          className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
           data-testid="button-new-enquiry"
           onClick={onNewEnquiry}
         >

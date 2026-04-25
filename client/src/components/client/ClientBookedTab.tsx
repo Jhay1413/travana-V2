@@ -36,22 +36,17 @@ export function ClientBookedTab({
     <div className="grid gap-3" data-testid="list-booked">
       <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-bookings-list">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/12 text-emerald-600">
-              <Pin className="h-4 w-4 rotate-45" />
+          <div>
+            <div className="text-sm font-semibold" data-testid="text-bookings-title">
+              Booked Packages
             </div>
-            <div>
-              <div className="text-sm font-semibold tracking-tight text-black/85" data-testid="text-bookings-title">
-                Booked Packages
-              </div>
-              <div className="text-[11px] text-black/50" data-testid="text-bookings-subtitle">
-                Confirmed bookings for this client
-              </div>
+            <div className="mt-1 text-xs text-black/55" data-testid="text-bookings-subtitle">
+              Confirmed bookings for this client.
             </div>
           </div>
           <Button
             size="sm"
-            className="h-9 rounded-2xl bg-black px-3 text-white shadow-sm hover:bg-black/90"
+            className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
             data-testid="button-add-booking"
             onClick={onAddBooking}
           >

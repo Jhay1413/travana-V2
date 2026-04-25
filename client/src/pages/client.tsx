@@ -24,14 +24,6 @@ import {
   X,
   UserCheck,
   Users,
-  LayoutDashboard,
-  MessageSquare,
-  Folder,
-  Crown,
-  Plane,
-  TrendingUp,
-  CircleDollarSign,
-  Inbox,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,8 +44,7 @@ import type { Transaction, EnquiryTable } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
 
-import { tierPill, transformNeonClientData, transformTicket, formatTicketDate, ticketStatusPill, ticketTypePill, filesFor, currency } from "@/components/client/client-types";
-import type { BookingWithJoins } from "@/components/client/client-types";
+import { tierPill, transformNeonClientData, transformTicket, formatTicketDate, ticketStatusPill, ticketTypePill, filesFor } from "@/components/client/client-types";
 import { EditClientDialog } from "@/components/client/EditClientDialog";
 import { UploadFileDialog } from "@/components/client/UploadFileDialog";
 import type { Client as ApiClient } from "@/types/client";
@@ -659,29 +650,18 @@ export default function ClientPage() {
         </Select>
       }
     >
-      <div className="relative min-h-[calc(100vh-56px)] w-full" data-testid="layout-client-page">
-
-        <section className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-0" aria-hidden>
-            <div className="absolute inset-0 bg-gradient-to-br from-[#fbf7f1] via-white to-sky-50/70" />
-            <div className="absolute -right-32 -top-40 h-[28rem] w-[28rem] rounded-full bg-gradient-to-br from-amber-200/45 via-rose-200/25 to-transparent blur-3xl" />
-            <div className="absolute -left-24 top-24 h-80 w-80 rounded-full bg-gradient-to-br from-sky-300/35 via-violet-300/25 to-transparent blur-3xl" />
-            <div className="absolute right-1/4 -bottom-24 h-72 w-72 rounded-full bg-gradient-to-br from-emerald-200/30 to-transparent blur-3xl" />
-            <div className="absolute inset-0 opacity-[0.03] [background-image:linear-gradient(rgba(0,0,0,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.5)_1px,transparent_1px)] [background-size:32px_32px]" />
-            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-black/[0.08] to-transparent" />
-          </div>
-
-          <div className="relative px-4 pt-5 pb-8 md:px-8 md:pb-10">
-            {/* Top action bar */}
+      <div className="relative min-h-[calc(100vh-56px)] w-full px-4 pb-6 md:px-6 md:pb-8">
+        <div className="relative mt-6 grid gap-3 lg:grid-cols-12" data-testid="layout-client-page">
+          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 lg:col-span-4">
             <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => navigate("/clients")}
-                className="inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-white/85 px-3.5 py-2 text-xs font-semibold text-black/75 shadow-[0_4px_12px_-6px_rgba(15,23,42,0.18)] backdrop-blur transition hover:-translate-x-0.5 hover:bg-white"
+                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
                 data-testid="button-back-clients"
               >
                 <ChevronLeft className="h-4 w-4" />
-                Back to clients
+                Back
               </button>
               <div className="flex items-center gap-2">
                 <button
@@ -694,455 +674,334 @@ export default function ClientPage() {
                       { onSuccess: (data: { favorited?: boolean; favorite?: Favorite }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
                     );
                   }}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold shadow-[0_4px_12px_-6px_rgba(15,23,42,0.18)] backdrop-blur transition ${isClientPinned ? "border-amber-400/40 bg-gradient-to-br from-amber-400/25 to-amber-500/10 text-amber-800 hover:from-amber-400/35" : "border-black/[0.08] bg-white/85 text-black/75 hover:bg-white"}`}
+                  className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isClientPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
                   data-testid="button-pin-client"
                 >
                   {isClientPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-                  {isClientPinned ? "Pinned" : "Pin to dashboard"}
+                  {isClientPinned ? "Unpin" : "Pin"}
                 </button>
                 <button
                   type="button"
                   onClick={openEditDialog}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-900/10 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white shadow-[0_8px_20px_-8px_rgba(15,23,42,0.5)] transition hover:bg-slate-800"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
                   data-testid="button-edit-client"
                 >
                   <Pencil className="h-4 w-4" />
-                  Edit profile
+                  Edit
                 </button>
               </div>
             </div>
 
-            {/* Identity block */}
-            <div className="mt-7 flex flex-col items-start gap-6 md:flex-row md:items-end md:gap-8" data-testid="card-client-summary">
-              <div className="relative shrink-0">
-                <div className="absolute -inset-2.5 rounded-[2rem] bg-gradient-to-br from-amber-400/40 via-rose-400/30 to-violet-400/40 blur-xl" aria-hidden />
+            <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">
+              <div className="flex items-center gap-3" data-testid="text-client-name">
                 <div
-                  className="relative inline-flex h-24 w-24 items-center justify-center rounded-3xl border border-white/80 bg-gradient-to-br from-white via-sky-50 to-violet-50 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.45)] md:h-28 md:w-28"
-                  data-testid="avatar-client"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
                   aria-hidden
+                  data-testid="avatar-client"
                 >
+                  <UserRound className="h-5 w-5 text-black/70" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-lg font-semibold">{client ? client.name : "Client"}</span>
+                  </div>
                   {client ? (
-                    <span className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent md:text-4xl">
-                      {client.name
-                        .split(" ")
-                        .filter(Boolean)
-                        .slice(0, 2)
-                        .map((p) => p[0]?.toUpperCase())
-                        .join("") || "·"}
-                    </span>
-                  ) : (
-                    <UserRound className="h-10 w-10 text-black/40" />
-                  )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Select
+                        value={clientData?.badge || "New Client"}
+                        onValueChange={(value) => {
+                          if (clientId) {
+                            updateNeonClientMutation.mutate({ id: clientId, data: { badge: value } });
+                          }
+                        }}
+                      >
+                        <SelectTrigger
+                          className="h-auto w-auto rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 px-2.5 py-0.5 text-xs font-semibold text-[#3b82f6] hover:bg-[#3b82f6]/20"
+                          data-testid="select-client-type"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-[400]">
+                          <SelectItem value="New Client">New Client</SelectItem>
+                          <SelectItem value="Repeat Client">Repeat Client</SelectItem>
+                          <SelectItem value="VIP Client">VIP Client</SelectItem>
+                          <SelectItem value="Family Member">Family Member</SelectItem>
+                          <SelectItem value="Time Waster">Time Waster</SelectItem>
+                          <SelectItem value="Banned">Banned</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full ${tierPill(client.tier)}`}
+                        data-testid="pill-client-tier"
+                      >
+                        {client.tier}
+                      </Badge>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="h-px w-6 bg-gradient-to-r from-amber-500/70 to-transparent" aria-hidden />
-                  <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-amber-700/80">Client Profile</div>
-                </div>
-                <h1
-                  className="mt-2 break-words text-3xl font-bold leading-[1.05] tracking-tight text-slate-900 md:text-5xl"
-                  data-testid="text-client-name"
-                >
-                  {client ? client.name : "Client"}
-                </h1>
-                {client ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <Select
-                      value={clientData?.badge || "New Client"}
-                      onValueChange={(value) => {
-                        if (clientId) {
-                          updateNeonClientMutation.mutate({ id: clientId, data: { badge: value } });
-                        }
-                      }}
-                    >
-                      <SelectTrigger
-                        className="h-auto w-auto rounded-full border-[#3b82f6]/30 bg-white/85 px-3 py-1 text-xs font-semibold text-[#3b82f6] shadow-sm backdrop-blur hover:bg-white"
-                        data-testid="select-client-type"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="z-[400]">
-                        <SelectItem value="New Client">New Client</SelectItem>
-                        <SelectItem value="Repeat Client">Repeat Client</SelectItem>
-                        <SelectItem value="VIP Client">VIP Client</SelectItem>
-                        <SelectItem value="Family Member">Family Member</SelectItem>
-                        <SelectItem value="Time Waster">Time Waster</SelectItem>
-                        <SelectItem value="Banned">Banned</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Badge
-                      variant="outline"
-                      className={`gap-1 rounded-full backdrop-blur ${tierPill(client.tier)}`}
-                      data-testid="pill-client-tier"
-                    >
-                      <Crown className="h-3 w-3" />
-                      {client.tier}
-                    </Badge>
-                    {clientData?.email && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white/70 px-3 py-1 text-[11px] font-medium text-black/70 backdrop-blur">
-                        <Mail className="h-3 w-3" />
-                        {clientData.email}
-                      </span>
-                    )}
-                    {clientData?.phoneNumber && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white/70 px-3 py-1 text-[11px] font-medium text-black/70 backdrop-blur">
-                        <Phone className="h-3 w-3" />
-                        {clientData.phoneNumber}
-                      </span>
-                    )}
-                  </div>
-                ) : null}
+              <ReferrerSelector
+                currentReferredByClientId={clientData?.referredByClientId}
+                excludeClientId={clientId}
+                onSelect={(referredByClientId) => {
+                  updateNeonClientMutation.mutate(
+                    { id: clientId, data: { referredByClientId } },
+                    { onSuccess: () => toast({ title: "Referrer saved" }), onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }) }
+                  );
+                }}
+                onClear={() => {
+                  updateNeonClientMutation.mutate(
+                    { id: clientId, data: { referredByClientId: null } },
+                    { onSuccess: () => toast({ title: "Referrer removed" }), onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }) }
+                  );
+                }}
+              />
+
+              <div className="mt-3">
+                <PortalPinSection clientId={clientId} />
               </div>
+
             </div>
 
-            {/* Inline metric ribbon */}
-            {(() => {
-              const bookedProfit = bookings.reduce(
-                (s: number, b: BookingWithJoins) => s + parseFloat(b.package_commission || "0"),
-                0
-              );
-              const metrics = [
-                { icon: Inbox, label: "Enquiries", value: String(enquiries.length), accent: "from-sky-500/15 to-sky-500/5", icColor: "text-sky-700", barColor: "from-sky-500 to-sky-400" },
-                { icon: Sparkles, label: "Quotes", value: String(quotes.length), accent: "from-violet-500/15 to-violet-500/5", icColor: "text-violet-700", barColor: "from-violet-500 to-fuchsia-400" },
-                { icon: Plane, label: "Bookings", value: String(bookings.length), accent: "from-emerald-500/15 to-emerald-500/5", icColor: "text-emerald-700", barColor: "from-emerald-500 to-teal-400" },
-                { icon: CircleDollarSign, label: "Booked profit", value: currency.format(bookedProfit), accent: "from-amber-500/15 to-amber-500/5", icColor: "text-amber-700", barColor: "from-amber-500 to-rose-400" },
-              ];
-              return (
-                <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-4">
-                  {metrics.map((m) => {
-                    const Icon = m.icon;
-                    return (
-                      <div
-                        key={m.label}
-                        className={`group relative overflow-hidden rounded-2xl border border-black/[0.06] bg-gradient-to-br ${m.accent} p-4 backdrop-blur transition hover:border-black/[0.12] hover:shadow-lg`}
-                      >
-                        <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${m.barColor}`} />
-                        <div className="flex items-center justify-between">
-                          <div className={`grid h-8 w-8 place-items-center rounded-xl bg-white/85 ${m.icColor} shadow-sm`}>
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <TrendingUp className="h-3.5 w-3.5 text-black/30" />
-                        </div>
-                        <div className="mt-3 text-[10px] font-bold uppercase tracking-[0.18em] text-black/55">{m.label}</div>
-                        <div className="mt-0.5 truncate text-2xl font-bold tracking-tight text-slate-900">{m.value}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-        </section>
-
-        <div className="sticky top-0 z-30 border-b border-black/[0.06] bg-white/85 backdrop-blur-xl">
-          <div className="px-4 md:px-8" data-testid="tabs-client-workspace">
-            <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
-              <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:-mx-8 md:px-8 [&::-webkit-scrollbar]:hidden">
-                <TabsList className="inline-flex h-auto w-max gap-1 bg-transparent p-0 py-2.5">
-                  {[
-                    { value: "overview", label: "Overview", icon: LayoutDashboard },
-                    { value: "enquiries", label: "Enquiries", icon: MessageSquare },
-                    { value: "quotes", label: "Quotes", icon: Sparkles },
-                    { value: "booked", label: "Booked", icon: Plane },
-                    { value: "files", label: "Files", icon: Folder },
-                    { value: "tickets", label: "Tickets", icon: Ticket },
-                    { value: "vip-club", label: "VIP Club", icon: Crown },
-                  ].map(({ value, label, icon: Icon }) => (
-                    <TabsTrigger
-                      key={value}
-                      value={value}
-                      data-testid={`tab-${value}`}
-                      className="group inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-black/55 transition hover:bg-black/[0.04] hover:text-black/85 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-[0_8px_22px_-10px_rgba(15,23,42,0.55)]"
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      {label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
+            <div className="mt-3 rounded-3xl border border-black/10 bg-white/60 p-3" data-testid="section-contact-details">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-semibold text-black/80">Contact Details</div>
+                <button
+                  type="button"
+                  onClick={openEditDialog}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] font-semibold text-black/60 hover:bg-black/[0.05] transition"
+                  data-testid="button-edit-contact"
+                >
+                  <Pencil className="h-3 w-3" />
+                  Edit
+                </button>
               </div>
-
-              <div className="grid gap-6 py-6 lg:grid-cols-12">
-                <div className="min-w-0 lg:col-span-8">
-                  <TabsContent value="overview" className="mt-0">
-                    <ClientOverviewTab
-                      clientData={clientData}
-                      client={client}
-                      enquiries={enquiries}
-                      quotes={quotes}
-                      bookings={bookings}
-                      tickets={tickets}
-                      clientId={clientId}
-                      navigate={navigate}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="enquiries" className="mt-0">
-                    <ClientEnquiriesTab
-                      enquiries={enquiries}
-                      isLoadingTransactions={isLoadingTransactions}
-                      clientId={clientId}
-                      navigate={navigate}
-                      client={client}
-                      userFavorites={userFavorites}
-                      toggleFavoriteMutation={toggleFavoriteMutation}
-                      onConvertEnquiryToQuote={handleConvertEnquiryToQuote}
-                      onEditEnquiry={(enq) => {
-                        setEditingEnquiry(enq);
-                        setShowEnquiryWizard(true);
-                      }}
-                      onNewEnquiry={() => {
-                        setEditingEnquiry(null);
-                        setShowEnquiryWizard(true);
-                      }}
-                      onDeleteEnquiry={handleDeleteEnquiry}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="quotes" className="mt-0">
-                    <ClientQuotesTab
-                      quotes={quotes}
-                      bookings={bookings}
-                      transactions={transactions}
-                      clientId={clientId}
-                      navigate={navigate}
-                      onNewQuote={handleNewQuote}
-                      expandedCopyGroups={expandedCopyGroups}
-                      setExpandedCopyGroups={setExpandedCopyGroups}
-                      client={client}
-                      userFavorites={userFavorites}
-                      toggleFavoriteMutation={toggleFavoriteMutation}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="booked" className="mt-0">
-                    <ClientBookedTab
-                      bookings={bookings}
-                      clientId={clientId}
-                      navigate={navigate}
-                      onAddBooking={() => setShowBookingCreateDialog(true)}
-                      client={client}
-                      userFavorites={userFavorites}
-                      toggleFavoriteMutation={toggleFavoriteMutation}
-                      getUserName={getUserName}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="files" className="mt-0">
-                    <ClientFilesTab
-                      clientFiles={clientFilesData}
-                      onDeleteFile={(id) => deleteFileMutation.mutate(id)}
-                      filteredFiles={filteredFiles}
-                      onUploadFile={() => setShowUploadFileModal(true)}
-                      role={role}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="tickets" className="mt-0">
-                    <ClientTicketsTab
-                      filteredTickets={filteredTickets}
-                      getUserName={getUserName}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="vip-club" className="mt-0">
-                    <ClientVipClubTab clientId={clientId} />
-                  </TabsContent>
-                </div>
-
-                {/* IDENTITY RAIL — right sidebar (sticky on desktop) */}
-                <aside className="lg:col-span-4">
-                  <div className="space-y-3 lg:sticky lg:top-20">
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="h-px w-5 bg-gradient-to-r from-amber-500/70 to-transparent" aria-hidden />
-                      <div
-                        className="text-[10px] font-bold uppercase tracking-[0.25em] text-black/60"
-                        data-testid="text-client-right-title"
-                      >
-                        Client workspace
-                      </div>
+              <div className="grid gap-2" data-testid="list-contact-details">
+                {clientData?.phoneNumber && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10">
+                      <Phone className="h-4 w-4 text-blue-600" />
                     </div>
-                    <div
-                      className="px-1 text-[11px] text-black/45"
-                      data-testid="text-client-right-subtitle"
-                    >
-                      Knowing your client is the key to rapport
-                    </div>
-
-                    {/* Contact + Address */}
-                    <div
-                      className="overflow-hidden rounded-3xl border border-black/[0.08] bg-white/95 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.22)] backdrop-blur"
-                      data-testid="section-contact-details"
-                    >
-                      <div className="flex items-center justify-between gap-3 border-b border-black/[0.06] bg-gradient-to-r from-slate-50 via-white to-white px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-white shadow-sm">
-                            <Phone className="h-3.5 w-3.5" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold tracking-tight text-black/85">Contact</div>
-                            <div className="text-[10px] text-black/50">Reach this client</div>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={openEditDialog}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-black/65 shadow-sm transition hover:bg-white"
-                          data-testid="button-edit-contact"
-                        >
-                          <Pencil className="h-3 w-3" />
-                          Edit
-                        </button>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-phone">Phone</div>
+                      <div className="truncate text-sm text-black/85" data-testid="value-contact-phone">
+                        <a href={`tel:${clientData.phoneNumber.replace(/\s/g, '')}`} className="hover:text-blue-600 transition-colors">
+                          {clientData.phoneNumber}
+                        </a>
                       </div>
-
-                      <div className="space-y-1.5 p-3" data-testid="list-contact-details">
-                        {clientData?.phoneNumber && (
-                          <div className="group flex items-center gap-3 rounded-2xl border border-black/[0.06] bg-white px-3 py-2.5 transition hover:border-blue-500/30 hover:bg-blue-50/40">
-                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-500/5 text-blue-600">
-                              <Phone className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-contact-phone">Phone</div>
-                              <div className="truncate text-sm font-medium text-black/85" data-testid="value-contact-phone">
-                                <a href={`tel:${clientData.phoneNumber.replace(/\s/g, '')}`} className="transition-colors hover:text-blue-600">
-                                  {clientData.phoneNumber}
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {clientData?.email && (
-                          <div className="group flex items-center gap-3 rounded-2xl border border-black/[0.06] bg-white px-3 py-2.5 transition hover:border-emerald-500/30 hover:bg-emerald-50/40">
-                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 text-emerald-600">
-                              <Mail className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-contact-email">Email</div>
-                              <div className="truncate text-sm font-medium text-black/85" data-testid="value-contact-email">
-                                <a href={`mailto:${clientData.email}`} className="transition-colors hover:text-emerald-600">
-                                  {clientData.email}
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {clientData?.DOB && (
-                          <div className="group flex items-center gap-3 rounded-2xl border border-black/[0.06] bg-white px-3 py-2.5 transition hover:border-purple-500/30 hover:bg-purple-50/40">
-                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-500/5 text-purple-600">
-                              <UserRound className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-contact-dob">Date of Birth</div>
-                              <div className="text-sm font-medium text-black/85" data-testid="value-contact-dob">
-                                {clientData.DOB}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {(clientData?.houseNumber || clientData?.street || clientData?.city || clientData?.post_code || clientData?.country) && (
-                        <>
-                          <div className="flex items-center gap-2.5 border-y border-black/[0.06] bg-gradient-to-r from-rose-50/60 via-white to-white px-4 py-3">
-                            <div className="grid h-8 w-8 place-items-center rounded-xl bg-rose-600 text-white shadow-sm">
-                              <Home className="h-3.5 w-3.5" />
-                            </div>
-                            <div>
-                              <div className="text-xs font-semibold tracking-tight text-black/85">Address</div>
-                              <div className="text-[10px] text-black/50">Where they're based</div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5 p-3" data-testid="list-address-details">
-                            {(clientData?.houseNumber || clientData?.street) && (
-                              <div className="flex items-start gap-3 rounded-2xl border border-black/[0.06] bg-white px-3 py-2.5 transition hover:border-rose-500/30 hover:bg-rose-50/40">
-                                <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-rose-500/15 to-rose-500/5 text-rose-600">
-                                  <Home className="h-4 w-4" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-address-street">Street</div>
-                                  <div className="text-sm font-medium text-black/85" data-testid="value-address-street">
-                                    {[clientData.houseNumber, clientData.street].filter(Boolean).join(" ")}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {(clientData?.city || clientData?.post_code) && (
-                              <div className="flex items-start gap-3 rounded-2xl border border-black/[0.06] bg-white px-3 py-2.5 transition hover:border-sky-500/30 hover:bg-sky-50/40">
-                                <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-sky-500/15 to-sky-500/5 text-sky-600">
-                                  <MapPin className="h-4 w-4" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-address-city">City &amp; Postcode</div>
-                                  <div className="text-sm font-medium text-black/85" data-testid="value-address-city">
-                                    {[clientData.city, clientData.post_code].filter(Boolean).join(", ")}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {clientData?.country && (
-                              <div className="flex items-start gap-3 rounded-2xl border border-black/[0.06] bg-white px-3 py-2.5 transition hover:border-indigo-500/30 hover:bg-indigo-50/40">
-                                <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500/15 to-indigo-500/5 text-indigo-600">
-                                  <MapPin className="h-4 w-4" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-address-country">Country</div>
-                                  <div className="text-sm font-medium text-black/85" data-testid="value-address-country">
-                                    {clientData.country}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Referrer card */}
-                    <div className="overflow-hidden rounded-3xl border border-black/[0.08] bg-white/95 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.22)] backdrop-blur">
-                      <div className="flex items-center gap-2.5 border-b border-black/[0.06] bg-gradient-to-r from-violet-50/60 via-white to-white px-4 py-3">
-                        <div className="grid h-8 w-8 place-items-center rounded-xl bg-violet-600 text-white shadow-sm">
-                          <UserCheck className="h-3.5 w-3.5" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-semibold tracking-tight text-black/85">Referred by</div>
-                          <div className="text-[10px] text-black/50">Track your referral chain</div>
-                        </div>
-                      </div>
-                      <div className="p-3">
-                        <ReferrerSelector
-                          currentReferredByClientId={clientData?.referredByClientId}
-                          excludeClientId={clientId}
-                          onSelect={(referredByClientId) => {
-                            updateNeonClientMutation.mutate(
-                              { id: clientId, data: { referredByClientId } },
-                              { onSuccess: () => toast({ title: "Referrer saved" }), onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }) }
-                            );
-                          }}
-                          onClear={() => {
-                            updateNeonClientMutation.mutate(
-                              { id: clientId, data: { referredByClientId: null } },
-                              { onSuccess: () => toast({ title: "Referrer removed" }), onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }) }
-                            );
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Portal access card */}
-                    <div className="overflow-hidden rounded-3xl border border-black/[0.08] bg-white/95 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.22)] backdrop-blur">
-                      <PortalPinSection clientId={clientId} />
                     </div>
                   </div>
-                </aside>
+                )}
+
+                {clientData?.email && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-500/10">
+                      <Mail className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-email">Email</div>
+                      <div className="truncate text-sm text-black/85" data-testid="value-contact-email">
+                        <a href={`mailto:${clientData.email}`} className="hover:text-green-600 transition-colors">
+                          {clientData.email}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {clientData?.DOB && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/10">
+                      <UserRound className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-dob">Date of Birth</div>
+                      <div className="text-sm text-black/85" data-testid="value-contact-dob">
+                        {clientData.DOB}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </Tabs>
-          </div>
+
+              {(clientData?.houseNumber || clientData?.street || clientData?.city || clientData?.post_code || clientData?.country) && (
+                <div className="mt-4 mb-2">
+                  <div className="text-xs font-semibold text-black/80">Address</div>
+                </div>
+              )}
+              <div className="grid gap-2" data-testid="list-address-details">
+                {(clientData?.houseNumber || clientData?.street) && (
+                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 mt-0.5">
+                      <Home className="h-4 w-4 text-rose-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-street">Street</div>
+                      <div className="text-sm text-black/85" data-testid="value-address-street">
+                        {[clientData.houseNumber, clientData.street].filter(Boolean).join(" ")}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(clientData?.city || clientData?.post_code) && (
+                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 mt-0.5">
+                      <MapPin className="h-4 w-4 text-sky-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-city">City & Postcode</div>
+                      <div className="text-sm text-black/85" data-testid="value-address-city">
+                        {[clientData.city, clientData.post_code].filter(Boolean).join(", ")}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {clientData?.country && (
+                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 mt-0.5">
+                      <MapPin className="h-4 w-4 text-indigo-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-country">Country</div>
+                      <div className="text-sm text-black/85" data-testid="value-address-country">
+                        {clientData.country}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 lg:col-span-8">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm font-semibold" data-testid="text-client-right-title">
+                  Client workspace
+                </div>
+                <div className="mt-1 text-xs text-black/55" data-testid="text-client-right-subtitle">Knowing you client is the key to Rapport</div>
+              </div>
+              
+            </div>
+
+            <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
+              <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
+                <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 rounded-2xl border border-black/10 bg-white/70">
+                  <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-overview">
+                    Overview
+                  </TabsTrigger>
+                  <TabsTrigger value="enquiries" className="rounded-xl" data-testid="tab-enquiries">
+                    Enquiries
+                  </TabsTrigger>
+                  <TabsTrigger value="quotes" className="rounded-xl" data-testid="tab-quotes">
+                    Quotes
+                  </TabsTrigger>
+                  <TabsTrigger value="booked" className="rounded-xl" data-testid="tab-booked">
+                    Booked
+                  </TabsTrigger>
+                  <TabsTrigger value="files" className="rounded-xl" data-testid="tab-files">
+                    Files
+                  </TabsTrigger>
+                  <TabsTrigger value="tickets" className="rounded-xl" data-testid="tab-tickets">
+                    Tickets
+                  </TabsTrigger>
+                  <TabsTrigger value="vip-club" className="rounded-xl" data-testid="tab-vip-club">
+                    VIP Club
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview" className="mt-3">
+                  <ClientOverviewTab
+                    clientData={clientData}
+                    client={client}
+                    enquiries={enquiries}
+                    quotes={quotes}
+                    bookings={bookings}
+                    tickets={tickets}
+                    clientId={clientId}
+                    navigate={navigate}
+                  />
+                </TabsContent>
+
+                <TabsContent value="enquiries" className="mt-3">
+                  <ClientEnquiriesTab
+                    enquiries={enquiries}
+                    isLoadingTransactions={isLoadingTransactions}
+                    clientId={clientId}
+                    navigate={navigate}
+                    client={client}
+                    userFavorites={userFavorites}
+                    toggleFavoriteMutation={toggleFavoriteMutation}
+                    onConvertEnquiryToQuote={handleConvertEnquiryToQuote}
+                    onEditEnquiry={(enq) => {
+                      setEditingEnquiry(enq);
+                      setShowEnquiryWizard(true);
+                    }}
+                    onNewEnquiry={() => {
+                      setEditingEnquiry(null);
+                      setShowEnquiryWizard(true);
+                    }}
+                    onDeleteEnquiry={handleDeleteEnquiry}
+                  />
+                </TabsContent>
+
+                <TabsContent value="quotes" className="mt-3">
+                  <ClientQuotesTab
+                    quotes={quotes}
+                    bookings={bookings}
+                    transactions={transactions}
+                    clientId={clientId}
+                    navigate={navigate}
+                    onNewQuote={handleNewQuote}
+                    expandedCopyGroups={expandedCopyGroups}
+                    setExpandedCopyGroups={setExpandedCopyGroups}
+                    client={client}
+                    userFavorites={userFavorites}
+                    toggleFavoriteMutation={toggleFavoriteMutation}
+                  />
+                </TabsContent>
+
+                <TabsContent value="booked" className="mt-3">
+                  <ClientBookedTab
+                    bookings={bookings}
+                    clientId={clientId}
+                    navigate={navigate}
+                    onAddBooking={() => setShowBookingCreateDialog(true)}
+                    client={client}
+                    userFavorites={userFavorites}
+                    toggleFavoriteMutation={toggleFavoriteMutation}
+                    getUserName={getUserName}
+                  />
+                </TabsContent>
+
+                <TabsContent value="files" className="mt-3">
+                  <ClientFilesTab
+                    clientFiles={clientFilesData}
+                    onDeleteFile={(id) => deleteFileMutation.mutate(id)}
+                    filteredFiles={filteredFiles}
+                    onUploadFile={() => setShowUploadFileModal(true)}
+                    role={role}
+                  />
+                </TabsContent>
+
+                <TabsContent value="tickets" className="mt-3">
+                  <ClientTicketsTab
+                    filteredTickets={filteredTickets}
+                    getUserName={getUserName}
+                  />
+                </TabsContent>
+
+                <TabsContent value="vip-club" className="mt-3">
+                  <ClientVipClubTab clientId={clientId} />
+                </TabsContent>
+
+              </Tabs>
+            </div>
+          </Card>
         </div>
       </div>
       <QuoteCreateDialog

@@ -51,22 +51,17 @@ export function ClientQuotesTab({
     <div className="grid gap-3" data-testid="layout-quotes">
       <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quotes-list">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-sky-500/12 text-sky-600">
-              <Sparkles className="h-4 w-4" />
+          <div>
+            <div className="text-sm font-semibold" data-testid="text-quotes-title">
+              Quotes
             </div>
-            <div>
-              <div className="text-sm font-semibold tracking-tight text-black/85" data-testid="text-quotes-title">
-                Quotes
-              </div>
-              <div className="text-[11px] text-black/50" data-testid="text-quotes-subtitle">
-                Active proposals, won deals &amp; archive
-              </div>
+            <div className="mt-1 text-xs text-black/55" data-testid="text-quotes-subtitle">
+              Quick view of recent quotes for this client.
             </div>
           </div>
           <Button
             size="sm"
-            className="h-9 rounded-2xl bg-black px-3 text-white shadow-sm hover:bg-black/90"
+            className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
             data-testid="button-quotes-new"
             onClick={onNewQuote}
           >
