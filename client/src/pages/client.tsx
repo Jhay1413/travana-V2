@@ -960,7 +960,7 @@ export default function ClientPage() {
                         className="text-[10px] font-bold uppercase tracking-[0.25em] text-black/60"
                         data-testid="text-client-right-title"
                       >
-                        Identity
+                        Client workspace
                       </div>
                     </div>
                     <div
