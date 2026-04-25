@@ -357,35 +357,28 @@ export function ClientOverviewTab({
     <div className="grid gap-3" data-testid="panel-overview">
       <ReferralStatsSection clientId={clientId} />
 
-      {/* Hero stats */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="overview-stats">
+      {/* Pipeline at-a-glance — narrative summary cards (different focus from page hero ribbon) */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="overview-stats">
         <HeroStatCard
           variant="enquiries"
-          label="Enquiries"
+          label="Open enquiries"
           value={enquiries.length}
           testId="stat-enquiries"
-          hint="Open conversations"
+          hint="Live conversations"
         />
         <HeroStatCard
           variant="quotes"
-          label="Quotes"
+          label="Quotes in play"
           value={quotes.length}
           testId="stat-quotes"
-          hint="Active proposals"
-        />
-        <HeroStatCard
-          variant="bookings"
-          label="Bookings"
-          value={bookings.length}
-          testId="stat-bookings"
-          hint="Confirmed trips"
+          hint="Awaiting decision"
         />
         <HeroStatCard
           variant="profit"
-          label="Total Profit"
+          label="Lifetime profit"
           value={currency.format(bookedCommission)}
           testId="stat-total-value"
-          hint="Commission booked"
+          hint={`${bookings.length} booking${bookings.length === 1 ? "" : "s"} confirmed`}
         />
       </div>
 
