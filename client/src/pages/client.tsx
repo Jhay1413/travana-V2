@@ -661,9 +661,7 @@ export default function ClientPage() {
     >
       <div className="relative min-h-[calc(100vh-56px)] w-full" data-testid="layout-client-page">
 
-        {/* ═══════════════════════ CINEMATIC HERO BAND ═══════════════════════ */}
         <section className="relative overflow-hidden">
-          {/* Layered gradient backdrop with floating orbs + subtle grid */}
           <div className="pointer-events-none absolute inset-0" aria-hidden>
             <div className="absolute inset-0 bg-gradient-to-br from-[#fbf7f1] via-white to-sky-50/70" />
             <div className="absolute -right-32 -top-40 h-[28rem] w-[28rem] rounded-full bg-gradient-to-br from-amber-200/45 via-rose-200/25 to-transparent blur-3xl" />
@@ -838,7 +836,6 @@ export default function ClientPage() {
           </div>
         </section>
 
-        {/* ═══════════════════════ STICKY TAB BAR ═══════════════════════ */}
         <div className="sticky top-0 z-30 border-b border-black/[0.06] bg-white/85 backdrop-blur-xl">
           <div className="px-4 md:px-8" data-testid="tabs-client-workspace">
             <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
@@ -866,9 +863,7 @@ export default function ClientPage() {
                 </TabsList>
               </div>
 
-              {/* ═══════════════════════ BODY GRID ═══════════════════════ */}
               <div className="grid gap-6 py-6 lg:grid-cols-12">
-                {/* WORKSPACE — main content area */}
                 <div className="min-w-0 lg:col-span-8">
                   <TabsContent value="overview" className="mt-0">
                     <ClientOverviewTab
