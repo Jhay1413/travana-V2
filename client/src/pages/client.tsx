@@ -792,113 +792,134 @@ export default function ClientPage() {
 
             </div>
 
-            <div className="mt-3 rounded-3xl border border-black/10 bg-white/60 p-3" data-testid="section-contact-details">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-semibold text-black/80">Contact Details</div>
+            <div className="mt-3 overflow-hidden rounded-3xl border border-black/10 bg-gradient-to-br from-white via-white to-slate-50/40 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset]" data-testid="section-contact-details">
+              <div className="flex items-center justify-between gap-3 border-b border-black/[0.06] bg-white/40 px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="grid h-7 w-7 place-items-center rounded-xl bg-slate-900/[0.06] text-slate-700">
+                    <Phone className="h-3.5 w-3.5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold tracking-tight text-black/85">Contact Details</div>
+                    <div className="text-[10px] text-black/45">Quick ways to reach this client</div>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={openEditDialog}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] font-semibold text-black/60 hover:bg-black/[0.05] transition"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-white/80 px-2 py-1 text-[11px] font-semibold text-black/65 shadow-sm hover:bg-white transition"
                   data-testid="button-edit-contact"
                 >
                   <Pencil className="h-3 w-3" />
                   Edit
                 </button>
               </div>
-              <div className="grid gap-2" data-testid="list-contact-details">
-                {clientData?.phoneNumber && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10">
-                      <Phone className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-phone">Phone</div>
-                      <div className="truncate text-sm text-black/85" data-testid="value-contact-phone">
-                        <a href={`tel:${clientData.phoneNumber.replace(/\s/g, '')}`} className="hover:text-blue-600 transition-colors">
-                          {clientData.phoneNumber}
-                        </a>
+
+              <div className="px-4 pb-4 pt-3">
+                <div className="grid gap-1.5" data-testid="list-contact-details">
+                  {clientData?.phoneNumber && (
+                    <div className="group flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2.5 transition hover:border-blue-500/25 hover:shadow-sm">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-500/5 text-blue-600">
+                        <Phone className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-contact-phone">Phone</div>
+                        <div className="truncate text-sm font-medium text-black/85" data-testid="value-contact-phone">
+                          <a href={`tel:${clientData.phoneNumber.replace(/\s/g, '')}`} className="hover:text-blue-600 transition-colors">
+                            {clientData.phoneNumber}
+                          </a>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {clientData?.email && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-500/10">
-                      <Mail className="h-4 w-4 text-green-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-email">Email</div>
-                      <div className="truncate text-sm text-black/85" data-testid="value-contact-email">
-                        <a href={`mailto:${clientData.email}`} className="hover:text-green-600 transition-colors">
-                          {clientData.email}
-                        </a>
+                  {clientData?.email && (
+                    <div className="group flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2.5 transition hover:border-emerald-500/25 hover:shadow-sm">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 text-emerald-600">
+                        <Mail className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-contact-email">Email</div>
+                        <div className="truncate text-sm font-medium text-black/85" data-testid="value-contact-email">
+                          <a href={`mailto:${clientData.email}`} className="hover:text-emerald-600 transition-colors">
+                            {clientData.email}
+                          </a>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {clientData?.DOB && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/10">
-                      <UserRound className="h-4 w-4 text-purple-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-dob">Date of Birth</div>
-                      <div className="text-sm text-black/85" data-testid="value-contact-dob">
-                        {clientData.DOB}
+                  {clientData?.DOB && (
+                    <div className="group flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2.5 transition hover:border-purple-500/25 hover:shadow-sm">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-500/5 text-purple-600">
+                        <UserRound className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-contact-dob">Date of Birth</div>
+                        <div className="text-sm font-medium text-black/85" data-testid="value-contact-dob">
+                          {clientData.DOB}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {(clientData?.houseNumber || clientData?.street || clientData?.city || clientData?.post_code || clientData?.country) && (
-                <div className="mt-4 mb-2">
-                  <div className="text-xs font-semibold text-black/80">Address</div>
+                  )}
                 </div>
-              )}
-              <div className="grid gap-2" data-testid="list-address-details">
-                {(clientData?.houseNumber || clientData?.street) && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 mt-0.5">
-                      <Home className="h-4 w-4 text-rose-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-street">Street</div>
-                      <div className="text-sm text-black/85" data-testid="value-address-street">
-                        {[clientData.houseNumber, clientData.street].filter(Boolean).join(" ")}
-                      </div>
-                    </div>
-                  </div>
-                )}
 
-                {(clientData?.city || clientData?.post_code) && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 mt-0.5">
-                      <MapPin className="h-4 w-4 text-sky-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-city">City & Postcode</div>
-                      <div className="text-sm text-black/85" data-testid="value-address-city">
-                        {[clientData.city, clientData.post_code].filter(Boolean).join(", ")}
+                {(clientData?.houseNumber || clientData?.street || clientData?.city || clientData?.post_code || clientData?.country) && (
+                  <>
+                    <div className="my-4 flex items-center gap-2.5">
+                      <div className="grid h-7 w-7 place-items-center rounded-xl bg-rose-500/10 text-rose-600">
+                        <Home className="h-3.5 w-3.5" />
                       </div>
+                      <div>
+                        <div className="text-xs font-semibold tracking-tight text-black/85">Address</div>
+                        <div className="text-[10px] text-black/45">Where this client is based</div>
+                      </div>
+                      <div className="ml-auto h-px flex-1 bg-gradient-to-r from-black/10 to-transparent" aria-hidden />
                     </div>
-                  </div>
-                )}
 
-                {clientData?.country && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 mt-0.5">
-                      <MapPin className="h-4 w-4 text-indigo-600" />
+                    <div className="grid gap-1.5" data-testid="list-address-details">
+                      {(clientData?.houseNumber || clientData?.street) && (
+                        <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2.5 transition hover:border-rose-500/25 hover:shadow-sm">
+                          <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-rose-500/15 to-rose-500/5 text-rose-600">
+                            <Home className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-address-street">Street</div>
+                            <div className="text-sm font-medium text-black/85" data-testid="value-address-street">
+                              {[clientData.houseNumber, clientData.street].filter(Boolean).join(" ")}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {(clientData?.city || clientData?.post_code) && (
+                        <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2.5 transition hover:border-sky-500/25 hover:shadow-sm">
+                          <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-sky-500/15 to-sky-500/5 text-sky-600">
+                            <MapPin className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-address-city">City &amp; Postcode</div>
+                            <div className="text-sm font-medium text-black/85" data-testid="value-address-city">
+                              {[clientData.city, clientData.post_code].filter(Boolean).join(", ")}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {clientData?.country && (
+                        <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2.5 transition hover:border-indigo-500/25 hover:shadow-sm">
+                          <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500/15 to-indigo-500/5 text-indigo-600">
+                            <MapPin className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-black/40" data-testid="label-address-country">Country</div>
+                            <div className="text-sm font-medium text-black/85" data-testid="value-address-country">
+                              {clientData.country}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-country">Country</div>
-                      <div className="text-sm text-black/85" data-testid="value-address-country">
-                        {clientData.country}
-                      </div>
-                    </div>
-                  </div>
+                  </>
                 )}
               </div>
             </div>
@@ -921,7 +942,8 @@ export default function ClientPage() {
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-gradient-to-b from-white/80 to-white/40 p-2 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset]" data-testid="tabs-client-workspace">
               <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
-                <TabsList className="flex h-auto w-full flex-wrap gap-1 rounded-2xl border border-black/10 bg-white/70 p-1 sm:grid sm:grid-cols-7 sm:gap-0">
+                <div className="-mx-2 overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <TabsList className="inline-flex h-auto w-max min-w-full gap-1 rounded-2xl border border-black/10 bg-white/70 p-1 sm:grid sm:w-full sm:min-w-0 sm:grid-cols-7 sm:gap-0">
                   <TabsTrigger
                     value="overview"
                     className="flex-1 rounded-xl text-xs font-semibold transition data-[state=active]:bg-gradient-to-br data-[state=active]:from-white data-[state=active]:to-sky-50 data-[state=active]:text-black/90 data-[state=active]:shadow-sm sm:flex-initial"
@@ -972,6 +994,7 @@ export default function ClientPage() {
                     VIP Club
                   </TabsTrigger>
                 </TabsList>
+                </div>
 
                 <TabsContent value="overview" className="mt-3">
                   <ClientOverviewTab
