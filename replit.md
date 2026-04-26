@@ -50,7 +50,7 @@ The database schema includes tables for users, clients, transactions, quotes, bo
 ### Core Services
 - **PostgreSQL**: Primary database.
 - **Replit Auth**: OpenID Connect provider.
-- **Twilio**: SMS notification service (via Replit Connectors).
+- **Twilio**: SMS notification service. The service tries the Replit Twilio connector first (`REPLIT_CONNECTORS_HOSTNAME`), then falls back to plain env vars `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`. Either path is supported.
 
 ### Key NPM Packages
 - `drizzle-orm` / `drizzle-kit`: ORM and migrations.

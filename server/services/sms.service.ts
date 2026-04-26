@@ -2,21 +2,15 @@ import twilio, { Twilio } from "twilio";
 
 let cachedSettings: { settings: any; expires_at?: string } | null = null;
 
-async function fetchTwilioConnection(): Promise<{ account_sid: string; auth_token: string; phone_number: string }> {
+async function fetchTwilioConnection(): Promise<any | null> {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  if (!hostname) {
-    throw new Error(
-      "Twilio is not configured. Please connect Twilio via the Replit integrations panel."
-    );
-  }
+  if (!hostname) return null;
   const xReplitToken = process.env.REPL_IDENTITY
     ? "repl " + process.env.REPL_IDENTITY
     : process.env.WEB_REPL_RENEWAL
     ? "depl " + process.env.WEB_REPL_RENEWAL
     : null;
-  if (!xReplitToken) {
-    throw new Error("Replit identity token not available — cannot reach the Twilio connector.");
-  }
+  if (!xReplitToken) return null;
 
   if (
     cachedSettings &&
@@ -26,33 +20,50 @@ async function fetchTwilioConnection(): Promise<{ account_sid: string; auth_toke
     return cachedSettings.settings;
   }
 
-  const res = await fetch(
-    `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=twilio`,
-    { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken } }
-  );
-  const data = await res.json().catch(() => ({} as any));
-  const item = data?.items?.[0];
-  if (!item) {
-    throw new Error(
-      "Twilio is not connected for this project. Please authorize Twilio in the integrations panel."
+  try {
+    const res = await fetch(
+      `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=twilio`,
+      { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken } }
     );
+    const data: any = await res.json().catch(() => ({} as any));
+    const item = data?.items?.[0];
+    if (!item) return null;
+    cachedSettings = { settings: item.settings, expires_at: item.expires_at };
+    return item.settings;
+  } catch {
+    return null;
   }
-  cachedSettings = { settings: item.settings, expires_at: item.expires_at };
-  return item.settings;
 }
 
 export async function getUncachableTwilioClient(): Promise<{
   client: Twilio;
   fromPhone: string;
 }> {
-  const settings = await fetchTwilioConnection();
+  // Prefer Replit connector if authorised; fall back to plain env vars.
+  const settings: any = (await fetchTwilioConnection()) || {};
   const accountSid: string =
-    settings.account_sid || settings.accountSid || settings.sid || settings.username;
-  const authToken: string = settings.auth_token || settings.authToken || settings.password;
+    settings.account_sid ||
+    settings.accountSid ||
+    settings.sid ||
+    settings.username ||
+    process.env.TWILIO_ACCOUNT_SID ||
+    "";
+  const authToken: string =
+    settings.auth_token ||
+    settings.authToken ||
+    settings.password ||
+    process.env.TWILIO_AUTH_TOKEN ||
+    "";
   const fromPhone: string =
-    settings.phone_number || settings.phoneNumber || settings.from_number || "";
+    settings.phone_number ||
+    settings.phoneNumber ||
+    settings.from_number ||
+    process.env.TWILIO_PHONE_NUMBER ||
+    "";
   if (!accountSid || !authToken) {
-    throw new Error("Twilio credentials are missing from the connection.");
+    throw new Error(
+      "Twilio is not connected. Either authorise the Twilio integration or set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER as project secrets."
+    );
   }
   return { client: twilio(accountSid, authToken), fromPhone };
 }
