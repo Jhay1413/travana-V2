@@ -22,6 +22,7 @@ import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";
 import SocialQuotePage from "@/pages/social-quote";
 import DestinationGuruPage from "@/pages/destination-guru";
+import SmsCenterPage from "@/pages/sms-center";
 import FeedbackPage from "@/pages/feedback";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
@@ -64,6 +65,7 @@ function AuthenticatedRouter() {
       <Route path="/enquiries/:enquiryId" component={EnquiryPage} />
       <Route path="/pipeline" component={PipelinePage} />
       <Route path="/destination-guru" component={DestinationGuruPage} />
+      <Route path="/sms-center" component={SmsCenterPage} />
       <Route path="/social-posts" component={SocialPostsPage} />
       <Route path="/social-posts/quotes/:quoteId" component={SocialQuotePage} />
       <Route path="/tickets" component={TicketsPage} />

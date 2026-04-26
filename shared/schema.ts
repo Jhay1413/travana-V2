@@ -93,6 +93,7 @@ export const clientTable = pgTable("client_table", {
   vipEnrolledAt: timestamp("vipEnrolledAt"),
   totalReferrals: integer("totalReferrals").default(0).notNull(),
   referredByClientId: uuid("referredByClientId"),
+  smsOptIn: boolean("sms_opt_in").notNull().default(true),
 });
 
 export const insertClientTableSchema = createInsertSchema(clientTable).omit({ id: true, createdAt: true });
@@ -1764,3 +1765,81 @@ export const webauthnCredentials = pgTable("webauthn_credentials", {
   deviceName: varchar("device_name", { length: 255 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+// =====================================================================
+// SMS Notifications
+// =====================================================================
+export const sms_template_category_enum = pgEnum("sms_template_category", [
+  "weekly_deals",
+  "balance_due",
+  "booking_confirmation",
+  "tickets_ready",
+  "portal_login",
+  "custom",
+]);
+
+export const sms_auto_trigger_enum = pgEnum("sms_auto_trigger", [
+  "manual",
+  "on_booking_create",
+  "on_pin_set",
+  "on_tickets_uploaded",
+  "days_before_departure",
+  "weekly_schedule",
+]);
+
+export const smsTemplatesTable = pgTable("sms_templates", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  category: sms_template_category_enum("category").notNull().default("custom"),
+  body: text("body").notNull(),
+  autoTrigger: sms_auto_trigger_enum("auto_trigger").notNull().default("manual"),
+  triggerDaysBefore: integer("trigger_days_before"),
+  triggerWeekday: integer("trigger_weekday"),
+  triggerHour: integer("trigger_hour"),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertSmsTemplateSchema = createInsertSchema(smsTemplatesTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type SmsTemplate = typeof smsTemplatesTable.$inferSelect;
+export type InsertSmsTemplate = z.infer<typeof insertSmsTemplateSchema>;
+
+export const sms_message_status_enum = pgEnum("sms_message_status", [
+  "queued",
+  "sent",
+  "delivered",
+  "failed",
+  "skipped_optout",
+  "skipped_no_phone",
+]);
+
+export const smsMessagesTable = pgTable("sms_messages", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  templateId: uuid("template_id").references(() => smsTemplatesTable.id, { onDelete: "set null" }),
+  templateName: varchar("template_name", { length: 200 }),
+  clientId: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
+  clientName: varchar("client_name", { length: 255 }),
+  toPhone: varchar("to_phone", { length: 30 }).notNull(),
+  body: text("body").notNull(),
+  status: sms_message_status_enum("status").notNull().default("queued"),
+  providerMessageId: varchar("provider_message_id", { length: 100 }),
+  providerError: text("provider_error"),
+  costCents: integer("cost_cents"),
+  triggeredBy: text("triggered_by").references(() => user.id, { onDelete: "set null" }),
+  triggeredByName: varchar("triggered_by_name", { length: 255 }),
+  triggerSource: varchar("trigger_source", { length: 50 }),
+  sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow(),
+});
+
+export const insertSmsMessageSchema = createInsertSchema(smsMessagesTable).omit({
+  id: true,
+  sentAt: true,
+});
+export type SmsMessage = typeof smsMessagesTable.$inferSelect;
+export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;

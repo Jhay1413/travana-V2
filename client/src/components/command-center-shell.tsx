@@ -111,6 +111,7 @@ function getNavRoute(key: string): string {
     "deletion-codes": "/settings/deletion-codes",
     "tags": "/settings/tags",
     "destination-guru": "/destination-guru",
+    "sms-center": "/sms-center",
     "financials": "/?s=financials",
     "financials-targets": "/?s=financials-targets",
     "admin-settings-page": "/?s=admin-settings-page",
@@ -674,6 +675,7 @@ export function CommandCenterShell({
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" /> },
+              { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" /> },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
             ],
@@ -688,6 +690,7 @@ export function CommandCenterShell({
         { key: "team", label: "Team Pipeline", icon: <BarChart3 className="h-4 w-4" /> },
         { key: "coverage", label: "Coverage", icon: <Compass className="h-4 w-4" /> },
         { key: "coaching", label: "Coaching", icon: <BadgeCheck className="h-4 w-4" /> },
+        { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" /> },
         { key: "reports", label: "Reports", icon: <Activity className="h-4 w-4" /> },
       ]};
     }

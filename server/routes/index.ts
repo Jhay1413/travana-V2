@@ -40,6 +40,7 @@ import hubPostRoutes from "./hubPost.routes";
 import referralRoutes from "./referral.routes";
 import referralPayoutRoutes from "./referralPayout.routes";
 import referralWithdrawalRoutes from "./referralWithdrawal.routes";
+import smsRoutes from "./sms.routes";
 
 const router = Router();
 
@@ -84,5 +85,6 @@ router.use("/hub-posts", hubPostRoutes);
 router.use("/referrals", referralRoutes);
 router.use("/referral-payouts", referralPayoutRoutes);
 router.use("/referral-withdrawals", referralWithdrawalRoutes);
+router.use("/sms", smsRoutes);
 
 export default router;
