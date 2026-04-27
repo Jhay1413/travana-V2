@@ -660,6 +660,7 @@ export function CommandCenterShell({
                 ] },
               ] },
               { key: "referrals", label: "Referrals", icon: <Gift className="h-4 w-4" /> },
+              { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" /> },
               { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
               { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" />, subGroups: settingsSubGroups },
             ],
