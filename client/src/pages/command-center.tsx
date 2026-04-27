@@ -559,6 +559,7 @@ function ShellNav({
                 ] },
               ] },
               { key: "referrals", label: "Referrals", icon: <Gift className="h-4 w-4" /> },
+              { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" />, route: "/sms-center" },
               { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
               { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" />, subGroups: settingsSubGroups },
             ] as NavItem[],
@@ -574,6 +575,7 @@ function ShellNav({
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" />, route: "/destination-guru" },
+              { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" />, route: "/sms-center" },
               { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
             ] as NavItem[],
@@ -589,6 +591,7 @@ function ShellNav({
         { key: "team", label: "Team Pipeline", icon: <BarChart3 className="h-4 w-4" /> },
         { key: "coverage", label: "Coverage", icon: <Compass className="h-4 w-4" /> },
         { key: "coaching", label: "Coaching", icon: <BadgeCheck className="h-4 w-4" /> },
+        { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" />, route: "/sms-center" },
         { key: "reports", label: "Reports", icon: <FileText className="h-4 w-4" /> },
       ] as NavItem[], sections: undefined as NavSection[] | undefined };
     }
