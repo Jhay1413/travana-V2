@@ -126,7 +126,10 @@ export default function SmsCenterPage() {
 
   const statusQ = useQuery<StatusResp>({
     queryKey: ["sms", "status"],
-    queryFn: async () => (await axios.get("/sms/status")).data,
+    queryFn: async () => {
+      const r = (await axios.get("/sms/status")).data;
+      return r?.data ?? r;
+    },
     refetchOnWindowFocus: false,
   });
 
@@ -180,7 +183,10 @@ function TemplatesTab() {
   const qc = useQueryClient();
   const templatesQ = useQuery<SmsTemplate[]>({
     queryKey: ["sms", "templates"],
-    queryFn: async () => (await axios.get("/sms/templates")).data,
+    queryFn: async () => {
+      const r = (await axios.get("/sms/templates")).data;
+      return r?.data ?? r;
+    },
   });
   const [editing, setEditing] = useState<SmsTemplate | null>(null);
   const [creating, setCreating] = useState(false);
@@ -448,7 +454,10 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
   const qc = useQueryClient();
   const templatesQ = useQuery<SmsTemplate[]>({
     queryKey: ["sms", "templates"],
-    queryFn: async () => (await axios.get("/sms/templates")).data,
+    queryFn: async () => {
+      const r = (await axios.get("/sms/templates")).data;
+      return r?.data ?? r;
+    },
   });
   const clientsQ = useQuery<any[]>({
     queryKey: ["clients", "neon-list"],
@@ -478,8 +487,10 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
   const previewQ = useQuery<{ total: number; eligible: number; skippedOptOut: number; skippedNoPhone: number; confirmRequired: boolean; maxAllowed: number }>({
     queryKey: ["sms", "preview-recipients", mode, vipTier, badge, clientId],
     enabled: mode !== "client" || !!clientId,
-    queryFn: async () =>
-      (await axios.post("/sms/preview-recipients", { recipients: buildRecipients() })).data,
+    queryFn: async () => {
+      const r = (await axios.post("/sms/preview-recipients", { recipients: buildRecipients() })).data;
+      return r?.data ?? r;
+    },
   });
 
   const doSend = async (confirmBulk: boolean) => {
@@ -722,7 +733,10 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
 function LogTab() {
   const messagesQ = useQuery<SmsMessage[]>({
     queryKey: ["sms", "messages"],
-    queryFn: async () => (await axios.get("/sms/messages?limit=300")).data,
+    queryFn: async () => {
+      const r = (await axios.get("/sms/messages?limit=300")).data;
+      return r?.data ?? r;
+    },
   });
 
   return (
