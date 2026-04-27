@@ -185,9 +185,11 @@ function TemplatesTab() {
     queryKey: ["sms", "templates"],
     queryFn: async () => {
       const r = (await axios.get("/sms/templates")).data;
-      return r?.data ?? r;
+      const arr = r?.data ?? r;
+      return Array.isArray(arr) ? arr : [];
     },
   });
+  const templates: SmsTemplate[] = Array.isArray(templatesQ.data) ? templatesQ.data : [];
   const [editing, setEditing] = useState<SmsTemplate | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -212,7 +214,7 @@ function TemplatesTab() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {templatesQ.data?.map((t) => (
+        {templates.map((t) => (
           <Card key={t.id} data-testid={`card-template-${t.id}`}>
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
@@ -456,9 +458,11 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
     queryKey: ["sms", "templates"],
     queryFn: async () => {
       const r = (await axios.get("/sms/templates")).data;
-      return r?.data ?? r;
+      const arr = r?.data ?? r;
+      return Array.isArray(arr) ? arr : [];
     },
   });
+  const templates: SmsTemplate[] = Array.isArray(templatesQ.data) ? templatesQ.data : [];
   const clientsQ = useQuery<any[]>({
     queryKey: ["clients", "neon-list"],
     queryFn: async () => (await axios.get("/neon-clients?limit=200")).data,
@@ -472,9 +476,9 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
   const [clientId, setClientId] = useState<string>("");
 
   useEffect(() => {
-    const t = templatesQ.data?.find((x) => x.id === templateId);
+    const t = templates.find((x) => x.id === templateId);
     if (t) setBodyOverride(t.body);
-  }, [templateId, templatesQ.data]);
+  }, [templateId, templates]);
 
   const buildRecipients = () => {
     const r: any = { mode };
@@ -570,7 +574,7 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
                   <SelectValue placeholder="Choose a template..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {templatesQ.data?.map((t) => (
+                  {templates.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name} <span className="text-muted-foreground">— {CATEGORY_LABELS[t.category]}</span>
                     </SelectItem>
