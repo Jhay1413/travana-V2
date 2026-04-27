@@ -146,6 +146,25 @@ export const referralRepository = {
     await db.delete(referral).where(eq(referral.id, id));
   },
 
+  async findDueForAutoApproval(referrerClientId?: string): Promise<Referral[]> {
+    const today = new Date().toISOString().split("T")[0];
+    if (referrerClientId) {
+      return db.select().from(referral).where(
+        and(
+          eq(referral.referralStatus, "PENDING"),
+          lte(referral.payoutTriggerDate, today),
+          eq(referral.referrerClientId, referrerClientId)
+        )
+      );
+    }
+    return db.select().from(referral).where(
+      and(
+        eq(referral.referralStatus, "PENDING"),
+        lte(referral.payoutTriggerDate, today)
+      )
+    );
+  },
+
   async getStatsByReferrerId(referrerClientId: string): Promise<{
     total: number;
     pending: number;

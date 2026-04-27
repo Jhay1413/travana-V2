@@ -25,8 +25,23 @@ function calculatePayoutTriggerDate(travelDate: string): string {
   return date.toISOString().split("T")[0];
 }
 
+async function autoApproveEligible(referrerClientId?: string) {
+  const due = await referralRepository.findDueForAutoApproval(referrerClientId);
+  if (due.length === 0) return;
+
+  const affectedReferrerIds = new Set<string>();
+  for (const r of due) {
+    await referralRepository.updateStatus(r.id, "IN_WALLET");
+    if (r.referrerClientId) affectedReferrerIds.add(r.referrerClientId);
+  }
+  for (const referrerId of Array.from(affectedReferrerIds)) {
+    await vipEnrollmentService.recalculateTier(referrerId);
+  }
+}
+
 export const referralService = {
   async listReferrals() {
+    await autoApproveEligible();
     return referralRepository.findAll();
   },
 
@@ -37,6 +52,7 @@ export const referralService = {
   },
 
   async getReferralsByReferrer(referrerClientId: string) {
+    await autoApproveEligible(referrerClientId);
     return referralRepository.findByReferrerClientId(referrerClientId);
   },
 

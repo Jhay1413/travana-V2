@@ -102,20 +102,20 @@ function ConnectionBanner({ status }: { status?: StatusResp }) {
     return (
       <div
         className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800"
-        data-testid="banner-twilio-connected"
+        data-testid="banner-sms-connected"
       >
         <MessageSquare className="h-4 w-4" />
-        Twilio connected{status.fromPhone ? ` — sending from ${status.fromPhone}` : ""}.
+        ClickSend connected{status.fromPhone ? ` — sending as ${status.fromPhone}` : ""}.
       </div>
     );
   }
   return (
     <div
       className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
-      data-testid="banner-twilio-disconnected"
+      data-testid="banner-sms-disconnected"
     >
       <AlertTriangle className="h-4 w-4" />
-      Twilio is not connected yet — templates can be edited, but sending is disabled until you authorise the integration.
+      ClickSend is not connected yet — templates can be edited, but sending is disabled until your ClickSend credentials are added to project secrets.
     </div>
   );
 }
@@ -683,7 +683,7 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
           data-testid="button-send-sms"
         >
           <Send className="mr-2 h-4 w-4" />
-          {sendM.isPending || confirmedSendM.isPending ? "Sending..." : canSend ? "Send now" : "Connect Twilio to send"}
+          {sendM.isPending || confirmedSendM.isPending ? "Sending..." : canSend ? "Send now" : "Connect ClickSend to send"}
         </Button>
       </div>
 

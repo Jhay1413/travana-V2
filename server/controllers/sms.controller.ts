@@ -5,7 +5,7 @@ import { successResponse } from "../utils/response";
 import { AppError } from "../utils/error-handler";
 import { smsRepository } from "../repositories/sms.repository";
 import {
-  pingTwilioConnection,
+  pingSmsConnection,
   sendSms,
   mergeTemplate,
   normalisePhone,
@@ -178,8 +178,8 @@ async function buildContextForClient(client: any): Promise<MergeContext> {
 export const smsController = {
   status: asyncHandler(async (req: Request, res: Response) => {
     await requireAdminOrManager(req);
-    const ping = await pingTwilioConnection();
-    return successResponse(res, ping, "Twilio status");
+    const ping = await pingSmsConnection();
+    return successResponse(res, ping, "SMS provider status");
   }),
 
   listTemplates: asyncHandler(async (req: Request, res: Response) => {

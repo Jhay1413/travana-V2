@@ -1,71 +1,30 @@
-import twilio, { Twilio } from "twilio";
+/**
+ * SMS provider — ClickSend.
+ *
+ * Auth: HTTP Basic with CLICKSEND_USERNAME + CLICKSEND_API_KEY.
+ * Sender: CLICKSEND_SENDER (alphanumeric like "TinasTravel", max 11 chars,
+ * no spaces — or an E.164 phone number).
+ *
+ * Docs: https://developers.clicksend.com/docs/rest/v3/
+ */
 
-let cachedSettings: { settings: any; expires_at?: string } | null = null;
+const CLICKSEND_BASE = "https://rest.clicksend.com/v3";
 
-async function fetchTwilioConnection(): Promise<any | null> {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  if (!hostname) return null;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? "repl " + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-    ? "depl " + process.env.WEB_REPL_RENEWAL
-    : null;
-  if (!xReplitToken) return null;
-
-  if (
-    cachedSettings &&
-    cachedSettings.expires_at &&
-    new Date(cachedSettings.expires_at).getTime() > Date.now()
-  ) {
-    return cachedSettings.settings;
-  }
-
-  try {
-    const res = await fetch(
-      `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=twilio`,
-      { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken } }
+function getCreds(): { username: string; apiKey: string; sender: string } {
+  const username = process.env.CLICKSEND_USERNAME ?? "";
+  const apiKey = process.env.CLICKSEND_API_KEY ?? "";
+  const sender = process.env.CLICKSEND_SENDER ?? "TinasTravel";
+  if (!username || !apiKey) {
+    throw new Error(
+      "ClickSend is not connected. Set CLICKSEND_USERNAME, CLICKSEND_API_KEY, and CLICKSEND_SENDER as project secrets."
     );
-    const data: any = await res.json().catch(() => ({} as any));
-    const item = data?.items?.[0];
-    if (!item) return null;
-    cachedSettings = { settings: item.settings, expires_at: item.expires_at };
-    return item.settings;
-  } catch {
-    return null;
   }
+  return { username, apiKey, sender };
 }
 
-export async function getUncachableTwilioClient(): Promise<{
-  client: Twilio;
-  fromPhone: string;
-}> {
-  // Prefer Replit connector if authorised; fall back to plain env vars.
-  const settings: any = (await fetchTwilioConnection()) || {};
-  const accountSid: string =
-    settings.account_sid ||
-    settings.accountSid ||
-    settings.sid ||
-    settings.username ||
-    process.env.TWILIO_ACCOUNT_SID ||
-    "";
-  const authToken: string =
-    settings.auth_token ||
-    settings.authToken ||
-    settings.password ||
-    process.env.TWILIO_AUTH_TOKEN ||
-    "";
-  const fromPhone: string =
-    settings.phone_number ||
-    settings.phoneNumber ||
-    settings.from_number ||
-    process.env.TWILIO_PHONE_NUMBER ||
-    "";
-  if (!accountSid || !authToken) {
-    throw new Error(
-      "Twilio is not connected. Either authorise the Twilio integration or set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER as project secrets."
-    );
-  }
-  return { client: twilio(accountSid, authToken), fromPhone };
+function authHeader(username: string, apiKey: string): string {
+  const token = Buffer.from(`${username}:${apiKey}`).toString("base64");
+  return `Basic ${token}`;
 }
 
 export interface MergeContext {
@@ -109,24 +68,61 @@ export interface SendSmsArgs {
   body: string;
 }
 
-export async function sendSms({
-  to,
-  body,
-}: SendSmsArgs): Promise<{ sid: string; status: string }> {
-  const { client, fromPhone } = await getUncachableTwilioClient();
-  if (!fromPhone) {
-    throw new Error(
-      "No Twilio sender phone number is configured on the connector. Please add a phone number in the Twilio dashboard."
-    );
+export async function sendSms({ to, body }: SendSmsArgs): Promise<{ sid: string; status: string }> {
+  const { username, apiKey, sender } = getCreds();
+  const res = await fetch(`${CLICKSEND_BASE}/sms/send`, {
+    method: "POST",
+    headers: {
+      Authorization: authHeader(username, apiKey),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          source: "tinas-crm",
+          from: sender,
+          to,
+          body,
+        },
+      ],
+    }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.http_code !== 200) {
+    const detail =
+      data?.response_msg ||
+      data?.data?.messages?.[0]?.status ||
+      `HTTP ${res.status}`;
+    throw new Error(`ClickSend send failed: ${detail}`);
   }
-  const message = await client.messages.create({ from: fromPhone, to, body });
-  return { sid: message.sid, status: message.status };
+  const msg = data?.data?.messages?.[0];
+  const status = msg?.status ?? "queued";
+  if (status && String(status).toUpperCase() !== "SUCCESS" && String(status).toUpperCase() !== "QUEUED") {
+    throw new Error(`ClickSend rejected message: ${status} (${msg?.error_text ?? "no detail"})`);
+  }
+  return { sid: msg?.message_id ?? "", status };
 }
 
-export async function pingTwilioConnection(): Promise<{ connected: boolean; fromPhone?: string; error?: string }> {
+export async function pingSmsConnection(): Promise<{ connected: boolean; fromPhone?: string; balance?: string; error?: string }> {
   try {
-    const { fromPhone } = await getUncachableTwilioClient();
-    return { connected: true, fromPhone };
+    const { username, apiKey, sender } = getCreds();
+    const res = await fetch(`${CLICKSEND_BASE}/account`, {
+      headers: {
+        Authorization: authHeader(username, apiKey),
+        Accept: "application/json",
+      },
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok || data?.http_code !== 200) {
+      return { connected: false, error: data?.response_msg || `HTTP ${res.status}` };
+    }
+    const balanceNum = data?.data?.balance;
+    return {
+      connected: true,
+      fromPhone: sender,
+      balance: balanceNum !== undefined ? `$${Number(balanceNum).toFixed(2)} USD` : undefined,
+    };
   } catch (err: any) {
     return { connected: false, error: err?.message ?? String(err) };
   }
