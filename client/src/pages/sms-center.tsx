@@ -111,11 +111,16 @@ function ConnectionBanner({ status }: { status?: StatusResp }) {
   }
   return (
     <div
-      className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
+      className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
       data-testid="banner-sms-disconnected"
     >
-      <AlertTriangle className="h-4 w-4" />
-      ClickSend is not connected yet — templates can be edited, but sending is disabled until your ClickSend credentials are added to project secrets.
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>
+        <div>ClickSend is not connected yet — templates can be edited, but sending is disabled until ClickSend credentials are added to project secrets.</div>
+        {status.error && (
+          <div className="mt-1 text-xs opacity-80">Provider says: {status.error}</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -739,9 +744,11 @@ function LogTab() {
     queryKey: ["sms", "messages"],
     queryFn: async () => {
       const r = (await axios.get("/sms/messages?limit=300")).data;
-      return r?.data ?? r;
+      const arr = r?.data ?? r;
+      return Array.isArray(arr) ? arr : [];
     },
   });
+  const messages: SmsMessage[] = Array.isArray(messagesQ.data) ? messagesQ.data : [];
 
   return (
     <Card>
@@ -763,10 +770,10 @@ function LogTab() {
               </tr>
             </thead>
             <tbody>
-              {messagesQ.data?.length === 0 && (
+              {messages.length === 0 && (
                 <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No texts sent yet.</td></tr>
               )}
-              {messagesQ.data?.map((m) => (
+              {messages.map((m) => (
                 <tr key={m.id} className="border-b last:border-b-0" data-testid={`row-sms-${m.id}`}>
                   <td className="px-2 py-2 text-xs text-muted-foreground">{new Date(m.sentAt).toLocaleString()}</td>
                   <td className="px-2 py-2">{m.templateName ?? "—"}</td>
