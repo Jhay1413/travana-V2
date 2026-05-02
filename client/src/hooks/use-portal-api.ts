@@ -487,6 +487,8 @@ export function useRequestWalletWithdraw() {
       queryClient.invalidateQueries({ queryKey: portalKeys.referrals });
       queryClient.invalidateQueries({ queryKey: portalKeys.withdrawals });
       queryClient.invalidateQueries({ queryKey: portalKeys.vip });
+      queryClient.invalidateQueries({ queryKey: portalKeys.walletBalance });
+      queryClient.invalidateQueries({ queryKey: portalKeys.walletTransactions });
     },
   });
 }

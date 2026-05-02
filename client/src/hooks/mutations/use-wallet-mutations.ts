@@ -5,7 +5,7 @@ import { walletKeys } from "@/hooks/queries/use-wallet-queries";
 export function useProcessWalletDebit() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { notes?: string } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { transfer_reference?: string; notes?: string } }) =>
       walletApi.processDebit(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: walletKeys.all });

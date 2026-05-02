@@ -17,6 +17,7 @@ import type { AdminReferral } from "@/api/endpoints/referral.api";
 import type { AdminReferralWithdrawal } from "@/api/endpoints/referral-withdrawal.api";
 import { referralWithdrawalApi } from "@/api/endpoints/referral-withdrawal.api";
 import { walletApi, type AdminWalletTransaction } from "@/api/endpoints/wallet.api";
+import { clientFileApi } from "@/api/endpoints/clientFile.api";
 import {
   Gift,
   Wallet,
@@ -257,6 +258,145 @@ function ProcessWithdrawalDialog({
           >
             {processWithdrawal.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {isBankTransfer ? "Confirm Transfer Sent" : "Confirm Credit Applied"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProcessBankWithdrawalDialog({
+  tx,
+  open,
+  onClose,
+}: {
+  tx: AdminWalletTransaction | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [transferReference, setTransferReference] = useState("");
+  const [notes, setNotes] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const processWalletDebit = useProcessWalletDebit();
+  const { toast } = useToast();
+
+  async function handleSubmit() {
+    if (!tx) return;
+    try {
+      let attachmentNote = "";
+      if (files.length > 0) {
+        const uploaded = await Promise.all(
+          files.map((file) =>
+            clientFileApi.upload(tx.client_id, file, {
+              title: `Bank Withdrawal Proof - ${tx.id.slice(0, 8)} - ${file.name}`,
+              category: "wallet_withdrawal_proof",
+              allocationType: "wallet_transaction",
+              allocationId: tx.id,
+            })
+          )
+        );
+
+        attachmentNote = `\nAttachments: ${uploaded.map((u) => `${u.fileName} (file:${u.id})`).join(", ")}`;
+      }
+
+      processWalletDebit.mutate(
+        {
+          id: tx.id,
+          data: {
+            transfer_reference: transferReference || undefined,
+            notes: `${notes || ""}${attachmentNote}`.trim() || undefined,
+          },
+        },
+        {
+          onSuccess: () => {
+            toast({ title: "Bank transfer confirmed", description: `${formatAmount(tx.amount)} marked as paid` });
+            setTransferReference("");
+            setNotes("");
+            setFiles([]);
+            onClose();
+          },
+          onError: (err: any) =>
+            toast({
+              title: "Failed to process",
+              description: err?.response?.data?.message ?? err?.message,
+              variant: "destructive",
+            }),
+        }
+      );
+    } catch (err: any) {
+      toast({
+        title: "File upload failed",
+        description: err?.response?.data?.message ?? err?.message ?? "Unable to upload attachment",
+        variant: "destructive",
+      });
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Banknote className="h-5 w-5 text-emerald-600" />
+            Confirm Bank Withdrawal
+          </DialogTitle>
+        </DialogHeader>
+        {tx && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-black/[0.04] p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-black/80 text-sm">
+                    {[tx.clientFirstName, tx.clientSurname].filter(Boolean).join(" ") || "Unknown client"}
+                  </p>
+                  {tx.clientEmail && <p className="text-xs text-black/40">{tx.clientEmail}</p>}
+                </div>
+                <p className="font-bold text-lg text-emerald-700">{formatAmount(tx.amount)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Transfer Reference <span className="text-black/30 font-normal">(optional)</span></Label>
+              <Input
+                value={transferReference}
+                onChange={(e) => setTransferReference(e.target.value)}
+                placeholder="e.g. TXN-2026-0411"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Attach Documents <span className="text-black/30 font-normal">(optional)</span></Label>
+              <Input
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx"
+                onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+              />
+              {files.length > 0 && (
+                <p className="text-xs text-black/50">{files.length} file{files.length !== 1 ? "s" : ""} selected</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notes <span className="text-black/30 font-normal">(optional)</span></Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add internal notes..."
+                rows={2}
+              />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={processWalletDebit.isPending}
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            {processWalletDebit.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Confirm Transfer Sent
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -709,19 +849,29 @@ export function AdminReferrals() {
   const { toast } = useToast();
 
   const [processWithdrawalFor, setProcessWithdrawalFor] = useState<AdminReferralWithdrawal | null>(null);
+  const [processBankWithdrawalFor, setProcessBankWithdrawalFor] = useState<AdminWalletTransaction | null>(null);
 
   // ── Derived stats ───────────────────────────────────────────────────────────
   const creditDebits = allWalletTxs.filter(
     (tx) => tx.type === "debit" && tx.source === "booking_credit"
+  );
+  const bankTransferDebits = allWalletTxs.filter(
+    (tx) => tx.type === "debit" && tx.source === "bank_transfer"
   );
   const sortedCreditDebits = [...creditDebits].sort((a, b) => {
     if (a.status === "pending" && b.status !== "pending") return -1;
     if (a.status !== "pending" && b.status === "pending") return 1;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
+  const sortedBankTransferDebits = [...bankTransferDebits].sort((a, b) => {
+    if (a.status === "pending" && b.status !== "pending") return -1;
+    if (a.status !== "pending" && b.status === "pending") return 1;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
   const pendingCreditDebitCount = creditDebits.filter((tx) => tx.status === "pending").length;
+  const pendingBankTransferDebitCount = bankTransferDebits.filter((tx) => tx.status === "pending").length;
   const pendingWithdrawalCount = withdrawals.filter((w) => w.status === "pending").length;
-  const totalPendingCount = pendingWithdrawalCount + pendingCreditDebitCount;
+  const totalPendingCount = pendingWithdrawalCount + pendingCreditDebitCount + pendingBankTransferDebitCount;
   const walletBalance = referrals
     .filter((r) => r.referralStatus === "IN_WALLET")
     .reduce((s, r) => s + parseFloat(r.payoutAmount ?? "0"), 0);
@@ -796,7 +946,7 @@ export function AdminReferrals() {
 
   return (
     <>
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 space-y-6">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 space-y-6">
 
         {/* Page heading */}
         <div>
@@ -932,15 +1082,196 @@ export function AdminReferrals() {
                   <p className="text-black/30 text-sm">No booking credit debits yet</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {sortedCreditDebits.map((tx) => (
-                    <WalletCreditDebitRow
-                      key={tx.id}
-                      tx={tx}
-                      onApprove={handleApproveWalletDebit}
-                      onReject={handleRejectWalletDebit}
-                    />
-                  ))}
+                <div className="rounded-xl border border-black/[0.08] overflow-hidden bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px] text-sm">
+                      <thead className="bg-black/[0.03] border-b border-black/[0.08]">
+                        <tr className="text-left text-black/50 text-xs uppercase tracking-wide">
+                          <th className="px-4 py-3 font-semibold">Client</th>
+                          <th className="px-4 py-3 font-semibold">Email</th>
+                          <th className="px-4 py-3 font-semibold">Booking Ref</th>
+                          <th className="px-4 py-3 font-semibold">Amount</th>
+                          <th className="px-4 py-3 font-semibold">Status</th>
+                          <th className="px-4 py-3 font-semibold">Dates</th>
+                          <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedCreditDebits.map((tx) => {
+                          const isPending = tx.status === "pending";
+                          const statusCfg = WALLET_DEBIT_STATUS_CONFIG[tx.status] ?? WALLET_DEBIT_STATUS_CONFIG.pending;
+                          const clientName = [tx.clientFirstName, tx.clientSurname].filter(Boolean).join(" ") || "Unknown client";
+
+                          return (
+                            <tr key={tx.id} className="border-b last:border-b-0 border-black/[0.06] align-top">
+                              <td className="px-4 py-3">
+                                <p className="font-semibold text-black/80">{clientName}</p>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-black/60">{tx.clientEmail ?? "—"}</td>
+                              <td className="px-4 py-3 text-xs text-black/70">{tx.bookingRef ?? "—"}</td>
+                              <td className="px-4 py-3 font-bold text-black/80">-{formatAmount(tx.amount)}</td>
+                              <td className="px-4 py-3">
+                                <span className={cn("inline-flex items-center gap-1 text-xs font-medium border rounded-full px-2.5 py-0.5", statusCfg.color)}>
+                                  <statusCfg.icon className="h-3 w-3" />
+                                  {statusCfg.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-black/60 space-y-1">
+                                <p>Requested: <span className="text-black/70">{formatDate(tx.created_at)}</span></p>
+                                <p>Processed: <span className="text-black/70">{formatDate(tx.processed_at)}</span></p>
+                                {tx.notes && <p>Notes: <span className="text-black/70">{tx.notes}</span></p>}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  {isPending && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleApproveWalletDebit(tx.id)}
+                                        className="h-7 text-xs gap-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      >
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Approve
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleRejectWalletDebit(tx.id)}
+                                        className="h-7 text-xs gap-1 px-3 text-red-600 border-red-400/40 hover:bg-red-50"
+                                      >
+                                        <XCircle className="h-3 w-3" />
+                                        Reject
+                                      </Button>
+                                    </>
+                                  )}
+                                  {tx.status === "processed" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={async () => {
+                                        const url = await walletApi.getInvoiceUrl(tx.id);
+                                        if (url) window.open(url, "_blank", "noopener,noreferrer");
+                                      }}
+                                      className="h-7 text-xs gap-1 px-3 text-blue-600 border-blue-400/40 hover:bg-blue-50"
+                                    >
+                                      <FileText className="h-3 w-3" />
+                                      View Invoice
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bank Transfer Withdrawals (wallet_transaction) */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold text-black/40 uppercase tracking-wider flex items-center gap-1.5">
+                <Banknote className="h-3.5 w-3.5" />
+                Bank Withdrawals
+                {pendingBankTransferDebitCount > 0 && (
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                    {pendingBankTransferDebitCount}
+                  </span>
+                )}
+              </h3>
+              {loadingWalletTxs ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-black/30" />
+                </div>
+              ) : sortedBankTransferDebits.length === 0 ? (
+                <div className="text-center py-6 rounded-xl border border-black/[0.06] bg-black/[0.01]">
+                  <p className="text-black/30 text-sm">No bank withdrawal requests yet</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-black/[0.08] overflow-hidden bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px] text-sm">
+                      <thead className="bg-black/[0.03] border-b border-black/[0.08]">
+                        <tr className="text-left text-black/50 text-xs uppercase tracking-wide">
+                          <th className="px-4 py-3 font-semibold">Client</th>
+                          <th className="px-4 py-3 font-semibold">Email</th>
+                          <th className="px-4 py-3 font-semibold">Account Name</th>
+                          <th className="px-4 py-3 font-semibold">Amount</th>
+                          <th className="px-4 py-3 font-semibold">Status</th>
+                          <th className="px-4 py-3 font-semibold">Dates</th>
+                          <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedBankTransferDebits.map((tx) => {
+                          const isPending = tx.status === "pending";
+                          const statusCfg = WALLET_DEBIT_STATUS_CONFIG[tx.status] ?? WALLET_DEBIT_STATUS_CONFIG.pending;
+                          const clientName = [tx.clientFirstName, tx.clientSurname].filter(Boolean).join(" ") || "Unknown client";
+
+                          return (
+                            <tr key={tx.id} className="border-b last:border-b-0 border-black/[0.06] align-top">
+                              <td className="px-4 py-3 font-semibold text-black/80">{clientName}</td>
+                              <td className="px-4 py-3 text-xs text-black/60">{tx.clientEmail ?? "—"}</td>
+                              <td className="px-4 py-3 text-xs text-black/70">{tx.account_name ?? "—"}</td>
+                              <td className="px-4 py-3 font-bold text-black/80">-{formatAmount(tx.amount)}</td>
+                              <td className="px-4 py-3">
+                                <span className={cn("inline-flex items-center gap-1 text-xs font-medium border rounded-full px-2.5 py-0.5", statusCfg.color)}>
+                                  <statusCfg.icon className="h-3 w-3" />
+                                  {statusCfg.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-black/60 space-y-1">
+                                <p>Requested: <span className="text-black/70">{formatDate(tx.created_at)}</span></p>
+                                <p>Processed: <span className="text-black/70">{formatDate(tx.processed_at)}</span></p>
+                                {tx.transfer_reference && <p>Ref: <span className="text-black/70">{tx.transfer_reference}</span></p>}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  {isPending && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => setProcessBankWithdrawalFor(tx)}
+                                        className="h-7 text-xs gap-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      >
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Confirm transfer
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleRejectWalletDebit(tx.id)}
+                                        className="h-7 text-xs gap-1 px-3 text-red-600 border-red-400/40 hover:bg-red-50"
+                                      >
+                                        <XCircle className="h-3 w-3" />
+                                        Reject
+                                      </Button>
+                                    </>
+                                  )}
+                                  {tx.status === "processed" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={async () => {
+                                        const url = await walletApi.getInvoiceUrl(tx.id);
+                                        if (url) window.open(url, "_blank", "noopener,noreferrer");
+                                      }}
+                                      className="h-7 text-xs gap-1 px-3 text-blue-600 border-blue-400/40 hover:bg-blue-50"
+                                    >
+                                      <FileText className="h-3 w-3" />
+                                      View Invoice
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -966,15 +1297,121 @@ export function AdminReferrals() {
                   <p className="text-xs text-black/20 mt-1">Requests appear here once a client withdraws from their wallet</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {sortedWithdrawals.map((w) => (
-                    <WithdrawalRow
-                      key={w.id}
-                      withdrawal={w}
-                      onProcess={setProcessWithdrawalFor}
-                      onReject={handleRejectWithdrawal}
-                    />
-                  ))}
+                <div className="rounded-xl border border-black/[0.08] overflow-hidden bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[980px] text-sm">
+                      <thead className="bg-black/[0.03] border-b border-black/[0.08]">
+                        <tr className="text-left text-black/50 text-xs uppercase tracking-wide">
+                          <th className="px-4 py-3 font-semibold">Client</th>
+                          <th className="px-4 py-3 font-semibold">Contact</th>
+                          <th className="px-4 py-3 font-semibold">Method</th>
+                          <th className="px-4 py-3 font-semibold">Amount</th>
+                          <th className="px-4 py-3 font-semibold">Status</th>
+                          <th className="px-4 py-3 font-semibold">Details</th>
+                          <th className="px-4 py-3 font-semibold">Dates</th>
+                          <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedWithdrawals.map((w) => {
+                          const isPending = w.status === "pending";
+                          const isBankTransfer = w.method === "bank_transfer";
+                          const statusCfg = WITHDRAWAL_STATUS_CONFIG[w.status];
+                          const { icon: MethodIcon, label: methodLabel } = METHOD_CONFIG[w.method] ?? { icon: Banknote, label: w.method };
+
+                          return (
+                            <tr key={w.id} className="border-b last:border-b-0 border-black/[0.06] align-top">
+                              <td className="px-4 py-3">
+                                <p className="font-semibold text-black/80">{w.clientName ?? "Unknown client"}</p>
+                                {w.referredName && (
+                                  <p className="text-xs text-black/40 mt-1">Referral: <span className="text-black/60">{w.referredName}</span></p>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-black/60 space-y-1">
+                                <p>{w.clientPhone ?? "—"}</p>
+                                <p>{w.clientEmail ?? "—"}</p>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-black/70">
+                                  <MethodIcon className="h-3.5 w-3.5" />
+                                  {methodLabel}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 font-bold text-black/80">{formatAmount(w.amount)}</td>
+                              <td className="px-4 py-3">
+                                <span className={cn("inline-flex items-center gap-1 text-xs font-medium border rounded-full px-2.5 py-0.5", statusCfg.color)}>
+                                  <statusCfg.icon className="h-3 w-3" />
+                                  {statusCfg.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-black/60 space-y-1.5 max-w-[260px]">
+                                {isBankTransfer ? (
+                                  <>
+                                    <p>Name: <span className="text-black/70">{w.account_name ?? "—"}</span></p>
+                                    <p>Acc: <span className="text-black/70">{w.account_number ?? "—"}</span></p>
+                                    <p>Sort: <span className="text-black/70">{w.sort_code ?? "—"}</span></p>
+                                    <p>Ref: <span className="text-black/70">{w.transfer_reference ?? "—"}</span></p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p>Booking: <span className="text-black/70">{w.booking_id ?? "—"}</span></p>
+                                    <p>Credit Note: <span className="text-black/70">{w.credit_note ?? "—"}</span></p>
+                                  </>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-black/60 space-y-1">
+                                <p>Requested: <span className="text-black/70">{formatDate(w.requested_at)}</span></p>
+                                <p>Processed: <span className="text-black/70">{formatDate(w.processed_at)}</span></p>
+                                {w.travelDate && <p>Travel: <span className="text-black/70">{formatDate(w.travelDate)}</span></p>}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  {isPending && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => setProcessWithdrawalFor(w)}
+                                        className={cn(
+                                          "h-7 text-xs gap-1 px-3",
+                                          isBankTransfer ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
+                                        )}
+                                      >
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        {isBankTransfer ? "Confirm transfer" : "Confirm credit"}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleRejectWithdrawal(w.id)}
+                                        className="h-7 text-xs gap-1 px-3 text-red-600 border-red-400/40 hover:bg-red-50"
+                                      >
+                                        <XCircle className="h-3 w-3" />
+                                        Reject
+                                      </Button>
+                                    </>
+                                  )}
+                                  {w.status === "processed" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={async () => {
+                                        const url = await referralWithdrawalApi.getInvoiceUrl(w.id);
+                                        window.open(url, "_blank", "noopener,noreferrer");
+                                      }}
+                                      className="h-7 text-xs gap-1 px-3 text-blue-600 border-blue-400/40 hover:bg-blue-50"
+                                    >
+                                      <FileText className="h-3 w-3" />
+                                      View Invoice
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -987,6 +1424,11 @@ export function AdminReferrals() {
         withdrawal={processWithdrawalFor}
         open={!!processWithdrawalFor}
         onClose={() => setProcessWithdrawalFor(null)}
+      />
+      <ProcessBankWithdrawalDialog
+        tx={processBankWithdrawalFor}
+        open={!!processBankWithdrawalFor}
+        onClose={() => setProcessBankWithdrawalFor(null)}
       />
     </>
   );
