@@ -814,6 +814,7 @@ export const booking = pgTable('booking_table', {
   title: varchar(),
   discounts: numeric({ precision: 10, scale: 2 }),
   service_charge: numeric({ precision: 10, scale: 2 }),
+  wallet_credit: numeric({ precision: 10, scale: 2 }).default("0.00"),
   num_of_nights: integer().notNull().default(0),
   pets: integer().notNull().default(0),
   cottage_id: uuid().references(() => cottages.id),

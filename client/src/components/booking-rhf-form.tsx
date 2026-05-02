@@ -318,6 +318,7 @@ export function BookingRHFForm({
   const discount = watch("discount");
   const serviceCharge = watch("serviceCharge");
   const commission = watch("commission");
+  const walletCreditAmount = watch("walletCreditAmount");
   const checkInDate = watch("checkInDate");
   const nights = watch("nights");
 
@@ -379,12 +380,13 @@ export function BookingRHFForm({
     const price = Number(form.getValues("price")) || 0;
     const currentDiscount = Number(form.getValues("discount")) || 0;
     const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
+    const currentWalletCredit = Number(form.getValues("walletCreditAmount")) || 0;
     const adults = Number(passengersAdults) || 0;
     const children = Number(passengersChildren) || 0;
     const total = adults + children;
-    const netPrice = price - currentDiscount + currentServiceCharge;
+    const netPrice = price - currentDiscount + currentServiceCharge - currentWalletCredit;
     setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [passengersAdults, passengersChildren, discount, serviceCharge, walletCreditAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   useEffect(() => {
@@ -1736,11 +1738,12 @@ export function BookingRHFForm({
                               }
                             }
                             
-                            // Price per person = (salesPrice - discount + serviceCharge) / (adults + children)
+                            // Price per person = (salesPrice - discount + serviceCharge - walletCredit) / (adults + children)
                             const adults = Number(form.getValues("passengersAdults")) || 0;
                             const children = Number(form.getValues("passengersChildren")) || 0;
+                            const currentWalletCredit = Number(form.getValues("walletCreditAmount")) || 0;
                             const total = adults + children;
-                            const netPrice = currentPrice - currentDiscount + currentServiceCharge;
+                            const netPrice = currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit;
                             setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
                           }
                         }}
@@ -1759,8 +1762,9 @@ export function BookingRHFForm({
             const currentDiscount = Number(discount) || 0;
             const currentServiceCharge = Number(serviceCharge) || 0;
             const currentCommission = Number(commission) || 0;
-            const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0;
-            
+            const currentWalletCredit = Number(walletCreditAmount) || 0;
+            const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0 || currentWalletCredit > 0;
+
             if (hasAdjustments) {
               return (
                 <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
@@ -1769,8 +1773,14 @@ export function BookingRHFForm({
                   </div>
                   <div className="mt-1 text-[10px] text-blue-700/70">
                     {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
-                    {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)}`}
+                    {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)} `}
+                    {currentWalletCredit > 0 && <span className="text-emerald-700">Wallet Credit: -£{currentWalletCredit.toFixed(2)}</span>}
                   </div>
+                  {currentWalletCredit > 0 && (
+                    <div className="mt-1.5 text-[10px] text-blue-700/60">
+                      Net payable: £{(currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit).toFixed(2)}
+                    </div>
+                  )}
                 </div>
               );
             }

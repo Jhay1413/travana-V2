@@ -136,6 +136,7 @@ export type QuoteDisplay = {
     agentSplitPercent: number;
     agentSplitValue: number;
     netToAgency: number;
+    walletCredit: number;
   };
   pricePerPerson: number;
   tags: string[];
@@ -201,6 +202,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
   const packageCommission = parseFloat(apiData.package_commission || "0");
   const discounts = parseFloat(apiData.discounts || "0");
   const serviceCharge = parseFloat(apiData.service_charge || "0");
+  const walletCredit = parseFloat((apiData as any).wallet_credit || "0");
 
   const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");
   console.log(apiData)
@@ -288,6 +290,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
       agentSplitPercent: 0,
       agentSplitValue: 0,
       netToAgency: packageCommission,
+      walletCredit,
     },
     notes: [],
     pets: apiData.pets || 0,

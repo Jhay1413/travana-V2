@@ -23,6 +23,9 @@ CREATE TABLE "wallet_transaction" (
   CONSTRAINT "wallet_transaction_booking_id_fk" FOREIGN KEY ("booking_id") REFERENCES "booking"("id") ON DELETE SET NULL
 );
 
+-- Add wallet_credit column to booking
+ALTER TABLE "booking_table" ADD COLUMN IF NOT EXISTS "wallet_credit" numeric(10,2) DEFAULT 0.00;
+
 -- Backfill: create a processed credit for every existing IN_WALLET referral
 -- so their balance appears correctly in the new ledger.
 INSERT INTO wallet_transaction (client_id, type, amount, source, referral_id, status, created_at, processed_at)

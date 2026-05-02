@@ -4,6 +4,7 @@ import { transactionRepository } from "../repositories/transaction.repository";
 import { neonClientRepository } from "../repositories/neonClient.repository";
 import { vipEnrollmentService } from "./vipEnrollment.service";
 import { referralService } from "./referral.service";
+import { walletService } from "./wallet.service";
 import { AppError } from "../utils/error-handler";
 import type {
   InsertBooking,
@@ -19,14 +20,15 @@ import type {
   InsertBookingCruiseItinerary,
 } from "@shared/schema";
 
-function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0): string {
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0, walletCredit: unknown = 0): string {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
   const disc = parseFloat(String(discount ?? 0)) || 0;
   const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
+  const wc = parseFloat(String(walletCredit ?? 0)) || 0;
   const adults = parseInt(String(adult ?? 0), 10) || 0;
   const children = parseInt(String(child ?? 0), 10) || 0;
   const total = adults + children;
-  const netPrice = price - disc + sc;
+  const netPrice = price - disc + sc - wc;
   return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 
@@ -286,9 +288,15 @@ export const bookingService = {
 
     const b = await bookingRepository.create({
       ...data,
-      price_per_person: calcPricePerPerson(data.sales_price, data.adult, data.child, data.discounts, data.service_charge),
+      price_per_person: calcPricePerPerson(data.sales_price, data.adult, data.child, data.discounts, data.service_charge, data.wallet_credit),
     });
     await transactionRepository.update(data.transaction_id, { status: 'on_booking' });
+
+    // Create wallet debit when wallet credit is applied to this booking
+    const walletCreditAmount = parseFloat(String(data.wallet_credit ?? 0)) || 0;
+    if (walletCreditAmount > 0 && txn.client_id) {
+      await walletService.applyBookingCredit(txn.client_id, b.id, walletCreditAmount);
+    }
 
     if (txn.client_id) {
       // Badge upgrade (3+ bookings)
@@ -333,7 +341,7 @@ export const bookingService = {
     const bookingData: Partial<InsertBooking> = {};
     const directFields: (keyof InsertBooking)[] = [
       'holiday_type_id', 'sales_price', 'package_commission', 'travel_date',
-      'discounts', 'service_charge', 'num_of_nights', 'pets', 'cottage_id',
+      'discounts', 'service_charge', 'wallet_credit', 'num_of_nights', 'pets', 'cottage_id',
       'lodge_id', 'lodge_type', 'transfer_type', 'booking_status',
       'main_tour_operator_id', 'deal_type', 'pre_booked_seats', 'flight_meals',
       'infant', 'child', 'adult', 'title', 'hays_ref', 'supplier_ref',
@@ -346,7 +354,7 @@ export const bookingService = {
     }
 
     // Recalculate price_per_person if any pricing/passenger fields changed
-    if ('sales_price' in bookingData || 'adult' in bookingData || 'child' in bookingData || 'discounts' in bookingData || 'service_charge' in bookingData) {
+    if ('sales_price' in bookingData || 'adult' in bookingData || 'child' in bookingData || 'discounts' in bookingData || 'service_charge' in bookingData || 'wallet_credit' in bookingData) {
       const current = await bookingRepository.findById(id);
       if (current) {
         bookingData.price_per_person = calcPricePerPerson(
@@ -355,6 +363,7 @@ export const bookingService = {
           bookingData.child ?? current.child,
           bookingData.discounts ?? current.discounts,
           bookingData.service_charge ?? current.service_charge,
+          bookingData.wallet_credit ?? current.wallet_credit,
         );
       }
     }
@@ -412,6 +421,16 @@ export const bookingService = {
         b.transaction_id,
         String(bookingData.travel_date)
       );
+    }
+
+    // Create wallet debit if wallet_credit is being applied for the first time on this booking
+    const newWalletCredit = parseFloat(String(bookingData.wallet_credit ?? 0)) || 0;
+    const prevWalletCredit = parseFloat(String(b.wallet_credit ?? 0)) || 0;
+    if (newWalletCredit > 0 && prevWalletCredit === 0 && b.transaction_id) {
+      const txn = await transactionRepository.findById(b.transaction_id);
+      if (txn?.client_id) {
+        await walletService.applyBookingCredit(txn.client_id, b.id, newWalletCredit);
+      }
     }
 
     return await bookingRepository.findWithDetails(id);

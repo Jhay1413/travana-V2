@@ -711,6 +711,15 @@ export default function BookingPage() {
                         </div>
                       </div>
 
+                      {booking.commissions.walletCredit > 0 && (
+                        <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2" data-testid="row-booking-summary-wallet-credit">
+                          <div className="text-xs font-semibold text-emerald-700" data-testid="text-booking-summary-wallet-credit-label">Wallet credit applied</div>
+                          <div className="text-xs font-semibold text-emerald-700" data-testid="text-booking-summary-wallet-credit-value">
+                            -{currency.format(booking.commissions.walletCredit)}
+                          </div>
+                        </div>
+                      )}
+
                       {bookingData?.hasReferral && (
                         <>
                           <div className="my-1 h-px w-full bg-black/10" data-testid="separator-booking-summary" />

@@ -183,6 +183,7 @@ function buildCreatePayload(
       package_commission: values.commission ? String(values.commission) : undefined,
       discounts: values.discount ? String(values.discount) : undefined,
       service_charge: values.serviceCharge ? String(values.serviceCharge) : undefined,
+      wallet_credit: String(values.walletCreditAmount || 0),
       transfer_type: values.transferType || undefined,
       lodge_id: isHotTubBreak ? (values.lodgeId || undefined) : undefined,
       pets: isHotTubBreak ? (values.pets ? 1 : 0) : 0,
