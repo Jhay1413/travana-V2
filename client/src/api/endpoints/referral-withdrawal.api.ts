@@ -27,6 +27,7 @@ export interface AdminReferralWithdrawal {
   referredEmail: string | null;
   travelDate: string | null;
   referralStatus: string | null;
+  invoice_url: string | null;
 }
 
 export interface ProcessWithdrawalData {
@@ -55,5 +56,10 @@ export const referralWithdrawalApi = {
   reject: async (id: string, notes?: string): Promise<AdminReferralWithdrawal> => {
     const { data } = await axiosClient.patch(`/api/referral-withdrawals/${id}/reject`, { notes });
     return data.data;
+  },
+
+  getInvoiceUrl: async (id: string): Promise<string> => {
+    const { data } = await axiosClient.get(`/api/referral-withdrawals/${id}/invoice`);
+    return data.data.url;
   },
 };

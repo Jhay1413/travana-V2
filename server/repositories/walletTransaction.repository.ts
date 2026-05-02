@@ -60,6 +60,7 @@ export const walletTransactionRepository = {
         account_name: wallet_transaction.account_name,
         transfer_reference: wallet_transaction.transfer_reference,
         notes: wallet_transaction.notes,
+        invoice_url: wallet_transaction.invoice_url,
         status: wallet_transaction.status,
         created_at: wallet_transaction.created_at,
         processed_at: wallet_transaction.processed_at,
@@ -72,6 +73,37 @@ export const walletTransactionRepository = {
       .leftJoin(clientTable, eq(wallet_transaction.client_id, clientTable.id))
       .leftJoin(booking, eq(wallet_transaction.booking_id, booking.id))
       .orderBy(wallet_transaction.created_at);
+  },
+
+  async findByIdWithDetails(id: string) {
+    const [result] = await db
+      .select({
+        id: wallet_transaction.id,
+        client_id: wallet_transaction.client_id,
+        type: wallet_transaction.type,
+        amount: wallet_transaction.amount,
+        source: wallet_transaction.source,
+        booking_id: wallet_transaction.booking_id,
+        transfer_reference: wallet_transaction.transfer_reference,
+        notes: wallet_transaction.notes,
+        invoice_url: wallet_transaction.invoice_url,
+        status: wallet_transaction.status,
+        created_at: wallet_transaction.created_at,
+        processed_at: wallet_transaction.processed_at,
+        clientFirstName: clientTable.firstName,
+        clientSurname: clientTable.surename,
+        clientEmail: clientTable.email,
+        clientPhone: clientTable.phoneNumber,
+        bookingHaysRef: booking.hays_ref,
+        bookingSupplierRef: booking.supplier_ref,
+        bookingTravelDate: booking.travel_date,
+      })
+      .from(wallet_transaction)
+      .leftJoin(clientTable, eq(wallet_transaction.client_id, clientTable.id))
+      .leftJoin(booking, eq(wallet_transaction.booking_id, booking.id))
+      .where(eq(wallet_transaction.id, id))
+      .limit(1);
+    return result;
   },
 
   async update(id: string, data: Partial<WalletTransaction>): Promise<WalletTransaction> {

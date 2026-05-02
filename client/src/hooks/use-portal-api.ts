@@ -168,6 +168,7 @@ export const portalKeys = {
   referrals: ["portal", "referrals"] as const,
   payoutRequests: ["portal", "payoutRequests"] as const,
   withdrawals: ["portal", "withdrawals"] as const,
+  walletBalance: ["portal", "walletBalance"] as const,
 };
 
 export function usePortalUser() {
@@ -380,6 +381,22 @@ export function usePortalWithdrawals() {
   return useQuery<PortalWithdrawal[]>({
     queryKey: portalKeys.withdrawals,
     queryFn: () => portalFetch("/api/portal/vip/withdrawals"),
+    retry: false,
+    enabled: !!getPortalToken(),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000,
+    staleTime: 0,
+  });
+}
+
+export function usePortalWalletBalance() {
+  return useQuery<string>({
+    queryKey: portalKeys.walletBalance,
+    queryFn: async () => {
+      const data = await portalFetch("/api/portal/wallet/balance");
+      return (data as { balance: string }).balance;
+    },
     retry: false,
     enabled: !!getPortalToken(),
     refetchOnMount: "always",

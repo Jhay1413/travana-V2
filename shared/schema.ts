@@ -1150,6 +1150,7 @@ export const wallet_transaction = pgTable('wallet_transaction', {
   sort_code: varchar("sort_code"),
   transfer_reference: varchar("transfer_reference"),
   notes: text("notes"),
+  invoice_url: text("invoice_url"),
   status: wallet_transaction_status_enum("status").default('pending').notNull(),
   created_at: timestamp("created_at").defaultNow(),
   processed_at: timestamp("processed_at"),

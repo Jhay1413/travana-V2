@@ -21,4 +21,7 @@ router.patch("/transactions/:id/process", walletController.processDebit);
 // Admin: reject a debit (returns balance to client)
 router.patch("/transactions/:id/reject", walletController.rejectDebit);
 
+// Admin: get a presigned URL to view the invoice PDF for a processed debit
+router.get("/transactions/:id/invoice", walletController.getInvoiceUrl);
+
 export default router;

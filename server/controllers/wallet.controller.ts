@@ -44,4 +44,15 @@ export const walletController = {
     const tx = await walletService.rejectDebit(id, req.body.notes);
     return successResponse(res, tx, "Transaction rejected");
   }),
+
+  getInvoiceUrl: asyncHandler(async (req: Request, res: Response) => {
+    const id = String(req.params.id);
+    const url = await walletService.getInvoicePresignedUrl(id);
+    if (!url) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No invoice available for this transaction" });
+    }
+    return successResponse(res, { url }, "Invoice URL generated");
+  }),
 };

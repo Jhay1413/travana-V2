@@ -1,5 +1,9 @@
 import { walletTransactionRepository } from "../repositories/walletTransaction.repository";
 import { AppError } from "../utils/error-handler";
+import {
+  generateWithdrawalInvoiceBuffer,
+  uploadWalletDebitInvoice,
+} from "./invoicePdf.service";
 
 export const walletService = {
   async getBalance(clientId: string): Promise<number> {
@@ -76,12 +80,55 @@ export const walletService = {
     if (tx.status === "processed") throw new AppError("Already processed", 400);
     if (tx.status === "rejected") throw new AppError("Cannot process a rejected transaction", 400);
 
-    return walletTransactionRepository.update(id, {
+    const updated = await walletTransactionRepository.update(id, {
       status: "processed",
       transfer_reference: data.transfer_reference,
       notes: data.notes,
       processed_at: new Date(),
     });
+
+    // Generate and store invoice PDF (failure must not block approval)
+    try {
+      const details = await walletTransactionRepository.findByIdWithDetails(id);
+      if (details) {
+        const clientName =
+          [details.clientFirstName, details.clientSurname].filter(Boolean).join(" ").trim() ||
+          "Client";
+        const pdfBuffer = await generateWithdrawalInvoiceBuffer({
+          withdrawalId: id,
+          requestedAt: details.created_at,
+          processedAt: updated.processed_at ?? null,
+          clientName,
+          clientEmail: details.clientEmail ?? null,
+          clientPhone: details.clientPhone ?? null,
+          amount: details.amount,
+          method: details.source, // "booking_credit" | "bank_transfer"
+          accountName: null,
+          accountNumber: null,
+          sortCode: null,
+          transferReference: details.transfer_reference ?? data.transfer_reference ?? null,
+          bookingHaysRef: details.bookingHaysRef ?? null,
+          bookingSupplierRef: details.bookingSupplierRef ?? null,
+          travelDate: details.bookingTravelDate ?? null,
+          referredName: null,
+          referredEmail: null,
+        });
+        const s3Key = await uploadWalletDebitInvoice(id, pdfBuffer);
+        await walletTransactionRepository.update(id, { invoice_url: s3Key });
+        return { ...updated, invoice_url: s3Key };
+      }
+    } catch (err) {
+      console.error("[invoice] Failed to generate wallet debit invoice:", err);
+    }
+
+    return updated;
+  },
+
+  async getInvoicePresignedUrl(id: string): Promise<string | null> {
+    const tx = await walletTransactionRepository.findById(id);
+    if (!tx?.invoice_url) return null;
+    const { getInvoicePresignedUrl } = await import("./invoicePdf.service");
+    return getInvoicePresignedUrl(tx.invoice_url);
   },
 
   // Admin rejects a debit — balance is automatically restored (rejected debits excluded from balance).

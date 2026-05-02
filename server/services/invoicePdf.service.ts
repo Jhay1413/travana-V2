@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client, S3_BUCKET } from "../config/s3";
 
 export interface WithdrawalInvoiceData {
@@ -194,4 +195,35 @@ export async function uploadWithdrawalInvoice(
     })
   );
   return s3Key;
+}
+
+/** Uploads a wallet-debit invoice PDF to S3 and returns the S3 key. */
+export async function uploadWalletDebitInvoice(
+  transactionId: string,
+  pdfBuffer: Buffer
+): Promise<string> {
+  const s3Key = `wallet-debit-invoices/${transactionId}.pdf`;
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: s3Key,
+      Body: pdfBuffer,
+      ContentType: "application/pdf",
+      ContentDisposition: `attachment; filename="wallet-invoice-${transactionId.slice(0, 8)}.pdf"`,
+    })
+  );
+  return s3Key;
+}
+
+export async function getInvoicePresignedUrl(s3Key: string): Promise<string> {
+  return getSignedUrl(
+    s3Client,
+    new GetObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: s3Key,
+      ResponseContentDisposition: `inline; filename="invoice.pdf"`,
+      ResponseContentType: "application/pdf",
+    }),
+    { expiresIn: 60 * 15 } // 15 minutes
+  );
 }

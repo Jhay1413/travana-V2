@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { referralWithdrawalService } from "../services/referralWithdrawal.service";
+import { getInvoicePresignedUrl } from "../services/invoicePdf.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 
@@ -52,5 +53,15 @@ export const referralWithdrawalController = {
     const id = String(req.params.id);
     const withdrawal = await referralWithdrawalService.rejectWithdrawal(id, req.body.notes);
     return successResponse(res, withdrawal, "Withdrawal rejected");
+  }),
+
+  getInvoiceUrl: asyncHandler(async (req: Request, res: Response) => {
+    const id = String(req.params.id);
+    const withdrawal = await referralWithdrawalService.getWithdrawalById(id);
+    if (!withdrawal?.invoice_url) {
+      return res.status(404).json({ success: false, message: "No invoice available for this withdrawal" });
+    }
+    const url = await getInvoicePresignedUrl(withdrawal.invoice_url);
+    return successResponse(res, { url }, "Invoice URL generated");
   }),
 };

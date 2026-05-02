@@ -21,4 +21,7 @@ router.patch("/:id/process", validate(processWithdrawalValidator), referralWithd
 // Admin: reject a withdrawal (returns referral to IN_WALLET)
 router.patch("/:id/reject", validate(rejectWithdrawalValidator), referralWithdrawalController.rejectWithdrawal);
 
+// Admin: get a presigned URL to view the invoice PDF
+router.get("/:id/invoice", validate(withdrawalIdParamValidator), referralWithdrawalController.getInvoiceUrl);
+
 export default router;

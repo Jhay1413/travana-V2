@@ -11,6 +11,7 @@ import {
   usePortalVipStatus,
   usePortalReferrals,
   usePortalWithdrawals,
+  usePortalWalletBalance,
   useRequestWalletWithdraw,
   type PortalReferral,
   type PortalVipStatus,
@@ -614,11 +615,13 @@ function WalletTab({
   referrals,
   withdrawals,
   totalEarnings,
+  trueBalance,
   onWithdraw,
 }: {
   referrals: PortalReferral[];
   withdrawals: PortalWithdrawal[];
   totalEarnings: string;
+  trueBalance: number;
   onWithdraw: () => void;
 }) {
   const walletBalance = referrals
@@ -691,9 +694,9 @@ function WalletTab({
             <p className="text-white/50 text-xs font-medium uppercase tracking-wide">Available Balance</p>
             <Wallet className="w-4 h-4 text-emerald-400" />
           </div>
-          <p className="text-emerald-400 font-bold text-4xl mb-1">£{withdrawableBalance.toFixed(2)}</p>
+          <p className="text-emerald-400 font-bold text-4xl mb-1">£{trueBalance.toFixed(2)}</p>
           <p className="text-white/30 text-xs">
-            {withdrawableBalance > 0
+            {trueBalance > 0
               ? `${referrals.filter((r) => r.referralStatus === "IN_WALLET" && !pendingWithdrawalReferralIds.has(r.id)).length} referral${referrals.filter((r) => r.referralStatus === "IN_WALLET" && !pendingWithdrawalReferralIds.has(r.id)).length !== 1 ? "s" : ""} ready to withdraw`
               : "No available balance"}
           </p>
@@ -876,6 +879,8 @@ export default function PortalReferralsPage() {
   const { data: vip, isLoading: vipLoading } = usePortalVipStatus();
   const { data: referrals = [], isLoading: referralsLoading } = usePortalReferrals();
   const { data: withdrawals = [], isLoading: withdrawalsLoading } = usePortalWithdrawals();
+  const { data: walletBalanceStr } = usePortalWalletBalance();
+  const trueBalance = parseFloat(walletBalanceStr ?? "0") || 0;
 
   const loading = vipLoading || referralsLoading || withdrawalsLoading;
   const vipData = vip ?? DEFAULT_VIP;
@@ -1024,6 +1029,7 @@ export default function PortalReferralsPage() {
                   referrals={referrals}
                   withdrawals={withdrawals}
                   totalEarnings={vipData.totalEarnings}
+                  trueBalance={trueBalance}
                   onWithdraw={() => setShowWithdraw(true)}
                 />
               </motion.div>

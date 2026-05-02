@@ -11,6 +11,7 @@ export interface WalletTransaction {
   account_name: string | null;
   transfer_reference: string | null;
   notes: string | null;
+  invoice_url: string | null;
   status: "pending" | "processed" | "rejected";
   created_at: string;
   processed_at: string | null;
@@ -69,5 +70,10 @@ export const walletApi = {
       { notes }
     );
     return data;
+  },
+
+  getInvoiceUrl: async (id: string): Promise<string> => {
+    const { data } = await axiosClient.get(`/api/wallet/transactions/${id}/invoice`);
+    return data?.url ?? "";
   },
 };

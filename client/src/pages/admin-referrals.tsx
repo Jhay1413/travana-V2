@@ -15,7 +15,8 @@ import { useProcessWalletDebit, useRejectWalletDebit } from "@/hooks/mutations/u
 import { useToast } from "@/hooks/use-toast";
 import type { AdminReferral } from "@/api/endpoints/referral.api";
 import type { AdminReferralWithdrawal } from "@/api/endpoints/referral-withdrawal.api";
-import type { AdminWalletTransaction } from "@/api/endpoints/wallet.api";
+import { referralWithdrawalApi } from "@/api/endpoints/referral-withdrawal.api";
+import { walletApi, type AdminWalletTransaction } from "@/api/endpoints/wallet.api";
 import {
   Gift,
   Wallet,
@@ -34,6 +35,7 @@ import {
   Filter,
   Loader2,
   XCircle,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -385,10 +387,21 @@ function WithdrawalRow({
   onReject: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [fetchingInvoice, setFetchingInvoice] = useState(false);
   const isPending = withdrawal.status === "pending";
   const isBankTransfer = withdrawal.method === "bank_transfer";
   const { icon: MethodIcon, label: methodLabel } = METHOD_CONFIG[withdrawal.method] ?? { icon: Banknote, label: withdrawal.method };
   const statusCfg = WITHDRAWAL_STATUS_CONFIG[withdrawal.status];
+
+  async function handleViewInvoice() {
+    setFetchingInvoice(true);
+    try {
+      const url = await referralWithdrawalApi.getInvoiceUrl(withdrawal.id);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setFetchingInvoice(false);
+    }
+  }
 
   return (
     <div className={cn(
@@ -453,6 +466,18 @@ function WithdrawalRow({
                 Reject
               </Button>
             </>
+          )}
+          {withdrawal.invoice_url && withdrawal.status === "processed" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => { e.stopPropagation(); handleViewInvoice(); }}
+              disabled={fetchingInvoice}
+              className="h-7 text-xs gap-1 px-3 text-blue-600 border-blue-400/40 hover:bg-blue-50"
+            >
+              {fetchingInvoice ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+              View Invoice
+            </Button>
           )}
           <button onClick={() => setExpanded((v) => !v)} className="text-black/30 hover:text-black/50">
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -544,9 +569,20 @@ function WalletCreditDebitRow({
   onReject: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [fetchingInvoice, setFetchingInvoice] = useState(false);
   const isPending = tx.status === "pending";
   const statusCfg = WALLET_DEBIT_STATUS_CONFIG[tx.status] ?? WALLET_DEBIT_STATUS_CONFIG.pending;
   const clientName = [tx.clientFirstName, tx.clientSurname].filter(Boolean).join(" ") || "Unknown client";
+
+  async function handleViewInvoice() {
+    setFetchingInvoice(true);
+    try {
+      const url = await walletApi.getInvoiceUrl(tx.id);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setFetchingInvoice(false);
+    }
+  }
 
   return (
     <div className={cn(
@@ -602,6 +638,18 @@ function WalletCreditDebitRow({
                 Reject
               </Button>
             </>
+          )}
+          {tx.invoice_url && tx.status === "processed" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => { e.stopPropagation(); handleViewInvoice(); }}
+              disabled={fetchingInvoice}
+              className="h-7 text-xs gap-1 px-3 text-blue-600 border-blue-400/40 hover:bg-blue-50"
+            >
+              {fetchingInvoice ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+              View Invoice
+            </Button>
           )}
           <button onClick={() => setExpanded((v) => !v)} className="text-black/30 hover:text-black/50">
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
