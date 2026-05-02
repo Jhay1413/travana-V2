@@ -16,7 +16,20 @@ export interface WalletTransaction {
   processed_at: string | null;
 }
 
+// Extended type returned by the admin listAll endpoint (includes joined client + booking data)
+export interface AdminWalletTransaction extends WalletTransaction {
+  clientFirstName: string | null;
+  clientSurname: string | null;
+  clientEmail: string | null;
+  bookingRef: string | null;
+}
+
 export const walletApi = {
+  listAll: async (): Promise<AdminWalletTransaction[]> => {
+    const { data } = await axiosClient.get("/api/wallet/");
+    return data;
+  },
+
   getBalance: async (clientId: string): Promise<{ balance: string }> => {
     const { data } = await axiosClient.get(`/api/wallet/client/${clientId}/balance`);
     return data;
