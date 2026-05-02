@@ -1,5 +1,6 @@
 import { referralRepository } from "../repositories/referral.repository";
 import { vipEnrollmentService } from "./vipEnrollment.service";
+import { walletService } from "./wallet.service";
 import { AppError } from "../utils/error-handler";
 
 /**
@@ -32,6 +33,10 @@ async function autoApproveEligible(referrerClientId?: string) {
   const affectedReferrerIds = new Set<string>();
   for (const r of due) {
     await referralRepository.updateStatus(r.id, "IN_WALLET");
+    // Credit the wallet ledger
+    if (r.referrerClientId && r.payoutAmount) {
+      await walletService.addReferralCredit(r.referrerClientId, r.id, r.payoutAmount);
+    }
     if (r.referrerClientId) affectedReferrerIds.add(r.referrerClientId);
   }
   for (const referrerId of Array.from(affectedReferrerIds)) {
@@ -107,6 +112,11 @@ export const referralService = {
     }
 
     const updated = await referralRepository.updateStatus(id, status);
+
+    // Credit the wallet ledger when manually moved to IN_WALLET
+    if (status === "IN_WALLET" && existing.referrerClientId && existing.payoutAmount) {
+      await walletService.addReferralCredit(existing.referrerClientId, id, existing.payoutAmount);
+    }
 
     // Recalculate tier whenever status changes to or from a successful state
     if (
@@ -204,6 +214,24 @@ export const referralService = {
     await referralRepository.update(existing.id, {
       commission: newCommission,
       payoutAmount: newPayoutAmount,
+    });
+  },
+
+  /**
+   * When booking travel date is updated, recalculate the linked referral's
+   * travelDate and payoutTriggerDate — only if the referral is still PENDING.
+   * This ensures the 8-week availability window stays in sync with the booking.
+   */
+  async syncTravelDateByTransaction(transactionId: string, newTravelDate: string) {
+    const existing = await referralRepository.findByTransactionId(transactionId);
+    if (!existing) return;
+
+    if (existing.referralStatus !== "PENDING") return;
+
+    const newPayoutTriggerDate = calculatePayoutTriggerDate(newTravelDate);
+    await referralRepository.update(existing.id, {
+      travelDate: newTravelDate,
+      payoutTriggerDate: newPayoutTriggerDate,
     });
   },
 };

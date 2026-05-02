@@ -81,7 +81,9 @@ const currency = new Intl.NumberFormat("en-GB", {
 
 function formatRelativeTime(date: string | Date) {
   const now = new Date();
-  const d = new Date(date);
+  const d = typeof date === "string"
+    ? new Date(/Z|[+-]\d{2}:?\d{2}$/.test(date) ? date : date.replace(" ", "T") + "Z")
+    : date;
   const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 1) return "Just now";
@@ -421,11 +423,12 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
   const [newDueTime, setNewDueTime] = useState("09:00");
+  const [assignedToId, setAssignedToId] = useState("");
 
   const presets = TASK_PRESETS_BY_ENTITY[taskCategory] || TASK_PRESETS_BY_ENTITY.enquiry;
 
   const handleAdd = () => {
-    const userIdForTask = assignedUserId || currentUser?.id;
+    const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
     if (!newTitle || !newDueDate || !userIdForTask) return;
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
@@ -444,6 +447,7 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
           setNewTitle("");
           setNewDueDate("");
           setNewDueTime("09:00");
+          setAssignedToId("");
           toast({ title: "Task added" });
         },
         onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
@@ -586,6 +590,15 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
               </Select>
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Assign To</Label>
+              <UserReassignSelect
+                value={assignedToId || assignedUserId || currentUser?.id || ""}
+                onValueChange={setAssignedToId}
+                data-testid="select-task-assign-to"
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-black/60">Due Date</Label>
@@ -628,11 +641,12 @@ export default function EnquiryPage() {
   const [, params] = useRoute("/clients/:clientId/enquiries/:enquiryId");
   const [, freeParams] = useRoute("/enquiries/:enquiryId");
   const resolvedParams = params ?? freeParams;
-  const clientId = resolvedParams?.clientId || "";
+  const urlClientId = resolvedParams?.clientId || "";
   const enquiryId = resolvedParams?.enquiryId || "";
   const { role, setRole } = useRole();
 
   const { data: enquiry, isLoading } = useEnquiry(enquiryId);
+  const clientId = (urlClientId && urlClientId !== "_") ? urlClientId : ((enquiry as any)?.client_id || "");
   const { data: clientData } = useClient(clientId);
   const { data: currentUser } = useCurrentUser();
   const createQuoteMutation = useCreateQuote();
@@ -751,7 +765,7 @@ export default function EnquiryPage() {
       <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
           <div className="text-sm text-black/50">Enquiry not found</div>
-          <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => navigate(`/clients/${clientId}?tab=enquiries`)}>
+          <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => navigate(clientId ? `/clients/${clientId}?tab=enquiries` : "/")}>
             <ChevronLeft className="mr-1 h-4 w-4" /> Enquiries
           </Button>
         </div>
@@ -790,7 +804,7 @@ export default function EnquiryPage() {
       <div className="mx-auto w-full max-w-5xl px-4 pb-12 pt-6">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <div className="mb-6 flex items-center gap-3">
-            <button type="button" onClick={() => navigate(`/clients/${clientId}?tab=enquiries`)} className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.04]" data-testid="button-back">
+            <button type="button" onClick={() => navigate(clientId ? `/clients/${clientId}?tab=enquiries` : "/")} className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.04]" data-testid="button-back">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <div className="min-w-0 flex-1">

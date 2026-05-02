@@ -29,6 +29,20 @@
       "when": 1745366400000,
       "tag": "0003_add_quote_views",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1746057600000,
+      "tag": "0004_add_portal_chat_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1746662400000,
+      "tag": "0005_add_wallet_transaction",
+      "breakpoints": true
     }
   ]
 }

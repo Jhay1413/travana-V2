@@ -78,6 +78,7 @@ export const bookingFormSchema = z.object({
   discount: z.coerce.number().min(0).default(0),
   serviceCharge: z.coerce.number().min(0).default(0),
   pricePerPerson: z.coerce.number().min(0).default(0),
+  walletCreditAmount: z.coerce.number().min(0).default(0),
 
   // Extras
   transfers: z.array(z.object({
@@ -229,6 +230,7 @@ export const defaultBookingFormValues: BookingFormValues = {
   discount: 0,
   serviceCharge: 0,
   pricePerPerson: 0,
+  walletCreditAmount: 0,
   transfers: [],
   carHires: [],
   attractionTickets: [],
@@ -246,6 +248,7 @@ export interface BookingRHFFormProps {
   submitLabel?: string;
   onCancel?: () => void;
   initialExtraAccomLabels?: string[];
+  clientId?: string;
 }
 
 export interface BookingCreateDialogProps {
@@ -261,4 +264,5 @@ export interface BookingUpdateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  clientId?: string;
 }

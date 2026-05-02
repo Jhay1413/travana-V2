@@ -131,4 +131,62 @@ export const referralWithdrawalService = {
   async getTotalPaidByClient(clientId: string): Promise<number> {
     return referralWithdrawalRepository.sumProcessedByClientId(clientId);
   },
+
+  /**
+   * Admin allocates a specific amount from the client's wallet to a booking.
+   * Uses FIFO across IN_WALLET referrals — drains the oldest first, then takes
+   * the remainder from the next one. Creates pending withdrawal records.
+   */
+  async applyBookingCreditAdmin(clientId: string, bookingId: string, requestedAmount: number) {
+    if (requestedAmount <= 0) {
+      throw new AppError("Amount must be greater than 0", 400);
+    }
+
+    const referrals = await referralRepository.findByReferrerClientId(clientId);
+    const eligible = referrals
+      .filter((r: any) => r.referralStatus === "IN_WALLET")
+      .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    const available = eligible.reduce(
+      (sum: number, r: any) => sum + parseFloat(r.payoutAmount ?? "0"),
+      0
+    );
+
+    if (available <= 0) {
+      throw new AppError("No wallet balance available to apply", 400);
+    }
+    if (requestedAmount > available + 0.001) {
+      throw new AppError(`Requested amount exceeds available balance of £${available.toFixed(2)}`, 400);
+    }
+
+    const created = [];
+    let remaining = requestedAmount;
+
+    for (const r of eligible) {
+      if (remaining <= 0.001) break;
+
+      const referralBalance = parseFloat(r.payoutAmount ?? "0");
+      if (referralBalance <= 0) continue;
+
+      // Skip if a pending withdrawal already exists for this referral
+      const existing = await referralWithdrawalRepository.findByReferralId(r.id);
+      if (existing && existing.status === "pending") continue;
+
+      const allocate = Math.min(remaining, referralBalance);
+
+      const w = await referralWithdrawalRepository.create({
+        referral_id: r.id,
+        client_id: clientId,
+        amount: allocate.toFixed(2),
+        method: "booking_credit",
+        status: "pending",
+        booking_id: bookingId,
+      });
+      created.push(w);
+      remaining -= allocate;
+    }
+
+    const totalApplied = (requestedAmount - Math.max(remaining, 0)).toFixed(2);
+    return { referralCount: created.length, totalAmount: totalApplied };
+  },
 };

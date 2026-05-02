@@ -60,4 +60,5 @@ export const referralController = {
     await referralService.deleteReferral(id);
     res.status(204).send();
   }),
+
 };

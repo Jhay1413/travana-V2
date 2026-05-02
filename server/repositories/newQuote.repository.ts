@@ -133,6 +133,7 @@ export const newQuoteRepository = {
       eq(quote.isFreeQuote, true),
       eq(quote.is_active, true),
       eq(transaction.is_test, false),
+      eq(quote.not_for_social, false),
       ...(searchCondition ? [searchCondition] : []),
     ];
 

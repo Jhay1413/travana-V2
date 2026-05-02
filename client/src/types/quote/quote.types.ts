@@ -152,6 +152,7 @@ export interface EnquiryPassenger {
 export interface EnquiryTable {
   id: string;
   transaction_id: string;
+  client_id?: string | null;
   holiday_type_id: string;
   accomodation_type_id: string | null;
   travel_date: string | null;

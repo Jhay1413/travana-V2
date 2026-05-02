@@ -1127,6 +1127,36 @@ export const insertReferralWithdrawalSchema = createInsertSchema(referral_withdr
 export type InsertReferralWithdrawal = z.infer<typeof insertReferralWithdrawalSchema>;
 export type ReferralWithdrawal = typeof referral_withdrawal.$inferSelect;
 
+// ── Wallet Ledger ─────────────────────────────────────────────────────────────
+// Replaces per-referral referral_withdrawal with a proper debit/credit ledger.
+// Credits are created when a referral moves to IN_WALLET.
+// Debits are created when booking credit or bank transfer is requested.
+export const wallet_transaction_type_enum = pgEnum('wallet_transaction_type_enum', ['credit', 'debit']);
+export const wallet_transaction_source_enum = pgEnum('wallet_transaction_source_enum', ['referral_commission', 'booking_credit', 'bank_transfer']);
+export const wallet_transaction_status_enum = pgEnum('wallet_transaction_status_enum', ['pending', 'processed', 'rejected']);
+
+export const wallet_transaction = pgTable('wallet_transaction', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  client_id: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  type: wallet_transaction_type_enum("type").notNull(),
+  amount: numeric("amount").notNull(),
+  source: wallet_transaction_source_enum("source").notNull(),
+  referral_id: uuid("referral_id").references(() => referral.id, { onDelete: "set null" }),
+  booking_id: uuid("booking_id").references(() => booking.id, { onDelete: "set null" }),
+  account_name: varchar("account_name"),
+  account_number: varchar("account_number"),
+  sort_code: varchar("sort_code"),
+  transfer_reference: varchar("transfer_reference"),
+  notes: text("notes"),
+  status: wallet_transaction_status_enum("status").default('pending').notNull(),
+  created_at: timestamp("created_at").defaultNow(),
+  processed_at: timestamp("processed_at"),
+});
+
+export const insertWalletTransactionSchema = createInsertSchema(wallet_transaction).omit({ id: true, created_at: true });
+export type InsertWalletTransaction = z.infer<typeof insertWalletTransactionSchema>;
+export type WalletTransaction = typeof wallet_transaction.$inferSelect;
+
 export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: uuid("client_id").references(() => clientTable.id, { onDelete: "cascade" }),

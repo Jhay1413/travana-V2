@@ -51,6 +51,7 @@ export const enquiryTableRepository = {
         enquiry: enquiry_table,
         holiday_type_name: package_type.name,
         user_id: transaction.user_id,
+        client_id: transaction.client_id,
       })
       .from(enquiry_table)
       .leftJoin(package_type, eq(enquiry_table.holiday_type_id, package_type.id))
@@ -140,6 +141,7 @@ export const enquiryTableRepository = {
       ...enq.enquiry,
       holiday_type_name: enq.holiday_type_name,
       user_id: enq.user_id,
+      client_id: enq.client_id,
       destinations,
       resorts: resortList,
       accommodations,

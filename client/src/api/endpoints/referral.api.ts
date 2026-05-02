@@ -136,4 +136,5 @@ export const referralApi = {
   remove: async (id: string): Promise<void> => {
     await axiosClient.delete(`/api/referrals/${id}`);
   },
+
 };

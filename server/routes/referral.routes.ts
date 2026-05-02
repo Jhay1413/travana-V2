@@ -17,6 +17,7 @@ router.get("/", referralController.listReferrals);
 // Admin: get referrals by client (referrer)
 router.get("/client/:clientId", validate(referrerClientParamValidator), referralController.getReferralsByClient);
 
+
 // Admin: get referral stats for a client (referrer)
 router.get("/client/:clientId/stats", validate(referrerClientParamValidator), referralController.getClientStats);
 

@@ -25,7 +25,9 @@ export function formatLeadSource(source: string | null | undefined): string {
 
 export function formatRelativeTime(date: string | Date) {
   const now = new Date();
-  const d = new Date(date);
+  const d = typeof date === "string"
+    ? new Date(/Z|[+-]\d{2}:?\d{2}$/.test(date) ? date : date.replace(" ", "T") + "Z")
+    : date;
   const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 1) return "Just now";

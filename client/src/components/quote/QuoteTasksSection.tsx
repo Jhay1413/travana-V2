@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useTasks, useCurrentUser } from "@/hooks/queries";
 import { useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 
 const TASK_PRESETS_BY_ENTITY: Record<string, string[]> = {
   general: [
@@ -81,11 +82,12 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
   const [newDueTime, setNewDueTime] = useState("09:00");
+  const [assignedToId, setAssignedToId] = useState("");
 
   const presets = TASK_PRESETS_BY_ENTITY[taskCategory] || TASK_PRESETS_BY_ENTITY.quote;
 
   const handleAdd = () => {
-    const userIdForTask = assignedUserId || currentUser?.id;
+    const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
     if (!newTitle || !newDueDate || !userIdForTask) return;
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
@@ -104,6 +106,7 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
           setNewTitle("");
           setNewDueDate("");
           setNewDueTime("09:00");
+          setAssignedToId("");
           toast({ title: "Task added" });
         },
         onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
@@ -244,6 +247,15 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Assign To</Label>
+              <UserReassignSelect
+                value={assignedToId || assignedUserId || currentUser?.id || ""}
+                onValueChange={setAssignedToId}
+                data-testid="select-task-assign-to"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-2">

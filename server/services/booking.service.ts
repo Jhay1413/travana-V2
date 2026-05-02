@@ -406,6 +406,14 @@ export const bookingService = {
       );
     }
 
+    // Sync referral travel date if travel_date changed — keeps payoutTriggerDate in sync
+    if (bookingData.travel_date !== undefined && b.transaction_id) {
+      await referralService.syncTravelDateByTransaction(
+        b.transaction_id,
+        String(bookingData.travel_date)
+      );
+    }
+
     return await bookingRepository.findWithDetails(id);
   },
 

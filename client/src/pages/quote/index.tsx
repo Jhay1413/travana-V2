@@ -547,9 +547,10 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
                   {!isBooking && (
                     <QuoteEngagement quoteId={quoteId} />
                   )}
-                  <QuoteTasksSection 
-                    quoteId={quoteId} 
-                    entityType={isBooking ? "booking" : "quote"} 
+                  <QuoteTasksSection
+                    quoteId={quoteId}
+                    entityType={isBooking ? "booking" : "quote"}
+                    assignedUserId={(rawData as any)?.user_id}
                   />
                   <QuoteNotesSection transactionId={quoteId} />
                   <Card className="rounded-3xl border-black/10 bg-white/70 p-4">

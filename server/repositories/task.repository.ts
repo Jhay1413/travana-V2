@@ -177,33 +177,113 @@ export const taskRepository = {
 
   async findAllWithClientTasks(userId?: string): Promise<TaskWithClient[]> {
     const query = db.select().from(tasks);
-    
+
     const allTasks = userId
       ? await query.where(eq(tasks.userId, userId)).orderBy(desc(tasks.dueDate))
       : await query.orderBy(desc(tasks.dueDate));
 
     if (allTasks.length === 0) return [];
 
-    const quoteEntityIds = allTasks
+    // Build excluded keys for on_booking transactions and LOST quotes
+    const excludedEntityKeys = new Set<string>();
+
+    const quoteIds = allTasks
       .filter(t => t.entityType === "quote")
       .map(t => t.entityId)
       .filter((id): id is string => id !== null);
-    const bookingEntityIds = allTasks
-      .filter(t => t.entityType === "booking")
-      .map(t => t.entityId)
-      .filter((id): id is string => id !== null);
-    const enquiryEntityIds = allTasks
+
+    if (quoteIds.length > 0) {
+      const quoteRows = await db
+        .select({ id: quote.id, quote_status: quote.quote_status, transaction_id: quote.transaction_id })
+        .from(quote)
+        .where(inArray(quote.id, quoteIds));
+
+      const txIds = quoteRows.map(q => q.transaction_id).filter((id): id is string => id !== null);
+      const txStatusMap = new Map<string, string>();
+
+      if (txIds.length > 0) {
+        const txRows = await db
+          .select({ id: transaction.id, status: transaction.status })
+          .from(transaction)
+          .where(inArray(transaction.id, txIds));
+        for (const tx of txRows) {
+          if (tx.status) txStatusMap.set(tx.id, tx.status);
+        }
+      }
+
+      for (const q of quoteRows) {
+        if (
+          q.quote_status === "LOST" ||
+          (q.transaction_id && txStatusMap.get(q.transaction_id) === "on_booking")
+        ) {
+          excludedEntityKeys.add(`quote:${q.id}`);
+        }
+      }
+    }
+
+    const enquiryIds = allTasks
       .filter(t => t.entityType === "enquiry")
       .map(t => t.entityId)
       .filter((id): id is string => id !== null);
-    const clientEntityIds = allTasks
+
+    if (enquiryIds.length > 0) {
+      const enquiryRows = await db
+        .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id })
+        .from(enquiry_table)
+        .where(inArray(enquiry_table.id, enquiryIds));
+
+      const txIds = enquiryRows.map(e => e.transaction_id).filter((id): id is string => id !== null);
+
+      if (txIds.length > 0) {
+        const txRows = await db
+          .select({ id: transaction.id, status: transaction.status })
+          .from(transaction)
+          .where(inArray(transaction.id, txIds));
+        const txStatusMap = new Map<string, string>();
+        for (const tx of txRows) {
+          if (tx.status) txStatusMap.set(tx.id, tx.status);
+        }
+        for (const e of enquiryRows) {
+          if (e.transaction_id && txStatusMap.get(e.transaction_id) === "on_booking") {
+            excludedEntityKeys.add(`enquiry:${e.id}`);
+          }
+        }
+      }
+    }
+
+    // Booking-type tasks are inherently on_booking stage — exclude them too
+    for (const t of allTasks) {
+      if (t.entityType === "booking" && t.entityId) {
+        excludedEntityKeys.add(`booking:${t.entityId}`);
+      }
+    }
+
+    const activeTasks = excludedEntityKeys.size > 0
+      ? allTasks.filter(t => !excludedEntityKeys.has(`${t.entityType ?? ""}:${t.entityId ?? ""}`))
+      : allTasks;
+
+    if (activeTasks.length === 0) return [];
+
+    const quoteEntityIds = activeTasks
+      .filter(t => t.entityType === "quote")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+    const bookingEntityIds = activeTasks
+      .filter(t => t.entityType === "booking")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+    const enquiryEntityIds = activeTasks
+      .filter(t => t.entityType === "enquiry")
+      .map(t => t.entityId)
+      .filter((id): id is string => id !== null);
+    const clientEntityIds = activeTasks
       .filter(t => t.entityType === "client")
       .map(t => t.entityId)
       .filter((id): id is string => id !== null);
 
-    const resolvedData = await resolveTaskClients(allTasks, quoteEntityIds, bookingEntityIds, enquiryEntityIds, clientEntityIds);
+    const resolvedData = await resolveTaskClients(activeTasks, quoteEntityIds, bookingEntityIds, enquiryEntityIds, clientEntityIds);
 
-    return allTasks.map(t => {
+    return activeTasks.map(t => {
       const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
       const clientId = resolvedData.directClientMap.get(key) ?? resolvedData.txClientMap.get(key) ?? null;
       const clientName = clientId ? resolvedData.clientNameMap.get(clientId) ?? null : null;

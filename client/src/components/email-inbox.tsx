@@ -361,9 +361,25 @@ export default function EmailInbox() {
   const selectedEmailWithBody = useMemo(() => {
     if (!selectedEmail) return null;
     if (!fullMessage) return selectedEmail;
+
+    const rawHtml = fullMessage.html;
+    const rawText = fullMessage.text;
+
+    let body = "";
+    if (rawHtml && /<[a-z][\s\S]*>/i.test(rawHtml)) {
+      body = rawHtml;
+    } else {
+      const plain = rawText || rawHtml || "";
+      body = plain
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br>");
+    }
+
     return {
       ...selectedEmail,
-      body: fullMessage.html ?? fullMessage.text ?? "",
+      body,
       attachments: fullMessage.attachments ?? [],
     };
   }, [selectedEmail, fullMessage]);
@@ -407,13 +423,21 @@ export default function EmailInbox() {
 
   const handleSend = async () => {
     if (!account || !composeData.to || !composeData.subject) return;
+    const htmlBody = composeData.body
+      ? composeData.body
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\n/g, "<br>")
+      : undefined;
     await sendEmail.mutateAsync({
       accountId: account.id,
       payload: {
         to: composeData.to,
         cc: composeData.cc || undefined,
         subject: composeData.subject,
-        html: composeData.body || undefined,
+        html: htmlBody,
+        text: composeData.body || undefined,
       },
     });
     setComposing(false);

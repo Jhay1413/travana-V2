@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   Calendar,
@@ -51,7 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePipelineColumn, useNeonClients, useNeonClient, useCurrentUser, useTransaction, useNotes, transactionKeys } from "@/hooks/queries";
-import { useUpdateTransaction, useConvertToBooking } from "@/hooks/mutations";
+import { useUpdateTransaction, useConvertToBooking, useUpdateQuote } from "@/hooks/mutations";
 import type { NeonClient } from "@/types/neon-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -194,6 +194,8 @@ interface CardProps {
 function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick }: CardProps) {
   const [, setLocation] = useLocation();
   const [isDragging, setIsDragging] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const profit = getTransactionProfit(t);
   const value = getTransactionValue(t);
   const { dest, country } = getDest(t);
@@ -202,6 +204,19 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
   const quoteCount = t.quotes?.length || 0;
   const quoteStatus = (t.quotes?.[0] as any)?.quote_status || null;
   const hex = STAGE_HEX[stage];
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const updateQuoteMutation = useUpdateQuote();
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMenu]);
 
   const navUrl = () => {
     if (!t.client_id) return "/pipeline";
@@ -249,7 +264,37 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
             <span className="text-[11px] text-gray-400">{getTimeAgo(t.created_at)}</span>
             <div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
               <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); setLocation(navUrl()); }}><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
-              <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="w-3.5 h-3.5 text-gray-400" /></button>
+              <div className="relative" ref={menuRef}>
+                <button className="p-1 rounded-md hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); setShowMenu(v => !v); }}><MoreHorizontal className="w-3.5 h-3.5 text-gray-400" /></button>
+                {showMenu && (stage === "Quoted" || stage === "In Play") && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
+                    <button
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        const mainQuote = t.quotes?.find(q => !(q as any).isQuoteCopy) || t.quotes?.[0];
+                        if (!mainQuote) return;
+                        updateQuoteMutation.mutate(
+                          { id: mainQuote.id, data: { quote_status: "LOST" } },
+                          {
+                            onSuccess: () => {
+                              queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+                              toast({ title: "Deal marked as lost" });
+                            },
+                            onError: () => {
+                              toast({ title: "Failed to mark as lost", variant: "destructive" });
+                            },
+                          }
+                        );
+                      }}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Mark as Lost
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

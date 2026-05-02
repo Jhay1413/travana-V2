@@ -242,6 +242,7 @@ export default function QuotePage() {
       serviceCharge: parseFloat(quoteData.service_charge || "0"),
       pricePerPerson: 0,
       tags: quoteData.tags || [],
+      not_for_social: quoteData.not_for_social ?? false,
     };
   }, [quoteData]);
 

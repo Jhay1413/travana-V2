@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useFieldArray, useWatch} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet } from "lucide-react";
+import { walletApi } from "@/api/endpoints/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
@@ -207,6 +208,76 @@ function TagSelectorSection({ control }: { control: any }) {
   );
 }
 
+function WalletCreditSection({ clientId, control, setValue }: { clientId: string; control: any; setValue: any }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["wallet-balance", clientId],
+    queryFn: () => walletApi.getBalance(clientId),
+    enabled: !!clientId,
+  });
+
+  const available = parseFloat(data?.balance ?? "0");
+  const allocatedAmount = useWatch({ control, name: "walletCreditAmount" }) as number;
+
+  return (
+    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+      <SectionHeader icon={Wallet} title="Wallet Credit" />
+      {isLoading ? (
+        <div className="h-8 w-48 animate-pulse rounded-xl bg-black/5" />
+      ) : available <= 0 ? (
+        <p className="text-xs text-black/40">No wallet balance available for this client.</p>
+      ) : (
+        <>
+          <div className="mb-3 flex items-center justify-between rounded-xl border border-black/8 bg-black/[0.02] px-3 py-2">
+            <span className="text-xs text-black/50">Available balance</span>
+            <span className="text-sm font-semibold text-black/80">£{available.toFixed(2)}</span>
+          </div>
+          <FormField
+            control={control}
+            name="walletCreditAmount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs font-medium text-black/60">Amount to allocate (£)</FormLabel>
+                <div className="flex items-center gap-2">
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      max={available}
+                      placeholder="0.00"
+                      {...field}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        field.onChange(Math.min(val, available));
+                      }}
+                      className="h-9 rounded-xl border-black/10 bg-white/70"
+                    />
+                  </FormControl>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0 rounded-xl text-xs"
+                    onClick={() => setValue("walletCreditAmount", available, { shouldDirty: true })}
+                  >
+                    Use all
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {allocatedAmount > 0 && (
+            <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-50/50 p-3 text-xs text-emerald-800">
+              £{Number(allocatedAmount).toFixed(2)} will be applied as a booking credit when saved.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function BookingRHFForm({
   defaultValues,
   onSubmit,
@@ -214,6 +285,7 @@ export function BookingRHFForm({
   submitLabel = "Save",
   onCancel,
   initialExtraAccomLabels = [],
+  clientId,
 }: BookingRHFFormProps) {
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -1705,6 +1777,9 @@ export function BookingRHFForm({
             return null;
           })()}
         </div>
+
+        {/* ── WALLET CREDIT ─────────────────────────────────────────────────── */}
+        {clientId && <WalletCreditSection clientId={clientId} control={control} setValue={setValue} />}
 
         {/* ── TAGS ──────────────────────────────────────────────────────────── */}
         <TagSelectorSection control={control} />

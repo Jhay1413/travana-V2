@@ -275,6 +275,10 @@ export const newQuoteService = {
   },
 
   async createSocialQuote(userId: string, data: Omit<CreateQuotePayload, 'transaction_id' | 'isFreeQuote'>) {
+    if ((data as any).not_for_social) {
+      throw new AppError("Cannot create social post for a quote marked as not for social", 400);
+    }
+
     const txn = await transactionRepository.create({
       status: 'on_quote',
       user_id: userId,

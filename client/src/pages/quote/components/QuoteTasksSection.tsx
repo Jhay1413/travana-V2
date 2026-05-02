@@ -11,14 +11,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { useTasks, useCurrentUser } from "@/hooks/queries";
 import { useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { TASK_PRESETS_BY_ENTITY, TASK_CATEGORIES, formatTaskDue } from "../utils/constants";
 
 interface QuoteTasksSectionProps {
   quoteId: string;
   entityType?: "enquiry" | "quote" | "booking";
+  assignedUserId?: string;
 }
 
-export function QuoteTasksSection({ quoteId, entityType = "quote" }: QuoteTasksSectionProps) {
+export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserId }: QuoteTasksSectionProps) {
   const taskEntityType = entityType === "booking" ? "quote" : entityType;
   const { data: tasksData, isLoading } = useTasks(taskEntityType, quoteId);
   const { data: currentUser } = useCurrentUser();
@@ -31,17 +33,19 @@ export function QuoteTasksSection({ quoteId, entityType = "quote" }: QuoteTasksS
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
   const [newDueTime, setNewDueTime] = useState("09:00");
+  const [assignedToId, setAssignedToId] = useState("");
 
   const presets = TASK_PRESETS_BY_ENTITY[taskCategory] || TASK_PRESETS_BY_ENTITY.quote;
 
   const handleAdd = () => {
-    if (!newTitle || !newDueDate || !currentUser?.id) return;
+    const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
+    if (!newTitle || !newDueDate || !userIdForTask) return;
     const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
     createMutation.mutate(
       {
         entityType: taskEntityType,
         entityId: quoteId,
-        userId: currentUser.id,
+        userId: userIdForTask,
         title: newTitle,
         dueDate: dueDate,
         completed: false,
@@ -53,6 +57,7 @@ export function QuoteTasksSection({ quoteId, entityType = "quote" }: QuoteTasksS
           setNewTitle("");
           setNewDueDate("");
           setNewDueTime("09:00");
+          setAssignedToId("");
           toast({ title: "Task added" });
         },
         onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
@@ -193,6 +198,15 @@ export function QuoteTasksSection({ quoteId, entityType = "quote" }: QuoteTasksS
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Assign To</Label>
+              <UserReassignSelect
+                value={assignedToId || assignedUserId || currentUser?.id || ""}
+                onValueChange={setAssignedToId}
+                data-testid="select-task-assign-to"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-2">

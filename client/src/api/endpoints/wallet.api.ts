@@ -1,0 +1,60 @@
+import axiosClient from "../client/axios-client";
+
+export interface WalletTransaction {
+  id: string;
+  client_id: string;
+  type: "credit" | "debit";
+  amount: string;
+  source: "referral_commission" | "booking_credit" | "bank_transfer";
+  referral_id: string | null;
+  booking_id: string | null;
+  account_name: string | null;
+  transfer_reference: string | null;
+  notes: string | null;
+  status: "pending" | "processed" | "rejected";
+  created_at: string;
+  processed_at: string | null;
+}
+
+export const walletApi = {
+  getBalance: async (clientId: string): Promise<{ balance: string }> => {
+    const { data } = await axiosClient.get(`/api/wallet/client/${clientId}/balance`);
+    return data;
+  },
+
+  getTransactions: async (clientId: string): Promise<WalletTransaction[]> => {
+    const { data } = await axiosClient.get(`/api/wallet/client/${clientId}/transactions`);
+    return data;
+  },
+
+  applyBookingCredit: async (
+    clientId: string,
+    bookingId: string,
+    amount: number
+  ): Promise<WalletTransaction> => {
+    const { data } = await axiosClient.post(
+      `/api/wallet/client/${clientId}/apply-booking-credit`,
+      { booking_id: bookingId, amount }
+    );
+    return data;
+  },
+
+  processDebit: async (
+    id: string,
+    data: { transfer_reference?: string; notes?: string }
+  ): Promise<WalletTransaction> => {
+    const { data: result } = await axiosClient.patch(
+      `/api/wallet/transactions/${id}/process`,
+      data
+    );
+    return result;
+  },
+
+  rejectDebit: async (id: string, notes?: string): Promise<WalletTransaction> => {
+    const { data } = await axiosClient.patch(
+      `/api/wallet/transactions/${id}/reject`,
+      { notes }
+    );
+    return data;
+  },
+};

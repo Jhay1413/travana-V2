@@ -13,6 +13,7 @@ import { useBooking, usePackageTypes } from "@/hooks/queries";
 import { BookingRHFForm } from "./booking-rhf-form";
 import { defaultBookingFormValues } from "@/types/booking";
 import type { BookingFormValues, BookingUpdateDialogProps } from "@/types/booking";
+import { walletApi } from "@/api/endpoints/wallet.api";
 
 function splitDateTime(iso: string | null | undefined): { date: string; time: string } {
   if (!iso) return { date: "", time: "" };
@@ -369,6 +370,7 @@ export function BookingEditDialog({
   open,
   onOpenChange,
   onSuccess,
+  clientId,
 }: BookingUpdateDialogProps) {
   const { toast } = useToast();
   const updateBooking = useUpdateBooking();
@@ -384,7 +386,21 @@ export function BookingEditDialog({
     updateBooking.mutate(
       { id: bookingId, data: payload as any },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
+          if (values.walletCreditAmount > 0 && clientId) {
+            try {
+              await walletApi.applyBookingCredit(clientId, bookingId, values.walletCreditAmount);
+            } catch {
+              toast({
+                title: "Booking updated",
+                description: "Changes saved, but wallet credit could not be applied.",
+                variant: "destructive",
+              });
+              onOpenChange(false);
+              onSuccess?.();
+              return;
+            }
+          }
           toast({ title: "Booking updated", description: "Changes saved successfully." });
           onOpenChange(false);
           onSuccess?.();
@@ -431,6 +447,7 @@ export function BookingEditDialog({
                 isLoading={updateBooking.isPending}
                 submitLabel="Save Changes"
                 onCancel={() => onOpenChange(false)}
+                clientId={clientId}
               />
             )}
           </div>

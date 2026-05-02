@@ -9,6 +9,7 @@ import {
 import { referralService } from "../services/referral.service";
 import { referralPayoutService } from "../services/referralPayout.service";
 import { referralWithdrawalService } from "../services/referralWithdrawal.service";
+import { walletService } from "../services/wallet.service";
 import { eq, and, desc, isNotNull, inArray, sql, asc, ilike, exists } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -819,13 +820,13 @@ portalRouter.get("/vip", portalAuth, async (req: Request, res: Response) => {
 
     if (!client) return res.status(404).json({ error: "Client not found" });
 
-    const totalEarnings = await referralWithdrawalService.getTotalPaidByClient(clientId);
+    const balance = await walletService.getBalance(clientId);
 
     res.json({
       vipTier: client.vipTier ?? "not_enrolled",
       vipEnrolledAt: client.vipEnrolledAt,
       totalReferrals: client.totalReferrals,
-      totalEarnings: totalEarnings.toFixed(2),
+      walletBalance: balance.toFixed(2),
     });
   } catch (err: any) {
     console.error("Portal VIP status error:", err);
@@ -856,15 +857,26 @@ portalRouter.get("/vip/payout-requests", portalAuth, async (req: Request, res: R
   }
 });
 
-// Returns client's referral_withdrawal records
+// Returns client's wallet transaction history
 portalRouter.get("/vip/withdrawals", portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const withdrawals = await referralWithdrawalService.getWithdrawalsByClient(clientId);
-    res.json(withdrawals);
+    const txs = await walletService.getTransactions(clientId);
+    res.json(txs);
   } catch (err: any) {
-    console.error("Portal VIP withdrawals error:", err);
-    res.status(500).json({ error: "Failed to load withdrawals" });
+    console.error("Portal wallet transactions error:", err);
+    res.status(500).json({ error: "Failed to load wallet transactions" });
+  }
+});
+
+// Returns client's current wallet balance
+portalRouter.get("/wallet/balance", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const balance = await walletService.getBalance(clientId);
+    res.json({ balance: balance.toFixed(2) });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to load wallet balance" });
   }
 });
 
@@ -881,55 +893,27 @@ portalRouter.post("/wallet/request-payout", portalAuth, async (req: Request, res
   }
 });
 
-// Client requests withdrawal of their IN_WALLET balance
-// Creates a referral_withdrawal record with bank details or booking credit selection
+// Client requests a bank transfer withdrawal from their wallet
 portalRouter.post("/wallet/withdraw", portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const {
-      method,
+    const { amount, account_name, account_number, sort_code } = req.body;
+
+    const parsed = parseFloat(amount);
+    if (!amount || isNaN(parsed) || parsed <= 0) {
+      return res.status(400).json({ error: "amount must be a positive number" });
+    }
+    if (!account_name || !account_number || !sort_code) {
+      return res.status(400).json({ error: "account_name, account_number and sort_code are required" });
+    }
+
+    const tx = await walletService.requestBankTransfer(clientId, parsed, {
       account_name,
       account_number,
       sort_code,
-      booking_id,
-    } = req.body;
-
-    if (!method || !["bank_transfer", "booking_credit"].includes(method)) {
-      return res.status(400).json({ error: "Invalid method. Must be bank_transfer or booking_credit." });
-    }
-
-    const referrals = await referralService.getReferralsByReferrer(clientId);
-    const eligible = referrals.filter((r: any) => r.referralStatus === "IN_WALLET");
-
-    if (eligible.length === 0) {
-      return res.status(400).json({ error: "No balance in wallet to withdraw." });
-    }
-
-    const created = [];
-    for (const r of eligible) {
-      const w = await referralWithdrawalService.requestWithdrawal({
-        referralId: r.id,
-        clientId,
-        method,
-        account_name,
-        account_number,
-        sort_code,
-        booking_id,
-      });
-      created.push(w);
-    }
-
-    const totalAmount = eligible.reduce(
-      (sum: number, r: any) => sum + parseFloat(r.payoutAmount ?? "0"),
-      0
-    );
-
-    res.json({
-      success: true,
-      referralCount: created.length,
-      totalAmount: totalAmount.toFixed(2),
-      method,
     });
+
+    res.json({ success: true, transaction: tx });
   } catch (err: any) {
     console.error("Portal wallet withdraw error:", err);
     const status = err?.statusCode ?? 500;
