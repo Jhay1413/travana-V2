@@ -467,6 +467,7 @@ export function useRequestWalletPayout() {
 
 export interface WithdrawRequestData {
   method: "bank_transfer" | "booking_credit";
+  amount: string;
   account_name?: string;
   account_number?: string;
   sort_code?: string;

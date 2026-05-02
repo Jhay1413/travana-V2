@@ -309,7 +309,14 @@ function WithdrawModal({
 
   async function handleWithdraw() {
     setValidationError(null);
-    const payload: WithdrawRequestData = { method };
+    if (totalAvailable <= 0) {
+      setValidationError("You have no available balance to withdraw.");
+      return;
+    }
+    const payload: WithdrawRequestData = {
+      method,
+      amount: totalAvailable.toFixed(2),
+    };
     if (method === "bank_transfer") {
       if (!accountName.trim() || !accountNumber.trim() || !sortCode.trim()) {
         setValidationError("Please fill in all bank details before withdrawing.");
@@ -319,8 +326,12 @@ function WithdrawModal({
       payload.account_number = accountNumber.trim();
       payload.sort_code = sortCode.trim();
     }
-    await withdraw.mutateAsync(payload);
-    setDone(true);
+    try {
+      await withdraw.mutateAsync(payload);
+      setDone(true);
+    } catch (err) {
+      // Error message will surface via withdraw.error in the JSX below
+    }
   }
 
   return (
