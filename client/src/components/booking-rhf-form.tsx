@@ -215,7 +215,7 @@ function WalletCreditSection({ clientId, control, setValue }: { clientId: string
     enabled: !!clientId,
   });
 
-  const available = parseFloat(data?.balance ?? "0");
+  const available = parseFloat(data ?? "0");
   const allocatedAmount = useWatch({ control, name: "walletCreditAmount" }) as number;
 
   return (

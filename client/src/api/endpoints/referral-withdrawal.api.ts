@@ -38,22 +38,22 @@ export interface ProcessWithdrawalData {
 
 export const referralWithdrawalApi = {
   getAll: async (): Promise<AdminReferralWithdrawal[]> => {
-    const { data } = await axiosClient.get<AdminReferralWithdrawal[]>("/api/referral-withdrawals");
-    return data;
+    const { data } = await axiosClient.get("/api/referral-withdrawals");
+    return data.data;
   },
 
   getById: async (id: string): Promise<AdminReferralWithdrawal> => {
-    const { data } = await axiosClient.get<AdminReferralWithdrawal>(`/api/referral-withdrawals/${id}`);
-    return data;
+    const { data } = await axiosClient.get(`/api/referral-withdrawals/${id}`);
+    return data.data;
   },
 
   process: async (id: string, payload: ProcessWithdrawalData): Promise<AdminReferralWithdrawal> => {
-    const { data } = await axiosClient.patch<AdminReferralWithdrawal>(`/api/referral-withdrawals/${id}/process`, payload);
-    return data;
+    const { data } = await axiosClient.patch(`/api/referral-withdrawals/${id}/process`, payload);
+    return data.data;
   },
 
   reject: async (id: string, notes?: string): Promise<AdminReferralWithdrawal> => {
-    const { data } = await axiosClient.patch<AdminReferralWithdrawal>(`/api/referral-withdrawals/${id}/reject`, { notes });
-    return data;
+    const { data } = await axiosClient.patch(`/api/referral-withdrawals/${id}/reject`, { notes });
+    return data.data;
   },
 };

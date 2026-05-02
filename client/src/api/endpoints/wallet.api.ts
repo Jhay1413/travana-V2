@@ -30,9 +30,9 @@ export const walletApi = {
     return data;
   },
 
-  getBalance: async (clientId: string): Promise<{ balance: string }> => {
+  getBalance: async (clientId: string): Promise<string> => {
     const { data } = await axiosClient.get(`/api/wallet/client/${clientId}/balance`);
-    return data;
+    return data?.balance ?? "0";
   },
 
   getTransactions: async (clientId: string): Promise<WalletTransaction[]> => {
@@ -54,13 +54,13 @@ export const walletApi = {
 
   processDebit: async (
     id: string,
-    data: { transfer_reference?: string; notes?: string }
+    payload: { transfer_reference?: string; notes?: string }
   ): Promise<WalletTransaction> => {
-    const { data: result } = await axiosClient.patch(
+    const { data } = await axiosClient.patch(
       `/api/wallet/transactions/${id}/process`,
-      data
+      payload
     );
-    return result;
+    return data;
   },
 
   rejectDebit: async (id: string, notes?: string): Promise<WalletTransaction> => {

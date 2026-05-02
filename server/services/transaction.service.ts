@@ -7,6 +7,7 @@ import { taskService } from "./task.service";
 import { newQuoteService } from "./newQuote.service";
 import { referralService } from "./referral.service";
 import { vipEnrollmentService } from "./vipEnrollment.service";
+import { walletService } from "./wallet.service";
 import { neonClientRepository } from "../repositories/neonClient.repository";
 import { AppError } from "../utils/error-handler";
 import type {
@@ -672,6 +673,12 @@ export const transactionService = {
           is_primary: false,
         } as import("@shared/schema").InsertBookingAccomodation);
       }
+    }
+
+    // Post-booking: wallet credit debit
+    const walletCreditAmount = parseFloat(String(bookingFields.wallet_credit ?? 0)) || 0;
+    if (walletCreditAmount > 0 && result.transaction.client_id) {
+      await walletService.applyBookingCredit(result.transaction.client_id, result.booking.id, walletCreditAmount);
     }
 
     // Post-booking: VIP enrollment + referral auto-creation
