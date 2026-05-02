@@ -353,10 +353,12 @@ export const bookingService = {
       }
     }
 
-    // Recalculate price_per_person if any pricing/passenger fields changed
+    // Capture previous wallet credit and recalculate price_per_person if any pricing/passenger fields changed
+    let prevWalletCredit = 0;
     if ('sales_price' in bookingData || 'adult' in bookingData || 'child' in bookingData || 'discounts' in bookingData || 'service_charge' in bookingData || 'wallet_credit' in bookingData) {
       const current = await bookingRepository.findById(id);
       if (current) {
+        prevWalletCredit = parseFloat(String(current.wallet_credit ?? 0)) || 0;
         bookingData.price_per_person = calcPricePerPerson(
           bookingData.sales_price ?? current.sales_price,
           bookingData.adult ?? current.adult,
@@ -423,13 +425,14 @@ export const bookingService = {
       );
     }
 
-    // Create wallet debit if wallet_credit is being applied for the first time on this booking
-    const newWalletCredit = parseFloat(String(bookingData.wallet_credit ?? 0)) || 0;
-    const prevWalletCredit = parseFloat(String(b.wallet_credit ?? 0)) || 0;
-    if (newWalletCredit > 0 && prevWalletCredit === 0 && b.transaction_id) {
-      const txn = await transactionRepository.findById(b.transaction_id);
-      if (txn?.client_id) {
-        await walletService.applyBookingCredit(txn.client_id, b.id, newWalletCredit);
+    // Adjust wallet debit if wallet_credit changed
+    if ('wallet_credit' in bookingData && b.transaction_id) {
+      const newWalletCredit = parseFloat(String(bookingData.wallet_credit ?? 0)) || 0;
+      if (newWalletCredit !== prevWalletCredit) {
+        const txn = await transactionRepository.findById(b.transaction_id);
+        if (txn?.client_id) {
+          await walletService.adjustBookingCredit(txn.client_id, b.id, newWalletCredit);
+        }
       }
     }
 

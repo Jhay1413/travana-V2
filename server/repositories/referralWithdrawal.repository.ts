@@ -18,6 +18,43 @@ export const referralWithdrawalRepository = {
     return result;
   },
 
+  async findByIdWithDetails(id: string) {
+    const [result] = await db
+      .select({
+        id: referral_withdrawal.id,
+        referral_id: referral_withdrawal.referral_id,
+        client_id: referral_withdrawal.client_id,
+        amount: referral_withdrawal.amount,
+        method: referral_withdrawal.method,
+        status: referral_withdrawal.status,
+        account_name: referral_withdrawal.account_name,
+        account_number: referral_withdrawal.account_number,
+        sort_code: referral_withdrawal.sort_code,
+        transfer_reference: referral_withdrawal.transfer_reference,
+        booking_id: referral_withdrawal.booking_id,
+        credit_note: referral_withdrawal.credit_note,
+        notes: referral_withdrawal.notes,
+        requested_at: referral_withdrawal.requested_at,
+        processed_at: referral_withdrawal.processed_at,
+        clientFirstName: clientTable.firstName,
+        clientSurname: clientTable.surename,
+        clientEmail: clientTable.email,
+        clientPhone: clientTable.phoneNumber,
+        referredName: referral.referredName,
+        referredEmail: referral.referredEmail,
+        travelDate: referral.travelDate,
+        bookingHaysRef: booking.hays_ref,
+        bookingSupplierRef: booking.supplier_ref,
+      })
+      .from(referral_withdrawal)
+      .leftJoin(clientTable, eq(referral_withdrawal.client_id, clientTable.id))
+      .leftJoin(referral, eq(referral_withdrawal.referral_id, referral.id))
+      .leftJoin(booking, eq(referral_withdrawal.booking_id, booking.id))
+      .where(eq(referral_withdrawal.id, id))
+      .limit(1);
+    return result;
+  },
+
   async findByReferralId(referralId: string): Promise<ReferralWithdrawal | undefined> {
     const [result] = await db
       .select()
@@ -51,6 +88,7 @@ export const referralWithdrawalRepository = {
         booking_id: referral_withdrawal.booking_id,
         credit_note: referral_withdrawal.credit_note,
         notes: referral_withdrawal.notes,
+        invoice_url: referral_withdrawal.invoice_url,
         requested_at: referral_withdrawal.requested_at,
         processed_at: referral_withdrawal.processed_at,
         clientFirstName: clientTable.firstName,
@@ -61,7 +99,8 @@ export const referralWithdrawalRepository = {
         referredEmail: referral.referredEmail,
         travelDate: referral.travelDate,
         referralStatus: referral.referralStatus,
-        bookingRef: booking.hays_ref,
+        bookingHaysRef: booking.hays_ref,
+        bookingSupplierRef: booking.supplier_ref,
       })
       .from(referral_withdrawal)
       .leftJoin(clientTable, eq(referral_withdrawal.client_id, clientTable.id))
@@ -77,6 +116,7 @@ export const referralWithdrawalRepository = {
       booking_id?: string;
       credit_note?: string;
       notes?: string;
+      invoice_url?: string;
     }
   ): Promise<ReferralWithdrawal> {
     const [result] = await db
@@ -88,6 +128,7 @@ export const referralWithdrawalRepository = {
         ...(data.booking_id ? { booking_id: data.booking_id } : {}),
         ...(data.credit_note ? { credit_note: data.credit_note } : {}),
         ...(data.notes ? { notes: data.notes } : {}),
+        ...(data.invoice_url ? { invoice_url: data.invoice_url } : {}),
       })
       .where(eq(referral_withdrawal.id, id))
       .returning();

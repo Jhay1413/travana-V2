@@ -13,7 +13,6 @@ import { BookingRHFForm } from "./booking-rhf-form";
 import type { BookingFormValues, BookingCreateDialogProps } from "@/types/booking";
 import { defaultBookingFormValues } from "@/types/booking";
 import type { CreateTransactionData } from "@/types/quote";
-import { walletApi } from "@/api/endpoints/wallet.api";
 
 function buildDateTime(date: string, time: string): string | null {
   if (!date) return null;
@@ -229,20 +228,6 @@ export function BookingCreateDialog({
     createTransaction.mutate(payload, {
       onSuccess: async (result) => {
         const bookingId = result?.booking?.id;
-        if (values.walletCreditAmount > 0 && bookingId) {
-          try {
-            await walletApi.applyBookingCredit(clientId, bookingId, values.walletCreditAmount);
-          } catch {
-            toast({
-              title: "Booking created",
-              description: "Booking saved, but wallet credit could not be applied.",
-              variant: "destructive",
-            });
-            onOpenChange(false);
-            onSuccess?.(bookingId);
-            return;
-          }
-        }
         toast({ title: "Booking created", description: "New booking has been created." });
         onOpenChange(false);
         onSuccess?.(bookingId || "");

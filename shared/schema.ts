@@ -1120,6 +1120,7 @@ export const referral_withdrawal = pgTable('referral_withdrawal', {
   credit_note: varchar("credit_note"),
   // General
   notes: varchar("notes"),
+  invoice_url: text("invoice_url"),
   requested_at: timestamp("requested_at").defaultNow(),
   processed_at: timestamp("processed_at"),
 });

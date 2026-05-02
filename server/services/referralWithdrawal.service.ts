@@ -1,6 +1,7 @@
 import { referralWithdrawalRepository } from "../repositories/referralWithdrawal.repository";
 import { referralRepository } from "../repositories/referral.repository";
 import { vipEnrollmentService } from "./vipEnrollment.service";
+import { generateWithdrawalInvoiceBuffer, uploadWithdrawalInvoice } from "./invoicePdf.service";
 import { AppError } from "../utils/error-handler";
 
 export const referralWithdrawalService = {
@@ -101,6 +102,38 @@ export const referralWithdrawalService = {
     }
 
     const updated = await referralWithdrawalRepository.markProcessed(id, data);
+
+    // Generate and store invoice PDF
+    try {
+      const details = await referralWithdrawalRepository.findByIdWithDetails(id);
+      if (details) {
+        const clientName = [details.clientFirstName, details.clientSurname].filter(Boolean).join(" ") || "Client";
+        const pdfBuffer = await generateWithdrawalInvoiceBuffer({
+          withdrawalId: id,
+          requestedAt: details.requested_at,
+          processedAt: updated.processed_at ?? null,
+          clientName,
+          clientEmail: details.clientEmail ?? null,
+          clientPhone: details.clientPhone ?? null,
+          amount: details.amount,
+          method: details.method,
+          accountName: details.account_name ?? null,
+          accountNumber: details.account_number ?? null,
+          sortCode: details.sort_code ?? null,
+          transferReference: details.transfer_reference ?? data.transfer_reference ?? null,
+          bookingHaysRef: details.bookingHaysRef ?? null,
+          bookingSupplierRef: details.bookingSupplierRef ?? null,
+          travelDate: details.travelDate ?? null,
+          referredName: details.referredName ?? null,
+          referredEmail: details.referredEmail ?? null,
+        });
+        const s3Key = await uploadWithdrawalInvoice(id, pdfBuffer);
+        await referralWithdrawalRepository.markProcessed(id, { invoice_url: s3Key });
+      }
+    } catch (err) {
+      // Invoice generation failure must not block the approval
+      console.error("[invoice] Failed to generate withdrawal invoice:", err);
+    }
 
     // Mark referral as PAID
     const referral = await referralRepository.findById(withdrawal.referral_id);

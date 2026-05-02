@@ -93,4 +93,19 @@ export const walletService = {
 
     return walletTransactionRepository.update(id, { status: "rejected", notes });
   },
+
+  // Adjust the wallet credit on an existing booking — voids the old pending debit and creates a new one.
+  // Called when wallet_credit is changed on a booking edit. If newAmount is 0, only voids.
+  async adjustBookingCredit(clientId: string, bookingId: string, newAmount: number) {
+    const existing = await walletTransactionRepository.findPendingDebitByBookingId(bookingId);
+    if (existing) {
+      await walletTransactionRepository.update(existing.id, {
+        status: "rejected",
+        notes: "Voided by booking credit adjustment",
+      });
+    }
+    if (newAmount > 0) {
+      await this.applyBookingCredit(clientId, bookingId, newAmount);
+    }
+  },
 };

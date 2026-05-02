@@ -82,4 +82,20 @@ export const walletTransactionRepository = {
       .returning();
     return result;
   },
+
+  async findPendingDebitByBookingId(bookingId: string): Promise<WalletTransaction | undefined> {
+    const [result] = await db
+      .select()
+      .from(wallet_transaction)
+      .where(
+        and(
+          eq(wallet_transaction.booking_id, bookingId),
+          eq(wallet_transaction.type, "debit"),
+          eq(wallet_transaction.source, "booking_credit"),
+          eq(wallet_transaction.status, "pending"),
+        )
+      )
+      .limit(1);
+    return result;
+  },
 };
