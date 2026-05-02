@@ -12,10 +12,12 @@ import {
   usePortalReferrals,
   usePortalWithdrawals,
   usePortalWalletBalance,
+  usePortalWalletTransactions,
   useRequestWalletWithdraw,
   type PortalReferral,
   type PortalVipStatus,
   type PortalWithdrawal,
+  type PortalWalletTransaction,
   type WithdrawRequestData,
 } from "@/hooks/use-portal-api";
 
@@ -277,20 +279,17 @@ function BottomSheet({ title: _title, onClose, children }: { title: string; onCl
 function WithdrawModal({
   referrals,
   withdrawals,
+  walletTransactions,
+  trueBalance,
   onClose,
 }: {
   referrals: PortalReferral[];
   withdrawals: PortalWithdrawal[];
+  walletTransactions: PortalWalletTransaction[];
+  trueBalance: number;
   onClose: () => void;
 }) {
   const withdraw = useRequestWalletWithdraw();
-  // Exclude referrals that already have a pending withdrawal
-  const pendingReferralIds = new Set(
-    withdrawals.filter((w) => w.status === "pending").map((w) => w.referral_id)
-  );
-  const eligible = referrals.filter(
-    (r) => r.referralStatus === "IN_WALLET" && !pendingReferralIds.has(r.id)
-  );
   const [method, setMethod] = useState<"bank_transfer" | "booking_credit">("bank_transfer");
   const [accountName, setAccountName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
@@ -298,7 +297,15 @@ function WithdrawModal({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  const totalAvailable = eligible.reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
+  // Build breakdown from wallet_transactions — credits minus deductions
+  const referralMap = new Map(referrals.map((r) => [r.id, r.referredName]));
+  const creditEntries = walletTransactions.filter(
+    (tx) => tx.type === "credit" && tx.status === "processed"
+  );
+  const debitEntries = walletTransactions.filter(
+    (tx) => tx.type === "debit" && tx.status !== "rejected"
+  );
+  const totalAvailable = trueBalance;
 
   async function handleWithdraw() {
     setValidationError(null);
@@ -321,14 +328,14 @@ function WithdrawModal({
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-white font-bold text-lg">Withdraw Funds</h2>
-          <p className="text-white/40 text-sm">{eligible.length} referral{eligible.length !== 1 ? "s" : ""} in wallet</p>
+          <p className="text-white/40 text-sm">{creditEntries.length} commission{creditEntries.length !== 1 ? "s" : ""} in wallet</p>
         </div>
         <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/[0.08] flex items-center justify-center text-white/50 hover:text-white">
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {eligible.length === 0 ? (
+      {totalAvailable <= 0 ? (
         <div className="text-center py-8">
           <Wallet className="w-10 h-10 text-white/20 mx-auto mb-3" />
           <p className="text-white/50 font-medium">Wallet is empty</p>
@@ -350,21 +357,41 @@ function WithdrawModal({
           <div className="bg-gradient-to-br from-emerald-500/15 to-teal-500/15 border border-emerald-500/20 rounded-2xl p-4 mb-5 text-center">
             <Wallet className="w-5 h-5 text-emerald-400 mx-auto mb-2" />
             <p className="text-emerald-400 font-bold text-3xl">£{totalAvailable.toFixed(2)}</p>
-            <p className="text-white/40 text-xs mt-1">Available across {eligible.length} referral{eligible.length !== 1 ? "s" : ""}</p>
+            <p className="text-white/40 text-xs mt-1">Available to withdraw</p>
           </div>
 
-          <div className="space-y-2 mb-5">
-            <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Breakdown</p>
-            {eligible.map((r) => (
-              <div key={r.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
-                <div className="flex items-center gap-2 min-w-0">
-                  <User className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
-                  <span className="text-white/70 text-sm truncate">{r.referredName}</span>
+          {(creditEntries.length > 0 || debitEntries.length > 0) && (
+            <div className="space-y-2 mb-5">
+              <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Breakdown</p>
+              {creditEntries.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <User className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
+                    <span className="text-white/70 text-sm truncate">
+                      {tx.referral_id ? (referralMap.get(tx.referral_id) ?? "Commission") : "Commission"}
+                    </span>
+                  </div>
+                  <span className="text-emerald-400 font-semibold text-sm flex-shrink-0">+£{parseFloat(tx.amount).toFixed(2)}</span>
                 </div>
-                <span className="text-emerald-400 font-semibold text-sm flex-shrink-0">{formatCurrency(r.payoutAmount)}</span>
+              ))}
+              {debitEntries.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CreditCard className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
+                    <span className="text-white/70 text-sm truncate">
+                      {tx.source === "booking_credit" ? "Booking credit applied" : "Withdrawal"}
+                      {tx.status === "pending" && <span className="ml-1.5 text-[10px] text-amber-400">(pending)</span>}
+                    </span>
+                  </div>
+                  <span className="text-orange-400 font-semibold text-sm flex-shrink-0">−£{parseFloat(tx.amount).toFixed(2)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-white/[0.08] pt-2 mt-1">
+                <span className="text-white/50 text-sm font-medium">Available</span>
+                <span className="text-emerald-400 font-bold text-sm">£{totalAvailable.toFixed(2)}</span>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
 
           <div className="mb-5">
             <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">How would you like it?</p>
@@ -607,19 +634,27 @@ function ReferralCard({ referral, index }: { referral: PortalReferral; index: nu
 
 // ── Wallet Tab ─────────────────────────────────────────────────────────────
 
-type WalletEntry =
-  | { type: "credit"; id: string; referredName: string; amount: string; date: string | null }
-  | { type: "withdrawal"; id: string; referredName: string; amount: string; date: string | null; method: string; status: "pending" | "processed" | "rejected" };
+type WalletEntry = {
+  id: string;
+  type: "credit" | "debit";
+  source: "referral_commission" | "booking_credit" | "bank_transfer";
+  amount: string;
+  status: "pending" | "processed" | "rejected";
+  date: string | null;
+  referral_id: string | null;
+};
 
 function WalletTab({
   referrals,
   withdrawals,
+  walletTransactions,
   totalEarnings,
   trueBalance,
   onWithdraw,
 }: {
   referrals: PortalReferral[];
   withdrawals: PortalWithdrawal[];
+  walletTransactions: PortalWalletTransaction[];
   totalEarnings: string;
   trueBalance: number;
   onWithdraw: () => void;
@@ -632,9 +667,9 @@ function WalletTab({
   const pendingWithdrawalReferralIds = new Set(
     withdrawals.filter((w) => w.status === "pending").map((w) => w.referral_id)
   );
-  const withdrawableBalance = referrals
-    .filter((r) => r.referralStatus === "IN_WALLET" && !pendingWithdrawalReferralIds.has(r.id))
-    .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
+  // trueBalance already accounts for all debits (booking credits, bank transfers).
+  // Subtract any pending bank-transfer debit that hasn't been processed yet to avoid double-counting.
+  const withdrawableBalance = trueBalance;
 
   const pendingBalance = referrals
     .filter((r) => r.referralStatus === "PENDING")
@@ -646,41 +681,25 @@ function WalletTab({
 
   const totalPaid = parseFloat(totalEarnings || "0");
 
-  // Build chronological transaction history
-  const entries: WalletEntry[] = [];
+  // Build transaction history solely from wallet_transaction records
+  const referralMap = new Map(referrals.map((r) => [r.id, r.referredName]));
 
-  // Credits: every referral that entered IN_WALLET (status is IN_WALLET or PAID)
-  referrals
-    .filter((r) => r.referralStatus === "IN_WALLET" || r.referralStatus === "PAID")
-    .forEach((r) => {
-      entries.push({
-        type: "credit",
-        id: `credit-${r.id}`,
-        referredName: r.referredName,
-        amount: r.payoutAmount ?? "0",
-        date: r.payoutTriggerDate ?? r.createdAt,
-      });
+  const entries: WalletEntry[] = walletTransactions
+    .filter((tx) => tx.status !== "rejected")
+    .map((tx) => ({
+      id: tx.id,
+      type: tx.type,
+      source: tx.source,
+      amount: tx.amount,
+      status: tx.status,
+      date: tx.processed_at ?? tx.created_at,
+      referral_id: tx.referral_id,
+    }))
+    .sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      return db - da;
     });
-
-  // Withdrawals: all referral_withdrawal records
-  withdrawals.forEach((w) => {
-    entries.push({
-      type: "withdrawal",
-      id: `withdrawal-${w.id}`,
-      referredName: "Withdrawal",
-      amount: w.amount,
-      date: w.processed_at ?? w.requested_at,
-      method: w.method,
-      status: w.status,
-    });
-  });
-
-  // Sort newest first
-  entries.sort((a, b) => {
-    const da = a.date ? new Date(a.date).getTime() : 0;
-    const db = b.date ? new Date(b.date).getTime() : 0;
-    return db - da;
-  });
 
   const pendingWithdrawals = withdrawals.filter((w) => w.status === "pending");
 
@@ -697,7 +716,7 @@ function WalletTab({
           <p className="text-emerald-400 font-bold text-4xl mb-1">£{trueBalance.toFixed(2)}</p>
           <p className="text-white/30 text-xs">
             {trueBalance > 0
-              ? `${referrals.filter((r) => r.referralStatus === "IN_WALLET" && !pendingWithdrawalReferralIds.has(r.id)).length} referral${referrals.filter((r) => r.referralStatus === "IN_WALLET" && !pendingWithdrawalReferralIds.has(r.id)).length !== 1 ? "s" : ""} ready to withdraw`
+              ? `£${trueBalance.toFixed(2)} available to withdraw`
               : "No available balance"}
           </p>
 
@@ -774,34 +793,52 @@ function WalletTab({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.04 }}
               >
-                {(() => {
-                  const isPendingWithdrawal = entry.type === "withdrawal" && entry.status === "pending";
-                  const borderClass = entry.type === "credit"
+{(() => {
+                  const isPending = entry.status === "pending";
+                  const isCredit = entry.type === "credit";
+                  const isBookingCredit = entry.source === "booking_credit";
+                  const isBankTransfer = entry.source === "bank_transfer";
+
+                  const borderClass = isCredit
                     ? "border-emerald-500/10"
-                    : isPendingWithdrawal
+                    : isBookingCredit
+                    ? isPending ? "border-amber-500/20" : "border-orange-500/15"
+                    : isPending
                     ? "border-amber-500/20"
                     : "border-blue-500/10";
-                  const iconBg = entry.type === "credit"
+                  const iconBg = isCredit
                     ? "bg-emerald-500/15 text-emerald-400"
-                    : isPendingWithdrawal
+                    : isBookingCredit
+                    ? isPending ? "bg-amber-500/15 text-amber-400" : "bg-orange-500/15 text-orange-400"
+                    : isPending
                     ? "bg-amber-500/15 text-amber-400"
                     : "bg-blue-500/15 text-blue-400";
-                  const amountColor = entry.type === "credit"
+                  const amountColor = isCredit
                     ? "text-emerald-400"
-                    : isPendingWithdrawal
+                    : isBookingCredit
+                    ? isPending ? "text-amber-400" : "text-orange-400"
+                    : isPending
                     ? "text-amber-400"
                     : "text-blue-400";
-                  const label = entry.type === "credit"
+                  const label = isCredit
                     ? "Commission credited"
-                    : isPendingWithdrawal
+                    : isBookingCredit
+                    ? "Booking credit applied"
+                    : isPending
                     ? "Withdrawal requested"
                     : "Withdrawal processed";
+                  const subtitle = isCredit && entry.referral_id
+                    ? referralMap.get(entry.referral_id) ?? ""
+                    : isBookingCredit
+                    ? "Applied to booking"
+                    : "Bank transfer";
+
                   return (
                     <GlassCard className={`px-4 py-3 border ${borderClass}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                            {entry.type === "credit"
+                            {isCredit
                               ? <ArrowDownToLine className="w-4 h-4" />
                               : <ArrowUpFromLine className="w-4 h-4" />
                             }
@@ -809,23 +846,20 @@ function WalletTab({
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <p className="text-white/80 text-sm font-medium truncate">{label}</p>
-                              {isPendingWithdrawal && (
+                              {isPending && (
                                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 flex-shrink-0">
                                   Pending
                                 </span>
                               )}
                             </div>
-                            <p className="text-white/30 text-xs truncate">
-                              {entry.referredName}
-                              {entry.type === "withdrawal" && (
-                                <span className="ml-1">· {entry.method === "bank_transfer" ? "Bank transfer" : "Booking credit"}</span>
-                              )}
-                            </p>
+                            {subtitle && (
+                              <p className="text-white/30 text-xs truncate">{subtitle}</p>
+                            )}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0 ml-3">
                           <p className={`font-semibold text-sm ${amountColor}`}>
-                            {entry.type === "credit" ? "+" : "−"}£{parseFloat(entry.amount).toFixed(2)}
+                            {isCredit ? "+" : "−"}£{parseFloat(entry.amount).toFixed(2)}
                           </p>
                           <p className="text-white/25 text-[10px]">{formatDate(entry.date)}</p>
                         </div>
@@ -879,6 +913,7 @@ export default function PortalReferralsPage() {
   const { data: vip, isLoading: vipLoading } = usePortalVipStatus();
   const { data: referrals = [], isLoading: referralsLoading } = usePortalReferrals();
   const { data: withdrawals = [], isLoading: withdrawalsLoading } = usePortalWithdrawals();
+  const { data: walletTransactions = [] } = usePortalWalletTransactions();
   const { data: walletBalanceStr } = usePortalWalletBalance();
   const trueBalance = parseFloat(walletBalanceStr ?? "0") || 0;
 
@@ -1028,6 +1063,7 @@ export default function PortalReferralsPage() {
                 <WalletTab
                   referrals={referrals}
                   withdrawals={withdrawals}
+                  walletTransactions={walletTransactions}
                   totalEarnings={vipData.totalEarnings}
                   trueBalance={trueBalance}
                   onWithdraw={() => setShowWithdraw(true)}
@@ -1041,7 +1077,7 @@ export default function PortalReferralsPage() {
       {/* Withdraw Modal */}
       <AnimatePresence>
         {showWithdraw && (
-          <WithdrawModal referrals={referrals} withdrawals={withdrawals} onClose={() => setShowWithdraw(false)} />
+          <WithdrawModal referrals={referrals} withdrawals={withdrawals} walletTransactions={walletTransactions} trueBalance={trueBalance} onClose={() => setShowWithdraw(false)} />
         )}
       </AnimatePresence>
     </PortalLayout>

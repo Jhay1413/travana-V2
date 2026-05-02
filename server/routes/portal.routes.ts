@@ -880,6 +880,17 @@ portalRouter.get("/wallet/balance", portalAuth, async (req: Request, res: Respon
   }
 });
 
+// Returns client's wallet transaction history
+portalRouter.get("/wallet/transactions", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const txns = await walletService.getTransactions(clientId);
+    res.json(txns);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to load wallet transactions" });
+  }
+});
+
 // Client requests payout for all eligible (PENDING + isDue) referrals
 // Creates referral_payout records (status: requested) for admin to approve
 portalRouter.post("/wallet/request-payout", portalAuth, async (req: Request, res: Response) => {

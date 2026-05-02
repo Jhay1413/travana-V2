@@ -639,7 +639,7 @@ function WalletCreditDebitRow({
               </Button>
             </>
           )}
-          {tx.invoice_url && tx.status === "processed" && (
+          {tx.status === "processed" && (
             <Button
               size="sm"
               variant="outline"

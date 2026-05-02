@@ -169,6 +169,7 @@ export const portalKeys = {
   payoutRequests: ["portal", "payoutRequests"] as const,
   withdrawals: ["portal", "withdrawals"] as const,
   walletBalance: ["portal", "walletBalance"] as const,
+  walletTransactions: ["portal", "walletTransactions"] as const,
 };
 
 export function usePortalUser() {
@@ -399,6 +400,38 @@ export function usePortalWalletBalance() {
     },
     retry: false,
     enabled: !!getPortalToken(),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000,
+    staleTime: 0,
+  });
+}
+
+export interface PortalWalletTransaction {
+  id: string;
+  type: "credit" | "debit";
+  amount: string;
+  source: "referral_commission" | "booking_credit" | "bank_transfer";
+  referral_id: string | null;
+  booking_id: string | null;
+  status: "pending" | "processed" | "rejected";
+  created_at: string;
+  processed_at: string | null;
+}
+
+export function usePortalWalletTransactions() {
+  const clientId = localStorage.getItem("portal_client_id");
+  return useQuery<PortalWalletTransaction[]>({
+    queryKey: [...portalKeys.walletTransactions, clientId],
+    queryFn: async () => {
+      if (!clientId) return [];
+      const { data } = await import("../api/client/axios-client").then((m) =>
+        m.default.get<PortalWalletTransaction[]>(`/api/wallet/client/${clientId}/transactions`)
+      );
+      return data;
+    },
+    retry: false,
+    enabled: !!getPortalToken() && !!clientId,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     refetchInterval: 30000,

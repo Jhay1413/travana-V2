@@ -380,13 +380,12 @@ export function BookingRHFForm({
     const price = Number(form.getValues("price")) || 0;
     const currentDiscount = Number(form.getValues("discount")) || 0;
     const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-    const currentWalletCredit = Number(form.getValues("walletCreditAmount")) || 0;
     const adults = Number(passengersAdults) || 0;
     const children = Number(passengersChildren) || 0;
     const total = adults + children;
-    const netPrice = price - currentDiscount + currentServiceCharge - currentWalletCredit;
+    const netPrice = price - currentDiscount + currentServiceCharge;
     setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge, walletCreditAmount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   useEffect(() => {
@@ -1738,12 +1737,11 @@ export function BookingRHFForm({
                               }
                             }
                             
-                            // Price per person = (salesPrice - discount + serviceCharge - walletCredit) / (adults + children)
+                            // Price per person = (salesPrice - discount + serviceCharge) / (adults + children)
                             const adults = Number(form.getValues("passengersAdults")) || 0;
                             const children = Number(form.getValues("passengersChildren")) || 0;
-                            const currentWalletCredit = Number(form.getValues("walletCreditAmount")) || 0;
                             const total = adults + children;
-                            const netPrice = currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit;
+                            const netPrice = currentPrice - currentDiscount + currentServiceCharge;
                             setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
                           }
                         }}

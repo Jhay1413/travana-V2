@@ -126,9 +126,48 @@ export const walletService = {
 
   async getInvoicePresignedUrl(id: string): Promise<string | null> {
     const tx = await walletTransactionRepository.findById(id);
-    if (!tx?.invoice_url) return null;
+    if (!tx) return null;
+
+    let invoiceKey = tx.invoice_url;
+
+    // If no invoice stored but the transaction is processed, regenerate it now
+    if (!invoiceKey && tx.status === "processed" && tx.type === "debit") {
+      try {
+        const details = await walletTransactionRepository.findByIdWithDetails(id);
+        if (details) {
+          const clientName =
+            [details.clientFirstName, details.clientSurname].filter(Boolean).join(" ").trim() ||
+            "Client";
+          const pdfBuffer = await generateWithdrawalInvoiceBuffer({
+            withdrawalId: id,
+            requestedAt: details.created_at,
+            processedAt: details.processed_at ?? null,
+            clientName,
+            clientEmail: details.clientEmail ?? null,
+            clientPhone: details.clientPhone ?? null,
+            amount: details.amount,
+            method: details.source,
+            accountName: null,
+            accountNumber: null,
+            sortCode: null,
+            transferReference: details.transfer_reference ?? null,
+            bookingHaysRef: details.bookingHaysRef ?? null,
+            bookingSupplierRef: details.bookingSupplierRef ?? null,
+            travelDate: details.bookingTravelDate ?? null,
+            referredName: null,
+            referredEmail: null,
+          });
+          invoiceKey = await uploadWalletDebitInvoice(id, pdfBuffer);
+          await walletTransactionRepository.update(id, { invoice_url: invoiceKey });
+        }
+      } catch (err) {
+        console.error("[invoice] Failed to regenerate wallet debit invoice:", err);
+      }
+    }
+
+    if (!invoiceKey) return null;
     const { getInvoicePresignedUrl } = await import("./invoicePdf.service");
-    return getInvoicePresignedUrl(tx.invoice_url);
+    return getInvoicePresignedUrl(invoiceKey);
   },
 
   // Admin rejects a debit — balance is automatically restored (rejected debits excluded from balance).
