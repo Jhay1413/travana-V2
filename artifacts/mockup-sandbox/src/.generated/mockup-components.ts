@@ -5,6 +5,6 @@ export const modules: ModuleMap = {
   "./components/mockups/tickets-layouts/DenseTable.tsx": () => import("../components/mockups/tickets-layouts/DenseTable.tsx"),
   "./components/mockups/tickets-layouts/KanbanBoard.tsx": () => import("../components/mockups/tickets-layouts/KanbanBoard.tsx"),
   "./components/mockups/tickets-layouts/SplitPanel.tsx": () => import("../components/mockups/tickets-layouts/SplitPanel.tsx"),
-  "./components/mockups/pipeline-v2/PipedriveStyle.tsx": () => import("../components/mockups/pipeline-v2/PipedriveStyle.tsx"),
-  "./components/mockups/travana-hr/TravanaHR.tsx": () => import("../components/mockups/travana-hr/TravanaHR.tsx")
+  "./components/mockups/travana-hr/TravanaHR.tsx": () => import("../components/mockups/travana-hr/TravanaHR.tsx"),
+  "./components/mockups/pipeline-v2/PipedriveStyle.tsx": () => import("../components/mockups/pipeline-v2/PipedriveStyle.tsx")
 };
