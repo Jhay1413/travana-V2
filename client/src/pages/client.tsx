@@ -7,7 +7,6 @@ import { clientFileApi } from "@/api";
 import {
   BadgeCheck,
   Calendar,
-  Check,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -18,7 +17,6 @@ import {
   PinOff,
   Pencil,
   Phone,
-  Shield,
   Sparkles,
   Ticket,
   UserRound,
@@ -206,92 +204,6 @@ function ReferrerSelector({
         </div>
       )}
     </div>
-  );
-}
-
-function PortalPinHeaderControl({ clientId }: { clientId: string }) {
-  const { toast } = useToast();
-  const [hasPin, setHasPin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!clientId) return;
-    fetch(`/api/portal/has-pin/${clientId}`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => {
-        setHasPin(Boolean(d?.hasPin));
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [clientId]);
-
-  async function handleSetPin() {
-    const pin = window.prompt("Enter a 4-digit portal PIN:");
-    if (!pin) return;
-    if (!/^\d{4}$/.test(pin)) {
-      toast({ title: "PIN must be 4 digits", variant: "destructive" });
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch("/api/portal/set-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ clientId, pin }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      setHasPin(true);
-      toast({ title: "Portal PIN set" });
-    } catch {
-      toast({ title: "Failed to set PIN", variant: "destructive" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRemovePin() {
-    const confirmed = window.confirm("Remove portal PIN for this client?");
-    if (!confirmed) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/portal/remove-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ clientId }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      setHasPin(false);
-      toast({ title: "Portal PIN removed" });
-    } catch {
-      toast({ title: "Failed to remove PIN", variant: "destructive" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-3 py-1 text-xs font-semibold text-black/45">
-        PIN...
-      </span>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={hasPin ? handleRemovePin : handleSetPin}
-      disabled={busy}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${hasPin ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15" : "border-black/10 bg-black/[0.03] text-black/60 hover:bg-black/[0.06]"}`}
-      data-testid="button-portal-pin-header"
-      title={hasPin ? "Click to remove portal PIN" : "Set portal PIN"}
-    >
-      {hasPin ? <Check className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
-      {busy ? "Working..." : hasPin ? "PIN Active" : "Set PIN"}
-    </button>
   );
 }
 
@@ -697,6 +609,7 @@ export default function ClientPage() {
       active={active}
       title={client.name}
       subtitle={clientData?.phoneNumber || ""}
+      subtitleIcon={clientData?.phoneNumber ? <Phone className="h-3 w-3" /> : null}
       query={q}
       onQuery={setQ}
       theme="light"
@@ -765,7 +678,6 @@ export default function ClientPage() {
             {isClientPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
           </button>
 
-          <PortalPinHeaderControl clientId={clientId} />
         </div>
       }
     >

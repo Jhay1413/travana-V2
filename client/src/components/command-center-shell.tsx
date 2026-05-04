@@ -483,6 +483,7 @@ export function CommandCenterShell({
   active = "overview",
   title,
   subtitle,
+  subtitleIcon,
   query,
   onQuery,
   role,
@@ -500,6 +501,7 @@ export function CommandCenterShell({
   active?: string;
   title: string;
   subtitle?: string;
+  subtitleIcon?: React.ReactNode;
   query?: string;
   onQuery?: (v: string) => void;
   role: Role;
@@ -1643,8 +1645,9 @@ export function CommandCenterShell({
                         {title}
                       </h1>
                       {subtitle && (
-                        <p className="mt-0.5 text-xs text-black/55 dark:text-white/55" data-testid="text-page-subtitle">
-                          {subtitle}
+                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-black/55 dark:text-white/55" data-testid="text-page-subtitle">
+                          {subtitleIcon}
+                          <span>{subtitle}</span>
                         </p>
                       )}
                     </div>
