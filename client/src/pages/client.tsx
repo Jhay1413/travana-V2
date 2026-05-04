@@ -18,8 +18,6 @@ import {
   Sparkles,
   Ticket,
   UserRound,
-  Pin,
-  PinOff,
   Search,
   X,
   UserCheck,
@@ -32,14 +30,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useNeonClient, useNeonClients, useTransactions, useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
+import { useNeonClient, useNeonClients, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useTasks } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction, useCreateTicket, useCreateTask } from "@/hooks/mutations";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
-import type { Favorite } from "@/api/endpoints/favorite.api";
 import type { Transaction, EnquiryTable } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
@@ -65,11 +62,13 @@ function ReferrerSelector({
   excludeClientId,
   onSelect,
   onClear,
+  className,
 }: {
   currentReferredByClientId: string | null | undefined;
   excludeClientId: string;
   onSelect: (clientId: string) => void;
   onClear: () => void;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -113,7 +112,7 @@ function ReferrerSelector({
 
   if (currentReferredByClientId && currentReferrer) {
     return (
-      <div className="mt-3 flex items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/5 px-3 py-2">
+      <div className={`flex w-full items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/5 px-3 py-2 ${className ?? ""}`}>
         <UserCheck className="h-3.5 w-3.5 shrink-0 text-green-600" />
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold text-black/40">Referred by</p>
@@ -137,12 +136,12 @@ function ReferrerSelector({
   }
 
   return (
-    <div ref={wrapperRef} className="relative mt-3">
+    <div ref={wrapperRef} className={`relative w-full ${className ?? ""}`}>
       {!open ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-3 py-1.5 text-xs font-medium text-black/40 transition hover:border-black/25 hover:bg-black/[0.04] hover:text-black/60"
+          className="flex w-full items-center gap-1.5 rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-3 py-2 text-xs font-medium text-black/40 transition hover:border-black/25 hover:bg-black/[0.04] hover:text-black/60"
         >
           <Users className="h-3.5 w-3.5" />
           Set referrer
@@ -247,6 +246,7 @@ export default function ClientPage() {
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
+  const [isContactDetailsOpen, setIsContactDetailsOpen] = useState(true);
   const [uploadFile, setUploadFile] = useState<{
     file: File | null;
     title: string;
@@ -291,6 +291,7 @@ export default function ClientPage() {
   const { data: transactionsData, isLoading: isLoadingTransactions } = useTransactions({ clientId });
 
   const { data: ticketsData, isLoading: isLoadingTickets } = useTicketsByClient(clientId);
+  const { data: tasksData } = useTasks("client", clientId);
 
   const { data: usersData } = useUsers();
 
@@ -298,10 +299,6 @@ export default function ClientPage() {
 
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
-  const isClientPinned = useMemo(() => {
-    if (!userFavorites || !clientId) return false;
-    return userFavorites.some((f: Favorite) => f.itemType === "client" && f.itemId === clientId);
-  }, [userFavorites, clientId]);
 
   const updateClientMutationHook = useUpdateClient();
   const updateClientMutation = {
@@ -528,6 +525,7 @@ export default function ClientPage() {
   }, [convertingFromEnquiryTxnId, transactions]);
 
   const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
+  const tasks = useMemo(() => tasksData ?? [], [tasksData]);
   const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
 
   const getUserName = (userId: string) => {
@@ -654,95 +652,22 @@ export default function ClientPage() {
         <div className="relative mt-6 grid gap-3 lg:grid-cols-12" data-testid="layout-client-page">
           <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 lg:col-span-4">
             <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => navigate("/clients")}
-                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-                data-testid="button-back-clients"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Back
-              </button>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    const clientName = client?.name || "Client";
-                    const subtitle = client?.phone || client?.email || "";
-                    toggleFavoriteMutation.mutate(
-                      { itemType: "client", itemId: clientId, label: clientName, subtitle },
-                      { onSuccess: (data: { favorited?: boolean; favorite?: Favorite }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
-                    );
-                  }}
-                  className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isClientPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
-                  data-testid="button-pin-client"
-                >
-                  {isClientPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-                  {isClientPinned ? "Unpin" : "Pin"}
-                </button>
-                <button
-                  type="button"
-                  onClick={openEditDialog}
+                  onClick={() => navigate("/clients")}
                   className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-                  data-testid="button-edit-client"
+                  data-testid="button-back-clients"
                 >
-                  <Pencil className="h-4 w-4" />
-                  Edit
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
                 </button>
               </div>
             </div>
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">
-              <div className="flex items-center gap-3" data-testid="text-client-name">
-                <div
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03]"
-                  aria-hidden
-                  data-testid="avatar-client"
-                >
-                  <UserRound className="h-5 w-5 text-black/70" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-lg font-semibold">{client ? client.name : "Client"}</span>
-                  </div>
-                  {client ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Select
-                        value={clientData?.badge || "New Client"}
-                        onValueChange={(value) => {
-                          if (clientId) {
-                            updateNeonClientMutation.mutate({ id: clientId, data: { badge: value } });
-                          }
-                        }}
-                      >
-                        <SelectTrigger
-                          className="h-auto w-auto rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 px-2.5 py-0.5 text-xs font-semibold text-[#3b82f6] hover:bg-[#3b82f6]/20"
-                          data-testid="select-client-type"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="z-[400]">
-                          <SelectItem value="New Client">New Client</SelectItem>
-                          <SelectItem value="Repeat Client">Repeat Client</SelectItem>
-                          <SelectItem value="VIP Client">VIP Client</SelectItem>
-                          <SelectItem value="Family Member">Family Member</SelectItem>
-                          <SelectItem value="Time Waster">Time Waster</SelectItem>
-                          <SelectItem value="Banned">Banned</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Badge
-                        variant="outline"
-                        className={`rounded-full ${tierPill(client.tier)}`}
-                        data-testid="pill-client-tier"
-                      >
-                        {client.tier}
-                      </Badge>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
               <ReferrerSelector
+                className="mb-3"
                 currentReferredByClientId={clientData?.referredByClientId}
                 excludeClientId={clientId}
                 onSelect={(referredByClientId) => {
@@ -759,7 +684,7 @@ export default function ClientPage() {
                 }}
               />
 
-              <div className="mt-3">
+              <div>
                 <PortalPinSection clientId={clientId} />
               </div>
 
@@ -767,17 +692,29 @@ export default function ClientPage() {
 
             <div className="mt-3 rounded-3xl border border-black/10 bg-white/60 p-3" data-testid="section-contact-details">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-semibold text-black/80">Contact Details</div>
                 <button
                   type="button"
-                  onClick={openEditDialog}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] font-semibold text-black/60 hover:bg-black/[0.05] transition"
-                  data-testid="button-edit-contact"
+                  onClick={() => setIsContactDetailsOpen((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-2 py-1 text-xs font-semibold text-black/75 transition hover:bg-black/[0.05]"
+                  data-testid="toggle-contact-details"
                 >
-                  <Pencil className="h-3 w-3" />
-                  Edit
+                  <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isContactDetailsOpen ? "rotate-90" : ""}`} />
+                  Contact Details
                 </button>
+                {isContactDetailsOpen && (
+                  <button
+                    type="button"
+                    onClick={openEditDialog}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] font-semibold text-black/60 hover:bg-black/[0.05] transition"
+                    data-testid="button-edit-contact"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </button>
+                )}
               </div>
+              {isContactDetailsOpen && (
+              <>
               <div className="grid gap-2" data-testid="list-contact-details">
                 {clientData?.phoneNumber && (
                   <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
@@ -874,6 +811,8 @@ export default function ClientPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </div>
           </Card>
 
@@ -922,6 +861,7 @@ export default function ClientPage() {
                     quotes={quotes}
                     bookings={bookings}
                     tickets={tickets}
+                    tasks={tasks}
                     clientId={clientId}
                     navigate={navigate}
                   />

@@ -58,6 +58,21 @@ export interface VipTransactionRow {
   isDue: boolean;
 }
 
+export interface VipWalletLedgerEntry {
+  id: string;
+  type: "credit" | "debit";
+  source: "referral_commission" | "booking_credit" | "bank_transfer";
+  amount: string;
+  status: "pending" | "processed" | "rejected";
+  referral_id: string | null;
+  booking_id: string | null;
+  referral_referred_name: string | null;
+  booking_hays_ref: string | null;
+  notes: string | null;
+  created_at: string | null;
+  processed_at: string | null;
+}
+
 export interface VipOverview {
   vipTier: "standard" | "gold" | "elite" | null;
   vipEnrolledAt: string | null;
@@ -76,9 +91,11 @@ export interface VipOverview {
     walletPayout: number;
     paidPayout: number;
     overallPayout: number;
+    availableBalance: number;
   };
   referredClients: VipReferredClient[];
   transactionHistory: VipTransactionRow[];
+  walletLedger: VipWalletLedgerEntry[];
 }
 
 export interface CreateReferralData {

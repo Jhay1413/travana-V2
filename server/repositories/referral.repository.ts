@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { referral, clientTable, booking } from "@shared/schema";
+import { referral, clientTable, booking, wallet_transaction } from "@shared/schema";
 import type { InsertReferral, Referral } from "@shared/schema";
 import { eq, and, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -238,6 +238,44 @@ export const referralRepository = {
       .from(referral)
       .where(eq(referral.referrerClientId, referrerClientId));
 
+    // Total non-rejected debits from the wallet ledger
+    const [walletRow] = await db
+      .select({
+        debitTotal: sql<string>`
+          COALESCE(SUM(
+            CASE WHEN ${wallet_transaction.type} = 'debit' AND ${wallet_transaction.status} != 'rejected'
+            THEN ${wallet_transaction.amount}::numeric ELSE 0 END
+          ), 0)
+        `,
+      })
+      .from(wallet_transaction)
+      .where(eq(wallet_transaction.client_id, referrerClientId));
+
+    const walletReferral = alias(referral, "wallet_referral");
+    const walletBooking = alias(booking, "wallet_booking");
+
+    // Wallet ledger entries (all transactions for this client)
+    const walletLedger = await db
+      .select({
+        id: wallet_transaction.id,
+        type: wallet_transaction.type,
+        source: wallet_transaction.source,
+        amount: wallet_transaction.amount,
+        status: wallet_transaction.status,
+        referral_id: wallet_transaction.referral_id,
+        booking_id: wallet_transaction.booking_id,
+        referral_referred_name: walletReferral.referredName,
+        booking_hays_ref: walletBooking.hays_ref,
+        notes: wallet_transaction.notes,
+        created_at: wallet_transaction.created_at,
+        processed_at: wallet_transaction.processed_at,
+      })
+      .from(wallet_transaction)
+      .leftJoin(walletReferral, eq(wallet_transaction.referral_id, walletReferral.id))
+      .leftJoin(walletBooking, eq(wallet_transaction.booking_id, walletBooking.id))
+      .where(eq(wallet_transaction.client_id, referrerClientId))
+      .orderBy(wallet_transaction.created_at);
+
     // Transaction history: referral rows joined with booking via transactionId
     const bookingAlias = alias(booking, "ref_booking");
     const txRows = await db
@@ -294,9 +332,12 @@ export const referralRepository = {
         walletPayout: parseFloat(statsRow?.walletPayout ?? "0"),
         paidPayout: parseFloat(statsRow?.paidPayout ?? "0"),
         overallPayout: parseFloat(statsRow?.overallPayout ?? "0"),
+        // Available = IN_WALLET referral payouts minus any non-rejected debits
+        availableBalance: Math.max(0, parseFloat(statsRow?.walletPayout ?? "0") - parseFloat(walletRow?.debitTotal ?? "0")),
       },
       referredClients,
       transactionHistory,
+      walletLedger,
     };
   },
 };

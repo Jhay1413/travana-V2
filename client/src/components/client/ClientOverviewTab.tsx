@@ -17,9 +17,19 @@ import {
 } from "lucide-react";
 import type { NeonClient } from "@/types/neon-client";
 import type { EnquiryTable } from "@/types/quote";
-import { currency, type QuoteWithJoins, type BookingWithJoins, type TicketItem, formatUKDate } from "./client-types";
+import {
+  currency,
+  type QuoteWithJoins,
+  type BookingWithJoins,
+  type TicketItem,
+  formatUKDate,
+  formatTicketDate,
+  ticketStatusPill,
+  ticketTypePill,
+} from "./client-types";
 import type { Client } from "./client-types";
 import { useReferralStatsByClient } from "@/hooks/queries/use-referral-queries";
+import type { TaskNew } from "@shared/schema";
 
 export function ReferralStatsSection({ clientId }: { clientId: string }) {
   const { data: stats, isLoading } = useReferralStatsByClient(clientId);
@@ -238,6 +248,7 @@ interface ClientOverviewTabProps {
   quotes: QuoteWithJoins[];
   bookings: BookingWithJoins[];
   tickets: TicketItem[];
+  tasks: TaskNew[];
   clientId: string;
   navigate: (to: string) => void;
 }
@@ -249,6 +260,7 @@ export function ClientOverviewTab({
   quotes,
   bookings,
   tickets,
+  tasks,
   clientId,
   navigate,
 }: ClientOverviewTabProps) {
@@ -283,25 +295,43 @@ export function ClientOverviewTab({
           <div className="text-xs font-semibold text-black/80">Recent Activity</div>
         </div>
         {(() => {
-          const activities: Array<{ id: string; type: string; title: string; date: string; status?: string; link: string }> = [];
+          const activities: Array<{ id: string; type: "Enquiry" | "Quote" | "Booking"; title: string; date: string; status?: string; link: string }> = [];
           enquiries.slice(0, 3).forEach((e: EnquiryTable) => {
-            activities.push({ id: `e-${e.id}`, type: "Enquiry", title: e.title || "Enquiry", date: e.date_created || "", status: e.status ?? undefined, link: `/clients/${clientId}/enquiries/${e.id}` });
+            activities.push({
+              id: `e-${e.id}`,
+              type: "Enquiry",
+              title: e.title || "Enquiry",
+              date: e.date_created || "",
+              status: e.status ?? undefined,
+              link: `/clients/${clientId}/enquiries/${e.id}`,
+            });
           });
           quotes.slice(0, 3).forEach((q: QuoteWithJoins) => {
-            activities.push({ id: `q-${q.id}`, type: "Quote", title: q.title || q.holiday_type_name || "Trip", date: q.date_created || "", status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "), link: `/clients/${clientId}/quotes/${q.id}` });
+            activities.push({
+              id: `q-${q.id}`,
+              type: "Quote",
+              title: q.title || q.holiday_type_name || "Trip",
+              date: q.date_created || "",
+              status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "),
+              link: `/clients/${clientId}/quotes/${q.id}`,
+            });
           });
           bookings.slice(0, 3).forEach((b: BookingWithJoins) => {
-            activities.push({ id: `b-${b.id}`, type: "Booking", title: b.title || b.holiday_type_name || "Booking", date: b.date_created || "", status: b.booking_status || "BOOKED", link: `/clients/${clientId}/bookings/${b.id}` });
-          });
-          tickets.slice(0, 2).forEach((t: TicketItem) => {
-            activities.push({ id: `t-${t.id}`, type: "Ticket", title: t.subject, date: t.createdAt || "", status: t.status, link: "#" });
+            activities.push({
+              id: `b-${b.id}`,
+              type: "Booking",
+              title: b.title || b.holiday_type_name || "Booking",
+              date: b.date_created || "",
+              status: b.booking_status || "BOOKED",
+              link: `/clients/${clientId}/bookings/${b.id}`,
+            });
           });
           activities.sort((a, b) => {
             if (!a.date) return 1;
             if (!b.date) return -1;
             return new Date(b.date).getTime() - new Date(a.date).getTime();
           });
-          const recent = activities.slice(0, 5);
+          const recent = activities.slice(0, 6);
           if (recent.length === 0) {
             return (
               <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-4 text-center text-xs text-black/45" data-testid="empty-activity">
@@ -309,33 +339,48 @@ export function ClientOverviewTab({
               </div>
             );
           }
+
+          const typeStyle = (type: "Enquiry" | "Quote" | "Booking") => {
+            if (type === "Booking") return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
+            if (type === "Quote") return "border-sky-500/25 bg-sky-500/10 text-sky-700";
+            return "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-700";
+          };
+
           return (
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               {recent.map((a) => (
                 <button
                   key={a.id}
                   type="button"
-                  className="group flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-black/[0.03]"
+                  className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/65 p-3 text-left transition hover:bg-black/[0.03]"
                   data-testid={`activity-${a.id}`}
                   onClick={() => navigate(a.link)}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${a.type === "Booking" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : a.type === "Quote" ? "border-sky-500/25 bg-sky-500/10 text-sky-700" : a.type === "Enquiry" ? "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-700" : "border-black/10 bg-black/[0.03] text-black/70"}`}>
-                      {a.type}
-                    </span>
-                    <span className="truncate text-xs font-medium text-black/75">{a.title}</span>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
+                      <Plane className="h-4 w-4 text-black/45" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-black/85">{a.title}</div>
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${typeStyle(a.type)}`}>
+                          {a.type}
+                        </span>
+                        {a.status && (
+                          <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-black/55">
+                            {a.status}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {a.status && (
-                      <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-black/55">
-                        {a.status}
-                      </span>
-                    )}
                     {a.date && (
-                      <span className="text-[10px] text-black/40">
-                        {new Date(a.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      <span className="text-[11px] text-black/45">
+                        {formatUKDate(a.date)}
                       </span>
                     )}
+                    <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
                   </div>
                 </button>
               ))}
@@ -343,6 +388,70 @@ export function ClientOverviewTab({
           );
         })()}
       </div>
+
+      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-client-work-items">
+        <div className="mb-3 flex items-center gap-2">
+          <BadgeCheck className="h-4 w-4 text-black/50" />
+          <div className="text-xs font-semibold text-black/80">Overview</div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-black/45">All Tasks ({tasks.length})</div>
+            {tasks.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-black/10 bg-white/40 p-3 text-center text-xs text-black/45">
+                No tasks for this client
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {[...tasks]
+                  .sort((a, b) => {
+                    const da = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+                    const db = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+                    return da - db;
+                  })
+                  .map((task) => (
+                    <div key={task.id} className="rounded-xl border border-black/10 bg-white/65 p-2.5" data-testid={`overview-task-${task.id}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-xs font-semibold text-black/80">{task.title || "Untitled task"}</div>
+                        <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
+                          {task.completed ? "Done" : "Open"}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-black/45">Due: {task.dueDate ? formatUKDate(new Date(task.dueDate).toISOString()) : "No due date"}</div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-black/45">All Tickets ({tickets.length})</div>
+            {tickets.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-black/10 bg-white/40 p-3 text-center text-xs text-black/45">
+                No tickets for this client
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {tickets.map((ticket) => (
+                  <div key={ticket.id} className="rounded-xl border border-black/10 bg-white/65 p-2.5" data-testid={`overview-ticket-${ticket.id}`}>
+                    <div className="truncate text-xs font-semibold text-black/80">{ticket.subject}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${ticketStatusPill(ticket.status)}`}>
+                        {ticket.status}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${ticketTypePill(ticket.type)}`}>
+                        {ticket.type}
+                      </span>
+                      <span className="text-[10px] text-black/45">{formatTicketDate(ticket.createdAt)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-2 md:grid-cols-2">
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-preferences">
           <div className="mb-3 flex items-center gap-2">

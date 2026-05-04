@@ -196,7 +196,7 @@ function BalanceCards({
     .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
 
   const pendingBalance = referrals
-    .filter((r) => r.referralStatus === "PENDING")
+    .filter((r) => r.referralStatus === "PENDING" && !r.isDue)
     .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
 
   const cards = [
@@ -370,39 +370,6 @@ function WithdrawModal({
             <p className="text-emerald-400 font-bold text-3xl">£{totalAvailable.toFixed(2)}</p>
             <p className="text-white/40 text-xs mt-1">Available to withdraw</p>
           </div>
-
-          {(creditEntries.length > 0 || debitEntries.length > 0) && (
-            <div className="space-y-2 mb-5">
-              <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">Breakdown</p>
-              {creditEntries.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <User className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
-                    <span className="text-white/70 text-sm truncate">
-                      {tx.referral_id ? (referralMap.get(tx.referral_id) ?? "Commission") : "Commission"}
-                    </span>
-                  </div>
-                  <span className="text-emerald-400 font-semibold text-sm flex-shrink-0">+£{parseFloat(tx.amount).toFixed(2)}</span>
-                </div>
-              ))}
-              {debitEntries.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CreditCard className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
-                    <span className="text-white/70 text-sm truncate">
-                      {tx.source === "booking_credit" ? "Booking credit applied" : "Withdrawal"}
-                      {tx.status === "pending" && <span className="ml-1.5 text-[10px] text-amber-400">(pending)</span>}
-                    </span>
-                  </div>
-                  <span className="text-orange-400 font-semibold text-sm flex-shrink-0">−£{parseFloat(tx.amount).toFixed(2)}</span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between border-t border-white/[0.08] pt-2 mt-1">
-                <span className="text-white/50 text-sm font-medium">Available</span>
-                <span className="text-emerald-400 font-bold text-sm">£{totalAvailable.toFixed(2)}</span>
-              </div>
-            </div>
-          )}
 
           <div className="mb-5">
             <p className="text-white/40 text-xs font-medium uppercase tracking-wide mb-2">How would you like it?</p>
@@ -683,7 +650,7 @@ function WalletTab({
   const withdrawableBalance = trueBalance;
 
   const pendingBalance = referrals
-    .filter((r) => r.referralStatus === "PENDING")
+    .filter((r) => r.referralStatus === "PENDING" && !r.isDue)
     .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0);
 
   const pendingWithdrawalBalance = withdrawals
