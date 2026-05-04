@@ -536,7 +536,7 @@ export default function PortalHomePage() {
   const { data: vipStatus } = usePortalVipStatus();
   const { data: referrals = [] } = usePortalReferrals();
   const pendingCommission = referrals
-    .filter((r) => r.referralStatus === "PENDING" || r.referralStatus === "IN_WALLET")
+    .filter((r) => r.referralStatus === "PENDING" && !r.isDue)
     .reduce((sum, r) => sum + parseFloat(r.payoutAmount || "0"), 0);
 
   const statsLoading = userLoading || quotesLoading || bookingsLoading || messagesLoading;
