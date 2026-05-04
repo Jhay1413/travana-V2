@@ -1,0 +1,108 @@
+Create a clean, modern HR section UI for “Travana”, a travel agency community platform with an existing CRM.
+
+This is HR only. Do NOT include sales performance, revenue, enquiries, bookings, targets, leaderboards, or CRM-related metrics.
+
+Build a simple, functional, cool UI using a modern SaaS style.
+
+Main HR dashboard should include:
+1. Employee overview cards
+   - Total employees
+   - New starters
+   - On leave today
+   - Pending HR tasks
+
+2. Employee directory
+   - Search bar
+   - Filters: role, status, location
+   - Employee cards showing:
+     - Name
+     - Role
+     - Status: Active, On Leave, Probation, Archived
+     - Start date
+     - Contact button
+     - View profile button
+
+3. Employee profile page
+   Include tabs:
+   - Overview
+   - Documents
+   - Holiday & Absence
+   - Training
+   - HR Notes
+   - Timeline
+
+Profile overview should include:
+   - Basic details
+   - Employment type
+   - Start date
+   - Probation end date
+   - Emergency contact
+   - Manager
+   - Location
+
+4. Holiday & absence section
+   - Request leave button
+   - Holiday allowance used/remaining
+   - Sick day log
+   - Calendar-style absence view
+   - Pending approvals list
+
+5. Onboarding checklist
+   - Contract signed
+   - NDA uploaded
+   - Right to work checked
+   - System access granted
+   - First week check-in completed
+   - Training started
+
+6. Training & development
+   - Training modules
+   - Completion status
+   - Certificates/badges
+   - Progress bars
+
+7. Document hub
+   - Upload document button
+   - Categories: Contract, NDA, Right to Work, Policies, Training
+   - Document status: Uploaded, Missing, Expiring Soon
+
+8. HR notes and timeline
+   - Add note button
+   - Notes should be private HR notes
+   - Timeline showing key events like joined, document uploaded, leave approved, training completed
+
+9. Automations/reminders panel
+   - Probation ending soon
+   - Missing documents
+   - Pending holiday approvals
+   - Contract review reminders
+
+Design requirements:
+- Use a modern travel-tech SaaS feel
+- Clean cards, soft shadows, rounded corners
+- Travana branding
+- Calm professional colours
+- Mobile responsive
+- Sidebar navigation
+- Top header with search and user profile
+- Use dummy data for 6 employees
+- Make it feel polished and demo-ready
+
+Important:
+- HR only
+- No sales data
+- No revenue
+- No bookings
+- No customer CRM sections
+- Keep it simple and practical
+
+Suggested pages:
+- HR Dashboard
+- Employee Directory
+- Employee Profile
+- Holiday & Absence
+- Documents
+- Training
+- Settings
+
+Create the frontend UI first with reusable components and dummy data. Focus on layout, usability, and a polished visual experience.

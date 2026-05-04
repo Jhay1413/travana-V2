@@ -1,20 +1,33 @@
+import { Button } from "@/components/ui/button";
 import { ticketTypePill, ticketStatusPill, formatTicketDate, type TicketItem } from "./client-types";
 
 interface ClientTicketsTabProps {
   filteredTickets: TicketItem[];
   getUserName: (userId: string) => string;
+  onNewTicket: () => void;
 }
 
 export function ClientTicketsTab({
   filteredTickets,
   getUserName,
+  onNewTicket,
 }: ClientTicketsTabProps) {
   return (
     <div className="grid gap-3" data-testid="list-tickets">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+          onClick={onNewTicket}
+          data-testid="button-client-ticket-create"
+        >
+          Create Ticket
+        </Button>
+      </div>
       {filteredTickets.length === 0 ? (
         <div className="rounded-3xl border border-black/10 bg-white/60 p-6 text-center">
           <div className="text-sm text-black/55">No tickets for this client.</div>
-          <p className="text-xs text-black/40 mt-1">Create a ticket from the Tickets page.</p>
+          <p className="mt-1 text-xs text-black/40">Use Create Ticket to open one for this client.</p>
         </div>
       ) : (
         filteredTickets.map((t) => (

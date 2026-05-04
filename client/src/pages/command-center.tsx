@@ -2271,6 +2271,17 @@ export default function CommandCenterPage() {
     if (!allTasksData || !Array.isArray(allTasksData)) return [];
     return allTasksData
       .filter((t) => {
+        const taskStatus = String((t as any)?.status ?? "").trim().toLowerCase();
+        const isFinishedTask =
+          Boolean(t.completed) ||
+          taskStatus === "closed" ||
+          taskStatus === "close" ||
+          taskStatus === "finished" ||
+          taskStatus === "finish" ||
+          taskStatus === "completed" ||
+          taskStatus === "complete" ||
+          taskStatus === "done";
+        if (isFinishedTask) return false;
         if (!t.dueDate) return false;
         const due = new Date(t.dueDate);
         return due >= whatsOnDateRange.start && due < whatsOnDateRange.end;
@@ -2282,7 +2293,24 @@ export default function CommandCenterPage() {
     if (!allTicketsData || !Array.isArray(allTicketsData)) return [];
     return allTicketsData
       .filter((t) => {
-        if (!(t.status === "Open" || t.status === "In Progress")) return false;
+        const ticketStatus = String(t.status ?? "").trim().toLowerCase();
+        const isClosedTicket =
+          ticketStatus === "closed" ||
+          ticketStatus === "close" ||
+          ticketStatus === "finished" ||
+          ticketStatus === "finish" ||
+          ticketStatus === "completed" ||
+          ticketStatus === "complete" ||
+          ticketStatus === "resolved" ||
+          ticketStatus === "done";
+        if (isClosedTicket) return false;
+
+        const isVisibleTicket =
+          ticketStatus === "open" ||
+          ticketStatus === "in progress" ||
+          ticketStatus === "in_progress";
+        if (!isVisibleTicket) return false;
+
         if (!currentUser?.id) return true;
         if (t.assignedTo) return t.assignedTo === currentUser.id;
         return t.userId === currentUser.id;

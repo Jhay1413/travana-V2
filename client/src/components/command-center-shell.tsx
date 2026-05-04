@@ -1645,7 +1645,7 @@ export function CommandCenterShell({
                         {title}
                       </h1>
                       {subtitle && (
-                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-black/55 dark:text-white/55" data-testid="text-page-subtitle">
+                        <p className="mt-0.5 flex font-semibold  items-center gap-1.5 text-base dark:text-white/55" data-testid="text-page-subtitle">
                           {subtitleIcon}
                           <span>{subtitle}</span>
                         </p>

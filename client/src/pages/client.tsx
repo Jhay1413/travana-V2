@@ -3,13 +3,14 @@ import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
-import { clientFileApi } from "@/api";
+import { clientFileApi, attachmentApi } from "@/api";
 import {
   BadgeCheck,
   Calendar,
   ChevronLeft,
   ChevronRight,
   FileText,
+  Image,
   Mail,
   MapPin,
   Home,
@@ -17,8 +18,10 @@ import {
   PinOff,
   Pencil,
   Phone,
+  Plus,
   Sparkles,
   Ticket,
+  Upload,
   UserRound,
   Search,
   X,
@@ -34,9 +37,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNeonClient, useNeonClients, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useTasks } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction, useCreateTicket, useCreateTask } from "@/hooks/mutations";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/rich-text-editor";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { Favorite } from "@/api/endpoints/favorite.api";
@@ -245,7 +249,10 @@ export default function ClientPage() {
   const [showTaskDialog, setShowTaskDialog] = useState(false);
   const [taskForm, setTaskForm] = useState({ title: "", dueDate: "", dueTime: "09:00" });
   const [showTicketDialog, setShowTicketDialog] = useState(false);
-  const [ticketForm, setTicketForm] = useState({ subject: "", type: "Task", priority: "Medium", description: "" });
+  const [ticketForm, setTicketForm] = useState({ subject: "", type: "Sales", status: "Open", priority: "Medium", description: "", dueDate: "", userId: "" });
+  const [ticketPendingFiles, setTicketPendingFiles] = useState<File[]>([]);
+  const [isTicketUploading, setIsTicketUploading] = useState(false);
+  const ticketFileInputRef = useRef<HTMLInputElement>(null);
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [showUploadFileModal, setShowUploadFileModal] = useState(false);
@@ -391,6 +398,87 @@ export default function ClientPage() {
   const createTransactionMutation = useCreateTransaction();
   const createTicketMutation = useCreateTicket();
   const createTaskMutation = useCreateTask("client", clientId || "");
+
+  const TICKET_TYPES = ["Admin", "Build", "Sales"] as const;
+  const TICKET_STATUSES = ["Open", "In Progress", "Resolved", "Closed"] as const;
+  const TICKET_PRIORITIES = ["Low", "Medium", "High", "Urgent"] as const;
+
+  const resetTicketForm = () => {
+    setTicketForm({ subject: "", type: "Sales", status: "Open", priority: "Medium", description: "", dueDate: "", userId: "" });
+    setTicketPendingFiles([]);
+    setIsTicketUploading(false);
+    if (ticketFileInputRef.current) ticketFileInputRef.current.value = "";
+  };
+
+  const handleTicketFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    const maxSize = 10 * 1024 * 1024;
+    const newFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (!allowed.includes(f.type)) { toast({ title: `${f.name}: Only images and PDFs are allowed`, variant: "destructive" }); continue; }
+      if (f.size > maxSize) { toast({ title: `${f.name}: File too large (max 10MB)`, variant: "destructive" }); continue; }
+      newFiles.push(f);
+    }
+    setTicketPendingFiles((prev) => [...prev, ...newFiles]);
+    if (ticketFileInputRef.current) ticketFileInputRef.current.value = "";
+  };
+
+  const removeTicketPendingFile = (index: number) => setTicketPendingFiles((prev) => prev.filter((_, i) => i !== index));
+
+  const formatTicketFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleCreateTicket = () => {
+    if (!ticketForm.subject.trim() || !ticketForm.userId || !currentUser?.id) {
+      toast({ title: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
+    setIsTicketUploading(true);
+    createTicketMutation.mutate(
+      {
+        clientId,
+        userId: currentUser.id,
+        assignedTo: ticketForm.userId,
+        type: ticketForm.type,
+        status: ticketForm.status,
+        priority: ticketForm.priority,
+        subject: ticketForm.subject.trim(),
+        description: ticketForm.description || null,
+        dueDate: ticketForm.dueDate ? new Date(ticketForm.dueDate).toISOString() : null,
+      },
+      {
+        onSuccess: async (data: any) => {
+          const ticketId = data?.id;
+          if (ticketId && ticketPendingFiles.length > 0) {
+            let uploaded = 0;
+            let failed = 0;
+            for (const file of ticketPendingFiles) {
+              try { await attachmentApi.upload(ticketId, file); uploaded++; } catch { failed++; }
+            }
+            if (failed > 0) {
+              toast({ title: `Ticket created. ${uploaded} file(s) uploaded, ${failed} failed.`, variant: "destructive" });
+            } else {
+              toast({ title: `Ticket created with ${uploaded} attachment(s)` });
+            }
+          } else {
+            toast({ title: "Ticket created successfully" });
+          }
+          setShowTicketDialog(false);
+          resetTicketForm();
+        },
+        onError: () => {
+          toast({ title: "Failed to create ticket", variant: "destructive" });
+          setIsTicketUploading(false);
+        },
+      }
+    );
+  };
 
   const handleEnquirySubmit = (data: Partial<EnquiryTable> & Record<string, unknown>) => {
     if (editingEnquiry) {
@@ -716,10 +804,16 @@ export default function ClientPage() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">
+            <div className="mt-4 " data-testid="card-client-summary">
               <div className="mb-3">
                 <ReferralStatsSection clientId={clientId} />
               </div>
+
+
+
+            </div>
+            <div className="mt-4 ">
+
 
               <PortalPinSection clientId={clientId} />
 
@@ -749,104 +843,104 @@ export default function ClientPage() {
                 )}
               </div>
               {isContactDetailsOpen && (
-              <>
-              <div className="grid gap-2" data-testid="list-contact-details">
-                {clientData?.phoneNumber && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10">
-                      <Phone className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-phone">Phone</div>
-                      <div className="truncate text-sm text-black/85" data-testid="value-contact-phone">
-                        <a href={`tel:${clientData.phoneNumber.replace(/\s/g, '')}`} className="hover:text-blue-600 transition-colors">
-                          {clientData.phoneNumber}
-                        </a>
+                <>
+                  <div className="grid gap-2" data-testid="list-contact-details">
+                    {clientData?.phoneNumber && (
+                      <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10">
+                          <Phone className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-phone">Phone</div>
+                          <div className="truncate text-sm text-black/85" data-testid="value-contact-phone">
+                            <a href={`tel:${clientData.phoneNumber.replace(/\s/g, '')}`} className="hover:text-blue-600 transition-colors">
+                              {clientData.phoneNumber}
+                            </a>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                )}
+                    )}
 
-                {clientData?.email && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-500/10">
-                      <Mail className="h-4 w-4 text-green-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-email">Email</div>
-                      <div className="truncate text-sm text-black/85" data-testid="value-contact-email">
-                        <a href={`mailto:${clientData.email}`} className="hover:text-green-600 transition-colors">
-                          {clientData.email}
-                        </a>
+                    {clientData?.email && (
+                      <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-500/10">
+                          <Mail className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-email">Email</div>
+                          <div className="truncate text-sm text-black/85" data-testid="value-contact-email">
+                            <a href={`mailto:${clientData.email}`} className="hover:text-green-600 transition-colors">
+                              {clientData.email}
+                            </a>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                )}
+                    )}
 
-                {clientData?.DOB && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/10">
-                      <UserRound className="h-4 w-4 text-purple-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-dob">Date of Birth</div>
-                      <div className="text-sm text-black/85" data-testid="value-contact-dob">
-                        {clientData.DOB}
+                    {clientData?.DOB && (
+                      <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/10">
+                          <UserRound className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold text-black/50" data-testid="label-contact-dob">Date of Birth</div>
+                          <div className="text-sm text-black/85" data-testid="value-contact-dob">
+                            {clientData.DOB}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {(clientData?.houseNumber || clientData?.street || clientData?.city || clientData?.post_code || clientData?.country) && (
-                <div className="mt-4 mb-2">
-                  <div className="text-xs font-semibold text-black/80">Address</div>
-                </div>
-              )}
-              <div className="grid gap-2" data-testid="list-address-details">
-                {(clientData?.houseNumber || clientData?.street) && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 mt-0.5">
-                      <Home className="h-4 w-4 text-rose-600" />
+                  {(clientData?.houseNumber || clientData?.street || clientData?.city || clientData?.post_code || clientData?.country) && (
+                    <div className="mt-4 mb-2">
+                      <div className="text-xs font-semibold text-black/80">Address</div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-street">Street</div>
-                      <div className="text-sm text-black/85" data-testid="value-address-street">
-                        {[clientData.houseNumber, clientData.street].filter(Boolean).join(" ")}
+                  )}
+                  <div className="grid gap-2" data-testid="list-address-details">
+                    {(clientData?.houseNumber || clientData?.street) && (
+                      <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 mt-0.5">
+                          <Home className="h-4 w-4 text-rose-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-street">Street</div>
+                          <div className="text-sm text-black/85" data-testid="value-address-street">
+                            {[clientData.houseNumber, clientData.street].filter(Boolean).join(" ")}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                )}
+                    )}
 
-                {(clientData?.city || clientData?.post_code) && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 mt-0.5">
-                      <MapPin className="h-4 w-4 text-sky-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-city">City & Postcode</div>
-                      <div className="text-sm text-black/85" data-testid="value-address-city">
-                        {[clientData.city, clientData.post_code].filter(Boolean).join(", ")}
+                    {(clientData?.city || clientData?.post_code) && (
+                      <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 mt-0.5">
+                          <MapPin className="h-4 w-4 text-sky-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-city">City & Postcode</div>
+                          <div className="text-sm text-black/85" data-testid="value-address-city">
+                            {[clientData.city, clientData.post_code].filter(Boolean).join(", ")}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                )}
+                    )}
 
-                {clientData?.country && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 mt-0.5">
-                      <MapPin className="h-4 w-4 text-indigo-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-country">Country</div>
-                      <div className="text-sm text-black/85" data-testid="value-address-country">
-                        {clientData.country}
+                    {clientData?.country && (
+                      <div className="flex items-start gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 mt-0.5">
+                          <MapPin className="h-4 w-4 text-indigo-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold text-black/50" data-testid="label-address-country">Country</div>
+                          <div className="text-sm text-black/85" data-testid="value-address-country">
+                            {clientData.country}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
-              </>
+                </>
               )}
             </div>
           </Card>
@@ -859,7 +953,7 @@ export default function ClientPage() {
                 </div>
                 <div className="mt-1 text-xs text-black/55" data-testid="text-client-right-subtitle">Knowing you client is the key to Rapport</div>
               </div>
-              
+
             </div>
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
@@ -967,6 +1061,7 @@ export default function ClientPage() {
                   <ClientTicketsTab
                     filteredTickets={filteredTickets}
                     getUserName={getUserName}
+                    onNewTicket={() => setShowTicketDialog(true)}
                   />
                 </TabsContent>
 
@@ -1081,92 +1176,129 @@ export default function ClientPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={showTicketDialog} onOpenChange={setShowTicketDialog}>
-        <DialogContent className="z-[500] max-w-md rounded-3xl">
+      <Dialog open={showTicketDialog} onOpenChange={(open) => { if (!open) { setShowTicketDialog(false); resetTicketForm(); } }}>
+        <DialogContent className="z-[500] sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Create Ticket</DialogTitle>
+            <DialogTitle>Create New Ticket</DialogTitle>
+            <DialogDescription>Create a support ticket for {clientData ? `${clientData.firstName} ${clientData.surename}`.trim() : "this client"}</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid gap-1.5">
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="ticket-user">Assigned To <span className="text-red-500">*</span></Label>
+              <Select value={ticketForm.userId} onValueChange={(v) => setTicketForm((f) => ({ ...f, userId: v }))}>
+                <SelectTrigger id="ticket-user" className="z-[600]">
+                  <SelectValue placeholder="Select user" />
+                </SelectTrigger>
+                <SelectContent className="z-[600]">
+                  {usersData?.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-2">
+                <Label>Type</Label>
+                <Select value={ticketForm.type} onValueChange={(v) => setTicketForm((f) => ({ ...f, type: v }))}>
+                  <SelectTrigger className="z-[600]"><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[600]">
+                    {TICKET_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Status</Label>
+                <Select value={ticketForm.status} onValueChange={(v) => setTicketForm((f) => ({ ...f, status: v }))}>
+                  <SelectTrigger className="z-[600]"><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[600]">
+                    {TICKET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Priority</Label>
+                <Select value={ticketForm.priority} onValueChange={(v) => setTicketForm((f) => ({ ...f, priority: v }))}>
+                  <SelectTrigger className="z-[600]"><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[600]">
+                    {TICKET_PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="ticket-subject">Subject <span className="text-red-500">*</span></Label>
               <Input
                 id="ticket-subject"
-                placeholder="What needs to be done?"
+                placeholder="Brief summary of the issue"
                 value={ticketForm.subject}
                 onChange={(e) => setTicketForm((f) => ({ ...f, subject: e.target.value }))}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="ticket-type">Type</Label>
-                <Select value={ticketForm.type} onValueChange={(v) => setTicketForm((f) => ({ ...f, type: v }))}>
-                  <SelectTrigger id="ticket-type" className="rounded-2xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="z-[600]">
-                    <SelectItem value="Task">Task</SelectItem>
-                    <SelectItem value="Support">Support</SelectItem>
-                    <SelectItem value="General">General</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="ticket-priority">Priority</Label>
-                <Select value={ticketForm.priority} onValueChange={(v) => setTicketForm((f) => ({ ...f, priority: v }))}>
-                  <SelectTrigger id="ticket-priority" className="rounded-2xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="z-[600]">
-                    <SelectItem value="Low">Low</SelectItem>
-                    <SelectItem value="Medium">Medium</SelectItem>
-                    <SelectItem value="High">High</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="ticket-description">Description</Label>
-              <Textarea
-                id="ticket-description"
-                placeholder="Optional notes…"
-                rows={3}
-                value={ticketForm.description}
-                onChange={(e) => setTicketForm((f) => ({ ...f, description: e.target.value }))}
-                className="rounded-2xl resize-none"
+            <div className="grid gap-2">
+              <Label htmlFor="ticket-due-date">Due Date</Label>
+              <Input
+                id="ticket-due-date"
+                type="date"
+                value={ticketForm.dueDate}
+                onChange={(e) => setTicketForm((f) => ({ ...f, dueDate: e.target.value }))}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ticket-description">Description</Label>
+              <RichTextEditor
+                content={ticketForm.description}
+                onChange={(html) => setTicketForm((f) => ({ ...f, description: html }))}
+                placeholder="Detailed description of the ticket"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Attachments</Label>
+              <input
+                ref={ticketFileInputRef}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                onChange={handleTicketFileSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => ticketFileInputRef.current?.click()}
+                className="rounded-xl border-2 border-dashed border-black/20 bg-black/[0.02] p-4 text-center hover:border-black/40 hover:bg-black/[0.04] transition-colors cursor-pointer"
+              >
+                <Upload className="h-5 w-5 mx-auto text-black/40 mb-1" />
+                <p className="text-sm text-black/60 font-medium">Click to attach files</p>
+                <p className="text-xs text-black/40 mt-0.5">Images (JPG, PNG, GIF, WebP) and PDF – max 10MB each</p>
+              </button>
+              {ticketPendingFiles.length > 0 && (
+                <div className="space-y-1.5 mt-1">
+                  {ticketPendingFiles.map((file, index) => (
+                    <div key={`${file.name}-${index}`} className="flex items-center gap-2 rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2">
+                      {file.type.startsWith("image/") ? (
+                        <Image className="h-4 w-4 text-blue-500" />
+                      ) : (
+                        <FileText className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className="text-sm text-black/70 flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-black/40">{formatTicketFileSize(file.size)}</span>
+                      <button type="button" onClick={() => removeTicketPendingFile(index)} className="text-black/30 hover:text-red-500 transition-colors">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="rounded-2xl" onClick={() => setShowTicketDialog(false)}>
+            <Button variant="outline" onClick={() => { setShowTicketDialog(false); resetTicketForm(); }}>
               Cancel
             </Button>
             <Button
-              className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-              disabled={!ticketForm.subject.trim() || createTicketMutation.isPending}
-              onClick={() => {
-                if (!ticketForm.subject.trim() || !currentUser?.id) return;
-                createTicketMutation.mutate(
-                  {
-                    clientId,
-                    userId: currentUser.id,
-                    type: ticketForm.type,
-                    status: "Open",
-                    priority: ticketForm.priority,
-                    subject: ticketForm.subject.trim(),
-                    description: ticketForm.description.trim() || null,
-                  },
-                  {
-                    onSuccess: () => {
-                      toast({ title: "Ticket created" });
-                      setShowTicketDialog(false);
-                      setTicketForm({ subject: "", type: "Task", priority: "Medium", description: "" });
-                    },
-                    onError: () => toast({ title: "Failed to create ticket", variant: "destructive" }),
-                  }
-                );
-              }}
+              disabled={!ticketForm.subject.trim() || !ticketForm.userId || createTicketMutation.isPending || isTicketUploading}
+              onClick={handleCreateTicket}
             >
-              {createTicketMutation.isPending ? "Creating…" : "Create Ticket"}
+              {isTicketUploading ? "Uploading files…" : createTicketMutation.isPending ? "Creating…" : "Create Ticket"}
             </Button>
           </DialogFooter>
         </DialogContent>
