@@ -95,6 +95,9 @@ app.use((req, res, next) => {
   app.use("/avatars", express.static(path.default.join(process.cwd(), "public", "avatars")));
   app.use("/uploads", express.static(path.default.join(process.cwd(), "public", "uploads")));
   app.use("/mockup-previews", express.static(path.default.join(process.cwd(), "public", "mockup-previews")));
+  app.get(/^\/mockup-previews\/sandbox(\/.*)?$/, (_req, res) => {
+    res.sendFile(path.default.join(process.cwd(), "public", "mockup-previews", "sandbox", "index.html"));
+  });
   app.get("/privacy-policy", (_req, res) => res.sendFile(path.default.join(process.cwd(), "public", "privacy-policy.html")));
   app.get("/data-deletion", (_req, res) => res.sendFile(path.default.join(process.cwd(), "public", "privacy-policy.html")));
 
