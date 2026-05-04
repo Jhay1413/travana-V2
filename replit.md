@@ -39,7 +39,7 @@ The backend uses a repository/service/controller pattern and a storage abstracti
 - **ORM**: Drizzle ORM with Zod schema validation
 - **Migrations**: Drizzle Kit
 
-The database schema includes tables for users, clients, transactions, quotes, bookings, support tickets, notifications, destination intelligence, feedback, announcements, and a comprehensive SMS notification system. A client portal provides secure access for clients via PIN or biometric login, enabling them to view quotes, bookings, and communicate with agents. A portal-to-internal chat bridge synchronizes client messages with the internal live chat system, and web push notifications alert clients to new messages. A public website API exposes deals and destination information for external consumption.
+The database schema includes tables for users, clients, transactions, quotes, bookings, support tickets, notifications, destination intelligence, feedback, announcements, a comprehensive SMS notification system, and HR (`hr_employees`, `hr_reminders` — nested data stored as JSONB) backing the `/hr` page. A client portal provides secure access for clients via PIN or biometric login, enabling them to view quotes, bookings, and communicate with agents. A portal-to-internal chat bridge synchronizes client messages with the internal live chat system, and web push notifications alert clients to new messages. A public website API exposes deals and destination information for external consumption.
 
 ### Development vs Production
 - **Development**: Vite dev server with HMR.

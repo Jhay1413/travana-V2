@@ -102,6 +102,7 @@ import {
   PanelLeftOpen,
   Gift,
   Tag,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -560,6 +561,7 @@ function ShellNav({
               ] },
               { key: "referrals", label: "Referrals", icon: <Gift className="h-4 w-4" /> },
               { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" />, route: "/sms-center" },
+              { key: "hr", label: "HR", icon: <UserCheck className="h-4 w-4" />, route: "/hr" },
               { key: "admin-settings-page", label: "Admin Settings", icon: <Settings2 className="h-4 w-4" /> },
               { key: "settings", label: "Data Settings", icon: <ClipboardList className="h-4 w-4" />, subGroups: settingsSubGroups },
             ] as NavItem[],
@@ -592,6 +594,7 @@ function ShellNav({
         { key: "coverage", label: "Coverage", icon: <Compass className="h-4 w-4" /> },
         { key: "coaching", label: "Coaching", icon: <BadgeCheck className="h-4 w-4" /> },
         { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" />, route: "/sms-center" },
+        { key: "hr", label: "HR", icon: <UserCheck className="h-4 w-4" />, route: "/hr" },
         { key: "reports", label: "Reports", icon: <FileText className="h-4 w-4" /> },
       ] as NavItem[], sections: undefined as NavSection[] | undefined };
     }

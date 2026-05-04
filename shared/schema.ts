@@ -1876,3 +1876,55 @@ export const insertSmsMessageSchema = createInsertSchema(smsMessagesTable).omit(
 });
 export type SmsMessage = typeof smsMessagesTable.$inferSelect;
 export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
+
+// =====================================================================
+// HR (Travana HR module) — graduated from mockup
+// =====================================================================
+export const hrEmployeesTable = pgTable("hr_employees", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  role: varchar("role", { length: 200 }).notNull(),
+  team: varchar("team", { length: 200 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  employmentType: varchar("employment_type", { length: 32 }).notNull(),
+  location: varchar("location", { length: 200 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  phone: varchar("phone", { length: 50 }).notNull(),
+  startDate: varchar("start_date", { length: 32 }).notNull(),
+  probationEnd: varchar("probation_end", { length: 32 }),
+  manager: varchar("manager", { length: 200 }).notNull(),
+  emergencyContact: jsonb("emergency_contact").notNull(),
+  avatarColor: varchar("avatar_color", { length: 100 }).notNull(),
+  initials: varchar("initials", { length: 8 }).notNull(),
+  holidayAllowance: integer("holiday_allowance").notNull(),
+  holidayUsed: integer("holiday_used").notNull(),
+  sickDaysYTD: integer("sick_days_ytd").notNull(),
+  documents: jsonb("documents").notNull().default(sql`'[]'::jsonb`),
+  holidays: jsonb("holidays").notNull().default(sql`'[]'::jsonb`),
+  training: jsonb("training").notNull().default(sql`'[]'::jsonb`),
+  notes: jsonb("notes").notNull().default(sql`'[]'::jsonb`),
+  timeline: jsonb("timeline").notNull().default(sql`'[]'::jsonb`),
+  onboarding: jsonb("onboarding").notNull().default(sql`'[]'::jsonb`),
+  sortOrder: integer("sort_order").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertHrEmployeeSchema = createInsertSchema(hrEmployeesTable).omit({
+  updatedAt: true,
+});
+export type HrEmployee = typeof hrEmployeesTable.$inferSelect;
+export type InsertHrEmployee = z.infer<typeof insertHrEmployeeSchema>;
+
+export const hrRemindersTable = pgTable("hr_reminders", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  type: varchar("type", { length: 32 }).notNull(),
+  message: text("message").notNull(),
+  employee: varchar("employee", { length: 200 }).notNull(),
+  due: varchar("due", { length: 64 }).notNull(),
+  severity: varchar("severity", { length: 16 }).notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const insertHrReminderSchema = createInsertSchema(hrRemindersTable);
+export type HrReminder = typeof hrRemindersTable.$inferSelect;
+export type InsertHrReminder = z.infer<typeof insertHrReminderSchema>;
