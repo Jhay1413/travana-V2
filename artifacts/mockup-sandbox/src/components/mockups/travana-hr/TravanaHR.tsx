@@ -30,6 +30,9 @@ import {
   UserPlus,
   Filter,
   MoreHorizontal,
+  Network,
+  Users2,
+  ChevronRight,
 } from "lucide-react";
 import {
   employees as initialEmployees,
@@ -61,11 +64,13 @@ function useHR(): HRContextValue {
 
 type View =
   | { name: "dashboard" }
-  | { name: "directory" }
+  | { name: "directory"; team?: string }
   | { name: "profile"; employeeId: string; tab?: ProfileTab }
   | { name: "holiday" }
   | { name: "documents" }
   | { name: "training" }
+  | { name: "orgchart" }
+  | { name: "teams" }
   | { name: "settings" };
 
 type ProfileTab = "overview" | "documents" | "holiday" | "training" | "notes" | "timeline";
@@ -73,6 +78,8 @@ type ProfileTab = "overview" | "documents" | "holiday" | "training" | "notes" | 
 const navItems = [
   { id: "dashboard", label: "HR Dashboard", icon: LayoutDashboard },
   { id: "directory", label: "Employee Directory", icon: Users },
+  { id: "teams", label: "Teams", icon: Users2 },
+  { id: "orgchart", label: "Org Chart", icon: Network },
   { id: "holiday", label: "Holiday & Absence", icon: CalendarDays },
   { id: "documents", label: "Documents", icon: FileText },
   { id: "training", label: "Training", icon: GraduationCap },
@@ -435,18 +442,30 @@ function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
   );
 }
 
-function DirectoryPage({ onOpenProfile }: { onOpenProfile: (id: string) => void }) {
+function DirectoryPage({
+  onOpenProfile,
+  initialTeam,
+}: {
+  onOpenProfile: (id: string) => void;
+  initialTeam?: string;
+}) {
   const { employees } = useHR();
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<string>("All");
   const [status, setStatus] = useState<string>("All");
   const [location, setLocation] = useState<string>("All");
+  const [team, setTeam] = useState<string>(initialTeam ?? "All");
+  const teams = useMemo(
+    () => Array.from(new Set(employees.map((e) => e.team))),
+    [employees],
+  );
 
   const filtered = useMemo(() => {
     return employees.filter((e) => {
       if (role !== "All" && e.role !== role) return false;
       if (status !== "All" && e.status !== status) return false;
       if (location !== "All" && e.location !== location) return false;
+      if (team !== "All" && e.team !== team) return false;
       if (search) {
         const q = search.toLowerCase();
         if (
@@ -476,6 +495,13 @@ function DirectoryPage({ onOpenProfile }: { onOpenProfile: (id: string) => void 
             />
           </div>
           <div className="flex flex-wrap gap-2">
+            <FilterSelect
+              label="Team"
+              value={team}
+              onChange={setTeam}
+              options={["All", ...teams]}
+              testId="select-filter-team"
+            />
             <FilterSelect
               label="Role"
               value={role}
@@ -1550,6 +1576,295 @@ function TrainingPage({ onOpenProfile }: { onOpenProfile: (id: string) => void }
   );
 }
 
+function TeamsPage({
+  onOpenTeam,
+}: {
+  onOpenTeam: (team: string) => void;
+}) {
+  const { employees } = useHR();
+  const teams = useMemo(() => {
+    const map = new Map<string, Employee[]>();
+    employees.forEach((e) => {
+      const list = map.get(e.team) ?? [];
+      list.push(e);
+      map.set(e.team, list);
+    });
+    return Array.from(map.entries()).map(([team, members]) => {
+      const active = members.filter((m) => m.status !== "Archived");
+      const onLeave = members.filter((m) => m.status === "On Leave").length;
+      const probation = members.filter((m) => m.status === "Probation").length;
+      const managerCounts = new Map<string, number>();
+      members.forEach((m) => {
+        managerCounts.set(m.manager, (managerCounts.get(m.manager) ?? 0) + 1);
+      });
+      const managerName =
+        Array.from(managerCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+      const managerEmployee = employees.find((e) => e.name === managerName);
+      const openings = team === "City Breaks" ? 1 : team === "Marketing" ? 1 : 0;
+      return {
+        name: team,
+        members,
+        headcount: active.length,
+        onLeave,
+        probation,
+        managerName,
+        managerEmployee,
+        openings,
+      };
+    });
+  }, [employees]);
+
+  const totalHeadcount = teams.reduce((sum, t) => sum + t.headcount, 0);
+  const totalOpenings = teams.reduce((sum, t) => sum + t.openings, 0);
+
+  return (
+    <div className="p-4 md:p-8 space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard
+          label="Teams"
+          value={teams.length}
+          icon={Users2}
+          tone="indigo"
+          hint="Across the business"
+          testId="card-teams-total"
+        />
+        <StatCard
+          label="Active headcount"
+          value={totalHeadcount}
+          icon={Users}
+          tone="emerald"
+          hint="Excluding archived"
+          testId="card-teams-headcount"
+        />
+        <StatCard
+          label="Open roles"
+          value={totalOpenings}
+          icon={UserPlus}
+          tone="amber"
+          hint="Currently hiring"
+          testId="card-teams-openings"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {teams.map((t) => (
+          <article
+            key={t.name}
+            className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col"
+            data-testid={`card-team-${t.name.toLowerCase().replace(/\s/g, "-")}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-slate-900 truncate" data-testid={`text-team-name-${t.name.toLowerCase().replace(/\s/g, "-")}`}>
+                  {t.name}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {t.headcount} {t.headcount === 1 ? "person" : "people"}
+                  {t.onLeave > 0 ? ` · ${t.onLeave} on leave` : ""}
+                  {t.probation > 0 ? ` · ${t.probation} on probation` : ""}
+                </p>
+              </div>
+              {t.openings > 0 && (
+                <span
+                  className="px-2 py-0.5 rounded-full text-[11px] font-medium border bg-amber-50 text-amber-700 border-amber-200 flex-none"
+                  data-testid={`badge-team-openings-${t.name.toLowerCase().replace(/\s/g, "-")}`}
+                >
+                  {t.openings} open
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              {t.managerEmployee ? (
+                <Avatar employee={t.managerEmployee} size="sm" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-semibold flex-none">
+                  {t.managerName
+                    .split(" ")
+                    .map((p) => p[0])
+                    .slice(0, 2)
+                    .join("")}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] text-slate-500">Team lead</div>
+                <div className="text-sm font-medium text-slate-800 truncate">{t.managerName}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex -space-x-2">
+              {t.members.slice(0, 5).map((m) => (
+                <div key={m.id} className="ring-2 ring-white rounded-full">
+                  <Avatar employee={m} size="sm" />
+                </div>
+              ))}
+              {t.members.length > 5 && (
+                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-semibold ring-2 ring-white">
+                  +{t.members.length - 5}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => onOpenTeam(t.name)}
+              className="mt-5 inline-flex items-center justify-center gap-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg py-2 transition-colors"
+              data-testid={`button-team-open-${t.name.toLowerCase().replace(/\s/g, "-")}`}
+            >
+              View team in directory
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface OrgNode {
+  employee: Employee;
+  reports: OrgNode[];
+}
+
+function OrgChartPage({ onOpenProfile }: { onOpenProfile: (id: string) => void }) {
+  const { employees } = useHR();
+  const roots = useMemo(() => {
+    const active = employees.filter((e) => e.status !== "Archived");
+    const byName = new Map(active.map((e) => [e.name, e] as const));
+    const childrenOf = new Map<string, Employee[]>();
+    const rootList: Employee[] = [];
+    active.forEach((e) => {
+      if (byName.has(e.manager)) {
+        const arr = childrenOf.get(e.manager) ?? [];
+        arr.push(e);
+        childrenOf.set(e.manager, arr);
+      } else {
+        rootList.push(e);
+      }
+    });
+    const build = (e: Employee): OrgNode => ({
+      employee: e,
+      reports: (childrenOf.get(e.name) ?? []).map(build),
+    });
+    return rootList.map(build);
+  }, [employees]);
+
+  const externalManagers = useMemo(() => {
+    const names = new Set(employees.map((e) => e.name));
+    const map = new Map<string, Employee[]>();
+    roots.forEach((node) => {
+      const mgr = node.employee.manager;
+      if (!names.has(mgr)) {
+        const arr = map.get(mgr) ?? [];
+        arr.push(node.employee);
+        map.set(mgr, arr);
+      }
+    });
+    return map;
+  }, [employees, roots]);
+
+  return (
+    <div className="p-4 md:p-8 space-y-6">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm" data-testid="card-orgchart-intro">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-none">
+            <Network className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Reporting structure</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Built from the manager field on each employee. Click anyone to open their profile.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {Array.from(externalManagers.entries()).map(([mgrName, directReports]) => (
+          <div
+            key={mgrName}
+            className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"
+            data-testid={`card-org-root-${mgrName.toLowerCase().replace(/\s/g, "-")}`}
+          >
+            <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold flex-none">
+                {mgrName
+                  .split(" ")
+                  .map((p) => p[0])
+                  .slice(0, 2)
+                  .join("")}
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{mgrName}</div>
+                <div className="text-xs text-slate-500">Executive · External to HR system</div>
+              </div>
+            </div>
+            <ul className="mt-4 space-y-3 pl-4 border-l-2 border-slate-100">
+              {directReports.map((emp) => {
+                const node = roots.find((n) => n.employee.id === emp.id);
+                return node ? (
+                  <OrgChartNode key={emp.id} node={node} onOpenProfile={onOpenProfile} depth={0} />
+                ) : null;
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OrgChartNode({
+  node,
+  onOpenProfile,
+  depth,
+}: {
+  node: OrgNode;
+  onOpenProfile: (id: string) => void;
+  depth: number;
+}) {
+  const e = node.employee;
+  return (
+    <li data-testid={`org-node-${e.id}`}>
+      <button
+        type="button"
+        onClick={() => onOpenProfile(e.id)}
+        className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-indigo-200 transition-colors text-left"
+        data-testid={`button-org-node-${e.id}`}
+      >
+        <Avatar employee={e} size="sm" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-slate-900 truncate">{e.name}</div>
+          <div className="text-xs text-slate-500 truncate">
+            {e.role} · {e.team}
+          </div>
+        </div>
+        <span
+          className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${statusBadgeClasses(e.status)} flex-none hidden sm:inline-block`}
+        >
+          {e.status}
+        </span>
+        {node.reports.length > 0 && (
+          <span className="text-[11px] text-slate-500 flex-none">
+            {node.reports.length} report{node.reports.length === 1 ? "" : "s"}
+          </span>
+        )}
+      </button>
+      {node.reports.length > 0 && (
+        <ul className="mt-3 space-y-3 pl-4 border-l-2 border-slate-100 ml-5">
+          {node.reports.map((child) => (
+            <OrgChartNode
+              key={child.employee.id}
+              node={child}
+              onOpenProfile={onOpenProfile}
+              depth={depth + 1}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 function SettingsPage() {
   const sections: { title: string; description: string; testId: string }[] = [
     {
@@ -1719,6 +2034,12 @@ export default function TravanaHR() {
   } else if (view.name === "training") {
     title = "Training";
     subtitle = "Compliance and development modules";
+  } else if (view.name === "orgchart") {
+    title = "Org Chart";
+    subtitle = "Reporting structure across Travana";
+  } else if (view.name === "teams") {
+    title = "Teams";
+    subtitle = "Headcount, leads and openings by team";
   } else if (view.name === "settings") {
     title = "Settings";
     subtitle = "HR configuration and policies";
@@ -1740,7 +2061,17 @@ export default function TravanaHR() {
         <main className="flex-1 overflow-y-auto">
           {view.name === "dashboard" && <DashboardPage onNavigate={setView} />}
           {view.name === "directory" && (
-            <DirectoryPage onOpenProfile={(id) => setView({ name: "profile", employeeId: id })} />
+            <DirectoryPage
+              key={view.team ?? "all"}
+              initialTeam={view.team}
+              onOpenProfile={(id) => setView({ name: "profile", employeeId: id })}
+            />
+          )}
+          {view.name === "teams" && (
+            <TeamsPage onOpenTeam={(team) => setView({ name: "directory", team })} />
+          )}
+          {view.name === "orgchart" && (
+            <OrgChartPage onOpenProfile={(id) => setView({ name: "profile", employeeId: id })} />
           )}
           {view.name === "profile" && employee && (
             <ProfilePage
