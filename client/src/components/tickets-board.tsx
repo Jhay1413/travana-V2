@@ -457,10 +457,12 @@ function TicketDetailPanel({
   ticket,
   users,
   onClose,
+  onAfterDelete,
 }: {
   ticket: Ticket;
   users: ApiUser[];
   onClose?: () => void;
+  onAfterDelete?: () => void;
 }) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -550,7 +552,11 @@ function TicketDetailPanel({
       onSuccess: () => {
         toast({ title: "Ticket deleted" });
         if (onClose) onClose();
-        navigate("/tickets");
+        if (onAfterDelete) {
+          onAfterDelete();
+        } else {
+          navigate("/tickets");
+        }
       },
       onError: () => toast({ title: "Failed to delete ticket", variant: "destructive" }),
     });
@@ -865,6 +871,8 @@ function TicketDetailPanel({
     </div>
   );
 }
+
+export { TicketDetailPanel };
 
 export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: string }) {
   const [query, setQuery] = useState("");

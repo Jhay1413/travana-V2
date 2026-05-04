@@ -35,7 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useNeonClient, useNeonClients, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useTasks } from "@/hooks/queries";
+import { useNeonClient, useNeonClients, useTransactions, useTicketsByClient, useUsers, useCurrentUser, useTasks, ticketKeys } from "@/hooks/queries";
 import { useUpdateClient, useUpdateNeonClient, useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry, useCreateTransaction, useCreateTicket, useCreateTask } from "@/hooks/mutations";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -455,6 +455,7 @@ export default function ClientPage() {
       {
         onSuccess: async (data: any) => {
           const ticketId = data?.id;
+          queryClient.invalidateQueries({ queryKey: ticketKeys.byClient(clientId) });
           if (ticketId && ticketPendingFiles.length > 0) {
             let uploaded = 0;
             let failed = 0;
