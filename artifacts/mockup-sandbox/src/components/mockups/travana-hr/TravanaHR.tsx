@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -32,7 +32,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import {
-  employees,
+  employees as initialEmployees,
   reminders,
   roles,
   locations,
@@ -41,6 +41,23 @@ import {
   type EmployeeStatus,
   type DocStatus,
 } from "./_data";
+
+interface HRContextValue {
+  employees: Employee[];
+  approveLeave: (empId: string, leaveId: string) => void;
+  rejectLeave: (empId: string, leaveId: string) => void;
+  addNote: (empId: string, body: string) => void;
+  toggleOnboarding: (empId: string, itemId: string) => void;
+  uploadDocument: (empId: string, name: string) => void;
+}
+
+const HRContext = createContext<HRContextValue | null>(null);
+
+function useHR(): HRContextValue {
+  const ctx = useContext(HRContext);
+  if (!ctx) throw new Error("HRContext missing");
+  return ctx;
+}
 
 type View =
   | { name: "dashboard" }
@@ -282,10 +299,15 @@ function StatCard({
 }
 
 function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const { employees } = useHR();
   const totalEmployees = employees.filter((e) => e.status !== "Archived").length;
   const newStarters = employees.filter((e) => e.status === "Probation").length;
   const onLeaveToday = employees.filter((e) => e.status === "On Leave").length;
-  const pendingTasks = reminders.length;
+  const pendingApprovals = employees.reduce(
+    (sum, e) => sum + e.holidays.filter((h) => h.status === "Pending").length,
+    0,
+  );
+  const pendingTasks = reminders.length + pendingApprovals;
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -414,6 +436,7 @@ function DashboardPage({ onNavigate }: { onNavigate: (view: View) => void }) {
 }
 
 function DirectoryPage({ onOpenProfile }: { onOpenProfile: (id: string) => void }) {
+  const { employees } = useHR();
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<string>("All");
   const [status, setStatus] = useState<string>("All");
@@ -435,7 +458,7 @@ function DirectoryPage({ onOpenProfile }: { onOpenProfile: (id: string) => void 
       }
       return true;
     });
-  }, [search, role, status, location]);
+  }, [employees, search, role, status, location]);
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -690,6 +713,7 @@ function ProfilePage({
 }
 
 function OnboardingChecklist({ employee }: { employee: Employee }) {
+  const { toggleOnboarding } = useHR();
   const done = employee.onboarding.filter((o) => o.done).length;
   const total = employee.onboarding.length;
   const pct = Math.round((done / total) * 100);
@@ -709,13 +733,22 @@ function OnboardingChecklist({ employee }: { employee: Employee }) {
       </div>
       <ul className="space-y-2.5">
         {employee.onboarding.map((o) => (
-          <li key={o.id} className="flex items-center gap-2.5 text-sm" data-testid={`onboarding-${o.id}`}>
-            {o.done ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-none" />
-            ) : (
-              <Circle className="w-4 h-4 text-slate-300 flex-none" />
-            )}
-            <span className={o.done ? "text-slate-700" : "text-slate-500"}>{o.label}</span>
+          <li key={o.id} data-testid={`onboarding-${o.id}`}>
+            <button
+              type="button"
+              onClick={() => toggleOnboarding(employee.id, o.id)}
+              className="w-full flex items-center gap-2.5 text-sm text-left rounded-md hover:bg-slate-50 -mx-1 px-1 py-0.5 transition-colors"
+              data-testid={`button-onboarding-toggle-${o.id}`}
+            >
+              {o.done ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-none" />
+              ) : (
+                <Circle className="w-4 h-4 text-slate-300 flex-none" />
+              )}
+              <span className={o.done ? "text-slate-700 line-through decoration-slate-300" : "text-slate-500"}>
+                {o.label}
+              </span>
+            </button>
           </li>
         ))}
       </ul>
@@ -770,6 +803,9 @@ function OverviewTab({ employee }: { employee: Employee }) {
 }
 
 function DocumentsTab({ employee }: { employee: Employee }) {
+  const { uploadDocument } = useHR();
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadName, setUploadName] = useState("");
   const grouped = useMemo(() => {
     const map = new Map<string, typeof employee.documents>();
     employee.documents.forEach((d) => {
@@ -790,6 +826,7 @@ function DocumentsTab({ employee }: { employee: Employee }) {
           </p>
         </div>
         <button
+          onClick={() => setUploadOpen((v) => !v)}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
           data-testid="button-upload-document"
         >
@@ -797,6 +834,41 @@ function DocumentsTab({ employee }: { employee: Employee }) {
           Upload
         </button>
       </div>
+      {uploadOpen && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row gap-2" data-testid="form-upload-document">
+          <input
+            type="text"
+            value={uploadName}
+            onChange={(e) => setUploadName(e.target.value)}
+            placeholder="Document name"
+            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            data-testid="input-upload-document-name"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setUploadOpen(false); setUploadName(""); }}
+              className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-lg"
+              data-testid="button-upload-document-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                const name = uploadName.trim();
+                if (!name) return;
+                uploadDocument(employee.id, name);
+                setUploadName("");
+                setUploadOpen(false);
+              }}
+              disabled={!uploadName.trim()}
+              className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
+              data-testid="button-upload-document-confirm"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
       <div className="space-y-4">
         {grouped.map(([category, docs]) => (
           <div
@@ -844,6 +916,7 @@ function DocumentsTab({ employee }: { employee: Employee }) {
 }
 
 function HolidayTab({ employee }: { employee: Employee }) {
+  const { approveLeave, rejectLeave } = useHR();
   const remaining = employee.holidayAllowance - employee.holidayUsed;
   const pct = Math.round((employee.holidayUsed / employee.holidayAllowance) * 100);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -961,9 +1034,28 @@ function HolidayTab({ employee }: { employee: Employee }) {
                       ? "bg-amber-50 text-amber-700 border-amber-200"
                       : "bg-rose-50 text-rose-700 border-rose-200"
                 }`}
+                data-testid={`status-leave-${h.id}`}
               >
                 {h.status}
               </span>
+              {h.status === "Pending" && (
+                <div className="flex gap-1.5 flex-none">
+                  <button
+                    onClick={() => rejectLeave(employee.id, h.id)}
+                    className="px-2.5 py-1 text-[11px] font-medium text-rose-700 border border-rose-200 bg-white hover:bg-rose-50 rounded-md"
+                    data-testid={`button-leave-reject-${h.id}`}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={() => approveLeave(employee.id, h.id)}
+                    className="px-2.5 py-1 text-[11px] font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-md"
+                    data-testid={`button-leave-approve-${h.id}`}
+                  >
+                    Approve
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -1026,6 +1118,16 @@ function TrainingTab({ employee }: { employee: Employee }) {
 }
 
 function NotesTab({ employee }: { employee: Employee }) {
+  const { addNote } = useHR();
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteBody, setNoteBody] = useState("");
+  const handleSave = () => {
+    const body = noteBody.trim();
+    if (!body) return;
+    addNote(employee.id, body);
+    setNoteBody("");
+    setNoteOpen(false);
+  };
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -1034,6 +1136,7 @@ function NotesTab({ employee }: { employee: Employee }) {
           <p className="text-xs text-slate-500 mt-0.5">Private to People team only</p>
         </div>
         <button
+          onClick={() => setNoteOpen((v) => !v)}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
           data-testid="button-add-note"
         >
@@ -1041,6 +1144,35 @@ function NotesTab({ employee }: { employee: Employee }) {
           Add note
         </button>
       </div>
+      {noteOpen && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3" data-testid="form-add-note">
+          <textarea
+            value={noteBody}
+            onChange={(e) => setNoteBody(e.target.value)}
+            placeholder="Write a private HR note…"
+            rows={3}
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
+            data-testid="input-note-body"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setNoteOpen(false); setNoteBody(""); }}
+              className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-lg"
+              data-testid="button-note-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!noteBody.trim()}
+              className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
+              data-testid="button-note-save"
+            >
+              Save note
+            </button>
+          </div>
+        </div>
+      )}
       <ul className="space-y-3">
         {employee.notes.map((n) => (
           <li
@@ -1107,6 +1239,7 @@ function TimelineTab({ employee }: { employee: Employee }) {
 }
 
 function HolidayPage({ onOpenProfile }: { onOpenProfile: (id: string) => void }) {
+  const { employees, approveLeave, rejectLeave } = useHR();
   const allRequests = employees.flatMap((e) =>
     e.holidays.map((h) => ({ ...h, employee: e })),
   );
@@ -1165,6 +1298,14 @@ function HolidayPage({ onOpenProfile }: { onOpenProfile: (id: string) => void })
                 Open
               </button>
               <button
+                onClick={() => rejectLeave(r.employee.id, r.id)}
+                className="px-3 py-1.5 text-xs font-medium text-rose-700 border border-rose-200 bg-white hover:bg-rose-50 rounded-lg"
+                data-testid={`button-pending-reject-${r.employee.id}-${r.id}`}
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => approveLeave(r.employee.id, r.id)}
                 className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg"
                 data-testid={`button-pending-approve-${r.employee.id}-${r.id}`}
               >
@@ -1206,9 +1347,21 @@ function HolidayPage({ onOpenProfile }: { onOpenProfile: (id: string) => void })
 }
 
 function DocumentsPage({ onOpenProfile }: { onOpenProfile: (id: string) => void }) {
+  const { employees, uploadDocument } = useHR();
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadEmpId, setUploadEmpId] = useState(employees[0]?.id ?? "");
+  const [uploadName, setUploadName] = useState("");
   const allDocs = employees.flatMap((e) => e.documents.map((d) => ({ ...d, employee: e })));
   const missing = allDocs.filter((d) => d.status === "Missing");
   const expiring = allDocs.filter((d) => d.status === "Expiring Soon");
+
+  const handleUpload = () => {
+    const name = uploadName.trim();
+    if (!name || !uploadEmpId) return;
+    uploadDocument(uploadEmpId, name);
+    setUploadName("");
+    setUploadOpen(false);
+  };
   return (
     <div className="p-4 md:p-8 space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1239,6 +1392,7 @@ function DocumentsPage({ onOpenProfile }: { onOpenProfile: (id: string) => void 
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Action required</h2>
           <button
+            onClick={() => setUploadOpen((v) => !v)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
             data-testid="button-upload-global"
           >
@@ -1246,6 +1400,45 @@ function DocumentsPage({ onOpenProfile }: { onOpenProfile: (id: string) => void 
             Upload
           </button>
         </div>
+        {uploadOpen && (
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row gap-2" data-testid="form-upload-global">
+            <select
+              value={uploadEmpId}
+              onChange={(e) => setUploadEmpId(e.target.value)}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              data-testid="select-upload-employee"
+            >
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>{e.name}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={uploadName}
+              onChange={(e) => setUploadName(e.target.value)}
+              placeholder="Document name"
+              className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              data-testid="input-upload-name"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setUploadOpen(false); setUploadName(""); }}
+                className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 hover:bg-white rounded-lg"
+                data-testid="button-upload-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpload}
+                disabled={!uploadName.trim()}
+                className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50"
+                data-testid="button-upload-confirm"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
         <ul className="divide-y divide-slate-100">
           {[...missing, ...expiring].map((d) => (
             <li
@@ -1284,6 +1477,7 @@ function DocumentsPage({ onOpenProfile }: { onOpenProfile: (id: string) => void 
 }
 
 function TrainingPage({ onOpenProfile }: { onOpenProfile: (id: string) => void }) {
+  const { employees } = useHR();
   const allModules = employees.flatMap((e) => e.training.map((t) => ({ ...t, employee: e })));
   const completed = allModules.filter((t) => t.status === "Completed").length;
   const inProgress = allModules.filter((t) => t.status === "In progress").length;
@@ -1418,6 +1612,91 @@ function SettingsPage() {
 
 export default function TravanaHR() {
   const [view, setView] = useState<View>({ name: "dashboard" });
+  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+
+  const updateEmployee = useCallback(
+    (empId: string, updater: (emp: Employee) => Employee) => {
+      setEmployees((prev) => prev.map((e) => (e.id === empId ? updater(e) : e)));
+    },
+    [],
+  );
+
+  const approveLeave = useCallback(
+    (empId: string, leaveId: string) => {
+      updateEmployee(empId, (e) => ({
+        ...e,
+        holidays: e.holidays.map((h) => (h.id === leaveId ? { ...h, status: "Approved" } : h)),
+      }));
+    },
+    [updateEmployee],
+  );
+
+  const rejectLeave = useCallback(
+    (empId: string, leaveId: string) => {
+      updateEmployee(empId, (e) => ({
+        ...e,
+        holidays: e.holidays.map((h) => (h.id === leaveId ? { ...h, status: "Rejected" } : h)),
+      }));
+    },
+    [updateEmployee],
+  );
+
+  const addNote = useCallback(
+    (empId: string, body: string) => {
+      const today = new Date().toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      updateEmployee(empId, (e) => ({
+        ...e,
+        notes: [
+          { id: `n-${Date.now()}`, author: "Jordan Pierce", date: today, body },
+          ...e.notes,
+        ],
+      }));
+    },
+    [updateEmployee],
+  );
+
+  const toggleOnboarding = useCallback(
+    (empId: string, itemId: string) => {
+      updateEmployee(empId, (e) => ({
+        ...e,
+        onboarding: e.onboarding.map((o) => (o.id === itemId ? { ...o, done: !o.done } : o)),
+      }));
+    },
+    [updateEmployee],
+  );
+
+  const uploadDocument = useCallback(
+    (empId: string, name: string) => {
+      const today = new Date().toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      updateEmployee(empId, (e) => ({
+        ...e,
+        documents: [
+          ...e.documents,
+          {
+            id: `d-${Date.now()}`,
+            name,
+            category: "Policies",
+            status: "Uploaded",
+            updated: today,
+          },
+        ],
+      }));
+    },
+    [updateEmployee],
+  );
+
+  const ctxValue = useMemo<HRContextValue>(
+    () => ({ employees, approveLeave, rejectLeave, addNote, toggleOnboarding, uploadDocument }),
+    [employees, approveLeave, rejectLeave, addNote, toggleOnboarding, uploadDocument],
+  );
 
   const employee =
     view.name === "profile" ? employees.find((e) => e.id === view.employeeId) ?? employees[0] : null;
@@ -1446,6 +1725,7 @@ export default function TravanaHR() {
   }
 
   return (
+    <HRContext.Provider value={ctxValue}>
     <div className="h-full min-h-screen flex bg-slate-50 text-slate-900 font-sans" data-testid="travana-hr-root">
       <Sidebar
         current={view.name === "profile" ? "directory" : view.name}
@@ -1483,5 +1763,6 @@ export default function TravanaHR() {
         </main>
       </div>
     </div>
+    </HRContext.Provider>
   );
 }
