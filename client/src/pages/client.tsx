@@ -1060,8 +1060,8 @@ export default function ClientPage() {
 
                 <TabsContent value="tickets" className="mt-3">
                   <ClientTicketsTab
-                    filteredTickets={filteredTickets}
-                    getUserName={getUserName}
+                    tickets={ticketsData ?? []}
+                    users={usersData ?? []}
                     onNewTicket={() => setShowTicketDialog(true)}
                   />
                 </TabsContent>
