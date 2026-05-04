@@ -1629,7 +1629,7 @@ export function CommandCenterShell({
             <Card className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-[40]" data-testid="topbar-command-center">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-start gap-3">
                     <button
                       type="button"
                       onClick={() => setMobileNavOpen(true)}
@@ -1638,9 +1638,16 @@ export function CommandCenterShell({
                     >
                       <Menu className="h-5 w-5 text-black/70 dark:text-white/80" />
                     </button>
-                    <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
-                      {title}
-                    </h1>
+                    <div className="min-w-0">
+                      <h1 className="title-serif text-2xl font-semibold tracking-tight md:text-3xl" data-testid="text-page-title">
+                        {title}
+                      </h1>
+                      {subtitle && (
+                        <p className="mt-0.5 text-xs text-black/55 dark:text-white/55" data-testid="text-page-subtitle">
+                          {subtitle}
+                        </p>
+                      )}
+                    </div>
                     {headerExtra}
                   </div>
                 </div>

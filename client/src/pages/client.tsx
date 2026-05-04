@@ -7,14 +7,18 @@ import { clientFileApi } from "@/api";
 import {
   BadgeCheck,
   Calendar,
+  Check,
   ChevronLeft,
   ChevronRight,
   FileText,
   Mail,
   MapPin,
   Home,
+  Pin,
+  PinOff,
   Pencil,
   Phone,
+  Shield,
   Sparkles,
   Ticket,
   UserRound,
@@ -37,6 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
+import type { Favorite } from "@/api/endpoints/favorite.api";
 import type { Transaction, EnquiryTable } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
@@ -47,7 +52,7 @@ import { UploadFileDialog } from "@/components/client/UploadFileDialog";
 import type { Client as ApiClient } from "@/types/client";
 import { QuoteCreateDialog } from "@/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/components/booking-create-dialog";
-import { ClientOverviewTab, PortalPinSection } from "@/components/client/ClientOverviewTab";
+import { ClientOverviewTab, PortalPinSection, ReferralStatsSection } from "@/components/client/ClientOverviewTab";
 import { ClientEnquiriesTab } from "@/components/client/ClientEnquiriesTab";
 import { ClientQuotesTab } from "@/components/client/ClientQuotesTab";
 import { ClientBookedTab } from "@/components/client/ClientBookedTab";
@@ -112,7 +117,7 @@ function ReferrerSelector({
 
   if (currentReferredByClientId && currentReferrer) {
     return (
-      <div className={`flex w-full items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/5 px-3 py-2 ${className ?? ""}`}>
+      <div className={`flex items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/5 px-3 py-2 ${className ?? ""}`}>
         <UserCheck className="h-3.5 w-3.5 shrink-0 text-green-600" />
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold text-black/40">Referred by</p>
@@ -136,18 +141,18 @@ function ReferrerSelector({
   }
 
   return (
-    <div ref={wrapperRef} className={`relative w-full ${className ?? ""}`}>
+    <div ref={wrapperRef} className={`relative ${className ?? ""}`}>
       {!open ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center gap-1.5 rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-3 py-2 text-xs font-medium text-black/40 transition hover:border-black/25 hover:bg-black/[0.04] hover:text-black/60"
+          className="flex w-full items-center gap-1.5 rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-3 py-1.5 text-xs font-medium text-black/40 transition hover:border-black/25 hover:bg-black/[0.04] hover:text-black/60"
         >
           <Users className="h-3.5 w-3.5" />
           Set referrer
         </button>
       ) : (
-        <div className="rounded-2xl border border-black/10 bg-white shadow-lg">
+        <div className="w-full rounded-2xl border border-black/10 bg-white shadow-lg">
           <div className="flex items-center gap-2 px-3 py-2">
             <Search className="h-3.5 w-3.5 shrink-0 text-black/30" />
             <input
@@ -201,6 +206,92 @@ function ReferrerSelector({
         </div>
       )}
     </div>
+  );
+}
+
+function PortalPinHeaderControl({ clientId }: { clientId: string }) {
+  const { toast } = useToast();
+  const [hasPin, setHasPin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!clientId) return;
+    fetch(`/api/portal/has-pin/${clientId}`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        setHasPin(Boolean(d?.hasPin));
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [clientId]);
+
+  async function handleSetPin() {
+    const pin = window.prompt("Enter a 4-digit portal PIN:");
+    if (!pin) return;
+    if (!/^\d{4}$/.test(pin)) {
+      toast({ title: "PIN must be 4 digits", variant: "destructive" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/portal/set-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ clientId, pin }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setHasPin(true);
+      toast({ title: "Portal PIN set" });
+    } catch {
+      toast({ title: "Failed to set PIN", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemovePin() {
+    const confirmed = window.confirm("Remove portal PIN for this client?");
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/portal/remove-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ clientId }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setHasPin(false);
+      toast({ title: "Portal PIN removed" });
+    } catch {
+      toast({ title: "Failed to remove PIN", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-3 py-1 text-xs font-semibold text-black/45">
+        PIN...
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={hasPin ? handleRemovePin : handleSetPin}
+      disabled={busy}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${hasPin ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15" : "border-black/10 bg-black/[0.03] text-black/60 hover:bg-black/[0.06]"}`}
+      data-testid="button-portal-pin-header"
+      title={hasPin ? "Click to remove portal PIN" : "Set portal PIN"}
+    >
+      {hasPin ? <Check className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
+      {busy ? "Working..." : hasPin ? "PIN Active" : "Set PIN"}
+    </button>
   );
 }
 
@@ -299,6 +390,10 @@ export default function ClientPage() {
 
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
+  const isClientPinned = useMemo(() => {
+    if (!userFavorites || !clientId) return false;
+    return userFavorites.some((f: Favorite) => f.itemType === "client" && f.itemId === clientId);
+  }, [userFavorites, clientId]);
 
   const updateClientMutationHook = useUpdateClient();
   const updateClientMutation = {
@@ -601,6 +696,7 @@ export default function ClientPage() {
       onRoleChange={setRole}
       active={active}
       title={client.name}
+      subtitle={clientData?.phoneNumber || ""}
       query={q}
       onQuery={setQ}
       theme="light"
@@ -613,46 +709,71 @@ export default function ClientPage() {
         { label: "Task", icon: <Ticket className="h-4 w-4" />, onClick: () => setShowTaskDialog(true) },
       ]}
       headerExtra={
-        <Select
-          value={clientData?.badge || "New Client"}
-          onValueChange={(value) => {
-            if (clientId) {
-              updateNeonClientMutation.mutate(
-                { id: clientId, data: { badge: value } },
+        <div className="flex items-center gap-2">
+          <Select
+            value={clientData?.badge || "New Client"}
+            onValueChange={(value) => {
+              if (clientId) {
+                updateNeonClientMutation.mutate(
+                  { id: clientId, data: { badge: value } },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "Client type updated" });
+                    },
+                    onError: () => {
+                      toast({ title: "Failed to update client type", variant: "destructive" });
+                    },
+                  }
+                );
+              }
+            }}
+          >
+            <SelectTrigger
+              className="h-auto w-auto rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 px-3 py-1 text-xs font-semibold text-[#3b82f6] hover:bg-[#3b82f6]/20"
+              data-testid="select-client-type-header"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-[400]">
+              <SelectItem value="New Client">New Client</SelectItem>
+              <SelectItem value="Repeat Client">Repeat Client</SelectItem>
+              <SelectItem value="VIP Client">VIP Client</SelectItem>
+              <SelectItem value="Family Member">Family Member</SelectItem>
+              <SelectItem value="Time Waster">Time Waster</SelectItem>
+              <SelectItem value="Banned">Banned</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <button
+            type="button"
+            onClick={() => {
+              const clientName = client?.name || "Client";
+              const subtitle = clientData?.phoneNumber || clientData?.email || "";
+              toggleFavoriteMutation.mutate(
+                { itemType: "client", itemId: clientId, label: clientName, subtitle },
                 {
-                  onSuccess: () => {
-                    toast({ title: "Client type updated" });
-                  },
-                  onError: () => {
-                    toast({ title: "Failed to update client type", variant: "destructive" });
+                  onSuccess: (data: { favorited?: boolean }) => {
+                    toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" });
                   },
                 }
               );
-            }
-          }}
-        >
-          <SelectTrigger
-            className="h-auto w-auto rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 px-3 py-1 text-xs font-semibold text-[#3b82f6] hover:bg-[#3b82f6]/20"
-            data-testid="select-client-type-header"
+            }}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isClientPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/60 hover:bg-black/[0.03]"}`}
+            data-testid="button-pin-client-header"
+            title={isClientPinned ? "Unpin client" : "Pin client"}
           >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="z-[400]">
-            <SelectItem value="New Client">New Client</SelectItem>
-            <SelectItem value="Repeat Client">Repeat Client</SelectItem>
-            <SelectItem value="VIP Client">VIP Client</SelectItem>
-            <SelectItem value="Family Member">Family Member</SelectItem>
-            <SelectItem value="Time Waster">Time Waster</SelectItem>
-            <SelectItem value="Banned">Banned</SelectItem>
-          </SelectContent>
-        </Select>
+            {isClientPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+          </button>
+
+          <PortalPinHeaderControl clientId={clientId} />
+        </div>
       }
     >
-      <div className="relative min-h-[calc(100vh-56px)] w-full px-4 pb-6 md:px-6 md:pb-8">
-        <div className="relative mt-6 grid gap-3 lg:grid-cols-12" data-testid="layout-client-page">
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 lg:col-span-4">
+      <div className="relative min-h-[calc(100vh-56px)] w-full px-2 pb-3 md:px-3 md:pb-4">
+        <div className="relative mt-2 grid gap-2 lg:grid-cols-12" data-testid="layout-client-page">
+          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-3 lg:col-span-4">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+              <div className="flex w-full items-center gap-2">
                 <button
                   type="button"
                   onClick={() => navigate("/clients")}
@@ -662,31 +783,33 @@ export default function ClientPage() {
                   <ChevronLeft className="h-4 w-4" />
                   Back
                 </button>
+
+                <ReferrerSelector
+                  className="min-w-0 flex-1"
+                  currentReferredByClientId={clientData?.referredByClientId}
+                  excludeClientId={clientId}
+                  onSelect={(referredByClientId) => {
+                    updateNeonClientMutation.mutate(
+                      { id: clientId, data: { referredByClientId } },
+                      { onSuccess: () => toast({ title: "Referrer saved" }), onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }) }
+                    );
+                  }}
+                  onClear={() => {
+                    updateNeonClientMutation.mutate(
+                      { id: clientId, data: { referredByClientId: null } },
+                      { onSuccess: () => toast({ title: "Referrer removed" }), onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }) }
+                    );
+                  }}
+                />
               </div>
             </div>
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/70 p-4" data-testid="card-client-summary">
-              <ReferrerSelector
-                className="mb-3"
-                currentReferredByClientId={clientData?.referredByClientId}
-                excludeClientId={clientId}
-                onSelect={(referredByClientId) => {
-                  updateNeonClientMutation.mutate(
-                    { id: clientId, data: { referredByClientId } },
-                    { onSuccess: () => toast({ title: "Referrer saved" }), onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }) }
-                  );
-                }}
-                onClear={() => {
-                  updateNeonClientMutation.mutate(
-                    { id: clientId, data: { referredByClientId: null } },
-                    { onSuccess: () => toast({ title: "Referrer removed" }), onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }) }
-                  );
-                }}
-              />
-
-              <div>
-                <PortalPinSection clientId={clientId} />
+              <div className="mb-3">
+                <ReferralStatsSection clientId={clientId} />
               </div>
+
+              <PortalPinSection clientId={clientId} />
 
             </div>
 
@@ -816,7 +939,7 @@ export default function ClientPage() {
             </div>
           </Card>
 
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-4 lg:col-span-8">
+          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-3 lg:col-span-8">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-sm font-semibold" data-testid="text-client-right-title">

@@ -3,6 +3,7 @@ import {
   BadgeCheck,
   Clock,
   Plane,
+  ImagePlus,
   TrendingUp,
   ChevronRight,
   Shield,
@@ -28,11 +29,12 @@ import {
   ticketTypePill,
 } from "./client-types";
 import type { Client } from "./client-types";
-import { useReferralStatsByClient } from "@/hooks/queries/use-referral-queries";
+import { useVipOverview } from "@/hooks/queries/use-referral-queries";
 import type { TaskNew } from "@shared/schema";
 
 export function ReferralStatsSection({ clientId }: { clientId: string }) {
-  const { data: stats, isLoading } = useReferralStatsByClient(clientId);
+  const { data, isLoading } = useVipOverview(clientId);
+  const stats = data?.stats;
 
   if (isLoading) {
     return (
@@ -45,48 +47,48 @@ export function ReferralStatsSection({ clientId }: { clientId: string }) {
   }
 
   const total = stats?.total ?? 0;
-  const pending = stats?.pending ?? 0;
-  const wallet = stats?.wallet ?? 0;
-  const overall = stats?.overall ?? 0;
+  const pending = stats?.pendingPayout ?? 0;
+  const wallet = stats?.availableBalance ?? 0;
+  const overall = stats?.overallPayout ?? 0;
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="referral-stats-section">
-      <div className="mb-3 flex items-center gap-2">
-        <Users className="h-4 w-4 text-purple-600" />
-        <div className="text-xs font-semibold text-black/80">Referral Summary</div>
+    <div className="rounded-2xl border border-black/10 bg-white/70 p-3" data-testid="referral-stats-section">
+      <div className="mb-2.5 flex items-center gap-1.5">
+        <Users className="h-3.5 w-3.5 text-purple-600" />
+        <div className="text-[11px] font-semibold text-black/75">Referral Summary</div>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className="flex flex-col gap-1 rounded-xl border border-purple-500/20 bg-purple-500/[0.06] p-3" data-testid="stat-total-referred">
+        <div className="flex flex-col gap-0.5 rounded-xl border border-purple-500/20 bg-purple-500/[0.06] p-2.5" data-testid="stat-total-referred">
           <div className="flex items-center gap-1.5">
-            <Users className="h-3.5 w-3.5 text-purple-600" />
-            <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Referred</span>
+            <Users className="h-3 w-3 text-purple-600" />
+            <span className="text-[9px] font-semibold text-black/50 uppercase tracking-wide">Referred</span>
           </div>
-          <div className="text-xl font-bold text-black/85">{total}</div>
-          <div className="text-[10px] text-black/40">Total clients</div>
+          <div className="text-lg font-bold text-black/85 leading-tight">{total}</div>
+          <div className="text-[9px] text-black/40">Total clients</div>
         </div>
-        <div className="flex flex-col gap-1 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3" data-testid="stat-pending-commission">
+        <div className="flex flex-col gap-0.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5" data-testid="stat-pending-commission">
           <div className="flex items-center gap-1.5">
-            <TrendingDown className="h-3.5 w-3.5 text-amber-600" />
-            <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Pending</span>
+            <TrendingDown className="h-3 w-3 text-amber-600" />
+            <span className="text-[9px] font-semibold text-black/50 uppercase tracking-wide">Pending</span>
           </div>
-          <div className="text-xl font-bold text-black/85">{currency.format(pending)}</div>
-          <div className="text-[10px] text-black/40">Awaiting approval</div>
+          <div className="text-lg font-bold text-black/85 leading-tight">{currency.format(pending)}</div>
+          <div className="text-[9px] text-black/40">Awaiting approval</div>
         </div>
-        <div className="flex flex-col gap-1 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-3" data-testid="stat-wallet-balance">
+        <div className="flex flex-col gap-0.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-2.5" data-testid="stat-wallet-balance">
           <div className="flex items-center gap-1.5">
-            <Wallet className="h-3.5 w-3.5 text-blue-600" />
-            <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Wallet</span>
+            <Wallet className="h-3 w-3 text-blue-600" />
+            <span className="text-[9px] font-semibold text-black/50 uppercase tracking-wide">Wallet</span>
           </div>
-          <div className="text-xl font-bold text-black/85">{currency.format(wallet)}</div>
-          <div className="text-[10px] text-black/40">Ready to withdraw</div>
+          <div className="text-lg font-bold text-black/85 leading-tight">{currency.format(wallet)}</div>
+          <div className="text-[9px] text-black/40">Ready to withdraw</div>
         </div>
-        <div className="flex flex-col gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3" data-testid="stat-overall-commission">
+        <div className="flex flex-col gap-0.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-2.5" data-testid="stat-overall-commission">
           <div className="flex items-center gap-1.5">
-            <CircleDollarSign className="h-3.5 w-3.5 text-emerald-600" />
-            <span className="text-[10px] font-semibold text-black/50 uppercase tracking-wide">Overall</span>
+            <CircleDollarSign className="h-3 w-3 text-emerald-600" />
+            <span className="text-[9px] font-semibold text-black/50 uppercase tracking-wide">Overall</span>
           </div>
-          <div className="text-xl font-bold text-black/85">{currency.format(overall)}</div>
-          <div className="text-[10px] text-black/40">All-time commission</div>
+          <div className="text-lg font-bold text-black/85 leading-tight">{currency.format(overall)}</div>
+          <div className="text-[9px] text-black/40">All-time commission</div>
         </div>
       </div>
     </div>
@@ -266,7 +268,6 @@ export function ClientOverviewTab({
 }: ClientOverviewTabProps) {
   return (
     <div className="grid gap-3" data-testid="panel-overview">
-      <ReferralStatsSection clientId={clientId} />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="overview-stats">
         <div className="rounded-2xl border border-black/10 bg-white/70 p-3 text-center" data-testid="stat-enquiries">
           <div className="text-2xl font-bold text-black/85">{enquiries.length}</div>
@@ -295,7 +296,16 @@ export function ClientOverviewTab({
           <div className="text-xs font-semibold text-black/80">Recent Activity</div>
         </div>
         {(() => {
-          const activities: Array<{ id: string; type: "Enquiry" | "Quote" | "Booking"; title: string; date: string; status?: string; link: string }> = [];
+          const activities: Array<{
+            id: string;
+            type: "Enquiry" | "Quote" | "Booking";
+            title: string;
+            date: string;
+            status?: string;
+            link: string;
+            imageUrl?: string | null;
+            meta?: string;
+          }> = [];
           enquiries.slice(0, 3).forEach((e: EnquiryTable) => {
             activities.push({
               id: `e-${e.id}`,
@@ -304,6 +314,8 @@ export function ClientOverviewTab({
               date: e.date_created || "",
               status: e.status ?? undefined,
               link: `/clients/${clientId}/enquiries/${e.id}`,
+              imageUrl: null,
+              meta: e.holiday_type_name || "Enquiry",
             });
           });
           quotes.slice(0, 3).forEach((q: QuoteWithJoins) => {
@@ -314,6 +326,8 @@ export function ClientOverviewTab({
               date: q.date_created || "",
               status: (q.quote_status || "NEW_LEAD").replace(/_/g, " "),
               link: `/clients/${clientId}/quotes/${q.id}`,
+              imageUrl: q.images?.find((img) => img.isPrimary)?.image_url || q.images?.[0]?.image_url || null,
+              meta: q.holiday_type_name || q.quote_type || "Quote",
             });
           });
           bookings.slice(0, 3).forEach((b: BookingWithJoins) => {
@@ -324,6 +338,8 @@ export function ClientOverviewTab({
               date: b.date_created || "",
               status: b.booking_status || "BOOKED",
               link: `/clients/${clientId}/bookings/${b.id}`,
+              imageUrl: b.images?.find((img) => img.isPrimary)?.image_url || b.images?.[0]?.image_url || null,
+              meta: b.holiday_type_name || "Booking",
             });
           });
           activities.sort((a, b) => {
@@ -352,35 +368,52 @@ export function ClientOverviewTab({
                 <button
                   key={a.id}
                   type="button"
-                  className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/65 p-3 text-left transition hover:bg-black/[0.03]"
+                  className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                   data-testid={`activity-${a.id}`}
                   onClick={() => navigate(a.link)}
                 >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
-                      <Plane className="h-4 w-4 text-black/45" />
+                  <div className="flex items-start gap-3">
+                    <div className="relative h-[72px] w-[96px] shrink-0 overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-black/[0.05] via-white/30 to-transparent" aria-hidden>
+                      {a.imageUrl ? (
+                        <img src={a.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-black/20">
+                          <ImagePlus className="h-6 w-6" />
+                        </div>
+                      )}
                     </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-black/85">{a.title}</div>
-                      <div className="mt-0.5 flex items-center gap-1.5">
-                        <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${typeStyle(a.type)}`}>
-                          {a.type}
-                        </span>
-                        {a.status && (
-                          <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-black/55">
-                            {a.status}
-                          </span>
-                        )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-black/85">{a.title}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/60">
+                            {a.meta && <span>{a.meta}</span>}
+                            {a.date && (
+                              <>
+                                <span className="text-black/25">•</span>
+                                <span>{formatUKDate(a.date)}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${typeStyle(a.type)}`}>
+                              {a.type}
+                            </span>
+                            {a.status && (
+                              <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-black/55">
+                                {a.status}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-black/60">
+                          View
+                          <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {a.date && (
-                      <span className="text-[11px] text-black/45">
-                        {formatUKDate(a.date)}
-                      </span>
-                    )}
-                    <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
                   </div>
                 </button>
               ))}
@@ -389,13 +422,14 @@ export function ClientOverviewTab({
         })()}
       </div>
 
-      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-client-work-items">
+      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-client-overview">
         <div className="mb-3 flex items-center gap-2">
           <BadgeCheck className="h-4 w-4 text-black/50" />
           <div className="text-xs font-semibold text-black/80">Overview</div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
+
+        <div className="flex flex-col gap-4">
+          <div data-testid="overview-client-tasks">
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-black/45">All Tasks ({tasks.length})</div>
             {tasks.length === 0 ? (
               <div className="rounded-xl border border-dashed border-black/10 bg-white/40 p-3 text-center text-xs text-black/45">
@@ -424,7 +458,7 @@ export function ClientOverviewTab({
             )}
           </div>
 
-          <div>
+          <div data-testid="overview-client-tickets">
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-black/45">All Tickets ({tickets.length})</div>
             {tickets.length === 0 ? (
               <div className="rounded-xl border border-dashed border-black/10 bg-white/40 p-3 text-center text-xs text-black/45">
@@ -449,11 +483,9 @@ export function ClientOverviewTab({
               </div>
             )}
           </div>
-        </div>
-      </div>
 
-      <div className="grid gap-2 md:grid-cols-2">
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-preferences">
+          <div className="grid gap-2 md:grid-cols-2">
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-preferences">
           <div className="mb-3 flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-black/50" />
             <div className="text-xs font-semibold text-black/80">Commission Summary</div>
@@ -480,7 +512,7 @@ export function ClientOverviewTab({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-tags-section">
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-tags-section">
           <div className="mb-3 flex items-center gap-2">
             <BadgeCheck className="h-4 w-4 text-black/50" />
             <div className="text-xs font-semibold text-black/80">Tags &amp; Status</div>
@@ -515,67 +547,9 @@ export function ClientOverviewTab({
               </span>
             </div>
           </div>
-        </div>
-      </div>
-      <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-upcoming">
-        <div className="mb-3 flex items-center gap-2">
-          <Plane className="h-4 w-4 text-black/50" />
-          <div className="text-xs font-semibold text-black/80">Upcoming Trips</div>
-        </div>
-        {(() => {
-          const upcomingItems: Array<{ id: string; title: string; type: string; travelDate: string; status: string; isBooking: boolean }> = [];
-          bookings.forEach((b: BookingWithJoins) => {
-            if (!b.travel_date) return;
-            const td = new Date(b.travel_date);
-            if (td >= new Date()) {
-              upcomingItems.push({ id: b.id, title: b.title || b.holiday_type_name || "Booking", type: b.holiday_type_name || "—", travelDate: b.travel_date, status: "BOOKED", isBooking: true });
-            }
-          });
-          upcomingItems.sort((a, b) => new Date(a.travelDate).getTime() - new Date(b.travelDate).getTime());
-          const upcoming = upcomingItems.slice(0, 3);
-          if (upcoming.length === 0) {
-            return (
-              <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-4 text-center text-xs text-black/45" data-testid="empty-upcoming">
-                No upcoming trips scheduled
-              </div>
-            );
-          }
-          return (
-            <div className="grid gap-2">
-              {upcoming.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="group flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
-                  data-testid={`upcoming-trip-${item.id}`}
-                  onClick={() => navigate(`/clients/${clientId}/${item.isBooking ? "bookings" : "quotes"}/${item.id}`)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-black/10 bg-black/[0.03]">
-                      <Plane className="h-4 w-4 text-black/50" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-black/85" data-testid={`upcoming-title-${item.id}`}>
-                        {item.title}
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-black/55">
-                        <span>{item.type}</span>
-                        <span className="text-black/25">&middot;</span>
-                        <span>{new Date(item.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${item.isBooking ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}>
-                      {item.status}
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5" />
-                  </div>
-                </button>
-              ))}
             </div>
-          );
-        })()}
+          </div>
+        </div>
       </div>
     </div>
   );
