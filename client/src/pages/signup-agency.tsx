@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plane, Building2, Palette, CreditCard, User, Check, ChevronRight, ChevronLeft, Upload, Loader2 } from "lucide-react";
+import { Plane, Building2, Palette, CreditCard, User, Check, ChevronRight, ChevronLeft, Upload, Loader2, Users, Plus, X, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAgency, readAgencies, writeAgencies, type AgencyPlan, PLAN_DETAILS } from "@/hooks/use-agency";
+import { useAgency, readAgencies, writeAgencies, writeTeam, type AgencyPlan, type TeamMember, PLAN_DETAILS } from "@/hooks/use-agency";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -13,7 +13,19 @@ const STEPS = [
   { id: 2, label: "Branding", icon: Palette },
   { id: 3, label: "Plan", icon: CreditCard },
   { id: 4, label: "Owner", icon: User },
+  { id: 5, label: "Team", icon: Users },
 ];
+
+type InviteRole = "Manager" | "Agent" | "Homeworker" | "Referer";
+const INVITE_ROLE_OPTIONS: { value: InviteRole; label: string }[] = [
+  { value: "Manager", label: "Manager" },
+  { value: "Agent", label: "Agent" },
+  { value: "Homeworker", label: "Homeworker" },
+  { value: "Referer", label: "Referral Agent" },
+];
+
+type Invite = { id: string; email: string; role: InviteRole };
+const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
 const SUGGESTED_COLORS = ["#2563eb", "#0891b2", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#9333ea", "#db2777"];
 
@@ -37,6 +49,10 @@ export default function SignupAgencyPage() {
   const [ownerEmail, setOwnerEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<InviteRole>("Agent");
+
   const handleNameChange = (v: string) => {
     setName(v);
     const auto = v.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -56,11 +72,32 @@ export default function SignupAgencyPage() {
     reader.readAsDataURL(file);
   };
 
+  const planSeatLimit = PLAN_DETAILS[plan].seats;
+  const remainingSeats = Math.max(0, planSeatLimit - 1 - invites.length);
+  const atSeatLimit = remainingSeats <= 0;
+
+  const addInvite = () => {
+    const trimmed = inviteEmail.trim().toLowerCase();
+    if (!isValidEmail(trimmed) || atSeatLimit) return;
+    if (invites.some((i) => i.email.toLowerCase() === trimmed) || trimmed === ownerEmail.trim().toLowerCase()) return;
+    setInvites((prev) => [...prev, { id: `inv-${Date.now()}-${prev.length}`, email: trimmed, role: inviteRole }]);
+    setInviteEmail("");
+  };
+
+  const removeInvite = (id: string) => setInvites((prev) => prev.filter((i) => i.id !== id));
+  const changeInviteRole = (id: string, r: InviteRole) => setInvites((prev) => prev.map((i) => i.id === id ? { ...i, role: r } : i));
+
   const canProceed = () => {
     if (step === 1) return !!name.trim() && !!slug.trim() && !slugTaken;
     if (step === 2) return !!brandColor;
     if (step === 3) return !!plan;
     if (step === 4) return !!ownerName.trim() && !!ownerEmail.trim() && password.length >= 6;
+    if (step === 5) {
+      if (invites.length + 1 > planSeatLimit) return false;
+      const ownerLower = ownerEmail.trim().toLowerCase();
+      if (invites.some((i) => i.email.toLowerCase() === ownerLower)) return false;
+      return true;
+    }
     return false;
   };
 
@@ -83,6 +120,22 @@ export default function SignupAgencyPage() {
     const all = readAgencies();
     writeAgencies([...all, newAgency]);
     switchAgency(newAgency);
+
+    const ownerMember: TeamMember = {
+      id: `u-${Date.now()}`,
+      name: ownerName.trim(),
+      email: ownerEmail.trim(),
+      role: "Admin",
+      status: "active",
+    };
+    const inviteMembers: TeamMember[] = invites.map((inv, i) => ({
+      id: `inv-${Date.now()}-${i}`,
+      name: inv.email.split("@")[0],
+      email: inv.email,
+      role: inv.role,
+      status: "invited",
+    }));
+    writeTeam([ownerMember, ...inviteMembers]);
     sessionStorage.setItem("apple-travel-role-preview", "Admin");
     try { window.dispatchEvent(new Event("role-preview-updated")); } catch {}
     await new Promise((r) => setTimeout(r, 700));
@@ -243,6 +296,92 @@ export default function SignupAgencyPage() {
                   </div>
                 </div>
               )}
+
+              {step === 5 && (
+                <div className="space-y-5">
+                  <div>
+                    <h2 className="text-xl font-semibold">Invite your team</h2>
+                    <p className="mt-1 text-sm text-black/60 dark:text-white/60">Optional — add teammates now and we'll email them an invite. You can also do this later from Settings.</p>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-4 py-2 text-xs dark:border-white/10 dark:bg-white/5">
+                    <span className="text-black/60 dark:text-white/60">Seats on <strong className="text-black/80 dark:text-white/80">{PLAN_DETAILS[plan].label}</strong></span>
+                    <span data-testid="text-seat-count" className={cn(atSeatLimit && "text-amber-600 font-medium")}>
+                      {invites.length + 1} / {planSeatLimit} used
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="min-w-[220px] flex-1 space-y-1">
+                      <Label htmlFor="invite-email">Teammate email</Label>
+                      <Input
+                        id="invite-email"
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addInvite(); } }}
+                        placeholder="teammate@yourcompany.com"
+                        disabled={atSeatLimit}
+                        data-testid="input-invite-email"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Role</Label>
+                      <select
+                        value={inviteRole}
+                        onChange={(e) => setInviteRole(e.target.value as InviteRole)}
+                        disabled={atSeatLimit}
+                        className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
+                        data-testid="select-invite-role"
+                      >
+                        {INVITE_ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      </select>
+                    </div>
+                    <Button type="button" onClick={addInvite} disabled={atSeatLimit || !isValidEmail(inviteEmail)} style={{ background: brandColor }} data-testid="button-add-invite">
+                      <Plus className="mr-1 h-4 w-4" /> Add
+                    </Button>
+                  </div>
+
+                  {atSeatLimit && (
+                    <div className="rounded-xl bg-amber-500/10 px-4 py-2 text-xs text-amber-700">
+                      You've used all seats on the {PLAN_DETAILS[plan].label} plan. Pick a larger plan to invite more teammates.
+                    </div>
+                  )}
+
+                  {invites.some((i) => i.email.toLowerCase() === ownerEmail.trim().toLowerCase()) && (
+                    <div className="rounded-xl bg-red-500/10 px-4 py-2 text-xs text-red-700" data-testid="text-owner-duplicate-warning">
+                      One of your invites uses the owner email address. Remove it or change the owner email to continue.
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    {invites.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-black/10 p-6 text-center text-sm text-black/50 dark:border-white/10 dark:text-white/50" data-testid="text-no-invites">
+                        <Mail className="mx-auto mb-2 h-5 w-5 opacity-60" />
+                        No invites yet — that's fine, you can invite teammates anytime.
+                      </div>
+                    ) : (
+                      invites.map((inv) => (
+                        <div key={inv.id} className="flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/5" data-testid={`row-invite-${inv.id}`}>
+                          <Mail className="h-4 w-4 text-black/40 dark:text-white/40" />
+                          <span className="flex-1 text-sm" data-testid={`text-invite-email-${inv.id}`}>{inv.email}</span>
+                          <select
+                            value={inv.role}
+                            onChange={(e) => changeInviteRole(inv.id, e.target.value as InviteRole)}
+                            className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
+                            data-testid={`select-invite-role-${inv.id}`}
+                          >
+                            {INVITE_ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                          </select>
+                          <button type="button" onClick={() => removeInvite(inv.id)} className="rounded-lg p-1.5 text-black/50 hover:bg-black/5 hover:text-red-600 dark:text-white/50 dark:hover:bg-white/10" data-testid={`button-remove-invite-${inv.id}`} aria-label="Remove invite">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
 
@@ -250,7 +389,7 @@ export default function SignupAgencyPage() {
             <Button type="button" variant="ghost" onClick={() => setStep((s) => Math.max(1, s - 1))} disabled={step === 1} data-testid="button-prev-step">
               <ChevronLeft className="mr-1 h-4 w-4" /> Back
             </Button>
-            {step < 4 ? (
+            {step < 5 ? (
               <Button type="button" onClick={() => setStep((s) => s + 1)} disabled={!canProceed()} data-testid="button-next-step" style={{ background: brandColor }}>
                 Continue <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
