@@ -112,6 +112,8 @@ export default function SignupAgencyPage() {
       brandColor,
       plan,
       seatLimit: planDetail.seats,
+      seatsUsed: 1 + invites.length,
+      trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString(),
       status: "active" as const,
       ownerEmail: ownerEmail.trim(),
       ownerName: ownerName.trim(),

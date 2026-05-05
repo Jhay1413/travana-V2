@@ -10,6 +10,8 @@ export type Agency = {
   brandColor: string;
   plan: AgencyPlan;
   seatLimit: number;
+  seatsUsed?: number;
+  trialEndsAt?: string | null;
   status: "active" | "suspended";
   ownerEmail: string;
   ownerName: string;
@@ -42,11 +44,15 @@ const DEFAULT_AGENCY: Agency = {
   brandColor: "#2563eb",
   plan: "growth",
   seatLimit: 15,
+  seatsUsed: 7,
+  trialEndsAt: null,
   status: "active",
   ownerEmail: "tina@tinastravel.com",
   ownerName: "Tina Cooper",
   createdAt: new Date().toISOString(),
 };
+
+const daysFromNow = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
 
 const DEFAULT_TEAM: TeamMember[] = [
   { id: "u1", name: "Tina Cooper", email: "tina@tinastravel.com", role: "Admin", status: "active" },
@@ -60,9 +66,10 @@ const DEFAULT_TEAM: TeamMember[] = [
 
 const DEMO_AGENCIES: Agency[] = [
   DEFAULT_AGENCY,
-  { id: "a2", name: "Sunset Voyages", slug: "sunset-voyages", logoUrl: null, brandColor: "#ea580c", plan: "starter", seatLimit: 5, status: "active", ownerEmail: "owner@sunset.com", ownerName: "Riya Khan", createdAt: new Date().toISOString() },
-  { id: "a3", name: "Highland Holidays", slug: "highland-holidays", logoUrl: null, brandColor: "#16a34a", plan: "scale", seatLimit: 50, status: "active", ownerEmail: "ceo@highland.co.uk", ownerName: "Greg McLeod", createdAt: new Date().toISOString() },
-  { id: "a4", name: "Coastal Escapes", slug: "coastal-escapes", logoUrl: null, brandColor: "#9333ea", plan: "growth", seatLimit: 15, status: "suspended", ownerEmail: "hello@coastal.com", ownerName: "Mira Holt", createdAt: new Date().toISOString() },
+  { id: "a2", name: "Sunset Voyages", slug: "sunset-voyages", logoUrl: null, brandColor: "#ea580c", plan: "starter", seatLimit: 5, seatsUsed: 3, trialEndsAt: daysFromNow(9), status: "active", ownerEmail: "owner@sunset.com", ownerName: "Riya Khan", createdAt: new Date().toISOString() },
+  { id: "a3", name: "Highland Holidays", slug: "highland-holidays", logoUrl: null, brandColor: "#16a34a", plan: "scale", seatLimit: 50, seatsUsed: 38, trialEndsAt: null, status: "active", ownerEmail: "ceo@highland.co.uk", ownerName: "Greg McLeod", createdAt: new Date().toISOString() },
+  { id: "a4", name: "Coastal Escapes", slug: "coastal-escapes", logoUrl: null, brandColor: "#9333ea", plan: "growth", seatLimit: 15, seatsUsed: 11, trialEndsAt: null, status: "suspended", ownerEmail: "hello@coastal.com", ownerName: "Mira Holt", createdAt: new Date().toISOString() },
+  { id: "a5", name: "Northern Lights Travel", slug: "northern-lights", logoUrl: null, brandColor: "#0ea5e9", plan: "growth", seatLimit: 15, seatsUsed: 4, trialEndsAt: daysFromNow(3), status: "active", ownerEmail: "owner@northern.co", ownerName: "Eva Lind", createdAt: new Date().toISOString() },
 ];
 
 function readAgency(): Agency {
@@ -74,10 +81,28 @@ function readAgency(): Agency {
   return DEFAULT_AGENCY;
 }
 
+function backfillAgency(a: Agency): Agency {
+  if (a.seatsUsed !== undefined && a.trialEndsAt !== undefined) return a;
+  return {
+    ...a,
+    seatsUsed: a.seatsUsed ?? Math.min(a.seatLimit, Math.max(1, Math.round(a.seatLimit * 0.4))),
+    trialEndsAt: a.trialEndsAt ?? null,
+  };
+}
+
 export function readAgencies(): Agency[] {
   try {
     const raw = localStorage.getItem(AGENCIES_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Agency[];
+      const needsBackfill = parsed.some((a) => a.seatsUsed === undefined || a.trialEndsAt === undefined);
+      if (needsBackfill) {
+        const migrated = parsed.map(backfillAgency);
+        localStorage.setItem(AGENCIES_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+      return parsed;
+    }
   } catch {}
   localStorage.setItem(AGENCIES_KEY, JSON.stringify(DEMO_AGENCIES));
   return DEMO_AGENCIES;
