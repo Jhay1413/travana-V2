@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plane, Users, FileText, TrendingUp, Shield, Zap, Loader2, Eye, EyeOff } from "lucide-react";
+import { Plane, Users, FileText, TrendingUp, Shield, Zap, Loader2, Eye, EyeOff, Sparkles } from "lucide-react";
 import { useLogin } from "@/hooks/mutations";
 
 export default function LandingPage() {
@@ -11,6 +12,7 @@ export default function LandingPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const loginMutation = useLogin();
+  const [, setLocation] = useLocation();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +29,13 @@ export default function LandingPage() {
             </div>
             <span className="text-xl font-semibold tracking-tight">TravelHub</span>
           </div>
+          <button
+            onClick={() => setLocation("/signup")}
+            className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-medium text-white transition border border-white/15"
+            data-testid="button-nav-signup"
+          >
+            <Sparkles className="w-4 h-4" /> Start your agency
+          </button>
         </div>
       </nav>
 
@@ -46,6 +55,16 @@ export default function LandingPage() {
               <p className="text-xl md:text-2xl text-white/60 mb-10 max-w-2xl">
                 The premium CRM for travel professionals. Manage clients, quotes, and commissions with elegance.
               </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  onClick={() => setLocation("/signup")}
+                  className="rounded-2xl bg-white text-black hover:bg-white/90 h-12 px-6 text-base font-semibold"
+                  data-testid="button-hero-signup"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" /> Sign up your agency — free trial
+                </Button>
+                <span className="text-sm text-white/50">No credit card required</span>
+              </div>
             </motion.div>
 
             <motion.div

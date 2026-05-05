@@ -1,5 +1,6 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
+import { useAgency } from "@/hooks/use-agency";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
@@ -75,7 +76,7 @@ import { Switch } from "@/components/ui/switch";
 
 import { cn } from "@/lib/utils";
 
-export type Role = "Admin" | "Manager" | "Agent" | "Homeworker" | "Referer";
+export type Role = "PlatformAdmin" | "Admin" | "Manager" | "Agent" | "Homeworker" | "Referer";
 
 function getNavRoute(key: string): string {
   const routes: Record<string, string> = {
@@ -134,11 +135,18 @@ function getNavRoute(key: string): string {
     "feedback": "/feedback",
     "connect-internal-chat": "/?s=connect-internal-chat",
     "referrals": "/?s=referrals",
+    "agency-team": "/agency/team",
+    "agency-permissions": "/agency/permissions",
+    "agency-branding": "/agency/branding",
+    "agency-billing": "/agency/billing",
+    "platform-admin": "/platform-admin",
+    "referral-hub": "/referral-hub",
   };
   return routes[key] || "/";
 }
 
 const RoleIcon = {
+  PlatformAdmin: Shield,
   Admin: Shield,
   Manager: BarChart3,
   Agent: Sparkles,
@@ -146,12 +154,17 @@ const RoleIcon = {
   Referer: Link2,
 } as const;
 
+const ROLE_DISPLAY: Record<Role, string> = {
+  PlatformAdmin: "Platform Admin",
+  Admin: "Owner",
+  Manager: "Manager",
+  Agent: "Agent",
+  Homeworker: "Homeworker",
+  Referer: "Referral Agent",
+};
+
 function rolePillLabel(role: Role) {
-  if (role === "Admin") return "Admin";
-  if (role === "Manager") return "Manager";
-  if (role === "Homeworker") return "Homeworker";
-  if (role === "Referer") return "Referer";
-  return "Agent";
+  return ROLE_DISPLAY[role] || "Agent";
 }
 
 const DID_YOU_KNOW_TIPS = [
@@ -550,6 +563,7 @@ export function CommandCenterShell({
   }, [query]);
 
   const { data: currentUser } = useCurrentUser();
+  const { agency } = useAgency();
 
   const { data: sidebarChats } = useChatConversations();
   const unreadChatCount = useMemo(() => {
@@ -643,10 +657,34 @@ export function CommandCenterShell({
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
     ];
 
+    if (role === "PlatformAdmin") {
+      return { grouped: false, items: [
+        { key: "platform-admin", label: "All Agencies", icon: <Building2 className="h-4 w-4" /> },
+        { key: "overview", label: "Demo Workspace", icon: <LayoutGrid className="h-4 w-4" /> },
+      ]};
+    }
+
+    if (role === "Referer") {
+      return { grouped: false, items: [
+        { key: "referral-hub", label: "Affiliate Hub", icon: <Link2 className="h-4 w-4" /> },
+      ]};
+    }
+
     if (role === "Admin") {
       return {
         grouped: true,
         sections: [
+          {
+            id: "owner",
+            label: "Agency Settings",
+            icon: <Building2 className="h-4 w-4" />,
+            items: [
+              { key: "agency-team", label: "Team & Seats", icon: <Users className="h-4 w-4" /> },
+              { key: "agency-permissions", label: "Roles & Permissions", icon: <Shield className="h-4 w-4" /> },
+              { key: "agency-branding", label: "White-label Branding", icon: <Sparkles className="h-4 w-4" /> },
+              { key: "agency-billing", label: "Billing & Plan", icon: <CircleDollarSign className="h-4 w-4" /> },
+            ],
+          },
           {
             id: "admin",
             label: "Admin",
@@ -1075,11 +1113,11 @@ export function CommandCenterShell({
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="relative grid h-10 w-10 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                    <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
+                  <div className="relative grid h-10 w-10 place-items-center overflow-hidden rounded-2xl border border-black/10 text-white dark:border-white/10" style={{ background: agency.brandColor }}>
+                    {agency.logoUrl ? <img src={agency.logoUrl} alt="" className="h-full w-full object-cover" /> : <Command className="h-5 w-5" />}
                   </div>
                   <div className="min-w-0">
-                    <div className="title-serif truncate text-sm font-semibold">Travana</div>
+                    <div className="title-serif truncate text-sm font-semibold">{agency.name}</div>
                     <div className="text-xs text-black/55 dark:text-white/55">Pipeline</div>
                   </div>
                 </div>
@@ -1099,8 +1137,8 @@ export function CommandCenterShell({
                 className="mb-4 w-full rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
                 data-testid="select-role-mobile"
               >
-                {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
-                  <option key={r} value={r} className="text-black bg-white">{r}</option>
+                {(["PlatformAdmin", "Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                  <option key={r} value={r} className="text-black bg-white">{ROLE_DISPLAY[r]}</option>
                 ))}
               </select>
 
@@ -1117,25 +1155,27 @@ export function CommandCenterShell({
               {sidebarCollapsed ? (
                 <div className="flex flex-col items-center gap-1">
                   <div
-                    className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                    className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-2xl border border-black/10 text-white dark:border-white/10"
+                    style={{ background: agency.brandColor }}
                     data-testid="img-brand-mark"
                   >
-                    <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
+                    {agency.logoUrl ? <img src={agency.logoUrl} alt="" className="h-full w-full object-cover" /> : <Command className="h-5 w-5" />}
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div
-                      className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                      className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-2xl border border-black/10 text-white dark:border-white/10"
+                      style={{ background: agency.brandColor }}
                       data-testid="img-brand-mark"
                     >
-                      <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
+                      {agency.logoUrl ? <img src={agency.logoUrl} alt="" className="h-full w-full object-cover" /> : <Command className="h-5 w-5" />}
                       <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
                     </div>
                     <div className="min-w-0">
                       <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-title">
-                        Travana
+                        {agency.name}
                       </div>
                       <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-brand-subtitle">
                         Pipeline
@@ -1149,9 +1189,9 @@ export function CommandCenterShell({
                     className="rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
                     data-testid="select-role-nav"
                   >
-                    {(["Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
+                    {(["PlatformAdmin", "Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
                       <option key={r} value={r} className="text-black bg-white">
-                        {r}
+                        {ROLE_DISPLAY[r]}
                       </option>
                     ))}
                   </select>

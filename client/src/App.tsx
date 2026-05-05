@@ -6,6 +6,16 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
+import SignupAgencyPage from "@/pages/signup-agency";
+import WelcomeTeamPage from "@/pages/welcome-team";
+import SettingsTeamPage from "@/pages/settings-team";
+import SettingsPermissionsPage from "@/pages/settings-permissions";
+import SettingsBrandingPage from "@/pages/settings-branding";
+import SettingsBillingPage from "@/pages/settings-billing";
+import PlatformAdminPage from "@/pages/platform-admin";
+import ReferralAgentDashboard from "@/pages/referral-agent";
+import { useRole } from "@/hooks/use-role";
+import { BrandingApplier } from "@/components/branding-applier";
 import PublicQuotePage from "@/pages/public-quote";
 import CommandCenterPage from "@/pages/command-center";
 import ClientsPage from "@/pages/clients";
@@ -52,9 +62,17 @@ function LoadingScreen() {
 }
 
 function AuthenticatedRouter() {
+  const { role } = useRole();
   return (
     <Switch>
-      <Route path="/" component={CommandCenterPage} />
+      <Route path="/" component={role === "Referer" ? ReferralAgentDashboard : role === "PlatformAdmin" ? PlatformAdminPage : CommandCenterPage} />
+      <Route path="/welcome-team" component={WelcomeTeamPage} />
+      <Route path="/platform-admin" component={PlatformAdminPage} />
+      <Route path="/agency/team" component={SettingsTeamPage} />
+      <Route path="/agency/permissions" component={SettingsPermissionsPage} />
+      <Route path="/agency/branding" component={SettingsBrandingPage} />
+      <Route path="/agency/billing" component={SettingsBillingPage} />
+      <Route path="/referral-hub" component={ReferralAgentDashboard} />
       <Route path="/command-center" component={CommandCenterPage} />
       <Route path="/clients" component={CommandCenterPage} />
       <Route path="/clients/:clientId" component={ClientPage} />
@@ -120,6 +138,10 @@ function AppRouter() {
     return <ForgotPasswordPage />;
   }
 
+  if (location === "/signup" || location === "/signup-agency") {
+    return <SignupAgencyPage />;
+  }
+
   if (location.startsWith("/reset-password")) {
     if (location === "/reset-password" || location === "/reset-password/") {
       window.location.href = "/forgot-password";
@@ -142,6 +164,7 @@ function AppRouter() {
 
   return (
     <>
+      <BrandingApplier />
       <AuthenticatedRouter />
       <FeedbackButton />
     </>
