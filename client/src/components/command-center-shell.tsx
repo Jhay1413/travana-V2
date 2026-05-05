@@ -593,7 +593,7 @@ export function CommandCenterShell({
       subtitle: c.subtitle,
       link: `/clients/${c.id}`,
       badge: "Client",
-      badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/30",
+      badgeColor: "bg-primary/10 text-primary border-primary/30",
     }));
   }, [debouncedSearch, searchResults]);
 
@@ -842,7 +842,7 @@ export function CommandCenterShell({
                                 className={
                                   "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                                   (subGroupActive
-                                    ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                    ? "bg-primary/15 text-primary dark:bg-primary/25"
                                     : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                                 }
                                 data-testid={`nav-${item.key}`}
@@ -864,7 +864,7 @@ export function CommandCenterShell({
                                 className={
                                   "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                                   (isActive || childActive
-                                    ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                    ? "bg-primary/15 text-primary dark:bg-primary/25"
                                     : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                                 }
                                 data-testid={`nav-${item.key}`}
@@ -897,7 +897,7 @@ export function CommandCenterShell({
                                           {group.label}
                                         </div>
                                         {group.items.map((child) => (
-                                          <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-black/5 text-black dark:bg-white/10 dark:text-white" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
+                                          <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-primary/15 text-primary dark:bg-primary/25" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
                                             <span className="text-black/60 dark:text-white/60">{child.icon}</span>
                                             <span>{child.label}</span>
                                           </Link>
@@ -911,7 +911,7 @@ export function CommandCenterShell({
                             {hasChildren && (
                               <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
                                 {item.children!.map((child) => (
-                                  <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-black/5 text-black dark:bg-white/10 dark:text-white" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
+                                  <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-primary/15 text-primary dark:bg-primary/25" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
                                     <span className="text-black/60 dark:text-white/60">{child.icon}</span>
                                     <span>{child.label}</span>
                                   </Link>
@@ -942,7 +942,7 @@ export function CommandCenterShell({
                     className={
                       "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                       (childActive
-                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                        ? "bg-primary/15 text-primary dark:bg-primary/25"
                         : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                     }
                     data-testid={`nav-${item.key}`}
@@ -964,7 +964,7 @@ export function CommandCenterShell({
                     className={
                       "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                       (isActive
-                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                        ? "bg-primary/15 text-primary dark:bg-primary/25"
                         : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                     }
                     data-testid={`nav-${item.key}`}
@@ -992,7 +992,7 @@ export function CommandCenterShell({
                     >
                       <div className="ml-6 mt-1 space-y-1 border-l border-black/10 pl-3 dark:border-white/10">
                         {item.children!.map((child) => (
-                          <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-black/5 text-black dark:bg-white/10 dark:text-white" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
+                          <Link key={child.key} href={getNavRoute(child.key)} onClick={() => onNavigate?.()} className={"flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " + (active === child.key ? "bg-primary/15 text-primary dark:bg-primary/25" : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")} data-testid={`nav-${child.key}`}>
                             <span className="text-black/60 dark:text-white/60">{child.icon}</span>
                             <span>{child.label}</span>
                           </Link>
@@ -1081,7 +1081,7 @@ export function CommandCenterShell({
           <div className="truncate text-sm font-semibold">{currentUser?.name ?? "—"}</div>
           {role === "Admin" && <div className="truncate text-xs text-black/55 dark:text-white/55">{currentUser?.email ?? ""}</div>}
         </div>
-        <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+        <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
           {currentUser?.role ?? role}
         </span>
       </div>
@@ -1134,7 +1134,7 @@ export function CommandCenterShell({
               <select
                 value={role}
                 onChange={(e) => onRoleChange(e.target.value as Role)}
-                className="mb-4 w-full rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
+                className="mb-4 w-full rounded-2xl border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary cursor-pointer"
                 data-testid="select-role-mobile"
               >
                 {(["PlatformAdmin", "Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
@@ -1186,7 +1186,7 @@ export function CommandCenterShell({
                   <select
                     value={role}
                     onChange={(e) => onRoleChange(e.target.value as Role)}
-                    className="rounded-2xl border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
+                    className="rounded-2xl border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary cursor-pointer"
                     data-testid="select-role-nav"
                   >
                     {(["PlatformAdmin", "Admin", "Manager", "Agent", "Homeworker", "Referer"] as Role[]).map((r) => (
@@ -1212,7 +1212,7 @@ export function CommandCenterShell({
                             className={cn(
                               "grid h-10 w-10 place-items-center rounded-xl transition",
                               isActive
-                                ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
+                                ? "bg-primary/20 text-primary dark:bg-primary/30"
                                 : "text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
                             )}
                             title={item.label}
@@ -1231,7 +1231,7 @@ export function CommandCenterShell({
                             className={cn(
                               "grid h-10 w-10 place-items-center rounded-xl transition",
                               isActive
-                                ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
+                                ? "bg-primary/20 text-primary dark:bg-primary/30"
                                 : "text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
                             )}
                             title={item.label}
@@ -1304,7 +1304,7 @@ export function CommandCenterShell({
                                         className={
                                           "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                                           (subGroupActive
-                                            ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                            ? "bg-primary/15 text-primary dark:bg-primary/25"
                                             : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                                         }
                                         data-testid={`nav-${item.key}`}
@@ -1333,7 +1333,7 @@ export function CommandCenterShell({
                                         className={
                                           "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                                           (isActive || childActive
-                                            ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                            ? "bg-primary/15 text-primary dark:bg-primary/25"
                                             : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                                         }
                                         data-testid={`nav-${item.key}`}
@@ -1379,7 +1379,7 @@ export function CommandCenterShell({
                                                     className={
                                                       "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
                                                       (active === child.key
-                                                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                                        ? "bg-primary/15 text-primary dark:bg-primary/25"
                                                         : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
                                                     }
                                                     data-testid={`nav-${child.key}`}
@@ -1403,7 +1403,7 @@ export function CommandCenterShell({
                                             className={
                                               "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
                                               (active === child.key
-                                                ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                                ? "bg-primary/15 text-primary dark:bg-primary/25"
                                                 : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
                                             }
                                             data-testid={`nav-${child.key}`}
@@ -1438,7 +1438,7 @@ export function CommandCenterShell({
                             className={
                               "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                               (childActive
-                                ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                ? "bg-primary/15 text-primary dark:bg-primary/25"
                                 : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                             }
                             data-testid={`nav-${item.key}`}
@@ -1467,7 +1467,7 @@ export function CommandCenterShell({
                             className={
                               "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                               (isActive
-                                ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                ? "bg-primary/15 text-primary dark:bg-primary/25"
                                 : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                             }
                             data-testid={`nav-${item.key}`}
@@ -1506,7 +1506,7 @@ export function CommandCenterShell({
                                     className={
                                       "flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition " +
                                       (active === child.key
-                                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                                        ? "bg-primary/15 text-primary dark:bg-primary/25"
                                         : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white")
                                     }
                                     data-testid={`nav-${child.key}`}
@@ -1602,7 +1602,7 @@ export function CommandCenterShell({
                       className={
                         "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition " +
                         (isConnectActive
-                          ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
+                          ? "bg-primary/15 text-primary dark:bg-primary/25"
                           : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white")
                       }
                       data-testid={`nav-connect-${key}`}
@@ -1647,7 +1647,7 @@ export function CommandCenterShell({
                   <div className="truncate text-sm font-semibold">{currentUser?.name ?? "—"}</div>
                   {role === "Admin" && <div className="truncate text-xs text-black/55 dark:text-white/55">{currentUser?.email ?? ""}</div>}
                 </div>
-                <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
                   {currentUser?.role ?? role}
                 </span>
               </div>
