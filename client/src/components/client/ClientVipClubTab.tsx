@@ -14,10 +14,14 @@ import {
   Briefcase,
   ArrowDownToLine,
   ArrowUpFromLine,
+  AlertCircle,
+  CheckCircle2,
+  Hourglass,
+  TrendingUp,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useVipOverview } from "@/hooks/queries/use-referral-queries";
-import type { VipWalletLedgerEntry } from "@/api/endpoints/referral.api";
+import type { VipWalletLedgerEntry, VipTransactionRow } from "@/api/endpoints/referral.api";
 
 const GBP = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 const fmt = (n: number) => GBP.format(n);
@@ -74,6 +78,7 @@ export function ClientVipClubTab({ clientId }: Props) {
         </div>
         <div className="h-48 rounded-2xl border border-black/10 bg-black/[0.03]" />
         <div className="h-48 rounded-2xl border border-black/10 bg-black/[0.03]" />
+        <div className="h-48 rounded-2xl border border-black/10 bg-black/[0.03]" />
       </div>
     );
   }
@@ -84,6 +89,10 @@ export function ClientVipClubTab({ clientId }: Props) {
   const stats = data?.stats;
   const referredClients = data?.referredClients ?? [];
   const walletLedger: VipWalletLedgerEntry[] = data?.walletLedger ?? [];
+  const transactionHistory: VipTransactionRow[] = data?.transactionHistory ?? [];
+  const pendingCommissions = transactionHistory.filter(
+    (r) => r.referralStatus === "PENDING" || r.referralStatus === "IN_WALLET",
+  );
 
   return (
     <div className="grid gap-3" data-testid="panel-vip-club">

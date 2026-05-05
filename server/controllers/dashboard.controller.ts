@@ -24,7 +24,7 @@ export const dashboardController = {
     const { user: userTable } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     const [dbUser] = await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, userId));
-    if (!dbUser || dbUser.role !== "admin") {
+    if (!dbUser || (dbUser.role || "").toLowerCase() !== "admin") {
       return res.status(403).json({ success: false, message: "Admin access required" });
     }
     const data = await dashboardService.getAdminOverviewStats();
