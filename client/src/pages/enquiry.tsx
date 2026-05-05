@@ -688,7 +688,7 @@ export default function EnquiryPage() {
       boardBasisId: firstBoardBasis?.board_basis_id || "",
       outboundDepartAirportId: firstAirport?.airport_id || "",
       cabinType: enquiry.cabin_type || "",
-      pets: !!(enquiry.no_of_pets && enquiry.no_of_pets > 0),
+      pets: enquiry.no_of_pets ?? 0,
       status: "QUOTE_IN_PROGRESS",
     };
   }, [enquiry]);

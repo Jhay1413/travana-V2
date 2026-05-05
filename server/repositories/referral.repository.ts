@@ -303,7 +303,7 @@ export const referralRepository = {
       .from(referral)
       .leftJoin(referredClient, eq(referral.referredClientId, referredClient.id))
       .leftJoin(bookingAlias, eq(bookingAlias.transaction_id, referral.transactionId))
-      .where(and(eq(referral.referrerClientId, referrerClientId), sql`${referral.transactionId} IS NOT NULL`))
+      .where(eq(referral.referrerClientId, referrerClientId))
       .orderBy(referral.createdAt);
 
     const transactionHistory = txRows.map((r) => ({

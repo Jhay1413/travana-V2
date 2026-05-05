@@ -61,7 +61,7 @@ export const bookingFormSchema = z.object({
 
   lodgeId: z.string().default(""),
   parkId: z.string().default(""),
-  pets: z.boolean().default(false),
+  pets: z.coerce.number().int().min(0).default(0),
 
   cruiseTitle: z.string().default(""),
   cruiseLine: z.string().default(""),
@@ -215,7 +215,7 @@ export const defaultBookingFormValues: BookingFormValues = {
   inboundConnectingLegs: [],
   parkId: "",
   lodgeId: "",
-  pets: false,
+  pets: 0,
   cruiseTitle: "",
   cruiseLine: "",
   shipName: "",

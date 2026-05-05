@@ -1030,13 +1030,17 @@ export function QuoteRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">
                       <div className="flex items-center gap-1.5">
                         <PawPrint className="h-3.5 w-3.5" />
-                        Pets Allowed
+                        No. of Pets
                       </div>
                     </FormLabel>
                     <FormControl>
-                      <div className="flex h-9 items-center">
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                      </div>
+                      <Input
+                        type="number"
+                        min={0}
+                        {...field}
+                        value={field.value ?? 0}
+                        onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

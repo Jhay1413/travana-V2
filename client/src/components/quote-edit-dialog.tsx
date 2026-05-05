@@ -249,7 +249,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     // Lodge
     parkId: quoteData.park_id || "",
     lodgeId: quoteData.lodge_id || "",
-    pets: (quoteData.pets ?? 0) > 0,
+    pets: quoteData.pets ?? 0,
 
     // Pricing
     price: salesPrice,
@@ -428,9 +428,10 @@ function buildUpdatePayload(
     };
   }
 
+  payload.pets = values.pets ?? 0;
+
   if (isHotTubBreak) {
     payload.lodge_id = values.lodgeId || null;
-    payload.pets = values.pets ? 1 : 0;
   }
 
   if (isCruise) {

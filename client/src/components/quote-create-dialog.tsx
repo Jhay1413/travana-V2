@@ -180,9 +180,10 @@ export function buildQuotePayload(
     };
   }
 
+  payload.pets = values.pets ?? 0;
+
   if (isHotTubBreak) {
     payload.lodge_id = values.lodgeId || undefined;
-    payload.pets = values.pets ? 1 : 0;
   }
 
   if (isCruise) {

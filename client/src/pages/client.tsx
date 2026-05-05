@@ -825,7 +825,7 @@ export default function ClientPage() {
                 <button
                   type="button"
                   onClick={() => setIsContactDetailsOpen((v) => !v)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-2 py-1 text-xs font-semibold text-black/75 transition hover:bg-black/[0.05]"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-2 py-1 text-sm font-semibold text-black transition hover:bg-black/[0.05]"
                   data-testid="toggle-contact-details"
                 >
                   <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isContactDetailsOpen ? "rotate-90" : ""}`} />

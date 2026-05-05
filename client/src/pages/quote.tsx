@@ -226,7 +226,7 @@ export default function QuotePage() {
       }),
       lodgeId: quoteData.lodge_id || "",
       parkId: "",
-      pets: Boolean(quoteData.pets),
+      pets: quoteData.pets ?? 0,
       cruiseTitle: quoteData.cruises?.[0]?.cruise_name || "",
       cruiseLine: quoteData.cruises?.[0]?.cruise_line || "",
       shipName: quoteData.cruises?.[0]?.ship || "",

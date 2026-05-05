@@ -130,7 +130,7 @@ function buildDefaultValues(bookingData: any): BookingFormValues {
     }),
 
     lodgeId: bookingData.lodge_id || "",
-    pets: (bookingData.pets ?? 0) > 0,
+    pets: bookingData.pets ?? 0,
 
     price: parseFloat(String(bookingData.sales_price || 0)) || 0,
     commission: parseFloat(String(bookingData.package_commission || 0)) || 0,
@@ -283,7 +283,7 @@ function buildUpdatePayload(
 
   if (isHotTubBreak) {
     payload.lodge_id = values.lodgeId || null;
-    payload.pets = values.pets ? 1 : 0;
+    payload.pets = values.pets ?? 0;
   }
 
   // Extras — all sent in single PATCH call

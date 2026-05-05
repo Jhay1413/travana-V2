@@ -900,7 +900,7 @@ export default function SocialQuotePage() {
               }),
               parkId: rawData.park_id || "",
               lodgeId: rawData.lodge_id || "",
-              pets: (rawData.pets ?? 0) > 0,
+              pets: rawData.pets ?? 0,
               price: parseFloat(String(rawData.sales_price || 0)) || 0,
               commission: parseFloat(String(rawData.package_commission || 0)) || 0,
               discount: parseFloat(String(rawData.discounts || 0)) || 0,

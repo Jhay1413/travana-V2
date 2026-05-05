@@ -185,7 +185,7 @@ function buildCreatePayload(
       wallet_credit: String(values.walletCreditAmount || 0),
       transfer_type: values.transferType || undefined,
       lodge_id: isHotTubBreak ? (values.lodgeId || undefined) : undefined,
-      pets: isHotTubBreak ? (values.pets ? 1 : 0) : 0,
+      pets: isHotTubBreak ? (values.pets ?? 0) : 0,
       main_tour_operator_id: values.tourOperatorId || undefined,
       outboundFlight,
       inboundFlight,
