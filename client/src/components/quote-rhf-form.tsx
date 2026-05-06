@@ -35,7 +35,7 @@ import {
   useAccommodationSearch,
   useCountries,
   useDestinationSearch,
-  useResorts,
+  useResortSearch,
   usePackageTypes,
   useRoomTypes,
   useParks,
@@ -47,6 +47,11 @@ import {
 } from "@/hooks/queries";
 import { useTags } from "@/hooks/queries/use-tags";
 import { useToast } from "@/hooks/use-toast";
+import { AddAccommodationModal } from "@/components/add-accommodation-modal";
+import { AddDestinationModal } from "@/components/add-destination-modal";
+import { AddResortModal } from "@/components/add-resort-modal";
+import { AddBoardBasisModal } from "@/components/add-board-basis-modal";
+import { AddRoomTypeModal } from "@/components/add-room-type-modal";
 
 const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",
@@ -234,9 +239,17 @@ export function QuoteRHFForm({
   const [existingImagesState, setExistingImagesState] = useState<{ id: string; url: string }[]>(existingImages);
   const [destSearch, setDestSearch] = useState("");
   const [destLabel, setDestLabel] = useState("");
+  const [resortSearch, setResortSearch] = useState("");
   const [accomSearch, setAccomSearch] = useState("");
   const [accomLabel, setAccomLabel] = useState("");
   const [resortLabel, setResortLabel] = useState("");
+  const [showAddAccomModal, setShowAddAccomModal] = useState(false);
+  const [showAddDestModal, setShowAddDestModal] = useState(false);
+  const [showAddResortModal, setShowAddResortModal] = useState(false);
+  const [showAddBoardBasisModal, setShowAddBoardBasisModal] = useState(false);
+  const [showAddRoomTypeModal, setShowAddRoomTypeModal] = useState(false);
+  const [boardBasisSearch, setBoardBasisSearch] = useState("");
+  const [roomTypeSearch, setRoomTypeSearch] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const skipLodgeResetRef = useRef(false);
 
@@ -268,7 +281,7 @@ export function QuoteRHFForm({
   const { data: roomTypeData } = useRoomTypes();
   const { data: countriesData } = useCountries();
   const { data: destinationsData, isFetching: isDestFetching } = useDestinationSearch(destSearch, country || undefined);
-  const { data: resortsData } = useResorts(destination || undefined, !destination ? (country || undefined) : undefined);
+  const { data: resortsData, isFetching: isResortFetching } = useResortSearch(resortSearch, destination || undefined, !destination ? (country || undefined) : undefined);
   const { data: accommodationsData, isFetching: isAccomFetching } = useAccommodationSearch(accomSearch, resort || undefined, !resort ? (destination || undefined) : undefined, !resort && !destination ? (country || undefined) : undefined);
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(parkId || undefined);
@@ -1307,6 +1320,12 @@ export function QuoteRHFForm({
                         onSearch={setDestSearch}
                         isLoading={isDestFetching}
                         placeholder="Search destinations..."
+                        onAddNew={
+                          destSearch && !isDestFetching && (!destinationsData || destinationsData.length === 0)
+                            ? () => setShowAddDestModal(true)
+                            : undefined
+                        }
+                        addNewLabel="Add Destination"
                       />
                     </FormControl>
                     <FormMessage />
@@ -1331,6 +1350,8 @@ export function QuoteRHFForm({
                         )}
                         value={field.value ?? ""}
                         selectedLabel={resortLabel}
+                        onSearch={setResortSearch}
+                        isLoading={isResortFetching}
                         onValueChange={(value) => {
                           field.onChange(value);
                           setValue("accommodationId", "");
@@ -1345,7 +1366,13 @@ export function QuoteRHFForm({
                           }
                           setResortLabel(selectedResort?.name || "");
                         }}
-                        placeholder="Select resort..."
+                        placeholder="Search resort..."
+                        onAddNew={
+                          (destination || country) && !isResortFetching && (!resortsData || resortsData.length === 0)
+                            ? () => setShowAddResortModal(true)
+                            : undefined
+                        }
+                        addNewLabel="Add Resort"
                       />
                     </FormControl>
                     <FormMessage />
@@ -1373,6 +1400,12 @@ export function QuoteRHFForm({
                         onSearch={setAccomSearch}
                         isLoading={isAccomFetching}
                         emptyMessage={!accomSearch && !resort && !destination && !country ? "Type to search accommodations..." : "No accommodations found."}
+                        onAddNew={
+                          accomSearch && !isAccomFetching && (!accommodationsData || accommodationsData.length === 0)
+                            ? () => setShowAddAccomModal(true)
+                            : undefined
+                        }
+                        addNewLabel="Add Accommodation"
                         onValueChange={(value) => {
                           field.onChange(value);
                           const selected = (accommodationsData || []).find((a) => a.id === value);
@@ -1399,6 +1432,95 @@ export function QuoteRHFForm({
                 )}
               />
 
+              <AddAccommodationModal
+                open={showAddAccomModal}
+                onOpenChange={setShowAddAccomModal}
+                initialName={accomSearch}
+                initialCountryId={country || ""}
+                initialDestinationId={destination || ""}
+                initialDestinationName={destLabel}
+                initialResortId={resort || ""}
+                initialResortName={resortLabel}
+                onSuccess={(acc) => {
+                  setValue("accommodationId", acc.id);
+                  setAccomLabel(acc.name);
+                  if (acc.resorts_id) {
+                    setValue("resort", acc.resorts_id);
+                    setResortLabel(acc.resort_name || "");
+                  }
+                  if (acc.destination_id) {
+                    setValue("destination", acc.destination_id);
+                    setDestLabel(acc.destination_name || "");
+                  }
+                  if (acc.country_id) {
+                    setValue("country", acc.country_id);
+                  }
+                  setAccomSearch("");
+                }}
+              />
+
+              <AddDestinationModal
+                open={showAddDestModal}
+                onOpenChange={setShowAddDestModal}
+                initialName={destSearch}
+                initialCountryId={country || ""}
+                onSuccess={(dest) => {
+                  setValue("destination", dest.id);
+                  setDestLabel(dest.name);
+                  if (dest.country_id) {
+                    setValue("country", dest.country_id);
+                  }
+                  setValue("resort", "");
+                  setValue("accommodationId", "");
+                  setResortLabel("");
+                  setAccomLabel("");
+                  setDestSearch("");
+                }}
+              />
+
+              <AddResortModal
+                open={showAddResortModal}
+                onOpenChange={setShowAddResortModal}
+                initialName={resortSearch}
+                initialCountryId={country || ""}
+                initialDestinationId={destination || ""}
+                initialDestinationName={destLabel}
+                onSuccess={(res) => {
+                  setValue("resort", res.id);
+                  setResortLabel(res.name);
+                  if (res.destination_id) {
+                    setValue("destination", res.destination_id);
+                    setDestLabel(res.destination_name || "");
+                  }
+                  if (res.country_id) {
+                    setValue("country", res.country_id);
+                  }
+                  setValue("accommodationId", "");
+                  setAccomLabel("");
+                  setResortSearch("");
+                }}
+              />
+
+              <AddBoardBasisModal
+                open={showAddBoardBasisModal}
+                onOpenChange={setShowAddBoardBasisModal}
+                initialName={boardBasisSearch}
+                onSuccess={(bb) => {
+                  setValue("boardBasisId", bb.id);
+                  setBoardBasisSearch("");
+                }}
+              />
+
+              <AddRoomTypeModal
+                open={showAddRoomTypeModal}
+                onOpenChange={setShowAddRoomTypeModal}
+                initialName={roomTypeSearch}
+                onSuccess={(rt) => {
+                  setValue("roomType", rt.id);
+                  setRoomTypeSearch("");
+                }}
+              />
+
               {/* Board Basis */}
               <FormField
                 control={control}
@@ -1416,6 +1538,9 @@ export function QuoteRHFForm({
                         )}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
+                        onSearchCapture={setBoardBasisSearch}
+                        onAddNew={boardBasisSearch ? () => setShowAddBoardBasisModal(true) : undefined}
+                        addNewLabel="Add Board Basis"
                         placeholder="Select board basis..."
                       />
                     </FormControl>
@@ -1441,6 +1566,9 @@ export function QuoteRHFForm({
                         )}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
+                        onSearchCapture={setRoomTypeSearch}
+                        onAddNew={roomTypeSearch ? () => setShowAddRoomTypeModal(true) : undefined}
+                        addNewLabel="Add Room Type"
                         placeholder="Select room type..."
                       />
                     </FormControl>

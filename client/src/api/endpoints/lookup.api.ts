@@ -136,10 +136,12 @@ export const lookupApi = {
     const { data } = await axios.get<LookupDestination[]>("/api/lookup/destinations", { params });
     return data;
   },
-  getResorts: async (destinationId?: string, countryId?: string): Promise<LookupResort[]> => {
+  getResorts: async (destinationId?: string, countryId?: string, search?: string, limit?: number): Promise<LookupResort[]> => {
     const params: Record<string, any> = {};
     if (destinationId) params.destinationId = destinationId;
     if (countryId) params.countryId = countryId;
+    if (search) params.search = search;
+    if (limit) params.limit = limit;
     const { data } = await axios.get<LookupResort[]>("/api/lookup/resorts", { params });
     return data;
   },

@@ -23,10 +23,16 @@ interface SearchableSelectProps {
   "data-testid"?: string;
   /** Called with the typed search string — enables server-side search (disables client-side filtering) */
   onSearch?: (search: string) => void;
+  /** Called with the typed search string without disabling client-side filtering — use to capture the term for modals */
+  onSearchCapture?: (search: string) => void;
   /** Show a loading indicator in the dropdown while fetching */
   isLoading?: boolean;
   /** Label to display for the selected value when it may not be present in current options */
   selectedLabel?: string;
+  /** If provided, an "Add" button is shown in the empty state and this callback is invoked when clicked */
+  onAddNew?: () => void;
+  /** Label for the add-new button (default: "Add new") */
+  addNewLabel?: string;
 }
 
 export function SearchableSelect({
@@ -39,8 +45,11 @@ export function SearchableSelect({
   className,
   "data-testid": dataTestId,
   onSearch,
+  onSearchCapture,
   isLoading,
   selectedLabel,
+  onAddNew,
+  addNewLabel = "Add new",
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
 
@@ -73,10 +82,34 @@ export function SearchableSelect({
         >
           <CommandInput
             placeholder={searchPlaceholder}
-            {...(onSearch ? { onValueChange: onSearch } : {})}
+            onValueChange={(val) => {
+              if (onSearch) onSearch(val);
+              if (onSearchCapture) onSearchCapture(val);
+            }}
           />
           <CommandList>
-            <CommandEmpty>{isLoading ? "Searching…" : emptyMessage}</CommandEmpty>
+            <CommandEmpty>
+              {isLoading ? (
+                "Searching…"
+              ) : onAddNew ? (
+                <div className="flex flex-col items-center gap-2 py-1">
+                  <span className="text-sm text-muted-foreground">{emptyMessage}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onAddNew();
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    + {addNewLabel}
+                  </button>
+                </div>
+              ) : (
+                emptyMessage
+              )}
+            </CommandEmpty>
             <CommandGroup>
               {options.map((opt) => (
                 <CommandItem

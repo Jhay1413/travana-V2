@@ -135,6 +135,15 @@ export function useAllResorts() {
   });
 }
 
+export function useResortSearch(search: string, destinationId?: string, countryId?: string) {
+  return useQuery({
+    queryKey: ["lookup", "resorts", "search", search, destinationId, countryId] as const,
+    queryFn: () => lookupApi.getResorts(destinationId, countryId, search || undefined, 20),
+    enabled: !!search || !!destinationId || !!countryId,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useAccommodationTypes() {
   return useQuery({
     queryKey: lookupKeys.accommodationTypes,

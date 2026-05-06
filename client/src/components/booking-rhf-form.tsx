@@ -46,6 +46,7 @@ import {
 } from "@/hooks/queries";
 import { useTags } from "@/hooks/queries/use-tags";
 import { useToast } from "@/hooks/use-toast";
+import { AddAccommodationModal } from "@/components/add-accommodation-modal";
 
 const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",
@@ -298,6 +299,7 @@ export function BookingRHFForm({
   const [accomSearch, setAccomSearch] = useState("");
   const [accomLabel, setAccomLabel] = useState("");
   const [resortLabel, setResortLabel] = useState("");
+  const [showAddAccomModal, setShowAddAccomModal] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const skipLodgeResetRef = useRef(false);
   
@@ -1320,6 +1322,12 @@ export function BookingRHFForm({
                         onSearch={setAccomSearch}
                         isLoading={isAccomFetching}
                         emptyMessage={!accomSearch && !resort && !destination && !country ? "Type to search accommodations..." : "No accommodations found."}
+                        onAddNew={
+                          accomSearch && !isAccomFetching && (!accommodationsData || accommodationsData.length === 0)
+                            ? () => setShowAddAccomModal(true)
+                            : undefined
+                        }
+                        addNewLabel="Add Accommodation"
                         onValueChange={(value) => {
                           field.onChange(value);
                           const selected = (accommodationsData || []).find((a) => a.id === value);
@@ -1344,6 +1352,33 @@ export function BookingRHFForm({
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+
+              <AddAccommodationModal
+                open={showAddAccomModal}
+                onOpenChange={setShowAddAccomModal}
+                initialName={accomSearch}
+                initialCountryId={country || ""}
+                initialDestinationId={destination || ""}
+                initialDestinationName={destLabel}
+                initialResortId={resort || ""}
+                initialResortName={resortLabel}
+                onSuccess={(acc) => {
+                  setValue("accommodationId", acc.id);
+                  setAccomLabel(acc.name);
+                  if (acc.resorts_id) {
+                    setValue("resort", acc.resorts_id);
+                    setResortLabel(acc.resort_name || "");
+                  }
+                  if (acc.destination_id) {
+                    setValue("destination", acc.destination_id);
+                    setDestLabel(acc.destination_name || "");
+                  }
+                  if (acc.country_id) {
+                    setValue("country", acc.country_id);
+                  }
+                  setAccomSearch("");
+                }}
               />
 
               <FormField

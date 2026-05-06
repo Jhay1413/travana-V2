@@ -60,10 +60,13 @@ router.get("/resorts", async (req, res) => {
   try {
     const destinationId = req.query.destinationId as string | undefined;
     const countryId = req.query.countryId as string | undefined;
+    const search = req.query.search as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
 
     const conditions = [
       ...(destinationId ? [eq(resorts.destination_id, destinationId)] : []),
       ...(countryId ? [eq(destination.country_id, countryId)] : []),
+      ...(search ? [ilike(resorts.name, `%${search}%`)] : []),
     ];
 
     let query = db
@@ -80,7 +83,10 @@ router.get("/resorts", async (req, res) => {
     if (conditions.length === 1) query = query.where(conditions[0]) as any;
     else if (conditions.length > 1) query = query.where(and(...conditions)) as any;
 
-    const rows = await query.orderBy(resorts.name);
+    let finalQuery = query.orderBy(resorts.name) as any;
+    if (limit) finalQuery = finalQuery.limit(limit);
+
+    const rows = await finalQuery;
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
