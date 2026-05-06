@@ -1,0 +1,80 @@
+Create a Design UI ONLY so I can see what it will look like and be like to use, but NOT on the platform.
+
+The Onboarding Wizard should setup the new user on the platform
+
+Use the same designs as current with step-by-step screens, progress indicator, back/next buttons, validation, and a final review screen.
+
+Wizard Steps:
+
+1. Company Details
+Fields:
+- Company Name
+- Address
+- Phone Number
+- Email Address
+
+2. Owner/Admin Details
+Fields:
+- Owner/Admin Name
+- Email Address
+- Phone Number
+
+3. Shop Opening Setup
+Allow the user to select one opening pattern:
+- Monday to Friday
+- Monday to Saturday
+- Open seven days
+
+Allow the user to select bank holiday preference:
+- Open bank holidays
+- Closed bank holidays
+
+4. Opening Hours
+Show all seven days of the week in a table.
+
+Columns:
+- Day
+- Open checkbox
+- Opening Time
+- Closing Time
+- Apply to all checkbox/button
+
+Default opening hours:
+- Monday to Friday: 09:00 to 17:30
+- Saturday: Closed
+- Sunday: Closed
+
+The user must be able to change each day’s opening and closing time.
+
+Include an “Apply to all” option that copies the selected day’s open/closed status and hours to every day.
+
+If the user selected:
+- Monday to Friday: Monday-Friday should be open, Saturday/Sunday closed
+- Monday to Saturday: Monday-Saturday should be open, Sunday closed
+- Open seven days: all days should be open
+
+5. Agents
+Allow the admin to add travel agents.
+
+Each agent should have:
+- Agent Name
+- Email Address
+- Phone Number
+- Role dropdown: Agent, Senior Agent, Manager, Admin
+- Active/Inactive status
+
+Allow multiple agents to be added, edited, and removed before completing onboarding.
+
+6. Review & Confirm
+Show a summary of all information entered:
+- Company details
+- Owner/admin details
+- Opening days and hours
+- Bank holiday preference
+- Agents added
+
+Include a final button:
+“Complete CRM Setup”
+
+After completion, show a success screen:
+“Your Travel Agency CRM has been set up successfully.”
