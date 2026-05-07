@@ -26,6 +26,7 @@ import TicketsBoard from "@/components/tickets-board";
 import FacebookMessenger from "@/components/facebook-messenger";
 import ChatRichInput from "@/components/chat-rich-input";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import { AskAiDialog } from "@/components/ask-ai-dialog";
 import { NotificationToast } from "@/components/command-center-shell";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
@@ -1221,6 +1222,7 @@ function TopBar({
   const queryClient = useQueryClient();
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
+  const [showAskAi, setShowAskAi] = useState(false);
   const [showSelectClientDialog, setShowSelectClientDialog] = useState(false);
   const [selectClientIntent, setSelectClientIntent] = useState<"enquiry" | "quote" | "booking" | "task" | "ticket" | null>(null);
   const [selectClientSearch, setSelectClientSearch] = useState("");
@@ -1570,9 +1572,23 @@ function TopBar({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowAskAi(true)}
+              className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 px-3 text-white shadow-sm shadow-blue-500/30 transition-shadow hover:shadow-md hover:shadow-blue-500/40"
+              data-testid="button-ask-terry"
+              aria-label="Ask Terry"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="text-[11px] font-semibold leading-none">Ask Terry</span>
+            </motion.button>
+
             {currentUser && (
               <NotificationsDropdown userId={currentUser.id} />
             )}
+
+            <AskAiDialog open={showAskAi} onOpenChange={setShowAskAi} />
 
             <Dialog open={showNewClientDialog} onOpenChange={setShowNewClientDialog}>
               <DialogContent className="sm:max-w-[500px] rounded-2xl z-[300]">
