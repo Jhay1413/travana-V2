@@ -183,7 +183,7 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
             <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
               <Sparkles className="h-4 w-4" />
             </div>
-            Ask AI
+            Ask Terry
           </DialogTitle>
           <DialogDescription>
             Ask a travel question. Save the answer straight to a client's notes.
