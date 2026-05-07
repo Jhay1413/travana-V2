@@ -43,6 +43,7 @@ import referralWithdrawalRoutes from "./referralWithdrawal.routes";
 import walletRoutes from "./wallet.routes";
 import smsRoutes from "./sms.routes";
 import hrRoutes from "./hr.routes";
+import aiAskRoutes from "./ai-ask.routes";
 
 const router = Router();
 
@@ -90,5 +91,6 @@ router.use("/referral-withdrawals", referralWithdrawalRoutes);
 router.use("/wallet", walletRoutes);
 router.use("/sms", smsRoutes);
 router.use("/hr", hrRoutes);
+router.use("/ai", aiAskRoutes);
 
 export default router;

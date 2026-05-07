@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { HubRole } from "@/data/hub-mock";
+import { AskAiDialog } from "@/components/ask-ai-dialog";
 
 const NAV_ITEMS = [
   { key: "profiles", label: "My Profile", icon: User, path: "/hub/profiles" },
@@ -60,6 +61,7 @@ export function HubShell({
   const [searchQuery, setSearchQuery] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAskAi, setShowAskAi] = useState(false);
 
   const toggleTheme = useCallback(() => setTheme((t) => (t === "light" ? "dark" : "light")), []);
   const isDark = theme === "dark";
@@ -314,11 +316,16 @@ export function HubShell({
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 transition-shadow hover:shadow-xl hover:shadow-blue-500/40"
+        onClick={() => setShowAskAi(true)}
+        className="fixed bottom-6 right-6 z-50 flex h-14 items-center gap-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 px-5 text-white shadow-lg shadow-blue-500/30 transition-shadow hover:shadow-xl hover:shadow-blue-500/40"
         data-testid="button-hub-ai-assistant"
+        aria-label="Ask AI"
       >
-        <Sparkles className="h-6 w-6" />
+        <Sparkles className="h-5 w-5" />
+        <span className="text-sm font-semibold">Ask AI</span>
       </motion.button>
+
+      <AskAiDialog open={showAskAi} onOpenChange={setShowAskAi} />
     </div>
   );
 }

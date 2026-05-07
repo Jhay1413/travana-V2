@@ -1034,6 +1034,7 @@ export const notes = pgTable('notes', {
   createdAt: timestamp("created_at", { mode: 'string' }).notNull().defaultNow(),
   parent_id: varchar(),
   transaction_id: uuid().references(() => transaction.id, { onDelete: "cascade" }),
+  client_id: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
 });
 
 export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, createdAt: true });
