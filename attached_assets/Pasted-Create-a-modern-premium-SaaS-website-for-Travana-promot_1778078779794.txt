@@ -1,0 +1,438 @@
+Create a modern, premium SaaS website for Travana, promoting its flagship product: Travel Agent Growth Hub by Travana.
+
+Travana is a luxury corporate travel-tech platform built for ambitious travel agency owners and modern travel agents who want to save time, stay organised, improve lead follow-up, train their teams, and close more bookings consistently.
+
+The website should feel like a mix of Monday.com, Lovable.dev, and Priceline.com, with a clean white SaaS layout, strong navy and orange brand accents taken from the Travana logo, premium gradients, smooth animations, modern dashboard mockups, and a polished corporate technology feel.
+
+The tone should be bold, disruptive, direct, and sales-focused. Avoid soft or generic travel language. This is not a holiday booking website. It is a serious business growth platform for travel professionals.
+
+The core message should be:
+
+Travana helps travel agents work smarter, follow up faster, sell better, and profit more.
+
+The platform combines CRM, sales training, live coaching, scripts, travel industry insights, community support, daily workflow tools, and booking conversion systems into one operating system for travel agents. It is designed to solve the real day-to-day problems travel agents face, including lost leads, weak follow-up, low conversion rates, lack of structure, and working without support.
+
+Brand Style
+
+Use the Travana logo colours:
+
+Primary colour: deep navy blue
+Accent colour: vivid orange
+Background: clean white with soft light-grey sections
+Secondary accents: pale blue, subtle gradients, glassmorphism panels, soft shadows
+
+The visual style should be:
+
+Premium SaaS
+Corporate travel-tech
+Clean, sharp, confident
+Luxury but not overly formal
+Modern, high-converting, and conversion-focused
+Built for agency owners who want growth, control, and better systems
+
+Use lots of white space, bold typography, clean icon cards, rounded sections, floating dashboard previews, CRM screens, pipeline visuals, sales performance charts, training modules, and agent community previews.
+
+Homepage Structure
+1. Hero Section
+
+Create a powerful hero section with the Travana logo and the product name:
+
+Travel Agent Growth Hub by Travana
+
+Headline options:
+
+The Operating System Built for Travel Agents Who Want More Bookings, Better Follow-Up, and Less Chaos.
+
+Alternative headline:
+
+Work Smarter. Sell Faster. Profit More.
+
+Subheadline:
+
+Travana gives travel agency owners and agents the CRM, sales training, scripts, coaching, community, and daily workflow tools they need to manage enquiries, follow up properly, and close more bookings.
+
+Primary CTA:
+
+Book a Demo
+
+Secondary CTA:
+
+See How It Works
+
+Add a premium SaaS-style dashboard mockup showing:
+
+Lead pipeline
+Daily tasks
+Follow-up reminders
+Booking status
+Sales training modules
+Community activity
+Conversion stats
+
+Add trust-style microcopy:
+
+Built specifically for travel agents, not generic sales teams.
+
+2. Problem Section
+
+Headline:
+
+Most Travel Agents Don’t Have a Lead Problem. They Have a Follow-Up Problem.
+
+Include bold pain points:
+
+Leads get lost in Messenger, emails, notes, and spreadsheets
+Agents forget to follow up at the right time
+Enquiries go cold before they are closed
+Teams lack a clear daily sales structure
+Owners cannot see what is happening across the pipeline
+Agents work alone without coaching, scripts, or accountability
+Too much time is wasted chasing instead of closing
+
+End this section with:
+
+Travana replaces scattered systems with one clear daily operating system.
+
+3. Solution Section
+
+Headline:
+
+One Platform. Every Enquiry. Every Follow-Up. Every Booking Opportunity.
+
+Explain that Travana brings together the essential tools travel businesses need to run a stronger sales operation.
+
+Feature cards:
+
+CRM lead tracking
+Follow-up management
+Pipeline organisation
+Daily task reminders
+Deal status tracking
+Sales training
+Live coaching
+Script library
+Industry updates
+Agent community
+Owner visibility
+Booking conversion frameworks
+
+4. CRM Feature Section
+
+Headline:
+
+A Sales-Focused CRM Built Around How Travel Agents Actually Work.
+
+Copy:
+
+Generic CRMs are not built for travel enquiries. Travana is designed around the real sales journey of a travel agent — from first enquiry to quote, follow-up, objection handling, and final booking.
+
+Show CRM dashboard mockups with:
+
+New enquiry
+Quote sent
+Follow-up due
+Hot lead
+Price objection
+Ready to book
+Booked
+Lost / nurture
+
+CTA:
+
+See the CRM in Action
+
+5. Training and Coaching Section
+
+Headline:
+
+Train Your Agents to Sell With Confidence, Not Guesswork.
+
+Include:
+
+Weekly live webinars
+Sales and closing techniques
+Messenger conversation strategies
+Objection handling
+Follow-up systems
+Booking conversion frameworks
+Real-world travel sales coaching
+
+Copy style should be confident and direct:
+
+Your agents should not be left to “figure it out.” Travana gives them the scripts, systems, and coaching to handle enquiries properly and turn more conversations into confirmed bookings.
+
+6. Script Library Section
+
+Headline:
+
+Stop Rewriting the Same Messages. Use Scripts That Convert.
+
+Include scripts for:
+
+New enquiries
+Follow-ups
+No replies
+Price objections
+Urgency messages
+Rebooking prompts
+Closing messages
+Payment reminders
+
+Visual idea:
+
+Show a polished chat-style interface with example message bubbles and a “Copy Script” button.
+
+7. Industry Updates Section
+
+Headline:
+
+Know What’s Selling Before Your Customers Ask.
+
+Feature:
+
+Trending destinations
+Supplier insights
+Travel updates
+Sales trends
+What’s selling now
+Market talking points
+
+Position this as a competitive advantage for agency owners and agents.
+
+8. Community Section
+
+Headline:
+
+A Growth Community for Ambitious Travel Agents.
+
+Copy:
+
+Travana is more than software. It is a support network where agents can share wins, ask questions, stay accountable, learn from others, and improve together.
+
+Use visuals of community cards, member wins, discussion threads, and coaching prompts.
+
+9. Benefits Section
+
+Headline:
+
+Built to Help Travel Businesses Sell More With Less Stress.
+
+Benefit cards:
+
+Save time
+Increase conversions
+Improve follow-up
+Organise every enquiry
+Train your team
+Reduce missed opportunities
+Create a clear daily workflow
+Give owners better visibility
+Help agents close more bookings
+Build a stronger sales culture
+
+10. Pricing Section
+
+Headline:
+
+Simple Pricing for Serious Travel Businesses.
+
+Create pricing ideas:
+
+Starter Growth Plan
+
+From £99/month
+
+Ideal for solo agents and small agencies who want better structure, CRM access, sales scripts, and core training.
+
+Includes:
+
+CRM access
+Lead tracking
+Follow-up reminders
+Script library
+Core training modules
+Community access
+Industry updates
+
+CTA: Start Growing
+
+Agency Growth Plan
+
+Book a Demo for Pricing
+
+Ideal for agency owners who want team access, coaching, reporting, onboarding, and sales system implementation.
+
+Includes:
+
+Everything in Starter
+Multi-agent access
+Owner dashboard
+Team pipeline visibility
+Live coaching
+Advanced sales training
+Team accountability tools
+Priority support
+Onboarding session
+
+CTA: Book a Demo
+
+Premium Implementation Plan
+
+Custom Pricing
+
+For agencies that want Travana installed as their full sales operating system.
+
+Includes:
+
+CRM setup
+Sales process buildout
+Team training
+Script customisation
+Workflow automation
+Management reporting
+Private coaching
+Performance reviews
+
+CTA: Speak to Travana
+
+Add pricing note:
+
+Not sure which plan fits your agency? Book a demo and we’ll show you the best setup.
+
+11. Testimonials Section
+
+Use placeholder testimonials from travel agency owners.
+
+Example:
+
+“Travana helped us stop losing enquiries and finally gave our agents a clear follow-up process.”
+
+“Before Travana, our leads were everywhere. Now we know exactly who needs chasing, who is ready to book, and where every enquiry stands.”
+
+“Travana is not just another CRM. It feels like a sales manager, training hub, and community all in one.”
+
+12. FAQ Section
+
+Include questions:
+
+Who is Travana for?
+Is Travana only for travel agents?
+Can agency owners use Travana with their team?
+Does Travana replace my current CRM?
+Do you provide sales training?
+Are scripts included?
+Is there live coaching?
+Can I book a demo before subscribing?
+How much does Travana cost?
+Can Travana help improve my team’s follow-up?
+
+13. Final CTA Section
+
+Headline:
+
+Ready to Stop Losing Leads and Start Closing More Bookings?
+
+Subheadline:
+
+Join the travel agents and agency owners using Travana to work smarter, follow up faster, and build a more profitable sales operation.
+
+Primary CTA:
+
+Book a Demo
+
+Secondary CTA:
+
+View Pricing
+
+Microcopy:
+
+Travel Agent Growth Hub by Travana — built for agents who want control, structure, and growth.
+
+Design Direction
+
+The site should include:
+
+Sticky navigation
+Large hero headline
+Animated SaaS dashboard mockups
+CRM pipeline graphics
+Floating lead cards
+Orange CTA buttons
+Navy headline typography
+Luxury white and light-grey layout
+Subtle gradient backgrounds
+Rounded feature cards
+Smooth scroll animations
+Bold statistics blocks
+Professional icons
+Mobile-first responsive design
+Premium corporate SaaS feel
+
+Suggested navigation:
+
+Product
+CRM
+Training
+Community
+Pricing
+Book Demo
+
+Suggested CTA button style:
+
+Orange background
+White text
+Rounded corners
+Slight shadow
+Hover effect with darker orange or navy border
+
+Suggested Website Copy Lines
+
+Use strong lines throughout the website such as:
+
+Built for travel agents who are serious about growth.
+
+Your leads deserve better than spreadsheets, sticky notes, and forgotten follow-ups.
+
+Turn enquiries into organised sales opportunities.
+
+Give your agents the structure, scripts, and confidence to close.
+
+The CRM, coaching, scripts, and community your travel business has been missing.
+
+More control. Better follow-up. Higher conversions.
+
+Travana helps travel agents work smarter and profit more.
+
+Final AI Website Builder Prompt
+
+Create a premium, modern SaaS website for Travana, promoting Travel Agent Growth Hub by Travana. The website should target travel agency owners first, while also appealing to independent travel agents and growing travel teams.
+
+The design should be clean, corporate, modern, luxurious, and tech-led, using the Travana logo colours of deep navy blue and vivid orange on a white SaaS-style background. The style should feel inspired by Lovable.dev, Monday.com, and Priceline.com, combining bold software visuals, clean product sections, strong calls to action, dashboard mockups, and a premium travel-tech feel.
+
+The copy should be bold, disruptive, direct, and sales-focused. Position Travana as the daily operating system for modern travel agents, helping them manage enquiries, improve follow-up, train their teams, use proven sales scripts, access coaching, stay updated on the travel industry, and close more bookings.
+
+Include homepage sections for: hero, problem, solution, CRM, sales training, script library, industry updates, community, benefits, pricing, testimonials, FAQ, and final call to action.
+
+The primary conversion goal is to get users to Book a Demo, while also allowing them to understand the product and buy online from a pricing plan starting at £99/month. Include a second pricing option that says Book a Demo for Pricing for agency owners and larger teams.
+
+Use strong visual elements such as CRM dashboards, sales pipelines, follow-up reminders, training modules, chat script examples, community cards, performance charts, and booking conversion graphics. Make the website feel fast, premium, trustworthy, and high-converting.
+
+Main headline:
+
+The Operating System Built for Travel Agents Who Want More Bookings, Better Follow-Up, and Less Chaos.
+
+Supporting headline:
+
+Work Smarter. Sell Faster. Profit More.
+
+Primary CTA:
+
+Book a Demo
+
+Secondary CTA:
+
+See How It Works
+
+Final CTA:
+
+Ready to stop losing leads and start closing more bookings? Book your Travana demo today.

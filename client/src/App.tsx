@@ -47,7 +47,6 @@ import PortalMessagesPage from "@/pages/portal/portal-messages";
 import PortalQuoteViewPage from "@/pages/portal/portal-quote-view";
 import PortalTagsPage from "@/pages/portal/portal-tags";
 import PortalReferralsPage from "@/pages/portal/portal-referrals";
-import { FeedbackButton } from "@/components/feedback-button";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -166,7 +165,6 @@ function AppRouter() {
     <>
       <BrandingApplier />
       <AuthenticatedRouter />
-      <FeedbackButton />
     </>
   );
 }

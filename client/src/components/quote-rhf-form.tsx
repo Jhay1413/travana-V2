@@ -1368,7 +1368,7 @@ export function QuoteRHFForm({
                         }}
                         placeholder="Search resort..."
                         onAddNew={
-                          (destination || country) && !isResortFetching && (!resortsData || resortsData.length === 0)
+                          resortSearch && !isResortFetching && (!resortsData || resortsData.length === 0)
                             ? () => setShowAddResortModal(true)
                             : undefined
                         }
