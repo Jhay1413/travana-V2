@@ -26,8 +26,8 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
 
   const askMutation = useMutation({
     mutationFn: async (q: string) => {
-      const { data } = await axiosClient.post<{ data: { answer: string } }>("/api/ai/ask", { question: q });
-      return data.data.answer;
+      const { data } = await axiosClient.post<{ answer: string }>("/api/ai/ask", { question: q });
+      return data.answer;
     },
     onSuccess: (a) => setAnswer(a),
     onError: (err: any) => {
