@@ -11,6 +11,92 @@ import { useClients } from "@/hooks/queries";
 import axiosClient from "@/api/client/axios-client";
 import { cn } from "@/lib/utils";
 
+function renderInline(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const regex = /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    if (match[1] !== undefined) parts.push(<strong key={key++}>{match[1]}</strong>);
+    else if (match[2] !== undefined) parts.push(<em key={key++}>{match[2]}</em>);
+    else if (match[3] !== undefined)
+      parts.push(
+        <code key={key++} className="rounded bg-slate-200 dark:bg-slate-800 px-1 py-0.5 text-xs">
+          {match[3]}
+        </code>
+      );
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
+function MarkdownAnswer({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let bullets: string[] = [];
+  let para: string[] = [];
+  let key = 0;
+
+  const flushBullets = () => {
+    if (bullets.length) {
+      blocks.push(
+        <ul key={key++} className="list-disc pl-5 space-y-1">
+          {bullets.map((b, i) => (
+            <li key={i}>{renderInline(b)}</li>
+          ))}
+        </ul>
+      );
+      bullets = [];
+    }
+  };
+  const flushPara = () => {
+    if (para.length) {
+      blocks.push(
+        <p key={key++} className="leading-relaxed">
+          {renderInline(para.join(" "))}
+        </p>
+      );
+      para = [];
+    }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      flushBullets();
+      flushPara();
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      flushBullets();
+      flushPara();
+      const level = heading[1].length;
+      const sizes = ["text-lg", "text-base", "text-base", "text-sm", "text-sm", "text-sm"];
+      blocks.push(
+        <div key={key++} className={cn("font-bold text-slate-900 dark:text-white mt-2", sizes[level - 1])}>
+          {renderInline(heading[2])}
+        </div>
+      );
+      continue;
+    }
+    const bullet = line.match(/^[-*]\s+(.*)$/);
+    if (bullet) {
+      flushPara();
+      bullets.push(bullet[1]);
+      continue;
+    }
+    flushBullets();
+    para.push(line);
+  }
+  flushBullets();
+  flushPara();
+  return <div className="space-y-3 text-sm text-slate-800 dark:text-slate-200">{blocks}</div>;
+}
+
 interface AskAiDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -146,15 +232,15 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium">Answer</label>
               <div
-                className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50 p-4 text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap min-h-[80px]"
+                className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50 p-4 min-h-[80px]"
                 data-testid="text-ask-ai-answer"
               >
                 {askMutation.isPending ? (
-                  <div className="flex items-center gap-2 text-slate-500">
+                  <div className="flex items-center gap-2 text-slate-500 text-sm">
                     <Loader2 className="h-4 w-4 animate-spin" /> Generating travel-expert answer...
                   </div>
                 ) : (
-                  answer
+                  <MarkdownAnswer text={answer} />
                 )}
               </div>
             </div>
