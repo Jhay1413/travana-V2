@@ -104,7 +104,7 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 overflow-y-auto pr-1">
+        <div className="flex flex-col gap-4 overflow-y-auto pr-1 flex-1 min-h-0">
           <div className="space-y-2">
             <label className="text-sm font-medium">Your question</label>
             <Textarea
