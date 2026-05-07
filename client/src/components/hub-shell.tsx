@@ -170,6 +170,18 @@ export function HubShell({
           </div>
 
           <div className="flex items-center gap-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowAskAi(true)}
+              className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 px-3 text-white shadow-sm shadow-blue-500/30 transition-shadow hover:shadow-md hover:shadow-blue-500/40"
+              data-testid="button-hub-ai-assistant"
+              aria-label="Ask Terry"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="text-[11px] font-semibold leading-none">Ask Terry</span>
+            </motion.button>
+
             <Button
               variant="ghost"
               size="sm"
@@ -312,18 +324,6 @@ export function HubShell({
           </>
         )}
       </AnimatePresence>
-
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setShowAskAi(true)}
-        className="fixed bottom-6 right-6 z-50 flex h-10 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 px-3.5 text-white shadow-lg shadow-blue-500/30 transition-shadow hover:shadow-xl hover:shadow-blue-500/40"
-        data-testid="button-hub-ai-assistant"
-        aria-label="Ask Terry"
-      >
-        <Sparkles className="h-4 w-4" />
-        <span className="text-xs font-semibold">Ask Terry</span>
-      </motion.button>
 
       <AskAiDialog open={showAskAi} onOpenChange={setShowAskAi} />
     </div>
