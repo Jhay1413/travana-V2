@@ -49,6 +49,7 @@ import {
   Tag,
 } from "lucide-react";
 import { NotificationsDropdown } from "./notifications-dropdown";
+import { AskAiDialog } from "./ask-ai-dialog";
 import { useCurrentUser, useNotifications, useChatConversations } from "@/hooks/queries";
 import { useGlobalSearch } from "@/hooks/queries/use-search-queries";
 import { useMarkNotificationRead } from "@/hooks/mutations";
@@ -531,6 +532,7 @@ export function CommandCenterShell({
   const [, navigate] = useLocation();
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showAskAi, setShowAskAi] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
   });
@@ -1823,6 +1825,18 @@ export function CommandCenterShell({
                       )
                     )}
 
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowAskAi(true)}
+                      className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 px-3 text-white shadow-sm shadow-blue-500/30 transition-shadow hover:shadow-md hover:shadow-blue-500/40"
+                      data-testid="button-ask-terry"
+                      aria-label="Ask Terry"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span className="text-[11px] font-semibold leading-none">Ask Terry</span>
+                    </motion.button>
+
                     {currentUser && (
                       <NotificationsDropdown userId={currentUser.id} />
                     )}
@@ -1837,6 +1851,7 @@ export function CommandCenterShell({
       </div>
       <DidYouKnowPopup />
       <NotificationToast />
+      <AskAiDialog open={showAskAi} onOpenChange={setShowAskAi} />
     </div>
   );
 }
