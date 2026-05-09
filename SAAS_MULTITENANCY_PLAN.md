@@ -72,9 +72,34 @@ erDiagram
         text      address
         varchar   phone
         boolean   is_default       "true for the first/main branch"
+        boolean   is_active        "false = soft-deleted"
         timestamp created_at
     }
 ```
+
+### `branch_members`
+
+The pivot table that links users to branches. A user can appear in multiple rows (one per branch
+they belong to). `org_id` is denormalized here so every permission check stays a single index scan
+without joining back to `branches`.
+
+```mermaid
+erDiagram
+    branch_members {
+        uuid      id         PK
+        uuid      org_id     FK  "denormalized from branches.organization_id — fast tenant scoping"
+        uuid      branch_id  FK
+        text      user_id    FK
+        varchar   org_role       "branch_manager | agent | homeworker | referral_agent"
+        boolean   is_active      "false = membership revoked"
+        timestamp joined_at
+    }
+```
+
+> `org_admin` users have **no rows** in `branch_members` — their role is recorded on `user.org_role`
+> and they are branch-agnostic by design. Every other role (branch_manager, agent, homeworker,
+> referral_agent) has exactly one active row in `branch_members` enforced by a unique constraint on
+> `(branch_id, user_id)` where `is_active = true`.
 
 ---
 
@@ -88,18 +113,19 @@ There is always at least one branch (the default one created at signup).
 
 ```mermaid
 erDiagram
-    organization ||--o{ branches : "has many"
-    organization ||--o{ user : "has many users (org_admin)"
-    branches ||--o{ user : "has many users (agents, managers)"
-    branches ||--o{ transaction : "groups transactions"
-    branches ||--o{ clientTable : "groups clients"
-    organization ||--o{ transaction : "owns all transactions"
-    organization ||--o{ clientTable : "owns all clients"
+    organization ||--o{ branches        : "has many"
+    organization ||--o{ user            : "has many (org_admin sit here)"
+    branches     ||--o{ branch_members  : "has many memberships"
+    user         ||--o{ branch_members  : "has many memberships"
+    branches     ||--o{ transaction     : "groups transactions"
+    branches     ||--o{ clientTable     : "groups clients"
+    organization ||--o{ transaction     : "owns all transactions"
+    organization ||--o{ clientTable     : "owns all clients"
 
     organization {
-        uuid      id       PK
+        uuid      id          PK
         varchar   name
-        varchar   slug             "login URL: app.travana.io/slug"
+        varchar   slug                  "login URL: app.travana.io/slug"
         varchar   brand_color
         varchar   logo_url
         bool      is_active
@@ -108,21 +134,32 @@ erDiagram
     }
 
     branches {
-        uuid      id       PK
-        uuid      organization_id  FK
-        varchar   name             "e.g. Manchester Office"
-        varchar   code             "short ref e.g. MCR"
+        uuid      id          PK
+        uuid      organization_id FK
+        varchar   name                  "e.g. Manchester Office"
+        varchar   code                  "short ref e.g. MCR"
         text      address
         varchar   phone
-        bool      is_default       "exactly one per org"
+        bool      is_default            "exactly one per org"
+        bool      is_active
         timestamp created_at
     }
 
+    branch_members {
+        uuid      id          PK
+        uuid      org_id      FK        "denormalized — fast tenant scoping"
+        uuid      branch_id   FK
+        text      user_id     FK
+        varchar   org_role              "branch_manager | agent | homeworker | referral_agent"
+        bool      is_active
+        timestamp joined_at
+    }
+
     user {
-        text      id       PK
-        uuid      org_id           FK  "always set — the tenant boundary"
-        uuid      branch_id        FK  "null for org_admin, set for all others"
-        varchar   org_role             "org_admin | branch_manager | agent | homeworker | referral_agent"
+        text      id          PK
+        uuid      org_id      FK        "always set — the tenant boundary"
+        varchar   org_role              "org_admin only — branch-level roles live in branch_members"
+        varchar   role                  "platform_admin | user"
     }
 ```
 
@@ -249,9 +286,10 @@ what enforces tenant separation. `branch_id` is what enables branch-level views.
 
 ```mermaid
 erDiagram
-    organization ||--o{ branches : "has many"
-    organization ||--o{ user : "has many"
-    branches ||--o{ user : "has many"
+    organization ||--o{ branches       : "has many"
+    organization ||--o{ user           : "has many (org_admin sit here)"
+    branches     ||--o{ branch_members : "has many memberships"
+    user         ||--o{ branch_members : "has many memberships"
 
     organization ||--o{ clientTable : "has many"
     branches ||--o{ clientTable : "has many"
@@ -267,20 +305,42 @@ erDiagram
     organization ||--o{ park : "has many"
     organization ||--o{ cottages : "has many"
 
+    branches {
+        uuid      id           PK
+        uuid      organization_id FK
+        varchar   name
+        varchar   code
+        text      address
+        varchar   phone
+        boolean   is_default
+        boolean   is_active
+        timestamp created_at
+    }
+
     user {
-        text   id PK
-        uuid   org_id      FK  "NEW — which organization"
-        uuid   branch_id   FK  "NEW — which branch (nullable for org-admin)"
-        text   org_role        "NEW — org_admin | branch_manager | agent | homeworker | referral_agent"
-        text   name
-        text   email
-        text   role            "kept: platform_admin | user"
+        text      id           PK
+        uuid      org_id       FK  "NEW — the tenant boundary (always set)"
+        text      org_role         "NEW — org_admin only; branch-level roles live in branch_members"
+        text      name
+        text      email
+        text      role             "kept: platform_admin | user"
+    }
+
+    branch_members {
+        uuid      id           PK
+        uuid      org_id       FK  "denormalized — fast tenant scoping"
+        uuid      branch_id    FK
+        text      user_id      FK
+        varchar   org_role         "branch_manager | agent | homeworker | referral_agent"
+        bool      is_active        "false = membership revoked"
+        timestamp joined_at
     }
 
     clientTable {
         uuid   id PK
         uuid   org_id      FK  "NEW"
         uuid   branch_id   FK  "NEW — branch that owns this client"
+        text   created_by  FK  "NEW — user who created this client (agent/homeworker ownership)"
         varchar firstName
         varchar surename
     }
@@ -455,7 +515,8 @@ graph TD
     BRN[branches]
 
     subgraph "Org + Branch Scoped"
-        USR[user + org_id + branch_id + org_role]
+        USR[user + org_id + org_role]
+        BMB[branch_members + org_id + branch_id + user_id]
         CLI[clientTable + org_id + branch_id]
         TXN[transaction + org_id + branch_id]
         TSK[task + org_id + branch_id]
@@ -494,7 +555,8 @@ graph TD
 
     ORG --> BRN
     ORG --> USR
-    BRN --> USR
+    BRN --> BMB
+    USR --> BMB
     ORG --> CLI
     BRN --> CLI
     ORG --> TXN
@@ -553,17 +615,30 @@ graph LR
 
 ### Data scoping rules per role
 
-`org_id` is always filtered first — it is never optional. `branch_id` and `user_id` are additive
-narrowing filters applied on top, depending on the role.
+`org_id` is always filtered first — it is never optional. `branch_id` and `user_id`/`created_by`
+are additive narrowing filters applied on top, depending on the role.
 
 ```
 platform_admin  → no filter (platform-level access)
-org_admin       → WHERE org_id = :orgId                                      ← sees all branches
-branch_manager  → WHERE org_id = :orgId AND branch_id = :branchId            ← sees their branch only
-agent           → WHERE org_id = :orgId AND user_id = :userId                ← sees own records only
-homeworker      → WHERE org_id = :orgId AND user_id = :userId                ← sees own records only
+org_admin       → WHERE org_id = :orgId                                          ← sees all branches
+branch_manager  → WHERE org_id = :orgId AND branch_id = :branchId                ← sees their branch only
+agent           → WHERE org_id = :orgId AND created_by = :userId  (clients)      ← sees own clients only
+                  WHERE org_id = :orgId AND user_id   = :userId   (transactions) ← sees own deals only
+homeworker      → WHERE org_id = :orgId AND created_by = :userId  (clients)      ← sees own clients only
+                  WHERE org_id = :orgId AND user_id   = :userId   (transactions) ← sees own deals only
 referral_agent  → WHERE org_id = :orgId AND user_id = :userId (referrals only)
 ```
+
+> **Homeworker isolation rule:** A homeworker added to a specific branch sees **only their own
+> records** — their own clients, quotes, and bookings. They see zero data from the wider
+> organisation or from other agents in the same branch. The only data visible to all authenticated
+> users regardless of role is the global shared reference data (countries, destinations, airports,
+> lookup tables).
+
+**Column ownership by table:**
+- `clientTable.created_by` — who created this client (used to scope agents and homeworkers)
+- `transaction.user_id` — which agent owns this deal (used to scope agents and homeworkers)
+- `clientTable.branch_id` / `transaction.branch_id` — which branch (used to scope branch managers)
 
 **The invariant:** No query ever returns data without `org_id` scoping (except `platform_admin`).
 `branch_id` is never used as the sole filter — it always sits alongside `org_id`.
@@ -655,42 +730,66 @@ The service layer always injects scope from the request context — never trust 
 creating user's branch), and added as a filter on queries only when the role requires it.
 
 ```typescript
-// INSERT — always write org_id; write branch_id as the creating agent's branch
-transactionService.create(data, { orgId, branchId }) {
+// ── INSERTS ──────────────────────────────────────────────────────────────────
+
+// INSERT transaction — write org_id + branch_id from request context
+transactionService.create(data, { orgId, branchId, userId }) {
   return transactionRepository.insert({
     ...data,
-    org_id: orgId,     // ← always required — the tenant boundary
-    branch_id: branchId, // ← which branch created this record (grouping label)
+    org_id:     orgId,    // ← always required — the tenant boundary
+    branch_id:  branchId, // ← which branch created this record (grouping label)
+    user_id:    userId,   // ← which agent owns this deal
   });
 }
 
-// QUERY as org_admin — org_id only, sees all branches
+// INSERT client — write org_id + branch_id + created_by from request context
+clientService.create(data, { orgId, branchId, userId }) {
+  return clientRepository.insert({
+    ...data,
+    org_id:     orgId,    // ← always required — the tenant boundary
+    branch_id:  branchId, // ← which branch this client belongs to
+    created_by: userId,   // ← which agent/homeworker created this client
+  });
+}
+
+// ── QUERIES ───────────────────────────────────────────────────────────────────
+
+// QUERY as org_admin — org_id only, sees all branches and all agents
 transactionRepository.findAll({ orgId }) {
   return db.select().from(transaction)
-    .where(eq(transaction.org_id, orgId));           // ← org_id is the isolation key
+    .where(eq(transaction.org_id, orgId));
 }
 
 // QUERY as branch_manager — org_id first, then narrow by branch
 transactionRepository.findAll({ orgId, branchId }) {
   return db.select().from(transaction)
     .where(and(
-      eq(transaction.org_id, orgId),                 // ← always first
-      eq(transaction.branch_id, branchId),           // ← additional narrowing only
+      eq(transaction.org_id, orgId),
+      eq(transaction.branch_id, branchId),
     ));
 }
 
-// QUERY as agent — org_id first, then narrow by user
+// QUERY as agent/homeworker — org_id first, then narrow by user_id (transactions)
 transactionRepository.findAll({ orgId, userId }) {
   return db.select().from(transaction)
     .where(and(
-      eq(transaction.org_id, orgId),                 // ← always first
-      eq(transaction.user_id, userId),               // ← additional narrowing only
+      eq(transaction.org_id, orgId),
+      eq(transaction.user_id, userId),   // ← owns the deal
+    ));
+}
+
+// QUERY as agent/homeworker — org_id first, then narrow by created_by (clients)
+clientRepository.findAll({ orgId, userId }) {
+  return db.select().from(clientTable)
+    .where(and(
+      eq(clientTable.org_id, orgId),
+      eq(clientTable.created_by, userId), // ← created_by, NOT user_id (clients don't have user_id)
     ));
 }
 ```
 
-**Rule:** `branch_id` is never the only filter. If you remove `org_id` from any query, that is a
-security bug. A branch ID alone does not identify a tenant.
+**Rule:** `branch_id` and `created_by` are never the sole filter. If you remove `org_id` from any
+query, that is a security bug. A branch ID or creator ID alone does not identify a tenant.
 
 ---
 
@@ -701,7 +800,7 @@ graph TD
     M1[1. Create organization table]
     M2[2. Create branches table]
     M3[3. Add org_id + branch_id + org_role to user + backfill]
-    M4[4. Add org_id + branch_id to clientTable + backfill]
+    M4[4. Add org_id + branch_id + created_by to clientTable + backfill]
     M5[5. Add org_id + branch_id to transaction + backfill via user_id]
     M6[6. Add org_id + branch_id to task, tickets, forwardsReport]
     M7[7. Add org_id to tour_operator only]
@@ -724,9 +823,10 @@ For the initial migration (existing single-tenant data):
 | Table | Change |
 |---|---|
 | **NEW** `organization` | id, name, slug, plan, is_active, seat_limit, brand_color, logo_url, settings, created_at, trial_ends_at |
-| **NEW** `branches` | id, organization_id FK, name, code, address, phone, is_default, created_at |
-| `user` | Add `org_id FK`, `branch_id FK` (nullable for org_admin), `org_role varchar`, drop `orgName text` |
-| `clientTable` | Add `org_id FK NOT NULL`, `branch_id FK NOT NULL` |
+| **NEW** `branches` | id, organization_id FK, name, code, address, phone, is_default, is_active, created_at |
+| **NEW** `branch_members` | id, org_id FK, branch_id FK, user_id FK, org_role varchar, is_active, joined_at — pivot table linking users to their branch(es); `org_admin` has no rows here |
+| `user` | Add `org_id FK NOT NULL`, `org_role varchar` (org_admin only — branch-level roles live in branch_members); `branch_id` NOT added — replaced by pivot; drop `orgName text` |
+| `clientTable` | Add `org_id FK NOT NULL`, `branch_id FK`, `created_by FK` (nullable — references `user.id`, used for agent/homeworker ownership scoping) |
 | `transaction` | Add `org_id FK NOT NULL`, `branch_id FK NOT NULL` |
 | `task` | Add `org_id FK NOT NULL`, `branch_id FK NOT NULL` |
 | `tickets` | Add `org_id FK NOT NULL`, `branch_id FK NOT NULL` |
@@ -775,7 +875,21 @@ CREATE TABLE IF NOT EXISTS branches (
   address         TEXT,
   phone           VARCHAR,
   is_default      BOOLEAN NOT NULL DEFAULT false,
+  is_active       BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- ─── STEP 2b: Create the branch_members pivot table ─────────────────────────
+
+CREATE TABLE IF NOT EXISTS branch_members (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id     UUID NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  branch_id  UUID NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  org_role   VARCHAR NOT NULL,
+  is_active  BOOLEAN NOT NULL DEFAULT true,
+  joined_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (branch_id, user_id)
 );
 
 -- ─── STEP 3: Seed the current agency as the first organization ────────────────
@@ -812,12 +926,13 @@ END $$;
 
 -- ─── STEP 5: Add org_id + branch_id columns (nullable first) ─────────────────
 
-ALTER TABLE "user"                      ADD COLUMN IF NOT EXISTS org_id    UUID REFERENCES organization(id);
-ALTER TABLE "user"                      ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES branches(id);
-ALTER TABLE "user"                      ADD COLUMN IF NOT EXISTS org_role  VARCHAR DEFAULT 'agent';
+ALTER TABLE "user"                      ADD COLUMN IF NOT EXISTS org_id   UUID REFERENCES organization(id);
+ALTER TABLE "user"                      ADD COLUMN IF NOT EXISTS org_role VARCHAR DEFAULT 'agent';
+-- branch membership is managed via branch_members pivot — no branch_id column on user
 
-ALTER TABLE client_table                ADD COLUMN IF NOT EXISTS org_id    UUID REFERENCES organization(id);
-ALTER TABLE client_table                ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES branches(id);
+ALTER TABLE client_table                ADD COLUMN IF NOT EXISTS org_id     UUID REFERENCES organization(id);
+ALTER TABLE client_table                ADD COLUMN IF NOT EXISTS branch_id  UUID REFERENCES branches(id);
+ALTER TABLE client_table                ADD COLUMN IF NOT EXISTS created_by TEXT REFERENCES "user"(id) ON DELETE SET NULL;
 
 ALTER TABLE transaction                 ADD COLUMN IF NOT EXISTS org_id    UUID REFERENCES organization(id);
 ALTER TABLE transaction                 ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES branches(id);
@@ -837,8 +952,38 @@ ALTER TABLE tour_package_commission_table ADD COLUMN IF NOT EXISTS org_id UUID R
 
 -- ─── STEP 6: Backfill all columns ────────────────────────────────────────────
 
-UPDATE "user"                    SET org_id = current_setting('app.seed_org_id')::uuid,    branch_id = current_setting('app.seed_branch_id')::uuid WHERE org_id IS NULL;
+UPDATE "user"                    SET org_id = current_setting('app.seed_org_id')::uuid WHERE org_id IS NULL;
+
+-- Backfill branch_members: enrol all non-admin users into the seed branch
+INSERT INTO branch_members (org_id, branch_id, user_id, org_role, joined_at)
+SELECT
+  current_setting('app.seed_org_id')::uuid,
+  current_setting('app.seed_branch_id')::uuid,
+  id,
+  CASE
+    WHEN role = 'Manager'    THEN 'branch_manager'
+    WHEN role = 'Homeworker' THEN 'homeworker'
+    WHEN role = 'Referer'    THEN 'referral_agent'
+    ELSE                          'agent'
+  END,
+  COALESCE(created_at, NOW())
+FROM "user"
+WHERE role != 'admin'   -- org_admin has no branch membership row by design
+ON CONFLICT (branch_id, user_id) DO NOTHING;
+
 UPDATE client_table              SET org_id = current_setting('app.seed_org_id')::uuid,    branch_id = current_setting('app.seed_branch_id')::uuid WHERE org_id IS NULL;
+
+-- Backfill created_by: infer from the earliest transaction linked to each client.
+-- Clients with no transactions will have created_by = NULL (acceptable for legacy data).
+UPDATE client_table c
+SET created_by = (
+  SELECT t.user_id
+  FROM transaction t
+  WHERE t.client_id = c.id
+  ORDER BY t.created_at ASC
+  LIMIT 1
+)
+WHERE c.created_by IS NULL;
 UPDATE transaction               SET org_id = current_setting('app.seed_org_id')::uuid,    branch_id = current_setting('app.seed_branch_id')::uuid WHERE org_id IS NULL;
 UPDATE task                      SET org_id = current_setting('app.seed_org_id')::uuid,    branch_id = current_setting('app.seed_branch_id')::uuid WHERE org_id IS NULL;
 UPDATE tickets                   SET org_id = current_setting('app.seed_org_id')::uuid,    branch_id = current_setting('app.seed_branch_id')::uuid WHERE org_id IS NULL;
@@ -865,7 +1010,7 @@ WHERE org_role IS NULL OR org_role = 'agent';
 -- who belongs to a branch), but stays nullable to accommodate org_admin-created records.
 
 ALTER TABLE "user"                       ALTER COLUMN org_id SET NOT NULL;
--- user.branch_id stays nullable — org_admin users have no branch
+-- user has no branch_id column — branch membership lives in branch_members
 ALTER TABLE client_table                 ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE transaction                  ALTER COLUMN org_id SET NOT NULL;
 ALTER TABLE task                         ALTER COLUMN org_id SET NOT NULL;
@@ -877,11 +1022,14 @@ ALTER TABLE tour_package_commission_table ALTER COLUMN org_id SET NOT NULL;
 
 -- ─── STEP 9: Add indexes ──────────────────────────────────────────────────────
 
-CREATE INDEX IF NOT EXISTS idx_branches_org_id           ON branches(organization_id);
-CREATE INDEX IF NOT EXISTS idx_user_org_id               ON "user"(org_id);
-CREATE INDEX IF NOT EXISTS idx_user_branch_id            ON "user"(branch_id);
-CREATE INDEX IF NOT EXISTS idx_client_org_id             ON client_table(org_id);
+CREATE INDEX IF NOT EXISTS idx_branches_org_id              ON branches(organization_id);
+CREATE INDEX IF NOT EXISTS idx_branch_members_org_id        ON branch_members(org_id);
+CREATE INDEX IF NOT EXISTS idx_branch_members_branch_id     ON branch_members(branch_id);
+CREATE INDEX IF NOT EXISTS idx_branch_members_user_id       ON branch_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_org_id                  ON "user"(org_id);
+CREATE INDEX IF NOT EXISTS idx_client_org_id                ON client_table(org_id);
 CREATE INDEX IF NOT EXISTS idx_client_branch_id          ON client_table(branch_id);
+CREATE INDEX IF NOT EXISTS idx_client_created_by         ON client_table(created_by);
 CREATE INDEX IF NOT EXISTS idx_transaction_org_id        ON transaction(org_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_branch_id     ON transaction(branch_id);
 CREATE INDEX IF NOT EXISTS idx_task_org_id               ON task(org_id);
@@ -911,9 +1059,7 @@ BEGIN
 
   SELECT COUNT(*) INTO bad_count FROM transaction              WHERE org_id IS NULL;
   IF bad_count > 0 THEN RAISE EXCEPTION 'transaction has % rows with NULL org_id', bad_count; END IF;
-
-  SELECT COUNT(*) INTO bad_count FROM transaction              WHERE branch_id IS NULL;
-  IF bad_count > 0 THEN RAISE EXCEPTION 'transaction has % rows with NULL branch_id', bad_count; END IF;
+  -- branch_id is intentionally nullable (grouping label, not isolation boundary) — no assertion needed.
 
   RAISE NOTICE 'Migration verification passed — all tables fully backfilled.';
 END $$;

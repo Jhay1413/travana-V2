@@ -17,6 +17,44 @@ export const withdrawal_method_enum = pgEnum('withdrawal_method_enum', ['bank_tr
 export const referral_payout_status_enum = pgEnum('referral_payout_status_enum', ['requested', 'approved', 'rejected']);
 export const referral_withdrawal_status_enum = pgEnum('referral_withdrawal_status_enum', ['pending', 'processed', 'rejected']);
 
+// ─── Multi-tenancy: Organizations & Branches ─────────────────────────────────
+
+export const organization = pgTable("organization", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  name: varchar("name").notNull(),
+  slug: varchar("slug").notNull().unique(),
+  plan: varchar("plan").default("starter"),
+  isActive: boolean("is_active").notNull().default(true),
+  seatLimit: integer("seat_limit").default(10),
+  brandColor: varchar("brand_color"),
+  logoUrl: varchar("logo_url"),
+  settings: jsonb("settings").default(sql`'{}'`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  trialEndsAt: timestamp("trial_ends_at"),
+});
+
+export const insertOrganizationSchema = createInsertSchema(organization).omit({ id: true, createdAt: true });
+export type Organization = typeof organization.$inferSelect;
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+
+export const branches = pgTable("branches", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  name: varchar("name").notNull(),
+  code: varchar("code"),
+  address: text("address"),
+  phone: varchar("phone"),
+  isDefault: boolean("is_default").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  idx_branches_org: index("idx_branches_org_id").on(table.organizationId),
+}));
+
+export const insertBranchSchema = createInsertSchema(branches).omit({ id: true, createdAt: true });
+export type Branch = typeof branches.$inferSelect;
+export type InsertBranch = z.infer<typeof insertBranchSchema>;
+
 export const sessions = pgTable("sessions", {
   sid: varchar("sid").primaryKey(),
   sess: jsonb("sess").notNull(),
@@ -43,12 +81,33 @@ export const user = pgTable("user", {
   password: text("password"),
   resetToken: text("resetToken"),
   resetTokenExpiry: timestamp("resetTokenExpiry"),
+  orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  orgRole: varchar("org_role"),
 });
 
 export const insertUserSchema = createInsertSchema(user).omit({ createdAt: true, updatedAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = typeof user.$inferInsert;
 export type User = typeof user.$inferSelect;
+
+export const branchMembers = pgTable("branch_members", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  orgRole: varchar("org_role").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  joinedAt: timestamp("joined_at").notNull().defaultNow(),
+}, (table) => ({
+  unique_branch_user: unique().on(table.branchId, table.userId),
+  idx_branch_members_org: index("idx_branch_members_org_id").on(table.orgId),
+  idx_branch_members_branch: index("idx_branch_members_branch_id").on(table.branchId),
+  idx_branch_members_user: index("idx_branch_members_user_id").on(table.userId),
+}));
+
+export const insertBranchMemberSchema = createInsertSchema(branchMembers).omit({ id: true, joinedAt: true });
+export type BranchMember = typeof branchMembers.$inferSelect;
+export type InsertBranchMember = z.infer<typeof insertBranchMemberSchema>;
 
 export const userProfiles = pgTable("user_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -89,6 +148,9 @@ export const clientTable = pgTable("client_table", {
   portalPin: varchar("portal_pin"),
   createdAt: timestamp().notNull().defaultNow(),
   referrerId: text("referrerId").references(() => user.id, { onDelete: "set null" }),
+  orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   vipTier: vip_tier_enum("vipTier"),
   vipEnrolledAt: timestamp("vipEnrolledAt"),
   totalReferrals: integer("totalReferrals").default(0).notNull(),
