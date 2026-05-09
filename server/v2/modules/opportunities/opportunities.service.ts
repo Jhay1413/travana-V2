@@ -1,0 +1,53 @@
+import { opportunitiesRepository, type OpportunityFilters } from './opportunities.repository';
+
+function formatClientName(title: string | null, firstName: string | null, surname: string | null): string {
+  return [title !== 'NULL' ? title : '', firstName, surname].filter(Boolean).join(' ') || 'Unknown';
+}
+
+export const opportunitiesService = {
+  async getEnquiries(filters: OpportunityFilters) {
+    const { rows, total } = await opportunitiesRepository.findEnquiries(filters);
+    const items = rows.map((r) => ({
+      id: r.id, transactionId: r.transactionId, clientId: r.clientId,
+      clientName: formatClientName(r.clientTitle, r.clientFirstName, r.clientSurname),
+      clientPhone: r.clientPhone || '', agentName: r.agentFirstName || r.agentName || '',
+      title: r.title || 'Untitled', status: r.status || 'NEW_LEAD',
+      travelDate: r.travelDate, dateCreated: r.dateCreated,
+      adults: r.adults || 0, children: r.children || 0, budget: parseFloat(r.budget as string) || 0, nights: r.nights || 0,
+    }));
+    return { items, total, page: filters.page, limit: filters.limit, totalPages: Math.ceil(total / filters.limit) };
+  },
+
+  async getQuotes(filters: OpportunityFilters) {
+    const { rows, total } = await opportunitiesRepository.findQuotes(filters);
+    const items = rows.map((r) => ({
+      id: r.id, transactionId: r.transactionId, clientId: r.clientId,
+      clientName: formatClientName(r.clientTitle, r.clientFirstName, r.clientSurname),
+      clientPhone: r.clientPhone || '', agentName: r.agentFirstName || r.agentName || '',
+      title: r.title || 'Untitled', status: r.status || 'DRAFT',
+      travelDate: r.travelDate, dateCreated: r.dateCreated,
+      salesPrice: parseFloat(r.salesPrice as string) || 0, commission: parseFloat(r.commission as string) || 0,
+      nights: r.nights || 0, adults: r.adults || 0, children: r.children || 0,
+    }));
+    return { items, total, page: filters.page, limit: filters.limit, totalPages: Math.ceil(total / filters.limit) };
+  },
+
+  async getBookings(filters: OpportunityFilters) {
+    const { rows, total } = await opportunitiesRepository.findBookings(filters);
+    const items = rows.map((r) => ({
+      id: r.id, transactionId: r.transactionId, clientId: r.clientId,
+      clientName: formatClientName(r.clientTitle, r.clientFirstName, r.clientSurname),
+      clientPhone: r.clientPhone || '', agentName: r.agentFirstName || r.agentName || '',
+      title: r.title || 'Untitled', status: r.status || 'BOOKED',
+      travelDate: r.travelDate, dateCreated: r.dateCreated,
+      salesPrice: parseFloat(r.salesPrice as string) || 0, commission: parseFloat(r.commission as string) || 0,
+      nights: r.nights || 0, adults: r.adults || 0, children: r.children || 0,
+      haysRef: r.haysRef || '', supplierRef: r.supplierRef || '',
+    }));
+    return { items, total, page: filters.page, limit: filters.limit, totalPages: Math.ceil(total / filters.limit) };
+  },
+
+  async getAgents() {
+    return opportunitiesRepository.findAgents();
+  },
+};

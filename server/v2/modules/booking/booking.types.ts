@@ -1,0 +1,18 @@
+export type {
+  Booking,
+  InsertBooking,
+  BookingFlight,
+  InsertBookingFlight,
+  BookingAccomodation,
+  InsertBookingAccomodation,
+  BookingTransfer,
+  InsertBookingTransfer,
+  BookingCarHire,
+  InsertBookingCarHire,
+  BookingAttractionTicket,
+  InsertBookingAttractionTicket,
+  BookingLoungePass,
+  InsertBookingLoungePass,
+  BookingAirportParking,
+  InsertBookingAirportParking,
+} from '@shared/schema';

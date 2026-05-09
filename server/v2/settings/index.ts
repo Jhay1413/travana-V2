@@ -1,0 +1,26 @@
+import { Router } from 'express';
+import destinationRoutes from './destination/destination.routes';
+import resortRoutes from './resort/resort.routes';
+import accommodationRoutes from './accommodation/accommodation.routes';
+import boardBasisRoutes from './board-basis/board-basis.routes';
+import roomTypeRoutes from './room-type/room-type.routes';
+import parkRoutes from './park/park.routes';
+import lodgeRoutes from './lodge/lodge.routes';
+import cottageRoutes from './cottage/cottage.routes';
+import cruiseRoutes from './cruise/cruise.routes';
+import accommodationTypeRoutes from './accommodation-type/accommodation-type.routes';
+import tourOperatorSettingsRoutes from './tour-operator/tour-operator-settings.routes';
+
+const router = Router();
+router.use('/destinations',       destinationRoutes);
+router.use('/resorts',            resortRoutes);
+router.use('/accommodations',     accommodationRoutes);
+router.use('/board-basis',        boardBasisRoutes);
+router.use('/room-types',         roomTypeRoutes);
+router.use('/parks',              parkRoutes);
+router.use('/lodges',             lodgeRoutes);
+router.use('/cottages',           cottageRoutes);
+router.use('/cruise',             cruiseRoutes);
+router.use('/accommodation-types',accommodationTypeRoutes);
+router.use('/tour-operators',     tourOperatorSettingsRoutes);
+export default router;

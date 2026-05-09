@@ -31,14 +31,15 @@ server/
 │
 ├── config/
 │   ├── database.ts
-│   └── s3.ts
+│   ├── s3.ts
+│   └── email.ts              ← NEW: email service config (invite + verification emails)
 │
 ├── middlewares/
 │   ├── auth/
 │   │   ├── index.ts        ← re-exports
 │   │   ├── session.ts      ← session config (moved from replit_integrations)
 │   │   └── require-auth.ts ← requireAuth guard
-│   ├── org-scope.ts        ← NEW: injects req.orgId from req.user.org_id
+│   ├── org-branch-scope.ts ← NEW: injects req.orgId, req.branchId, req.orgRole from session
 │   ├── error.middleware.ts
 │   └── validation.middleware.ts
 │
@@ -51,18 +52,48 @@ server/
 │   └── response.ts
 │
 ├── types/
-│   └── express.d.ts        ← Augment Express Request: req.orgId, req.user
+│   └── express.d.ts        ← Augment Express Request: req.orgId, req.branchId, req.orgRole, req.user
 │
 │
 ├── modules/                ← All domain code lives here
 │   │
-│   │── organization/       ← NEW (SaaS tenant management)
+│   │── organization/       ← NEW (SaaS tenant management — platform admin only)
 │   │   ├── organization.routes.ts
 │   │   ├── organization.controller.ts
 │   │   ├── organization.service.ts
 │   │   ├── organization.repository.ts
 │   │   ├── organization.validator.ts
 │   │   └── organization.types.ts
+│   │
+│   ├── branch/             ← NEW (branch CRUD — org admin + branch manager)
+│   │   ├── branch.routes.ts
+│   │   ├── branch.controller.ts
+│   │   ├── branch.service.ts
+│   │   ├── branch.repository.ts
+│   │   ├── branch.validator.ts
+│   │   └── branch.types.ts
+│   │
+│   ├── onboarding/         ← NEW (self-serve signup wizard — 3 steps: agency → branding → owner)
+│   │   ├── onboarding.routes.ts
+│   │   ├── onboarding.controller.ts
+│   │   ├── onboarding.service.ts  ← atomically creates org + default branch + owner user
+│   │   ├── onboarding.validator.ts
+│   │   └── onboarding.types.ts
+│   │
+│   ├── invite/             ← NEW (team invite flow — email token → user creation)
+│   │   ├── invite.routes.ts
+│   │   ├── invite.controller.ts
+│   │   ├── invite.service.ts
+│   │   ├── invite.repository.ts
+│   │   ├── invite.validator.ts
+│   │   └── invite.types.ts
+│   │
+│   ├── platform-admin/     ← NEW (platform-level — guard: role = platform_admin)
+│   │   ├── platform-admin.routes.ts
+│   │   ├── platform-admin.controller.ts
+│   │   ├── platform-admin.service.ts  ← suspend, reactivate, impersonate, plan change
+│   │   ├── platform-admin.repository.ts
+│   │   └── platform-admin.types.ts
 │   │
 │   ├── user/
 │   │   ├── user.routes.ts
@@ -246,12 +277,6 @@ server/
 │   │   ├── tour-operator.repository.ts
 │   │   └── tour-operator.validator.ts
 │   │
-│   ├── registration/
-│   │   ├── registration.routes.ts
-│   │   ├── registration.controller.ts
-│   │   ├── registration.service.ts
-│   │   └── registration.repository.ts
-│   │
 │   ├── portal/
 │   │   ├── portal.routes.ts
 │   │   ├── portal.controller.ts
@@ -317,10 +342,10 @@ graph LR
     end
 
     subgraph "AFTER — Domain modules"
-        M[modules/\n27 domains]
+        M[modules/\n31 domains]
         LK[lookup/]
         ST[settings/\n10 sub-domains]
-        MW[middlewares/\nauth + org-scope]
+        MW[middlewares/\nauth + org-branch-scope]
     end
 ```
 
@@ -382,18 +407,25 @@ only this file changes, nothing else.
 
 ```mermaid
 graph TD
-    A[middlewares/org-scope.ts] -->|"injects req.orgId"| B[Every org-scoped controller]
-    C[types/express.d.ts] -->|"augments Request"| D["req.orgId: string\nreq.user: User"]
+    A[middlewares/org-branch-scope.ts] -->|"injects req.orgId + req.branchId + req.orgRole"| B[Every org-scoped controller]
+    C[types/express.d.ts] -->|"augments Request"| D["req.orgId: string\nreq.branchId: string | null\nreq.orgRole: string\nreq.user: User"]
     E[modules/organization/] -->|"CRUD for tenants"| F[Platform admin only]
+    G[modules/branch/] -->|"CRUD for branches"| H[Org admin + branch manager]
+    I[modules/onboarding/] -->|"3-step signup wizard"| J[Creates org + branch + owner atomically]
+    K[modules/invite/] -->|"email token invite flow"| L[Org admin + branch manager]
+    M[modules/platform-admin/] -->|"suspend, impersonate, plan"| N[Platform admin only]
 ```
 
-### `middlewares/org-scope.ts`
+### `middlewares/org-branch-scope.ts`
 ```typescript
 // Pseudocode — not to implement yet, just the shape
-export function orgScope(req, res, next) {
-  const orgId = req.user?.org_id;
-  if (!orgId) return res.status(403).json({ message: 'No org context' });
-  req.orgId = orgId;
+export function orgBranchScope(req, res, next) {
+  const { org_id, branch_id, org_role, role } = req.user ?? {};
+  if (!org_id && role !== 'platform_admin')
+    return res.status(403).json({ message: 'No org context' });
+  req.orgId    = org_id;
+  req.branchId = branch_id ?? null;   // null for org_admin
+  req.orgRole  = org_role;
   next();
 }
 ```
@@ -403,7 +435,9 @@ export function orgScope(req, res, next) {
 // Extends Express globally — one place, all routes benefit
 declare namespace Express {
   interface Request {
-    orgId: string;
+    orgId:    string;
+    branchId: string | null;  // null for org_admin (branch-agnostic)
+    orgRole:  string;         // org_admin | branch_manager | agent | homeworker | referral_agent
     user?: import('../shared/schema').User;
   }
 }
@@ -422,7 +456,7 @@ graph TD
     P3["Pass 3 — Break lookup.routes.ts\n• Add lookup.service.ts + lookup.repository.ts\n• Routes become thin wrappers"]
     P4["Pass 4 — Move domains to modules/\n• Start with most-changed: quote, booking, client\n• Then referral, ticket, task\n• Update routes/index.ts import paths"]
     P5["Pass 5 — Rename files to kebab-case\n• Automated rename + find/replace imports\n• One domain at a time"]
-    P6["Pass 6 — Wire org-scope middleware\n• Add to all org-scoped route groups\n• Update all repositories to accept orgId"]
+    P6["Pass 6 — Wire org-branch-scope middleware\n• Add to all org-scoped route groups\n• Update repositories to accept orgId (mandatory) + branchId (role-dependent)\n• Guard platform-admin routes by role = platform_admin"]
 
     P1 --> P2 --> P3 --> P4 --> P5 --> P6
 ```
@@ -440,7 +474,12 @@ graph TD
 | 271-line `lookup.routes.ts` with inline DB queries | Add `lookup.service.ts` + `lookup.repository.ts` |
 | 47-file flat `routes/` folder | Move to `modules/<domain>/` |
 | Auth in `replit_integrations/` | Move to `middlewares/auth/` |
-| No org-scope middleware | Add `middlewares/org-scope.ts` |
-| No Express type augmentation | Add `types/express.d.ts` |
+| No org-scope middleware | Add `middlewares/org-branch-scope.ts` (injects `orgId` + `branchId` + `orgRole`) |
+| No Express type augmentation | Add `types/express.d.ts` (`orgId`, `branchId`, `orgRole`, `user`) |
+| No branch management API | Add `modules/branch/` (org admin CRUD + branch manager read-own) |
+| No self-serve signup | Add `modules/onboarding/` (3-step wizard: agency → branding → owner) |
+| No invite flow | Add `modules/invite/` (email token → 48h expiry → user creation) |
+| No platform admin area | Add `modules/platform-admin/` (guarded by `role = platform_admin`) |
+| No email service config | Add `config/email.ts` for verification + invite emails |
 | Mixed camelCase/kebab-case filenames | Standardise to kebab-case |
 | No `app.ts` / `server.ts` split | Split `index.ts` into `app.ts` + `server.ts` |

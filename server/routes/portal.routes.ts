@@ -846,7 +846,7 @@ portalRouter.get("/vip/referrals", portalAuth, async (req: Request, res: Respons
 });
 
 // Returns client's referral_payout records (payout request history)
-portalRouter.get("/vip/payout-requests", portalAuth, async (req: Request, res: Response) => {
+portalRouter.get("/vip/payout-requests", portalAuth, async (req: Request, res: Response) => {                                             
   try {
     const { clientId } = (req as any).portalClient;
     const payouts = await referralPayoutService.getPayoutsByClient(clientId);
@@ -864,11 +864,11 @@ portalRouter.get("/vip/withdrawals", portalAuth, async (req: Request, res: Respo
     const withdrawals = await referralWithdrawalService.getWithdrawalsByClient(clientId);
     res.json(withdrawals);
   } catch (err: any) {
-    console.error("Portal withdrawals error:", err);
+    console.error("Portal withdrawals error:", err);                                    
     res.status(500).json({ error: "Failed to load withdrawals" });
-  }
+  } 
 });
-
+                      
 // Returns client's current wallet balance
 portalRouter.get("/wallet/balance", portalAuth, async (req: Request, res: Response) => {
   try {
