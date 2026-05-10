@@ -46,7 +46,7 @@ const AGENT_NAV: NavConfig = [
   {
     id: "main",
     items: [
-      { path: "/", label: "Overview", icon: LayoutGrid },
+      { path: "/agent-overview", label: "Overview", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/tickets", label: "Tickets", icon: LifeBuoy },
       { path: "/?s=connect-internal-chat", label: "Live Chat", icon: MessageSquare },
@@ -62,7 +62,7 @@ const BRANCH_MANAGER_NAV: NavConfig = [
   {
     id: "main",
     items: [
-      { path: "/", label: "Branch Overview", icon: LayoutGrid },
+      { path: "/branch-overview", label: "Branch Overview", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/clients", label: "Clients", icon: Users },
       { path: "/bookings", label: "Bookings", icon: ClipboardList },

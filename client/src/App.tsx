@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -18,7 +18,8 @@ import ReferralAgentDashboard from "@/pages/referral-agent";
 import { useRole } from "@/hooks/use-role";
 import { BrandingApplier } from "@/components/branding-applier";
 import PublicQuotePage from "@/pages/public-quote";
-import HomePage from "@/pages/home";
+import AgentOverviewPage from "@/pages/agent-overview";
+import BranchOverviewPage from "@/pages/branch-overview";
 import ClientsPage from "@/pages/clients";
 import ClientPage from "@/pages/client";
 import QuotePage from "@/pages/quote"; // Using original full-featured version
@@ -83,19 +84,24 @@ function LoadingScreen() {
 
 function AuthenticatedRouter() {
   const { orgRole } = useRole();
-  const homeComponent =
+  const homePath =
     orgRole === "referral_agent"
-      ? ReferralAgentDashboard
+      ? "/referral-hub"
       : orgRole === "platform_admin"
-        ? PlatformAdminPage
-        : HomePage;
+        ? "/platform-admin"
+        : orgRole === "branch_manager"
+          ? "/branch-overview"
+          : "/agent-overview";
 
   return (
     <AppLayout>
       <Switch>
-        <Route path="/" component={homeComponent} />
+        <Route path="/">{() => <Redirect to={homePath} />}</Route>
         <Route path="/welcome-team" component={WelcomeTeamPage} />
         <Route path="/forbidden" component={ForbiddenPage} />
+
+        <RoleRoute path="/agent-overview" allow={STAFF_ROLES} component={AgentOverviewPage} />
+        <RoleRoute path="/branch-overview" allow={MANAGER_ROLES} component={BranchOverviewPage} />
 
         <RoleRoute path="/platform-admin" allow={PLATFORM_ROLES} component={PlatformAdminPage} />
         <RoleRoute path="/referral-hub" allow={REFERRAL_ROLES} component={ReferralAgentDashboard} />
