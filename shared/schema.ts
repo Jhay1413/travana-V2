@@ -1971,6 +1971,7 @@ export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
 // =====================================================================
 export const hrEmployeesTable = pgTable("hr_employees", {
   id: varchar("id", { length: 64 }).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 200 }).notNull(),
   role: varchar("role", { length: 200 }).notNull(),
   team: varchar("team", { length: 200 }).notNull(),
@@ -2006,6 +2007,7 @@ export type InsertHrEmployee = z.infer<typeof insertHrEmployeeSchema>;
 
 export const hrRemindersTable = pgTable("hr_reminders", {
   id: varchar("id", { length: 64 }).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   type: varchar("type", { length: 32 }).notNull(),
   message: text("message").notNull(),
   employee: varchar("employee", { length: 200 }).notNull(),

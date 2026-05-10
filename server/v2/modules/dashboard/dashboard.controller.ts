@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { dashboardService } from "./dashboard.service";
+import { userRepository } from "../user/user.repository";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
@@ -28,10 +29,7 @@ export const dashboardController = {
   getAdminOverviewStats: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const { db } = await import("../../config/database");
-    const { user: userTable } = await import("@shared/schema");
-    const { eq } = await import("drizzle-orm");
-    const [dbUser] = await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, userId));
+    const dbUser = await userRepository.findRoleById(userId);
     if (!dbUser || (dbUser.role || "").toLowerCase() !== "admin") {
       return res.status(403).json({ success: false, message: "Admin access required" });
     }

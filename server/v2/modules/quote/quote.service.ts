@@ -130,19 +130,7 @@ function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
 }
 
 async function resolveAndGenerateGuru(accommodationId: string, userId?: string) {
-  const { db } = await import("../../config/database");
-  const { accomodation_list, resorts, destination } = await import("@shared/schema");
-  const { eq } = await import("drizzle-orm");
-
-  const results = await db
-    .select({ destinationName: destination.name })
-    .from(accomodation_list)
-    .innerJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
-    .innerJoin(destination, eq(resorts.destination_id, destination.id))
-    .where(eq(accomodation_list.id, accommodationId))
-    .limit(1);
-
-  const destName = results[0]?.destinationName;
+  const destName = await newQuoteRepository.findDestinationNameByAccommodationId(accommodationId);
   if (destName && destName.trim().length > 0) {
     console.log(`DESTINATION GURU - auto-generating for: ${destName}`);
     await destinationGuruService.generate(destName.trim(), userId);
@@ -444,6 +432,33 @@ export const newQuoteService = {
   async getQuoteTags(quoteId: string, scope: ScopeOrTrusted) {
     await assertQuoteInScope(quoteId, scope);
     return tagService.getQuoteTags(quoteId);
+  },
+
+  async setPortalVisibility(id: string, showOnPortal: boolean, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(id, scope);
+    let token: string | undefined;
+    if (showOnPortal) {
+      const existing = await newQuoteRepository.findTokenById(id);
+      if (!existing?.token) {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        token = "";
+        for (let i = 0; i < 8; i++) token += chars[Math.floor(Math.random() * chars.length)];
+      }
+    }
+    await newQuoteRepository.setPortalVisibility(id, showOnPortal, token);
+  },
+
+  async setFeatured(id: string, isFeatured: boolean, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(id, scope);
+    await newQuoteRepository.setFeatured(id, isFeatured);
+  },
+
+  /** Used by the portal-push endpoint to fetch the title before broadcasting. */
+  async getTitleForPortalPush(id: string, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(id, scope);
+    const row = await newQuoteRepository.findTitleAndPortalVisibilityById(id);
+    if (!row) throw new AppError("Quote not found", 404);
+    return row;
   },
 };
 

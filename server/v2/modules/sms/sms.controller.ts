@@ -5,9 +5,7 @@ import { successResponse } from '../../utils/response';
 import { AppError } from '../../utils/error-handler';
 import { smsRepository } from './sms.repository';
 import { pingSmsConnection, sendSms, mergeTemplate, normalisePhone } from './sms.service';
-import { db } from '../../config/database';
-import { user as userTable, transaction as transactionTable, booking as bookingTable } from '@shared/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { userRepository } from '../user/user.repository';
 import { getUserId } from '../../utils/get-user-id';
 import { getScope, type Scope } from '../../utils/scope';
 
@@ -65,7 +63,7 @@ async function ensureSeed() {
 async function requireAdminOrManager(req: Request) {
   const userId = getUserId(req);
   if (!userId) throw new AppError('Not authenticated', 401);
-  const [u] = await db.select().from(userTable).where(eq(userTable.id, userId)).limit(1);
+  const u = await userRepository.findById(userId);
   if (!u) throw new AppError('User not found', 404);
   const role = (u.role || '').toLowerCase();
   if (role !== 'admin' && role !== 'manager') throw new AppError('Only Admin or Manager can manage texts', 403);
@@ -88,9 +86,7 @@ async function buildContextForClient(client: any) {
     company_name: "Tina's Travel", destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '',
   };
   try {
-    const [latestTxn] = await db.select().from(transactionTable).where(eq(transactionTable.client_id, client.id)).orderBy(desc(transactionTable.created_at)).limit(1);
-    if (!latestTxn) return ctx;
-    const [bookingRow] = await db.select().from(bookingTable).where(and(eq(bookingTable.transaction_id, latestTxn.id), eq(bookingTable.is_active, true))).limit(1);
+    const bookingRow = await smsRepository.findLatestActiveBookingForClient(client.id);
     if (bookingRow) {
       ctx.hays_ref = bookingRow.hays_ref ?? '';
       ctx.supplier_ref = bookingRow.supplier_ref ?? '';

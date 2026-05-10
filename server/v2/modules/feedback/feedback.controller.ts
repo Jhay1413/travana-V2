@@ -1,21 +1,19 @@
 import { Request, Response } from 'express';
 import { feedbackService } from './feedback.service';
+import { userRepository } from '../user/user.repository';
 import { asyncHandler } from '../../utils/async-handler';
 import { getUserId } from '../../utils/get-user-id';
-import { db } from '../../config/database';
-import { user as userTable } from '@shared/schema';
-import { eq } from 'drizzle-orm';
 
 const VALID_TYPES = ['suggestion', 'bug', 'general'];
 const VALID_STATUSES = ['open', 'in_review', 'resolved', 'closed'];
 
 async function getUserName(userId: string) {
-  const [u] = await db.select({ name: userTable.name }).from(userTable).where(eq(userTable.id, userId)).limit(1);
+  const u = await userRepository.findRoleAndNameById(userId);
   return u?.name || null;
 }
 
 async function getUserRole(userId: string) {
-  const [u] = await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, userId)).limit(1);
+  const u = await userRepository.findRoleById(userId);
   return u?.role?.toLowerCase() || null;
 }
 
@@ -58,7 +56,7 @@ export const feedbackController = {
     if (role !== 'admin' && role !== 'manager') return res.status(403).json({ success: false, message: 'Admin or Manager access required' });
     const { status, adminNotes } = req.body;
     if (!status || !VALID_STATUSES.includes(status)) return res.status(400).json({ success: false, message: `Status must be one of: ${VALID_STATUSES.join(', ')}` });
-    const item = await feedbackService.updateStatus(req.params.id, status, adminNotes);
+    const item = await feedbackService.updateStatus(req.params.id as string, status, adminNotes);
     res.json({ success: true, data: item });
   }),
 
@@ -67,7 +65,7 @@ export const feedbackController = {
     if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
     const role = await getUserRole(userId);
     if (role !== 'admin' && role !== 'manager') return res.status(403).json({ success: false, message: 'Admin or Manager access required' });
-    await feedbackService.remove(req.params.id);
+    await feedbackService.remove(req.params.id as string);
     res.json({ success: true, message: 'Feedback deleted' });
   }),
 };

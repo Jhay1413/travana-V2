@@ -1,11 +1,6 @@
-import { db } from '../../config/database';
-import {
-  chatConversations, chatParticipants, chatMessages,
-  transaction, clientTable, user, portalMessages,
-} from '@shared/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
 import { notificationRepository } from '../notification/notification.repository';
 import { pushNotificationService } from '../notification/push-notification.service';
+import { portalRepository } from './portal.repository';
 
 const PORTAL_SENDER_PREFIX = 'portal-client:';
 
@@ -22,62 +17,25 @@ export function extractClientIdFromSender(senderId: string): string | null {
   return senderId.replace(PORTAL_SENDER_PREFIX, '');
 }
 
-async function getClientName(clientId: string): Promise<string> {
-  const [client] = await db
-    .select({ firstName: clientTable.firstName, surename: clientTable.surename })
-    .from(clientTable)
-    .where(eq(clientTable.id, clientId))
-    .limit(1);
-  if (!client) return 'Portal Client';
-  return `${(client.firstName || '').trim()} ${(client.surename || '').trim()}`.trim() || 'Portal Client';
-}
-
-async function findAgentForClient(clientId: string): Promise<string | null> {
-  const [txn] = await db
-    .select({ userId: transaction.user_id })
-    .from(transaction)
-    .where(and(eq(transaction.client_id, clientId), eq(transaction.is_active, true)))
-    .orderBy(desc(transaction.created_at))
-    .limit(1);
-  return txn?.userId || null;
-}
-
-async function getAllAgentIds(): Promise<string[]> {
-  const agents = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(sql`${user.banned} = false OR ${user.banned} IS NULL`);
-  return agents.map((a) => a.id);
-}
-
 async function reconcileParticipants(
   conversationId: string,
   agentIds: string[],
   clientId: string,
 ): Promise<void> {
-  const existing = await db
-    .select({ userId: chatParticipants.userId })
-    .from(chatParticipants)
-    .where(eq(chatParticipants.conversationId, conversationId));
-
+  const existing = await portalRepository.listParticipantUserIds(conversationId);
   const existingUserIds = new Set(existing.map((e) => e.userId));
   const portalId = portalSenderId(clientId);
   const desiredIds = new Set([portalId, ...agentIds]);
 
   for (const agentId of agentIds) {
     if (!existingUserIds.has(agentId)) {
-      await db.insert(chatParticipants).values({ conversationId, userId: agentId });
+      await portalRepository.addParticipant(conversationId, agentId);
     }
   }
 
   for (const existingId of existingUserIds) {
     if (existingId && !desiredIds.has(existingId)) {
-      await db.delete(chatParticipants).where(
-        and(
-          eq(chatParticipants.conversationId, conversationId),
-          eq(chatParticipants.userId, existingId),
-        ),
-      );
+      await portalRepository.removeParticipant(conversationId, existingId);
     }
   }
 }
@@ -88,12 +46,7 @@ async function findOrCreatePortalConversation(
   agentIds: string[],
   isGroupChat: boolean,
 ): Promise<string> {
-  const [existing] = await db
-    .select({ id: chatConversations.id })
-    .from(chatConversations)
-    .where(eq(chatConversations.portalClientId, clientId))
-    .limit(1);
-
+  const existing = await portalRepository.findConversationByPortalClient(clientId);
   if (existing) {
     await reconcileParticipants(existing.id, agentIds, clientId);
     return existing.id;
@@ -103,24 +56,16 @@ async function findOrCreatePortalConversation(
   const convName = `Portal: ${clientName}`;
 
   try {
-    const [conv] = await db
-      .insert(chatConversations)
-      .values({
-        type: convType,
-        name: convName,
-        createdBy: portalSenderId(clientId),
-        portalClientId: clientId,
-        portalClientName: clientName,
-      })
-      .onConflictDoNothing()
-      .returning();
+    const conv = await portalRepository.createConversation({
+      type: convType,
+      name: convName,
+      createdBy: portalSenderId(clientId),
+      portalClientId: clientId,
+      portalClientName: clientName,
+    });
 
     if (!conv) {
-      const [retry] = await db
-        .select({ id: chatConversations.id })
-        .from(chatConversations)
-        .where(eq(chatConversations.portalClientId, clientId))
-        .limit(1);
+      const retry = await portalRepository.findConversationByPortalClient(clientId);
       if (retry) {
         await reconcileParticipants(retry.id, agentIds, clientId);
         return retry.id;
@@ -128,23 +73,15 @@ async function findOrCreatePortalConversation(
       throw new Error('Failed to create or find portal conversation');
     }
 
-    await db.insert(chatParticipants).values({
-      conversationId: conv.id,
-      userId: portalSenderId(clientId),
-    });
-
+    await portalRepository.addParticipant(conv.id, portalSenderId(clientId));
     for (const agentId of agentIds) {
-      await db.insert(chatParticipants).values({ conversationId: conv.id, userId: agentId });
+      await portalRepository.addParticipant(conv.id, agentId);
     }
 
     return conv.id;
   } catch (err: any) {
     if (err.code === '23505') {
-      const [retry] = await db
-        .select({ id: chatConversations.id })
-        .from(chatConversations)
-        .where(eq(chatConversations.portalClientId, clientId))
-        .limit(1);
+      const retry = await portalRepository.findConversationByPortalClient(clientId);
       if (retry) {
         await reconcileParticipants(retry.id, agentIds, clientId);
         return retry.id;
@@ -160,19 +97,19 @@ export async function bridgePortalMessageToChat(
   isFromDeal: boolean = false,
 ): Promise<void> {
   try {
-    const clientName = await getClientName(clientId);
+    const clientName = await portalRepository.getClientName(clientId);
     let agentIds: string[] = [];
     let isGroupChat = false;
 
     if (isFromDeal) {
-      agentIds = await getAllAgentIds();
+      agentIds = await portalRepository.findAllNonBannedAgentIds();
       isGroupChat = agentIds.length > 1;
     } else {
-      const agentId = await findAgentForClient(clientId);
+      const agentId = await portalRepository.findActiveAgentIdForClient(clientId);
       if (agentId) {
         agentIds = [agentId];
       } else {
-        agentIds = await getAllAgentIds();
+        agentIds = await portalRepository.findAllNonBannedAgentIds();
         isGroupChat = agentIds.length > 1;
       }
     }
@@ -186,16 +123,13 @@ export async function bridgePortalMessageToChat(
       isGroupChat,
     );
 
-    await db.insert(chatMessages).values({
+    await portalRepository.insertChatMessage({
       conversationId,
       senderId: portalSenderId(clientId),
       content: messageText,
     });
 
-    await db
-      .update(chatConversations)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatConversations.id, conversationId));
+    await portalRepository.touchConversation(conversationId);
 
     const preview = messageText.length > 80 ? messageText.slice(0, 80) + '…' : messageText;
 
@@ -223,27 +157,21 @@ export async function bridgeAgentReplyToPortal(
   messageText: string,
 ): Promise<void> {
   try {
-    const [conv] = await db
-      .select({ portalClientId: chatConversations.portalClientId })
-      .from(chatConversations)
-      .where(eq(chatConversations.id, conversationId))
-      .limit(1);
-
-    if (!conv?.portalClientId) return;
+    const portalClientId = await portalRepository.findPortalClientIdForConversation(conversationId);
+    if (!portalClientId) return;
 
     const plainText = messageText.replace(/<[^>]*>/g, '').trim();
     if (!plainText) return;
 
-    await db.insert(portalMessages).values({
-      clientId: conv.portalClientId,
-      sender: 'agent',
+    await portalRepository.insertPortalMessageFromAgent({
+      clientId: portalClientId,
       agentId,
       agentName,
       text: plainText,
     });
 
     try {
-      await pushNotificationService.sendToClient(conv.portalClientId, {
+      await pushNotificationService.sendToClient(portalClientId, {
         title: `Message from ${agentName || 'Your Travel Agent'}`,
         body: plainText.length > 120 ? plainText.slice(0, 117) + '...' : plainText,
         url: '/portal/messages',

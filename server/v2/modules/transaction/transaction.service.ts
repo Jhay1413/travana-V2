@@ -21,10 +21,6 @@ import type {
   InsertBookingFlight,
   InsertBookingAccomodation,
 } from "@shared/schema";
-import { db } from "../../config/database";
-import { transaction, enquiry_table, quote, booking, quote_flights, quote_accomodation, booking_flights, booking_accomodation, quoteImages, deal_images, accommodation_images, lodge_images } from "@shared/schema";
-import { eq } from "drizzle-orm";
-import { randomUUID } from "crypto";
 
 interface EnquiryPassenger {
   type: string;
@@ -251,74 +247,26 @@ export const transactionService = {
     const normalizedOutboundConnecting = outboundConnectingSource.map(normalizeFlightInput);
     const normalizedInboundConnecting = inboundConnectingSource.map(normalizeFlightInput);
 
-    const result = await db.transaction(async (tx) => {
-      const [txn] = await tx.insert(transaction).values({
-        ...transactionData,
-        status: 'on_quote',
-        org_id: (transactionData as any).org_id ?? scope.orgId ?? null,
-        branch_id: (transactionData as any).branch_id ?? scope.branchId ?? null,
-      }).returning();
+    const defaultExpiry = new Date();
+    defaultExpiry.setDate(defaultExpiry.getDate() + 7);
 
-      const defaultExpiry = new Date();
-      defaultExpiry.setDate(defaultExpiry.getDate() + 7);
+    const quoteValues: Record<string, unknown> = {
+      ...quoteFields,
+      date_expiry: quoteFields.date_expiry ?? defaultExpiry,
+    };
+    if (quoteValues.date_expiry) quoteValues.date_expiry = toDateOrNull(quoteValues.date_expiry);
+    if (quoteValues.deleted_at) quoteValues.deleted_at = toDateOrNull(quoteValues.deleted_at);
 
-      const quoteValues: Record<string, unknown> = {
-        ...quoteFields,
-        transaction_id: txn.id,
-        date_expiry: quoteFields.date_expiry ?? defaultExpiry,
-      };
-      if (quoteValues.date_expiry) quoteValues.date_expiry = toDateOrNull(quoteValues.date_expiry);
-      if (quoteValues.deleted_at) quoteValues.deleted_at = toDateOrNull(quoteValues.deleted_at);
-      const [q] = await tx.insert(quote).values(quoteValues as InsertQuote).returning();
-
-      if (normalizedOutboundFlight && (normalizedOutboundFlight.departing_airport_id || normalizedOutboundFlight.arrival_airport_id || normalizedOutboundFlight.departure_date_time || normalizedOutboundFlight.arrival_date_time || normalizedOutboundFlight.flight_number)) {
-        const converted = convertFlightDates(normalizedOutboundFlight as Record<string, unknown>);
-        await tx.insert(quote_flights).values({ ...converted, quote_id: q.id, flight_type: 'outbound', leg_order: 0 });
-      }
-      if (normalizedInboundFlight && (normalizedInboundFlight.departing_airport_id || normalizedInboundFlight.arrival_airport_id || normalizedInboundFlight.departure_date_time || normalizedInboundFlight.arrival_date_time || normalizedInboundFlight.flight_number)) {
-        const converted = convertFlightDates(normalizedInboundFlight as Record<string, unknown>);
-        await tx.insert(quote_flights).values({ ...converted, quote_id: q.id, flight_type: 'inbound', leg_order: 0 });
-      }
-
-      for (let i = 0; i < normalizedOutboundConnecting.length; i++) {
-        const leg = normalizedOutboundConnecting[i];
-        if (!leg) continue;
-        const hasLegData = Boolean(leg.departing_airport_id || leg.arrival_airport_id || leg.departure_date_time || leg.arrival_date_time || leg.flight_number);
-        if (!hasLegData) continue;
-        const converted = convertFlightDates(leg as Record<string, unknown>);
-        await tx.insert(quote_flights).values({ ...converted, quote_id: q.id, flight_type: 'outbound', leg_order: i + 1 });
-      }
-
-      for (let i = 0; i < normalizedInboundConnecting.length; i++) {
-        const leg = normalizedInboundConnecting[i];
-        if (!leg) continue;
-        const hasLegData = Boolean(leg.departing_airport_id || leg.arrival_airport_id || leg.departure_date_time || leg.arrival_date_time || leg.flight_number);
-        if (!hasLegData) continue;
-        const converted = convertFlightDates(leg as Record<string, unknown>);
-        await tx.insert(quote_flights).values({ ...converted, quote_id: q.id, flight_type: 'inbound', leg_order: i + 1 });
-      }
-
-      if (primaryAccommodation && primaryAccommodation.accomodation_id) {
-        const converted = convertAccommodationDates(primaryAccommodation);
-        await tx.insert(quote_accomodation).values({ ...converted, quote_id: q.id, is_primary: true });
-      }
-
-      const normalizedImages = normalizeUniqueImageUrls(images);
-      if (normalizedImages.length > 0) {
-        await tx.insert(quoteImages).values(normalizedImages.map((url, index) => ({ id: randomUUID(), quoteId: q.id, url, isPrimary: index === 0 })));
-        if (primaryAccommodation?.accomodation_id) {
-          for (const url of normalizedImages) {
-            await tx.insert(accommodation_images).values({ accommodation_id: primaryAccommodation.accomodation_id as string, image_url: url }).onConflictDoNothing();
-          }
-        }
-        if (quoteFields.lodge_id) {
-          for (const url of normalizedImages) {
-            await tx.insert(lodge_images).values({ lodge_id: quoteFields.lodge_id, image_url: url }).onConflictDoNothing();
-          }
-        }
-      }
-
-      return { transaction: txn, quote: q };
+    const result = await transactionRepository.createWithQuoteAndChildren({
+      transactionData,
+      quoteFields: quoteValues as any,
+      outboundFlight: normalizedOutboundFlight ? (convertFlightDates(normalizedOutboundFlight as Record<string, unknown>) as any) : null,
+      inboundFlight: normalizedInboundFlight ? (convertFlightDates(normalizedInboundFlight as Record<string, unknown>) as any) : null,
+      outboundConnectingLegs: normalizedOutboundConnecting.map((leg) => leg ? (convertFlightDates(leg as Record<string, unknown>) as any) : null).filter(Boolean) as any,
+      inboundConnectingLegs: normalizedInboundConnecting.map((leg) => leg ? (convertFlightDates(leg as Record<string, unknown>) as any) : null).filter(Boolean) as any,
+      primaryAccommodation: primaryAccommodation ? (convertAccommodationDates(primaryAccommodation) as any) : null,
+      images: normalizeUniqueImageUrls(images),
+      scope,
     });
 
     const mainQuoteId = result.quote.id;
@@ -374,64 +322,19 @@ export const transactionService = {
     const normalizedOutboundConnecting = outboundConnectingSource.map(normalizeFlightInput);
     const normalizedInboundConnecting = inboundConnectingSource.map(normalizeFlightInput);
 
-    const result = await db.transaction(async (tx) => {
-      const [txn] = await tx.insert(transaction).values({
-        ...transactionData,
-        status: 'on_booking',
-        org_id: (transactionData as any).org_id ?? scope.orgId ?? null,
-        branch_id: (transactionData as any).branch_id ?? scope.branchId ?? null,
-      }).returning();
+    const bookingValues: Record<string, unknown> = { ...bookingFields };
+    if (bookingValues.deleted_at) bookingValues.deleted_at = toDateOrNull(bookingValues.deleted_at);
 
-      const bookingValues: Record<string, unknown> = { ...bookingFields, transaction_id: txn.id, booking_status: 'BOOKED' };
-      if (bookingValues.deleted_at) bookingValues.deleted_at = toDateOrNull(bookingValues.deleted_at);
-      const [b] = await tx.insert(booking).values(bookingValues as InsertBooking).returning();
-
-      if (normalizedOutboundFlight && (normalizedOutboundFlight.departing_airport_id || normalizedOutboundFlight.arrival_airport_id || normalizedOutboundFlight.departure_date_time || normalizedOutboundFlight.arrival_date_time || normalizedOutboundFlight.flight_number)) {
-        const converted = convertFlightDates(normalizedOutboundFlight as Record<string, unknown>);
-        await tx.insert(booking_flights).values({ ...converted, booking_id: b.id, flight_type: 'outbound' });
-      }
-      if (normalizedInboundFlight && (normalizedInboundFlight.departing_airport_id || normalizedInboundFlight.arrival_airport_id || normalizedInboundFlight.departure_date_time || normalizedInboundFlight.arrival_date_time || normalizedInboundFlight.flight_number)) {
-        const converted = convertFlightDates(normalizedInboundFlight as Record<string, unknown>);
-        await tx.insert(booking_flights).values({ ...converted, booking_id: b.id, flight_type: 'inbound' });
-      }
-
-      for (const leg of normalizedOutboundConnecting) {
-        if (!leg) continue;
-        const hasLegData = Boolean(leg.departing_airport_id || leg.arrival_airport_id || leg.departure_date_time || leg.arrival_date_time || leg.flight_number);
-        if (!hasLegData) continue;
-        const converted = convertFlightDates(leg as Record<string, unknown>);
-        await tx.insert(booking_flights).values({ ...converted, booking_id: b.id, flight_type: 'outbound' });
-      }
-
-      for (const leg of normalizedInboundConnecting) {
-        if (!leg) continue;
-        const hasLegData = Boolean(leg.departing_airport_id || leg.arrival_airport_id || leg.departure_date_time || leg.arrival_date_time || leg.flight_number);
-        if (!hasLegData) continue;
-        const converted = convertFlightDates(leg as Record<string, unknown>);
-        await tx.insert(booking_flights).values({ ...converted, booking_id: b.id, flight_type: 'inbound' });
-      }
-
-      if (primaryAccommodation && primaryAccommodation.accomodation_id) {
-        const converted = convertAccommodationDates(primaryAccommodation);
-        await tx.insert(booking_accomodation).values({ ...converted, booking_id: b.id, is_primary: true });
-      }
-
-      const normalizedImages = normalizeUniqueImageUrls(images);
-      if (normalizedImages.length > 0) {
-        await tx.insert(deal_images).values(normalizedImages.map((imageUrl, index) => ({ id: randomUUID(), owner_id: b.id, image_url: imageUrl, isPrimary: index === 0 })));
-        if (primaryAccommodation?.accomodation_id) {
-          for (const imageUrl of normalizedImages) {
-            await tx.insert(accommodation_images).values({ accommodation_id: primaryAccommodation.accomodation_id as string, image_url: imageUrl }).onConflictDoNothing();
-          }
-        }
-        if (bookingFields.lodge_id) {
-          for (const imageUrl of normalizedImages) {
-            await tx.insert(lodge_images).values({ lodge_id: bookingFields.lodge_id, image_url: imageUrl }).onConflictDoNothing();
-          }
-        }
-      }
-
-      return { transaction: txn, booking: b };
+    const result = await transactionRepository.createWithBookingAndChildren({
+      transactionData,
+      bookingFields: bookingValues as any,
+      outboundFlight: normalizedOutboundFlight ? (convertFlightDates(normalizedOutboundFlight as Record<string, unknown>) as any) : null,
+      inboundFlight: normalizedInboundFlight ? (convertFlightDates(normalizedInboundFlight as Record<string, unknown>) as any) : null,
+      outboundConnectingLegs: normalizedOutboundConnecting.map((leg) => leg ? (convertFlightDates(leg as Record<string, unknown>) as any) : null).filter(Boolean) as any,
+      inboundConnectingLegs: normalizedInboundConnecting.map((leg) => leg ? (convertFlightDates(leg as Record<string, unknown>) as any) : null).filter(Boolean) as any,
+      primaryAccommodation: primaryAccommodation ? (convertAccommodationDates(primaryAccommodation) as any) : null,
+      images: normalizeUniqueImageUrls(images),
+      scope,
     });
 
     const bookingId = result.booking.id;

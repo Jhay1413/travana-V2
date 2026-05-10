@@ -66,4 +66,27 @@ export const branchRepository = {
   async remove(id: string, orgId: string): Promise<void> {
     await db.delete(branches).where(and(eq(branches.id, id), eq(branches.organizationId, orgId)));
   },
+
+  /** Atomic: insert a branch, optionally clearing the default flag on every other branch in the org. */
+  async createAtomic(data: InsertBranch, makeDefault: boolean): Promise<Branch> {
+    return db.transaction(async (tx) => {
+      const created = await this.create(data, tx);
+      if (makeDefault) {
+        await this.clearDefaultExcept(data.organizationId, created.id, tx);
+      }
+      return created;
+    });
+  },
+
+  /** Atomic: update a branch, optionally clearing the default flag on every other branch in the org. */
+  async updateAtomic(id: string, data: Partial<InsertBranch>, orgId: string, makeDefault: boolean): Promise<Branch | null> {
+    return db.transaction(async (tx) => {
+      const updated = await this.update(id, data, orgId, tx);
+      if (!updated) return null;
+      if (makeDefault) {
+        await this.clearDefaultExcept(orgId, id, tx);
+      }
+      return updated;
+    });
+  },
 };

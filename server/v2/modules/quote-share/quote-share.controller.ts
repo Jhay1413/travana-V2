@@ -1,13 +1,11 @@
 import { Request, Response } from 'express';
 import { quoteShareService } from './quote-share.service';
+import { userRepository } from '../user/user.repository';
 import { asyncHandler } from '../../utils/async-handler';
 import { getUserId } from '../../utils/get-user-id';
-import { db } from '../../config/database';
-import { user as userTable } from '@shared/schema';
-import { eq } from 'drizzle-orm';
 
 async function getUserRole(userId: string): Promise<string> {
-  const [u] = await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, userId)).limit(1);
+  const u = await userRepository.findRoleById(userId);
   return u?.role?.toLowerCase() || '';
 }
 
@@ -16,8 +14,8 @@ export const quoteShareController = {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
     const role = await getUserRole(userId);
-    await quoteShareService.verifyAccess(req.params.id, userId, role);
-    const token = await quoteShareService.generateToken(req.params.id);
+    await quoteShareService.verifyAccess(req.params.id as string, userId, role);
+    const token = await quoteShareService.generateToken(req.params.id as string);
     res.json({ success: true, data: { token } });
   }),
 
@@ -25,8 +23,8 @@ export const quoteShareController = {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
     const role = await getUserRole(userId);
-    await quoteShareService.verifyAccess(req.params.id, userId, role);
-    const stats = await quoteShareService.getViewStats(req.params.id);
+    await quoteShareService.verifyAccess(req.params.id as string, userId, role);
+    const stats = await quoteShareService.getViewStats(req.params.id as string);
     res.json({ success: true, data: stats });
   }),
 
@@ -34,8 +32,8 @@ export const quoteShareController = {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
     const role = await getUserRole(userId);
-    await quoteShareService.verifyAccess(req.params.id, userId, role);
-    const actions = await quoteShareService.getCustomerActions(req.params.id);
+    await quoteShareService.verifyAccess(req.params.id as string, userId, role);
+    const actions = await quoteShareService.getCustomerActions(req.params.id as string);
     res.json({ success: true, data: actions });
   }),
 
@@ -43,9 +41,9 @@ export const quoteShareController = {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
     const role = await getUserRole(userId);
-    await quoteShareService.verifyAccess(req.params.id, userId, role);
+    await quoteShareService.verifyAccess(req.params.id as string, userId, role);
     const { sentVia } = req.body;
-    await quoteShareService.updateSentInfo(req.params.id, sentVia);
+    await quoteShareService.updateSentInfo(req.params.id as string, sentVia);
     res.json({ success: true });
   }),
 };

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { newQuoteService } from "./quote.service";
 import { socialPostService } from "../social-post/social-post.service";
+import { pushNotificationService } from "../notification/push-notification.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
@@ -230,5 +231,33 @@ export const quoteController = {
     const quoteId = req.params.id as string;
     const tags = await newQuoteService.getQuoteTags(quoteId, scope);
     return successResponse(res, tags, "Tags retrieved successfully");
+  }),
+
+  setPortalVisibility: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    const showOnPortal = !!req.body?.show_on_portal;
+    await newQuoteService.setPortalVisibility(id, showOnPortal, scope);
+    res.json({ success: true, show_on_portal: showOnPortal });
+  }),
+
+  setFeatured: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    const isFeatured = !!req.body?.is_featured;
+    await newQuoteService.setFeatured(id, isFeatured, scope);
+    res.json({ success: true, is_featured: isFeatured });
+  }),
+
+  portalPush: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    const q = await newQuoteService.getTitleForPortalPush(id, scope);
+    const sent = await pushNotificationService.sendToAll({
+      title: "Latest Holiday Deals from Tinas Travel",
+      body: q.title || "Check out our latest travel deal!",
+      url: "/portal",
+    });
+    res.json({ success: true, sent });
   }),
 };

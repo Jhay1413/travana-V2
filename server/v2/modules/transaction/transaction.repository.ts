@@ -1,8 +1,47 @@
 import { db } from "../../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
-import type { Transaction, InsertTransaction } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
+import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, type SQL } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
+
+interface ConnectingLeg extends Partial<InsertQuoteFlight> {}
+interface BookingConnectingLeg extends Partial<InsertBookingFlight> {}
+
+interface CreateTransactionWithQuoteInput {
+  transactionData: InsertTransaction;
+  quoteFields: Partial<InsertQuote> & { lodge_id?: string | null };
+  outboundFlight?: Partial<InsertQuoteFlight> | null;
+  inboundFlight?: Partial<InsertQuoteFlight> | null;
+  outboundConnectingLegs?: ConnectingLeg[];
+  inboundConnectingLegs?: ConnectingLeg[];
+  primaryAccommodation?: (Partial<InsertQuoteAccomodation> & { accomodation_id?: string | null }) | null;
+  images?: string[];
+  scope: Scope;
+}
+
+interface CreateTransactionWithBookingInput {
+  transactionData: InsertTransaction;
+  bookingFields: Partial<InsertBooking> & { lodge_id?: string | null };
+  outboundFlight?: Partial<InsertBookingFlight> | null;
+  inboundFlight?: Partial<InsertBookingFlight> | null;
+  outboundConnectingLegs?: BookingConnectingLeg[];
+  inboundConnectingLegs?: BookingConnectingLeg[];
+  primaryAccommodation?: (Partial<InsertBookingAccomodation> & { accomodation_id?: string | null }) | null;
+  images?: string[];
+  scope: Scope;
+}
+
+function hasFlightData(leg: Partial<InsertQuoteFlight> | Partial<InsertBookingFlight> | null | undefined): boolean {
+  if (!leg) return false;
+  return Boolean(
+    (leg as any).departing_airport_id ||
+    (leg as any).arrival_airport_id ||
+    (leg as any).departure_date_time ||
+    (leg as any).arrival_date_time ||
+    (leg as any).flight_number,
+  );
+}
 
 function buildTxnScopeConds(scope?: Scope): SQL[] {
   const conds: SQL[] = [];
@@ -388,6 +427,125 @@ export const transactionRepository = {
     }).from(quote).innerJoin(transaction, eq(quote.transaction_id, transaction.id)).leftJoin(clientTable, eq(transaction.client_id, clientTable.id)).where(and(...conditions));
 
     return rows;
+  },
+
+  /**
+   * Atomic insert: transaction + quote + flights + primary accommodation + image rows.
+   * The service is responsible for all data normalisation/conversion before calling.
+   */
+  async createWithQuoteAndChildren(input: CreateTransactionWithQuoteInput) {
+    return db.transaction(async (tx) => {
+      const [txn] = await tx.insert(transaction).values({
+        ...input.transactionData,
+        status: 'on_quote',
+        org_id: (input.transactionData as any).org_id ?? input.scope.orgId ?? null,
+        branch_id: (input.transactionData as any).branch_id ?? input.scope.branchId ?? null,
+      } as InsertTransaction).returning();
+
+      const [q] = await tx.insert(quote).values({
+        ...input.quoteFields,
+        transaction_id: txn.id,
+      } as InsertQuote).returning();
+
+      if (hasFlightData(input.outboundFlight)) {
+        await tx.insert(quote_flights).values({ ...input.outboundFlight, quote_id: q.id, flight_type: 'outbound', leg_order: 0 } as InsertQuoteFlight);
+      }
+      if (hasFlightData(input.inboundFlight)) {
+        await tx.insert(quote_flights).values({ ...input.inboundFlight, quote_id: q.id, flight_type: 'inbound', leg_order: 0 } as InsertQuoteFlight);
+      }
+
+      const outConn = input.outboundConnectingLegs ?? [];
+      for (let i = 0; i < outConn.length; i++) {
+        if (!hasFlightData(outConn[i])) continue;
+        await tx.insert(quote_flights).values({ ...outConn[i], quote_id: q.id, flight_type: 'outbound', leg_order: i + 1 } as InsertQuoteFlight);
+      }
+      const inConn = input.inboundConnectingLegs ?? [];
+      for (let i = 0; i < inConn.length; i++) {
+        if (!hasFlightData(inConn[i])) continue;
+        await tx.insert(quote_flights).values({ ...inConn[i], quote_id: q.id, flight_type: 'inbound', leg_order: i + 1 } as InsertQuoteFlight);
+      }
+
+      if (input.primaryAccommodation && input.primaryAccommodation.accomodation_id) {
+        await tx.insert(quote_accomodation).values({ ...input.primaryAccommodation, quote_id: q.id, is_primary: true } as InsertQuoteAccomodation);
+      }
+
+      const images = input.images ?? [];
+      if (images.length > 0) {
+        await tx.insert(quoteImages).values(images.map((url, index) => ({ id: randomUUID(), quoteId: q.id, url, isPrimary: index === 0 })));
+        if (input.primaryAccommodation?.accomodation_id) {
+          for (const url of images) {
+            await tx.insert(accommodation_images).values({ accommodation_id: input.primaryAccommodation.accomodation_id, image_url: url }).onConflictDoNothing();
+          }
+        }
+        if (input.quoteFields.lodge_id) {
+          for (const url of images) {
+            await tx.insert(lodge_images).values({ lodge_id: input.quoteFields.lodge_id, image_url: url }).onConflictDoNothing();
+          }
+        }
+      }
+
+      return { transaction: txn, quote: q };
+    });
+  },
+
+  /**
+   * Atomic insert: transaction + booking + flights + primary accommodation + image rows.
+   * The service is responsible for all data normalisation before calling.
+   */
+  async createWithBookingAndChildren(input: CreateTransactionWithBookingInput) {
+    return db.transaction(async (tx) => {
+      const [txn] = await tx.insert(transaction).values({
+        ...input.transactionData,
+        status: 'on_booking',
+        org_id: (input.transactionData as any).org_id ?? input.scope.orgId ?? null,
+        branch_id: (input.transactionData as any).branch_id ?? input.scope.branchId ?? null,
+      } as InsertTransaction).returning();
+
+      const [b] = await tx.insert(booking).values({
+        ...input.bookingFields,
+        transaction_id: txn.id,
+        booking_status: 'BOOKED',
+      } as InsertBooking).returning();
+
+      if (hasFlightData(input.outboundFlight)) {
+        await tx.insert(booking_flights).values({ ...input.outboundFlight, booking_id: b.id, flight_type: 'outbound' } as InsertBookingFlight);
+      }
+      if (hasFlightData(input.inboundFlight)) {
+        await tx.insert(booking_flights).values({ ...input.inboundFlight, booking_id: b.id, flight_type: 'inbound' } as InsertBookingFlight);
+      }
+
+      const outConn = input.outboundConnectingLegs ?? [];
+      for (const leg of outConn) {
+        if (!hasFlightData(leg)) continue;
+        await tx.insert(booking_flights).values({ ...leg, booking_id: b.id, flight_type: 'outbound' } as InsertBookingFlight);
+      }
+      const inConn = input.inboundConnectingLegs ?? [];
+      for (const leg of inConn) {
+        if (!hasFlightData(leg)) continue;
+        await tx.insert(booking_flights).values({ ...leg, booking_id: b.id, flight_type: 'inbound' } as InsertBookingFlight);
+      }
+
+      if (input.primaryAccommodation && input.primaryAccommodation.accomodation_id) {
+        await tx.insert(booking_accomodation).values({ ...input.primaryAccommodation, booking_id: b.id, is_primary: true } as InsertBookingAccomodation);
+      }
+
+      const images = input.images ?? [];
+      if (images.length > 0) {
+        await tx.insert(deal_images).values(images.map((imageUrl, index) => ({ id: randomUUID(), owner_id: b.id, image_url: imageUrl, isPrimary: index === 0 })));
+        if (input.primaryAccommodation?.accomodation_id) {
+          for (const imageUrl of images) {
+            await tx.insert(accommodation_images).values({ accommodation_id: input.primaryAccommodation.accomodation_id, image_url: imageUrl }).onConflictDoNothing();
+          }
+        }
+        if (input.bookingFields.lodge_id) {
+          for (const imageUrl of images) {
+            await tx.insert(lodge_images).values({ lodge_id: input.bookingFields.lodge_id, image_url: imageUrl }).onConflictDoNothing();
+          }
+        }
+      }
+
+      return { transaction: txn, booking: b };
+    });
   },
 
   async getStats(scope?: Scope) {

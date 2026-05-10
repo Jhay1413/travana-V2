@@ -1,8 +1,7 @@
-import { db } from '../../config/database';
-import { user, branches as branchesTable } from '@shared/schema';
-import { and, eq } from 'drizzle-orm';
 import { AppError } from '../../utils/error-handler';
 import { branchMemberRepository } from '../branch-member/branch-member.repository';
+import { branchRepository } from '../branch/branch.repository';
+import { userRepository } from '../user/user.repository';
 
 const ALLOWED_ORG_ROLES = ['org_admin', 'branch_manager', 'agent', 'homeworker', 'referral_agent'] as const;
 type OrgRole = (typeof ALLOWED_ORG_ROLES)[number];
@@ -11,6 +10,14 @@ function assertRole(role: string): asserts role is OrgRole {
   if (!ALLOWED_ORG_ROLES.includes(role as OrgRole)) {
     throw new AppError(`Invalid org role: ${role}`, 400);
   }
+}
+
+async function findMemberInOrg(userId: string, orgId: string) {
+  const target = await userRepository.findById(userId);
+  if (!target || target.orgId !== orgId) {
+    throw new AppError('Member not found in this organisation', 404);
+  }
+  return target;
 }
 
 export const orgMemberService = {
@@ -24,15 +31,8 @@ export const orgMemberService = {
       throw new AppError('You cannot demote yourself', 400);
     }
 
-    const [target] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
-    if (!target || target.orgId !== orgId) {
-      throw new AppError('Member not found in this organisation', 404);
-    }
-
-    await db.transaction(async (tx) => {
-      await tx.update(user).set({ orgRole: newRole, updatedAt: new Date() }).where(eq(user.id, userId));
-      await branchMemberRepository.setRoleForUser(orgId, userId, newRole, tx);
-    });
+    await findMemberInOrg(userId, orgId);
+    await branchMemberRepository.setOrgRoleAtomic(orgId, userId, newRole);
 
     return { userId, orgRole: newRole };
   },
@@ -42,25 +42,14 @@ export const orgMemberService = {
       throw new AppError('You cannot suspend your own account', 400);
     }
 
-    const [target] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
-    if (!target || target.orgId !== orgId) {
-      throw new AppError('Member not found in this organisation', 404);
-    }
-
+    await findMemberInOrg(userId, orgId);
     await branchMemberRepository.setActiveForUser(orgId, userId, !suspended);
     return { userId, suspended };
   },
 
   async assignToBranch(orgId: string, userId: string, branchId: string, role?: string) {
-    const [target] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
-    if (!target || target.orgId !== orgId) {
-      throw new AppError('Member not found in this organisation', 404);
-    }
-    const [branch] = await db
-      .select()
-      .from(branchesTable)
-      .where(and(eq(branchesTable.id, branchId), eq(branchesTable.organizationId, orgId)))
-      .limit(1);
+    const target = await findMemberInOrg(userId, orgId);
+    const branch = await branchRepository.findById(branchId, orgId);
     if (!branch) throw new AppError('Branch not found', 404);
 
     const existing = await branchMemberRepository.findByUserAndBranch(userId, branchId);
@@ -74,11 +63,7 @@ export const orgMemberService = {
   },
 
   async unassignFromBranch(orgId: string, userId: string, branchId: string) {
-    const [branch] = await db
-      .select()
-      .from(branchesTable)
-      .where(and(eq(branchesTable.id, branchId), eq(branchesTable.organizationId, orgId)))
-      .limit(1);
+    const branch = await branchRepository.findById(branchId, orgId);
     if (!branch) throw new AppError('Branch not found', 404);
 
     await branchMemberRepository.removeFromBranch(branchId, userId);

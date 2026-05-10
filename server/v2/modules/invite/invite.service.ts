@@ -1,11 +1,9 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { db } from '../../config/database';
-import { branches } from '@shared/schema';
-import { and, eq } from 'drizzle-orm';
 import { AppError } from '../../utils/error-handler';
 import { getEmailProvider } from '../../../services/email-provider';
 import { inviteRepository, type PendingInviteRow } from './invite.repository';
+import { branchRepository } from '../branch/branch.repository';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ALLOWED_ROLES = ['branch_manager', 'agent', 'homeworker', 'referral_agent'] as const;
@@ -94,11 +92,7 @@ export const inviteService = {
 
     assertManagerCanInvite(actor, payload);
 
-    const [branch] = await db
-      .select()
-      .from(branches)
-      .where(and(eq(branches.id, payload.branchId), eq(branches.organizationId, actor.orgId)))
-      .limit(1);
+    const branch = await branchRepository.findById(payload.branchId, actor.orgId);
     if (!branch) throw new AppError('Branch not found', 404);
 
     const existing = await inviteRepository.findByEmail(email);
@@ -120,8 +114,8 @@ export const inviteService = {
     const expiry = new Date(Date.now() + INVITE_TTL_MS);
     const userId = crypto.randomUUID();
 
-    const created = await db.transaction(async (tx) => {
-      const newUser = await inviteRepository.createPendingUser({
+    const created = await inviteRepository.createPendingUserWithBranchMembership(
+      {
         id: userId,
         name: email,
         email,
@@ -137,18 +131,15 @@ export const inviteService = {
         invitedBy: actor.userId,
         invitedAt: new Date(),
         inviteAgencyName: orgName,
-      } as any, tx);
-
-      await inviteRepository.createBranchMember({
+      } as any,
+      {
         orgId: actor.orgId,
         branchId: payload.branchId,
         userId,
         orgRole: payload.orgRole,
         isActive: false,
-      }, tx);
-
-      return newUser;
-    });
+      },
+    );
 
     await this.sendInviteEmail(email, orgName, token);
 
@@ -216,21 +207,17 @@ export const inviteService = {
     const hashedPassword = await bcrypt.hash(payload.password, 10);
     const fullName = `${payload.firstName.trim()} ${payload.lastName.trim()}`.trim();
 
-    await db.transaction(async (tx) => {
-      await inviteRepository.updateUser(found.id, {
-        firstName: payload.firstName.trim(),
-        lastName: payload.lastName.trim(),
-        phoneNumber: payload.phoneNumber.trim(),
-        name: fullName,
-        password: hashedPassword,
-        emailVerified: true,
-        inviteToken: null,
-        inviteTokenExpiry: null,
-        invitedAt: null,
-        updatedAt: new Date(),
-      }, tx);
-
-      await inviteRepository.setBranchMembersActiveForUser(found.orgId!, found.id, true, tx);
+    await inviteRepository.finaliseAcceptedInvite(found.id, found.orgId!, {
+      firstName: payload.firstName.trim(),
+      lastName: payload.lastName.trim(),
+      phoneNumber: payload.phoneNumber.trim(),
+      name: fullName,
+      password: hashedPassword,
+      emailVerified: true,
+      inviteToken: null,
+      inviteTokenExpiry: null,
+      invitedAt: null,
+      updatedAt: new Date(),
     });
 
     return { userId: found.id, email: found.email };

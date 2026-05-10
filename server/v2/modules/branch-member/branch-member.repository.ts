@@ -78,6 +78,17 @@ export const branchMemberRepository = {
       .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.userId, userId)));
   },
 
+  /**
+   * Atomic: update both user.orgRole AND every branch_members.orgRole row for that user.
+   * Used when an org admin changes a member's role — the two stores must stay in sync.
+   */
+  async setOrgRoleAtomic(orgId: string, userId: string, orgRole: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.update(user).set({ orgRole, updatedAt: new Date() }).where(eq(user.id, userId));
+      await this.setRoleForUser(orgId, userId, orgRole, tx);
+    });
+  },
+
   async removeAllForUser(orgId: string, userId: string, tx?: Tx): Promise<void> {
     const runner = tx ?? db;
     await runner

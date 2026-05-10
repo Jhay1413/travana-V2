@@ -49,6 +49,47 @@ export const neonClientRepository = {
     return result;
   },
 
+  /** Lightweight VIP-fields lookup used by enrollment. */
+  async findVipEnrolledAt(id: string): Promise<{ vipEnrolledAt: Date | null } | undefined> {
+    const [row] = await db
+      .select({ vipEnrolledAt: clientTable.vipEnrolledAt })
+      .from(clientTable)
+      .where(eq(clientTable.id, id))
+      .limit(1);
+    return row;
+  },
+
+  /** Initialise VIP fields on a client (no-op if already enrolled). */
+  async enrollVip(id: string): Promise<void> {
+    await db
+      .update(clientTable)
+      .set({ vipTier: 'standard', vipEnrolledAt: new Date(), totalReferrals: 0 })
+      .where(eq(clientTable.id, id));
+  },
+
+  async setVipTotalsAndTier(id: string, totalReferrals: number, vipTier: 'standard' | 'gold' | 'elite'): Promise<void> {
+    await db
+      .update(clientTable)
+      .set({ totalReferrals, vipTier })
+      .where(eq(clientTable.id, id));
+  },
+
+  async findPortalPin(id: string): Promise<{ portalPin: string | null } | undefined> {
+    const [row] = await db
+      .select({ portalPin: clientTable.portalPin })
+      .from(clientTable)
+      .where(eq(clientTable.id, id))
+      .limit(1);
+    return row;
+  },
+
+  async setPortalPin(id: string, hash: string | null): Promise<void> {
+    await db
+      .update(clientTable)
+      .set({ portalPin: hash })
+      .where(eq(clientTable.id, id));
+  },
+
   async findAll(scope?: Scope): Promise<NeonClient[]> {
     const conds = buildClientScopeConds(scope);
     const query = db.select().from(clientTable);

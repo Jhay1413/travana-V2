@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { notifications, type Notification, type InsertNotification } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 export const notificationRepository = {
   async findById(id: string): Promise<Notification | undefined> {
@@ -32,5 +32,18 @@ export const notificationRepository = {
 
   async remove(id: string): Promise<void> {
     await db.delete(notifications).where(eq(notifications.id, id));
+  },
+
+  /**
+   * Find existing (userId, link) pairs for a given notification type, used to
+   * dedupe reminder fan-outs (e.g. don't send two stale-ticket reminders for
+   * the same ticket to the same user).
+   */
+  async findExistingByTypeAndLinks(type: string, links: string[]): Promise<Array<{ userId: string; link: string | null }>> {
+    if (links.length === 0) return [];
+    return db
+      .select({ link: notifications.link, userId: notifications.userId })
+      .from(notifications)
+      .where(and(eq(notifications.type, type), inArray(notifications.link, links)));
   },
 };

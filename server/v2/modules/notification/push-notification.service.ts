@@ -1,7 +1,5 @@
 import webpush from "web-push";
-import { db } from "../../config/database";
-import { pushSubscriptions } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { pushSubscriptionRepository } from "./push-subscription.repository";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
@@ -17,24 +15,16 @@ export const pushNotificationService = {
   },
 
   async subscribe(clientId: string, subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<void> {
-    await db
-      .delete(pushSubscriptions)
-      .where(eq(pushSubscriptions.endpoint, subscription.endpoint));
-
-    await db
-      .insert(pushSubscriptions)
-      .values({
-        clientId,
-        endpoint: subscription.endpoint,
-        p256dh: subscription.keys.p256dh,
-        auth: subscription.keys.auth,
-      });
+    await pushSubscriptionRepository.upsert({
+      clientId,
+      endpoint: subscription.endpoint,
+      p256dh: subscription.keys.p256dh,
+      auth: subscription.keys.auth,
+    });
   },
 
   async unsubscribe(clientId: string, endpoint: string): Promise<void> {
-    await db
-      .delete(pushSubscriptions)
-      .where(and(eq(pushSubscriptions.clientId, clientId), eq(pushSubscriptions.endpoint, endpoint)));
+    await pushSubscriptionRepository.removeByClientAndEndpoint(clientId, endpoint);
   },
 
   async sendToAll(payload: { title: string; body: string; icon?: string; url?: string }): Promise<number> {
@@ -43,7 +33,7 @@ export const pushNotificationService = {
       return 0;
     }
 
-    const subs = await db.select().from(pushSubscriptions);
+    const subs = await pushSubscriptionRepository.findAll();
     if (subs.length === 0) return 0;
 
     const jsonPayload = JSON.stringify(payload);
@@ -58,7 +48,7 @@ export const pushNotificationService = {
         sent++;
       } catch (err: any) {
         if (err.statusCode === 410 || err.statusCode === 404) {
-          await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
+          await pushSubscriptionRepository.removeById(sub.id);
         } else {
           console.error("Push broadcast failed:", err.statusCode || err.message);
         }
@@ -73,11 +63,7 @@ export const pushNotificationService = {
       return;
     }
 
-    const subs = await db
-      .select()
-      .from(pushSubscriptions)
-      .where(eq(pushSubscriptions.clientId, clientId));
-
+    const subs = await pushSubscriptionRepository.findByClientId(clientId);
     if (subs.length === 0) return;
 
     const jsonPayload = JSON.stringify(payload);
@@ -85,15 +71,12 @@ export const pushNotificationService = {
     for (const sub of subs) {
       try {
         await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           jsonPayload,
         );
       } catch (err: any) {
         if (err.statusCode === 410 || err.statusCode === 404) {
-          await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
+          await pushSubscriptionRepository.removeById(sub.id);
         } else {
           console.error("Push notification failed:", err.statusCode || err.message);
         }

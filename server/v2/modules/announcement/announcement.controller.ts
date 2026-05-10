@@ -1,13 +1,10 @@
 import { Request, Response } from 'express';
 import { announcementService } from './announcement.service';
-import { asyncHandler } from '../../utils/async-handler';
-import { successResponse } from '../../utils/response';
-import { AppError } from '../../utils/error-handler';
-import { getUserId } from '../../utils/get-user-id';
-import { db } from '../../config/database';
-import { user as userTable, hubAnnouncementLikesTable } from '@shared/schema';
-import { eq, and, count } from 'drizzle-orm';
+import { announcementRepository } from './announcement.repository';
+import { userRepository } from '../user/user.repository';
 import { notificationRepository } from '../notification/notification.repository';
+import { asyncHandler } from '../../utils/async-handler';
+import { getUserId } from '../../utils/get-user-id';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, getS3Bucket } from '../../config/s3';
 import { randomUUID } from 'crypto';
@@ -26,12 +23,8 @@ export const imageUpload = multer({
 });
 
 async function getUserInfo(userId: string) {
-  const [u] = await db.select({ name: userTable.name, role: userTable.role }).from(userTable).where(eq(userTable.id, userId)).limit(1);
+  const u = await userRepository.findRoleAndNameById(userId);
   return { name: u?.name || null, role: u?.role?.toLowerCase() || null };
-}
-
-async function getAllUserIds() {
-  return db.select({ id: userTable.id, name: userTable.name }).from(userTable);
 }
 
 async function createHubNotification(userId: string, type: string, title: string, message: string, link: string) {
@@ -41,7 +34,7 @@ async function createHubNotification(userId: string, type: string, title: string
 }
 
 async function notifyAllUsersExcept(excludeUserId: string, type: string, title: string, message: string, link: string) {
-  const allUsers = await getAllUserIds();
+  const allUsers = await userRepository.findAllIdsAndNames();
   for (const u of allUsers) {
     if (u.id !== excludeUserId) await createHubNotification(u.id, type, title, message, link);
   }
@@ -70,7 +63,7 @@ function extractMentions(content: string): string[] {
 async function notifyMentionedUsers(content: string, authorId: string, authorName: string) {
   const mentions = extractMentions(content);
   if (mentions.length === 0) return;
-  const allUsers = await getAllUserIds();
+  const allUsers = await userRepository.findAllIdsAndNames();
   if (mentions.includes('__all__')) {
     for (const u of allUsers) {
       if (u.id !== authorId) await createHubNotification(u.id, 'hub_mention', 'You were mentioned in TheHub', `${authorName} mentioned @Everyone in a post`, '/hub/news');
@@ -120,7 +113,7 @@ export const announcementController = {
   }),
 
   getMentionableUsers: asyncHandler(async (_req: Request, res: Response) => {
-    const users = await db.select({ id: userTable.id, name: userTable.name, role: userTable.role }).from(userTable);
+    const users = await userRepository.findAllIdsNamesAndRoles();
     const mentionables = [{ id: '__all__', name: 'Everyone', role: 'all' }, ...users.filter((u) => u.name).map((u) => ({ id: u.id, name: u.name!, role: u.role || 'Agent' }))];
     res.json({ success: true, data: mentionables });
   }),
@@ -137,7 +130,7 @@ export const announcementController = {
     if (category !== undefined && VALID_CATEGORIES.includes(category)) updates.category = category;
     if (pinned !== undefined) updates.pinned = !!pinned;
     if (imageUrl !== undefined) updates.imageUrl = imageUrl || null;
-    const item = await announcementService.update(req.params.id, updates);
+    const item = await announcementService.update(req.params.id as string, updates);
     res.json({ success: true, data: item });
   }),
 
@@ -146,7 +139,7 @@ export const announcementController = {
     if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
     const { role } = await getUserInfo(userId);
     if (role !== 'admin' && role !== 'manager') return res.status(403).json({ success: false, message: 'Only Admin or Manager can pin announcements' });
-    const item = await announcementService.togglePin(req.params.id);
+    const item = await announcementService.togglePin(req.params.id as string);
     res.json({ success: true, data: item });
   }),
 
@@ -155,36 +148,27 @@ export const announcementController = {
     if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
     const { role } = await getUserInfo(userId);
     if (role !== 'admin' && role !== 'manager') return res.status(403).json({ success: false, message: 'Only Admin or Manager can delete announcements' });
-    await announcementService.remove(req.params.id);
+    await announcementService.remove(req.params.id as string);
     res.json({ success: true, message: 'Announcement deleted' });
   }),
 
   like: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
-    const announcementId = req.params.id;
+    const announcementId = req.params.id as string;
     const announcement = await announcementService.findById(announcementId);
-    const existing = await db.select().from(hubAnnouncementLikesTable).where(and(eq(hubAnnouncementLikesTable.announcementId, announcementId), eq(hubAnnouncementLikesTable.userId, userId))).limit(1);
-    if (existing.length > 0) {
-      await db.delete(hubAnnouncementLikesTable).where(eq(hubAnnouncementLikesTable.id, existing[0].id));
-      return res.json({ success: true, data: { liked: false } });
-    }
-    await db.insert(hubAnnouncementLikesTable).values({ announcementId, userId });
-    if (announcement.authorId !== userId) {
+    const result = await announcementRepository.toggleLike(announcementId, userId);
+    if (result.liked && announcement.authorId !== userId) {
       const { name } = await getUserInfo(userId);
       await createHubNotification(announcement.authorId, 'hub_like', 'Your post was liked', `${name || 'Someone'} liked your post${announcement.title ? `: ${announcement.title}` : ''}`, '/hub/news');
     }
-    res.json({ success: true, data: { liked: true } });
+    res.json({ success: true, data: result });
   }),
 
   getBulkLikes: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const allLikes = await db.select({ announcementId: hubAnnouncementLikesTable.announcementId, count: count() }).from(hubAnnouncementLikesTable).groupBy(hubAnnouncementLikesTable.announcementId);
-    let userLikes: string[] = [];
-    if (userId) {
-      const uLikes = await db.select({ announcementId: hubAnnouncementLikesTable.announcementId }).from(hubAnnouncementLikesTable).where(eq(hubAnnouncementLikesTable.userId, userId));
-      userLikes = uLikes.map((l) => l.announcementId);
-    }
+    const allLikes = await announcementRepository.countLikesGroupedByAnnouncement();
+    const userLikes: string[] = userId ? await announcementRepository.findAnnouncementIdsLikedByUser(userId) : [];
     const likesMap: Record<string, { count: number; userLiked: boolean }> = {};
     for (const l of allLikes) likesMap[l.announcementId] = { count: l.count, userLiked: userLikes.includes(l.announcementId) };
     res.json({ success: true, data: likesMap });
@@ -192,20 +176,16 @@ export const announcementController = {
 
   getLikes: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const announcementId = req.params.id;
-    const likes = await db.select({ count: count() }).from(hubAnnouncementLikesTable).where(eq(hubAnnouncementLikesTable.announcementId, announcementId));
-    let userLiked = false;
-    if (userId) {
-      const userLike = await db.select().from(hubAnnouncementLikesTable).where(and(eq(hubAnnouncementLikesTable.announcementId, announcementId), eq(hubAnnouncementLikesTable.userId, userId))).limit(1);
-      userLiked = userLike.length > 0;
-    }
-    res.json({ success: true, data: { count: likes[0]?.count || 0, userLiked } });
+    const announcementId = req.params.id as string;
+    const totalCount = await announcementRepository.countLikesFor(announcementId);
+    const userLiked = userId ? await announcementRepository.hasUserLiked(announcementId, userId) : false;
+    res.json({ success: true, data: { count: totalCount, userLiked } });
   }),
 
   share: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
-    const announcement = await announcementService.findById(req.params.id);
+    const announcement = await announcementService.findById(req.params.id as string);
     if (announcement.authorId !== userId) {
       const { name } = await getUserInfo(userId);
       await createHubNotification(announcement.authorId, 'hub_share', 'Your post was shared', `${name || 'Someone'} shared your post${announcement.title ? `: ${announcement.title}` : ''}`, '/hub/news');

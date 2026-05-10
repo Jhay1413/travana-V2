@@ -1,10 +1,10 @@
-import { db } from "../../config/database";
-import { organization, branches, branchMembers, user } from "@shared/schema";
-import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { AppError } from "../../utils/error-handler";
 import { getEmailProvider } from "../../../services/email-provider";
+import { onboardingRepository } from "./onboarding.repository";
+import { organizationRepository } from "../organization/organization.repository";
+import { userRepository } from "../user/user.repository";
 import type { SignupPayload, SignupResult } from "./onboarding.types";
 
 const ORG_ROLE_ADMIN = "org_admin";
@@ -46,12 +46,12 @@ export const onboardingService = {
     const ownerEmail = payload.ownerEmail.toLowerCase().trim();
     const slug = payload.slug.toLowerCase().trim();
 
-    const [existingUser] = await db.select().from(user).where(eq(user.email, ownerEmail)).limit(1);
+    const existingUser = await userRepository.findByEmail(ownerEmail);
     if (existingUser) {
       throw new AppError("An account with this email already exists", 409);
     }
 
-    const [existingOrg] = await db.select().from(organization).where(eq(organization.slug, slug)).limit(1);
+    const existingOrg = await organizationRepository.findBySlug(slug);
     if (existingOrg) {
       throw new AppError("That agency URL is already taken — try another", 409);
     }
@@ -63,7 +63,7 @@ export const onboardingService = {
         conflictingAgentEmails.push(email);
         continue;
       }
-      const [hit] = await db.select().from(user).where(eq(user.email, email)).limit(1);
+      const hit = await userRepository.findByEmail(email);
       if (hit) conflictingAgentEmails.push(email);
     }
     if (conflictingAgentEmails.length > 0) {
@@ -80,101 +80,61 @@ export const onboardingService = {
     const ownerFirstName = ownerNameParts[0];
     const ownerLastName = ownerNameParts.slice(1).join(" ") || "—";
 
-    const result = await db.transaction(async (tx) => {
-      const [org] = await tx
-        .insert(organization)
-        .values({
-          name: payload.agencyName.trim(),
-          slug,
-          plan: "starter",
-          isActive: true,
-          seatLimit: 15,
-          brandColor: payload.brandColor ?? "#2563eb",
-          logoUrl: payload.logoUrl ?? null,
-          trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
-        })
-        .returning();
-
-      const branchIds: string[] = [];
-      for (let i = 0; i < payload.branches.length; i++) {
-        const b = payload.branches[i];
-        const [branch] = await tx
-          .insert(branches)
-          .values({
-            organizationId: org.id,
-            name: b.name.trim(),
-            address: b.address.trim(),
-            phone: b.phone.trim(),
-            email: b.email.trim().toLowerCase(),
-            openingPattern: b.openingPattern,
-            bankHolidaysOpen: b.bankHolidaysOpen,
-            openingHours: b.openingHours,
-            isDefault: i === 0,
-            isActive: true,
-          })
-          .returning();
-        branchIds.push(branch.id);
-      }
-      const defaultBranchId = branchIds[0];
-
-      const ownerId = crypto.randomUUID();
-      const [ownerUser] = await tx
-        .insert(user)
-        .values({
-          id: ownerId,
-          name: payload.ownerName.trim(),
-          email: ownerEmail,
-          firstName: ownerFirstName,
-          lastName: ownerLastName,
-          phoneNumber: payload.ownerPhone.trim(),
-          role: "Agent",
-          orgId: org.id,
-          orgRole: ORG_ROLE_ADMIN,
-          password: hashedPassword,
-          emailVerified: false,
-          verificationToken,
-          verificationTokenExpiry,
-        })
-        .returning();
-
-      await tx.insert(branchMembers).values({
-        orgId: org.id,
-        branchId: defaultBranchId,
-        userId: ownerUser.id,
-        orgRole: ORG_ROLE_ADMIN,
+    const result = await onboardingRepository.signupAgency({
+      organization: {
+        name: payload.agencyName.trim(),
+        slug,
+        plan: "starter",
         isActive: true,
-      });
-
-      for (const agent of payload.agents) {
-        const agentId = crypto.randomUUID();
-        const agentEmail = agent.email.toLowerCase().trim();
+        seatLimit: 15,
+        brandColor: payload.brandColor ?? "#2563eb",
+        logoUrl: payload.logoUrl ?? null,
+        trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
+      } as any,
+      branchInputs: payload.branches.map((b) => ({
+        name: b.name.trim(),
+        address: b.address.trim(),
+        phone: b.phone.trim(),
+        email: b.email.trim().toLowerCase(),
+        openingPattern: b.openingPattern,
+        bankHolidaysOpen: b.bankHolidaysOpen,
+        openingHours: b.openingHours,
+        isActive: true,
+      } as any)),
+      ownerUser: {
+        id: crypto.randomUUID(),
+        name: payload.ownerName.trim(),
+        email: ownerEmail,
+        firstName: ownerFirstName,
+        lastName: ownerLastName,
+        phoneNumber: payload.ownerPhone.trim(),
+        role: "Agent",
+        orgRole: ORG_ROLE_ADMIN,
+        password: hashedPassword,
+        emailVerified: false,
+        verificationToken,
+        verificationTokenExpiry,
+      } as any,
+      ownerBranchMemberRoleAndActive: { orgRole: ORG_ROLE_ADMIN, isActive: true },
+      agents: payload.agents.map((agent) => {
         const agentNameParts = agent.name.trim().split(/\s+/);
         const orgRole = mapAgentRoleToOrgRole(agent.role);
-        const branchId = branchIds[agent.branchIndex ?? 0] ?? defaultBranchId;
-
-        await tx.insert(user).values({
-          id: agentId,
-          name: agent.name.trim(),
-          email: agentEmail,
-          firstName: agentNameParts[0],
-          lastName: agentNameParts.slice(1).join(" ") || "—",
-          phoneNumber: (agent.phone ?? "").trim(),
-          role: "Agent",
-          orgId: org.id,
-          orgRole,
-          emailVerified: false,
-        });
-
-        await tx.insert(branchMembers).values({
-          orgId: org.id,
-          branchId,
-          userId: agentId,
-          orgRole,
-          isActive: agent.active,
-        });
-      }
-
-      return { orgId: org.id, ownerId: ownerUser.id, branchIds };
+        return {
+          user: {
+            id: crypto.randomUUID(),
+            name: agent.name.trim(),
+            email: agent.email.toLowerCase().trim(),
+            firstName: agentNameParts[0],
+            lastName: agentNameParts.slice(1).join(" ") || "—",
+            phoneNumber: (agent.phone ?? "").trim(),
+            role: "Agent",
+            orgRole,
+            emailVerified: false,
+          } as any,
+          branchIndex: agent.branchIndex,
+          branchMemberRoleAndActive: { orgRole, isActive: agent.active },
+        };
+      }),
     });
 
     try {
@@ -196,7 +156,7 @@ export const onboardingService = {
 
   async resendVerification(emailRaw: string): Promise<void> {
     const email = emailRaw.toLowerCase().trim();
-    const [found] = await db.select().from(user).where(eq(user.email, email)).limit(1);
+    const found = await userRepository.findByEmail(email);
 
     // Don't leak whether the email exists — just no-op for unknown / already-verified.
     if (!found || found.emailVerified) return;
@@ -213,10 +173,7 @@ export const onboardingService = {
     const verificationToken = crypto.randomBytes(32).toString("hex");
     const verificationTokenExpiry = new Date(Date.now() + VERIFICATION_TTL_MS);
 
-    await db
-      .update(user)
-      .set({ verificationToken, verificationTokenExpiry, updatedAt: new Date() })
-      .where(eq(user.id, found.id));
+    await userRepository.update(found.id, { verificationToken, verificationTokenExpiry } as any);
 
     try {
       const provider = getEmailProvider();
@@ -229,7 +186,7 @@ export const onboardingService = {
   },
 
   async verifyEmail(token: string): Promise<void> {
-    const [found] = await db.select().from(user).where(eq(user.verificationToken, token)).limit(1);
+    const found = await userRepository.findByVerificationToken(token);
     if (!found) {
       throw new AppError("Invalid or expired verification link", 400);
     }
@@ -237,14 +194,10 @@ export const onboardingService = {
       throw new AppError("Verification link has expired", 400);
     }
 
-    await db
-      .update(user)
-      .set({
-        emailVerified: true,
-        verificationToken: null,
-        verificationTokenExpiry: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(user.id, found.id));
+    await userRepository.update(found.id, {
+      emailVerified: true,
+      verificationToken: null,
+      verificationTokenExpiry: null,
+    } as any);
   },
 };

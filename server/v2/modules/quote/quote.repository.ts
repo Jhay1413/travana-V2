@@ -498,6 +498,74 @@ export const newQuoteRepository = {
     await db.update(quote).set({ deleted_at: new Date(), is_active: false }).where(eq(quote.id, id));
   },
 
+  async findTokenById(id: string): Promise<{ token: string | null } | undefined> {
+    const [row] = await db.select({ token: quote.quote_token }).from(quote).where(eq(quote.id, id)).limit(1);
+    return row;
+  },
+
+  async findTitleAndPortalVisibilityById(id: string) {
+    const [row] = await db
+      .select({ title: quote.title, show_on_portal: quote.show_on_portal })
+      .from(quote)
+      .where(eq(quote.id, id))
+      .limit(1);
+    return row;
+  },
+
+  /** Set show_on_portal flag, optionally also assigning a fresh quote_token. */
+  async setPortalVisibility(id: string, showOnPortal: boolean, token?: string): Promise<void> {
+    const updates: Record<string, any> = { show_on_portal: showOnPortal };
+    if (token) updates.quote_token = token;
+    await db.update(quote).set(updates).where(eq(quote.id, id));
+  },
+
+  async setFeatured(id: string, isFeatured: boolean): Promise<void> {
+    await db.update(quote).set({ is_featured: isFeatured }).where(eq(quote.id, id));
+  },
+
+  /** Bulk-mark unexpired non-free quotes (older than 7 days, not yet booked) as expired. */
+  async markStaleAsExpired(): Promise<{ id: string }[]> {
+    return db
+      .update(quote)
+      .set({ is_expired: true })
+      .where(
+        and(
+          eq(quote.is_expired, false),
+          eq(quote.isFreeQuote, false),
+          sql`${quote.date_created} < NOW() - INTERVAL '7 days'`,
+          sql`${quote.transaction_id} NOT IN (SELECT id FROM ${transaction} WHERE ${transaction.status} = 'on_booking')`,
+        ),
+      )
+      .returning({ id: quote.id });
+  },
+
+  /** Resolve the destination name for an accommodation (accommodation → resort → destination). */
+  async findDestinationNameByAccommodationId(accommodationId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ destinationName: destination.name })
+      .from(accomodation_list)
+      .innerJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .innerJoin(destination, eq(resorts.destination_id, destination.id))
+      .where(eq(accomodation_list.id, accommodationId))
+      .limit(1);
+    return row?.destinationName ?? null;
+  },
+
+  /** Bulk-clear is_future_deal on quotes whose future_deal_date has arrived. */
+  async activateDueFutureDeals(): Promise<{ id: string }[]> {
+    return db
+      .update(quote)
+      .set({ is_future_deal: false, future_deal_date: null })
+      .where(
+        and(
+          eq(quote.is_future_deal, true),
+          sql`${quote.future_deal_date} <= CURRENT_DATE`,
+          sql`${quote.transaction_id} IN (SELECT id FROM ${transaction} WHERE ${transaction.status} IN ('on_enquiry', 'on_quote'))`,
+        ),
+      )
+      .returning({ id: quote.id });
+  },
+
   async findWithDetails(id: string) {
     const [q] = await db
       .select({

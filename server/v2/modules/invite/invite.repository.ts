@@ -95,4 +95,34 @@ export const inviteRepository = {
       .limit(1);
     return row ?? null;
   },
+
+  /**
+   * Atomic: create the pending user record AND the inactive branch membership.
+   * Both succeed or both rollback.
+   */
+  async createPendingUserWithBranchMembership(
+    userValues: typeof user.$inferInsert,
+    branchMember: typeof branchMembers.$inferInsert,
+  ): Promise<typeof user.$inferSelect> {
+    return db.transaction(async (tx) => {
+      const newUser = await this.createPendingUser(userValues, tx);
+      await this.createBranchMember(branchMember, tx);
+      return newUser;
+    });
+  },
+
+  /**
+   * Atomic: finalise an accepted invite — fill in the user fields and flip
+   * their branch_members row to active.
+   */
+  async finaliseAcceptedInvite(
+    userId: string,
+    orgId: string,
+    userPatch: Partial<typeof user.$inferInsert>,
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      await this.updateUser(userId, userPatch, tx);
+      await this.setBranchMembersActiveForUser(orgId, userId, true, tx);
+    });
+  },
 };

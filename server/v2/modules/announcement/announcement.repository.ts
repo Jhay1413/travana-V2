@@ -1,6 +1,6 @@
 import { db } from '../../config/database';
-import { hubAnnouncementTable } from '@shared/schema';
-import { eq, desc } from 'drizzle-orm';
+import { hubAnnouncementTable, hubAnnouncementLikesTable } from '@shared/schema';
+import { and, count, desc, eq } from 'drizzle-orm';
 
 export const announcementRepository = {
   async findAll() {
@@ -31,5 +31,66 @@ export const announcementRepository = {
 
   async remove(id: string) {
     await db.delete(hubAnnouncementTable).where(eq(hubAnnouncementTable.id, id));
+  },
+
+  // ─── Likes ────────────────────────────────────────────────────────────────
+
+  /**
+   * Toggle a user's like on an announcement. Returns the new liked state.
+   */
+  async toggleLike(announcementId: string, userId: string): Promise<{ liked: boolean }> {
+    const [existing] = await db
+      .select({ id: hubAnnouncementLikesTable.id })
+      .from(hubAnnouncementLikesTable)
+      .where(
+        and(
+          eq(hubAnnouncementLikesTable.announcementId, announcementId),
+          eq(hubAnnouncementLikesTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      await db.delete(hubAnnouncementLikesTable).where(eq(hubAnnouncementLikesTable.id, existing.id));
+      return { liked: false };
+    }
+    await db.insert(hubAnnouncementLikesTable).values({ announcementId, userId });
+    return { liked: true };
+  },
+
+  async countLikesGroupedByAnnouncement(): Promise<Array<{ announcementId: string; count: number }>> {
+    return db
+      .select({ announcementId: hubAnnouncementLikesTable.announcementId, count: count() })
+      .from(hubAnnouncementLikesTable)
+      .groupBy(hubAnnouncementLikesTable.announcementId);
+  },
+
+  async findAnnouncementIdsLikedByUser(userId: string): Promise<string[]> {
+    const rows = await db
+      .select({ announcementId: hubAnnouncementLikesTable.announcementId })
+      .from(hubAnnouncementLikesTable)
+      .where(eq(hubAnnouncementLikesTable.userId, userId));
+    return rows.map((r) => r.announcementId);
+  },
+
+  async countLikesFor(announcementId: string): Promise<number> {
+    const [row] = await db
+      .select({ count: count() })
+      .from(hubAnnouncementLikesTable)
+      .where(eq(hubAnnouncementLikesTable.announcementId, announcementId));
+    return row?.count ?? 0;
+  },
+
+  async hasUserLiked(announcementId: string, userId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: hubAnnouncementLikesTable.id })
+      .from(hubAnnouncementLikesTable)
+      .where(
+        and(
+          eq(hubAnnouncementLikesTable.announcementId, announcementId),
+          eq(hubAnnouncementLikesTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    return !!row;
   },
 };

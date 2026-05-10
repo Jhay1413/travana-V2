@@ -10,9 +10,6 @@ import {
   uploadMediaFromUrl,
   fetchOnlySocialsPost,
 } from "../../utils/only-socials";
-import { db } from "../../config/database";
-import { quote_accomodation, accommodation_images, lodge_images, lodges, quote, accomodation_list, park, transaction } from "@shared/schema";
-import { eq, inArray } from "drizzle-orm";
 import type { TravelDeal } from "@shared/schema";
 import type { OnlySocialsMediaUploadResponse, OnlySocialsMediaContent } from "./social-post.types";
 import type { Scope } from "../../utils/scope";
@@ -157,13 +154,7 @@ export const socialPostService = {
   async generatePost(params: GeneratePostParams, scope: ScopeOrTrusted): Promise<TravelDeal> {
     await assertQuoteInScope(params.quoteId, scope);
 
-    const [quoteRow] = await db
-      .select({ is_test: transaction.is_test })
-      .from(quote)
-      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .where(eq(quote.id, params.quoteId))
-      .limit(1);
-    if (quoteRow?.is_test) {
+    if (await socialPostRepository.isTestTransactionForQuote(params.quoteId)) {
       throw new AppError("Cannot generate social post for a test transaction", 400);
     }
 
@@ -378,97 +369,13 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
   async getQuoteImages(quoteId: string, scope: ScopeOrTrusted): Promise<{ url: string; name: string; source: string; isPrimary: boolean }[]> {
     await assertQuoteInScope(quoteId, scope);
-    const images: { url: string; name: string; source: string; isPrimary: boolean }[] = [];
-
+    let images: Array<{ url: string; name: string; source: string; isPrimary: boolean }> = [];
     try {
-      const quoteAccoms = await db.select({
-        accomodation_id: quote_accomodation.accomodation_id,
-        accomodation_name: accomodation_list.name,
-      })
-        .from(quote_accomodation)
-        .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
-        .where(eq(quote_accomodation.quote_id, quoteId));
-
-      const accomIds = quoteAccoms
-        .map(a => a.accomodation_id)
-        .filter((id): id is string => !!id);
-
-      if (accomIds.length > 0) {
-        const accomImgs = await db.select()
-          .from(accommodation_images)
-          .where(inArray(accommodation_images.accommodation_id, accomIds));
-
-        for (const img of accomImgs) {
-          const accom = quoteAccoms.find(a => a.accomodation_id === img.accommodation_id);
-          images.push({
-            url: img.image_url,
-            name: accom?.accomodation_name || "Accommodation",
-            source: "accommodation",
-            isPrimary: img.isPrimary ?? false,
-          });
-        }
-      }
-
-      const [quoteRecord] = await db.select({
-        lodge_id: quote.lodge_id,
-        cottage_id: quote.cottage_id,
-      }).from(quote).where(eq(quote.id, quoteId));
-
-      if (quoteRecord?.lodge_id) {
-        const lodgeImgs = await db.select({
-          image_url: lodge_images.image_url,
-          isPrimary: lodge_images.isPrimary,
-          lodge_name: lodges.lodge_name,
-        })
-          .from(lodge_images)
-          .leftJoin(lodges, eq(lodge_images.lodge_id, lodges.id))
-          .where(eq(lodge_images.lodge_id, quoteRecord.lodge_id));
-
-        for (const img of lodgeImgs) {
-          images.push({
-            url: img.image_url,
-            name: img.lodge_name || "Lodge",
-            source: "lodge",
-            isPrimary: img.isPrimary ?? false,
-          });
-        }
-
-        const [lodge] = await db.select({
-          image: lodges.image,
-          lodge_name: lodges.lodge_name,
-          park_id: lodges.park_id,
-        }).from(lodges).where(eq(lodges.id, quoteRecord.lodge_id));
-
-        if (lodge?.image) {
-          images.push({
-            url: lodge.image,
-            name: lodge.lodge_name || "Lodge",
-            source: "lodge",
-            isPrimary: false,
-          });
-        }
-
-        if (lodge?.park_id) {
-          const [parkRecord] = await db.select({
-            image_1: park.image_1,
-            image_2: park.image_2,
-            name: park.name,
-          }).from(park).where(eq(park.id, lodge.park_id));
-
-          if (parkRecord?.image_1) {
-            images.push({ url: parkRecord.image_1, name: parkRecord.name || "Park", source: "park", isPrimary: false });
-          }
-          if (parkRecord?.image_2) {
-            images.push({ url: parkRecord.image_2, name: parkRecord.name || "Park", source: "park", isPrimary: false });
-          }
-        }
-      }
+      images = await socialPostRepository.findAllImagesForQuote(quoteId);
     } catch (err) {
       console.error("[SocialPost] Error fetching quote images:", err);
     }
-
-    const primaryFirst = images.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
-    return primaryFirst;
+    return images.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
   },
 
   async uploadImageUrls(urls: string[]): Promise<number[]> {

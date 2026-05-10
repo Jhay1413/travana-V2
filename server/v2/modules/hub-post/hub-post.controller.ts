@@ -1,10 +1,8 @@
 import { Request, Response } from 'express';
 import { hubPostService } from './hub-post.service';
+import { userRepository } from '../user/user.repository';
 import { asyncHandler } from '../../utils/async-handler';
 import { getUserId } from '../../utils/get-user-id';
-import { db } from '../../config/database';
-import { user as userTable } from '@shared/schema';
-import { eq } from 'drizzle-orm';
 
 export const hubPostController = {
   getAll: asyncHandler(async (req: Request, res: Response) => {
@@ -16,7 +14,7 @@ export const hubPostController = {
   create: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const [u] = await db.select().from(userTable).where(eq(userTable.id, userId)).limit(1);
+    const u = await userRepository.findById(userId);
     const authorName = u?.name || 'Agent';
     const { type, content, image, badge, destination, value, pinned } = req.body;
     if (!content?.trim()) return res.status(400).json({ success: false, message: 'Content is required' });
@@ -27,27 +25,27 @@ export const hubPostController = {
   remove: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const [u] = await db.select().from(userTable).where(eq(userTable.id, userId)).limit(1);
-    const role = (u as any)?.role?.toLowerCase() || '';
-    await hubPostService.remove(req.params.id, userId, role);
+    const u = await userRepository.findRoleById(userId);
+    const role = u?.role?.toLowerCase() || '';
+    await hubPostService.remove(req.params.id as string, userId, role);
     res.json({ success: true, message: 'Post deleted' });
   }),
 
   like: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const liked = await hubPostService.toggleLike(req.params.id, userId);
+    const liked = await hubPostService.toggleLike(req.params.id as string, userId);
     res.json({ success: true, data: { liked } });
   }),
 
   comment: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const [u] = await db.select().from(userTable).where(eq(userTable.id, userId)).limit(1);
+    const u = await userRepository.findRoleAndNameById(userId);
     const authorName = u?.name || 'Agent';
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ success: false, message: 'Comment text is required' });
-    const comment = await hubPostService.addComment(req.params.id, userId, authorName, text.trim());
+    const comment = await hubPostService.addComment(req.params.id as string, userId, authorName, text.trim());
     res.status(201).json({ success: true, data: { author: authorName, avatar: authorName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(), text: comment.text, date: 'Just now' } });
   }),
 };

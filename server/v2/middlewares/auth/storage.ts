@@ -1,6 +1,5 @@
-import { user, type User, type UpsertUser } from "@shared/schema";
-import { db } from "../../config/database";
-import { eq } from "drizzle-orm";
+import { type User, type UpsertUser } from "@shared/schema";
+import { userRepository } from "../../modules/user/user.repository";
 
 export interface IAuthStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -11,56 +10,24 @@ export interface IAuthStorage {
 }
 
 class AuthStorage implements IAuthStorage {
-  async getUser(id: string): Promise<User | undefined> {
-    const [result] = await db.select().from(user).where(eq(user.id, id));
-    return result;
+  getUser(id: string): Promise<User | undefined> {
+    return userRepository.findById(id);
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [result] = await db.select().from(user).where(eq(user.email, email));
-    return result;
+  getUserByEmail(email: string): Promise<User | undefined> {
+    return userRepository.findByEmail(email);
   }
 
-  async getUserByResetToken(token: string): Promise<User | undefined> {
-    const [result] = await db.select().from(user).where(eq(user.resetToken, token));
-    return result;
+  getUserByResetToken(token: string): Promise<User | undefined> {
+    return userRepository.findByResetToken(token);
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    const { role, ...updateData } = userData;
-    if (userData.email) {
-      const existing = await this.getUserByEmail(userData.email);
-      if (existing && existing.id !== userData.id) {
-        const { id: _newId, ...safeUpdate } = updateData;
-        const [result] = await db
-          .update(user)
-          .set({ ...safeUpdate, updatedAt: new Date() })
-          .where(eq(user.id, existing.id))
-          .returning();
-        return result;
-      }
-    }
-    const [result] = await db
-      .insert(user)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: user.id,
-        set: {
-          ...updateData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return result;
+  upsertUser(userData: UpsertUser): Promise<User> {
+    return userRepository.upsertByIdOrEmail(userData);
   }
 
-  async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
-    const [result] = await db
-      .update(user)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(user.id, id))
-      .returning();
-    return result;
+  updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
+    return userRepository.updatePartial(id, data);
   }
 }
 

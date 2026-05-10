@@ -130,6 +130,23 @@ export const referralRepository = {
     return result;
   },
 
+  /** Find the oldest pending referral for a referrer that hasn't been linked to a referredClient yet. */
+  async findOldestPendingUnlinkedByReferrer(referrerClientId: string): Promise<Referral | undefined> {
+    const [row] = await db
+      .select()
+      .from(referral)
+      .where(
+        and(
+          eq(referral.referrerClientId, referrerClientId),
+          eq(referral.referralStatus, 'PENDING'),
+          sql`${referral.referredClientId} IS NULL`,
+        ),
+      )
+      .orderBy(referral.createdAt)
+      .limit(1);
+    return row;
+  },
+
   async linkReferredClient(id: string, referredClientId: string): Promise<Referral> {
     const [result] = await db
       .update(referral)

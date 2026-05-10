@@ -1,10 +1,4 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { db } from '../../config/database';
-import {
-  quote, quote_accomodation, accomodation_list, resorts, destination, country,
-  quoteImages, accommodation_images, clientTable, transaction, booking,
-  portalMessages, webauthnCredentials, quoteTags, tags, clientTags,
-} from '@shared/schema';
 import { referralService } from '../referral/referral.service';
 import { referralPayoutService } from '../referral/referral-payout.service';
 import { referralWithdrawalService } from '../referral/referral-withdrawal.service';
@@ -12,9 +6,10 @@ import { walletService } from '../wallet/wallet.service';
 import { tagService } from '../tag/tag.service';
 import { pushNotificationService } from '../notification/push-notification.service';
 import { quotePublicRepository } from '../quote/quote-public.repository';
+import { portalRepository } from './portal.repository';
+import { neonClientRepository } from '../neon-client/neon-client.repository';
 import { bridgePortalMessageToChat } from '../../../services/portal-chat-bridge';
 import { getUserId } from '../../utils/get-user-id';
-import { eq, and, desc, isNotNull, inArray, sql, asc, ilike, exists } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -73,11 +68,7 @@ portalRouter.post('/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email and PIN are required' });
     }
 
-    const [client] = await db
-      .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, portalPin: clientTable.portalPin })
-      .from(clientTable)
-      .where(eq(clientTable.email, email.toLowerCase().trim()))
-      .limit(1);
+    const client = await portalRepository.findClientForLogin(email);
 
     if (!client) {
       return res.status(401).json({ error: 'No account found with that email' });
@@ -92,12 +83,7 @@ portalRouter.post('/login', async (req: Request, res: Response) => {
     }
 
     const token = signPortalToken({ clientId: client.id, email: client.email || '' });
-
-    const creds = await db
-      .select({ id: webauthnCredentials.id })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.clientId, client.id))
-      .limit(1);
+    const creds = await portalRepository.findWebauthnCredentialIdsForClient(client.id);
 
     res.json({
       token,
@@ -121,12 +107,11 @@ portalRouter.post('/webauthn/register', portalAuth, async (req: Request, res: Re
       return res.status(400).json({ error: 'Missing credential data' });
     }
 
-    await db.insert(webauthnCredentials).values({
+    await portalRepository.insertWebauthnCredential({
       clientId,
       credentialId,
       publicKey,
       deviceName: deviceName || 'Unknown device',
-      counter: 0,
     });
 
     res.json({ success: true });
@@ -143,33 +128,17 @@ portalRouter.post('/webauthn/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing credential data' });
     }
 
-    const [cred] = await db
-      .select()
-      .from(webauthnCredentials)
-      .where(and(
-        eq(webauthnCredentials.clientId, clientId),
-        eq(webauthnCredentials.credentialId, credentialId),
-      ))
-      .limit(1);
-
+    const cred = await portalRepository.findWebauthnByCredential(clientId, credentialId);
     if (!cred) {
       return res.status(401).json({ error: 'Biometric not recognized' });
     }
 
-    const [client] = await db
-      .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName })
-      .from(clientTable)
-      .where(eq(clientTable.id, clientId))
-      .limit(1);
-
+    const client = await portalRepository.findClientBasicById(clientId);
     if (!client) {
       return res.status(401).json({ error: 'Client not found' });
     }
 
-    await db
-      .update(webauthnCredentials)
-      .set({ counter: sql`${webauthnCredentials.counter} + 1` })
-      .where(eq(webauthnCredentials.id, cred.id));
+    await portalRepository.incrementWebauthnCounter(cred.id);
 
     const token = signPortalToken({ clientId: client.id, email: client.email || '' });
     res.json({ token, clientId: client.id, firstName: client.firstName });
@@ -184,11 +153,7 @@ portalRouter.post('/webauthn/check', async (req: Request, res: Response) => {
     const { clientId } = req.body;
     if (!clientId) return res.json({ hasBiometric: false });
 
-    const creds = await db
-      .select({ id: webauthnCredentials.id, deviceName: webauthnCredentials.deviceName })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.clientId, clientId));
-
+    const creds = await portalRepository.findWebauthnDevicesForClient(clientId);
     res.json({ hasBiometric: creds.length > 0, devices: creds });
   } catch {
     res.json({ hasBiometric: false });
@@ -199,151 +164,95 @@ portalRouter.post('/webauthn/check', async (req: Request, res: Response) => {
 
 portalRouter.get('/deals/filters', async (_req: Request, res: Response) => {
   try {
-    const baseWhere = and(
-      eq(quote.is_active, true),
-      isNotNull(quote.quote_token),
-      eq(quote.show_on_portal, true),
-      eq(quote.isFreeQuote, true),
-    );
-
-    const [countryRows, tagRows] = await Promise.all([
-      db
-        .selectDistinct({ country: country.country_name })
-        .from(quote)
-        .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
-        .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
-        .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
-        .leftJoin(destination, eq(resorts.destination_id, destination.id))
-        .leftJoin(country, eq(destination.country_id, country.id))
-        .where(and(baseWhere, isNotNull(country.country_name)))
-        .orderBy(asc(country.country_name)),
-
-      db
-        .select({
-          tag: tags.name,
-          count: sql<number>`count(${quoteTags.quoteId})::int`,
-        })
-        .from(tags)
-        .innerJoin(quoteTags, eq(quoteTags.tagId, tags.id))
-        .innerJoin(quote, eq(quote.id, quoteTags.quoteId))
-        .where(and(
-          eq(quote.is_active, true),
-          isNotNull(quote.quote_token),
-          eq(quote.show_on_portal, true),
-          eq(quote.isFreeQuote, true),
-        ))
-        .groupBy(tags.name)
-        .orderBy(desc(sql`count(${quoteTags.quoteId})`))
-        .limit(10),
-    ]);
-
-    res.json({
-      countries: countryRows.map((r) => r.country).filter(Boolean),
-      popularTags: tagRows.map((r) => ({ tag: r.tag, count: r.count })),
-    });
+    const filters = await portalRepository.findDealFilters();
+    res.json(filters);
   } catch (err: any) {
     console.error('Error fetching deal filters:', err);
     res.status(500).json({ error: 'Failed to load filters' });
   }
 });
 
+function buildImageMap(
+  primaryImages: Array<{ quoteId: string | null; url: string; isPrimary: boolean | null }>,
+  fallbackImages: Array<{ quoteId: string | null; url: string }>,
+): Record<string, string> {
+  const imageMap: Record<string, string> = {};
+  for (const img of primaryImages) {
+    if (img.quoteId && (!imageMap[img.quoteId] || img.isPrimary)) {
+      imageMap[img.quoteId] = img.url;
+    }
+  }
+  for (const img of fallbackImages) {
+    if (img.quoteId && !imageMap[img.quoteId]) {
+      imageMap[img.quoteId] = img.url;
+    }
+  }
+  return imageMap;
+}
+
+function buildTagMap(rows: Array<{ quoteId: string; tagName: string }>): Record<string, string[]> {
+  const tagMap: Record<string, string[]> = {};
+  for (const row of rows) {
+    if (!tagMap[row.quoteId]) tagMap[row.quoteId] = [];
+    tagMap[row.quoteId].push(row.tagName);
+  }
+  return tagMap;
+}
+
+async function enrichDealRows(
+  results: Array<{
+    id: string;
+    token: string | null;
+    title: string | null;
+    salesPrice: string | null;
+    travelDate: string | Date | null;
+    numNights: number | null;
+    accommodationName: string | null;
+    destinationName: string | null;
+    countryName: string | null;
+  }>,
+) {
+  const quoteIds = results.map((r) => r.id);
+  const tagRows = await portalRepository.findTagsForQuotes(quoteIds);
+  const tagMap = buildTagMap(tagRows);
+
+  const primary = await portalRepository.findImagesForQuotes(quoteIds);
+  const initialMap: Record<string, string> = {};
+  for (const img of primary) {
+    if (img.quoteId && (!initialMap[img.quoteId] || img.isPrimary)) {
+      initialMap[img.quoteId] = img.url;
+    }
+  }
+  const missingImageIds = quoteIds.filter((id) => !initialMap[id]);
+  const accomImages = await portalRepository.findAccommodationImagesForQuotes(missingImageIds);
+  const imageMap = buildImageMap(primary, accomImages);
+
+  return results.map((r) => ({
+    id: r.id,
+    token: r.token,
+    title: r.title || `${r.destinationName || r.countryName || 'Holiday'} Getaway`,
+    destination: r.destinationName && r.countryName
+      ? `${r.destinationName}, ${r.countryName}`
+      : r.countryName || r.destinationName || 'TBC',
+    country: r.countryName || null,
+    hotel: r.accommodationName || '',
+    price: parseFloat(r.salesPrice || '0'),
+    travel_date: r.travelDate,
+    num_nights: r.numNights,
+    image_url: imageMap[r.id] || '',
+    quote_url: r.token ? `/portal/quote/${r.token}` : null,
+    tags: tagMap[r.id] ?? [],
+  }));
+}
+
 portalRouter.get('/deals/for-you', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
+    const clientTagIds = await portalRepository.findClientTagIds(clientId);
+    if (clientTagIds.length === 0) return res.json([]);
 
-    const clientTagRows = await db
-      .select({ tagId: clientTags.tagId })
-      .from(clientTags)
-      .where(eq(clientTags.clientId, clientId));
-
-    if (clientTagRows.length === 0) return res.json([]);
-
-    const clientTagIds = clientTagRows.map((r) => r.tagId);
-
-    const results = await db
-      .select({
-        id: quote.id,
-        token: quote.quote_token,
-        title: quote.title,
-        salesPrice: quote.sales_price,
-        travelDate: quote.travel_date,
-        numNights: quote.num_of_nights,
-        accommodationName: accomodation_list.name,
-        destinationName: destination.name,
-        countryName: country.country_name,
-      })
-      .from(quote)
-      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
-      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
-      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
-      .leftJoin(destination, eq(resorts.destination_id, destination.id))
-      .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(
-        eq(quote.is_active, true),
-        isNotNull(quote.quote_token),
-        eq(quote.isFreeQuote, true),
-        exists(
-          db.select({ one: sql`1` })
-            .from(quoteTags)
-            .where(and(eq(quoteTags.quoteId, quote.id), inArray(quoteTags.tagId, clientTagIds))),
-        ),
-      ))
-      .orderBy(desc(quote.date_created))
-      .limit(20);
-
-    const quoteIds = results.map((r) => r.id);
-    let tagMap: Record<string, string[]> = {};
-    if (quoteIds.length > 0) {
-      const tagRows = await db
-        .select({ quoteId: quoteTags.quoteId, tagName: tags.name })
-        .from(quoteTags)
-        .innerJoin(tags, eq(quoteTags.tagId, tags.id))
-        .where(inArray(quoteTags.quoteId, quoteIds));
-      for (const row of tagRows) {
-        if (!tagMap[row.quoteId]) tagMap[row.quoteId] = [];
-        tagMap[row.quoteId].push(row.tagName);
-      }
-    }
-
-    let imageMap: Record<string, string> = {};
-    if (quoteIds.length > 0) {
-      const images = await db
-        .select({ quoteId: quoteImages.quoteId, url: quoteImages.url, isPrimary: quoteImages.isPrimary })
-        .from(quoteImages)
-        .where(inArray(quoteImages.quoteId, quoteIds));
-      for (const img of images) {
-        if (img.quoteId && (!imageMap[img.quoteId] || img.isPrimary)) {
-          imageMap[img.quoteId] = img.url;
-        }
-      }
-      const missingImageIds = quoteIds.filter((id) => !imageMap[id]);
-      if (missingImageIds.length > 0) {
-        const accomImages = await db
-          .select({ quoteId: quote_accomodation.quote_id, url: accommodation_images.image_url })
-          .from(quote_accomodation)
-          .innerJoin(accommodation_images, eq(accommodation_images.accommodation_id, quote_accomodation.accomodation_id))
-          .where(and(inArray(quote_accomodation.quote_id, missingImageIds), eq(quote_accomodation.is_primary, true)))
-          .limit(missingImageIds.length);
-        for (const img of accomImages) {
-          if (img.quoteId && !imageMap[img.quoteId]) imageMap[img.quoteId] = img.url;
-        }
-      }
-    }
-
-    res.json(results.map((r) => ({
-      id: r.id,
-      token: r.token,
-      title: r.title || `${r.destinationName || r.countryName || 'Holiday'} Getaway`,
-      destination: r.destinationName && r.countryName ? `${r.destinationName}, ${r.countryName}` : r.countryName || r.destinationName || 'TBC',
-      country: r.countryName || null,
-      hotel: r.accommodationName || '',
-      price: parseFloat(r.salesPrice || '0'),
-      travel_date: r.travelDate,
-      num_nights: r.numNights,
-      image_url: imageMap[r.id] || '',
-      quote_url: r.token ? `/portal/quote/${r.token}` : null,
-      tags: tagMap[r.id] ?? [],
-    })));
+    const results = await portalRepository.findForYouDeals(clientTagIds, 20);
+    res.json(await enrichDealRows(results));
   } catch (err: any) {
     console.error('Error fetching for-you deals:', err);
     res.status(500).json({ error: 'Failed to load personalised deals' });
@@ -355,99 +264,12 @@ portalRouter.get('/deals', async (req: Request, res: Response) => {
     const filterCountry = ((req.query.country as string) || '').trim();
     const filterTag = ((req.query.tag as string) || '').trim();
 
-    const baseConditions = and(
-      eq(quote.is_active, true),
-      isNotNull(quote.quote_token),
-      eq(quote.show_on_portal, true),
-      eq(quote.isFreeQuote, true),
-      filterCountry ? ilike(country.country_name, filterCountry) : undefined,
-      filterTag
-        ? exists(
-            db.select({ one: sql`1` })
-              .from(quoteTags)
-              .innerJoin(tags, eq(tags.id, quoteTags.tagId))
-              .where(and(eq(quoteTags.quoteId, quote.id), ilike(tags.name, filterTag))),
-          )
-        : undefined,
-    );
-
-    const results = await db
-      .select({
-        id: quote.id,
-        token: quote.quote_token,
-        title: quote.title,
-        salesPrice: quote.sales_price,
-        travelDate: quote.travel_date,
-        numNights: quote.num_of_nights,
-        accommodationName: accomodation_list.name,
-        destinationName: destination.name,
-        countryName: country.country_name,
-      })
-      .from(quote)
-      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
-      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
-      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
-      .leftJoin(destination, eq(resorts.destination_id, destination.id))
-      .leftJoin(country, eq(destination.country_id, country.id))
-      .where(baseConditions)
-      .orderBy(desc(quote.date_created))
-      .limit(50);
-
-    const quoteIds = results.map((r) => r.id);
-    let tagMap: Record<string, string[]> = {};
-    if (quoteIds.length > 0) {
-      const tagRows = await db
-        .select({ quoteId: quoteTags.quoteId, tagName: tags.name })
-        .from(quoteTags)
-        .innerJoin(tags, eq(quoteTags.tagId, tags.id))
-        .where(inArray(quoteTags.quoteId, quoteIds));
-      for (const row of tagRows) {
-        if (!tagMap[row.quoteId]) tagMap[row.quoteId] = [];
-        tagMap[row.quoteId].push(row.tagName);
-      }
-    }
-
-    let imageMap: Record<string, string> = {};
-    if (quoteIds.length > 0) {
-      const images = await db
-        .select({ quoteId: quoteImages.quoteId, url: quoteImages.url, isPrimary: quoteImages.isPrimary })
-        .from(quoteImages)
-        .where(inArray(quoteImages.quoteId, quoteIds));
-      for (const img of images) {
-        if (img.quoteId) {
-          if (!imageMap[img.quoteId] || img.isPrimary) {
-            imageMap[img.quoteId] = img.url;
-          }
-        }
-      }
-      const missingImageIds = quoteIds.filter((id) => !imageMap[id]);
-      if (missingImageIds.length > 0) {
-        const accomImages = await db
-          .select({ quoteId: quote_accomodation.quote_id, url: accommodation_images.image_url })
-          .from(quote_accomodation)
-          .innerJoin(accommodation_images, eq(accommodation_images.accommodation_id, quote_accomodation.accomodation_id))
-          .where(and(inArray(quote_accomodation.quote_id, missingImageIds), eq(quote_accomodation.is_primary, true)))
-          .limit(missingImageIds.length);
-        for (const img of accomImages) {
-          if (img.quoteId && !imageMap[img.quoteId]) imageMap[img.quoteId] = img.url;
-        }
-      }
-    }
-
-    res.json(results.map((r) => ({
-      id: r.id,
-      token: r.token,
-      title: r.title || `${r.destinationName || r.countryName || 'Holiday'} Getaway`,
-      destination: r.destinationName && r.countryName ? `${r.destinationName}, ${r.countryName}` : r.countryName || r.destinationName || 'TBC',
-      country: r.countryName || null,
-      hotel: r.accommodationName || '',
-      price: parseFloat(r.salesPrice || '0'),
-      travel_date: r.travelDate,
-      num_nights: r.numNights,
-      image_url: imageMap[r.id] || '',
-      quote_url: r.token ? `/portal/quote/${r.token}` : null,
-      tags: tagMap[r.id] ?? [],
-    })));
+    const results = await portalRepository.findDeals({
+      country: filterCountry || undefined,
+      tag: filterTag || undefined,
+      limit: 50,
+    });
+    res.json(await enrichDealRows(results));
   } catch (err: any) {
     console.error('Error fetching portal deals:', err);
     res.status(500).json({ error: 'Failed to load deals' });
@@ -459,18 +281,7 @@ portalRouter.get('/deals', async (req: Request, res: Response) => {
 portalRouter.get('/user', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const [client] = await db
-      .select({
-        firstName: clientTable.firstName,
-        lastName: clientTable.surename,
-        email: clientTable.email,
-        phone: clientTable.phoneNumber,
-        avatarUrl: clientTable.avatarUrl,
-      })
-      .from(clientTable)
-      .where(eq(clientTable.id, clientId))
-      .limit(1);
-
+    const client = await portalRepository.findClientProfile(clientId);
     if (!client) return res.status(404).json({ error: 'Client not found' });
     res.json(client);
   } catch (err: any) {
@@ -482,44 +293,14 @@ portalRouter.get('/user', portalAuth, async (req: Request, res: Response) => {
 portalRouter.get('/quotes', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-
-    const results = await db
-      .select({
-        quoteId: quote.id,
-        title: quote.title,
-        salesPrice: quote.sales_price,
-        travelDate: quote.travel_date,
-        numNights: quote.num_of_nights,
-        dateExpiry: quote.date_expiry,
-        quoteToken: quote.quote_token,
-        accommodationName: accomodation_list.name,
-        destinationName: destination.name,
-        countryName: country.country_name,
-      })
-      .from(transaction)
-      .innerJoin(quote, eq(quote.transaction_id, transaction.id))
-      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
-      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
-      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
-      .leftJoin(destination, eq(resorts.destination_id, destination.id))
-      .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(
-        eq(transaction.client_id, clientId),
-        eq(quote.is_active, true),
-      ))
-      .orderBy(desc(quote.date_created));
+    const results = await portalRepository.findClientQuotes(clientId);
 
     const quoteIds = results.map((r) => r.quoteId);
-    let imageMap: Record<string, string> = {};
-    if (quoteIds.length > 0) {
-      const images = await db
-        .select({ quoteId: quoteImages.quoteId, url: quoteImages.url, isPrimary: quoteImages.isPrimary })
-        .from(quoteImages)
-        .where(inArray(quoteImages.quoteId, quoteIds));
-      for (const img of images) {
-        if (img.quoteId && (!imageMap[img.quoteId] || img.isPrimary)) {
-          imageMap[img.quoteId] = img.url;
-        }
+    const primary = await portalRepository.findImagesForQuotes(quoteIds);
+    const imageMap: Record<string, string> = {};
+    for (const img of primary) {
+      if (img.quoteId && (!imageMap[img.quoteId] || img.isPrimary)) {
+        imageMap[img.quoteId] = img.url;
       }
     }
 
@@ -562,40 +343,7 @@ portalRouter.get('/quotes', portalAuth, async (req: Request, res: Response) => {
 portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-
-    const results = await db
-      .select({
-        bookingId: booking.id,
-        title: booking.title,
-        haysRef: booking.hays_ref,
-        supplierRef: booking.supplier_ref,
-        salesPrice: booking.sales_price,
-        travelDate: booking.travel_date,
-        numNights: booking.num_of_nights,
-        accommodationName: accomodation_list.name,
-        destinationName: destination.name,
-        countryName: country.country_name,
-      })
-      .from(transaction)
-      .innerJoin(booking, eq(booking.transaction_id, transaction.id))
-      .leftJoin(
-        quote_accomodation,
-        sql`${quote_accomodation.quote_id} = (
-          SELECT q.id FROM quote_table q
-          WHERE q.transaction_id = ${transaction.id}
-          AND q.is_active = true
-          ORDER BY q.date_created DESC LIMIT 1
-        ) AND ${quote_accomodation.is_primary} = true`,
-      )
-      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
-      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
-      .leftJoin(destination, eq(resorts.destination_id, destination.id))
-      .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(
-        eq(transaction.client_id, clientId),
-        eq(booking.is_active, true),
-      ))
-      .orderBy(desc(booking.travel_date));
+    const results = await portalRepository.findClientBookings(clientId);
 
     res.json(results.map((r) => {
       const dest = r.destinationName && r.countryName
@@ -627,13 +375,7 @@ portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) =>
 portalRouter.get('/messages', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-
-    const msgs = await db
-      .select()
-      .from(portalMessages)
-      .where(eq(portalMessages.clientId, clientId))
-      .orderBy(asc(portalMessages.createdAt))
-      .limit(100);
+    const msgs = await portalRepository.findClientPortalMessages(clientId, 100);
 
     res.json(msgs.map((m) => ({
       id: m.id,
@@ -655,7 +397,7 @@ portalRouter.post('/message', portalAuth, async (req: Request, res: Response) =>
     if (!text?.trim()) return res.status(400).json({ error: 'Message text required' });
 
     const trimmed = text.trim();
-    await db.insert(portalMessages).values({ clientId, sender: 'client', text: trimmed });
+    await portalRepository.insertClientPortalMessage(clientId, trimmed);
     await bridgePortalMessageToChat(clientId, trimmed, false);
 
     res.json({ success: true });
@@ -671,7 +413,7 @@ portalRouter.post('/quote-request', portalAuth, async (req: Request, res: Respon
     const { destination: dest, dates, travellers, notes } = req.body;
 
     const messageText = `Quote Request:\n• Destination: ${dest || 'Not specified'}\n• Dates: ${dates || 'Flexible'}\n• Travellers: ${travellers || 'Not specified'}\n• Notes: ${notes || 'None'}`;
-    await db.insert(portalMessages).values({ clientId, sender: 'client', text: messageText });
+    await portalRepository.insertClientPortalMessage(clientId, messageText);
     await bridgePortalMessageToChat(clientId, messageText, false);
 
     res.json({ success: true });
@@ -687,7 +429,7 @@ portalRouter.post('/interest', portalAuth, async (req: Request, res: Response) =
     const { dealId } = req.body;
 
     const messageText = `Interested in deal: ${dealId}`;
-    await db.insert(portalMessages).values({ clientId, sender: 'client', text: messageText });
+    await portalRepository.insertClientPortalMessage(clientId, messageText);
     await bridgePortalMessageToChat(clientId, messageText, true);
 
     res.json({ success: true });
@@ -783,19 +525,10 @@ portalRouter.post('/push/unsubscribe', portalAuth, async (req: Request, res: Res
 portalRouter.get('/vip', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const [client] = await db
-      .select({
-        vipTier: clientTable.vipTier,
-        vipEnrolledAt: clientTable.vipEnrolledAt,
-        totalReferrals: clientTable.totalReferrals,
-      })
-      .from(clientTable)
-      .where(eq(clientTable.id, clientId))
-      .limit(1);
-
+    const client = await portalRepository.findVipSummary(clientId);
     if (!client) return res.status(404).json({ error: 'Client not found' });
 
-    const balance = await walletService.getBalance(clientId);
+    const balance = await walletService.getBalance(clientId, { orgId: null });
 
     res.json({
       vipTier: client.vipTier ?? 'not_enrolled',
@@ -812,7 +545,7 @@ portalRouter.get('/vip', portalAuth, async (req: Request, res: Response) => {
 portalRouter.get('/vip/referrals', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const referrals = await referralService.getReferralsByReferrer(clientId);
+    const referrals = await referralService.getReferralsByReferrer(clientId, { orgId: null });
     res.json(referrals);
   } catch (err: any) {
     console.error('Portal VIP referrals error:', err);
@@ -825,7 +558,7 @@ portalRouter.get('/vip/referrals', portalAuth, async (req: Request, res: Respons
 portalRouter.get('/wallet/balance', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const balance = await walletService.getBalance(clientId);
+    const balance = await walletService.getBalance(clientId, { orgId: null });
     res.json({ balance: balance.toFixed(2) });
   } catch {
     res.status(500).json({ error: 'Failed to load wallet balance' });
@@ -835,7 +568,7 @@ portalRouter.get('/wallet/balance', portalAuth, async (req: Request, res: Respon
 portalRouter.get('/wallet/transactions', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const txns = await walletService.getTransactions(clientId);
+    const txns = await walletService.getTransactions(clientId, { orgId: null });
     res.json(txns);
   } catch {
     res.status(500).json({ error: 'Failed to load wallet transactions' });
@@ -888,11 +621,12 @@ portalRouter.post('/wallet/withdraw', portalAuth, async (req: Request, res: Resp
       return res.status(400).json({ error: 'account_name, account_number and sort_code are required' });
     }
 
-    const tx = await walletService.requestBankTransfer(clientId, parsed, {
-      account_name,
-      account_number,
-      sort_code,
-    });
+    const tx = await walletService.requestBankTransfer(
+      clientId,
+      parsed,
+      { account_name, account_number, sort_code },
+      { orgId: null },
+    );
 
     res.json({ success: true, transaction: tx });
   } catch (err: any) {
@@ -910,15 +644,10 @@ portalRouter.post('/quote/:token/view', portalAuth, async (req: Request, res: Re
     const { token } = req.params;
     const ua = req.headers['user-agent'] || '';
 
-    const [client] = await db
-      .select({ firstName: clientTable.firstName, lastName: clientTable.surename })
-      .from(clientTable)
-      .where(eq(clientTable.id, clientId))
-      .limit(1);
-
+    const client = await portalRepository.findClientNameById(clientId);
     const viewerName = [client?.firstName, client?.lastName].filter(Boolean).join(' ') || null;
 
-    const quoteId = await quotePublicRepository.findQuoteIdByToken(token);
+    const quoteId = await quotePublicRepository.findQuoteIdByToken(String(token));
     if (!quoteId) return res.status(404).json({ error: 'Quote not found' });
 
     let deviceType = 'desktop';
@@ -959,11 +688,7 @@ portalRouter.post('/quote/:token/view', portalAuth, async (req: Request, res: Re
 
 portalRouter.get('/staff/has-pin/:clientId', requireStaffAuth, async (req: Request, res: Response) => {
   try {
-    const [client] = await db
-      .select({ portalPin: clientTable.portalPin })
-      .from(clientTable)
-      .where(eq(clientTable.id, req.params.clientId))
-      .limit(1);
+    const client = await neonClientRepository.findPortalPin(String(req.params.clientId));
     res.json({ hasPin: !!client?.portalPin });
   } catch {
     res.status(500).json({ error: 'Failed to check PIN' });
@@ -977,7 +702,7 @@ portalRouter.post('/staff/set-pin', requireStaffAuth, async (req: Request, res: 
       return res.status(400).json({ error: 'Valid 4-digit PIN required' });
     }
     const hash = await bcrypt.hash(pin, 10);
-    await db.update(clientTable).set({ portalPin: hash }).where(eq(clientTable.id, clientId));
+    await neonClientRepository.setPortalPin(clientId, hash);
     res.json({ success: true });
   } catch (err: any) {
     console.error('Set PIN error:', err);
@@ -989,7 +714,7 @@ portalRouter.post('/staff/remove-pin', requireStaffAuth, async (req: Request, re
   try {
     const { clientId } = req.body;
     if (!clientId) return res.status(400).json({ error: 'clientId required' });
-    await db.update(clientTable).set({ portalPin: null }).where(eq(clientTable.id, clientId));
+    await neonClientRepository.setPortalPin(clientId, null);
     res.json({ success: true });
   } catch (err: any) {
     console.error('Remove PIN error:', err);
@@ -1002,11 +727,7 @@ export const portalStaffRouter = Router();
 
 portalStaffRouter.get('/has-pin/:clientId', requireStaffAuth, async (req: Request, res: Response) => {
   try {
-    const [client] = await db
-      .select({ portalPin: clientTable.portalPin })
-      .from(clientTable)
-      .where(eq(clientTable.id, req.params.clientId))
-      .limit(1);
+    const client = await neonClientRepository.findPortalPin(String(req.params.clientId));
     res.json({ hasPin: !!client?.portalPin });
   } catch {
     res.status(500).json({ error: 'Failed to check PIN' });
@@ -1020,7 +741,7 @@ portalStaffRouter.post('/set-pin', requireStaffAuth, async (req: Request, res: R
       return res.status(400).json({ error: 'Valid 4-digit PIN required' });
     }
     const hash = await bcrypt.hash(pin, 10);
-    await db.update(clientTable).set({ portalPin: hash }).where(eq(clientTable.id, clientId));
+    await neonClientRepository.setPortalPin(clientId, hash);
     res.json({ success: true });
   } catch (err: any) {
     console.error('Set PIN error:', err);
@@ -1032,7 +753,7 @@ portalStaffRouter.post('/remove-pin', requireStaffAuth, async (req: Request, res
   try {
     const { clientId } = req.body;
     if (!clientId) return res.status(400).json({ error: 'clientId required' });
-    await db.update(clientTable).set({ portalPin: null }).where(eq(clientTable.id, clientId));
+    await neonClientRepository.setPortalPin(clientId, null);
     res.json({ success: true });
   } catch (err: any) {
     console.error('Remove PIN error:', err);

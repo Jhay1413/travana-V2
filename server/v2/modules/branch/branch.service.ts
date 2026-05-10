@@ -1,4 +1,3 @@
-import { db } from '../../config/database';
 import { AppError } from '../../utils/error-handler';
 import { branchRepository } from './branch.repository';
 import type { InsertBranch } from '@shared/schema';
@@ -22,42 +21,31 @@ export const branchService = {
     const existingCount = await branchRepository.countByOrg(orgId);
     const shouldBeDefault = data.isDefault === true || existingCount === 0;
 
-    return db.transaction(async (tx) => {
-      const created = await branchRepository.create(
-        {
-          organizationId: orgId,
-          name: data.name!.trim(),
-          code: data.code ?? null,
-          address: data.address ?? null,
-          phone: data.phone ?? null,
-          email: data.email ?? null,
-          openingPattern: data.openingPattern ?? null,
-          bankHolidaysOpen: data.bankHolidaysOpen ?? false,
-          openingHours: data.openingHours ?? [],
-          isDefault: shouldBeDefault,
-          isActive: data.isActive ?? true,
-        } as InsertBranch,
-        tx,
-      );
-      if (shouldBeDefault) {
-        await branchRepository.clearDefaultExcept(orgId, created.id, tx);
-      }
-      return created;
-    });
+    return branchRepository.createAtomic(
+      {
+        organizationId: orgId,
+        name: data.name!.trim(),
+        code: data.code ?? null,
+        address: data.address ?? null,
+        phone: data.phone ?? null,
+        email: data.email ?? null,
+        openingPattern: data.openingPattern ?? null,
+        bankHolidaysOpen: data.bankHolidaysOpen ?? false,
+        openingHours: data.openingHours ?? [],
+        isDefault: shouldBeDefault,
+        isActive: data.isActive ?? true,
+      } as InsertBranch,
+      shouldBeDefault,
+    );
   },
 
   async update(id: string, data: BranchInput, orgId: string) {
     const existing = await branchRepository.findById(id, orgId);
     if (!existing) throw new AppError('Branch not found', 404);
 
-    return db.transaction(async (tx) => {
-      const updated = await branchRepository.update(id, data, orgId, tx);
-      if (!updated) throw new AppError('Branch not found', 404);
-      if (data.isDefault === true) {
-        await branchRepository.clearDefaultExcept(orgId, id, tx);
-      }
-      return updated;
-    });
+    const updated = await branchRepository.updateAtomic(id, data, orgId, data.isDefault === true);
+    if (!updated) throw new AppError('Branch not found', 404);
+    return updated;
   },
 
   async remove(id: string, orgId: string) {

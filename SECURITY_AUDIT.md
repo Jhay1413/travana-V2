@@ -9,15 +9,26 @@ header search bug exposed clients from other organisations.
 - ⏸️ **PAUSED — REVERTED** — code was written but has been rolled back; must be re-implemented
 - 🛑 **BLOCKED** — needs a design decision before code can land
 
-## ⏸️ Resume point (Phase A + C + B done 2026-05-10; resume on Phase D)
+## ⏸️ Resume point (Phase A + B + C + D done 2026-05-10)
 
-**Phases A, B, and C are all in place and verified** — full verification script run
-returns **34 passed, 0 failed, 4 skipped** (the skips are payout + withdrawal tables
-empty, plus quote/booking delete-guards have no foreign-org fixtures).
+**Phases A, B, C, and D are all in place** (Phases A/B/C verified at 34 passed, 0
+failed; Phase D pending DB migration before live verification).
 
-Targets module is intentionally **excluded** — `shop_target` has no `org_id` column, so
-it's a Phase D blocker (needs schema migration + design decision per the table at the
-bottom of this doc).
+Phase D resolved as:
+- **`shop_target`** → **per-branch** (not per-org). New unique constraint
+  `(branch_id, year, month)`. Existing rows wiped per design call.
+- **`agent_target`** → also gained `branch_id` for symmetry. Backfilled from each
+  user's active `branch_members` row; orphans deleted.
+- **`hr_employees` / `hr_reminders`** → **per-org**. Existing rows wiped.
+- **`hub_posts` / `announcements` / `destination_guru` / `feedback`** → **truly
+  global** (one shared library across all orgs). Writes locked to
+  `org_admin + platform_admin` via `requireOrgRole` middleware. Reads stay open
+  to any authenticated user. User-level interactions (like, share, comment,
+  submit feedback) also stay open.
+
+Pending: `npm run db:push` for migrations 0007 (email-verification, branch
+settings — already in repo from earlier work), 0008 (targets per branch), 0009
+(HR per org). After that the verification script can be re-run.
 
 **What still exists (new files, untracked):**
 - `scripts/verify-phase-a-isolation.ts` — verification script
@@ -272,37 +283,52 @@ repo's `transactionBelongsToOrg` returns false for that transaction.
 
 ---
 
-## Phase D — Truly global tables (design call) 🛑 BLOCKED on decisions
+## Phase D — Decisions made + implemented ✅ DONE
 
-**Goal:** decide whether tables that have no `org_id` column should be per-org or stay
-truly global, and migrate accordingly.
+Decisions taken 2026-05-10. Each formerly-global table is now either per-tenant or
+documented as truly global with role-gated writes.
 
-**Tables / modules in question**
-
-| Table / Module | Current state | Why it matters |
+| Table / Module | Decision | Implementation |
 |---|---|---|
-| `shop_target` | No `org_id` column; one row per (year, month) globally. Any user in any org can read/overwrite. | Two agencies in the same month corrupt each other's targets. **Probably should be per-org.** |
-| `hr_employees` / `hr_reminders` | No `org_id`. Single global HR roster. | If two agencies share this deployment, an admin in agency A reads + approves agency B's HR records. **Probably should be per-org.** |
-| `hub_posts`, `announcements`, `destination_guru` | No `org_id`. Likely intentional ("the Hub" = shared content library). | If posts should ever be per-org, all repo queries need scoping. **Confirm intent first.** |
-| `feedback` | No `org_id`. Global feedback list. | Admins/managers in any org see + change status / delete the entire feedback list. **Probably should be per-org.** |
+| `shop_target` | **Per-branch** | Migration [0008_targets_per_branch.sql](migrations/0008_targets_per_branch.sql) wipes existing rows, adds `branch_id uuid NOT NULL` FK, unique on `(branch_id, year, month)`. [targets.repository.ts](server/v2/modules/targets/targets.repository.ts) every method takes `branchId`; [targets.service.ts](server/v2/modules/targets/targets.service.ts) resolves branch from scope (`branch_manager`/`agent`/`homeworker` → own branch only; `org_admin` → can override to any branch in their org; `platform_admin` → must pass branchId). |
+| `agent_target` | **Per-branch** (symmetry) | Same migration adds `branch_id`, backfilled from each user's active `branch_members` row, orphans deleted. New unique on `(branch_id, user_id, year, month)`. |
+| `hr_employees` / `hr_reminders` | **Per-org** | Migration [0009_hr_per_org.sql](migrations/0009_hr_per_org.sql) wipes existing rows and adds `org_id uuid NOT NULL` FK to both. [hr.repository.ts](server/v2/modules/hr/hr.repository.ts) every method takes `orgId`; [hr.service.ts](server/v2/modules/hr/hr.service.ts) derives orgId from scope. The legacy `requireHrRole` global-role guard stays as defense-in-depth on top of org scoping. [seed-hr.ts](scripts/seed-hr.ts) updated to require an `orgId` (env var, CLI arg, or auto-pick if there's only one org). |
+| `hub_posts`, `announcements`, `destination_guru` | **Truly global** (shared content library) | No schema change. Routes for create/update/delete/pin/upload-image/generate gated to `requireOrgRole(['org_admin', 'platform_admin'])`. Reads + user-level interactions (like/share/comment) stay open to any authenticated user. Module-level comments document the global-by-design decision. |
+| `feedback` | **Truly global** | No schema change. Reads + own-submission stay open. `PATCH /:id/status` and `DELETE /:id` gated to `requireOrgRole(['org_admin', 'platform_admin'])`. |
 
-### What's needed before code can land
-- For each table above, decide: **per-org** (add `org_id` column + backfill + scope queries) or **truly global** (document explicitly + lock writes to `platform_admin` only).
-- Schema migration plan for the per-org tables — including how to backfill existing rows
-  (assign all to a "default" org? skip rows? require manual mapping?).
+### Routes/index.ts mount changes
+`/destination-guru`, `/announcements`, `/feedback`, `/hr`, `/hub-posts` switched
+from `isAuthenticated` to `...auth` (which adds `orgBranchScope`) so `req.orgRole`
+is populated for the new role guards.
 
-### Test checklist (once decisions made + implemented)
-For each table chosen as **per-org**:
-- [ ] As Org B admin, `GET /api/v2/<endpoint>` returns Org B-only.
-- [ ] As Org B admin, mutations on Org A records return 404.
-- [ ] Existing Org A rows (post-backfill) still appear for Org A users.
-- [ ] Schema migration ran without losing rows.
+### Test checklist
+**Per-branch (`shop_target`, `agent_target`):**
+- [ ] As branch_manager A, `GET /api/v2/targets/shop` returns only branch A's targets.
+- [ ] As branch_manager A, `POST /api/v2/targets/shop` with branchId override → 404 if branch not yours.
+- [ ] As org_admin, `?branchId=<branch-in-own-org>` works; `?branchId=<branch-in-other-org>` → 404.
+- [ ] As platform_admin, must pass `?branchId=X` (no implicit default).
+- [ ] Org A and Org B set different shop targets for the same year/month — neither overwrites the other.
+- [ ] Agent dropdown for target-setting (`/api/v2/targets/agents`) returns branch-A agents only when called by a branch-A user.
 
-For each table chosen as **truly global**:
-- [ ] As `platform_admin` only — writes succeed.
-- [ ] As any other role — writes return 403.
-- [ ] Reads remain accessible to authenticated users (or whatever rule was chosen).
-- [ ] Note added to repo / service file calling out the global-by-design decision.
+**Per-org (`hr_employees`, `hr_reminders`):**
+- [ ] As Org B admin, `GET /api/v2/hr/employees` returns Org B-only employees.
+- [ ] As Org B admin, `GET /api/v2/hr/employees/<Org-A-employee-id>` returns 404.
+- [ ] As Org B admin, mutations (`approveLeave`, `addNote`, `toggleOnboarding`, `uploadDocument`) on Org-A employee return 404.
+- [ ] As `platform_admin`, all reads return cross-org data.
+- [ ] As `agent` / `homeworker` (no admin/manager global role), the entire `/api/v2/hr/*` returns 403 (existing `requireHrRole` guard).
+
+**Truly global (writes locked):**
+- [ ] As an `agent` or `branch_manager`, `POST /api/v2/hub-posts` returns 403; `GET` works.
+- [ ] As an `agent`, `PATCH /api/v2/announcements/:id/pin` returns 403; `POST /api/v2/announcements/:id/like` works.
+- [ ] As an `agent`, `POST /api/v2/destination-guru/generate` returns 403; `GET` works.
+- [ ] As an `agent`, `DELETE /api/v2/feedback/:id` returns 403; `POST /api/v2/feedback` works (anyone can submit feedback).
+- [ ] As `org_admin`, all the above writes succeed.
+
+### Known limitations / consequences of Phase D
+- **v1 HR routes** at `server/repositories/hr.repository.ts` will fail on writes after the migration (NOT NULL `org_id` violation). v1 was always pre-audit / unscoped; the client uses v2 paths. Same expected consequence as the v1 targets break documented above.
+- **Cross-org content visibility for `org_admin`**: an Org A admin can edit announcements / hub-posts / destination-guru entries that Org B users see — by design (shared library). If isolation is later required, Phase D is reopened.
+- **`feedback`** read-all (`GET /api/v2/feedback`) is still visible to any authenticated user. Per design call (`Leave writes open to org_admin`), this stays. If feedback should ever be per-org, see the resolved `hr_employees` migration for the same pattern.
+- **HR seed script** now requires an `orgId`. CI / dev workflows that ran `tsx scripts/seed-hr.ts` blind will need either `HR_SEED_ORG_ID=<uuid>` env var, a CLI arg, or a single-org DB (auto-picked).
 
 ---
 

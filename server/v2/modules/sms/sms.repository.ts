@@ -3,6 +3,8 @@ import {
   smsTemplatesTable,
   smsMessagesTable,
   clientTable,
+  transaction as transactionTable,
+  booking as bookingTable,
 } from '@shared/schema';
 import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 
@@ -91,6 +93,26 @@ export const smsRepository = {
   async findClientById(id: string) {
     const [row] = await db.select().from(clientTable).where(eq(clientTable.id, id)).limit(1);
     return row || undefined;
+  },
+
+  /**
+   * Find the most recent active booking for a client (used to fill SMS template
+   * merge fields like balance_due, hays_ref, departure_date).
+   */
+  async findLatestActiveBookingForClient(clientId: string) {
+    const [latestTxn] = await db
+      .select({ id: transactionTable.id })
+      .from(transactionTable)
+      .where(eq(transactionTable.client_id, clientId))
+      .orderBy(desc(transactionTable.created_at))
+      .limit(1);
+    if (!latestTxn) return undefined;
+    const [bookingRow] = await db
+      .select()
+      .from(bookingTable)
+      .where(and(eq(bookingTable.transaction_id, latestTxn.id), eq(bookingTable.is_active, true)))
+      .limit(1);
+    return bookingRow || undefined;
   },
 
   async findClientByIdInOrg(id: string, orgId: string) {

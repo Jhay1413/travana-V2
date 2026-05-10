@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { tickets, clientTable, user, type Ticket, type InsertTicket } from "@shared/schema";
-import { eq, desc, sql, or, and, type SQL } from "drizzle-orm";
+import { and, desc, eq, lt, not, sql, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Scope } from "../../utils/scope";
 
@@ -108,5 +108,28 @@ export const ticketRepository = {
     const conds: SQL[] = [eq(tickets.id, id), ...buildTicketScopeConds(scope)];
     const result = await db.delete(tickets).where(and(...conds)).returning({ id: tickets.id });
     return result.length > 0;
+  },
+
+  /**
+   * Find tickets that are still open (not Closed/Resolved) and haven't been
+   * touched since `cutoff`. Used by the stale-ticket reminder job.
+   */
+  async findStale(cutoff: Date) {
+    return db
+      .select({
+        id: tickets.id,
+        userId: tickets.userId,
+        subject: tickets.subject,
+        status: tickets.status,
+        updatedAt: tickets.updatedAt,
+      })
+      .from(tickets)
+      .where(
+        and(
+          not(eq(tickets.status, "Closed")),
+          not(eq(tickets.status, "Resolved")),
+          lt(tickets.updatedAt, cutoff),
+        ),
+      );
   },
 };
