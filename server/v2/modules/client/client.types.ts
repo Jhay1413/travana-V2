@@ -1,3 +1,5 @@
-export type { Client, InsertClient } from "@shared/schema";
+import type { NeonClient as ClientRow, InsertClientTable } from "@shared/schema";
 
-export type UpdateClientDTO = Partial<import("@shared/schema").InsertClient>;
+export type Client = ClientRow;
+export type InsertClient = InsertClientTable;
+export type UpdateClientDTO = Partial<InsertClientTable>;

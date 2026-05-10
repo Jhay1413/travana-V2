@@ -4,6 +4,7 @@ import { socialPostService } from "../social-post/social-post.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
+import { getScope } from "../../utils/scope";
 import { authStorage } from "../../middlewares/auth";
 
 const BUDGET_TYPE_MAP: Record<string, string> = {
@@ -96,6 +97,7 @@ function normalizeBooking(data: any) {
 export const transactionController = {
   listTransactions: asyncHandler(async (req: Request, res: Response) => {
     const { clientId, agentId, status, dateFrom, dateTo } = req.query;
+    const scope = getScope(req);
 
     const parsedDateFrom = dateFrom && typeof dateFrom === "string" ? new Date(dateFrom) : undefined;
     const parsedDateTo = dateTo && typeof dateTo === "string" ? new Date(dateTo) : undefined;
@@ -113,18 +115,18 @@ export const transactionController = {
 
     let transactions;
     if (clientId && typeof clientId === "string") {
-      transactions = await transactionService.listTransactionsByClient(clientId);
+      transactions = await transactionService.listTransactionsByClient(clientId, scope);
     } else if (effectiveAgentId) {
-      transactions = await transactionService.listTransactionsByAgent(effectiveAgentId);
+      transactions = await transactionService.listTransactionsByAgent(effectiveAgentId, scope);
     } else {
-      transactions = await transactionService.listTransactions(parsedDateFrom, parsedDateTo);
+      transactions = await transactionService.listTransactions(scope, parsedDateFrom, parsedDateTo);
     }
 
     return successResponse(res, transactions, "Transactions retrieved successfully");
   }),
 
-  listTransactionsLightweight: asyncHandler(async (_req: Request, res: Response) => {
-    const transactions = await transactionService.listTransactionsLightweight();
+  listTransactionsLightweight: asyncHandler(async (req: Request, res: Response) => {
+    const transactions = await transactionService.listTransactionsLightweight(getScope(req));
     return successResponse(res, transactions, "Pipeline transactions retrieved successfully");
   }),
 
@@ -144,19 +146,20 @@ export const transactionController = {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
     const agentId = req.query.agentId as string | undefined;
     const quoteStatusFilter = req.query.quoteStatus as string | undefined;
-    const result = await transactionService.listPipelineByStatus(dbStatus, page, limit, agentId || undefined, quoteStatusFilter || undefined);
+    const result = await transactionService.listPipelineByStatus(getScope(req), dbStatus, page, limit, agentId || undefined, quoteStatusFilter || undefined);
     return successResponse(res, result, "Pipeline data retrieved");
   }),
 
   getTransactionById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const txn = await transactionService.getTransactionWithDetails(id);
+    const txn = await transactionService.getTransactionWithDetails(id, getScope(req));
     return successResponse(res, txn, "Transaction retrieved successfully");
   }),
 
   createTransaction: asyncHandler(async (req: Request, res: Response) => {
     const body = req.body.data ? JSON.parse(req.body.data) : req.body;
     const { enquiry, quote, booking, ...transactionData } = body;
+    const scope = getScope(req);
 
     const files = (req.files as Express.Multer.File[]) || [];
     let uploadedUrls: string[] = [];
@@ -172,7 +175,7 @@ export const transactionController = {
     if (enquiry) {
       const normalizedEnquiry = normalizeEnquiry(enquiry);
       const agentId = getUserId(req);
-      const result = await transactionService.createTransactionWithEnquiry(transactionData, normalizedEnquiry, agentId);
+      const result = await transactionService.createTransactionWithEnquiry(transactionData, normalizedEnquiry, scope, agentId);
       return successResponse(res, result, "Transaction with enquiry created successfully", 201);
     }
 
@@ -181,7 +184,7 @@ export const transactionController = {
         return res.status(400).json({ success: false, error: "Quote requires holiday_type_id and travel_date" });
       }
       const normalizedQuote = normalizeQuote(quote);
-      const result = await transactionService.createTransactionWithQuote(transactionData, normalizedQuote);
+      const result = await transactionService.createTransactionWithQuote(transactionData, normalizedQuote, scope);
       return successResponse(res, result, "Transaction with quote created successfully", 201);
     }
 
@@ -190,28 +193,28 @@ export const transactionController = {
         return res.status(400).json({ success: false, error: "Booking requires holiday_type_id and travel_date" });
       }
       const normalizedBooking = normalizeBooking(booking);
-      const result = await transactionService.createTransactionWithBooking(transactionData, normalizedBooking);
+      const result = await transactionService.createTransactionWithBooking(transactionData, normalizedBooking, scope);
       return successResponse(res, result, "Transaction with booking created successfully", 201);
     }
 
-    const txn = await transactionService.createTransaction(transactionData);
+    const txn = await transactionService.createTransaction(transactionData, scope);
     return successResponse(res, txn, "Transaction created successfully", 201);
   }),
 
   updateTransaction: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const txn = await transactionService.updateTransaction(id, req.body);
+    const txn = await transactionService.updateTransaction(id, req.body, getScope(req));
     return successResponse(res, txn, "Transaction updated successfully");
   }),
 
   deleteTransaction: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    await transactionService.deleteTransaction(id);
+    await transactionService.deleteTransaction(id, getScope(req));
     res.status(204).send();
   }),
 
-  getStats: asyncHandler(async (_req: Request, res: Response) => {
-    const stats = await transactionService.getStats();
+  getStats: asyncHandler(async (req: Request, res: Response) => {
+    const stats = await transactionService.getStats(getScope(req));
     return successResponse(res, stats, "Transaction stats retrieved successfully");
   }),
 
@@ -223,7 +226,7 @@ export const transactionController = {
       const isRestricted = sessionUser?.role !== "Admin" && sessionUser?.role !== "Manager";
       if (isRestricted) agentId = sessionUserId;
     }
-    const quotes = await transactionService.getExpiringQuotes(agentId);
+    const quotes = await transactionService.getExpiringQuotes(getScope(req), agentId);
     return successResponse(res, quotes, "Expiring quotes retrieved successfully");
   }),
 };

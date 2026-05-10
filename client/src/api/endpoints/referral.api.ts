@@ -111,47 +111,47 @@ export interface CreateReferralData {
 
 export const referralApi = {
   getAll: async (): Promise<AdminReferral[]> => {
-    const { data } = await axiosClient.get<AdminReferral[]>("/api/referrals");
+    const { data } = await axiosClient.get<AdminReferral[]>("/api/v2/referrals");
     return data;
   },
 
   getById: async (id: string): Promise<AdminReferral> => {
-    const { data } = await axiosClient.get<AdminReferral>(`/api/referrals/${id}`);
+    const { data } = await axiosClient.get<AdminReferral>(`/api/v2/referrals/${id}`);
     return data;
   },
 
   getByClient: async (clientId: string): Promise<AdminReferral[]> => {
-    const { data } = await axiosClient.get<AdminReferral[]>(`/api/referrals/client/${clientId}`);
+    const { data } = await axiosClient.get<AdminReferral[]>(`/api/v2/referrals/client/${clientId}`);
     return data;
   },
 
   getStatsByClient: async (clientId: string): Promise<ReferralStats> => {
-    const { data } = await axiosClient.get<ReferralStats>(`/api/referrals/client/${clientId}/stats`);
+    const { data } = await axiosClient.get<ReferralStats>(`/api/v2/referrals/client/${clientId}/stats`);
     return data;
   },
 
   getVipOverview: async (clientId: string): Promise<VipOverview> => {
-    const { data } = await axiosClient.get<VipOverview>(`/api/referrals/client/${clientId}/vip-overview`);
+    const { data } = await axiosClient.get<VipOverview>(`/api/v2/referrals/client/${clientId}/vip-overview`);
     return data;
   },
 
   create: async (payload: CreateReferralData): Promise<AdminReferral> => {
-    const { data } = await axiosClient.post<AdminReferral>("/api/referrals", payload);
+    const { data } = await axiosClient.post<AdminReferral>("/api/v2/referrals", payload);
     return data;
   },
 
   updateStatus: async (id: string, status: AdminReferral["referralStatus"]): Promise<AdminReferral> => {
-    const { data } = await axiosClient.patch<AdminReferral>(`/api/referrals/${id}/status`, { referralStatus: status });
+    const { data } = await axiosClient.patch<AdminReferral>(`/api/v2/referrals/${id}/status`, { referralStatus: status });
     return data;
   },
 
   update: async (id: string, payload: Partial<CreateReferralData>): Promise<AdminReferral> => {
-    const { data } = await axiosClient.patch<AdminReferral>(`/api/referrals/${id}`, payload);
+    const { data } = await axiosClient.patch<AdminReferral>(`/api/v2/referrals/${id}`, payload);
     return data;
   },
 
   remove: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/referrals/${id}`);
+    await axiosClient.delete(`/api/v2/referrals/${id}`);
   },
 
 };

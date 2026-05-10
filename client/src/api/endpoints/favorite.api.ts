@@ -20,22 +20,22 @@ export interface ToggleFavoritePayload {
 
 export const favoriteApi = {
   getAll: async (): Promise<Favorite[]> => {
-    const { data } = await axiosClient.get<Favorite[]>("/api/favorites");
+    const { data } = await axiosClient.get<Favorite[]>("/api/v2/favorites");
     return data;
   },
   add: async (payload: ToggleFavoritePayload): Promise<Favorite> => {
-    const { data } = await axiosClient.post<Favorite>("/api/favorites", payload);
+    const { data } = await axiosClient.post<Favorite>("/api/v2/favorites", payload);
     return data;
   },
   toggle: async (payload: ToggleFavoritePayload): Promise<{ favorited: boolean; favorite?: Favorite }> => {
-    const { data } = await axiosClient.post<{ favorited: boolean; favorite?: Favorite }>("/api/favorites/toggle", payload);
+    const { data } = await axiosClient.post<{ favorited: boolean; favorite?: Favorite }>("/api/v2/favorites/toggle", payload);
     return data;
   },
   check: async (itemType: string, itemId: string): Promise<{ favorited: boolean }> => {
-    const { data } = await axiosClient.get<{ favorited: boolean }>(`/api/favorites/check?itemType=${itemType}&itemId=${itemId}`);
+    const { data } = await axiosClient.get<{ favorited: boolean }>(`/api/v2/favorites/check?itemType=${itemType}&itemId=${itemId}`);
     return data;
   },
   remove: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/favorites/${id}`);
+    await axiosClient.delete(`/api/v2/favorites/${id}`);
   },
 };

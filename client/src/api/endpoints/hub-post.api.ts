@@ -1,6 +1,6 @@
 import axios from "../client/axios-client";
 
-const BASE = "/api/hub-posts";
+const BASE = "/api/v2/hub-posts";
 
 export interface HubPostData {
   id: string;

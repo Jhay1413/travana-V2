@@ -1,4 +1,4 @@
-import { tourOperatorSettingsRepository } from './tour-operator.repository';
+import { tourOperatorSettingsRepository } from './tour-operator-settings.repository';
 import { AppError } from '../../../utils/error-handler';
 
 export const tourOperatorSettingsService = {

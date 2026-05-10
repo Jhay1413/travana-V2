@@ -3,7 +3,7 @@ import { AppError } from "../../utils/error-handler";
 import {
   generateWithdrawalInvoiceBuffer,
   uploadWalletDebitInvoice,
-} from "../../services/invoicePdf.service";
+} from "../../../services/invoicePdf.service";
 
 export const walletService = {
   async getBalance(clientId: string): Promise<number> {

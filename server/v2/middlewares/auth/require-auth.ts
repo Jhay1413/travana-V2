@@ -7,7 +7,7 @@ import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { onboardingController } from "../modules/onboarding/onboarding.controller";
+import { onboardingController } from "../../modules/onboarding/onboarding.controller";
 
 export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/register", onboardingController.signup);

@@ -89,7 +89,7 @@ router.use('/referral-payouts',   isAuthenticated, referralPayoutRoutes);
 router.use('/referral-withdrawals', isAuthenticated, referralWithdrawalRoutes);
 router.use('/wallet',             isAuthenticated, walletRoutes);
 router.use('/sms',                isAuthenticated, smsRoutes);
-router.use('/neon-clients',       isAuthenticated, neonClientRoutes);
+router.use('/neon-clients',       ...auth, neonClientRoutes);
 router.use('/ai',                 isAuthenticated, aiAskRoutes);
 router.use('/destination-guru',   isAuthenticated, destinationGuruRoutes);
 router.use('/json-mapper',        isAuthenticated, jsonMapperRoutes);

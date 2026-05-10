@@ -3,7 +3,7 @@ import type { ClientFile } from "@shared/schema";
 
 export const clientFileApi = {
   getByClient: async (clientId: string): Promise<ClientFile[]> => {
-    const { data } = await axiosClient.get<ClientFile[]>(`/api/client-files/client/${clientId}`);
+    const { data } = await axiosClient.get<ClientFile[]>(`/api/v2/client-files/client/${clientId}`);
     return data;
   },
 
@@ -19,7 +19,7 @@ export const clientFileApi = {
     if (meta.allocationType) formData.append("allocationType", meta.allocationType);
     if (meta.allocationId) formData.append("allocationId", meta.allocationId);
     const { data } = await axiosClient.post<ClientFile>(
-      `/api/client-files/client/${clientId}`,
+      `/api/v2/client-files/client/${clientId}`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } }
     );
@@ -27,10 +27,10 @@ export const clientFileApi = {
   },
 
   delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/client-files/${id}`);
+    await axiosClient.delete(`/api/v2/client-files/${id}`);
   },
 
   getDownloadUrl: (id: string): string => {
-    return `/api/client-files/${id}/download`;
+    return `/api/v2/client-files/${id}/download`;
   },
 };

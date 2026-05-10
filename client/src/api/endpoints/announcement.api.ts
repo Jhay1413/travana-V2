@@ -1,7 +1,7 @@
 import type { HubAnnouncement } from "@shared/schema";
 import axios from "../client/axios-client";
 
-const BASE = "/api/announcements";
+const BASE = "/api/v2/announcements";
 
 export const announcementApi = {
   async getAll(): Promise<HubAnnouncement[]> {

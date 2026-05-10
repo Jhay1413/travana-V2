@@ -1,10 +1,24 @@
 import { db } from "../../config/database";
 import { tasks, notifications, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
-import { eq, and, desc, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, lte, inArray, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import type { Scope } from "../../utils/scope";
 
 type TaskNew = typeof tasks.$inferSelect;
 type InsertTaskNew = typeof tasks.$inferInsert;
+
+function buildTaskScopeConds(scope?: Scope): SQL[] {
+  const conds: SQL[] = [];
+  if (!scope || scope.orgRole === "platform_admin") return conds;
+  conds.push(eq(tasks.orgId, scope.orgId));
+  if (scope.orgRole === "branch_manager" && scope.branchId) {
+    conds.push(eq(tasks.branchId, scope.branchId));
+  }
+  if ((scope.orgRole === "agent" || scope.orgRole === "homeworker") && scope.userId) {
+    conds.push(eq(tasks.userId, scope.userId));
+  }
+  return conds;
+}
 
 const entityRouteMap: Record<string, string> = {
   enquiry: "/enquiries",
@@ -144,11 +158,12 @@ async function resolveTaskClients(
 }
 
 export const taskRepository = {
-  async findAll(userId?: string): Promise<TaskWithClient[]> {
+  async findAll(userId?: string, scope?: Scope): Promise<TaskWithClient[]> {
+    const scopeConds = buildTaskScopeConds(scope);
+    const conds: SQL[] = userId ? [eq(tasks.userId, userId), ...scopeConds] : scopeConds;
     const query = db.select().from(tasks);
-
-    const allTasks = userId
-      ? await query.where(eq(tasks.userId, userId)).orderBy(desc(tasks.dueDate))
+    const allTasks = conds.length > 0
+      ? await query.where(and(...conds)).orderBy(desc(tasks.dueDate))
       : await query.orderBy(desc(tasks.dueDate));
 
     if (allTasks.length === 0) return [];
@@ -175,11 +190,12 @@ export const taskRepository = {
     });
   },
 
-  async findAllWithClientTasks(userId?: string): Promise<TaskWithClient[]> {
+  async findAllWithClientTasks(userId?: string, scope?: Scope): Promise<TaskWithClient[]> {
+    const scopeConds = buildTaskScopeConds(scope);
+    const conds: SQL[] = userId ? [eq(tasks.userId, userId), ...scopeConds] : scopeConds;
     const query = db.select().from(tasks);
-
-    const allTasks = userId
-      ? await query.where(eq(tasks.userId, userId)).orderBy(desc(tasks.dueDate))
+    const allTasks = conds.length > 0
+      ? await query.where(and(...conds)).orderBy(desc(tasks.dueDate))
       : await query.orderBy(desc(tasks.dueDate));
 
     if (allTasks.length === 0) return [];
@@ -291,32 +307,35 @@ export const taskRepository = {
     });
   },
 
-  async findByEntity(entityType: string, entityId: string): Promise<TaskNew[]> {
+  async findByEntity(entityType: string, entityId: string, scope?: Scope): Promise<TaskNew[]> {
+    const conds: SQL[] = [eq(tasks.entityType, entityType), eq(tasks.entityId, entityId), ...buildTaskScopeConds(scope)];
     return await db
       .select()
       .from(tasks)
-      .where(and(eq(tasks.entityType, entityType), eq(tasks.entityId, entityId)))
+      .where(and(...conds))
       .orderBy(desc(tasks.createdAt));
   },
 
-  async findByUserId(userId: string): Promise<TaskNew[]> {
+  async findByUserId(userId: string, scope?: Scope): Promise<TaskNew[]> {
+    const conds: SQL[] = [eq(tasks.userId, userId), ...buildTaskScopeConds(scope)];
     return await db
       .select()
       .from(tasks)
-      .where(eq(tasks.userId, userId))
+      .where(and(...conds))
       .orderBy(desc(tasks.createdAt));
   },
 
-  async create(taskData: InsertTaskNew): Promise<TaskNew> {
-    const [result] = await db.insert(tasks).values({
-      ...taskData,
-      id: randomUUID(),
-    }).returning();
+  async create(taskData: InsertTaskNew, scope?: Scope): Promise<TaskNew> {
+    const values = scope
+      ? { ...taskData, id: randomUUID(), orgId: (taskData as any).orgId ?? scope.orgId ?? null, branchId: (taskData as any).branchId ?? scope.branchId ?? null }
+      : { ...taskData, id: randomUUID() };
+    const [result] = await db.insert(tasks).values(values).returning();
     return result;
   },
 
-  async toggleComplete(id: string): Promise<TaskNew | undefined> {
-    const [existing] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+  async toggleComplete(id: string, scope?: Scope): Promise<TaskNew | undefined> {
+    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const [existing] = await db.select().from(tasks).where(and(...conds)).limit(1);
     if (!existing) return undefined;
     const [result] = await db
       .update(tasks)
@@ -324,13 +343,15 @@ export const taskRepository = {
         completed: !existing.completed,
         completedAt: !existing.completed ? new Date() : null,
       })
-      .where(eq(tasks.id, id))
+      .where(and(...conds))
       .returning();
     return result;
   },
 
-  async remove(id: string): Promise<void> {
-    await db.delete(tasks).where(eq(tasks.id, id));
+  async remove(id: string, scope?: Scope): Promise<boolean> {
+    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const result = await db.delete(tasks).where(and(...conds)).returning({ id: tasks.id });
+    return result.length > 0;
   },
 
   async reassignByEntity(entityType: string, entityId: string, newUserId: string): Promise<void> {

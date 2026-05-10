@@ -121,11 +121,11 @@ export interface LodgeImage {
 
 export const lookupApi = {
   getPackageTypes: async (): Promise<LookupPackageType[]> => {
-    const { data } = await axios.get<LookupPackageType[]>("/api/lookup/package-types");
+    const { data } = await axios.get<LookupPackageType[]>("/api/v2/lookup/package-types");
     return data;
   },
   getCountries: async (): Promise<LookupCountry[]> => {
-    const { data } = await axios.get<LookupCountry[]>("/api/lookup/countries");
+    const { data } = await axios.get<LookupCountry[]>("/api/v2/lookup/countries");
     return data;
   },
   getDestinations: async (countryId?: string, search?: string, limit?: number): Promise<LookupDestination[]> => {
@@ -133,7 +133,7 @@ export const lookupApi = {
     if (countryId) params.countryId = countryId;
     if (search) params.search = search;
     if (limit) params.limit = limit;
-    const { data } = await axios.get<LookupDestination[]>("/api/lookup/destinations", { params });
+    const { data } = await axios.get<LookupDestination[]>("/api/v2/lookup/destinations", { params });
     return data;
   },
   getResorts: async (destinationId?: string, countryId?: string, search?: string, limit?: number): Promise<LookupResort[]> => {
@@ -142,7 +142,7 @@ export const lookupApi = {
     if (countryId) params.countryId = countryId;
     if (search) params.search = search;
     if (limit) params.limit = limit;
-    const { data } = await axios.get<LookupResort[]>("/api/lookup/resorts", { params });
+    const { data } = await axios.get<LookupResort[]>("/api/v2/lookup/resorts", { params });
     return data;
   },
   getAccommodations: async (resortId?: string, destinationId?: string, countryId?: string, search?: string, limit?: number): Promise<LookupAccommodation[]> => {
@@ -152,54 +152,54 @@ export const lookupApi = {
     if (countryId) params.countryId = countryId;
     if (search) params.search = search;
     if (limit) params.limit = limit;
-    const { data } = await axios.get<LookupAccommodation[]>("/api/lookup/accommodations", { params });
+    const { data } = await axios.get<LookupAccommodation[]>("/api/v2/lookup/accommodations", { params });
     return data;
   },
   getBoardBasis: async (): Promise<LookupBoardBasis[]> => {
-    const { data } = await axios.get<LookupBoardBasis[]>("/api/lookup/board-basis");
+    const { data } = await axios.get<LookupBoardBasis[]>("/api/v2/lookup/board-basis");
     return data;
   },
   getParks: async (parkId?: string): Promise<LookupPark[]> => {
-    const { data } = await axios.get<LookupPark[]>("/api/lookup/parks", { params: parkId ? { parkId } : {} });
+    const { data } = await axios.get<LookupPark[]>("/api/v2/lookup/parks", { params: parkId ? { parkId } : {} });
     return data;
   },
   getLodges: async (parkId?: string): Promise<LookupLodge[]> => {
-    const { data } = await axios.get<LookupLodge[]>("/api/lookup/lodges", { params: parkId ? { parkId } : {} });
+    const { data } = await axios.get<LookupLodge[]>("/api/v2/lookup/lodges", { params: parkId ? { parkId } : {} });
     return data;
   },
   getCottages: async (): Promise<LookupCottage[]> => {
-    const { data } = await axios.get<LookupCottage[]>("/api/lookup/cottages");
+    const { data } = await axios.get<LookupCottage[]>("/api/v2/lookup/cottages");
     return data;
   },
   getAccommodationTypes: async (): Promise<LookupAccommodationType[]> => {
-    const { data } = await axios.get<LookupAccommodationType[]>("/api/lookup/accommodation-types");
+    const { data } = await axios.get<LookupAccommodationType[]>("/api/v2/lookup/accommodation-types");
     return data;
   },
   getRoomTypes: async (): Promise<LookupRoomType[]> => {
-    const { data } = await axios.get<LookupRoomType[]>("/api/lookup/room-types");
+    const { data } = await axios.get<LookupRoomType[]>("/api/v2/lookup/room-types");
     return data;
   },
   getAccommodationImages: async (accommodationId?: string): Promise<AccommodationImage[]> => {
     if (!accommodationId) return [];
-    const { data } = await axios.get<AccommodationImage[]>("/api/lookup/accommodation-images", { params: { accommodationId } });
+    const { data } = await axios.get<AccommodationImage[]>("/api/v2/lookup/accommodation-images", { params: { accommodationId } });
     return data;
   },
   getLodgeImages: async (lodgeId?: string): Promise<LodgeImage[]> => {
     if (!lodgeId) return [];
-    const { data } = await axios.get<LodgeImage[]>("/api/lookup/lodge-images", { params: { lodgeId } });
+    const { data } = await axios.get<LodgeImage[]>("/api/v2/lookup/lodge-images", { params: { lodgeId } });
     return data;
   },
   getCruiseLines: async (): Promise<LookupCruiseLine[]> => {
-    const { data } = await axios.get<LookupCruiseLine[]>("/api/lookup/cruise-lines");
+    const { data } = await axios.get<LookupCruiseLine[]>("/api/v2/lookup/cruise-lines");
     return data;
   },
   getShips: async (cruiseLineId?: string): Promise<LookupCruiseShip[]> => {
-    const { data } = await axios.get<LookupCruiseShip[]>("/api/lookup/ships", { params: cruiseLineId ? { cruiseLineId } : {} });
+    const { data } = await axios.get<LookupCruiseShip[]>("/api/v2/lookup/ships", { params: cruiseLineId ? { cruiseLineId } : {} });
     return data;
   },
   getCruiseItineraries: async (shipId?: string): Promise<LookupCruiseItinerary[]> => {
     if (!shipId) return [];
-    const { data } = await axios.get<LookupCruiseItinerary[]>("/api/lookup/cruise-itineraries", { params: { shipId } });
+    const { data } = await axios.get<LookupCruiseItinerary[]>("/api/v2/lookup/cruise-itineraries", { params: { shipId } });
     return data;
   },
 };

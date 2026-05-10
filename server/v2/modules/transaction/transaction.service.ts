@@ -6,10 +6,11 @@ import { noteRepository } from "../note/note.repository";
 import { taskService } from "../task/task.service";
 import { newQuoteService } from "../quote/quote.service";
 import { referralService } from "../referral/referral.service";
-import { vipEnrollmentService } from "../../services/vipEnrollment.service";
+import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { walletService } from "../wallet/wallet.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { AppError } from "../../utils/error-handler";
+import type { Scope } from "../../utils/scope";
 import type {
   InsertTransaction,
   InsertEnquiryTable,
@@ -138,49 +139,49 @@ function normalizeFlightInput(input: unknown): Partial<InsertQuoteFlight> {
 }
 
 export const transactionService = {
-  async listTransactions(dateFrom?: Date, dateTo?: Date) {
-    return await transactionRepository.findAll(dateFrom, dateTo);
+  async listTransactions(scope: Scope, dateFrom?: Date, dateTo?: Date) {
+    return await transactionRepository.findAll(scope, dateFrom, dateTo);
   },
 
-  async listTransactionsLightweight() {
-    return await transactionRepository.findAllLightweight();
+  async listTransactionsLightweight(scope: Scope) {
+    return await transactionRepository.findAllLightweight(scope);
   },
 
-  async listPipelineByStatus(status: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string) {
-    return await transactionRepository.findPipelineByStatus(status, page, limit, agentId, quoteStatusFilter);
+  async listPipelineByStatus(scope: Scope, status: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string) {
+    return await transactionRepository.findPipelineByStatus(scope, status, page, limit, agentId, quoteStatusFilter);
   },
 
-  async listTransactionsByClient(clientId: string) {
-    return await transactionRepository.findByClientId(clientId);
+  async listTransactionsByClient(clientId: string, scope: Scope) {
+    return await transactionRepository.findByClientId(clientId, scope);
   },
 
-  async listTransactionsByAgent(agentId: string) {
-    return await transactionRepository.findByAgentId(agentId);
+  async listTransactionsByAgent(agentId: string, scope: Scope) {
+    return await transactionRepository.findByAgentId(agentId, scope);
   },
 
-  async getTransactionById(id: string) {
-    const txn = await transactionRepository.findById(id);
+  async getTransactionById(id: string, scope: Scope) {
+    const txn = await transactionRepository.findById(id, scope);
     if (!txn) throw new AppError("Transaction not found", 404);
     return txn;
   },
 
-  async getTransactionWithDetails(id: string) {
-    const txn = await transactionRepository.findWithDetails(id);
+  async getTransactionWithDetails(id: string, scope: Scope) {
+    const txn = await transactionRepository.findWithDetails(id, scope);
     if (!txn) throw new AppError("Transaction not found", 404);
     return txn;
   },
 
-  async createTransaction(data: InsertTransaction) {
-    return await transactionRepository.create(data);
+  async createTransaction(data: InsertTransaction, scope: Scope) {
+    return await transactionRepository.create(data, scope);
   },
 
-  async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: CreateEnquiryPayload, agentId?: string | null) {
+  async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: CreateEnquiryPayload, scope: Scope, agentId?: string | null) {
     const { destinations, resorts, boardBases, departureAirports, passengers, notes, agent_id, ...enquiryFields } = enquiryData;
 
     const txn = await transactionRepository.create({
       ...transactionData,
       status: 'on_enquiry',
-    });
+    }, scope);
 
     const enquiry = await enquiryTableRepository.create({
       ...enquiryFields,
@@ -223,7 +224,7 @@ export const transactionService = {
     return { transaction: txn, enquiry };
   },
 
-  async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: QuoteRelationPayload) {
+  async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: QuoteRelationPayload, scope: Scope) {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
@@ -254,6 +255,8 @@ export const transactionService = {
       const [txn] = await tx.insert(transaction).values({
         ...transactionData,
         status: 'on_quote',
+        org_id: (transactionData as any).org_id ?? scope.orgId ?? null,
+        branch_id: (transactionData as any).branch_id ?? scope.branchId ?? null,
       }).returning();
 
       const defaultExpiry = new Date();
@@ -329,7 +332,7 @@ export const transactionService = {
     const { transaction: mainTxn } = result;
     if (!(quoteFields as any).not_for_social && !transactionData.is_test) {
       try {
-        const freeTxn = await transactionRepository.create({ status: 'on_quote', user_id: mainTxn.user_id } as InsertTransaction);
+        const freeTxn = await transactionRepository.create({ status: 'on_quote', user_id: mainTxn.user_id } as InsertTransaction, scope);
         await newQuoteService.createQuote({
           ...quoteFields,
           transaction_id: freeTxn.id,
@@ -356,7 +359,7 @@ export const transactionService = {
     return result;
   },
 
-  async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: BookingRelationPayload) {
+  async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: BookingRelationPayload, scope: Scope) {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
@@ -372,7 +375,12 @@ export const transactionService = {
     const normalizedInboundConnecting = inboundConnectingSource.map(normalizeFlightInput);
 
     const result = await db.transaction(async (tx) => {
-      const [txn] = await tx.insert(transaction).values({ ...transactionData, status: 'on_booking' }).returning();
+      const [txn] = await tx.insert(transaction).values({
+        ...transactionData,
+        status: 'on_booking',
+        org_id: (transactionData as any).org_id ?? scope.orgId ?? null,
+        branch_id: (transactionData as any).branch_id ?? scope.branchId ?? null,
+      }).returning();
 
       const bookingValues: Record<string, unknown> = { ...bookingFields, transaction_id: txn.id, booking_status: 'BOOKED' };
       if (bookingValues.deleted_at) bookingValues.deleted_at = toDateOrNull(bookingValues.deleted_at);
@@ -567,11 +575,11 @@ export const transactionService = {
     return result;
   },
 
-  async updateTransaction(id: string, data: Partial<InsertTransaction>) {
-    const oldTxn = await transactionRepository.findById(id);
+  async updateTransaction(id: string, data: Partial<InsertTransaction>, scope: Scope) {
+    const oldTxn = await transactionRepository.findById(id, scope);
     if (!oldTxn) throw new AppError("Transaction not found", 404);
 
-    const txn = await transactionRepository.update(id, data);
+    const txn = await transactionRepository.update(id, data, scope);
     if (!txn) throw new AppError("Transaction not found", 404);
 
     if (data.user_id && data.user_id !== oldTxn.user_id) {
@@ -596,17 +604,18 @@ export const transactionService = {
     return txn;
   },
 
-  async deleteTransaction(id: string) {
-    await transactionRepository.remove(id);
+  async deleteTransaction(id: string, scope: Scope) {
+    const removed = await transactionRepository.remove(id, scope);
+    if (!removed) throw new AppError("Transaction not found", 404);
   },
 
-  async getStats() {
-    return await transactionRepository.getStats();
+  async getStats(scope: Scope) {
+    return await transactionRepository.getStats(scope);
   },
 
-  async getExpiringQuotes(agentId?: string) {
+  async getExpiringQuotes(scope: Scope, agentId?: string) {
     const now = new Date();
-    const rows = await transactionRepository.findExpiringQuotes(agentId);
+    const rows = await transactionRepository.findExpiringQuotes(scope, agentId);
     return rows.map(r => {
       const expiryDate = r.dateExpiry
         ? new Date(r.dateExpiry)

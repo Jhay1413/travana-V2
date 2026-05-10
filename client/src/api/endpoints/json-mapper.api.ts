@@ -41,7 +41,7 @@ export const jsonMapperApi = {
    */
   mapToIds: async (input: JsonMappingInput): Promise<JsonMappingResult> => {
     const { data } = await axiosClient.post<JsonMappingResult>(
-      "/api/json-mapper/map-to-ids",
+      "/api/v2/json-mapper/map-to-ids",
       input
     );
     return data as unknown as JsonMappingResult;

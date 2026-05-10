@@ -7,7 +7,7 @@ import type {
   BulkAgentTargetsInput,
 } from "../../types/targets/targets.types";
 
-const API_BASE = "/api/targets";
+const API_BASE = "/api/v2/targets";
 
 export const targetsApi = {
   // ─── Overview ───────────────────────────────────────────────────────────

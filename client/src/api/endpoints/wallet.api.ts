@@ -27,17 +27,17 @@ export interface AdminWalletTransaction extends WalletTransaction {
 
 export const walletApi = {
   listAll: async (): Promise<AdminWalletTransaction[]> => {
-    const { data } = await axiosClient.get("/api/wallet/");
+    const { data } = await axiosClient.get("/api/v2/wallet/");
     return data;
   },
 
   getBalance: async (clientId: string): Promise<string> => {
-    const { data } = await axiosClient.get(`/api/wallet/client/${clientId}/balance`);
+    const { data } = await axiosClient.get(`/api/v2/wallet/client/${clientId}/balance`);
     return data?.balance ?? "0";
   },
 
   getTransactions: async (clientId: string): Promise<WalletTransaction[]> => {
-    const { data } = await axiosClient.get(`/api/wallet/client/${clientId}/transactions`);
+    const { data } = await axiosClient.get(`/api/v2/wallet/client/${clientId}/transactions`);
     return data;
   },
 
@@ -47,7 +47,7 @@ export const walletApi = {
     amount: number
   ): Promise<WalletTransaction> => {
     const { data } = await axiosClient.post(
-      `/api/wallet/client/${clientId}/apply-booking-credit`,
+      `/api/v2/wallet/client/${clientId}/apply-booking-credit`,
       { booking_id: bookingId, amount }
     );
     return data;
@@ -58,7 +58,7 @@ export const walletApi = {
     payload: { transfer_reference?: string; notes?: string }
   ): Promise<WalletTransaction> => {
     const { data } = await axiosClient.patch(
-      `/api/wallet/transactions/${id}/process`,
+      `/api/v2/wallet/transactions/${id}/process`,
       payload
     );
     return data;
@@ -66,14 +66,14 @@ export const walletApi = {
 
   rejectDebit: async (id: string, notes?: string): Promise<WalletTransaction> => {
     const { data } = await axiosClient.patch(
-      `/api/wallet/transactions/${id}/reject`,
+      `/api/v2/wallet/transactions/${id}/reject`,
       { notes }
     );
     return data;
   },
 
   getInvoiceUrl: async (id: string): Promise<string> => {
-    const { data } = await axiosClient.get(`/api/wallet/transactions/${id}/invoice`);
+    const { data } = await axiosClient.get(`/api/v2/wallet/transactions/${id}/invoice`);
     return data?.url ?? "";
   },
 };

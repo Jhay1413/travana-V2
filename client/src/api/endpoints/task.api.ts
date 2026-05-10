@@ -5,36 +5,36 @@ export type TaskWithClient = TaskNew & { clientId: string | null; clientName: st
 
 export const taskApi = {
   getAll: async (): Promise<TaskWithClient[]> => {
-    const { data } = await axiosClient.get<TaskWithClient[]>("/api/tasks/all");
+    const { data } = await axiosClient.get<TaskWithClient[]>("/api/v2/tasks/all");
     return data;
   },
 
   getAllExtended: async (): Promise<TaskWithClient[]> => {
-    const { data } = await axiosClient.get<TaskWithClient[]>("/api/tasks/all-extended");
+    const { data } = await axiosClient.get<TaskWithClient[]>("/api/v2/tasks/all-extended");
     return data;
   },
 
   getByEntity: async (entityType: string, entityId: string): Promise<TaskNew[]> => {
-    const { data } = await axiosClient.get<TaskNew[]>(`/api/tasks?entityType=${entityType}&entityId=${entityId}`);
+    const { data } = await axiosClient.get<TaskNew[]>(`/api/v2/tasks?entityType=${entityType}&entityId=${entityId}`);
     return data;
   },
 
   getByUser: async (userId: string): Promise<TaskNew[]> => {
-    const { data } = await axiosClient.get<TaskNew[]>(`/api/tasks/user?userId=${userId}`);
+    const { data } = await axiosClient.get<TaskNew[]>(`/api/v2/tasks/user?userId=${userId}`);
     return data;
   },
 
   create: async (taskData: InsertTaskNew): Promise<TaskNew> => {
-    const { data } = await axiosClient.post<TaskNew>("/api/tasks", taskData);
+    const { data } = await axiosClient.post<TaskNew>("/api/v2/tasks", taskData);
     return data;
   },
 
   toggleComplete: async (id: string): Promise<TaskNew> => {
-    const { data } = await axiosClient.put<TaskNew>(`/api/tasks/${id}/toggle`);
+    const { data } = await axiosClient.put<TaskNew>(`/api/v2/tasks/${id}/toggle`);
     return data;
   },
 
   delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/tasks/${id}`);
+    await axiosClient.delete(`/api/v2/tasks/${id}`);
   },
 };

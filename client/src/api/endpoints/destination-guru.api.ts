@@ -13,26 +13,26 @@ export type DestinationGuruRecord = {
 
 export const destinationGuruApi = {
   getAll: async (): Promise<DestinationGuruRecord[]> => {
-    const { data } = await axiosClient.get("/api/destination-guru");
+    const { data } = await axiosClient.get("/api/v2/destination-guru");
     return data;
   },
 
   getById: async (id: string): Promise<DestinationGuruRecord> => {
-    const { data } = await axiosClient.get(`/api/destination-guru/${id}`);
+    const { data } = await axiosClient.get(`/api/v2/destination-guru/${id}`);
     return data;
   },
 
   searchByDestination: async (destination: string): Promise<DestinationGuruRecord> => {
-    const { data } = await axiosClient.get(`/api/destination-guru/search/${encodeURIComponent(destination)}`);
+    const { data } = await axiosClient.get(`/api/v2/destination-guru/search/${encodeURIComponent(destination)}`);
     return data;
   },
 
   generate: async (destination: string): Promise<DestinationGuruRecord> => {
-    const { data } = await axiosClient.post("/api/destination-guru/generate", { destination });
+    const { data } = await axiosClient.post("/api/v2/destination-guru/generate", { destination });
     return data;
   },
 
   remove: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/destination-guru/${id}`);
+    await axiosClient.delete(`/api/v2/destination-guru/${id}`);
   },
 };

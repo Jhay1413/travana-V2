@@ -1,6 +1,7 @@
 import { db } from "../../config/database";
 import { clientTable, transaction, type NeonClient, type InsertClientTable } from "@shared/schema";
-import { eq, desc, sql, count, or, ilike, getTableColumns } from "drizzle-orm";
+import { eq, desc, sql, count, or, and, ilike, getTableColumns, type SQL } from "drizzle-orm";
+import type { Scope } from "../../utils/scope";
 
 export type NeonClientWithId = InsertClientTable & { id: string };
 
@@ -28,23 +29,41 @@ const upsertSet = {
   referrerId: sql`excluded."referrerId"`,
 };
 
+function buildClientScopeConds(scope?: Scope): SQL[] {
+  const conds: SQL[] = [];
+  if (!scope || scope.orgRole === "platform_admin") return conds;
+  conds.push(eq(clientTable.orgId, scope.orgId));
+  if (scope.orgRole === "branch_manager" && scope.branchId) {
+    conds.push(eq(clientTable.branchId, scope.branchId));
+  }
+  if (scope.orgRole === "homeworker" && scope.userId) {
+    conds.push(eq(clientTable.createdBy, scope.userId));
+  }
+  return conds;
+}
+
 export const neonClientRepository = {
-  async findById(id: string): Promise<NeonClient | undefined> {
-    const [result] = await db.select().from(clientTable).where(eq(clientTable.id, id)).limit(1);
+  async findById(id: string, scope?: Scope): Promise<NeonClient | undefined> {
+    const conds: SQL[] = [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
+    const [result] = await db.select().from(clientTable).where(and(...conds)).limit(1);
     return result;
   },
 
-  async findAll(): Promise<NeonClient[]> {
-    return await db.select().from(clientTable).orderBy(desc(clientTable.createdAt));
+  async findAll(scope?: Scope): Promise<NeonClient[]> {
+    const conds = buildClientScopeConds(scope);
+    const query = db.select().from(clientTable);
+    return conds.length > 0
+      ? await query.where(and(...conds)).orderBy(desc(clientTable.createdAt))
+      : await query.orderBy(desc(clientTable.createdAt));
   },
 
-  async findPaginated(page: number, limit: number, search?: string): Promise<{ clients: NeonClient[]; total: number }> {
+  async findPaginated(page: number, limit: number, search?: string, scope?: Scope): Promise<{ clients: NeonClient[]; total: number }> {
     const offset = (page - 1) * limit;
 
     const words = search ? search.trim().split(/\s+/).filter(Boolean) : [];
     const wordTerms = words.map((w) => `%${w}%`);
 
-    const whereClause = search
+    const searchClause = search
       ? or(
           ...wordTerms.map((t) => ilike(clientTable.firstName, t)),
           ...wordTerms.map((t) => ilike(clientTable.surename, t)),
@@ -55,6 +74,11 @@ export const neonClientRepository = {
           sql`concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename}) ilike ${`%${search}%`}`,
         )
       : undefined;
+
+    const scopeConds = buildClientScopeConds(scope);
+    const allConds: SQL[] = [...scopeConds];
+    if (searchClause) allConds.push(searchClause);
+    const whereClause = allConds.length > 0 ? and(...allConds) : undefined;
 
     const latestTransaction = db
       .select({
@@ -86,26 +110,46 @@ export const neonClientRepository = {
     return { clients, total: totalResult[0]?.total ?? 0 };
   },
 
-  async create(client: InsertClientTable): Promise<NeonClient> {
-    const [result] = await db.insert(clientTable).values(client).returning();
+  async create(client: InsertClientTable, scope?: Scope): Promise<NeonClient> {
+    const values: InsertClientTable = scope
+      ? ({
+          ...client,
+          orgId: (client as any).orgId ?? scope.orgId ?? null,
+          branchId: (client as any).branchId ?? scope.branchId ?? null,
+          createdBy: (client as any).createdBy ?? scope.userId ?? null,
+        } as InsertClientTable)
+      : client;
+    const [result] = await db.insert(clientTable).values(values).returning();
     return result;
   },
 
-  async update(id: string, client: Partial<InsertClientTable>): Promise<NeonClient | undefined> {
-    const [result] = await db.update(clientTable).set(client).where(eq(clientTable.id, id)).returning();
+  async update(id: string, client: Partial<InsertClientTable>, scope?: Scope): Promise<NeonClient | undefined> {
+    const conds: SQL[] = [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
+    const [result] = await db.update(clientTable).set(client).where(and(...conds)).returning();
     return result;
   },
 
-  async remove(id: string): Promise<void> {
-    await db.delete(clientTable).where(eq(clientTable.id, id));
+  async remove(id: string, scope?: Scope): Promise<boolean> {
+    const conds: SQL[] = [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
+    const result = await db.delete(clientTable).where(and(...conds)).returning({ id: clientTable.id });
+    return result.length > 0;
   },
 
-  async bulkUpsert(clients: NeonClientWithId[]): Promise<{ imported: number; errors: Array<{ row: number; id: string; error: string }> }> {
+  async bulkUpsert(clients: NeonClientWithId[], scope?: Scope): Promise<{ imported: number; errors: Array<{ row: number; id: string; error: string }> }> {
     const errors: Array<{ row: number; id: string; error: string }> = [];
     let imported = 0;
 
-    for (let batchStart = 0; batchStart < clients.length; batchStart += BATCH_SIZE) {
-      const batch = clients.slice(batchStart, batchStart + BATCH_SIZE);
+    const stamped = scope
+      ? clients.map((c) => ({
+          ...c,
+          orgId: (c as any).orgId ?? scope.orgId ?? null,
+          branchId: (c as any).branchId ?? scope.branchId ?? null,
+          createdBy: (c as any).createdBy ?? scope.userId ?? null,
+        }))
+      : clients;
+
+    for (let batchStart = 0; batchStart < stamped.length; batchStart += BATCH_SIZE) {
+      const batch = stamped.slice(batchStart, batchStart + BATCH_SIZE);
       try {
         await db
           .insert(clientTable)

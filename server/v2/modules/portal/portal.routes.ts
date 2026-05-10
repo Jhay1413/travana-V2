@@ -12,7 +12,7 @@ import { walletService } from '../wallet/wallet.service';
 import { tagService } from '../tag/tag.service';
 import { pushNotificationService } from '../notification/push-notification.service';
 import { quotePublicRepository } from '../quote/quote-public.repository';
-import { bridgePortalMessageToChat } from '../../services/portal-chat-bridge';
+import { bridgePortalMessageToChat } from '../../../services/portal-chat-bridge';
 import { getUserId } from '../../utils/get-user-id';
 import { eq, and, desc, isNotNull, inArray, sql, asc, ilike, exists } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';

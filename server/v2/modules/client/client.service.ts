@@ -1,34 +1,37 @@
 import { clientRepository } from "./client.repository";
 import { AppError } from "../../utils/error-handler";
 import type { Client, InsertClient } from "./client.types";
+import type { Scope } from "../../utils/scope";
 
 export const clientService = {
-  async listClients(): Promise<Client[]> {
-    return await clientRepository.findAll();
+  async listClients(scope: Scope): Promise<Client[]> {
+    return await clientRepository.findAll(scope);
   },
 
-  async getClientById(id: string): Promise<Client> {
-    const client = await clientRepository.findById(id);
+  async getClientById(id: string, scope: Scope): Promise<Client> {
+    const client = await clientRepository.findById(id, scope);
     if (!client) {
       throw new AppError("Client not found", 404);
     }
     return client;
   },
 
-  async createClient(data: InsertClient): Promise<Client> {
-    const client = await clientRepository.create(data);
-    return client;
+  async createClient(data: InsertClient, scope: Scope): Promise<Client> {
+    return await clientRepository.create(data, scope);
   },
 
-  async updateClient(id: string, data: Partial<InsertClient>): Promise<Client> {
-    const client = await clientRepository.update(id, data);
+  async updateClient(id: string, data: Partial<InsertClient>, scope: Scope): Promise<Client> {
+    const client = await clientRepository.update(id, data, scope);
     if (!client) {
       throw new AppError("Client not found", 404);
     }
     return client;
   },
 
-  async deleteClient(id: string): Promise<void> {
-    await clientRepository.remove(id);
+  async deleteClient(id: string, scope: Scope): Promise<void> {
+    const removed = await clientRepository.remove(id, scope);
+    if (!removed) {
+      throw new AppError("Client not found", 404);
+    }
   },
 };

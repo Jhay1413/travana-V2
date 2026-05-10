@@ -1,6 +1,6 @@
 import { referralPayoutRepository } from './referral-payout.repository';
 import { referralRepository } from './referral.repository';
-import { vipEnrollmentService } from '../../services/vipEnrollment.service';
+import { vipEnrollmentService } from '../../../services/vipEnrollment.service';
 import { AppError } from '../../utils/error-handler';
 
 export const referralPayoutService = {

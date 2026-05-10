@@ -3,7 +3,7 @@ import type { TicketAttachment } from "@/types/attachment";
 
 export const attachmentApi = {
   getByTicket: async (ticketId: string): Promise<TicketAttachment[]> => {
-    const { data } = await axiosClient.get<TicketAttachment[]>(`/api/attachments/ticket/${ticketId}`);
+    const { data } = await axiosClient.get<TicketAttachment[]>(`/api/v2/attachments/ticket/${ticketId}`);
     return data;
   },
 
@@ -11,7 +11,7 @@ export const attachmentApi = {
     const formData = new FormData();
     formData.append("file", file);
     const { data } = await axiosClient.post<TicketAttachment>(
-      `/api/attachments/ticket/${ticketId}`,
+      `/api/v2/attachments/ticket/${ticketId}`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } },
     );
@@ -19,10 +19,10 @@ export const attachmentApi = {
   },
 
   delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/attachments/${id}`);
+    await axiosClient.delete(`/api/v2/attachments/${id}`);
   },
 
   getDownloadUrl: (id: string): string => {
-    return `/api/attachments/${id}/download`;
+    return `/api/v2/attachments/${id}/download`;
   },
 };

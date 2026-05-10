@@ -25,17 +25,17 @@ export interface AdminOverviewStats {
 
 export const dashboardApi = {
   getStats: async (): Promise<DashboardStats> => {
-    const { data } = await axiosClient.get<DashboardStats>("/api/dashboard/stats");
+    const { data } = await axiosClient.get<DashboardStats>("/api/v2/dashboard/stats");
     return data;
   },
 
   getMyProfit: async (): Promise<MyProfit> => {
-    const { data } = await axiosClient.get<MyProfit>("/api/dashboard/my-profit");
+    const { data } = await axiosClient.get<MyProfit>("/api/v2/dashboard/my-profit");
     return data;
   },
 
   getAdminOverviewStats: async (): Promise<AdminOverviewStats> => {
-    const { data } = await axiosClient.get<AdminOverviewStats>("/api/dashboard/admin-overview-stats");
+    const { data } = await axiosClient.get<AdminOverviewStats>("/api/v2/dashboard/admin-overview-stats");
     return data;
   },
 };

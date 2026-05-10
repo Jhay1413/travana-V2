@@ -2,7 +2,7 @@ import { bookingRepository } from "./booking.repository";
 import { newQuoteRepository } from "../quote/quote.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
-import { vipEnrollmentService } from "../../services/vipEnrollment.service";
+import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { referralService } from "../referral/referral.service";
 import { walletService } from "../wallet/wallet.service";
 import { AppError } from "../../utils/error-handler";

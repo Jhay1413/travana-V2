@@ -81,6 +81,11 @@ export const user = pgTable("user", {
   password: text("password"),
   resetToken: text("resetToken"),
   resetTokenExpiry: timestamp("resetTokenExpiry"),
+  inviteToken: text("inviteToken"),
+  inviteTokenExpiry: timestamp("inviteTokenExpiry"),
+  invitedBy: text("invitedBy"),
+  invitedAt: timestamp("invitedAt"),
+  inviteAgencyName: text("inviteAgencyName"),
   orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   orgRole: varchar("org_role"),
 });
@@ -228,6 +233,7 @@ export const tour_operator = pgTable('tour_operator_table', {
     .default(sql`gen_random_uuid()`)
     .primaryKey(),
   name: varchar(),
+  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
 });
 export type TourOperatorLookup = typeof tour_operator.$inferSelect;
 export type InsertTourOperatorLookup = typeof tour_operator.$inferInsert;
@@ -244,8 +250,8 @@ export type InsertPackageType = typeof package_type.$inferInsert;
 export const tour_package_commission = pgTable(
   'tour_package_commission_table',
   {
-    package_type_id: uuid().references(() => package_type.id),
-    tour_operator_id: uuid().references(() => tour_operator.id),
+    package_type_id: uuid().notNull().references(() => package_type.id),
+    tour_operator_id: uuid().notNull().references(() => tour_operator.id),
     percentage_commission: decimal({ precision: 5, scale: 2 }),
   },
   (table) => [primaryKey({ name: 'id', columns: [table.package_type_id, table.tour_operator_id] })]
@@ -380,6 +386,8 @@ export const forwardsReport = pgTable('forwards_report', {
   historical_ids: text().array()
     .notNull()
     .default(sql`ARRAY[]::text[]`),
+  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  branch_id: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
 }, (table) => ({
   unique_year_month: unique().on(table.year, table.month),
   year_month_idx: index('forwards_report_year_month_idx').on(table.year, table.month),
@@ -541,6 +549,8 @@ export const transaction = pgTable('transaction', {
   lead_source: lead_source_enum().default('SHOP'),
   user_id: text().notNull().references(() => user.id),
   created_at: timestamp().notNull().defaultNow(),
+  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  branch_id: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
 });
 
 export const insertTransactionSchema = createInsertSchema(transaction).omit({ id: true, created_at: true });
@@ -1120,6 +1130,8 @@ export const task = pgTable('task', {
   priority: varchar(),
   status: varchar(),
   created_at: timestamp({ mode: 'string' }).notNull().defaultNow(),
+  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  branch_id: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
 });
 
 export const insertTaskSchema = createInsertSchema(task).omit({ id: true, created_at: true });
@@ -1140,6 +1152,7 @@ export const referral = pgTable('referral', {
   travelDate: date("travelDate"),
   payoutTriggerDate: date("payoutTriggerDate"),
   paidAt: timestamp("paidAt"),
+  payoutType: varchar("payoutType"),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
 });
@@ -1237,6 +1250,8 @@ export const tickets = pgTable("tickets", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),
+  orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
 });
 
 export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true });
@@ -1500,6 +1515,7 @@ export const tourOperators = pgTable("tour_operators", {
   contact: text("contact"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
 });
 
 export const insertTourOperatorSchema = createInsertSchema(tourOperators);
@@ -1561,6 +1577,8 @@ export const tasks = pgTable("tasks", {
   completedAt: timestamp("completed_at"),
   notified: boolean("notified"),
   createdAt: timestamp("created_at").defaultNow(),
+  orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
 });
 
 export const insertTasksSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });

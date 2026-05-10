@@ -61,45 +61,45 @@ export interface SendEmailPayload {
 
 export const emailApi = {
   getSharedAccount: async (): Promise<EmailAccountPublic | null> => {
-    const { data } = await axiosClient.get<EmailAccountPublic | null>("/api/emails/accounts/shared");
+    const { data } = await axiosClient.get<EmailAccountPublic | null>("/api/v2/emails/accounts/shared");
     return data;
   },
 
   listAccounts: async (userId: string): Promise<EmailAccountPublic[]> => {
-    const { data } = await axiosClient.get<EmailAccountPublic[]>(`/api/emails/accounts/user/${userId}`);
+    const { data } = await axiosClient.get<EmailAccountPublic[]>(`/api/v2/emails/accounts/user/${userId}`);
     return data;
   },
 
   createAccount: async (payload: CreateEmailAccountData): Promise<EmailAccountPublic> => {
-    const { data } = await axiosClient.post<EmailAccountPublic>("/api/emails/accounts", payload);
+    const { data } = await axiosClient.post<EmailAccountPublic>("/api/v2/emails/accounts", payload);
     return data;
   },
 
   deleteAccount: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/emails/accounts/${id}`);
+    await axiosClient.delete(`/api/v2/emails/accounts/${id}`);
   },
 
   testConnection: async (id: string): Promise<{ success: boolean; message: string }> => {
-    const { data } = await axiosClient.get<{ success: boolean; message: string }>(`/api/emails/accounts/${id}/test`);
+    const { data } = await axiosClient.get<{ success: boolean; message: string }>(`/api/v2/emails/accounts/${id}/test`);
     return data;
   },
 
   fetchMessages: async (accountId: string, folder = "INBOX", limit = 50): Promise<ImapMessage[]> => {
-    const { data } = await axiosClient.get<ImapMessage[]>(`/api/emails/accounts/${accountId}/messages`, {
+    const { data } = await axiosClient.get<ImapMessage[]>(`/api/v2/emails/accounts/${accountId}/messages`, {
       params: { folder, limit },
     });
     return data;
   },
 
   fetchMessageById: async (accountId: string, uid: number, folder = "INBOX"): Promise<ImapMessageFull> => {
-    const { data } = await axiosClient.get<ImapMessageFull>(`/api/emails/accounts/${accountId}/messages/${uid}`, {
+    const { data } = await axiosClient.get<ImapMessageFull>(`/api/v2/emails/accounts/${accountId}/messages/${uid}`, {
       params: { folder },
     });
     return data;
   },
 
   sendEmail: async (accountId: string, payload: SendEmailPayload): Promise<{ messageId: string }> => {
-    const { data } = await axiosClient.post<{ messageId: string }>(`/api/emails/accounts/${accountId}/send`, payload);
+    const { data } = await axiosClient.post<{ messageId: string }>(`/api/v2/emails/accounts/${accountId}/send`, payload);
     return data;
   },
 };

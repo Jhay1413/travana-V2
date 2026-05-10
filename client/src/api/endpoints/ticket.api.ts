@@ -3,36 +3,36 @@ import type { Ticket, CreateTicketData } from "@/types/ticket";
 
 export const ticketApi = {
   getAll: async (): Promise<Ticket[]> => {
-    const { data } = await axiosClient.get<Ticket[]>("/api/tickets");
+    const { data } = await axiosClient.get<Ticket[]>("/api/v2/tickets");
     return data;
   },
 
   getById: async (id: string): Promise<Ticket> => {
-    const { data } = await axiosClient.get<Ticket>(`/api/tickets/${id}`);
+    const { data } = await axiosClient.get<Ticket>(`/api/v2/tickets/${id}`);
     return data;
   },
 
   getByClient: async (clientId: string): Promise<Ticket[]> => {
-    const { data } = await axiosClient.get<Ticket[]>(`/api/tickets/client/${clientId}`);
+    const { data } = await axiosClient.get<Ticket[]>(`/api/v2/tickets/client/${clientId}`);
     return data;
   },
 
   getByUser: async (userId: string): Promise<Ticket[]> => {
-    const { data } = await axiosClient.get<Ticket[]>(`/api/tickets/user/${userId}`);
+    const { data } = await axiosClient.get<Ticket[]>(`/api/v2/tickets/user/${userId}`);
     return data;
   },
 
   create: async (ticketData: CreateTicketData): Promise<Ticket> => {
-    const { data } = await axiosClient.post<Ticket>("/api/tickets", ticketData);
+    const { data } = await axiosClient.post<Ticket>("/api/v2/tickets", ticketData);
     return data;
   },
 
   update: async (id: string, ticketData: Partial<Ticket>): Promise<Ticket> => {
-    const { data } = await axiosClient.patch<Ticket>(`/api/tickets/${id}`, ticketData);
+    const { data } = await axiosClient.patch<Ticket>(`/api/v2/tickets/${id}`, ticketData);
     return data;
   },
 
   delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/tickets/${id}`);
+    await axiosClient.delete(`/api/v2/tickets/${id}`);
   },
 };

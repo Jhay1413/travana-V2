@@ -1,7 +1,21 @@
 import { db } from "../../config/database";
 import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
 import type { Transaction, InsertTransaction } from "@shared/schema";
-import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, type SQL } from "drizzle-orm";
+import type { Scope } from "../../utils/scope";
+
+function buildTxnScopeConds(scope?: Scope): SQL[] {
+  const conds: SQL[] = [];
+  if (!scope || scope.orgRole === "platform_admin") return conds;
+  conds.push(eq(transaction.org_id, scope.orgId));
+  if (scope.orgRole === "branch_manager" && scope.branchId) {
+    conds.push(eq(transaction.branch_id, scope.branchId));
+  }
+  if ((scope.orgRole === "agent" || scope.orgRole === "homeworker") && scope.userId) {
+    conds.push(eq(transaction.user_id, scope.userId));
+  }
+  return conds;
+}
 
 async function enrichTransactions(txns: Transaction[]) {
   if (txns.length === 0) return [];
@@ -172,13 +186,14 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
 }
 
 export const transactionRepository = {
-  async findById(id: string): Promise<Transaction | undefined> {
-    const [result] = await db.select().from(transaction).where(eq(transaction.id, id)).limit(1);
+  async findById(id: string, scope?: Scope): Promise<Transaction | undefined> {
+    const conds = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
+    const [result] = await db.select().from(transaction).where(and(...conds)).limit(1);
     return result;
   },
 
-  async findAll(dateFrom?: Date, dateTo?: Date) {
-    const conditions = [];
+  async findAll(scope?: Scope, dateFrom?: Date, dateTo?: Date) {
+    const conditions: SQL[] = [...buildTxnScopeConds(scope)];
     if (dateFrom) conditions.push(sql`${transaction.created_at} >= ${dateFrom.toISOString()}`);
     if (dateTo) conditions.push(sql`${transaction.created_at} <= ${dateTo.toISOString()}`);
 
@@ -188,16 +203,18 @@ export const transactionRepository = {
     return enrichTransactions(txns);
   },
 
-  async findAllLightweight() {
-    const txns = await db.select().from(transaction).where(eq(transaction.is_test, false)).orderBy(desc(transaction.created_at));
+  async findAllLightweight(scope?: Scope) {
+    const conds: SQL[] = [eq(transaction.is_test, false), ...buildTxnScopeConds(scope)];
+    const txns = await db.select().from(transaction).where(and(...conds)).orderBy(desc(transaction.created_at));
     return enrichTransactionsLightweight(txns);
   },
 
-  async findPipelineByStatus(status: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
-    const conditions = [
+  async findPipelineByStatus(scope: Scope | undefined, status: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
+    const conditions: SQL[] = [
       eq(transaction.status, status as "on_enquiry" | "on_quote" | "in_play" | "on_booking"),
       sql`${transaction.client_id} IS NOT NULL`,
       eq(transaction.is_test, false),
+      ...buildTxnScopeConds(scope),
     ];
     if (agentId) conditions.push(eq(transaction.user_id, agentId));
 
@@ -235,32 +252,41 @@ export const transactionRepository = {
     return { items: enriched, total, page, hasMore: page * limit < total, totalProfit, totalValue };
   },
 
-  async findByClientId(clientId: string) {
-    const txns = await db.select().from(transaction).where(eq(transaction.client_id, clientId)).orderBy(desc(transaction.created_at));
+  async findByClientId(clientId: string, scope?: Scope) {
+    const conds: SQL[] = [eq(transaction.client_id, clientId), ...buildTxnScopeConds(scope)];
+    const txns = await db.select().from(transaction).where(and(...conds)).orderBy(desc(transaction.created_at));
     return enrichTransactions(txns);
   },
 
-  async findByAgentId(agentId: string) {
-    const txns = await db.select().from(transaction).where(eq(transaction.user_id, agentId)).orderBy(desc(transaction.created_at));
+  async findByAgentId(agentId: string, scope?: Scope) {
+    const conds: SQL[] = [eq(transaction.user_id, agentId), ...buildTxnScopeConds(scope)];
+    const txns = await db.select().from(transaction).where(and(...conds)).orderBy(desc(transaction.created_at));
     return enrichTransactions(txns);
   },
 
-  async create(data: InsertTransaction): Promise<Transaction> {
-    const [result] = await db.insert(transaction).values(data).returning();
+  async create(data: InsertTransaction, scope?: Scope): Promise<Transaction> {
+    const values: InsertTransaction = scope
+      ? ({ ...data, org_id: (data as any).org_id ?? scope.orgId ?? null, branch_id: (data as any).branch_id ?? scope.branchId ?? null } as InsertTransaction)
+      : data;
+    const [result] = await db.insert(transaction).values(values).returning();
     return result;
   },
 
-  async update(id: string, data: Partial<InsertTransaction>): Promise<Transaction | undefined> {
-    const [result] = await db.update(transaction).set(data).where(eq(transaction.id, id)).returning();
+  async update(id: string, data: Partial<InsertTransaction>, scope?: Scope): Promise<Transaction | undefined> {
+    const conds: SQL[] = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
+    const [result] = await db.update(transaction).set(data).where(and(...conds)).returning();
     return result;
   },
 
-  async remove(id: string): Promise<void> {
-    await db.delete(transaction).where(eq(transaction.id, id));
+  async remove(id: string, scope?: Scope): Promise<boolean> {
+    const conds: SQL[] = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
+    const result = await db.delete(transaction).where(and(...conds)).returning({ id: transaction.id });
+    return result.length > 0;
   },
 
-  async findWithDetails(id: string) {
-    const [txn] = await db.select().from(transaction).where(eq(transaction.id, id)).limit(1);
+  async findWithDetails(id: string, scope?: Scope) {
+    const conds: SQL[] = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
+    const [txn] = await db.select().from(transaction).where(and(...conds)).limit(1);
     if (!txn) return undefined;
 
     const [enquiryResult] = await db.select().from(enquiry_table).where(eq(enquiry_table.transaction_id, id)).limit(1);
@@ -312,12 +338,12 @@ export const transactionRepository = {
     return { ...txn, enquiry: enrichedEnquiry, quotes, booking: bookingResult || null, client: client || null, agent: agent || null };
   },
 
-  async findExpiringQuotes(agentId?: string) {
+  async findExpiringQuotes(scope?: Scope, agentId?: string) {
     const now = new Date();
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const conditions = [
+    const conditions: SQL[] = [
       eq(transaction.is_active, true),
       eq(transaction.is_test, false),
       eq(transaction.status, 'on_quote'),
@@ -327,6 +353,7 @@ export const transactionRepository = {
       eq(quote.isQuoteCopy, false),
       sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
       sql`((${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} <= ${sevenDaysFromNow}) OR (${quote.date_expiry} IS NULL AND ${quote.date_created} < ${sevenDaysAgo}))`,
+      ...buildTxnScopeConds(scope),
     ];
 
     if (agentId) conditions.push(eq(transaction.user_id, agentId));
@@ -346,14 +373,16 @@ export const transactionRepository = {
     return rows;
   },
 
-  async getStats() {
-    const [result] = await db.select({
+  async getStats(scope?: Scope) {
+    const conds = buildTxnScopeConds(scope);
+    const query = db.select({
       total: sql<number>`count(*)`,
       active: sql<number>`count(*) FILTER (WHERE ${transaction.is_active} = true)`,
       enquiry: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'ENQUIRY')`,
       quoted: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'QUOTED')`,
       booked: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'BOOKED')`,
     }).from(transaction);
+    const [result] = conds.length > 0 ? await query.where(and(...conds)) : await query;
     return result;
   },
 };

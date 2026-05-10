@@ -9,21 +9,21 @@ export type CreateNoteData = {
 
 export const noteApi = {
   getByTransaction: async (transactionId: string): Promise<TransactionNote[]> => {
-    const { data } = await axiosClient.get<TransactionNote[]>(`/api/notes/transaction/${transactionId}`);
+    const { data } = await axiosClient.get<TransactionNote[]>(`/api/v2/notes/transaction/${transactionId}`);
     return data;
   },
 
   create: async (noteData: CreateNoteData): Promise<TransactionNote> => {
-    const { data } = await axiosClient.post<TransactionNote>("/api/notes", noteData);
+    const { data } = await axiosClient.post<TransactionNote>("/api/v2/notes", noteData);
     return data;
   },
 
   update: async (id: string, content: string): Promise<TransactionNote> => {
-    const { data } = await axiosClient.patch<TransactionNote>(`/api/notes/${id}`, { content });
+    const { data } = await axiosClient.patch<TransactionNote>(`/api/v2/notes/${id}`, { content });
     return data;
   },
 
   delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/notes/${id}`);
+    await axiosClient.delete(`/api/v2/notes/${id}`);
   },
 };

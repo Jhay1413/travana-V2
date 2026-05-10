@@ -21,22 +21,22 @@ export interface AdminReferralPayout {
 
 export const referralPayoutApi = {
   getAll: async (): Promise<AdminReferralPayout[]> => {
-    const { data } = await axiosClient.get<AdminReferralPayout[]>("/api/referral-payouts");
+    const { data } = await axiosClient.get<AdminReferralPayout[]>("/api/v2/referral-payouts");
     return data;
   },
 
   getById: async (id: string): Promise<AdminReferralPayout> => {
-    const { data } = await axiosClient.get<AdminReferralPayout>(`/api/referral-payouts/${id}`);
+    const { data } = await axiosClient.get<AdminReferralPayout>(`/api/v2/referral-payouts/${id}`);
     return data;
   },
 
   approve: async (id: string, notes?: string): Promise<AdminReferralPayout> => {
-    const { data } = await axiosClient.patch<AdminReferralPayout>(`/api/referral-payouts/${id}/approve`, { notes });
+    const { data } = await axiosClient.patch<AdminReferralPayout>(`/api/v2/referral-payouts/${id}/approve`, { notes });
     return data;
   },
 
   reject: async (id: string, notes?: string): Promise<AdminReferralPayout> => {
-    const { data } = await axiosClient.patch<AdminReferralPayout>(`/api/referral-payouts/${id}/reject`, { notes });
+    const { data } = await axiosClient.patch<AdminReferralPayout>(`/api/v2/referral-payouts/${id}/reject`, { notes });
     return data;
   },
 };

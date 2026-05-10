@@ -7,7 +7,7 @@ import { addImagesValidator } from "./quote.validator";
 import { db } from "../../config/database";
 import { quote } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { pushNotificationService } from "./push-notification.service";
+import { pushNotificationService } from "../notification/push-notification.service";
 
 const router = Router();
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];

@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import routes from "./routes/index";
+import v2Routes from "./v2/routes/index";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./repositories/task.repository";
@@ -88,6 +89,9 @@ app.use((req, res, next) => {
   registerAuthRoutes(app);
 
   app.use("/api/portal", portalStaffRouter);
+
+  // v2 routes mounted under /api/v2/* (parallel to v1 at /api/*)
+  app.use("/api/v2", v2Routes);
 
   app.use("/api", routes);
 

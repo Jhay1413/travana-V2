@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { tourOperatorSettingsService } from './tour-operator.service';
+import { tourOperatorSettingsService } from './tour-operator-settings.service';
 import { asyncHandler } from '../../../utils/async-handler';
 import { successResponse } from '../../../utils/response';
 

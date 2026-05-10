@@ -53,22 +53,22 @@ function buildParams(filters: OpportunityFilters) {
 
 export const opportunitiesApi = {
   getEnquiries: async (filters: OpportunityFilters = {}): Promise<PaginatedResponse> => {
-    const { data } = await axiosClient.get<PaginatedResponse>("/api/opportunities/enquiries", { params: buildParams(filters) });
+    const { data } = await axiosClient.get<PaginatedResponse>("/api/v2/opportunities/enquiries", { params: buildParams(filters) });
     return data;
   },
 
   getQuotes: async (filters: OpportunityFilters = {}): Promise<PaginatedResponse> => {
-    const { data } = await axiosClient.get<PaginatedResponse>("/api/opportunities/quotes", { params: buildParams(filters) });
+    const { data } = await axiosClient.get<PaginatedResponse>("/api/v2/opportunities/quotes", { params: buildParams(filters) });
     return data;
   },
 
   getBookings: async (filters: OpportunityFilters = {}): Promise<PaginatedResponse> => {
-    const { data } = await axiosClient.get<PaginatedResponse>("/api/opportunities/bookings", { params: buildParams(filters) });
+    const { data } = await axiosClient.get<PaginatedResponse>("/api/v2/opportunities/bookings", { params: buildParams(filters) });
     return data;
   },
 
   getAgents: async (): Promise<{ id: string; name: string; firstName: string }[]> => {
-    const { data } = await axiosClient.get("/api/opportunities/agents");
+    const { data } = await axiosClient.get("/api/v2/opportunities/agents");
     return data;
   },
 };

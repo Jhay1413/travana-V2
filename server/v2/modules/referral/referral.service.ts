@@ -1,5 +1,5 @@
 import { referralRepository } from "./referral.repository";
-import { vipEnrollmentService } from "../../services/vipEnrollment.service";
+import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { walletService } from "../wallet/wallet.service";
 import { AppError } from "../../utils/error-handler";
 

@@ -52,25 +52,25 @@ export interface QuoteImageSource {
 
 export const socialPostApi = {
   generate: async (data: GeneratePostParams): Promise<TravelDeal> => {
-    const { data: res } = await axiosClient.post<TravelDeal>("/api/social-posts/generate", data);
+    const { data: res } = await axiosClient.post<TravelDeal>("/api/v2/social-posts/generate", data);
     return res;
   },
 
   getByQuoteId: async (quoteId: string): Promise<TravelDeal | null> => {
     const { data: res } = await axiosClient.get<TravelDeal | null>(
-      `/api/social-posts/quote/${quoteId}`
+      `/api/v2/social-posts/quote/${quoteId}`
     );
     return res;
   },
 
   update: async (id: string, data: Partial<TravelDeal>): Promise<TravelDeal> => {
-    const { data: res } = await axiosClient.patch<TravelDeal>(`/api/social-posts/${id}`, data);
+    const { data: res } = await axiosClient.patch<TravelDeal>(`/api/v2/social-posts/${id}`, data);
     return res;
   },
 
   scheduleOnOnlySocials: async (id: string, formData: FormData): Promise<TravelDeal> => {
     const { data: res } = await axiosClient.post<TravelDeal>(
-      `/api/social-posts/${id}/schedule`,
+      `/api/v2/social-posts/${id}/schedule`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } }
     );
@@ -79,7 +79,7 @@ export const socialPostApi = {
 
   rescheduleOnOnlySocials: async (id: string, formData: FormData): Promise<TravelDeal> => {
     const { data: res } = await axiosClient.put<TravelDeal>(
-      `/api/social-posts/${id}/reschedule`,
+      `/api/v2/social-posts/${id}/reschedule`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } }
     );
@@ -89,19 +89,19 @@ export const socialPostApi = {
   uploadMedia: async (files: File[]): Promise<UploadedMedia[]> => {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
-    const { data: res } = await axiosClient.post<UploadedMedia[]>("/api/social-posts/media/upload", formData, {
+    const { data: res } = await axiosClient.post<UploadedMedia[]>("/api/v2/social-posts/media/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return res;
   },
 
   getMedia: async (id: string): Promise<{ media: UploadedMedia[]; postContent: string }> => {
-    const { data: res } = await axiosClient.get<{ media: UploadedMedia[]; postContent: string }>(`/api/social-posts/${id}/media`);
+    const { data: res } = await axiosClient.get<{ media: UploadedMedia[]; postContent: string }>(`/api/v2/social-posts/${id}/media`);
     return res;
   },
 
   getQuoteImages: async (quoteId: string): Promise<QuoteImageSource[]> => {
-    const { data: res } = await axiosClient.get<QuoteImageSource[]>(`/api/social-posts/quote/${quoteId}/images`);
+    const { data: res } = await axiosClient.get<QuoteImageSource[]>(`/api/v2/social-posts/quote/${quoteId}/images`);
     return res;
   },
 };

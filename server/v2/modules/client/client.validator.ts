@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { insertClientSchema } from "@shared/schema";
+import { insertClientTableSchema } from "@shared/schema";
 
 export const createClientValidator = z.object({
-  body: insertClientSchema,
+  body: insertClientTableSchema,
 });
 
 export const updateClientValidator = z.object({
   params: z.object({
     id: z.string(),
   }),
-  body: insertClientSchema.partial(),
+  body: insertClientTableSchema.partial(),
 });

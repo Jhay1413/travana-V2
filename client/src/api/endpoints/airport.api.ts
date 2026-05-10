@@ -3,16 +3,16 @@ import type { Airport } from "@/types/airport";
 
 export const airportApi = {
   getAll: async (): Promise<Airport[]> => {
-    const { data } = await axiosClient.get<Airport[]>("/api/airports");
+    const { data } = await axiosClient.get<Airport[]>("/api/v2/airports");
     return data;
   },
 
   create: async (airportData: Omit<Airport, "id" | "createdAt">): Promise<Airport> => {
-    const { data } = await axiosClient.post<Airport>("/api/airports", airportData);
+    const { data } = await axiosClient.post<Airport>("/api/v2/airports", airportData);
     return data;
   },
 
   delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/airports/${id}`);
+    await axiosClient.delete(`/api/v2/airports/${id}`);
   },
 };

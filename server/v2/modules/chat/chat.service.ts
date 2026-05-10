@@ -1,7 +1,7 @@
 import { chatRepository } from "./chat.repository";
 import { notificationRepository } from "../notification/notification.repository";
 import { AppError } from "../../utils/error-handler";
-import { bridgeAgentReplyToPortal, isPortalSender } from "../../services/portal-chat-bridge";
+import { bridgeAgentReplyToPortal, isPortalSender } from "../../../services/portal-chat-bridge";
 
 export const chatService = {
   async getConversations(userId: string) {

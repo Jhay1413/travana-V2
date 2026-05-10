@@ -9,32 +9,32 @@ export const transactionApi = {
     if (filters?.dateFrom) params.append("dateFrom", filters.dateFrom);
     if (filters?.dateTo) params.append("dateTo", filters.dateTo);
     const query = params.toString();
-    const { data } = await axiosClient.get<Transaction[]>(`/api/transactions${query ? `?${query}` : ""}`);
+    const { data } = await axiosClient.get<Transaction[]>(`/api/v2/transactions${query ? `?${query}` : ""}`);
     return data;
   },
 
   getById: async (id: string): Promise<Transaction> => {
-    const { data } = await axiosClient.get<Transaction>(`/api/transactions/${id}`);
+    const { data } = await axiosClient.get<Transaction>(`/api/v2/transactions/${id}`);
     return data;
   },
 
   create: async (txnData: CreateTransactionData | FormData): Promise<Transaction> => {
     const config = txnData instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : {};
-    const { data } = await axiosClient.post<Transaction>("/api/transactions", txnData, config);
+    const { data } = await axiosClient.post<Transaction>("/api/v2/transactions", txnData, config);
     return data;
   },
 
   update: async (id: string, txnData: Partial<CreateTransactionData>): Promise<Transaction> => {
-    const { data } = await axiosClient.patch<Transaction>(`/api/transactions/${id}`, txnData);
+    const { data } = await axiosClient.patch<Transaction>(`/api/v2/transactions/${id}`, txnData);
     return data;
   },
 
   delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/transactions/${id}`);
+    await axiosClient.delete(`/api/v2/transactions/${id}`);
   },
 
   getPipeline: async (): Promise<Transaction[]> => {
-    const { data } = await axiosClient.get<Transaction[]>("/api/transactions/pipeline");
+    const { data } = await axiosClient.get<Transaction[]>("/api/v2/transactions/pipeline");
     return data;
   },
 
@@ -48,18 +48,18 @@ export const transactionApi = {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (agentId) params.append("agentId", agentId);
     if (quoteStatus) params.append("quoteStatus", quoteStatus);
-    const { data } = await axiosClient.get(`/api/transactions/pipeline/${status}?${params.toString()}`);
+    const { data } = await axiosClient.get(`/api/v2/transactions/pipeline/${status}?${params.toString()}`);
     return data as { items: Transaction[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number };
   },
 
   getStats: async () => {
-    const { data } = await axiosClient.get("/api/transactions/stats");
+    const { data } = await axiosClient.get("/api/v2/transactions/stats");
     return data;
   },
 
   getExpiringQuotes: async (agentId?: string) => {
     const params = agentId ? `?agentId=${agentId}` : "";
-    const { data } = await axiosClient.get(`/api/transactions/expiring-quotes${params}`);
+    const { data } = await axiosClient.get(`/api/v2/transactions/expiring-quotes${params}`);
     return data as {
       id: string;
       clientId: string | null;

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { referralWithdrawalService } from './referral-withdrawal.service';
-import { getInvoicePresignedUrl } from '../../services/invoicePdf.service';
+import { getInvoicePresignedUrl } from '../../../services/invoicePdf.service';
 import { successResponse } from '../../utils/response';
 import { asyncHandler } from '../../utils/async-handler';
 

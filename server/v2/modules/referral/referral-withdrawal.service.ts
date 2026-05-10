@@ -1,10 +1,10 @@
 import { referralWithdrawalRepository } from './referral-withdrawal.repository';
 import { referralRepository } from './referral.repository';
-import { vipEnrollmentService } from '../../services/vipEnrollment.service';
+import { vipEnrollmentService } from '../../../services/vipEnrollment.service';
 import {
   generateWithdrawalInvoiceBuffer,
   uploadWithdrawalInvoice,
-} from '../../services/invoicePdf.service';
+} from '../../../services/invoicePdf.service';
 import { AppError } from '../../utils/error-handler';
 
 export const referralWithdrawalService = {

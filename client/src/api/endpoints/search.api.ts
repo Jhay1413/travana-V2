@@ -37,7 +37,7 @@ export type GlobalSearchResponse = {
 
 export const searchApi = {
   globalSearch: async (q: string): Promise<GlobalSearchResponse> => {
-    const { data } = await axiosClient.get<GlobalSearchResponse>("/api/search", { params: { q } });
+    const { data } = await axiosClient.get<GlobalSearchResponse>("/api/v2/search", { params: { q } });
     return data;
   },
 };

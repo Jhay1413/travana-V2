@@ -23,26 +23,26 @@ export type CreateFeedbackData = {
 
 export const feedbackApi = {
   getAll: async (): Promise<FeedbackRecord[]> => {
-    const { data } = await axiosClient.get("/api/feedback");
+    const { data } = await axiosClient.get("/api/v2/feedback");
     return data;
   },
 
   getMine: async (): Promise<FeedbackRecord[]> => {
-    const { data } = await axiosClient.get("/api/feedback/mine");
+    const { data } = await axiosClient.get("/api/v2/feedback/mine");
     return data;
   },
 
   create: async (payload: CreateFeedbackData): Promise<FeedbackRecord> => {
-    const { data } = await axiosClient.post("/api/feedback", payload);
+    const { data } = await axiosClient.post("/api/v2/feedback", payload);
     return data;
   },
 
   updateStatus: async (id: string, status: string, adminNotes?: string): Promise<FeedbackRecord> => {
-    const { data } = await axiosClient.patch(`/api/feedback/${id}/status`, { status, adminNotes });
+    const { data } = await axiosClient.patch(`/api/v2/feedback/${id}/status`, { status, adminNotes });
     return data;
   },
 
   remove: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/feedback/${id}`);
+    await axiosClient.delete(`/api/v2/feedback/${id}`);
   },
 };
