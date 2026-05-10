@@ -18,7 +18,7 @@ import ReferralAgentDashboard from "@/pages/referral-agent";
 import { useRole } from "@/hooks/use-role";
 import { BrandingApplier } from "@/components/branding-applier";
 import PublicQuotePage from "@/pages/public-quote";
-import CommandCenterPage from "@/pages/command-center";
+import HomePage from "@/pages/home";
 import ClientsPage from "@/pages/clients";
 import ClientPage from "@/pages/client";
 import QuotePage from "@/pages/quote"; // Using original full-featured version
@@ -88,7 +88,7 @@ function AuthenticatedRouter() {
       ? ReferralAgentDashboard
       : orgRole === "platform_admin"
         ? PlatformAdminPage
-        : CommandCenterPage;
+        : HomePage;
 
   return (
     <AppLayout>
@@ -113,8 +113,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/tasks" allow={MANAGER_ROLES} component={TasksPage} />
         <RoleRoute path="/reports" allow={MANAGER_ROLES} component={ReportsPage} />
 
-        <RoleRoute path="/command-center" allow={STAFF_ROLES} component={CommandCenterPage} />
-        <RoleRoute path="/clients" allow={STAFF_ROLES} component={CommandCenterPage} />
+        <RoleRoute path="/clients" allow={STAFF_ROLES} component={ClientsPage} />
         <RoleRoute path="/clients/:clientId" allow={STAFF_ROLES} component={ClientPage} />
         <RoleRoute path="/clients/:clientId/quotes/:quoteId" allow={STAFF_ROLES} component={QuotePage} />
         <RoleRoute path="/quotes/:quoteId" allow={STAFF_ROLES} component={QuotePage} />
