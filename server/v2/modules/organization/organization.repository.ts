@@ -1,19 +1,36 @@
-import { db } from '../../config/database';
-// TODO: import { organization } from '@shared/schema' once schema is added
+import { db } from "../../config/database";
+import { organization, type Organization, type InsertOrganization } from "@shared/schema";
+import { eq } from "drizzle-orm";
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export const organizationRepository = {
-  async findAll() {
-    // TODO: return db.select().from(organization);
-    return [];
+  async findAll(): Promise<Organization[]> {
+    return db.select().from(organization);
   },
-  async findById(_id: string) {
-    return null;
+
+  async findById(id: string): Promise<Organization | null> {
+    const [row] = await db.select().from(organization).where(eq(organization.id, id)).limit(1);
+    return row ?? null;
   },
-  async create(_data: any) {
-    return null;
+
+  async findBySlug(slug: string): Promise<Organization | null> {
+    const [row] = await db.select().from(organization).where(eq(organization.slug, slug)).limit(1);
+    return row ?? null;
   },
-  async update(_id: string, _data: any) {
-    return null;
+
+  async create(data: InsertOrganization, tx?: Tx): Promise<Organization> {
+    const runner = tx ?? db;
+    const [row] = await runner.insert(organization).values(data).returning();
+    return row;
   },
-  async remove(_id: string) {},
+
+  async update(id: string, data: Partial<InsertOrganization>): Promise<Organization | null> {
+    const [row] = await db.update(organization).set(data).where(eq(organization.id, id)).returning();
+    return row ?? null;
+  },
+
+  async remove(id: string): Promise<void> {
+    await db.delete(organization).where(eq(organization.id, id));
+  },
 };

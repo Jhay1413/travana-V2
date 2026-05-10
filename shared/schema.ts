@@ -44,6 +44,10 @@ export const branches = pgTable("branches", {
   code: varchar("code"),
   address: text("address"),
   phone: varchar("phone"),
+  email: varchar("email"),
+  openingPattern: varchar("opening_pattern"),
+  bankHolidaysOpen: boolean("bank_holidays_open").notNull().default(false),
+  openingHours: jsonb("opening_hours").default(sql`'[]'`),
   isDefault: boolean("is_default").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -88,6 +92,8 @@ export const user = pgTable("user", {
   inviteAgencyName: text("inviteAgencyName"),
   orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   orgRole: varchar("org_role"),
+  verificationToken: text("verification_token"),
+  verificationTokenExpiry: timestamp("verification_token_expiry"),
 });
 
 export const insertUserSchema = createInsertSchema(user).omit({ createdAt: true, updatedAt: true });
@@ -1670,13 +1676,14 @@ export type InsertFacebookPage = Omit<typeof facebookPages.$inferInsert, "id" | 
 
 export const shopTargetTable = pgTable("shop_target_table", {
   id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  branchId: uuid("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   year: integer().notNull(),
   month: integer().notNull(),
   targetAmount: numeric("target_amount", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
-  unique("shop_target_year_month_unique").on(table.year, table.month)
+  unique("shop_target_branch_year_month_unique").on(table.branchId, table.year, table.month)
 ]);
 
 export const insertShopTargetSchema = createInsertSchema(shopTargetTable).omit({ id: true, createdAt: true, updatedAt: true });
@@ -1685,6 +1692,7 @@ export type InsertShopTarget = z.infer<typeof insertShopTargetSchema>;
 
 export const agentTargetTable = pgTable("agent_target_table", {
   id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  branchId: uuid("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   year: integer().notNull(),
   month: integer().notNull(),
@@ -1692,7 +1700,7 @@ export const agentTargetTable = pgTable("agent_target_table", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
-  unique("agent_target_user_year_month_unique").on(table.userId, table.year, table.month)
+  unique("agent_target_branch_user_year_month_unique").on(table.branchId, table.userId, table.year, table.month)
 ]);
 
 export const insertAgentTargetSchema = createInsertSchema(agentTargetTable).omit({ id: true, createdAt: true, updatedAt: true });

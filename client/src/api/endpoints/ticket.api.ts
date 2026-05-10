@@ -17,8 +17,14 @@ export const ticketApi = {
     return data;
   },
 
-  getByUser: async (userId: string): Promise<Ticket[]> => {
-    const { data } = await axiosClient.get<Ticket[]>(`/api/v2/tickets/user/${userId}`);
+  getByUser: async (userId: string, filters?: { statuses?: string[] }): Promise<Ticket[]> => {
+    const params = new URLSearchParams();
+    if (filters?.statuses && filters.statuses.length > 0) {
+      params.set("status", filters.statuses.join(","));
+    }
+    const qs = params.toString();
+    const url = `/api/v2/tickets/user/${userId}${qs ? `?${qs}` : ""}`;
+    const { data } = await axiosClient.get<Ticket[]>(url);
     return data;
   },
 

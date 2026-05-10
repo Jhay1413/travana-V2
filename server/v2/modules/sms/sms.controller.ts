@@ -9,6 +9,7 @@ import { db } from '../../config/database';
 import { user as userTable, transaction as transactionTable, booking as bookingTable } from '@shared/schema';
 import { and, desc, eq } from 'drizzle-orm';
 import { getUserId } from '../../utils/get-user-id';
+import { getScope, type Scope } from '../../utils/scope';
 
 const BULK_CONFIRM_THRESHOLD = 25;
 const MAX_RECIPIENTS_PER_REQUEST = 500;
@@ -22,6 +23,10 @@ function pruneIdempotencyCache() {
 
 function buildIdempotencyKey(payload: unknown, userId: string): string {
   return crypto.createHash('sha256').update(JSON.stringify({ payload, userId })).digest('hex');
+}
+
+function effectiveOrgId(scope: Scope): string | null {
+  return scope.orgRole === 'platform_admin' ? null : (scope.orgId || null);
 }
 
 function formatGbp(value: unknown): string {
@@ -64,7 +69,12 @@ async function requireAdminOrManager(req: Request) {
   if (!u) throw new AppError('User not found', 404);
   const role = (u.role || '').toLowerCase();
   if (role !== 'admin' && role !== 'manager') throw new AppError('Only Admin or Manager can manage texts', 403);
-  return { user: u, userId };
+  // orgId comes from the orgBranchScope middleware. Platform admins see across orgs.
+  const orgId = req.orgRole === 'platform_admin' ? null : (req.orgId || null);
+  if (req.orgRole !== 'platform_admin' && !orgId) {
+    throw new AppError('No organisation context', 403);
+  }
+  return { user: u, userId, orgId };
 }
 
 function buildPortalLink() {
@@ -115,9 +125,10 @@ export const smsController = {
 
   previewRecipients: asyncHandler(async (req: Request, res: Response) => {
     await requireAdminOrManager(req);
+    const scope = getScope(req);
     const recipients = req.body?.recipients;
     if (!recipients || typeof recipients !== 'object') throw new AppError('recipients filter is required', 400);
-    const clients = await smsRepository.resolveRecipients(recipients);
+    const clients = await smsRepository.resolveRecipients({ ...recipients, orgId: effectiveOrgId(scope) });
     const eligible = clients.filter((c) => c.smsOptIn && c.phoneNumber);
     return successResponse(res, {
       total: clients.length, eligible: eligible.length,
@@ -135,19 +146,21 @@ export const smsController = {
 
   updateTemplate: asyncHandler(async (req: Request, res: Response) => {
     await requireAdminOrManager(req);
-    const row = await smsRepository.updateTemplate(req.params.id, req.body);
+    const row = await smsRepository.updateTemplate(req.params.id as string, req.body);
     if (!row) throw new AppError('Template not found', 404);
     return successResponse(res, row, 'Template updated');
   }),
 
   deleteTemplate: asyncHandler(async (req: Request, res: Response) => {
     await requireAdminOrManager(req);
-    await smsRepository.deleteTemplate(req.params.id);
+    await smsRepository.deleteTemplate(req.params.id as string);
     return successResponse(res, null, 'Template deleted');
   }),
 
   send: asyncHandler(async (req: Request, res: Response) => {
     const { user, userId } = await requireAdminOrManager(req);
+    const scope = getScope(req);
+    const orgId = effectiveOrgId(scope);
     const { templateId, bodyOverride, recipients, triggerSource, confirmBulk } = req.body as any;
 
     let template: { id?: string; name?: string; body: string } | null = null;
@@ -166,7 +179,7 @@ export const smsController = {
       throw new AppError('Duplicate send blocked. Wait 60 seconds before re-sending the same payload.', 429);
     }
 
-    const clients = await smsRepository.resolveRecipients(recipients);
+    const clients = await smsRepository.resolveRecipients({ ...recipients, orgId });
     if (clients.length === 0) return successResponse(res, { sent: 0, skipped: 0, failed: 0, results: [] }, 'No recipients matched the selection');
     if (clients.length > MAX_RECIPIENTS_PER_REQUEST) throw new AppError(`Too many recipients (${clients.length}). Hard cap is ${MAX_RECIPIENTS_PER_REQUEST} per request.`, 400);
     if (clients.length > BULK_CONFIRM_THRESHOLD && !confirmBulk) throw new AppError(`Bulk send to ${clients.length} recipients requires confirmation. Re-submit with confirmBulk=true.`, 400);
@@ -205,16 +218,25 @@ export const smsController = {
 
   listMessages: asyncHandler(async (req: Request, res: Response) => {
     await requireAdminOrManager(req);
+    const scope = getScope(req);
     const limit = Math.min(parseInt(String(req.query.limit ?? '200'), 10) || 200, 1000);
     const clientId = req.query.clientId ? String(req.query.clientId) : undefined;
-    const rows = await smsRepository.listMessages({ limit, clientId });
+    const rows = await smsRepository.listMessages({ limit, clientId, orgId: effectiveOrgId(scope) });
     return successResponse(res, rows, 'Messages retrieved');
   }),
 
   setOptIn: asyncHandler(async (req: Request, res: Response) => {
     await requireAdminOrManager(req);
+    const scope = getScope(req);
+    const orgId = effectiveOrgId(scope);
     const { id } = req.params;
     const { smsOptIn } = req.body;
+
+    if (orgId) {
+      const client = await smsRepository.findClientByIdInOrg(id, orgId);
+      if (!client) throw new AppError('Client not found', 404);
+    }
+
     await smsRepository.setClientOptIn(id, !!smsOptIn);
     return successResponse(res, { id, smsOptIn: !!smsOptIn }, 'Opt-in updated');
   }),

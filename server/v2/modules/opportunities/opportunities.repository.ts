@@ -10,6 +10,7 @@ export interface OpportunityFilters {
   dateRange?: string;
   agentId?: string;
   sortBy?: string;
+  orgId: string | null;
 }
 
 function buildDateConditions(field: any, dateRange: string) {
@@ -35,9 +36,10 @@ function buildDateConditions(field: any, dateRange: string) {
 
 export const opportunitiesRepository = {
   async findEnquiries(filters: OpportunityFilters) {
-    const { page, limit, status, search, dateRange, agentId, sortBy = 'newest' } = filters;
+    const { page, limit, status, search, dateRange, agentId, sortBy = 'newest', orgId } = filters;
     const offset = (page - 1) * limit;
     const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false)];
+    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
     if (status && status !== 'all') conditions.push(eq(enquiry_table.status, status));
     if (agentId && agentId !== 'all') conditions.push(eq(transaction.user_id, agentId));
     if (dateRange && dateRange !== 'all-time') conditions.push(...buildDateConditions(enquiry_table.date_created, dateRange));
@@ -50,9 +52,10 @@ export const opportunitiesRepository = {
   },
 
   async findQuotes(filters: OpportunityFilters) {
-    const { page, limit, status, search, dateRange, agentId, sortBy = 'newest' } = filters;
+    const { page, limit, status, search, dateRange, agentId, sortBy = 'newest', orgId } = filters;
     const offset = (page - 1) * limit;
     const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false), eq(quote.isFreeQuote, false), isNull(quote.deleted_at)];
+    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
     if (status && status !== 'all') conditions.push(eq(quote.quote_status, status));
     if (agentId && agentId !== 'all') conditions.push(eq(transaction.user_id, agentId));
     if (dateRange && dateRange !== 'all-time') conditions.push(...buildDateConditions(quote.date_created, dateRange));
@@ -65,9 +68,10 @@ export const opportunitiesRepository = {
   },
 
   async findBookings(filters: OpportunityFilters) {
-    const { page, limit, status, search, dateRange, agentId, sortBy = 'newest' } = filters;
+    const { page, limit, status, search, dateRange, agentId, sortBy = 'newest', orgId } = filters;
     const offset = (page - 1) * limit;
     const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false)];
+    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
     if (status && status !== 'all') conditions.push(eq(booking.booking_status, status));
     if (agentId && agentId !== 'all') conditions.push(eq(transaction.user_id, agentId));
     if (dateRange && dateRange !== 'all-time') conditions.push(...buildDateConditions(booking.date_created, dateRange));
@@ -79,7 +83,14 @@ export const opportunitiesRepository = {
     return { rows, total: totalResult?.total || 0 };
   },
 
-  async findAgents() {
-    return db.select({ id: user.id, name: user.name, firstName: user.firstName }).from(user).orderBy(user.firstName);
+  async findAgents(orgId: string | null) {
+    if (!orgId) {
+      return db.select({ id: user.id, name: user.name, firstName: user.firstName }).from(user).orderBy(user.firstName);
+    }
+    return db
+      .select({ id: user.id, name: user.name, firstName: user.firstName })
+      .from(user)
+      .where(eq(user.orgId, orgId))
+      .orderBy(user.firstName);
   },
 };

@@ -2,16 +2,40 @@ import { referralPayoutRepository } from './referral-payout.repository';
 import { referralRepository } from './referral.repository';
 import { vipEnrollmentService } from '../../../services/vipEnrollment.service';
 import { AppError } from '../../utils/error-handler';
+import type { Scope } from '../../utils/scope';
 
-export const referralPayoutService = {
-  async listPayouts() {
-    return referralPayoutRepository.findAll();
-  },
+type ScopeOrTrusted = Scope | { orgId: null };
 
-  async getPayoutById(id: string) {
+function effectiveOrgId(scope: ScopeOrTrusted): string | null {
+  if (scope.orgId === null) return null;
+  if ((scope as Scope).orgRole === 'platform_admin') return null;
+  return (scope as Scope).orgId || null;
+}
+
+async function loadScopedPayout(id: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) {
     const p = await referralPayoutRepository.findById(id);
     if (!p) throw new AppError('Payout request not found', 404);
     return p;
+  }
+
+  const row = await referralPayoutRepository.findByIdWithOrg(id);
+  if (!row || row.clientOrgId !== orgId) {
+    throw new AppError('Payout request not found', 404);
+  }
+  const p = await referralPayoutRepository.findById(id);
+  if (!p) throw new AppError('Payout request not found', 404);
+  return p;
+}
+
+export const referralPayoutService = {
+  async listPayouts(scope: ScopeOrTrusted) {
+    return referralPayoutRepository.findAll(effectiveOrgId(scope));
+  },
+
+  async getPayoutById(id: string, scope: ScopeOrTrusted) {
+    return loadScopedPayout(id, scope);
   },
 
   async getPayoutsByClient(clientId: string) {
@@ -66,9 +90,8 @@ export const referralPayoutService = {
     return { count: created.length, totalAmount: totalAmount.toFixed(2) };
   },
 
-  async approvePayout(id: string, notes?: string) {
-    const payout = await referralPayoutRepository.findById(id);
-    if (!payout) throw new AppError('Payout request not found', 404);
+  async approvePayout(id: string, notes: string | undefined, scope: ScopeOrTrusted) {
+    const payout = await loadScopedPayout(id, scope);
     if (payout.status !== 'requested') throw new AppError('Only requested payouts can be approved', 400);
 
     const referralRecord = await referralRepository.findById(payout.referral_id);
@@ -85,9 +108,8 @@ export const referralPayoutService = {
     return updated;
   },
 
-  async rejectPayout(id: string, notes?: string) {
-    const payout = await referralPayoutRepository.findById(id);
-    if (!payout) throw new AppError('Payout request not found', 404);
+  async rejectPayout(id: string, notes: string | undefined, scope: ScopeOrTrusted) {
+    const payout = await loadScopedPayout(id, scope);
     if (payout.status !== 'requested') throw new AppError('Only requested payouts can be rejected', 400);
     return referralPayoutRepository.markRejected(id, notes);
   },

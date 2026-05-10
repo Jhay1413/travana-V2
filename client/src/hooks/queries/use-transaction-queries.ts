@@ -36,13 +36,14 @@ export function usePipelineTransactions() {
   });
 }
 
-export function usePipelineColumn(status: string, limit: number = 10, agentId?: string, quoteStatus?: string) {
+export function usePipelineColumn(status: string, limit: number = 10, agentId?: string, quoteStatus?: string, options?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: transactionKeys.pipeline(status, agentId, quoteStatus),
     queryFn: ({ pageParam = 1 }) =>
       transactionApi.getPipelineByStatus(status, pageParam as number, limit, agentId, quoteStatus),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.page + 1 : undefined,
+    enabled: options?.enabled ?? true,
   });
 }
 

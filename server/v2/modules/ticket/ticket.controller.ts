@@ -24,7 +24,9 @@ export const ticketController = {
 
   listTicketsByUser: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.params.userId as string;
-    const tickets = await ticketService.listTicketsByUser(userId, getScope(req));
+    const statusRaw = req.query.status as string | undefined;
+    const statuses = statusRaw ? statusRaw.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+    const tickets = await ticketService.listTicketsByUser(userId, getScope(req), { statuses });
     return successResponse(res, tickets, "Tickets retrieved successfully");
   }),
 

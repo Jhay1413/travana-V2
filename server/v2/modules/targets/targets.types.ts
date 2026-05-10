@@ -1,5 +1,6 @@
 export interface ShopTargetData {
   id: string;
+  branchId: string;
   year: number;
   month: number;
   targetAmount: string;
@@ -15,6 +16,7 @@ export interface ShopTargetInput {
 
 export interface AgentTargetData {
   id: string;
+  branchId: string;
   userId: string;
   year: number;
   month: number;
@@ -55,6 +57,7 @@ export interface BulkAgentTargetsInput {
 }
 
 export interface TargetsOverview {
+  branchId: string;
   shopTargets: ShopTargetData[];
   agentTargets: AgentTargetData[];
   agents: AgentInfo[];

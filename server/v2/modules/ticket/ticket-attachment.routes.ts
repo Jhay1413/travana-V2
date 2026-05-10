@@ -3,6 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { ticketAttachmentController } from './ticket-attachment.controller';
+import { isAuthenticated } from '../../middlewares/auth';
+import { orgBranchScope } from '../../middlewares/org-branch-scope';
 
 const uploadDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -30,6 +32,8 @@ const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterC
 const upload = multer({ storage: fileStorage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
 
 const router = Router();
+
+router.use(isAuthenticated, orgBranchScope);
 
 router.get('/ticket/:ticketId', ticketAttachmentController.listByTicketId);
 router.post('/ticket/:ticketId', upload.single('file'), ticketAttachmentController.uploadAttachment);

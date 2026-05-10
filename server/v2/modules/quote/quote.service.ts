@@ -4,6 +4,7 @@ import { quoteImageRepository } from "./quote-image.repository";
 import { tagService } from "../tag/tag.service";
 import { destinationGuruService } from "../destination-guru/destination-guru.service";
 import { AppError } from "../../utils/error-handler";
+import type { Scope } from "../../utils/scope";
 import type {
   Quote,
   InsertQuote,
@@ -17,6 +18,58 @@ import type {
   InsertQuoteAirportParking,
   InsertPassenger,
 } from "@shared/schema";
+
+type ScopeOrTrusted = Scope | { orgId: null };
+
+function effectiveOrgId(scope: ScopeOrTrusted): string | null {
+  if (scope.orgId === null) return null;
+  if ((scope as Scope).orgRole === "platform_admin") return null;
+  return (scope as Scope).orgId || null;
+}
+
+async function assertQuoteInScope(id: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const row = await newQuoteRepository.findByIdWithOrg(id);
+  if (!row || row.clientOrgId !== orgId) {
+    throw new AppError("Quote not found", 404);
+  }
+}
+
+async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await newQuoteRepository.transactionBelongsToOrg(transactionId, orgId);
+  if (!ok) throw new AppError("Quote not found", 404);
+}
+
+async function assertFlightInScope(flightId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await newQuoteRepository.flightBelongsToOrg(flightId, orgId);
+  if (!ok) throw new AppError("Flight not found", 404);
+}
+
+async function assertAccommodationInScope(accommodationId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await newQuoteRepository.accommodationBelongsToOrg(accommodationId, orgId);
+  if (!ok) throw new AppError("Accommodation not found", 404);
+}
+
+async function assertTransferInScope(transferId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await newQuoteRepository.transferBelongsToOrg(transferId, orgId);
+  if (!ok) throw new AppError("Transfer not found", 404);
+}
+
+async function assertPassengerInScope(passengerId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await newQuoteRepository.passengerBelongsToOrg(passengerId, orgId);
+  if (!ok) throw new AppError("Passenger not found", 404);
+}
 
 interface QuoteRelationData {
   outboundFlight?: Partial<InsertQuoteFlight>;
@@ -54,6 +107,7 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   loungePasses?: Record<string, unknown>[];
   airportParkings?: Record<string, unknown>[];
   extraAccommodations?: Record<string, unknown>[];
+  childAges?: any[];
 };
 
 function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0): string {
@@ -96,43 +150,51 @@ async function resolveAndGenerateGuru(accommodationId: string, userId?: string) 
 }
 
 export const newQuoteService = {
-  async listQuotes() {
-    return await newQuoteRepository.findAll();
+  async listQuotes(scope: ScopeOrTrusted) {
+    return newQuoteRepository.findAll(effectiveOrgId(scope));
   },
 
-  async listQuotesByTransaction(transactionId: string) {
-    return await newQuoteRepository.findByTransactionId(transactionId);
+  async listQuotesByTransaction(transactionId: string, scope: ScopeOrTrusted) {
+    await assertTransactionInScope(transactionId, scope);
+    return newQuoteRepository.findByTransactionId(transactionId);
   },
 
-  async listQuotesByStatus(status: Quote['quote_status']) {
-    return await newQuoteRepository.findByStatus(status);
+  async listQuotesByStatus(status: Quote['quote_status'], scope: ScopeOrTrusted) {
+    return newQuoteRepository.findByStatus(status, effectiveOrgId(scope));
   },
 
-  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "") {
-    return await newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd);
+  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted) {
+    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, effectiveOrgId(scope));
   },
 
-  async getQuoteById(id: string) {
+  async getQuoteById(id: string, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(id, scope);
     const q = await newQuoteRepository.findById(id);
     if (!q) throw new AppError("Quote not found", 404);
     return q;
   },
 
-  async getQuoteWithDetails(id: string) {
+  async getQuoteWithDetails(id: string, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(id, scope);
     const q = await newQuoteRepository.findWithDetails(id);
     if (!q) throw new AppError("Quote not found", 404);
     return q;
   },
 
-  async createQuote(data: CreateQuotePayload) {
+  async createQuote(data: CreateQuotePayload, scope: ScopeOrTrusted) {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...quoteFields
     } = data;
 
+    await assertTransactionInScope(quoteFields.transaction_id, scope);
+
     const txn = await transactionRepository.findById(quoteFields.transaction_id);
     if (!txn) throw new AppError("Transaction not found", 404);
+    if (scope.orgId && txn.org_id !== scope.orgId) {
+      throw new AppError("Transaction not found", 404);
+    }
 
     if (!quoteFields.price_per_person || quoteFields.price_per_person === "0.00" || quoteFields.price_per_person === "0") {
       quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child, quoteFields.discounts, quoteFields.service_charge);
@@ -202,16 +264,18 @@ export const newQuoteService = {
     return q;
   },
 
-  async createSocialQuote(userId: string, data: Omit<CreateQuotePayload, 'transaction_id' | 'isFreeQuote'>) {
+  async createSocialQuote(userId: string, data: Omit<CreateQuotePayload, 'transaction_id' | 'isFreeQuote'>, scope: ScopeOrTrusted) {
     if ((data as any).not_for_social) {
       throw new AppError("Cannot create social post for a quote marked as not for social", 400);
     }
 
     const txn = await transactionRepository.create({ status: 'on_quote', user_id: userId } as InsertTransaction);
-    return newQuoteService.createQuote({ ...data, transaction_id: txn.id, isFreeQuote: true } as CreateQuotePayload);
+    return newQuoteService.createQuote({ ...data, transaction_id: txn.id, isFreeQuote: true } as CreateQuotePayload, { orgId: null });
   },
 
-  async duplicateQuote(sourceQuoteId: string, data: Partial<CreateQuotePayload>) {
+  async duplicateQuote(sourceQuoteId: string, data: Partial<CreateQuotePayload>, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(sourceQuoteId, scope);
+
     const sourceQuote = await newQuoteRepository.findById(sourceQuoteId);
     if (!sourceQuote) throw new AppError("Quote not found", 404);
 
@@ -241,10 +305,12 @@ export const newQuoteService = {
       tags: sourceDetails?.tags ?? [],
     };
 
-    return newQuoteService.createQuote(payload);
+    return newQuoteService.createQuote(payload, scope);
   },
 
-  async updateQuote(id: string, data: UpdateQuotePayload) {
+  async updateQuote(id: string, data: UpdateQuotePayload, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(id, scope);
+
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType,
@@ -310,60 +376,74 @@ export const newQuoteService = {
       if (lodgeId) await newQuoteRepository.saveImagesToLodge(lodgeId, normalizedUpdateImages);
     }
 
-    return await newQuoteRepository.findWithDetails(id);
+    return newQuoteRepository.findWithDetails(id);
   },
 
-  async deleteQuote(id: string) {
+  async deleteQuote(id: string, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(id, scope);
     const existing = await newQuoteRepository.findById(id);
     if (!existing) throw new AppError("Quote not found", 404);
     await newQuoteRepository.remove(id);
   },
 
-  async addFlight(quoteId: string, data: Omit<InsertQuoteFlight, 'quote_id'>) {
-    return await newQuoteRepository.addFlight({ ...data, quote_id: quoteId });
+  async addFlight(quoteId: string, data: Omit<InsertQuoteFlight, 'quote_id'>, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(quoteId, scope);
+    return newQuoteRepository.addFlight({ ...data, quote_id: quoteId });
   },
 
-  async updateFlight(flightId: string, data: Partial<InsertQuoteFlight>) {
-    return await newQuoteRepository.updateFlight(flightId, data);
+  async updateFlight(flightId: string, data: Partial<InsertQuoteFlight>, scope: ScopeOrTrusted) {
+    await assertFlightInScope(flightId, scope);
+    return newQuoteRepository.updateFlight(flightId, data);
   },
 
-  async removeFlight(flightId: string) {
+  async removeFlight(flightId: string, scope: ScopeOrTrusted) {
+    await assertFlightInScope(flightId, scope);
     await newQuoteRepository.removeFlight(flightId);
   },
 
-  async addAccommodation(quoteId: string, data: Omit<InsertQuoteAccomodation, 'quote_id'>) {
-    return await newQuoteRepository.addAccommodation({ ...data, quote_id: quoteId });
+  async addAccommodation(quoteId: string, data: Omit<InsertQuoteAccomodation, 'quote_id'>, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(quoteId, scope);
+    return newQuoteRepository.addAccommodation({ ...data, quote_id: quoteId });
   },
 
-  async updateAccommodation(accommodationId: string, data: Partial<InsertQuoteAccomodation>) {
-    return await newQuoteRepository.updateAccommodation(accommodationId, data);
+  async updateAccommodation(accommodationId: string, data: Partial<InsertQuoteAccomodation>, scope: ScopeOrTrusted) {
+    await assertAccommodationInScope(accommodationId, scope);
+    return newQuoteRepository.updateAccommodation(accommodationId, data);
   },
 
-  async removeAccommodation(accommodationId: string) {
+  async removeAccommodation(accommodationId: string, scope: ScopeOrTrusted) {
+    await assertAccommodationInScope(accommodationId, scope);
     await newQuoteRepository.removeAccommodation(accommodationId);
   },
 
-  async addTransfer(quoteId: string, data: Omit<InsertQuoteTransfer, 'quote_id'>) {
-    return await newQuoteRepository.addTransfer({ ...data, quote_id: quoteId });
+  async addTransfer(quoteId: string, data: Omit<InsertQuoteTransfer, 'quote_id'>, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(quoteId, scope);
+    return newQuoteRepository.addTransfer({ ...data, quote_id: quoteId });
   },
 
-  async removeTransfer(transferId: string) {
+  async removeTransfer(transferId: string, scope: ScopeOrTrusted) {
+    await assertTransferInScope(transferId, scope);
     await newQuoteRepository.removeTransfer(transferId);
   },
 
-  async addPassenger(quoteId: string, data: Omit<InsertPassenger, 'quote_id'>) {
-    return await newQuoteRepository.addPassenger({ ...data, quote_id: quoteId });
+  async addPassenger(quoteId: string, data: Omit<InsertPassenger, 'quote_id'>, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(quoteId, scope);
+    return newQuoteRepository.addPassenger({ ...data, quote_id: quoteId });
   },
 
-  async removePassenger(passengerId: string) {
+  async removePassenger(passengerId: string, scope: ScopeOrTrusted) {
+    await assertPassengerInScope(passengerId, scope);
     await newQuoteRepository.removePassenger(passengerId);
   },
 
-  async updateQuoteTags(quoteId: string, tagNames: string[]) {
+  async updateQuoteTags(quoteId: string, tagNames: string[], scope: ScopeOrTrusted) {
+    await assertQuoteInScope(quoteId, scope);
     await tagService.updateQuoteTags(quoteId, tagNames);
   },
 
-  async getQuoteTags(quoteId: string) {
-    return await tagService.getQuoteTags(quoteId);
+  async getQuoteTags(quoteId: string, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(quoteId, scope);
+    return tagService.getQuoteTags(quoteId);
   },
 };
+

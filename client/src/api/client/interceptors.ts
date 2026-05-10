@@ -28,11 +28,20 @@ axiosClient.interceptors.response.use(
         window.location.href = "/";
       }
     }
+    const responseData = (error.response?.data ?? {}) as Record<string, unknown>;
     const message =
-      (error.response?.data as { message?: string })?.message ||
+      (responseData.message as string | undefined) ||
       error.message ||
       "Request failed";
-    return Promise.reject(new Error(message));
+    const wrapped = new Error(message) as Error & {
+      status?: number;
+      code?: string;
+      data?: Record<string, unknown>;
+    };
+    wrapped.status = error.response?.status;
+    wrapped.code = responseData.code as string | undefined;
+    wrapped.data = responseData;
+    return Promise.reject(wrapped);
   },
 );
 

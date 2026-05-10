@@ -18,9 +18,35 @@ export const referralRepository = {
     return result;
   },
 
-  async findAll() {
+  async findByIdWithOrg(id: string) {
+    const [result] = await db
+      .select({
+        id: referral.id,
+        referrerClientId: referral.referrerClientId,
+        referralStatus: referral.referralStatus,
+        payoutAmount: referral.payoutAmount,
+        referrerOrgId: referrerClient.orgId,
+      })
+      .from(referral)
+      .leftJoin(referrerClient, eq(referral.referrerClientId, referrerClient.id))
+      .where(eq(referral.id, id))
+      .limit(1);
+    return result ?? null;
+  },
+
+  async clientBelongsToOrg(clientId: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: clientTable.id })
+      .from(clientTable)
+      .where(and(eq(clientTable.id, clientId), eq(clientTable.orgId, orgId)))
+      .limit(1);
+    return !!row;
+  },
+
+  async findAll(orgId: string | null) {
     const today = new Date().toISOString().split("T")[0];
-    const rows = await db
+
+    const baseQuery = db
       .select({
         id: referral.id,
         referralStatus: referral.referralStatus,
@@ -45,8 +71,13 @@ export const referralRepository = {
       })
       .from(referral)
       .leftJoin(referrerClient, eq(referral.referrerClientId, referrerClient.id))
-      .leftJoin(referredClient, eq(referral.referredClientId, referredClient.id))
-      .orderBy(referral.createdAt);
+      .leftJoin(referredClient, eq(referral.referredClientId, referredClient.id));
+
+    const scoped = orgId
+      ? baseQuery.where(eq(referrerClient.orgId, orgId))
+      : baseQuery;
+
+    const rows = await scoped.orderBy(referral.createdAt);
 
     return rows.map((r) => ({
       ...r,
@@ -196,7 +227,6 @@ export const referralRepository = {
   async getVipOverview(referrerClientId: string) {
     const today = new Date().toISOString().split("T")[0];
 
-    // Client VIP profile
     const [clientRow] = await db
       .select({
         vipTier: clientTable.vipTier,
@@ -206,7 +236,6 @@ export const referralRepository = {
       .from(clientTable)
       .where(eq(clientTable.id, referrerClientId));
 
-    // Clients referred by this client (from clientTable.referredByClientId)
     const referredClients = await db
       .select({
         id: clientTable.id,
@@ -219,7 +248,6 @@ export const referralRepository = {
       .from(clientTable)
       .where(eq(clientTable.referredByClientId, referrerClientId));
 
-    // Stats from referral table
     const [statsRow] = await db
       .select({
         pendingCount: sql<string>`COUNT(*) FILTER (WHERE ${referral.referralStatus} = 'PENDING')`,
@@ -238,7 +266,6 @@ export const referralRepository = {
       .from(referral)
       .where(eq(referral.referrerClientId, referrerClientId));
 
-    // Total non-rejected debits from the wallet ledger
     const [walletRow] = await db
       .select({
         debitTotal: sql<string>`
@@ -254,7 +281,6 @@ export const referralRepository = {
     const walletReferral = alias(referral, "wallet_referral");
     const walletBooking = alias(booking, "wallet_booking");
 
-    // Wallet ledger entries (all transactions for this client)
     const walletLedger = await db
       .select({
         id: wallet_transaction.id,
@@ -276,7 +302,6 @@ export const referralRepository = {
       .where(eq(wallet_transaction.client_id, referrerClientId))
       .orderBy(wallet_transaction.created_at);
 
-    // Transaction history: referral rows joined with booking via transactionId
     const bookingAlias = alias(booking, "ref_booking");
     const txRows = await db
       .select({
@@ -332,7 +357,6 @@ export const referralRepository = {
         walletPayout: parseFloat(statsRow?.walletPayout ?? "0"),
         paidPayout: parseFloat(statsRow?.paidPayout ?? "0"),
         overallPayout: parseFloat(statsRow?.overallPayout ?? "0"),
-        // Available = IN_WALLET referral payouts minus any non-rejected debits
         availableBalance: Math.max(0, parseFloat(statsRow?.walletPayout ?? "0") - parseFloat(walletRow?.debitTotal ?? "0")),
       },
       referredClients,

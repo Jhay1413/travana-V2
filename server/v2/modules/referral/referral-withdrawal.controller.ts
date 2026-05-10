@@ -3,10 +3,12 @@ import { referralWithdrawalService } from './referral-withdrawal.service';
 import { getInvoicePresignedUrl } from '../../../services/invoicePdf.service';
 import { successResponse } from '../../utils/response';
 import { asyncHandler } from '../../utils/async-handler';
+import { getScope } from '../../utils/scope';
 
 export const referralWithdrawalController = {
-  listWithdrawals: asyncHandler(async (_req: Request, res: Response) => {
-    const raw = await referralWithdrawalService.listWithdrawals();
+  listWithdrawals: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const raw = await referralWithdrawalService.listWithdrawals(scope);
     const withdrawals = raw.map((w: any) => ({
       id: w.id,
       referral_id: w.referral_id,
@@ -38,25 +40,30 @@ export const referralWithdrawalController = {
   }),
 
   getWithdrawalById: asyncHandler(async (req: Request, res: Response) => {
-    const withdrawal = await referralWithdrawalService.getWithdrawalById(req.params.id as string);
+    const scope = getScope(req);
+    const withdrawal = await referralWithdrawalService.getWithdrawalById(req.params.id as string, scope);
     return successResponse(res, withdrawal, 'Withdrawal retrieved successfully');
   }),
 
   processWithdrawal: asyncHandler(async (req: Request, res: Response) => {
-    const withdrawal = await referralWithdrawalService.processWithdrawal(req.params.id as string, req.body);
+    const scope = getScope(req);
+    const withdrawal = await referralWithdrawalService.processWithdrawal(req.params.id as string, req.body, scope);
     return successResponse(res, withdrawal, 'Withdrawal processed successfully');
   }),
 
   rejectWithdrawal: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const withdrawal = await referralWithdrawalService.rejectWithdrawal(
       req.params.id as string,
       req.body.notes,
+      scope,
     );
     return successResponse(res, withdrawal, 'Withdrawal rejected');
   }),
 
   getInvoiceUrl: asyncHandler(async (req: Request, res: Response) => {
-    const withdrawal = await referralWithdrawalService.getWithdrawalById(req.params.id as string);
+    const scope = getScope(req);
+    const withdrawal = await referralWithdrawalService.getWithdrawalById(req.params.id as string, scope);
     if (!(withdrawal as any)?.invoice_url) {
       return res
         .status(404)

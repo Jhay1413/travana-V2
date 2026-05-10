@@ -1,7 +1,7 @@
 import { db } from "../../config/database";
-import { travel_deal } from "@shared/schema";
+import { travel_deal, quote, transaction, clientTable } from "@shared/schema";
 import type { TravelDeal, InsertTravelDeal } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export const socialPostRepository = {
   async create(data: InsertTravelDeal): Promise<TravelDeal> {
@@ -25,6 +25,33 @@ export const socialPostRepository = {
       .where(eq(travel_deal.id, id))
       .limit(1);
     return result;
+  },
+
+  async findByIdWithOrg(id: string) {
+    const [result] = await db
+      .select({
+        id: travel_deal.id,
+        quote_id: travel_deal.quote_id,
+        clientOrgId: clientTable.orgId,
+      })
+      .from(travel_deal)
+      .leftJoin(quote, eq(travel_deal.quote_id, quote.id))
+      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(eq(travel_deal.id, id))
+      .limit(1);
+    return result ?? null;
+  },
+
+  async quoteBelongsToOrg(quoteId: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: quote.id })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(and(eq(quote.id, quoteId), eq(clientTable.orgId, orgId)))
+      .limit(1);
+    return !!row;
   },
 
   async update(id: string, data: Partial<InsertTravelDeal>): Promise<TravelDeal> {

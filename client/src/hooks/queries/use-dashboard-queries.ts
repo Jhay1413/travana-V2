@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "@/api";
 import type { DashboardStats } from "@/types/dashboard";
-import type { MyProfit, AdminOverviewStats } from "@/api/endpoints/dashboard.api";
+import type { MyProfit, AdminOverviewStats, AgentStats } from "@/api/endpoints/dashboard.api";
 
 export const dashboardKeys = {
   all: ["dashboard"] as const,
   stats: () => [...dashboardKeys.all, "stats"] as const,
   myProfit: () => [...dashboardKeys.all, "my-profit"] as const,
+  agentStats: () => [...dashboardKeys.all, "agent-stats"] as const,
   adminOverview: () => [...dashboardKeys.all, "admin-overview"] as const,
 };
 
@@ -28,5 +29,13 @@ export function useAdminOverviewStats() {
   return useQuery<AdminOverviewStats>({
     queryKey: dashboardKeys.adminOverview(),
     queryFn: dashboardApi.getAdminOverviewStats,
+  });
+}
+
+export function useAgentStats(options?: { enabled?: boolean }) {
+  return useQuery<AgentStats>({
+    queryKey: dashboardKeys.agentStats(),
+    queryFn: dashboardApi.getAgentStats,
+    enabled: options?.enabled ?? true,
   });
 }

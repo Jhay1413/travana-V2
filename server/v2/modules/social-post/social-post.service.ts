@@ -14,7 +14,35 @@ import { db } from "../../config/database";
 import { quote_accomodation, accommodation_images, lodge_images, lodges, quote, accomodation_list, park, transaction } from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import type { TravelDeal } from "@shared/schema";
-import type { OnlySocialsMediaUploadResponse, OnlySocialsMediaContent } from "../../types/social-post/social-post.types";
+import type { OnlySocialsMediaUploadResponse, OnlySocialsMediaContent } from "./social-post.types";
+import type { Scope } from "../../utils/scope";
+
+type ScopeOrTrusted = Scope | { orgId: null };
+
+function effectiveOrgId(scope: ScopeOrTrusted): string | null {
+  if (scope.orgId === null) return null;
+  if ((scope as Scope).orgRole === "platform_admin") return null;
+  return (scope as Scope).orgId || null;
+}
+
+async function assertQuoteInScope(quoteId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await socialPostRepository.quoteBelongsToOrg(quoteId, orgId);
+  if (!ok) throw new AppError("Quote not found", 404);
+}
+
+async function assertDealInScope(dealId: string, scope: ScopeOrTrusted): Promise<TravelDeal> {
+  const orgId = effectiveOrgId(scope);
+  const deal = await socialPostRepository.findById(dealId);
+  if (!deal) throw new AppError("Travel deal not found", 404);
+  if (!orgId) return deal;
+  const row = await socialPostRepository.findByIdWithOrg(dealId);
+  if (!row || row.clientOrgId !== orgId) {
+    throw new AppError("Travel deal not found", 404);
+  }
+  return deal;
+}
 
 function getOpenAI(): OpenAI {
   if (!process.env.OPENAI_API_KEY) {
@@ -34,7 +62,7 @@ function pickRandomEmoji(pool: string[]): string {
 
 interface PostDeal {
   title: string;
-  travelDate: string;
+  travelDate: string | null;
   nights: number;
   boardBasis?: string | null;
   departureAirport?: string | null;
@@ -126,7 +154,9 @@ export interface GeneratePostParams {
 }
 
 export const socialPostService = {
-  async generatePost(params: GeneratePostParams): Promise<TravelDeal> {
+  async generatePost(params: GeneratePostParams, scope: ScopeOrTrusted): Promise<TravelDeal> {
+    await assertQuoteInScope(params.quoteId, scope);
+
     const [quoteRow] = await db
       .select({ is_test: transaction.is_test })
       .from(quote)
@@ -253,14 +283,14 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     });
   },
 
-  async getTravelDealByQuoteId(quoteId: string): Promise<TravelDeal | null> {
+  async getTravelDealByQuoteId(quoteId: string, scope: ScopeOrTrusted): Promise<TravelDeal | null> {
+    await assertQuoteInScope(quoteId, scope);
     const deal = await socialPostRepository.findByQuoteId(quoteId);
     return deal ?? null;
   },
 
-  async updateTravelDeal(id: string, data: Partial<TravelDeal>): Promise<TravelDeal> {
-    const existing = await socialPostRepository.findById(id);
-    if (!existing) throw new AppError("Travel deal not found", 404);
+  async updateTravelDeal(id: string, data: Partial<TravelDeal>, scope: ScopeOrTrusted): Promise<TravelDeal> {
+    await assertDealInScope(id, scope);
     return await socialPostRepository.update(id, data);
   },
 
@@ -269,10 +299,10 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     postSchedule: string,
     existingImageIds: number[],
     newFiles: Express.Multer.File[],
-    imageUrls: string[] = []
+    imageUrls: string[] = [],
+    scope: ScopeOrTrusted = { orgId: null }
   ): Promise<TravelDeal> {
-    const deal = await socialPostRepository.findById(id);
-    if (!deal) throw new AppError("Travel deal not found", 404);
+    const deal = await assertDealInScope(id, scope);
 
     let allImageIds = [...existingImageIds];
     if (newFiles.length > 0) {
@@ -299,10 +329,10 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     existingImageIds: number[],
     newFiles: Express.Multer.File[],
     postContent: string,
-    imageUrls: string[] = []
+    imageUrls: string[] = [],
+    scope: ScopeOrTrusted = { orgId: null }
   ): Promise<TravelDeal> {
-    const deal = await socialPostRepository.findById(id);
-    if (!deal) throw new AppError("Travel deal not found", 404);
+    const deal = await assertDealInScope(id, scope);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
 
     let allImageIds = [...existingImageIds];
@@ -329,9 +359,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     });
   },
 
-  async deleteScheduledPost(id: string): Promise<TravelDeal> {
-    const deal = await socialPostRepository.findById(id);
-    if (!deal) throw new AppError("Travel deal not found", 404);
+  async deleteScheduledPost(id: string, scope: ScopeOrTrusted): Promise<TravelDeal> {
+    const deal = await assertDealInScope(id, scope);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials", 400);
 
     await deleteOnlySocialsPost(deal.onlySocialsId);
@@ -347,7 +376,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     return await uploadMultipleOnlySocialsMedia(files);
   },
 
-  async getQuoteImages(quoteId: string): Promise<{ url: string; name: string; source: string; isPrimary: boolean }[]> {
+  async getQuoteImages(quoteId: string, scope: ScopeOrTrusted): Promise<{ url: string; name: string; source: string; isPrimary: boolean }[]> {
+    await assertQuoteInScope(quoteId, scope);
     const images: { url: string; name: string; source: string; isPrimary: boolean }[] = [];
 
     try {
@@ -454,9 +484,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     return mediaIds;
   },
 
-  async getPostMedia(id: string): Promise<{ media: OnlySocialsMediaContent[]; postContent: string }> {
-    const deal = await socialPostRepository.findById(id);
-    if (!deal) throw new AppError("Travel deal not found", 404);
+  async getPostMedia(id: string, scope: ScopeOrTrusted): Promise<{ media: OnlySocialsMediaContent[]; postContent: string }> {
+    const deal = await assertDealInScope(id, scope);
     if (!deal.onlySocialsId) return { media: [], postContent: "" };
     const post = await fetchOnlySocialsPost(deal.onlySocialsId);
     const firstContent = post.versions?.[0]?.content?.[0];

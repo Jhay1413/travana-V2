@@ -20,13 +20,29 @@ function buildTxnScopeConds(scope?: Scope): SQL[] {
 async function enrichTransactions(txns: Transaction[]) {
   if (txns.length === 0) return [];
   const txnIds = txns.map(t => t.id);
+  const clientIds = Array.from(new Set(txns.map(t => t.client_id).filter((id): id is string => !!id)));
 
-  const [allEnquiries, allQuotes, allBookings, allPackageTypes] = await Promise.all([
+  const [allEnquiries, allQuotes, allBookings, allPackageTypes, allClients] = await Promise.all([
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
     db.select().from(quote).where(and(inArray(quote.transaction_id, txnIds), isNull(quote.deleted_at))),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
     db.select().from(package_type),
+    clientIds.length > 0
+      ? db.select({
+          id: clientTable.id,
+          title: clientTable.title,
+          firstName: clientTable.firstName,
+          surename: clientTable.surename,
+        }).from(clientTable).where(inArray(clientTable.id, clientIds))
+      : Promise.resolve([] as Array<{ id: string; title: string | null; firstName: string | null; surename: string | null }>),
   ]);
+
+  const clientMap = new Map<string, { id: string; title: string | null; firstName: string | null; surename: string | null; name: string }>();
+  for (const c of allClients) {
+    const title = c.title && c.title !== "NULL" ? c.title : "";
+    const name = [title, c.firstName, c.surename].filter(Boolean).join(" ");
+    clientMap.set(c.id, { ...c, name });
+  }
 
   const packageTypeMap = new Map(allPackageTypes.map(pt => [pt.id, pt.name]));
 
@@ -114,7 +130,8 @@ async function enrichTransactions(txns: Transaction[]) {
     const quotes = quotesMap.get(txn.id) || [];
     const bookingEntry = bookingMap.get(txn.id) || null;
     const holiday_type_name = enquiry?.holiday_type_name || quotes[0]?.holiday_type_name || bookingEntry?.holiday_type_name || null;
-    return { ...txn, holiday_type_name, enquiry, quotes, booking: bookingEntry };
+    const client = txn.client_id ? clientMap.get(txn.client_id) ?? null : null;
+    return { ...txn, holiday_type_name, enquiry, quotes, booking: bookingEntry, client };
   });
 }
 

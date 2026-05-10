@@ -1,7 +1,7 @@
 import { db } from '../../config/database';
 import { referral_payout, clientTable, referral } from '@shared/schema';
 import type { InsertReferralPayout, ReferralPayout } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 export const referralPayoutRepository = {
   async create(data: InsertReferralPayout): Promise<ReferralPayout> {
@@ -16,6 +16,22 @@ export const referralPayoutRepository = {
       .where(eq(referral_payout.id, id))
       .limit(1);
     return result;
+  },
+
+  async findByIdWithOrg(id: string) {
+    const [result] = await db
+      .select({
+        id: referral_payout.id,
+        referral_id: referral_payout.referral_id,
+        client_id: referral_payout.client_id,
+        status: referral_payout.status,
+        clientOrgId: clientTable.orgId,
+      })
+      .from(referral_payout)
+      .leftJoin(clientTable, eq(referral_payout.client_id, clientTable.id))
+      .where(eq(referral_payout.id, id))
+      .limit(1);
+    return result ?? null;
   },
 
   async findByReferralId(referralId: string): Promise<ReferralPayout | undefined> {
@@ -35,8 +51,8 @@ export const referralPayoutRepository = {
       .orderBy(referral_payout.requested_at);
   },
 
-  async findAll() {
-    return db
+  async findAll(orgId: string | null) {
+    const baseQuery = db
       .select({
         id: referral_payout.id,
         referral_id: referral_payout.referral_id,
@@ -58,8 +74,13 @@ export const referralPayoutRepository = {
       })
       .from(referral_payout)
       .leftJoin(clientTable, eq(referral_payout.client_id, clientTable.id))
-      .leftJoin(referral, eq(referral_payout.referral_id, referral.id))
-      .orderBy(referral_payout.requested_at);
+      .leftJoin(referral, eq(referral_payout.referral_id, referral.id));
+
+    const scoped = orgId
+      ? baseQuery.where(eq(clientTable.orgId, orgId))
+      : baseQuery;
+
+    return scoped.orderBy(referral_payout.requested_at);
   },
 
   async markApproved(id: string, notes?: string): Promise<ReferralPayout> {

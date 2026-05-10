@@ -6,9 +6,10 @@ import { isAuthenticated } from "../../middlewares/auth";
 import { asyncHandler } from "../../utils/async-handler";
 import { successResponse } from "../../utils/response";
 import { getUserId } from "../../utils/get-user-id";
+import { getScope } from "../../utils/scope";
 import { db } from "../../config/database";
-import { userProfiles } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { userProfiles, user as userTable } from "@shared/schema";
+import { and, eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -34,7 +35,20 @@ router.get(
 router.get(
   "/profiles/:userId",
   asyncHandler(async (req: any, res: any) => {
-    const [row] = await db.select().from(userProfiles).where(eq(userProfiles.userId, req.params.userId));
+    const scope = getScope(req);
+    const targetUserId = req.params.userId as string;
+    const callerOrgId = scope.orgRole === "platform_admin" ? null : (scope.orgId || null);
+
+    if (callerOrgId) {
+      const [target] = await db
+        .select({ id: userTable.id })
+        .from(userTable)
+        .where(and(eq(userTable.id, targetUserId), eq(userTable.orgId, callerOrgId)))
+        .limit(1);
+      if (!target) return res.status(404).json({ success: false, message: "Profile not found" });
+    }
+
+    const [row] = await db.select().from(userProfiles).where(eq(userProfiles.userId, targetUserId));
     return successResponse(res, row || null, "Profile retrieved");
   })
 );

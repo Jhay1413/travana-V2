@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { wallet_transaction, clientTable, referral, booking } from "@shared/schema";
+import { wallet_transaction, clientTable, booking } from "@shared/schema";
 import type { InsertWalletTransaction, WalletTransaction } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -18,6 +18,32 @@ export const walletTransactionRepository = {
     return result;
   },
 
+  async findByIdWithOrg(id: string) {
+    const [result] = await db
+      .select({
+        id: wallet_transaction.id,
+        client_id: wallet_transaction.client_id,
+        type: wallet_transaction.type,
+        status: wallet_transaction.status,
+        amount: wallet_transaction.amount,
+        clientOrgId: clientTable.orgId,
+      })
+      .from(wallet_transaction)
+      .leftJoin(clientTable, eq(wallet_transaction.client_id, clientTable.id))
+      .where(eq(wallet_transaction.id, id))
+      .limit(1);
+    return result ?? null;
+  },
+
+  async clientBelongsToOrg(clientId: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: clientTable.id })
+      .from(clientTable)
+      .where(and(eq(clientTable.id, clientId), eq(clientTable.orgId, orgId)))
+      .limit(1);
+    return !!row;
+  },
+
   async findByClientId(clientId: string): Promise<WalletTransaction[]> {
     return db
       .select()
@@ -26,7 +52,6 @@ export const walletTransactionRepository = {
       .orderBy(wallet_transaction.created_at);
   },
 
-  // Available balance = sum of processed credits − sum of non-rejected debits
   async getBalance(clientId: string): Promise<number> {
     const [row] = await db
       .select({
@@ -47,32 +72,39 @@ export const walletTransactionRepository = {
     return parseFloat(row?.balance ?? "0");
   },
 
-  async findAll() {
-    return db
-      .select({
-        id: wallet_transaction.id,
-        client_id: wallet_transaction.client_id,
-        type: wallet_transaction.type,
-        amount: wallet_transaction.amount,
-        source: wallet_transaction.source,
-        referral_id: wallet_transaction.referral_id,
-        booking_id: wallet_transaction.booking_id,
-        account_name: wallet_transaction.account_name,
-        transfer_reference: wallet_transaction.transfer_reference,
-        notes: wallet_transaction.notes,
-        invoice_url: wallet_transaction.invoice_url,
-        status: wallet_transaction.status,
-        created_at: wallet_transaction.created_at,
-        processed_at: wallet_transaction.processed_at,
-        clientFirstName: clientTable.firstName,
-        clientSurname: clientTable.surename,
-        clientEmail: clientTable.email,
-        bookingRef: booking.hays_ref,
-      })
+  async findAll(orgId: string | null) {
+    const baseSelect = {
+      id: wallet_transaction.id,
+      client_id: wallet_transaction.client_id,
+      type: wallet_transaction.type,
+      amount: wallet_transaction.amount,
+      source: wallet_transaction.source,
+      referral_id: wallet_transaction.referral_id,
+      booking_id: wallet_transaction.booking_id,
+      account_name: wallet_transaction.account_name,
+      transfer_reference: wallet_transaction.transfer_reference,
+      notes: wallet_transaction.notes,
+      invoice_url: wallet_transaction.invoice_url,
+      status: wallet_transaction.status,
+      created_at: wallet_transaction.created_at,
+      processed_at: wallet_transaction.processed_at,
+      clientFirstName: clientTable.firstName,
+      clientSurname: clientTable.surename,
+      clientEmail: clientTable.email,
+      bookingRef: booking.hays_ref,
+    };
+
+    const query = db
+      .select(baseSelect)
       .from(wallet_transaction)
       .leftJoin(clientTable, eq(wallet_transaction.client_id, clientTable.id))
-      .leftJoin(booking, eq(wallet_transaction.booking_id, booking.id))
-      .orderBy(wallet_transaction.created_at);
+      .leftJoin(booking, eq(wallet_transaction.booking_id, booking.id));
+
+    const scoped = orgId
+      ? query.where(eq(clientTable.orgId, orgId))
+      : query;
+
+    return scoped.orderBy(wallet_transaction.created_at);
   },
 
   async findByIdWithDetails(id: string) {

@@ -16,7 +16,17 @@ export default function LandingPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    loginMutation.mutate({ email, password });
+    loginMutation.mutate(
+      { email, password },
+      {
+        onError: (err: any) => {
+          if (err?.code === "EMAIL_NOT_VERIFIED") {
+            const target = err?.data?.email ?? email;
+            setLocation(`/verify-email?email=${encodeURIComponent(target)}`);
+          }
+        },
+      },
+    );
   };
 
   return (

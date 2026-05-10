@@ -3,7 +3,7 @@ import { booking, transaction, clientTable, user } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNotNull } from "drizzle-orm";
 
 export const revenueRepository = {
-  async getForwardsForMonth(year: number, month: number): Promise<{
+  async getForwardsForMonth(year: number, month: number, orgId: string | null): Promise<{
     totalCommission: number;
     dealCount: number;
   }> {
@@ -16,20 +16,28 @@ export const revenueRepository = {
     const travelDateEnd = new Date(monthEnd);
     travelDateEnd.setDate(travelDateEnd.getDate() + 56);
 
-    const result = await db
+    const conditions: any[] = [
+      gte(booking.travel_date, travelDateStart.toISOString().split('T')[0]),
+      lte(booking.travel_date, travelDateEnd.toISOString().split('T')[0]),
+      eq(booking.is_active, true),
+      isNotNull(booking.package_commission),
+    ];
+    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
+
+    const baseQuery = db
       .select({
         totalCommission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
         dealCount: sql<number>`COUNT(*)`,
       })
-      .from(booking)
-      .where(
-        and(
-          gte(booking.travel_date, travelDateStart.toISOString().split('T')[0]),
-          lte(booking.travel_date, travelDateEnd.toISOString().split('T')[0]),
-          eq(booking.is_active, true),
-          isNotNull(booking.package_commission)
-        )
-      );
+      .from(booking);
+
+    const scoped = orgId
+      ? baseQuery
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      : baseQuery;
+
+    const result = await scoped.where(and(...conditions));
 
     return {
       totalCommission: Number(result[0]?.totalCommission || 0),
@@ -37,18 +45,7 @@ export const revenueRepository = {
     };
   },
 
-  async getBookingsForMonth(year: number, month: number): Promise<Array<{
-    bookingId: string;
-    clientId: string;
-    clientFirstName: string;
-    clientSurename: string;
-    travelDate: string;
-    commission: number;
-    agentId: string;
-    agentFirstName: string;
-    agentLastName: string;
-    title: string | null;
-  }>> {
+  async getBookingsForMonth(year: number, month: number, orgId: string | null) {
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
 
@@ -57,6 +54,14 @@ export const revenueRepository = {
 
     const travelDateEnd = new Date(monthEnd);
     travelDateEnd.setDate(travelDateEnd.getDate() + 56);
+
+    const conditions: any[] = [
+      gte(booking.travel_date, travelDateStart.toISOString().split('T')[0]),
+      lte(booking.travel_date, travelDateEnd.toISOString().split('T')[0]),
+      eq(booking.is_active, true),
+      isNotNull(booking.package_commission),
+    ];
+    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
 
     const bookings = await db
       .select({
@@ -75,14 +80,7 @@ export const revenueRepository = {
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
       .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
       .innerJoin(user, eq(transaction.user_id, user.id))
-      .where(
-        and(
-          gte(booking.travel_date, travelDateStart.toISOString().split('T')[0]),
-          lte(booking.travel_date, travelDateEnd.toISOString().split('T')[0]),
-          eq(booking.is_active, true),
-          isNotNull(booking.package_commission)
-        )
-      )
+      .where(and(...conditions))
       .orderBy(booking.travel_date);
 
     return bookings.map((b) => ({
@@ -99,18 +97,20 @@ export const revenueRepository = {
     }));
   },
 
-  async getAgentPerformance(): Promise<Array<{
-    agentId: string;
-    agentFirstName: string;
-    agentLastName: string;
-    totalCommission: number;
-    dealCount: number;
-  }>> {
+  async getAgentPerformance(orgId: string | null) {
     const now = new Date();
     const oneYearFromNow = new Date(now);
     oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
 
-    const results = await db
+    const conditions: any[] = [
+      eq(booking.is_active, true),
+      isNotNull(booking.package_commission),
+      gte(booking.travel_date, now.toISOString().split('T')[0]),
+      lte(booking.travel_date, oneYearFromNow.toISOString().split('T')[0]),
+    ];
+    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
+
+    const baseQuery = db
       .select({
         agentId: user.id,
         agentFirstName: user.firstName,
@@ -120,15 +120,14 @@ export const revenueRepository = {
       })
       .from(booking)
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-      .innerJoin(user, eq(transaction.user_id, user.id))
-      .where(
-        and(
-          eq(booking.is_active, true),
-          isNotNull(booking.package_commission),
-          gte(booking.travel_date, now.toISOString().split('T')[0]),
-          lte(booking.travel_date, oneYearFromNow.toISOString().split('T')[0])
-        )
-      )
+      .innerJoin(user, eq(transaction.user_id, user.id));
+
+    const scoped = orgId
+      ? baseQuery.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      : baseQuery;
+
+    const results = await scoped
+      .where(and(...conditions))
       .groupBy(user.id, user.firstName, user.lastName)
       .orderBy(sql`SUM(CAST(${booking.package_commission} AS DECIMAL)) DESC`);
 
@@ -141,7 +140,7 @@ export const revenueRepository = {
     }));
   },
 
-  async getTotalStats(): Promise<{
+  async getTotalStats(orgId: string | null): Promise<{
     totalCommission: number;
     totalDeals: number;
   }> {
@@ -149,20 +148,28 @@ export const revenueRepository = {
     const oneYearFromNow = new Date(now);
     oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
 
-    const result = await db
+    const conditions: any[] = [
+      eq(booking.is_active, true),
+      isNotNull(booking.package_commission),
+      gte(booking.travel_date, now.toISOString().split('T')[0]),
+      lte(booking.travel_date, oneYearFromNow.toISOString().split('T')[0]),
+    ];
+    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
+
+    const baseQuery = db
       .select({
         totalCommission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
         totalDeals: sql<number>`COUNT(*)`,
       })
-      .from(booking)
-      .where(
-        and(
-          eq(booking.is_active, true),
-          isNotNull(booking.package_commission),
-          gte(booking.travel_date, now.toISOString().split('T')[0]),
-          lte(booking.travel_date, oneYearFromNow.toISOString().split('T')[0])
-        )
-      );
+      .from(booking);
+
+    const scoped = orgId
+      ? baseQuery
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      : baseQuery;
+
+    const result = await scoped.where(and(...conditions));
 
     return {
       totalCommission: Number(result[0]?.totalCommission || 0),

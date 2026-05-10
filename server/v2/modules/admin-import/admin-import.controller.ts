@@ -34,18 +34,18 @@ export const adminImportController = {
   }),
 
   deleteRow: asyncHandler(async (req: Request, res: Response) => {
-    await adminImportService.deleteRow(req.params.tableName, req.params.id);
+    await adminImportService.deleteRow(req.params.tableName as string, req.params.id as string);
     return successResponse(res, null, 'Row deleted');
   }),
 
   importRows: asyncHandler(async (req: Request, res: Response) => {
     const { rows } = req.body;
-    const result = await adminImportService.importRows(req.params.tableName, rows);
+    const result = await adminImportService.importRows(req.params.tableName as string, rows);
     return successResponse(res, result, `Import complete: ${result.imported}/${result.total} rows imported`);
   }),
 
   clearTable: asyncHandler(async (req: Request, res: Response) => {
-    await adminImportService.clearTable(req.params.tableName);
+    await adminImportService.clearTable(req.params.tableName as string);
     return successResponse(res, null, `Table ${req.params.tableName} cleared`);
   }),
 };

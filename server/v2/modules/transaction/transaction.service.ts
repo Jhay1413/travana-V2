@@ -350,7 +350,7 @@ export const transactionService = {
           loungePasses,
           airportParkings,
           extraAccommodations,
-        } as any);
+        } as any, { orgId: null });
       } catch (err) {
         console.error('FREE QUOTE - error creating free quote:', err);
       }
@@ -542,7 +542,8 @@ export const transactionService = {
 
     const walletCreditAmount = parseFloat(String(bookingFields.wallet_credit ?? 0)) || 0;
     if (walletCreditAmount > 0 && result.transaction.client_id) {
-      await walletService.applyBookingCredit(result.transaction.client_id, result.booking.id, walletCreditAmount);
+      // Internal trusted call from a scoped transaction flow — bypass org check.
+      await walletService.applyBookingCredit(result.transaction.client_id, result.booking.id, walletCreditAmount, { orgId: null });
     }
 
     if (result.transaction.client_id) {

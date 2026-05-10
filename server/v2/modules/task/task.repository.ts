@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { tasks, notifications, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
-import { eq, and, desc, lte, inArray, type SQL } from "drizzle-orm";
+import { eq, and, desc, gte, lte, inArray, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
 
@@ -190,9 +190,16 @@ export const taskRepository = {
     });
   },
 
-  async findAllWithClientTasks(userId?: string, scope?: Scope): Promise<TaskWithClient[]> {
+  async findAllWithClientTasks(
+    userId?: string,
+    scope?: Scope,
+    filters?: { dueFrom?: Date; dueTo?: Date; incomplete?: boolean },
+  ): Promise<TaskWithClient[]> {
     const scopeConds = buildTaskScopeConds(scope);
     const conds: SQL[] = userId ? [eq(tasks.userId, userId), ...scopeConds] : scopeConds;
+    if (filters?.dueFrom) conds.push(gte(tasks.dueDate, filters.dueFrom));
+    if (filters?.dueTo) conds.push(lte(tasks.dueDate, filters.dueTo));
+    if (filters?.incomplete) conds.push(eq(tasks.completed, false));
     const query = db.select().from(tasks);
     const allTasks = conds.length > 0
       ? await query.where(and(...conds)).orderBy(desc(tasks.dueDate))

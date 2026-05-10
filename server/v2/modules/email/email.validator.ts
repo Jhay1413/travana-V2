@@ -13,9 +13,7 @@ const emailAccountBase = z.object({
 });
 
 export const createEmailAccountValidator = z.object({
-  body: emailAccountBase.extend({
-    userId: z.string().min(1, "User ID is required"),
-  }),
+  body: emailAccountBase,
 });
 
 export const updateEmailAccountValidator = z.object({

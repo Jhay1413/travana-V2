@@ -642,7 +642,7 @@ export default function EnquiryPage() {
   const resolvedParams = params ?? freeParams;
   const urlClientId = resolvedParams?.clientId || "";
   const enquiryId = resolvedParams?.enquiryId || "";
-  const { role, setRole } = useRole();
+  const { role } = useRole();
 
   const { data: enquiry, isLoading } = useEnquiry(enquiryId);
   const clientId = (urlClientId && urlClientId !== "_") ? urlClientId : ((enquiry as any)?.client_id || "");

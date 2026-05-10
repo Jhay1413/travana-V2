@@ -80,9 +80,9 @@ const ORG_ADMIN_NAV: NavConfig = [
     label: "Agency Settings",
     icon: Building2,
     items: [
+      { path: "/agency/profile", label: "Agency Profile", icon: Sparkles },
+      { path: "/agency/branches", label: "Branches", icon: Building2 },
       { path: "/agency/team", label: "Team & Seats", icon: Users },
-      { path: "/agency/permissions", label: "Roles & Permissions", icon: Shield },
-      { path: "/agency/branding", label: "White-label Branding", icon: Sparkles },
       { path: "/agency/billing", label: "Billing & Plan", icon: CircleDollarSign },
     ],
   },

@@ -15,7 +15,7 @@ export function useMarkNotificationRead(userId: string) {
 export function useMarkAllNotificationsRead(userId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => notificationApi.markAllRead(userId),
+    mutationFn: () => notificationApi.markAllRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.byUser(userId) });
     },

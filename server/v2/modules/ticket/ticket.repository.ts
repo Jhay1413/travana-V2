@@ -75,10 +75,18 @@ export const ticketRepository = {
     return await buildTicketWithNamesQuery().where(and(...conds)).orderBy(desc(tickets.createdAt));
   },
 
-  async findByAssignedTo(userId: string, scope?: Scope): Promise<TicketWithNames[]> {
+  async findByAssignedTo(
+    userId: string,
+    scope?: Scope,
+    filters?: { statuses?: string[] },
+  ): Promise<TicketWithNames[]> {
     const scopeConds = buildTicketScopeConds(scope);
     const assignedOr = or(eq(tickets.assignedTo, userId), eq(tickets.userId, userId))!;
     const conds: SQL[] = [assignedOr, ...scopeConds];
+    if (filters?.statuses && filters.statuses.length > 0) {
+      const lowered = filters.statuses.map((s) => s.toLowerCase().replace("_", " "));
+      conds.push(sql`LOWER(REPLACE(${tickets.status}::text, '_', ' ')) IN (${sql.join(lowered.map((s) => sql`${s}`), sql`, `)})`);
+    }
     return await buildTicketWithNamesQuery().where(and(...conds)).orderBy(desc(tickets.createdAt));
   },
 

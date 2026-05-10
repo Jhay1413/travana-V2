@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { useCurrentUser } from "./queries";
 import type { Role, OrgRole } from "@/types/auth/auth.types";
 import { can as canPerm, canAccessModule, type Module, type Action } from "@/lib/permissions";
-
-const ROLE_KEY = "apple-travel-role-preview";
 
 function normalizeRole(raw?: string): Role {
   if (!raw) return "Agent";
@@ -28,34 +26,23 @@ function deriveOrgRoleFromRole(role: Role): OrgRole {
   }
 }
 
+function roleFromOrgRole(orgRole: OrgRole | null | undefined): Role | null {
+  switch (orgRole) {
+    case "platform_admin": return "PlatformAdmin";
+    case "org_admin":      return "Admin";
+    case "branch_manager": return "Manager";
+    case "agent":          return "Agent";
+    case "homeworker":     return "Homeworker";
+    case "referral_agent": return "Referer";
+    default:               return null;
+  }
+}
+
 export function useRole() {
   const { data: user } = useCurrentUser();
-  const actualRole: Role = normalizeRole(user?.role);
-  const actualOrgRole: OrgRole = user?.orgRole ?? deriveOrgRoleFromRole(actualRole);
 
-  const [rolePreview, setRolePreview] = useState<Role | null>(() => {
-    const saved = sessionStorage.getItem(ROLE_KEY);
-    if (saved) return saved as Role;
-    return "Agent";
-  });
-
-  useEffect(() => {
-    const handler = () => {
-      const saved = sessionStorage.getItem(ROLE_KEY);
-      setRolePreview((saved as Role) || "Agent");
-    };
-    window.addEventListener("role-preview-updated", handler);
-    return () => window.removeEventListener("role-preview-updated", handler);
-  }, []);
-
-  const role: Role = rolePreview || actualRole;
-  const orgRole: OrgRole = rolePreview ? deriveOrgRoleFromRole(rolePreview) : actualOrgRole;
-
-  const setRole = useCallback((r: Role) => {
-    sessionStorage.setItem(ROLE_KEY, r);
-    setRolePreview(r);
-    try { window.dispatchEvent(new Event("role-preview-updated")); } catch {}
-  }, []);
+  const orgRole: OrgRole = (user?.orgRole as OrgRole | undefined) ?? deriveOrgRoleFromRole(normalizeRole(user?.role));
+  const role: Role = roleFromOrgRole(orgRole) ?? normalizeRole(user?.role);
 
   const can = useCallback(
     (action: Action, mod: Module, scope: "own" | "any" = "any") => canPerm(role, action, mod, scope),
@@ -63,5 +50,5 @@ export function useRole() {
   );
   const canAccess = useCallback((mod: Module) => canAccessModule(role, mod), [role]);
 
-  return { role, orgRole, setRole, actualRole, actualOrgRole, can, canAccess };
+  return { role, orgRole, can, canAccess };
 }

@@ -217,7 +217,7 @@ export default function ClientPage() {
   const [, params] = useRoute("/clients/:clientId");
   const { toast } = useToast();
 
-  const { role, setRole } = useRole();
+  const { role } = useRole();
   const [active] = useState<string>("clients");
   const [q, setQ] = useState("");
   type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "vip-club";

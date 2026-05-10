@@ -12,8 +12,12 @@ export const ticketService = {
     return await ticketRepository.findByClientId(clientId, scope);
   },
 
-  async listTicketsByUser(userId: string, scope: Scope) {
-    return await ticketRepository.findByUserId(userId, scope);
+  async listTicketsByUser(
+    userId: string,
+    scope: Scope,
+    filters?: { statuses?: string[] },
+  ) {
+    return await ticketRepository.findByAssignedTo(userId, scope, filters);
   },
 
   async getTicketById(id: string, scope?: Scope) {

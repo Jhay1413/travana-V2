@@ -1,4 +1,6 @@
 import * as targetsRepository from "./targets.repository";
+import { AppError } from "../../utils/error-handler";
+import type { Scope } from "../../utils/scope";
 import type {
   ShopTargetInput,
   AgentTargetInput,
@@ -11,60 +13,103 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-export async function getAllShopTargets() {
-  return await targetsRepository.getAllShopTargets();
-}
-
-export async function upsertShopTargets(targets: ShopTargetInput[]) {
-  for (const target of targets) {
-    if (target.month < 1 || target.month > 12) {
-      throw new Error(`Invalid month: ${target.month}. Must be between 1 and 12.`);
-    }
-    if (target.year < 2020 || target.year > 2050) {
-      throw new Error(`Invalid year: ${target.year}. Must be between 2020 and 2050.`);
-    }
-    const amount = parseFloat(target.targetAmount);
-    if (isNaN(amount) || amount < 0) {
-      throw new Error(`Invalid target amount: ${target.targetAmount}. Must be a positive number.`);
-    }
+/**
+ * Resolve which branch the request operates on.
+ *
+ * - branch_manager / agent / homeworker: always their own branch (scope.branchId).
+ *   `override` is ignored.
+ * - org_admin: defaults to scope.branchId if set, otherwise must pass `override`.
+ *   The override branch must belong to their org.
+ * - platform_admin: must pass `override` (no implicit branch).
+ *
+ * Returns the resolved branchId or throws AppError(400) if unresolved.
+ */
+async function resolveBranchId(scope: Scope, override?: string): Promise<string> {
+  if (scope.orgRole === "platform_admin") {
+    if (!override) throw new AppError("branchId is required for platform_admin", 400);
+    return override;
   }
 
-  return await targetsRepository.bulkUpsertShopTargets(targets);
-}
-
-export async function getAllAgentTargets() {
-  return await targetsRepository.getAllAgentTargets();
-}
-
-export async function getAgentTargetsByUserId(userId: string) {
-  return await targetsRepository.getAgentTargetsByUserId(userId);
-}
-
-export async function upsertAgentTargets(targets: AgentTargetInput[]) {
-  for (const target of targets) {
-    if (!target.userId) {
-      throw new Error("User ID is required for agent targets.");
-    }
-    if (target.month < 1 || target.month > 12) {
-      throw new Error(`Invalid month: ${target.month}. Must be between 1 and 12.`);
-    }
-    if (target.year < 2020 || target.year > 2050) {
-      throw new Error(`Invalid year: ${target.year}. Must be between 2020 and 2050.`);
-    }
-    const amount = parseFloat(target.targetAmount);
-    if (isNaN(amount) || amount < 0) {
-      throw new Error(`Invalid target amount: ${target.targetAmount}. Must be a positive number.`);
-    }
+  if (scope.branchId && (!override || override === scope.branchId)) {
+    return scope.branchId;
   }
 
-  return await targetsRepository.bulkUpsertAgentTargets(targets);
+  if (scope.orgRole === "org_admin" && override) {
+    const ok = await targetsRepository.branchBelongsToOrg(override, scope.orgId);
+    if (!ok) throw new AppError("Branch not found", 404);
+    return override;
+  }
+
+  // Branch users cannot operate on a branch other than their own.
+  if (override && scope.branchId && override !== scope.branchId) {
+    throw new AppError("Branch not found", 404);
+  }
+
+  throw new AppError("Branch context required", 400);
 }
 
-export async function getAllAgents() {
-  return await targetsRepository.getAllAgents();
+async function assertAgentInBranch(userId: string, branchId: string) {
+  const ok = await targetsRepository.userBelongsToBranch(userId, branchId);
+  if (!ok) throw new AppError("Agent not found in this branch", 404);
 }
 
-export async function getTargetsOverview(): Promise<TargetsOverview> {
+function validateMonth(month: number) {
+  if (month < 1 || month > 12) throw new AppError(`Invalid month: ${month}. Must be between 1 and 12.`, 400);
+}
+function validateYear(year: number) {
+  if (year < 2020 || year > 2050) throw new AppError(`Invalid year: ${year}. Must be between 2020 and 2050.`, 400);
+}
+function validateAmount(amount: string) {
+  const n = parseFloat(amount);
+  if (isNaN(n) || n < 0) throw new AppError(`Invalid target amount: ${amount}. Must be a positive number.`, 400);
+}
+
+export async function getAllShopTargets(scope: Scope, branchOverride?: string) {
+  const branchId = await resolveBranchId(scope, branchOverride);
+  return targetsRepository.getAllShopTargets(branchId);
+}
+
+export async function upsertShopTargets(scope: Scope, targets: ShopTargetInput[], branchOverride?: string) {
+  const branchId = await resolveBranchId(scope, branchOverride);
+  for (const t of targets) {
+    validateMonth(t.month);
+    validateYear(t.year);
+    validateAmount(t.targetAmount);
+  }
+  return targetsRepository.bulkUpsertShopTargets(branchId, targets);
+}
+
+export async function getAllAgentTargets(scope: Scope, branchOverride?: string) {
+  const branchId = await resolveBranchId(scope, branchOverride);
+  return targetsRepository.getAllAgentTargets(branchId);
+}
+
+export async function getAgentTargetsByUserId(scope: Scope, userId: string, branchOverride?: string) {
+  const branchId = await resolveBranchId(scope, branchOverride);
+  await assertAgentInBranch(userId, branchId);
+  return targetsRepository.getAgentTargetsByUserId(branchId, userId);
+}
+
+export async function upsertAgentTargets(scope: Scope, targets: AgentTargetInput[], branchOverride?: string) {
+  const branchId = await resolveBranchId(scope, branchOverride);
+  for (const t of targets) {
+    if (!t.userId) throw new AppError("User ID is required for agent targets.", 400);
+    validateMonth(t.month);
+    validateYear(t.year);
+    validateAmount(t.targetAmount);
+    await assertAgentInBranch(t.userId, branchId);
+  }
+  return targetsRepository.bulkUpsertAgentTargets(branchId, targets);
+}
+
+export async function getAllAgents(scope: Scope, branchOverride?: string) {
+  const branchId = await resolveBranchId(scope, branchOverride);
+  return targetsRepository.getAllAgents(branchId);
+}
+
+export async function getTargetsOverview(scope: Scope, branchOverride?: string): Promise<TargetsOverview> {
+  const branchId = await resolveBranchId(scope, branchOverride);
+
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
@@ -82,10 +127,10 @@ export async function getTargetsOverview(): Promise<TargetsOverview> {
   }
 
   const [shopTargets, agentTargets, agents, summaryData] = await Promise.all([
-    targetsRepository.getShopTargetsByDateRange(currentYear, currentMonth, endYear, endMonth),
-    targetsRepository.getAgentTargetsByDateRange(currentYear, currentMonth, endYear, endMonth),
-    targetsRepository.getAllAgents(),
-    targetsRepository.getTargetSummaryByDateRange(currentYear, currentMonth, endYear, endMonth),
+    targetsRepository.getShopTargetsByDateRange(branchId, currentYear, currentMonth, endYear, endMonth),
+    targetsRepository.getAgentTargetsByDateRange(branchId, currentYear, currentMonth, endYear, endMonth),
+    targetsRepository.getAllAgents(branchId),
+    targetsRepository.getTargetSummaryByDateRange(branchId, currentYear, currentMonth, endYear, endMonth),
   ]);
 
   const summary: MonthTargetSummary[] = [];
@@ -130,6 +175,7 @@ export async function getTargetsOverview(): Promise<TargetsOverview> {
   }
 
   return {
+    branchId,
     shopTargets,
     agentTargets,
     agents,

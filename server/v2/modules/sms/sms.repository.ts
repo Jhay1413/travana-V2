@@ -54,21 +54,51 @@ export const smsRepository = {
     return row;
   },
 
-  async listMessages(opts: { limit?: number; clientId?: string } = {}) {
+  async listMessages(opts: { limit?: number; clientId?: string; orgId: string | null }) {
     const limit = opts.limit ?? 200;
-    if (opts.clientId) {
-      return db
-        .select()
-        .from(smsMessagesTable)
-        .where(eq(smsMessagesTable.clientId, opts.clientId))
-        .orderBy(desc(smsMessagesTable.sentAt))
-        .limit(limit);
-    }
-    return db.select().from(smsMessagesTable).orderBy(desc(smsMessagesTable.sentAt)).limit(limit);
+
+    const baseQuery = db
+      .select({
+        id: smsMessagesTable.id,
+        clientId: smsMessagesTable.clientId,
+        clientName: smsMessagesTable.clientName,
+        toPhone: smsMessagesTable.toPhone,
+        body: smsMessagesTable.body,
+        status: smsMessagesTable.status,
+        templateId: smsMessagesTable.templateId,
+        templateName: smsMessagesTable.templateName,
+        triggerSource: smsMessagesTable.triggerSource,
+        triggeredBy: smsMessagesTable.triggeredBy,
+        triggeredByName: smsMessagesTable.triggeredByName,
+        providerMessageId: smsMessagesTable.providerMessageId,
+        providerError: smsMessagesTable.providerError,
+        sentAt: smsMessagesTable.sentAt,
+      })
+      .from(smsMessagesTable)
+      .leftJoin(clientTable, eq(smsMessagesTable.clientId, clientTable.id));
+
+    const conditions: any[] = [];
+    if (opts.clientId) conditions.push(eq(smsMessagesTable.clientId, opts.clientId));
+    if (opts.orgId) conditions.push(eq(clientTable.orgId, opts.orgId));
+
+    const scoped = conditions.length > 0
+      ? baseQuery.where(and(...conditions))
+      : baseQuery;
+
+    return scoped.orderBy(desc(smsMessagesTable.sentAt)).limit(limit);
   },
 
   async findClientById(id: string) {
     const [row] = await db.select().from(clientTable).where(eq(clientTable.id, id)).limit(1);
+    return row || undefined;
+  },
+
+  async findClientByIdInOrg(id: string, orgId: string) {
+    const [row] = await db
+      .select()
+      .from(clientTable)
+      .where(and(eq(clientTable.id, id), eq(clientTable.orgId, orgId)))
+      .limit(1);
     return row || undefined;
   },
 
@@ -82,15 +112,27 @@ export const smsRepository = {
     clientIds?: string[];
     vipTier?: string;
     badge?: string;
+    orgId: string | null;
   }) {
+    const orgFilter = filter.orgId ? [eq(clientTable.orgId, filter.orgId)] : [];
+
     if (filter.mode === 'client' && filter.clientId) {
-      const c = await this.findClientById(filter.clientId);
-      return c ? [c] : [];
+      const conditions = [eq(clientTable.id, filter.clientId), ...orgFilter];
+      const rows = await db.select().from(clientTable).where(and(...conditions)).limit(1);
+      return rows;
     }
     if (filter.mode === 'list' && filter.clientIds?.length) {
-      return db.select().from(clientTable).where(sql`${clientTable.id} = ANY(${filter.clientIds})`);
+      const conditions = [
+        sql`${clientTable.id} = ANY(${filter.clientIds})`,
+        ...orgFilter,
+      ];
+      return db.select().from(clientTable).where(and(...conditions));
     }
-    const conditions: any[] = [eq(clientTable.smsOptIn, true), isNotNull(clientTable.phoneNumber)];
+    const conditions: any[] = [
+      eq(clientTable.smsOptIn, true),
+      isNotNull(clientTable.phoneNumber),
+      ...orgFilter,
+    ];
     if (filter.mode === 'vip_tier' && filter.vipTier) {
       conditions.push(eq(clientTable.vipTier, filter.vipTier as any));
     }

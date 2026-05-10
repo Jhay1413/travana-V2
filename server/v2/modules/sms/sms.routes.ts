@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { smsController } from './sms.controller';
+import { isAuthenticated } from '../../middlewares/auth';
+import { orgBranchScope } from '../../middlewares/org-branch-scope';
 
 const router = Router();
+
+router.use(isAuthenticated, orgBranchScope);
 
 router.get('/status', smsController.status);
 router.get('/templates', smsController.listTemplates);

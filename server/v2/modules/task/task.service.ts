@@ -20,9 +20,13 @@ export const taskService = {
     return await taskRepository.findByEntity(entityType, entityId, scope);
   },
 
-  async listByUser(userId: string, scope?: Scope): Promise<TaskNew[]> {
+  async listByUser(
+    userId: string,
+    scope?: Scope,
+    filters?: { dueFrom?: Date; dueTo?: Date; incomplete?: boolean },
+  ): Promise<TaskWithClient[]> {
     await taskRepository.checkAndNotifyDueTasks();
-    return await taskRepository.findByUserId(userId, scope);
+    return await taskRepository.findAllWithClientTasks(userId, scope, filters);
   },
 
   async create(data: InsertTaskNew, scope?: Scope): Promise<TaskNew> {

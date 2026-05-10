@@ -18,6 +18,23 @@ export const referralWithdrawalRepository = {
     return result;
   },
 
+  async findByIdWithOrg(id: string) {
+    const [result] = await db
+      .select({
+        id: referral_withdrawal.id,
+        referral_id: referral_withdrawal.referral_id,
+        client_id: referral_withdrawal.client_id,
+        status: referral_withdrawal.status,
+        method: referral_withdrawal.method,
+        clientOrgId: clientTable.orgId,
+      })
+      .from(referral_withdrawal)
+      .leftJoin(clientTable, eq(referral_withdrawal.client_id, clientTable.id))
+      .where(eq(referral_withdrawal.id, id))
+      .limit(1);
+    return result ?? null;
+  },
+
   async findByIdWithDetails(id: string) {
     const [result] = await db
       .select({
@@ -72,8 +89,8 @@ export const referralWithdrawalRepository = {
       .orderBy(referral_withdrawal.requested_at);
   },
 
-  async findAll() {
-    return db
+  async findAll(orgId: string | null) {
+    const baseQuery = db
       .select({
         id: referral_withdrawal.id,
         referral_id: referral_withdrawal.referral_id,
@@ -105,8 +122,13 @@ export const referralWithdrawalRepository = {
       .from(referral_withdrawal)
       .leftJoin(clientTable, eq(referral_withdrawal.client_id, clientTable.id))
       .leftJoin(referral, eq(referral_withdrawal.referral_id, referral.id))
-      .leftJoin(booking, eq(referral_withdrawal.booking_id, booking.id))
-      .orderBy(referral_withdrawal.requested_at);
+      .leftJoin(booking, eq(referral_withdrawal.booking_id, booking.id));
+
+    const scoped = orgId
+      ? baseQuery.where(eq(clientTable.orgId, orgId))
+      : baseQuery;
+
+    return scoped.orderBy(referral_withdrawal.requested_at);
   },
 
   async markProcessed(

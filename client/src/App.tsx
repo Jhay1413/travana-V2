@@ -9,10 +9,7 @@ import ForbiddenPage from "@/pages/forbidden";
 import LandingPage from "@/pages/landing";
 import SignupAgencyPage from "@/pages/signup-agency";
 import WelcomeTeamPage from "@/pages/welcome-team";
-import SettingsTeamPage from "@/pages/settings-team";
-import SettingsPermissionsPage from "@/pages/settings-permissions";
-import SettingsBrandingPage from "@/pages/settings-branding";
-import SettingsBillingPage from "@/pages/settings-billing";
+import AgencyPage from "@/pages/agency";
 import PlatformAdminPage from "@/pages/platform-admin";
 import ReferralAgentDashboard from "@/pages/referral-agent";
 import { useRole } from "@/hooks/use-role";
@@ -42,6 +39,8 @@ import HrPage from "@/pages/hr";
 import FeedbackPage from "@/pages/feedback";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import VerifyEmailPendingPage from "@/pages/verify-email-pending";
+import AcceptInvitePage from "@/pages/accept-invite";
 import TravanaRouter from "@/pages/travana";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RoleRoute } from "@/components/role-route";
@@ -106,10 +105,9 @@ function AuthenticatedRouter() {
         <RoleRoute path="/platform-admin" allow={PLATFORM_ROLES} component={PlatformAdminPage} />
         <RoleRoute path="/referral-hub" allow={REFERRAL_ROLES} component={ReferralAgentDashboard} />
 
-        <RoleRoute path="/agency/team" allow={ADMIN_ROLES} component={SettingsTeamPage} />
-        <RoleRoute path="/agency/permissions" allow={ADMIN_ROLES} component={SettingsPermissionsPage} />
-        <RoleRoute path="/agency/branding" allow={ADMIN_ROLES} component={SettingsBrandingPage} />
-        <RoleRoute path="/agency/billing" allow={ADMIN_ROLES} component={SettingsBillingPage} />
+        <RoleRoute path="/agency/team" allow={MANAGER_ROLES} component={AgencyPage} />
+        <RoleRoute path="/agency/:rest*" allow={ADMIN_ROLES} component={AgencyPage} />
+        <RoleRoute path="/agency" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/admin/import" allow={ADMIN_ROLES} component={AdminImportPage} />
         <RoleRoute path="/admin/lookup/:tableSlug" allow={ADMIN_ROLES} component={AdminLookupPage} />
         <RoleRoute path="/settings/:tableSlug" allow={ADMIN_ROLES} component={SettingsLookupPage} />
@@ -183,6 +181,14 @@ function AppRouter() {
 
   if (location === "/signup" || location === "/signup-agency") {
     return <SignupAgencyPage />;
+  }
+
+  if (location === "/verify-email") {
+    return <VerifyEmailPendingPage />;
+  }
+
+  if (location === "/accept-invite") {
+    return <AcceptInvitePage />;
   }
 
   if (location.startsWith("/reset-password")) {

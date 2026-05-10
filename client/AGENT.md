@@ -42,6 +42,50 @@ Forbidden:
 - Inline axios usage
 - Business logic beyond simple conditional rendering
 
+#### Single-page features
+A single page that fits comfortably in one file lives at the top level:
+
+```
+pages/landing.tsx
+pages/clients.tsx
+```
+
+#### Multi-page features (REQUIRED for anything with sub-routes or sub-tabs)
+Group every page that shares a URL prefix into one folder. The folder owns its
+own components, hooks and utils — never reach across to a sibling feature folder.
+
+```
+pages/<feature>/
+  index.tsx              ← sub-router (wouter <Switch>) OR single entry
+  <subpage-a>.tsx        ← one file per sub-route, kebab-case
+  <subpage-b>.tsx
+  components/            ← chunks extracted from the pages
+    PascalCase.tsx
+  hooks/                 ← feature-only hooks (page-level state, derived data)
+    use-thing.ts
+  utils/                 ← types, constants, pure helpers
+    helpers.ts
+```
+
+Rules:
+- One file per sub-route — never stuff multiple sub-routes into one file.
+- The folder's `index.tsx` is the only entry imported by `App.tsx`. It either
+  renders the single page or hosts a `<Switch>` that dispatches to siblings.
+- A page file may not exceed **~250 lines**. If it grows past that, extract a
+  chunk into `components/`, a derivation into `hooks/`, or pure logic into
+  `utils/`. Never let UI, state and helpers all live in one file.
+- Reusable bits (form rows, stat cards, gates) go in `components/`. Pure
+  functions (mappers, defaults, validators that aren't React) go in `utils/`.
+- Components inside `pages/<feature>/components/` use **named exports** and
+  **PascalCase** filenames. Page entry files keep their existing default export.
+- Don't put another feature's components here. If a chunk turns out to be useful
+  in another feature, promote it to top-level `components/` (kebab-case) and
+  re-export.
+
+Example: see [`pages/agency/`](src/pages/agency) — sub-router in `index.tsx`,
+five sub-pages, shared chunks in `components/`, branch + role helpers in
+`utils/`.
+
 ---
 
 ### Components (`components/`)
@@ -179,8 +223,13 @@ client/src/
     utils.ts                ← cn() and other pure utilities
     queryClient.ts          ← TanStack Query client config
   pages/
-    <domain>/
-      <PageName>.tsx
+    <single-page-feature>.tsx        ← top-level for one-file features
+    <multi-page-feature>/            ← REQUIRED for anything with sub-routes
+      index.tsx                      ← sub-router or sole entry
+      <subpage>.tsx
+      components/                    ← extracted UI chunks (PascalCase, named exports)
+      hooks/                         ← feature-only hooks
+      utils/                         ← types, constants, pure helpers
   types/
     quote/
       quote.types.ts
@@ -297,6 +346,9 @@ DO:
 - Use `@/` path alias for all imports — never use relative `../../` paths
 - Keep components focused — split when a component exceeds ~200 lines
 - Always invalidate query keys after mutations
+- Group multi-page features under `pages/<feature>/` with `index.tsx`,
+  `components/`, `hooks/`, and `utils/` — never stack sub-routes as siblings of
+  unrelated top-level pages
 
 DO NOT:
 - Call axios directly from a component or page

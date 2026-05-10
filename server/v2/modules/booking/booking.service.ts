@@ -6,6 +6,7 @@ import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { referralService } from "../referral/referral.service";
 import { walletService } from "../wallet/wallet.service";
 import { AppError } from "../../utils/error-handler";
+import type { Scope } from "../../utils/scope";
 import type {
   InsertBooking,
   InsertBookingFlight,
@@ -19,6 +20,44 @@ import type {
   InsertBookingCruiseItemExtra,
   InsertBookingCruiseItinerary,
 } from "@shared/schema";
+
+type ScopeOrTrusted = Scope | { orgId: null };
+
+function effectiveOrgId(scope: ScopeOrTrusted): string | null {
+  if (scope.orgId === null) return null;
+  if ((scope as Scope).orgRole === "platform_admin") return null;
+  return (scope as Scope).orgId || null;
+}
+
+async function assertBookingInScope(id: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const row = await bookingRepository.findByIdWithOrg(id);
+  if (!row || row.clientOrgId !== orgId) {
+    throw new AppError("Booking not found", 404);
+  }
+}
+
+async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await bookingRepository.transactionBelongsToOrg(transactionId, orgId);
+  if (!ok) throw new AppError("Booking not found", 404);
+}
+
+async function assertFlightInScope(flightId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await bookingRepository.flightBelongsToOrg(flightId, orgId);
+  if (!ok) throw new AppError("Flight not found", 404);
+}
+
+async function assertAccommodationInScope(accommodationId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await bookingRepository.accommodationBelongsToOrg(accommodationId, orgId);
+  if (!ok) throw new AppError("Accommodation not found", 404);
+}
 
 function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0, walletCredit: unknown = 0): string {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
@@ -48,34 +87,44 @@ interface BookingRelationData {
 type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
 
 export const bookingService = {
-  async listBookings() {
-    return await bookingRepository.findAllWithImages();
+  async listBookings(scope: ScopeOrTrusted) {
+    return bookingRepository.findAllWithImages(effectiveOrgId(scope));
   },
 
-  async getBookingById(id: string) {
+  async getBookingById(id: string, scope: ScopeOrTrusted) {
+    await assertBookingInScope(id, scope);
     const b = await bookingRepository.findById(id);
     if (!b) throw new AppError("Booking not found", 404);
     return b;
   },
 
-  async getBookingByTransactionId(transactionId: string) {
+  async getBookingByTransactionId(transactionId: string, scope: ScopeOrTrusted) {
+    await assertTransactionInScope(transactionId, scope);
     const b = await bookingRepository.findByTransactionId(transactionId);
     if (!b) throw new AppError("Booking not found for this transaction", 404);
     return b;
   },
 
-  async getBookingWithDetails(id: string) {
+  async getBookingWithDetails(id: string, scope: ScopeOrTrusted) {
+    await assertBookingInScope(id, scope);
     const b = await bookingRepository.findWithDetails(id);
     if (!b) throw new AppError("Booking not found", 404);
     return b;
   },
 
-  async convertQuoteToBooking(quoteId: string, haysRef: string, supplierRef: string) {
+  async convertQuoteToBooking(quoteId: string, haysRef: string, supplierRef: string, scope: ScopeOrTrusted) {
     const q = await newQuoteRepository.findById(quoteId);
     if (!q) throw new AppError("Quote not found", 404);
 
+    await assertTransactionInScope(q.transaction_id, scope);
+
     const txn = await transactionRepository.findById(q.transaction_id);
     if (!txn) throw new AppError("Transaction not found", 404);
+
+    // Scope check: the source quote's transaction must belong to caller's org.
+    if (scope.orgId && txn.org_id !== scope.orgId) {
+      throw new AppError("Quote not found", 404);
+    }
 
     const existingBooking = await bookingRepository.findByTransactionId(q.transaction_id);
     if (existingBooking) throw new AppError("Transaction already has a booking", 400);
@@ -251,17 +300,14 @@ export const bookingService = {
     await transactionRepository.update(q.transaction_id, { status: 'on_booking' });
 
     if (txn.client_id) {
-      // Badge upgrade (3+ bookings)
       const bookingCount = await bookingRepository.countByClientId(txn.client_id);
       if (bookingCount >= 3) {
         await neonClientRepository.update(txn.client_id, { badge: 'VIP Client' });
       }
 
-      // Enroll client into VIP referral club on first booking
       const client = await neonClientRepository.findById(txn.client_id);
       await vipEnrollmentService.enrollClient(txn.client_id);
 
-      // Auto-create referral for every booking when a referrer is set
       if (client?.referredByClientId) {
         await referralService.createReferral({
           referrerClientId: client.referredByClientId,
@@ -279,9 +325,14 @@ export const bookingService = {
     return { ...b, client_id: txn.client_id ?? null };
   },
 
-  async createBooking(data: InsertBooking) {
+  async createBooking(data: InsertBooking, scope: ScopeOrTrusted) {
+    await assertTransactionInScope(data.transaction_id, scope);
+
     const txn = await transactionRepository.findById(data.transaction_id);
     if (!txn) throw new AppError("Transaction not found", 404);
+    if (scope.orgId && txn.org_id !== scope.orgId) {
+      throw new AppError("Transaction not found", 404);
+    }
 
     const existingBooking = await bookingRepository.findByTransactionId(data.transaction_id);
     if (existingBooking) throw new AppError("Transaction already has a booking", 400);
@@ -292,24 +343,20 @@ export const bookingService = {
     });
     await transactionRepository.update(data.transaction_id, { status: 'on_booking' });
 
-    // Create wallet debit when wallet credit is applied to this booking
     const walletCreditAmount = parseFloat(String(data.wallet_credit ?? 0)) || 0;
     if (walletCreditAmount > 0 && txn.client_id) {
-      await walletService.applyBookingCredit(txn.client_id, b.id, walletCreditAmount);
+      await walletService.applyBookingCredit(txn.client_id, b.id, walletCreditAmount, scope);
     }
 
     if (txn.client_id) {
-      // Badge upgrade (3+ bookings)
       const bookingCount = await bookingRepository.countByClientId(txn.client_id);
       if (bookingCount >= 3) {
         await neonClientRepository.update(txn.client_id, { badge: 'VIP Client' });
       }
 
-      // Enroll client into VIP referral club on first booking
       const client = await neonClientRepository.findById(txn.client_id);
       await vipEnrollmentService.enrollClient(txn.client_id);
 
-      // Auto-create referral for every booking when a referrer is set
       if (client?.referredByClientId) {
         await referralService.createReferral({
           referrerClientId: client.referredByClientId,
@@ -327,7 +374,9 @@ export const bookingService = {
     return b;
   },
 
-  async updateBooking(id: string, data: UpdateBookingPayload) {
+  async updateBooking(id: string, data: UpdateBookingPayload, scope: ScopeOrTrusted) {
+    await assertBookingInScope(id, scope);
+
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
@@ -350,7 +399,6 @@ export const bookingService = {
       }
     }
 
-    // Capture previous wallet credit and recalculate price_per_person if any pricing/passenger fields changed
     let prevWalletCredit = 0;
     if ('sales_price' in bookingData || 'adult' in bookingData || 'child' in bookingData || 'discounts' in bookingData || 'service_charge' in bookingData || 'wallet_credit' in bookingData) {
       const current = await bookingRepository.findById(id);
@@ -402,7 +450,6 @@ export const bookingService = {
       await newQuoteRepository.replaceChildPassengers(id, "booking", childAges);
     }
 
-    // Sync referral commission if package_commission changed and booking has a transaction
     if (bookingData.package_commission !== undefined && b.transaction_id) {
       await referralService.syncCommissionByTransaction(
         b.transaction_id,
@@ -410,7 +457,6 @@ export const bookingService = {
       );
     }
 
-    // Sync referral travel date if travel_date changed — keeps payoutTriggerDate in sync
     if (bookingData.travel_date !== undefined && b.transaction_id) {
       await referralService.syncTravelDateByTransaction(
         b.transaction_id,
@@ -418,7 +464,6 @@ export const bookingService = {
       );
     }
 
-    // Adjust wallet debit if wallet_credit changed
     if ('wallet_credit' in bookingData && b.transaction_id) {
       const newWalletCredit = parseFloat(String(bookingData.wallet_credit ?? 0)) || 0;
       if (newWalletCredit !== prevWalletCredit) {
@@ -429,31 +474,35 @@ export const bookingService = {
       }
     }
 
-    return await bookingRepository.findWithDetails(id);
+    return bookingRepository.findWithDetails(id);
   },
 
-  async deleteBooking(id: string) {
+  async deleteBooking(id: string, scope: ScopeOrTrusted) {
+    await assertBookingInScope(id, scope);
     const booking = await bookingRepository.findById(id);
     if (booking?.transaction_id) {
-      // Void any referrals tied to this transaction (cancellation = no commission)
       await referralService.voidReferralsByTransaction(booking.transaction_id);
     }
     await bookingRepository.remove(id);
   },
 
-  async addFlight(bookingId: string, flightData: Omit<InsertBookingFlight, 'booking_id'>) {
-    return await bookingRepository.addFlight({ ...flightData, booking_id: bookingId });
+  async addFlight(bookingId: string, flightData: Omit<InsertBookingFlight, 'booking_id'>, scope: ScopeOrTrusted) {
+    await assertBookingInScope(bookingId, scope);
+    return bookingRepository.addFlight({ ...flightData, booking_id: bookingId });
   },
 
-  async removeFlight(flightId: string) {
+  async removeFlight(flightId: string, scope: ScopeOrTrusted) {
+    await assertFlightInScope(flightId, scope);
     await bookingRepository.removeFlight(flightId);
   },
 
-  async addAccommodation(bookingId: string, accommodationData: Omit<InsertBookingAccomodation, 'booking_id'>) {
-    return await bookingRepository.addAccommodation({ ...accommodationData, booking_id: bookingId });
+  async addAccommodation(bookingId: string, accommodationData: Omit<InsertBookingAccomodation, 'booking_id'>, scope: ScopeOrTrusted) {
+    await assertBookingInScope(bookingId, scope);
+    return bookingRepository.addAccommodation({ ...accommodationData, booking_id: bookingId });
   },
 
-  async removeAccommodation(accommodationId: string) {
+  async removeAccommodation(accommodationId: string, scope: ScopeOrTrusted) {
+    await assertAccommodationInScope(accommodationId, scope);
     await bookingRepository.removeAccommodation(accommodationId);
   },
 };

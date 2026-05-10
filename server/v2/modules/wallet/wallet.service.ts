@@ -1,24 +1,60 @@
 import { walletTransactionRepository } from "./wallet-transaction.repository";
 import { AppError } from "../../utils/error-handler";
+import type { Scope } from "../../utils/scope";
 import {
   generateWithdrawalInvoiceBuffer,
   uploadWalletDebitInvoice,
 } from "../../../services/invoicePdf.service";
 
+type ScopeOrTrusted = Scope | { orgId: null };
+
+function effectiveOrgId(scope: ScopeOrTrusted): string | null {
+  if (scope.orgId === null) return null;
+  if ((scope as Scope).orgRole === "platform_admin") return null;
+  return (scope as Scope).orgId || null;
+}
+
+async function assertClientInScope(clientId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await walletTransactionRepository.clientBelongsToOrg(clientId, orgId);
+  if (!ok) throw new AppError("Wallet not found", 404);
+}
+
+async function assertTxInScope(id: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) {
+    const tx = await walletTransactionRepository.findById(id);
+    if (!tx) throw new AppError("Wallet transaction not found", 404);
+    return tx;
+  }
+
+  const row = await walletTransactionRepository.findByIdWithOrg(id);
+  if (!row || row.clientOrgId !== orgId) {
+    throw new AppError("Wallet transaction not found", 404);
+  }
+  const tx = await walletTransactionRepository.findById(id);
+  if (!tx) throw new AppError("Wallet transaction not found", 404);
+  return tx;
+}
+
 export const walletService = {
-  async getBalance(clientId: string): Promise<number> {
+  async getBalance(clientId: string, scope: ScopeOrTrusted): Promise<number> {
+    await assertClientInScope(clientId, scope);
     return walletTransactionRepository.getBalance(clientId);
   },
 
-  async getTransactions(clientId: string) {
+  async getTransactions(clientId: string, scope: ScopeOrTrusted) {
+    await assertClientInScope(clientId, scope);
     return walletTransactionRepository.findByClientId(clientId);
   },
 
-  async listAll() {
-    return walletTransactionRepository.findAll();
+  async listAll(scope: ScopeOrTrusted) {
+    return walletTransactionRepository.findAll(effectiveOrgId(scope));
   },
 
-  // Called when a referral moves to IN_WALLET — creates a processed credit immediately.
+  // Internal: called from referral.service when a referral moves to IN_WALLET.
+  // Trusted scope — the caller has already validated the client belongs to its org.
   async addReferralCredit(clientId: string, referralId: string, amount: string) {
     return walletTransactionRepository.create({
       client_id: clientId,
@@ -30,8 +66,8 @@ export const walletService = {
     });
   },
 
-  // Admin allocates wallet credit to a booking — creates a pending debit.
-  async applyBookingCredit(clientId: string, bookingId: string, amount: number) {
+  async applyBookingCredit(clientId: string, bookingId: string, amount: number, scope: ScopeOrTrusted) {
+    await assertClientInScope(clientId, scope);
     const balance = await walletTransactionRepository.getBalance(clientId);
     if (amount <= 0) throw new AppError("Amount must be greater than 0", 400);
     if (amount > balance + 0.001) {
@@ -48,12 +84,13 @@ export const walletService = {
     });
   },
 
-  // Client or admin requests a bank transfer — creates a pending debit.
   async requestBankTransfer(
     clientId: string,
     amount: number,
-    bankDetails: { account_name: string; account_number: string; sort_code: string }
+    bankDetails: { account_name: string; account_number: string; sort_code: string },
+    scope: ScopeOrTrusted,
   ) {
+    await assertClientInScope(clientId, scope);
     const balance = await walletTransactionRepository.getBalance(clientId);
     if (amount <= 0) throw new AppError("Amount must be greater than 0", 400);
     if (amount > balance + 0.001) {
@@ -72,10 +109,8 @@ export const walletService = {
     });
   },
 
-  // Admin confirms a debit was paid/applied.
-  async processDebit(id: string, data: { transfer_reference?: string; notes?: string }) {
-    const tx = await walletTransactionRepository.findById(id);
-    if (!tx) throw new AppError("Wallet transaction not found", 404);
+  async processDebit(id: string, data: { transfer_reference?: string; notes?: string }, scope: ScopeOrTrusted) {
+    const tx = await assertTxInScope(id, scope);
     if (tx.type !== "debit") throw new AppError("Only debit transactions can be processed", 400);
     if (tx.status === "processed") throw new AppError("Already processed", 400);
     if (tx.status === "rejected") throw new AppError("Cannot process a rejected transaction", 400);
@@ -87,7 +122,6 @@ export const walletService = {
       processed_at: new Date(),
     });
 
-    // Generate and store invoice PDF (failure must not block approval)
     try {
       const details = await walletTransactionRepository.findByIdWithDetails(id);
       if (details) {
@@ -102,7 +136,7 @@ export const walletService = {
           clientEmail: details.clientEmail ?? null,
           clientPhone: details.clientPhone ?? null,
           amount: details.amount,
-          method: details.source, // "booking_credit" | "bank_transfer"
+          method: details.source,
           accountName: null,
           accountNumber: null,
           sortCode: null,
@@ -124,13 +158,10 @@ export const walletService = {
     return updated;
   },
 
-  async getInvoicePresignedUrl(id: string): Promise<string | null> {
-    const tx = await walletTransactionRepository.findById(id);
-    if (!tx) return null;
-
+  async getInvoicePresignedUrl(id: string, scope: ScopeOrTrusted): Promise<string | null> {
+    const tx = await assertTxInScope(id, scope);
     let invoiceKey = tx.invoice_url;
 
-    // If no invoice stored but the transaction is processed, regenerate it now
     if (!invoiceKey && tx.status === "processed" && tx.type === "debit") {
       try {
         const details = await walletTransactionRepository.findByIdWithDetails(id);
@@ -166,22 +197,20 @@ export const walletService = {
     }
 
     if (!invoiceKey) return null;
-    const { getInvoicePresignedUrl } = await import("../../services/invoicePdf.service");
+    const { getInvoicePresignedUrl } = await import("../../../services/invoicePdf.service");
     return getInvoicePresignedUrl(invoiceKey);
   },
 
-  // Admin rejects a debit — balance is automatically restored (rejected debits excluded from balance).
-  async rejectDebit(id: string, notes?: string) {
-    const tx = await walletTransactionRepository.findById(id);
-    if (!tx) throw new AppError("Wallet transaction not found", 404);
+  async rejectDebit(id: string, notes: string | undefined, scope: ScopeOrTrusted) {
+    const tx = await assertTxInScope(id, scope);
     if (tx.type !== "debit") throw new AppError("Only debit transactions can be rejected", 400);
     if (tx.status !== "pending") throw new AppError("Only pending transactions can be rejected", 400);
 
     return walletTransactionRepository.update(id, { status: "rejected", notes });
   },
 
-  // Adjust the wallet credit on an existing booking — voids the old pending debit and creates a new one.
-  // Called when wallet_credit is changed on a booking edit. If newAmount is 0, only voids.
+  // Internal: called from booking.service when wallet credit on a booking changes.
+  // Trusted scope — the caller is the v1 booking flow which has its own client check.
   async adjustBookingCredit(clientId: string, bookingId: string, newAmount: number) {
     const existing = await walletTransactionRepository.findPendingDebitByBookingId(bookingId);
     if (existing) {
@@ -191,7 +220,7 @@ export const walletService = {
       });
     }
     if (newAmount > 0) {
-      await this.applyBookingCredit(clientId, bookingId, newAmount);
+      await this.applyBookingCredit(clientId, bookingId, newAmount, { orgId: null });
     }
   },
 };

@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useParams, useLocation } from "wouter";
-import { useRole } from "@/hooks/use-role";
 import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
 import {
   ArrowLeft,
@@ -634,7 +633,6 @@ export default function TicketPage() {
   const params = useParams();
   const ticketId = params.ticketId as string;
   const [, navigate] = useLocation();
-  const { role, setRole } = useRole();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     type: "",

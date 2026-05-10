@@ -29,7 +29,7 @@ const STATUS = {
 };
 
 export default function ReferralAgentDashboard() {
-  const { role, setRole } = useRole();
+  const { role } = useRole();
   const { agency } = useAgency();
 
   const [referrals, setReferrals] = useState<Referral[]>(SEED);

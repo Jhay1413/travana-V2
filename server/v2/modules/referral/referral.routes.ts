@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { referralController } from './referral.controller';
+import { isAuthenticated } from '../../middlewares/auth';
+import { orgBranchScope } from '../../middlewares/org-branch-scope';
+import { requireOrgRole } from '../../middlewares/auth/require-org-role';
 import { validate } from '../../middlewares/validation.middleware';
 import {
   createReferralValidator,
@@ -10,6 +13,8 @@ import {
 } from './referral.validator';
 
 const router = Router();
+
+router.use(isAuthenticated, orgBranchScope, requireOrgRole(['org_admin', 'platform_admin', 'branch_manager']));
 
 router.get('/', referralController.listReferrals);
 router.get('/client/:clientId', validate(referrerClientParamValidator), referralController.getReferralsByClient);

@@ -19,8 +19,15 @@ export const taskApi = {
     return data;
   },
 
-  getByUser: async (userId: string): Promise<TaskNew[]> => {
-    const { data } = await axiosClient.get<TaskNew[]>(`/api/v2/tasks/user?userId=${userId}`);
+  getByUser: async (
+    userId: string,
+    filters?: { dueFrom?: string; dueTo?: string; incomplete?: boolean },
+  ): Promise<TaskWithClient[]> => {
+    const params = new URLSearchParams({ userId });
+    if (filters?.dueFrom) params.set("dueFrom", filters.dueFrom);
+    if (filters?.dueTo) params.set("dueTo", filters.dueTo);
+    if (filters?.incomplete) params.set("incomplete", "true");
+    const { data } = await axiosClient.get<TaskWithClient[]>(`/api/v2/tasks/user?${params.toString()}`);
     return data;
   },
 

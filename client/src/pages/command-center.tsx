@@ -2045,11 +2045,11 @@ export default function CommandCenterPage() {
       return next;
     });
   }, []);
-  const { role, setRole: setRoleFromHook, actualRole } = useRole();
-  const rolePreview = role !== actualRole ? role : null;
-  const setRolePreview = (r: Role | null) => {
-    setRoleFromHook(r || actualRole);
-  };
+  const { role } = useRole();
+  const actualRole = role;
+  const rolePreview: Role | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const setRolePreview = (_r: Role | null) => {};
   const [settingsTab, setSettingsTab] = useState<"general" | "tour-operators">("general");
   const [tourOperatorSearch, setTourOperatorSearch] = useState("");
   const [airportSearch, setAirportSearch] = useState("");

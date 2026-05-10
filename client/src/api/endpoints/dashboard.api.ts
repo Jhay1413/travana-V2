@@ -5,6 +5,16 @@ export interface MyProfit {
   profitThisMonth: number;
 }
 
+export interface AgentStats {
+  todayProfit: number;
+  weekProfit: number;
+  monthProfit: number;
+  bookingsCount: number;
+  avgBookingValue: number;
+  totalOpenQuotesValue: number;
+  quotesCount: number;
+}
+
 export interface AdminOverviewStats {
   todayProfit: number;
   weekProfit: number;
@@ -37,5 +47,10 @@ export const dashboardApi = {
   getAdminOverviewStats: async (): Promise<AdminOverviewStats> => {
     const { data } = await axiosClient.get<AdminOverviewStats>("/api/v2/dashboard/admin-overview-stats");
     return data;
+  },
+
+  getAgentStats: async (): Promise<AgentStats> => {
+    const { data } = await axiosClient.get<{ data: AgentStats }>("/api/v2/dashboard/agent-stats");
+    return data?.data ?? (data as unknown as AgentStats);
   },
 };

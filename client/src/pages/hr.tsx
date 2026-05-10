@@ -3,7 +3,7 @@ import TravanaHR from "./hr/TravanaHR";
 import { ShieldAlert } from "lucide-react";
 
 export default function HrPage() {
-  const { role, setRole } = useRole();
+  const { role } = useRole();
   const allowed = role === "Admin" || role === "Manager";
 
   return (

@@ -11,7 +11,7 @@ export { useTickets, useTicket, useTicketsByClient, useTicketsByUser, ticketKeys
 export { useAttachments, attachmentKeys, getAttachmentDownloadUrl } from "./use-attachment-queries";
 export { useReplies, replyKeys } from "./use-reply-queries";
 export { useNotifications, useUnreadNotifications, notificationKeys } from "./use-notification-queries";
-export { useDashboardStats, useMyProfit, useAdminOverviewStats, dashboardKeys } from "./use-dashboard-queries";
+export { useDashboardStats, useMyProfit, useAdminOverviewStats, useAgentStats, dashboardKeys } from "./use-dashboard-queries";
 export { useRevenueDashboard, useMonthBookings, useMonthForwards, revenueKeys } from "./use-revenue-queries";
 export { useTargetsOverview, useShopTargets, useUpsertShopTargets, useAgentTargets, useAgentTargetsByUserId, useUpsertAgentTargets, useAgents } from "./use-targets-queries";
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";
@@ -22,3 +22,6 @@ export { usePackageTypes, useCountries, useDestinations, useDestinationSearch, u
 export { useChatConversations, useChatMessages, chatKeys } from "./use-chat-queries";
 export { useSharedEmailAccount, useEmailAccounts, useEmailMessages, useEmailMessage, emailKeys } from "./use-email-queries";
 export { useFacebookPages, useFacebookConversations, useFacebookMessages, facebookKeys } from "./use-facebook-queries";
+export { useCurrentOrganization, useOrgMembers, organizationKeys } from "./use-organization-queries";
+export { useBranches, useBranch, branchKeys } from "./use-branch-queries";
+export { usePendingInvites, useInviteByToken, inviteKeys } from "./use-invite-queries";

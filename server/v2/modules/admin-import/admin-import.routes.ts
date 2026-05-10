@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { adminImportController } from './admin-import.controller';
+import { requireOrgRole } from '../../middlewares/auth/require-org-role';
 
 const router = Router();
+
+router.use(requireOrgRole(['platform_admin']));
 
 router.get('/tables', adminImportController.getTables);
 router.get('/data/:tableName', adminImportController.getData);

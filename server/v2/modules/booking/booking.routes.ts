@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { bookingController } from "./booking.controller";
 import { tagService } from "../tag/tag.service";
 import { asyncHandler } from "../../utils/async-handler";
@@ -19,8 +19,8 @@ router.delete("/:id/flights/:flightId", bookingController.removeFlight);
 router.post("/:id/accommodations", bookingController.addAccommodation);
 router.delete("/:id/accommodations/:accommodationId", bookingController.removeAccommodation);
 
-router.put("/:id/tags", asyncHandler(async (req, res) => {
-  const { id } = req.params;
+router.put("/:id/tags", asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
   const { tags } = req.body;
   if (!Array.isArray(tags)) {
     return res.status(400).json({ error: "tags must be an array of tag names" });
@@ -30,8 +30,8 @@ router.put("/:id/tags", asyncHandler(async (req, res) => {
   return successResponse(res, updated, "Booking tags updated");
 }));
 
-router.get("/:id/tags", asyncHandler(async (req, res) => {
-  const tags = await tagService.getBookingTags(req.params.id);
+router.get("/:id/tags", asyncHandler(async (req: Request, res: Response) => {
+  const tags = await tagService.getBookingTags(req.params.id as string);
   return successResponse(res, tags, "Booking tags retrieved");
 }));
 

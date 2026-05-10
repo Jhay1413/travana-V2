@@ -27,7 +27,7 @@ export default function ClientPage() {
   const [, params] = useRoute("/clients/:clientId");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { role, setRole } = useRole();
+  const { role } = useRole();
 
   // State
   const [tab, setTab] = useState<ClientTab>("overview");

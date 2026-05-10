@@ -1,14 +1,15 @@
 import axiosClient from "../client/axios-client";
 import type { Notification } from "@/types/notification";
 
+// Server resolves the current user from the session — no userId in the URL.
 export const notificationApi = {
-  getAll: async (userId: string): Promise<Notification[]> => {
-    const { data } = await axiosClient.get<Notification[]>(`/api/v2/notifications?userId=${userId}`);
+  getAll: async (): Promise<Notification[]> => {
+    const { data } = await axiosClient.get<Notification[]>(`/api/v2/notifications`);
     return data;
   },
 
-  getUnread: async (userId: string): Promise<Notification[]> => {
-    const { data } = await axiosClient.get<Notification[]>(`/api/v2/notifications/unread?userId=${userId}`);
+  getUnread: async (): Promise<Notification[]> => {
+    const { data } = await axiosClient.get<Notification[]>(`/api/v2/notifications/unread`);
     return data;
   },
 
@@ -17,8 +18,8 @@ export const notificationApi = {
     return data;
   },
 
-  markAllRead: async (userId: string): Promise<void> => {
-    await axiosClient.put(`/api/v2/notifications/read-all?userId=${userId}`);
+  markAllRead: async (): Promise<void> => {
+    await axiosClient.put(`/api/v2/notifications/read-all`);
   },
 
   delete: async (id: string): Promise<void> => {

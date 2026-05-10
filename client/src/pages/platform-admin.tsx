@@ -34,7 +34,7 @@ const csvCell = (v: string | number | null | undefined) => {
 };
 
 export default function PlatformAdminPage() {
-  const { role, setRole } = useRole();
+  const { role } = useRole();
   const { switchAgency } = useAgency();
   const allowed = role === "PlatformAdmin";
 
@@ -55,9 +55,7 @@ export default function PlatformAdminPage() {
 
   const impersonate = (a: Agency) => {
     switchAgency(a);
-    sessionStorage.setItem("apple-travel-role-preview", "Admin");
     sessionStorage.setItem("platform-impersonating", a.id);
-    try { window.dispatchEvent(new Event("role-preview-updated")); } catch {}
     window.location.href = "/";
   };
 

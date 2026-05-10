@@ -2,10 +2,12 @@ import { Request, Response } from 'express';
 import { referralPayoutService } from './referral-payout.service';
 import { successResponse } from '../../utils/response';
 import { asyncHandler } from '../../utils/async-handler';
+import { getScope } from '../../utils/scope';
 
 export const referralPayoutController = {
-  listPayouts: asyncHandler(async (_req: Request, res: Response) => {
-    const raw = await referralPayoutService.listPayouts();
+  listPayouts: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const raw = await referralPayoutService.listPayouts(scope);
     const payouts = raw.map((p: any) => ({
       id: p.id,
       referral_id: p.referral_id,
@@ -28,17 +30,20 @@ export const referralPayoutController = {
   }),
 
   getPayoutById: asyncHandler(async (req: Request, res: Response) => {
-    const payout = await referralPayoutService.getPayoutById(req.params.id as string);
+    const scope = getScope(req);
+    const payout = await referralPayoutService.getPayoutById(req.params.id as string, scope);
     return successResponse(res, payout, 'Payout request retrieved successfully');
   }),
 
   approvePayout: asyncHandler(async (req: Request, res: Response) => {
-    const payout = await referralPayoutService.approvePayout(req.params.id as string, req.body.notes);
+    const scope = getScope(req);
+    const payout = await referralPayoutService.approvePayout(req.params.id as string, req.body.notes, scope);
     return successResponse(res, payout, 'Payout approved — commission credited to client wallet');
   }),
 
   rejectPayout: asyncHandler(async (req: Request, res: Response) => {
-    const payout = await referralPayoutService.rejectPayout(req.params.id as string, req.body.notes);
+    const scope = getScope(req);
+    const payout = await referralPayoutService.rejectPayout(req.params.id as string, req.body.notes, scope);
     return successResponse(res, payout, 'Payout request rejected');
   }),
 };

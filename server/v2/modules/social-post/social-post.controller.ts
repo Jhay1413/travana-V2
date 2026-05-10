@@ -2,22 +2,23 @@ import { Request, Response } from "express";
 import { socialPostService } from "./social-post.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
+import { getScope } from "../../utils/scope";
 
 export const socialPostController = {
   generatePost: asyncHandler(async (req: Request, res: Response) => {
-    const deal = await socialPostService.generatePost(req.body);
+    const deal = await socialPostService.generatePost(req.body, getScope(req));
     return successResponse(res, deal, "Post generated successfully", 201);
   }),
 
   getByQuoteId: asyncHandler(async (req: Request, res: Response) => {
     const { quoteId } = req.params as { quoteId: string };
-    const deal = await socialPostService.getTravelDealByQuoteId(quoteId);
+    const deal = await socialPostService.getTravelDealByQuoteId(quoteId, getScope(req));
     return successResponse(res, deal, "Travel deal retrieved successfully");
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as { id: string };
-    const deal = await socialPostService.updateTravelDeal(id, req.body);
+    const deal = await socialPostService.updateTravelDeal(id, req.body, getScope(req));
     return successResponse(res, deal, "Travel deal updated successfully");
   }),
 
@@ -32,7 +33,7 @@ export const socialPostController = {
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.schedulePost(id, postSchedule, existingImageIds, newFiles, imageUrls);
+    const deal = await socialPostService.schedulePost(id, postSchedule, existingImageIds, newFiles, imageUrls, getScope(req));
     return successResponse(res, deal, "Post scheduled successfully");
   }),
 
@@ -48,13 +49,13 @@ export const socialPostController = {
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.reschedulePost(id, postSchedule, existingImageIds, newFiles, postContent, imageUrls);
+    const deal = await socialPostService.reschedulePost(id, postSchedule, existingImageIds, newFiles, postContent, imageUrls, getScope(req));
     return successResponse(res, deal, "Post rescheduled successfully");
   }),
 
   deleteScheduledPost: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as { id: string };
-    const deal = await socialPostService.deleteScheduledPost(id);
+    const deal = await socialPostService.deleteScheduledPost(id, getScope(req));
     return successResponse(res, deal, "Scheduled post deleted successfully");
   }),
 
@@ -66,13 +67,13 @@ export const socialPostController = {
 
   getPostMedia: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as { id: string };
-    const media = await socialPostService.getPostMedia(id);
+    const media = await socialPostService.getPostMedia(id, getScope(req));
     return successResponse(res, media, "Media retrieved successfully");
   }),
 
   getQuoteImages: asyncHandler(async (req: Request, res: Response) => {
     const { quoteId } = req.params as { quoteId: string };
-    const images = await socialPostService.getQuoteImages(quoteId);
+    const images = await socialPostService.getQuoteImages(quoteId, getScope(req));
     return successResponse(res, images, "Quote images retrieved successfully");
   }),
 };

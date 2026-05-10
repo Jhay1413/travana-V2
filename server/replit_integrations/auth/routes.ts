@@ -34,6 +34,14 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(403).json({ message: "Account is banned" });
       }
 
+      if (!foundUser.emailVerified) {
+        return res.status(403).json({
+          message: "Please verify your email before signing in",
+          code: "EMAIL_NOT_VERIFIED",
+          email: foundUser.email,
+        });
+      }
+
       req.login({ userId: foundUser.id, authType: "password" }, (err: any) => {
         if (err) {
           console.error("Login error:", err);

@@ -29,28 +29,38 @@ async function withImap<T>(account: EmailAccount, fn: (client: ImapFlow) => Prom
   }
 }
 
+async function loadOwnedAccount(id: string, userId: string): Promise<EmailAccount> {
+  const account = await emailRepository.findById(id);
+  if (!account || account.userId !== userId) {
+    throw new AppError("Email account not found", 404);
+  }
+  return account;
+}
+
 export const emailService = {
-  async getSharedAccount(): Promise<Omit<EmailAccount, "encryptedPassword"> | null> {
-    const account = await emailRepository.findFirst();
-    if (!account) return null;
-    const { encryptedPassword: _pwd, ...rest } = account;
+  async getSharedAccount(userId: string): Promise<Omit<EmailAccount, "encryptedPassword"> | null> {
+    const accounts = await emailRepository.findAllByUserId(userId);
+    const first = accounts[0];
+    if (!first) return null;
+    const { encryptedPassword: _pwd, ...rest } = first;
     return rest;
   },
 
-  async listAccounts(userId: string): Promise<Omit<EmailAccount, "encryptedPassword">[]> {
+  async listAccounts(userId: string, actingUserId: string): Promise<Omit<EmailAccount, "encryptedPassword">[]> {
+    if (userId !== actingUserId) {
+      throw new AppError("You can only list your own email accounts", 403);
+    }
     const accounts = await emailRepository.findAllByUserId(userId);
     return accounts.map(({ encryptedPassword: _pwd, ...rest }) => rest);
   },
 
-  async getAccount(id: string): Promise<Omit<EmailAccount, "encryptedPassword">> {
-    const account = await emailRepository.findById(id);
-    if (!account) throw new AppError("Email account not found", 404);
+  async getAccount(id: string, userId: string): Promise<Omit<EmailAccount, "encryptedPassword">> {
+    const account = await loadOwnedAccount(id, userId);
     const { encryptedPassword: _pwd, ...rest } = account;
     return rest;
   },
 
   async createAccount(data: {
-    userId: string;
     label: string;
     emailAddress: string;
     imapHost: string;
@@ -60,16 +70,17 @@ export const emailService = {
     secure: boolean;
     username: string;
     password: string;
-  }): Promise<Omit<EmailAccount, "encryptedPassword">> {
+  }, actingUserId: string): Promise<Omit<EmailAccount, "encryptedPassword">> {
     const { password, ...rest } = data;
     const encryptedPassword = encrypt(password);
-    const account = await emailRepository.create({ ...rest, encryptedPassword });
+    const account = await emailRepository.create({ ...rest, userId: actingUserId, encryptedPassword });
     const { encryptedPassword: _pwd, ...safeAccount } = account;
     return safeAccount;
   },
 
   async updateAccount(
     id: string,
+    userId: string,
     data: Partial<{
       label: string;
       emailAddress: string;
@@ -81,9 +92,9 @@ export const emailService = {
       username: string;
       password: string;
     }>,
+    actingUserId: string,
   ): Promise<Omit<EmailAccount, "encryptedPassword">> {
-    const existing = await emailRepository.findById(id);
-    if (!existing) throw new AppError("Email account not found", 404);
+    await loadOwnedAccount(id, userId);
 
     const { password, ...rest } = data;
     const updateData: Record<string, unknown> = { ...rest };
@@ -96,15 +107,13 @@ export const emailService = {
     return safeAccount;
   },
 
-  async deleteAccount(id: string): Promise<void> {
-    const existing = await emailRepository.findById(id);
-    if (!existing) throw new AppError("Email account not found", 404);
+  async deleteAccount(id: string, userId: string): Promise<void> {
+    await loadOwnedAccount(id, userId);
     await emailRepository.remove(id);
   },
 
-  async testConnection(id: string): Promise<{ success: boolean; message: string }> {
-    const account = await emailRepository.findById(id);
-    if (!account) throw new AppError("Email account not found", 404);
+  async testConnection(id: string, userId: string): Promise<{ success: boolean; message: string }> {
+    const account = await loadOwnedAccount(id, userId);
 
     try {
       await withImap(account, async (client) => {
@@ -117,9 +126,8 @@ export const emailService = {
     }
   },
 
-  async listFolders(id: string): Promise<MailboxFolder[]> {
-    const account = await emailRepository.findById(id);
-    if (!account) throw new AppError("Email account not found", 404);
+  async listFolders(id: string, userId: string): Promise<MailboxFolder[]> {
+    const account = await loadOwnedAccount(id, userId);
 
     return withImap(account, async (client) => {
       const list = await client.list();
@@ -132,9 +140,8 @@ export const emailService = {
     });
   },
 
-  async fetchMessages(id: string, folder = "INBOX", limit = 20): Promise<EmailMessage[]> {
-    const account = await emailRepository.findById(id);
-    if (!account) throw new AppError("Email account not found", 404);
+  async fetchMessages(id: string, userId: string, folder = "INBOX", limit = 20): Promise<EmailMessage[]> {
+    const account = await loadOwnedAccount(id, userId);
 
     return withImap(account, async (client) => {
       const mailbox = await client.mailboxOpen(folder);
@@ -161,9 +168,8 @@ export const emailService = {
     });
   },
 
-  async fetchMessageById(id: string, uid: number, folder = "INBOX"): Promise<EmailMessageFull> {
-    const account = await emailRepository.findById(id);
-    if (!account) throw new AppError("Email account not found", 404);
+  async fetchMessageById(id: string, userId: string, uid: number, folder = "INBOX"): Promise<EmailMessageFull> {
+    const account = await loadOwnedAccount(id, userId);
 
     return withImap(account, async (client) => {
       await client.mailboxOpen(folder);
@@ -202,9 +208,8 @@ export const emailService = {
     });
   },
 
-  async sendEmail(id: string, payload: SendEmailPayload): Promise<{ messageId: string }> {
-    const account = await emailRepository.findById(id);
-    if (!account) throw new AppError("Email account not found", 404);
+  async sendEmail(id: string, userId: string, payload: SendEmailPayload): Promise<{ messageId: string }> {
+    const account = await loadOwnedAccount(id, userId);
 
     const transporter = nodemailer.createTransport({
       host: account.smtpHost,

@@ -1,16 +1,25 @@
 import { dashboardRepository } from "./dashboard.repository";
 import type { DashboardStats } from "./dashboard.types";
+import type { Scope } from "../../utils/scope";
+
+function effectiveOrgId(scope: Scope): string | null {
+  return scope.orgRole === "platform_admin" ? null : (scope.orgId || null);
+}
 
 export const dashboardService = {
-  async getStats(): Promise<DashboardStats> {
-    return await dashboardRepository.getStats();
+  async getStats(scope: Scope): Promise<DashboardStats> {
+    return dashboardRepository.getStats(effectiveOrgId(scope));
   },
 
   async getMyProfit(userId: string): Promise<{ profitThisMonth: number }> {
-    return await dashboardRepository.getMyProfit(userId);
+    return dashboardRepository.getMyProfit(userId);
   },
 
-  async getAdminOverviewStats() {
-    return await dashboardRepository.getAdminOverviewStats();
+  async getAgentStats(userId: string) {
+    return dashboardRepository.getAgentStats(userId);
+  },
+
+  async getAdminOverviewStats(scope: Scope) {
+    return dashboardRepository.getAdminOverviewStats(effectiveOrgId(scope));
   },
 };

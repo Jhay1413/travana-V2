@@ -11,7 +11,7 @@ export const notificationKeys = {
 export function useNotifications(userId: string) {
   return useQuery<Notification[]>({
     queryKey: notificationKeys.byUser(userId),
-    queryFn: () => notificationApi.getAll(userId),
+    queryFn: () => notificationApi.getAll(),
     enabled: !!userId,
     refetchInterval: 30000,
   });
@@ -20,7 +20,7 @@ export function useNotifications(userId: string) {
 export function useUnreadNotifications(userId: string) {
   return useQuery<Notification[]>({
     queryKey: notificationKeys.unread(userId),
-    queryFn: () => notificationApi.getUnread(userId),
+    queryFn: () => notificationApi.getUnread(),
     enabled: !!userId,
     refetchInterval: 30000,
   });

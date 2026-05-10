@@ -4,6 +4,7 @@ import { socialPostService } from "../social-post/social-post.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
+import { getScope } from "../../utils/scope";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   "In Play": "QUOTE_IN_PROGRESS",
@@ -43,21 +44,23 @@ function normalizeQuoteStatus(data: any) {
 
 export const quoteController = {
   listQuotes: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const { status, transactionId } = req.query;
     let quotes;
 
     if (transactionId && typeof transactionId === "string") {
-      quotes = await newQuoteService.listQuotesByTransaction(transactionId);
+      quotes = await newQuoteService.listQuotesByTransaction(transactionId, scope);
     } else if (status && typeof status === "string") {
-      quotes = await newQuoteService.listQuotesByStatus(status);
+      quotes = await newQuoteService.listQuotesByStatus(status, scope);
     } else {
-      quotes = await newQuoteService.listQuotes();
+      quotes = await newQuoteService.listQuotes(scope);
     }
 
     return successResponse(res, quotes, "Quotes retrieved successfully");
   }),
 
   listFreeQuotes: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const page = parseInt(req.query.page as string) || 0;
     const pageSize = parseInt(req.query.pageSize as string) || 12;
     const scheduledOnly = req.query.scheduledOnly === "true";
@@ -66,18 +69,20 @@ export const quoteController = {
     const rangeEnd = (req.query.rangeEnd as string) || "";
     const search = (req.query.search as string) || "";
 
-    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd);
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope);
 
     return successResponse(res, { quotes, page, pageSize, hasMore: quotes.length === pageSize }, "Free quotes retrieved successfully");
   }),
 
   getQuoteById: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const id = req.params.id as string;
-    const quote = await newQuoteService.getQuoteWithDetails(id);
+    const quote = await newQuoteService.getQuoteWithDetails(id, scope);
     return successResponse(res, quote, "Quote retrieved successfully");
   }),
 
   createQuote: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const body = req.body.data ? JSON.parse(req.body.data) : req.body;
     const files = (req.files as Express.Multer.File[]) || [];
 
@@ -90,11 +95,12 @@ export const quoteController = {
       body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
     }
     normalizeQuoteStatus(body);
-    const quote = await newQuoteService.createQuote(body);
+    const quote = await newQuoteService.createQuote(body, scope);
     return successResponse(res, quote, "Quote created successfully", 201);
   }),
 
   createSocialQuote: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const body = req.body.data ? JSON.parse(req.body.data) : req.body;
     const files = (req.files as Express.Multer.File[]) || [];
 
@@ -109,90 +115,104 @@ export const quoteController = {
     }
 
     normalizeQuoteStatus(body);
-    const quote = await newQuoteService.createSocialQuote(userId, body);
+    const quote = await newQuoteService.createSocialQuote(userId, body, scope);
     return successResponse(res, quote, "Social quote created successfully", 201);
   }),
 
   duplicateQuote: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const id = req.params.id as string;
-    const quote = await newQuoteService.duplicateQuote(id, req.body ?? {});
+    const quote = await newQuoteService.duplicateQuote(id, req.body ?? {}, scope);
     return successResponse(res, quote, "Quote duplicated successfully", 201);
   }),
 
   updateQuote: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const id = req.params.id as string;
     normalizeQuoteStatus(req.body);
-    const quote = await newQuoteService.updateQuote(id, req.body);
+    const quote = await newQuoteService.updateQuote(id, req.body, scope);
     return successResponse(res, quote, "Quote updated successfully");
   }),
 
   deleteQuote: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const id = req.params.id as string;
-    await newQuoteService.deleteQuote(id);
+    await newQuoteService.deleteQuote(id, scope);
     res.status(204).send();
   }),
 
   addFlight: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const quoteId = req.params.id as string;
-    const flight = await newQuoteService.addFlight(quoteId, req.body);
+    const flight = await newQuoteService.addFlight(quoteId, req.body, scope);
     return successResponse(res, flight, "Flight added successfully", 201);
   }),
 
   updateFlight: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const flightId = req.params.flightId as string;
-    const flight = await newQuoteService.updateFlight(flightId, req.body);
+    const flight = await newQuoteService.updateFlight(flightId, req.body, scope);
     return successResponse(res, flight, "Flight updated successfully");
   }),
 
   removeFlight: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const flightId = req.params.flightId as string;
-    await newQuoteService.removeFlight(flightId);
+    await newQuoteService.removeFlight(flightId, scope);
     res.status(204).send();
   }),
 
   addAccommodation: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const quoteId = req.params.id as string;
-    const accommodation = await newQuoteService.addAccommodation(quoteId, req.body);
+    const accommodation = await newQuoteService.addAccommodation(quoteId, req.body, scope);
     return successResponse(res, accommodation, "Accommodation added successfully", 201);
   }),
 
   updateAccommodation: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const accommodationId = req.params.accommodationId as string;
-    const accommodation = await newQuoteService.updateAccommodation(accommodationId, req.body);
+    const accommodation = await newQuoteService.updateAccommodation(accommodationId, req.body, scope);
     return successResponse(res, accommodation, "Accommodation updated successfully");
   }),
 
   removeAccommodation: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const accommodationId = req.params.accommodationId as string;
-    await newQuoteService.removeAccommodation(accommodationId);
+    await newQuoteService.removeAccommodation(accommodationId, scope);
     res.status(204).send();
   }),
 
   addTransfer: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const quoteId = req.params.id as string;
-    const transfer = await newQuoteService.addTransfer(quoteId, req.body);
+    const transfer = await newQuoteService.addTransfer(quoteId, req.body, scope);
     return successResponse(res, transfer, "Transfer added successfully", 201);
   }),
 
   removeTransfer: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const transferId = req.params.transferId as string;
-    await newQuoteService.removeTransfer(transferId);
+    await newQuoteService.removeTransfer(transferId, scope);
     res.status(204).send();
   }),
 
   addPassenger: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const quoteId = req.params.id as string;
-    const passenger = await newQuoteService.addPassenger(quoteId, req.body);
+    const passenger = await newQuoteService.addPassenger(quoteId, req.body, scope);
     return successResponse(res, passenger, "Passenger added successfully", 201);
   }),
 
   removePassenger: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const passengerId = req.params.passengerId as string;
-    await newQuoteService.removePassenger(passengerId);
+    await newQuoteService.removePassenger(passengerId, scope);
     res.status(204).send();
   }),
 
   updateQuoteTags: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const quoteId = req.params.id as string;
     const { tags } = req.body;
 
@@ -200,14 +220,15 @@ export const quoteController = {
       return res.status(400).json({ success: false, message: "Tags must be an array" });
     }
 
-    await newQuoteService.updateQuoteTags(quoteId, tags);
-    const updatedQuote = await newQuoteService.getQuoteWithDetails(quoteId);
+    await newQuoteService.updateQuoteTags(quoteId, tags, scope);
+    const updatedQuote = await newQuoteService.getQuoteWithDetails(quoteId, scope);
     return successResponse(res, updatedQuote, "Tags updated successfully");
   }),
 
   getQuoteTags: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
     const quoteId = req.params.id as string;
-    const tags = await newQuoteService.getQuoteTags(quoteId);
+    const tags = await newQuoteService.getQuoteTags(quoteId, scope);
     return successResponse(res, tags, "Tags retrieved successfully");
   }),
 };

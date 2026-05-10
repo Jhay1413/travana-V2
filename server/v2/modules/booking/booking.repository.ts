@@ -5,7 +5,7 @@ import {
   booking_airport_parking, booking_cruise, booking_cruise_item_extra,
   booking_cruise_itinerary, passengers, deal_images, accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
-  transaction, resorts, destination, country, room_type, referral,
+  transaction, resorts, destination, country, room_type, referral, clientTable,
 } from "@shared/schema";
 import type {
   Booking, InsertBooking, InsertBookingFlight, BookingFlight,
@@ -59,6 +59,55 @@ export const bookingRepository = {
     return result;
   },
 
+  async findByIdWithOrg(id: string) {
+    const [result] = await db
+      .select({
+        id: booking.id,
+        transaction_id: booking.transaction_id,
+        clientOrgId: clientTable.orgId,
+      })
+      .from(booking)
+      .leftJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(eq(booking.id, id))
+      .limit(1);
+    return result ?? null;
+  },
+
+  async transactionBelongsToOrg(transactionId: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: transaction.id })
+      .from(transaction)
+      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(and(eq(transaction.id, transactionId), eq(clientTable.orgId, orgId)))
+      .limit(1);
+    return !!row;
+  },
+
+  async flightBelongsToOrg(flightId: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: booking_flights.id })
+      .from(booking_flights)
+      .innerJoin(booking, eq(booking_flights.booking_id, booking.id))
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(and(eq(booking_flights.id, flightId), eq(clientTable.orgId, orgId)))
+      .limit(1);
+    return !!row;
+  },
+
+  async accommodationBelongsToOrg(accommodationId: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: booking_accomodation.id })
+      .from(booking_accomodation)
+      .innerJoin(booking, eq(booking_accomodation.booking_id, booking.id))
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(and(eq(booking_accomodation.id, accommodationId), eq(clientTable.orgId, orgId)))
+      .limit(1);
+    return !!row;
+  },
+
   async findByTransactionId(transactionId: string): Promise<Booking | undefined> {
     const [result] = await db.select().from(booking).where(eq(booking.transaction_id, transactionId)).limit(1);
     return result;
@@ -73,12 +122,30 @@ export const bookingRepository = {
     return result[0]?.count || 0;
   },
 
-  async findAll(): Promise<Booking[]> {
-    return await db.select().from(booking).orderBy(desc(booking.date_created));
+  async findAll(orgId: string | null): Promise<Booking[]> {
+    if (!orgId) {
+      return db.select().from(booking).orderBy(desc(booking.date_created));
+    }
+    const rows = await db
+      .select({ booking })
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(eq(clientTable.orgId, orgId))
+      .orderBy(desc(booking.date_created));
+    return rows.map((r) => r.booking);
   },
 
-  async findAllWithImages() {
-    const bookings = await db.select().from(booking).orderBy(desc(booking.date_created));
+  async findAllWithImages(orgId: string | null) {
+    const bookings = orgId
+      ? (await db
+          .select({ booking })
+          .from(booking)
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          .where(eq(clientTable.orgId, orgId))
+          .orderBy(desc(booking.date_created))).map((r) => r.booking)
+      : await db.select().from(booking).orderBy(desc(booking.date_created));
     if (bookings.length === 0) return [];
 
     const bookingIds = bookings.map(b => b.id);

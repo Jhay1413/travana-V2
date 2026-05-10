@@ -2,7 +2,7 @@ import { useRole } from "@/hooks/use-role";
 import PipelineBoard from "@/components/pipeline-board";
 
 export default function PipelinePage() {
-  const { role, setRole } = useRole();
+  const { role } = useRole();
 
   return (
     <PipelineBoard />

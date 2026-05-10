@@ -2,13 +2,40 @@ import { referralRepository } from "./referral.repository";
 import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { walletService } from "../wallet/wallet.service";
 import { AppError } from "../../utils/error-handler";
+import type { Scope } from "../../utils/scope";
 
-/**
- * Commission formula:
- *   haysDeduction = commission × 0.10
- *   afterHays     = commission − haysDeduction
- *   referralPayout (client gets) = afterHays × 0.25
- */
+type ScopeOrTrusted = Scope | { orgId: null };
+
+function effectiveOrgId(scope: ScopeOrTrusted): string | null {
+  if (scope.orgId === null) return null;
+  if ((scope as Scope).orgRole === "platform_admin") return null;
+  return (scope as Scope).orgId || null;
+}
+
+async function loadScopedReferral(id: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) {
+    const r = await referralRepository.findById(id);
+    if (!r) throw new AppError("Referral not found", 404);
+    return r;
+  }
+
+  const row = await referralRepository.findByIdWithOrg(id);
+  if (!row || row.referrerOrgId !== orgId) {
+    throw new AppError("Referral not found", 404);
+  }
+  const r = await referralRepository.findById(id);
+  if (!r) throw new AppError("Referral not found", 404);
+  return r;
+}
+
+async function assertClientInScope(clientId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await referralRepository.clientBelongsToOrg(clientId, orgId);
+  if (!ok) throw new AppError("Referral not found", 404);
+}
+
 function calculatePayoutAmount(commission: string | null | undefined): string {
   if (!commission) return "0.00";
   const gross = parseFloat(commission);
@@ -17,9 +44,6 @@ function calculatePayoutAmount(commission: string | null | undefined): string {
   return (afterHays * 0.25).toFixed(2);
 }
 
-/**
- * Calculates payoutTriggerDate as travelDate minus 56 days (8 weeks).
- */
 function calculatePayoutTriggerDate(travelDate: string): string {
   const date = new Date(travelDate);
   date.setDate(date.getDate() - 56);
@@ -33,7 +57,6 @@ async function autoApproveEligible(referrerClientId?: string) {
   const affectedReferrerIds = new Set<string>();
   for (const r of due) {
     await referralRepository.updateStatus(r.id, "IN_WALLET");
-    // Credit the wallet ledger
     if (r.referrerClientId && r.payoutAmount) {
       await walletService.addReferralCredit(r.referrerClientId, r.id, r.payoutAmount);
     }
@@ -45,30 +68,33 @@ async function autoApproveEligible(referrerClientId?: string) {
 }
 
 export const referralService = {
-  async listReferrals() {
+  async listReferrals(scope: ScopeOrTrusted) {
     await autoApproveEligible();
-    return referralRepository.findAll();
+    return referralRepository.findAll(effectiveOrgId(scope));
   },
 
-  async getReferralById(id: string) {
-    const r = await referralRepository.findById(id);
-    if (!r) throw new AppError("Referral not found", 404);
-    return r;
+  async getReferralById(id: string, scope: ScopeOrTrusted) {
+    return loadScopedReferral(id, scope);
   },
 
-  async getReferralsByReferrer(referrerClientId: string) {
+  async getReferralsByReferrer(referrerClientId: string, scope: ScopeOrTrusted) {
+    await assertClientInScope(referrerClientId, scope);
     await autoApproveEligible(referrerClientId);
     return referralRepository.findByReferrerClientId(referrerClientId);
   },
 
-  async getStatsByReferrer(referrerClientId: string) {
+  async getStatsByReferrer(referrerClientId: string, scope: ScopeOrTrusted) {
+    await assertClientInScope(referrerClientId, scope);
     return referralRepository.getStatsByReferrerId(referrerClientId);
   },
 
-  async getVipOverview(referrerClientId: string) {
+  async getVipOverview(referrerClientId: string, scope: ScopeOrTrusted) {
+    await assertClientInScope(referrerClientId, scope);
     return referralRepository.getVipOverview(referrerClientId);
   },
 
+  // Internal: called from booking.service / transaction.service when a booking commits.
+  // Caller has already validated the client belongs to its scope.
   async createReferral(data: {
     referrerClientId: string;
     referredClientId?: string;
@@ -102,10 +128,10 @@ export const referralService = {
 
   async updateStatus(
     id: string,
-    status: "PENDING" | "IN_WALLET" | "PAID" | "VOIDED"
+    status: "PENDING" | "IN_WALLET" | "PAID" | "VOIDED",
+    scope: ScopeOrTrusted,
   ) {
-    const existing = await referralRepository.findById(id);
-    if (!existing) throw new AppError("Referral not found", 404);
+    const existing = await loadScopedReferral(id, scope);
 
     if (existing.referralStatus === "PAID") {
       throw new AppError("Cannot change status of a paid referral", 400);
@@ -113,12 +139,10 @@ export const referralService = {
 
     const updated = await referralRepository.updateStatus(id, status);
 
-    // Credit the wallet ledger when manually moved to IN_WALLET
     if (status === "IN_WALLET" && existing.referrerClientId && existing.payoutAmount) {
       await walletService.addReferralCredit(existing.referrerClientId, id, existing.payoutAmount);
     }
 
-    // Recalculate tier whenever status changes to or from a successful state
     if (
       existing.referrerClientId &&
       (status === "IN_WALLET" || status === "PAID" || status === "VOIDED")
@@ -136,10 +160,10 @@ export const referralService = {
       commission?: string;
       referredEmail?: string;
       referredPhone?: string;
-    }
+    },
+    scope: ScopeOrTrusted,
   ) {
-    const existing = await referralRepository.findById(id);
-    if (!existing) throw new AppError("Referral not found", 404);
+    await loadScopedReferral(id, scope);
 
     const payoutTriggerDate = data.travelDate
       ? calculatePayoutTriggerDate(data.travelDate)
@@ -160,15 +184,13 @@ export const referralService = {
     });
   },
 
-  async deleteReferral(id: string) {
-    const existing = await referralRepository.findById(id);
-    if (!existing) throw new AppError("Referral not found", 404);
+  async deleteReferral(id: string, scope: ScopeOrTrusted) {
+    const existing = await loadScopedReferral(id, scope);
 
     if (existing.referralStatus === "PAID") {
       throw new AppError("Cannot delete a paid referral", 400);
     }
 
-    // Void it first so tier recalculates
     if (
       existing.referralStatus === "IN_WALLET" &&
       existing.referrerClientId
@@ -180,8 +202,8 @@ export const referralService = {
     await referralRepository.delete(id);
   },
 
+  // Internal: trusted callers from booking.service when a transaction is voided.
   async voidReferralsByTransaction(transactionId: string) {
-    // Find and void referrals linked to a cancelled transaction
     const existing = await referralRepository.findByTransactionId(transactionId);
     if (!existing) return;
 
@@ -194,16 +216,11 @@ export const referralService = {
     }
   },
 
-  /**
-   * When booking commission is updated, recalculate the linked referral's
-   * commission and payoutAmount — but only if the referral is still PENDING
-   * (not yet approved into wallet). IN_WALLET and PAID amounts are locked.
-   */
   async syncCommissionByTransaction(transactionId: string, newCommission: string) {
     const existing = await referralRepository.findByTransactionId(transactionId);
-    if (!existing) return; // no referral linked to this booking
+    if (!existing) return;
 
-    if (existing.referralStatus !== "PENDING") return; // locked once approved
+    if (existing.referralStatus !== "PENDING") return;
 
     const newPayoutAmount = calculatePayoutAmount(newCommission);
     await referralRepository.update(existing.id, {
@@ -212,11 +229,6 @@ export const referralService = {
     });
   },
 
-  /**
-   * When booking travel date is updated, recalculate the linked referral's
-   * travelDate and payoutTriggerDate — only if the referral is still PENDING.
-   * This ensures the 8-week availability window stays in sync with the booking.
-   */
   async syncTravelDateByTransaction(transactionId: string, newTravelDate: string) {
     const existing = await referralRepository.findByTransactionId(transactionId);
     if (!existing) return;

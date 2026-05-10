@@ -9,6 +9,8 @@ export interface Favorite {
   subtitle: string | null;
   displayOrder: number;
   createdAt: string;
+  clientId?: string | null;
+  clientName?: string | null;
 }
 
 export interface ToggleFavoritePayload {

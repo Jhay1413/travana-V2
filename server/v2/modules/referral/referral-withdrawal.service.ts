@@ -6,16 +6,40 @@ import {
   uploadWithdrawalInvoice,
 } from '../../../services/invoicePdf.service';
 import { AppError } from '../../utils/error-handler';
+import type { Scope } from '../../utils/scope';
 
-export const referralWithdrawalService = {
-  async listWithdrawals() {
-    return referralWithdrawalRepository.findAll();
-  },
+type ScopeOrTrusted = Scope | { orgId: null };
 
-  async getWithdrawalById(id: string) {
+function effectiveOrgId(scope: ScopeOrTrusted): string | null {
+  if (scope.orgId === null) return null;
+  if ((scope as Scope).orgRole === 'platform_admin') return null;
+  return (scope as Scope).orgId || null;
+}
+
+async function loadScopedWithdrawal(id: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) {
     const w = await referralWithdrawalRepository.findById(id);
     if (!w) throw new AppError('Withdrawal not found', 404);
     return w;
+  }
+
+  const row = await referralWithdrawalRepository.findByIdWithOrg(id);
+  if (!row || row.clientOrgId !== orgId) {
+    throw new AppError('Withdrawal not found', 404);
+  }
+  const w = await referralWithdrawalRepository.findById(id);
+  if (!w) throw new AppError('Withdrawal not found', 404);
+  return w;
+}
+
+export const referralWithdrawalService = {
+  async listWithdrawals(scope: ScopeOrTrusted) {
+    return referralWithdrawalRepository.findAll(effectiveOrgId(scope));
+  },
+
+  async getWithdrawalById(id: string, scope: ScopeOrTrusted) {
+    return loadScopedWithdrawal(id, scope);
   },
 
   async getWithdrawalsByClient(clientId: string) {
@@ -68,9 +92,9 @@ export const referralWithdrawalService = {
       credit_note?: string;
       notes?: string;
     },
+    scope: ScopeOrTrusted,
   ) {
-    const withdrawal = await referralWithdrawalRepository.findById(id);
-    if (!withdrawal) throw new AppError('Withdrawal not found', 404);
+    const withdrawal = await loadScopedWithdrawal(id, scope);
     if (withdrawal.status === 'processed') throw new AppError('Withdrawal has already been processed', 400);
     if (withdrawal.status === 'rejected') throw new AppError('Cannot process a rejected withdrawal', 400);
 
@@ -124,9 +148,8 @@ export const referralWithdrawalService = {
     return updated;
   },
 
-  async rejectWithdrawal(id: string, notes?: string) {
-    const withdrawal = await referralWithdrawalRepository.findById(id);
-    if (!withdrawal) throw new AppError('Withdrawal not found', 404);
+  async rejectWithdrawal(id: string, notes: string | undefined, scope: ScopeOrTrusted) {
+    const withdrawal = await loadScopedWithdrawal(id, scope);
     if (withdrawal.status !== 'pending') throw new AppError('Only pending withdrawals can be rejected', 400);
 
     await referralRepository.updateStatus(withdrawal.referral_id, 'IN_WALLET');

@@ -44,7 +44,7 @@ export default function QuotePage() {
   const [, freeQuoteParams] = useRoute("/quotes/:quoteId");
   const params = quoteParams ?? freeQuoteParams;
 
-  const { role, actualRole } = useRole();
+  const { role } = useRole();
   const clientId = quoteParams?.clientId ?? "";
   const quoteId = params?.quoteId ?? "";
 
@@ -808,7 +808,7 @@ export default function QuotePage() {
                                   { label: `Edit ${pageLabel}`, icon: Pencil, id: "edit" },
                                   ...(quote.status !== "accepted" ? [{ label: "Convert to Booking", icon: RefreshCw, id: "convert" }] : []),
                                   { label: `Duplicate ${pageLabel}`, icon: Copy, id: "duplicate" },
-                                  ...(actualRole === "Admin" ? [{ label: `Delete ${pageLabel}`, icon: Trash2, id: "admin-delete" }] : []),
+                                  ...(role === "Admin" ? [{ label: `Delete ${pageLabel}`, icon: Trash2, id: "admin-delete" }] : []),
                                 ].map((item) => (
                                   <button
                                     key={item.id}

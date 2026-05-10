@@ -18,7 +18,15 @@ export function useQuotes(filters?: QuoteFilters) {
   });
 }
 
-export function useFreeQuotesInfinite(pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "") {
+export function useFreeQuotesInfinite(
+  pageSize: number = 12,
+  scheduledOnly = false,
+  scheduleFilter = "none",
+  search = "",
+  rangeStart = "",
+  rangeEnd = "",
+  options?: { enabled?: boolean },
+) {
   return useInfiniteQuery({
     queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search, rangeStart, rangeEnd],
     queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd),
@@ -26,6 +34,7 @@ export function useFreeQuotesInfinite(pageSize: number = 12, scheduledOnly = fal
       return lastPage.hasMore ? lastPage.page + 1 : undefined;
     },
     initialPageParam: 0 as number,
+    enabled: options?.enabled ?? true,
   });
 }
 

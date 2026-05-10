@@ -28,3 +28,6 @@ export { searchApi } from "./endpoints/search.api";
 export { announcementApi } from "./endpoints/announcement.api";
 export { emailApi } from "./endpoints/email.api";
 export { facebookApi } from "./endpoints/facebook.api";
+export { organizationApi } from "./endpoints/organization.api";
+export { branchApi } from "./endpoints/branch.api";
+export { inviteApi } from "./endpoints/invite.api";

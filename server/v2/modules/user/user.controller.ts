@@ -17,24 +17,24 @@ export const userController = {
 
   getUserById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const user = await userService.getUserById(id);
+    const user = await userService.getUserById(id, getScope(req));
     return successResponse(res, stripPassword(user), "User retrieved successfully");
   }),
 
   createUser: asyncHandler(async (req: Request, res: Response) => {
-    const user = await userService.createUser(req.body);
+    const user = await userService.createUser(req.body, getScope(req));
     return successResponse(res, user, "User created successfully", 201);
   }),
 
   updateUser: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const user = await userService.updateUser(id, req.body);
+    const user = await userService.updateUser(id, req.body, getScope(req));
     return successResponse(res, user, "User updated successfully");
   }),
 
   deleteUser: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    await userService.deleteUser(id);
+    await userService.deleteUser(id, getScope(req));
     res.status(204).send();
   }),
 };

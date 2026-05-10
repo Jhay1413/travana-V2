@@ -33,10 +33,13 @@ export function useTasks(entityType: string, entityId: string) {
   });
 }
 
-export function useUserTasks(userId: string) {
-  return useQuery<TaskNew[]>({
-    queryKey: taskKeys.byUser(userId),
-    queryFn: () => taskApi.getByUser(userId),
+export function useUserTasks(
+  userId: string,
+  filters?: { dueFrom?: string; dueTo?: string; incomplete?: boolean },
+) {
+  return useQuery<TaskWithClient[]>({
+    queryKey: [...taskKeys.byUser(userId), filters ?? {}] as const,
+    queryFn: () => taskApi.getByUser(userId, filters),
     enabled: !!userId,
   });
 }

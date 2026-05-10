@@ -2,11 +2,21 @@ import { Request, Response } from 'express';
 import { facebookService } from './facebook.service';
 import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
+import { AppError } from '../../utils/error-handler';
+import { getUserId } from '../../utils/get-user-id';
+
+function requireUserId(req: Request): string {
+  const userId = getUserId(req);
+  if (!userId) {
+    throw new AppError('Unauthorized', 401);
+  }
+  return userId;
+}
 
 export const facebookController = {
+  // Auth + callback are public — they bridge to FB's OAuth.
   auth: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
-    if (!userId) return res.status(400).json({ message: 'userId required' });
+    const userId = requireUserId(req);
     const url = facebookService.getAuthUrl(userId);
     res.redirect(url);
   }),
@@ -36,39 +46,37 @@ export const facebookController = {
     res.sendStatus(200);
   }),
 
+  // All authenticated endpoints below resolve userId from the session — never from query.
+
   getPages: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
-    if (!userId) return res.status(400).json({ message: 'userId required' });
+    const userId = requireUserId(req);
     const pages = await facebookService.getPages(userId);
     return successResponse(res, pages, 'Pages retrieved');
   }),
 
   disconnectPage: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
-    if (!userId) return res.status(400).json({ message: 'userId required' });
+    const userId = requireUserId(req);
     await facebookService.disconnectPage(req.params.id, userId);
     res.sendStatus(204);
   }),
 
   getConversations: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
-    if (!userId) return res.status(400).json({ message: 'userId required' });
+    const userId = requireUserId(req);
     const conversations = await facebookService.getConversations(req.params.id, userId);
     return successResponse(res, conversations, 'Conversations retrieved');
   }),
 
   getMessages: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
+    const userId = requireUserId(req);
     const pageId = req.query.pageId as string;
-    if (!userId || !pageId) return res.status(400).json({ message: 'userId and pageId required' });
+    if (!pageId) return res.status(400).json({ message: 'pageId required' });
     const messages = await facebookService.getMessages(req.params.conversationId, pageId, userId);
     return successResponse(res, messages, 'Messages retrieved');
   }),
 
   sendMessage: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
+    const userId = requireUserId(req);
     const { recipientId, text } = req.body as { recipientId: string; text: string };
-    if (!userId) return res.status(400).json({ message: 'userId required' });
     await facebookService.sendMessage(req.params.id, recipientId, text, userId);
     return successResponse(res, null, 'Message sent');
   }),

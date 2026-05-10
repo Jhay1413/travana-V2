@@ -47,7 +47,7 @@ export const opportunitiesService = {
     return { items, total, page: filters.page, limit: filters.limit, totalPages: Math.ceil(total / filters.limit) };
   },
 
-  async getAgents() {
-    return opportunitiesRepository.findAgents();
+  async getAgents(orgId: string | null) {
+    return opportunitiesRepository.findAgents(orgId);
   },
 };

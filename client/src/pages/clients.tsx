@@ -88,7 +88,7 @@ const stageColors = {
 
 export default function ClientsPage() {
   const [, navigate] = useLocation();
-  const { role, setRole } = useRole();
+  const { role } = useRole();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [q, setQ] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");

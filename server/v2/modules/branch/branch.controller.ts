@@ -9,7 +9,7 @@ export const branchController = {
     successResponse(res, data);
   }),
   getById: asyncHandler(async (req: Request, res: Response) => {
-    const data = await branchService.getById(req.params.id, req.orgId);
+    const data = await branchService.getById(req.params.id as string, req.orgId);
     successResponse(res, data);
   }),
   create:  asyncHandler(async (req: Request, res: Response) => {
@@ -17,11 +17,11 @@ export const branchController = {
     successResponse(res, data, 'Branch created', 201);
   }),
   update:  asyncHandler(async (req: Request, res: Response) => {
-    const data = await branchService.update(req.params.id, req.body, req.orgId);
+    const data = await branchService.update(req.params.id as string, req.body, req.orgId);
     successResponse(res, data);
   }),
   remove:  asyncHandler(async (req: Request, res: Response) => {
-    await branchService.remove(req.params.id, req.orgId);
+    await branchService.remove(req.params.id as string, req.orgId);
     successResponse(res, null, 'Branch deleted');
   }),
 };

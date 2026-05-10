@@ -34,7 +34,15 @@ export const taskController = {
     if (!userId) {
       throw new AppError("userId query parameter is required", 400);
     }
-    const tasks = await taskService.listByUser(userId, getScope(req));
+    const dueFromRaw = req.query.dueFrom as string | undefined;
+    const dueToRaw = req.query.dueTo as string | undefined;
+    const incompleteRaw = req.query.incomplete as string | undefined;
+    const filters = {
+      dueFrom: dueFromRaw ? new Date(dueFromRaw) : undefined,
+      dueTo: dueToRaw ? new Date(dueToRaw) : undefined,
+      incomplete: incompleteRaw === "true" || incompleteRaw === "1",
+    };
+    const tasks = await taskService.listByUser(userId, getScope(req), filters);
     return successResponse(res, tasks);
   }),
 

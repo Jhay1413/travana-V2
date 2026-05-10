@@ -35,10 +35,10 @@ export function useTicketsByClient(clientId: string) {
   });
 }
 
-export function useTicketsByUser(userId: string) {
+export function useTicketsByUser(userId: string, filters?: { statuses?: string[] }) {
   return useQuery<Ticket[]>({
-    queryKey: ticketKeys.byUser(userId),
-    queryFn: () => ticketApi.getByUser(userId),
+    queryKey: [...ticketKeys.byUser(userId), filters ?? {}] as const,
+    queryFn: () => ticketApi.getByUser(userId, filters),
     enabled: !!userId,
   });
 }

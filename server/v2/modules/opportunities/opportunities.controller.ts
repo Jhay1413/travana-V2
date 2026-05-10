@@ -2,11 +2,17 @@ import { Request, Response } from 'express';
 import { opportunitiesService } from './opportunities.service';
 import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
+import { getScope } from '../../utils/scope';
 
 function resolveAgentId(req: Request): string | undefined {
   const queryAgentId = req.query.agentId as string;
   if (queryAgentId) return queryAgentId;
   return undefined;
+}
+
+function effectiveOrgId(req: Request): string | null {
+  const scope = getScope(req);
+  return scope.orgRole === 'platform_admin' ? null : (scope.orgId || null);
 }
 
 export const opportunitiesController = {
@@ -19,6 +25,7 @@ export const opportunitiesController = {
       dateRange: req.query.dateRange as string,
       agentId: resolveAgentId(req),
       sortBy: req.query.sortBy as string,
+      orgId: effectiveOrgId(req),
     });
     return successResponse(res, result, 'Enquiries retrieved');
   }),
@@ -32,6 +39,7 @@ export const opportunitiesController = {
       dateRange: req.query.dateRange as string,
       agentId: resolveAgentId(req),
       sortBy: req.query.sortBy as string,
+      orgId: effectiveOrgId(req),
     });
     return successResponse(res, result, 'Quotes retrieved');
   }),
@@ -45,12 +53,13 @@ export const opportunitiesController = {
       dateRange: req.query.dateRange as string,
       agentId: resolveAgentId(req),
       sortBy: req.query.sortBy as string,
+      orgId: effectiveOrgId(req),
     });
     return successResponse(res, result, 'Bookings retrieved');
   }),
 
-  getAgents: asyncHandler(async (_req: Request, res: Response) => {
-    const agents = await opportunitiesService.getAgents();
+  getAgents: asyncHandler(async (req: Request, res: Response) => {
+    const agents = await opportunitiesService.getAgents(effectiveOrgId(req));
     return successResponse(res, agents, 'Agents retrieved');
   }),
 };
