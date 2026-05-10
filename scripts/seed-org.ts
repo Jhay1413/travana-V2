@@ -11,6 +11,7 @@ import {
   forwardsReport,
   tour_operator,
   tourOperators,
+  clientTable,
 } from "../shared/schema";
 import { eq, isNull } from "drizzle-orm";
 
@@ -109,6 +110,13 @@ async function main() {
     .set({ orgId, branchId })
     .where(isNull(tickets.orgId));
   console.log(`  tickets: backfilled`);
+
+  // ── 7a. Backfill clientTable ──────────────────────────────────────────────
+  await db
+    .update(clientTable)
+    .set({ orgId, branchId })
+    .where(isNull(clientTable.orgId));
+  console.log(`  clientTable: backfilled`);
 
   // ── 8. Backfill forwardsReport ────────────────────────────────────────────
   await db
