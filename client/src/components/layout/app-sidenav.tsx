@@ -18,9 +18,11 @@ function isActive(currentPath: string, currentSearch: string, itemPath: string):
   if (query) {
     const itemParams = new URLSearchParams(query);
     const currentParams = new URLSearchParams(currentSearch);
-    for (const [k, v] of itemParams.entries()) {
-      if (currentParams.get(k) !== v) return false;
-    }
+    let match = true;
+    itemParams.forEach((v, k) => {
+      if (currentParams.get(k) !== v) match = false;
+    });
+    if (!match) return false;
     return currentPath === (path || "/");
   }
   if (itemPath === "/") return currentPath === "/" && !currentSearch;
