@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import CsvImportDialog from "@/components/csv-import-dialog";
 import {
@@ -231,17 +230,7 @@ export default function ClientsPage() {
   const activeFilters = (stage !== "all" ? 1 : 0) + (tier !== "all" ? 1 : 0);
 
   return (
-    <CommandCenterShell
-      role={role}
-      onRoleChange={setRole}
-      active="clients"
-      title="Clients"
-      query={q}
-      onQuery={handleSearch}
-      theme={theme}
-      onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
-      onAddClient={() => setShowNewClientDialog(true)}
-    >
+    <>
       <div className="space-y-6">
         {/* Import CSV Banner */}
         <div className="flex items-center justify-between rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4" data-testid="banner-csv-import">
@@ -786,6 +775,6 @@ export default function ClientsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </CommandCenterShell>
+    </>
   );
 }

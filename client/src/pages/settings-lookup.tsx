@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "wouter";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import type { Role } from "@/types/auth/auth.types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -738,11 +738,9 @@ export default function SettingsLookupPage() {
 
   if (!def) {
     return (
-      <CommandCenterShell active="" title="Not Found" role={role} onRoleChange={setRole} query={query} onQuery={setQuery}>
-        <Card className="glass ringed grain rounded-3xl p-8 text-center">
-          <p className="text-black/50 dark:text-white/50">Settings table not found: {tableSlug}</p>
-        </Card>
-      </CommandCenterShell>
+      <Card className="glass ringed grain rounded-3xl p-8 text-center">
+        <p className="text-black/50 dark:text-white/50">Settings table not found: {tableSlug}</p>
+      </Card>
     );
   }
 
@@ -785,15 +783,7 @@ export default function SettingsLookupPage() {
   };
 
   return (
-    <CommandCenterShell
-      active={def.navKey}
-      title={def.label}
-      subtitle={`Manage ${def.label.toLowerCase()}`}
-      role={role}
-      onRoleChange={setRole}
-      query={query}
-      onQuery={setQuery}
-    >
+    <>
       <section>
         <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
           {/* Header */}
@@ -1003,6 +993,6 @@ export default function SettingsLookupPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </CommandCenterShell>
+    </>
   );
 }

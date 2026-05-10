@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { authStorage } from '../../replit_integrations/auth/storage';
+import { branchMemberRepository } from '../modules/branch-member/branch-member.repository';
 import { getUserId } from '../../utils/get-user-id';
 
 export async function orgBranchScope(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -17,22 +18,27 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
     return;
   }
 
-  const role: string = (dbUser as any).role ?? '';
-  if (role === 'platform_admin') {
+  if (dbUser.role === 'platform_admin') {
     req.orgId    = '';
     req.branchId = null;
     req.orgRole  = 'platform_admin';
     return next();
   }
 
-  const orgId: string | undefined = (dbUser as any).org_id;
-  if (!orgId) {
-    res.status(403).json({ message: 'No organisation context' });
-    return;
+  const membership = await branchMemberRepository.findActiveByUserId(userId);
+  if (membership) {
+    req.orgId    = membership.orgId;
+    req.branchId = membership.branchId;
+    req.orgRole  = membership.orgRole;
+    return next();
   }
 
-  req.orgId    = orgId;
-  req.branchId = (dbUser as any).branch_id ?? null;
-  req.orgRole  = (dbUser as any).org_role ?? 'agent';
-  next();
+  if (dbUser.orgId) {
+    req.orgId    = dbUser.orgId;
+    req.branchId = null;
+    req.orgRole  = dbUser.orgRole ?? 'org_admin';
+    return next();
+  }
+
+  res.status(403).json({ message: 'No organisation context' });
 }

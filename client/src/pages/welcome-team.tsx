@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAgency, useTeam } from "@/hooks/use-agency";
 import { ROLE_LABEL, VISIBLE_ROLES } from "@/lib/permissions";
-import type { Role } from "@/components/command-center-shell";
+import type { Role } from "@/types/auth/auth.types";
 
 export default function WelcomeTeamPage() {
   const [, setLocation] = useLocation();

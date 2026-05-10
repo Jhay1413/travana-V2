@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { readAgencies, writeAgencies, useAgency, PLAN_DETAILS, type Agency } from "@/hooks/use-agency";
 import { AlertCircle, Building2, Eye, ShieldOff, ShieldCheck, Search, Download } from "lucide-react";
@@ -106,7 +105,7 @@ export default function PlatformAdminPage() {
   };
 
   return (
-    <CommandCenterShell active="platform-admin" title="Platform Admin" subtitle="All agencies on TravelHub" role={role} onRoleChange={setRole}>
+    <>
       {!allowed ? (
         <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
           <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-600" />
@@ -209,7 +208,7 @@ export default function PlatformAdminPage() {
           </div>
         </div>
       )}
-    </CommandCenterShell>
+    </>
   );
 }
 

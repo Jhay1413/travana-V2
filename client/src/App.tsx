@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
+import ForbiddenPage from "@/pages/forbidden";
 import LandingPage from "@/pages/landing";
 import SignupAgencyPage from "@/pages/signup-agency";
 import WelcomeTeamPage from "@/pages/welcome-team";
@@ -27,6 +28,9 @@ import AdminImportPage from "@/pages/admin-import";
 import AdminLookupPage from "@/pages/admin-lookup";
 import SettingsLookupPage from "@/pages/settings-lookup";
 import BookingPage from "@/pages/booking-standalone";
+import BookingsPage from "@/pages/bookings";
+import TasksPage from "@/pages/tasks";
+import ReportsPage from "@/pages/reports";
 import PipelinePage from "@/pages/pipeline";
 import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";
@@ -38,6 +42,23 @@ import FeedbackPage from "@/pages/feedback";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import TravanaRouter from "@/pages/travana";
+import { AppLayout } from "@/components/layout/app-layout";
+import { RoleRoute } from "@/components/role-route";
+import type { OrgRole } from "@/types/auth/auth.types";
+
+const ALL_ROLES: OrgRole[] = [
+  "platform_admin",
+  "org_admin",
+  "branch_manager",
+  "agent",
+  "homeworker",
+  "referral_agent",
+];
+const STAFF_ROLES: OrgRole[] = ["platform_admin", "org_admin", "branch_manager", "agent", "homeworker"];
+const MANAGER_ROLES: OrgRole[] = ["platform_admin", "org_admin", "branch_manager"];
+const ADMIN_ROLES: OrgRole[] = ["platform_admin", "org_admin"];
+const PLATFORM_ROLES: OrgRole[] = ["platform_admin"];
+const REFERRAL_ROLES: OrgRole[] = ["referral_agent", "platform_admin"];
 import PortalLoginPage from "@/pages/portal/portal-login";
 import PortalHomePage from "@/pages/portal/portal-home";
 import PortalQuotesPage from "@/pages/portal/portal-quotes";
@@ -61,42 +82,60 @@ function LoadingScreen() {
 }
 
 function AuthenticatedRouter() {
-  const { role } = useRole();
+  const { orgRole } = useRole();
+  const homeComponent =
+    orgRole === "referral_agent"
+      ? ReferralAgentDashboard
+      : orgRole === "platform_admin"
+        ? PlatformAdminPage
+        : CommandCenterPage;
+
   return (
-    <Switch>
-      <Route path="/" component={role === "Referer" ? ReferralAgentDashboard : role === "PlatformAdmin" ? PlatformAdminPage : CommandCenterPage} />
-      <Route path="/welcome-team" component={WelcomeTeamPage} />
-      <Route path="/platform-admin" component={PlatformAdminPage} />
-      <Route path="/agency/team" component={SettingsTeamPage} />
-      <Route path="/agency/permissions" component={SettingsPermissionsPage} />
-      <Route path="/agency/branding" component={SettingsBrandingPage} />
-      <Route path="/agency/billing" component={SettingsBillingPage} />
-      <Route path="/referral-hub" component={ReferralAgentDashboard} />
-      <Route path="/command-center" component={CommandCenterPage} />
-      <Route path="/clients" component={CommandCenterPage} />
-      <Route path="/clients/:clientId" component={ClientPage} />
-      <Route path="/clients/:clientId/quotes/:quoteId" component={QuotePage} />
-      <Route path="/quotes/:quoteId" component={QuotePage} />
-      <Route path="/clients/:clientId/bookings/:quoteId" component={BookingPage} />
-      <Route path="/bookings/:quoteId" component={BookingPage} />
-      <Route path="/clients/:clientId/enquiries/:enquiryId" component={EnquiryPage} />
-      <Route path="/enquiries/:enquiryId" component={EnquiryPage} />
-      <Route path="/pipeline" component={PipelinePage} />
-      <Route path="/destination-guru" component={DestinationGuruPage} />
-      <Route path="/sms-center" component={SmsCenterPage} />
-      <Route path="/hr" component={HrPage} />
-      <Route path="/social-posts" component={SocialPostsPage} />
-      <Route path="/social-posts/quotes/:quoteId" component={SocialQuotePage} />
-      <Route path="/tickets" component={TicketsPage} />
-      <Route path="/tickets/:ticketId" component={TicketsPage} />
-      <Route path="/hub/:rest*" component={HubPage} />
-      <Route path="/hub" component={HubPage} />
-      <Route path="/admin/import" component={AdminImportPage} />
-      <Route path="/admin/lookup/:tableSlug" component={AdminLookupPage} />
-      <Route path="/settings/:tableSlug" component={SettingsLookupPage} />
-      <Route path="/feedback" component={FeedbackPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <AppLayout>
+      <Switch>
+        <Route path="/" component={homeComponent} />
+        <Route path="/welcome-team" component={WelcomeTeamPage} />
+        <Route path="/forbidden" component={ForbiddenPage} />
+
+        <RoleRoute path="/platform-admin" allow={PLATFORM_ROLES} component={PlatformAdminPage} />
+        <RoleRoute path="/referral-hub" allow={REFERRAL_ROLES} component={ReferralAgentDashboard} />
+
+        <RoleRoute path="/agency/team" allow={ADMIN_ROLES} component={SettingsTeamPage} />
+        <RoleRoute path="/agency/permissions" allow={ADMIN_ROLES} component={SettingsPermissionsPage} />
+        <RoleRoute path="/agency/branding" allow={ADMIN_ROLES} component={SettingsBrandingPage} />
+        <RoleRoute path="/agency/billing" allow={ADMIN_ROLES} component={SettingsBillingPage} />
+        <RoleRoute path="/admin/import" allow={ADMIN_ROLES} component={AdminImportPage} />
+        <RoleRoute path="/admin/lookup/:tableSlug" allow={ADMIN_ROLES} component={AdminLookupPage} />
+        <RoleRoute path="/settings/:tableSlug" allow={ADMIN_ROLES} component={SettingsLookupPage} />
+        <RoleRoute path="/hr" allow={ADMIN_ROLES} component={HrPage} />
+
+        <RoleRoute path="/bookings" allow={MANAGER_ROLES} component={BookingsPage} />
+        <RoleRoute path="/tasks" allow={MANAGER_ROLES} component={TasksPage} />
+        <RoleRoute path="/reports" allow={MANAGER_ROLES} component={ReportsPage} />
+
+        <RoleRoute path="/command-center" allow={STAFF_ROLES} component={CommandCenterPage} />
+        <RoleRoute path="/clients" allow={STAFF_ROLES} component={CommandCenterPage} />
+        <RoleRoute path="/clients/:clientId" allow={STAFF_ROLES} component={ClientPage} />
+        <RoleRoute path="/clients/:clientId/quotes/:quoteId" allow={STAFF_ROLES} component={QuotePage} />
+        <RoleRoute path="/quotes/:quoteId" allow={STAFF_ROLES} component={QuotePage} />
+        <RoleRoute path="/clients/:clientId/bookings/:quoteId" allow={STAFF_ROLES} component={BookingPage} />
+        <RoleRoute path="/bookings/:quoteId" allow={STAFF_ROLES} component={BookingPage} />
+        <RoleRoute path="/clients/:clientId/enquiries/:enquiryId" allow={STAFF_ROLES} component={EnquiryPage} />
+        <RoleRoute path="/enquiries/:enquiryId" allow={STAFF_ROLES} component={EnquiryPage} />
+        <RoleRoute path="/pipeline" allow={STAFF_ROLES} component={PipelinePage} />
+        <RoleRoute path="/destination-guru" allow={STAFF_ROLES} component={DestinationGuruPage} />
+        <RoleRoute path="/sms-center" allow={STAFF_ROLES} component={SmsCenterPage} />
+        <RoleRoute path="/social-posts" allow={STAFF_ROLES} component={SocialPostsPage} />
+        <RoleRoute path="/social-posts/quotes/:quoteId" allow={STAFF_ROLES} component={SocialQuotePage} />
+        <RoleRoute path="/tickets" allow={STAFF_ROLES} component={TicketsPage} />
+        <RoleRoute path="/tickets/:ticketId" allow={STAFF_ROLES} component={TicketsPage} />
+        <RoleRoute path="/hub/:rest*" allow={STAFF_ROLES} component={HubPage} />
+        <RoleRoute path="/hub" allow={STAFF_ROLES} component={HubPage} />
+        <RoleRoute path="/feedback" allow={ALL_ROLES} component={FeedbackPage} />
+
+        <Route component={NotFound} />
+      </Switch>
+    </AppLayout>
   );
 }
 

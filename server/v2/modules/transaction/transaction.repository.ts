@@ -8,10 +8,10 @@ function buildTxnScopeConds(scope?: Scope): SQL[] {
   const conds: SQL[] = [];
   if (!scope || scope.orgRole === "platform_admin") return conds;
   conds.push(eq(transaction.org_id, scope.orgId));
-  if (scope.orgRole === "branch_manager" && scope.branchId) {
+  if (scope.branchId && (scope.orgRole === "branch_manager" || scope.orgRole === "agent")) {
     conds.push(eq(transaction.branch_id, scope.branchId));
   }
-  if ((scope.orgRole === "agent" || scope.orgRole === "homeworker") && scope.userId) {
+  if (scope.orgRole === "homeworker" && scope.userId) {
     conds.push(eq(transaction.user_id, scope.userId));
   }
   return conds;

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CommandCenterShell, type Role } from "@/components/command-center-shell";
+import type { Role } from "@/types/auth/auth.types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -367,15 +367,7 @@ export default function AdminImportPage() {
   const dependentTables = data?.tables.filter((t) => t.dependsOn.length > 0) || [];
 
   return (
-    <CommandCenterShell
-      active="data-import"
-      title="Data Import"
-      subtitle="Import lookup and reference data"
-      role={role}
-      onRoleChange={setRole}
-      query={query}
-      onQuery={setQuery}
-    >
+    <>
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
@@ -421,6 +413,6 @@ export default function AdminImportPage() {
           </div>
         )}
       </div>
-    </CommandCenterShell>
+    </>
   );
 }

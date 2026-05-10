@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { useAgency } from "@/hooks/use-agency";
 import {
@@ -10,7 +9,7 @@ import {
 import { AlertCircle, Lock, RotateCcw, Save, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { Role } from "@/components/command-center-shell";
+import type { Role } from "@/types/auth/auth.types";
 
 const LEVEL_BADGE: Record<AccessLevel, string> = {
   none: "bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/50",
@@ -48,7 +47,7 @@ export default function SettingsPermissionsPage() {
     (overrides[r]?.[m] ?? DEFAULT_PERMISSIONS[r]?.[m] ?? "none");
 
   return (
-    <CommandCenterShell active="permissions-settings" title="Roles & Permissions" subtitle="Default matrix with light Owner toggles" role={role} onRoleChange={setRole}>
+    <>
       {!allowed ? (
         <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
           <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-600" />
@@ -116,6 +115,6 @@ export default function SettingsPermissionsPage() {
           </div>
         </div>
       )}
-    </CommandCenterShell>
+    </>
   );
 }

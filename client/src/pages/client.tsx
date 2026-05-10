@@ -1,7 +1,6 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { clientFileApi, attachmentApi } from "@/api";
 import {
@@ -645,131 +644,32 @@ export default function ClientPage() {
 
   if (isLoadingClient) {
     return (
-      <CommandCenterShell
-        role={role}
-        onRoleChange={setRole}
-        active={active}
-        title="Client"
-        query={q}
-        onQuery={setQ}
-        theme="light"
-        onToggleTheme={() => { }}
-      >
-        <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-client">
-          <Spinner className="h-8 w-8" />
-        </div>
-      </CommandCenterShell>
+      <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-client">
+        <Spinner className="h-8 w-8" />
+      </div>
     );
   }
 
   if (!client) {
     return (
-      <CommandCenterShell
-        role={role}
-        onRoleChange={setRole}
-        active={active}
-        title="Client"
-        query={q}
-        onQuery={setQ}
-        theme="light"
-        onToggleTheme={() => { }}
-      >
-        <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-client">
-          <div className="text-center">
-            <p className="text-sm text-black/70">Client not found</p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-4"
-              onClick={() => navigate("/clients")}
-            >
-              Back to Clients
-            </Button>
-          </div>
+      <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-client">
+        <div className="text-center">
+          <p className="text-sm text-black/70">Client not found</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-4"
+            onClick={() => navigate("/clients")}
+          >
+            Back to Clients
+          </Button>
         </div>
-      </CommandCenterShell>
+      </div>
     );
   }
 
   return (
-    <CommandCenterShell
-      role={role}
-      onRoleChange={setRole}
-      active={active}
-      title={client.name}
-      subtitle={clientData?.phoneNumber || ""}
-      subtitleIcon={clientData?.phoneNumber ? <Phone className="h-3 w-3" /> : null}
-      query={q}
-      onQuery={setQ}
-      theme="light"
-      onToggleTheme={() => { }}
-      filterSlot={<></>}
-      createActions={[
-        { label: "Enquiry", icon: <FileText className="h-4 w-4" />, onClick: () => setShowEnquiryWizard(true) },
-        { label: "Quote", icon: <Sparkles className="h-4 w-4" />, onClick: handleNewQuote },
-        { label: "Booking", icon: <Calendar className="h-4 w-4" />, onClick: () => setShowBookingCreateDialog(true) },
-        { label: "Task", icon: <Ticket className="h-4 w-4" />, onClick: () => setShowTaskDialog(true) },
-      ]}
-      headerExtra={
-        <div className="flex items-center gap-2">
-          <Select
-            value={clientData?.badge || "New Client"}
-            onValueChange={(value) => {
-              if (clientId) {
-                updateNeonClientMutation.mutate(
-                  { id: clientId, data: { badge: value } },
-                  {
-                    onSuccess: () => {
-                      toast({ title: "Client type updated" });
-                    },
-                    onError: () => {
-                      toast({ title: "Failed to update client type", variant: "destructive" });
-                    },
-                  }
-                );
-              }
-            }}
-          >
-            <SelectTrigger
-              className="h-auto w-auto rounded-full border-[#3b82f6]/30 bg-[#3b82f6]/10 px-3 py-1 text-xs font-semibold text-[#3b82f6] hover:bg-[#3b82f6]/20"
-              data-testid="select-client-type-header"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="z-[400]">
-              <SelectItem value="New Client">New Client</SelectItem>
-              <SelectItem value="Repeat Client">Repeat Client</SelectItem>
-              <SelectItem value="VIP Client">VIP Client</SelectItem>
-              <SelectItem value="Family Member">Family Member</SelectItem>
-              <SelectItem value="Time Waster">Time Waster</SelectItem>
-              <SelectItem value="Banned">Banned</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <button
-            type="button"
-            onClick={() => {
-              const clientName = client?.name || "Client";
-              const subtitle = clientData?.phoneNumber || clientData?.email || "";
-              toggleFavoriteMutation.mutate(
-                { itemType: "client", itemId: clientId, label: clientName, subtitle },
-                {
-                  onSuccess: (data: { favorited?: boolean }) => {
-                    toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" });
-                  },
-                }
-              );
-            }}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isClientPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/60 hover:bg-black/[0.03]"}`}
-            data-testid="button-pin-client-header"
-            title={isClientPinned ? "Unpin client" : "Pin client"}
-          >
-            {isClientPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-          </button>
-
-        </div>
-      }
-    >
+    <>
       <div className="relative min-h-[calc(100vh-56px)] w-full px-2 pb-3 md:px-3 md:pb-4">
         <div className="relative mt-2 grid gap-2 lg:grid-cols-12" data-testid="layout-client-page">
           <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-3 lg:col-span-4">
@@ -1332,6 +1232,6 @@ export default function ClientPage() {
         onSubmit={handleEnquirySubmit}
         isSaving={createEnquiryMutation.isPending || updateEnquiryMutation.isPending}
       />
-    </CommandCenterShell>
+    </>
   );
 }

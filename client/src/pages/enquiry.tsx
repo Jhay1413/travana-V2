@@ -37,7 +37,6 @@ import {
   PawPrint,
   PinOff,
 } from "lucide-react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -752,24 +751,20 @@ export default function EnquiryPage() {
 
   if (isLoading) {
     return (
-      <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <Spinner className="h-8 w-8" />
-        </div>
-      </CommandCenterShell>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
     );
   }
 
   if (!enquiry) {
     return (
-      <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
-        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
-          <div className="text-sm text-black/50">Enquiry not found</div>
-          <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => navigate(clientId ? `/clients/${clientId}?tab=enquiries` : "/")}>
-            <ChevronLeft className="mr-1 h-4 w-4" /> Enquiries
-          </Button>
-        </div>
-      </CommandCenterShell>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <div className="text-sm text-black/50">Enquiry not found</div>
+        <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => navigate(clientId ? `/clients/${clientId}?tab=enquiries` : "/")}>
+          <ChevronLeft className="mr-1 h-4 w-4" /> Enquiries
+        </Button>
+      </div>
     );
   }
 
@@ -800,7 +795,7 @@ export default function EnquiryPage() {
   const cruiseDestinationNames = (enquiry as any).cruiseDestinations?.map((c: any) => c.cruise_destination_name || c.name || null).filter(Boolean).join(", ") || null;
 
   return (
-    <CommandCenterShell title="Enquiry" role={role} onRoleChange={setRole} theme="light" onToggleTheme={() => {}}>
+    <>
       <div className="mx-auto w-full max-w-5xl px-4 pb-12 pt-6">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <div className="mb-6 flex items-center gap-3">
@@ -996,6 +991,6 @@ export default function EnquiryPage() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
-    </CommandCenterShell>
+    </>
   );
 }

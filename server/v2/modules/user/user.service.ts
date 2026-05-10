@@ -1,10 +1,11 @@
 import { userRepository } from "./user.repository";
 import { AppError } from "../../utils/error-handler";
 import type { User, InsertUser } from "./user.types";
+import type { Scope } from "../../utils/scope";
 
 export const userService = {
-  async listUsers(): Promise<User[]> {
-    return await userRepository.findAll();
+  async listUsers(scope?: Scope): Promise<User[]> {
+    return await userRepository.findAll(scope);
   },
 
   async getUserById(id: string): Promise<User> {

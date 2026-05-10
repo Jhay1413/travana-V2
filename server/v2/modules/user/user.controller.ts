@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { userService } from "./user.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
+import { getScope } from "../../utils/scope";
 
 function stripPassword<T extends { password?: string | null }>(user: T): Omit<T, "password"> {
   const { password, ...rest } = user;
@@ -9,8 +10,8 @@ function stripPassword<T extends { password?: string | null }>(user: T): Omit<T,
 }
 
 export const userController = {
-  listUsers: asyncHandler(async (_req: Request, res: Response) => {
-    const users = await userService.listUsers();
+  listUsers: asyncHandler(async (req: Request, res: Response) => {
+    const users = await userService.listUsers(getScope(req));
     return successResponse(res, users.map(stripPassword), "Users retrieved successfully");
   }),
 

@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useParams, useLocation } from "wouter";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
 import {
@@ -766,53 +765,31 @@ export default function TicketPage() {
 
   if (ticketsLoading) {
     return (
-      <CommandCenterShell
-        active="tickets"
-        title="Ticket"
-        subtitle="Loading..."
-        role={role}
-        onRoleChange={setRole}
-      >
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
-      </CommandCenterShell>
+      <div className="flex justify-center py-12">
+        <Spinner />
+      </div>
     );
   }
 
   if (!ticket) {
     return (
-      <CommandCenterShell
-        active="tickets"
-        title="Ticket"
-        subtitle="Not found"
-        role={role}
-        onRoleChange={setRole}
-      >
-        <Card className="glass ringed grain rounded-3xl p-8 text-center">
-          <h3 className="text-lg font-medium text-black/70 mb-2">Ticket not found</h3>
-          <p className="text-sm text-black/50 mb-4">
-            The ticket you're looking for doesn't exist or has been deleted.
-          </p>
-          <Link href="/tickets">
-            <Button className="rounded-2xl gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Tickets
-            </Button>
-          </Link>
-        </Card>
-      </CommandCenterShell>
+      <Card className="glass ringed grain rounded-3xl p-8 text-center">
+        <h3 className="text-lg font-medium text-black/70 mb-2">Ticket not found</h3>
+        <p className="text-sm text-black/50 mb-4">
+          The ticket you're looking for doesn't exist or has been deleted.
+        </p>
+        <Link href="/tickets">
+          <Button className="rounded-2xl gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Tickets
+          </Button>
+        </Link>
+      </Card>
     );
   }
 
   return (
-    <CommandCenterShell
-      active="tickets"
-      title="Ticket Details"
-      subtitle={ticket.subject}
-      role={role}
-      onRoleChange={setRole}
-    >
+    <>
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1176,6 +1153,6 @@ export default function TicketPage() {
           )}
         </DialogContent>
       </Dialog>
-    </CommandCenterShell>
+    </>
   );
 }

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { useAgency } from "@/hooks/use-agency";
 import { Button } from "@/components/ui/button";
@@ -33,7 +32,7 @@ export default function SettingsBrandingPage() {
   };
 
   return (
-    <CommandCenterShell active="branding-settings" title="White-label Branding" subtitle="How your agency looks across the app" role={role} onRoleChange={setRole}>
+    <>
       {!allowed ? (
         <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
           <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-600" />
@@ -96,6 +95,6 @@ export default function SettingsBrandingPage() {
           </div>
         </div>
       )}
-    </CommandCenterShell>
+    </>
   );
 }

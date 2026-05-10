@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useReferrals } from "@/hooks/queries/use-referral-queries";
 import { useReferralWithdrawals } from "@/hooks/queries/use-referral-withdrawal-queries";
 import { useAllWalletTransactions } from "@/hooks/queries/use-wallet-queries";
@@ -1436,9 +1435,7 @@ export function AdminReferrals() {
 
 export default function AdminReferralsPage() {
   return (
-    <CommandCenterShell title="VIP Referrals" theme="light" filterSlot={<></>} role="admin" onRoleChange={() => {}}>
-      <AdminReferrals />
-    </CommandCenterShell>
+    <AdminReferrals />
   );
 }
 

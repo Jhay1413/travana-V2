@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useFeedbackList } from "@/hooks/queries/use-feedback-queries";
 import { useUpdateFeedbackStatus, useDeleteFeedback } from "@/hooks/mutations/use-feedback-mutations";
 import { useToast } from "@/hooks/use-toast";
@@ -54,8 +53,7 @@ export default function FeedbackPage() {
   };
 
   return (
-    <CommandCenterShell title="Feedback" theme="light" filterSlot={<></>} onRoleChange={() => {}}>
-      <div className="mx-auto w-full max-w-4xl px-4 py-6">
+    <div className="mx-auto w-full max-w-4xl px-4 py-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-black/85" data-testid="text-feedback-title">User Feedback</h1>
@@ -179,8 +177,7 @@ export default function FeedbackPage() {
               );
             })}
           </div>
-        )}
-      </div>
-    </CommandCenterShell>
+      )}
+    </div>
   );
 }

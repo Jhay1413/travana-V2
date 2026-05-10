@@ -27,7 +27,7 @@ import FacebookMessenger from "@/components/facebook-messenger";
 import ChatRichInput from "@/components/chat-rich-input";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { AskAiDialog } from "@/components/ask-ai-dialog";
-import { NotificationToast } from "@/components/command-center-shell";
+import { NotificationToast } from "@/components/notification-toast";
 import type { TourOperator } from "@/types/tour-operator";
 import type { Airport } from "@/types/airport";
 import type { CreateClientData } from "@/types/client";

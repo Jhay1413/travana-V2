@@ -22,7 +22,6 @@ import {
   Upload,
   Loader2,
 } from "lucide-react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -126,42 +125,38 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
 
   if (isLoading) {
     return (
-      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
-        <div
-          className="flex h-[calc(100vh-56px)] items-center justify-center"
-          data-testid="loading-quote"
-        >
-          <Spinner className="h-8 w-8" />
-        </div>
-      </CommandCenterShell>
+      <div
+        className="flex h-[calc(100vh-56px)] items-center justify-center"
+        data-testid="loading-quote"
+      >
+        <Spinner className="h-8 w-8" />
+      </div>
     );
   }
 
   if (error || !quote) {
     return (
-      <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
-        <div
-          className="flex h-[calc(100vh-56px)] items-center justify-center"
-          data-testid="error-quote"
-        >
-          <div className="text-center">
-            <p className="text-sm text-black/70">Failed to load {pageLabel.toLowerCase()}</p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-4"
-              onClick={() => setLocation("/clients")}
-            >
-              Back to Clients
-            </Button>
-          </div>
+      <div
+        className="flex h-[calc(100vh-56px)] items-center justify-center"
+        data-testid="error-quote"
+      >
+        <div className="text-center">
+          <p className="text-sm text-black/70">Failed to load {pageLabel.toLowerCase()}</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-4"
+            onClick={() => setLocation("/clients")}
+          >
+            Back to Clients
+          </Button>
         </div>
-      </CommandCenterShell>
+      </div>
     );
   }
 
   return (
-    <CommandCenterShell role={role} title={pageLabel} theme="light" onRoleChange={() => {}}>
+    <>
       <div className="px-5 pb-8 pt-5" data-testid="page-quote">
         {/* Header */}
         <div
@@ -562,6 +557,6 @@ export default function QuotePage({ isBooking = false }: { isBooking?: boolean }
           </div>
         </div>
       </div>
-    </CommandCenterShell>
+    </>
   );
 }

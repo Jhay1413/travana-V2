@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
@@ -77,29 +76,25 @@ export default function ClientPage() {
   // Loading state
   if (isLoading) {
     return (
-      <CommandCenterShell role={role} title="Client" theme="light" onRoleChange={setRole}>
-        <div className="flex h-[calc(100vh-56px)] items-center justify-center">
-          <Spinner className="h-8 w-8" />
-        </div>
-      </CommandCenterShell>
+      <div className="flex h-[calc(100vh-56px)] items-center justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
     );
   }
 
   // Error state
   if (!client) {
     return (
-      <CommandCenterShell role={role} title="Client" theme="light" onRoleChange={setRole}>
-        <div className="flex h-[calc(100vh-56px)] items-center justify-center">
-          <div className="text-center">
-            <p className="text-sm text-black/70">Client not found</p>
-          </div>
+      <div className="flex h-[calc(100vh-56px)] items-center justify-center">
+        <div className="text-center">
+          <p className="text-sm text-black/70">Client not found</p>
         </div>
-      </CommandCenterShell>
+      </div>
     );
   }
 
   return (
-    <CommandCenterShell role={role} title="Client" theme="light" onRoleChange={setRole}>
+    <>
       <div className="h-[calc(100vh-56px)] overflow-y-auto">
         <div className="mx-auto max-w-6xl p-6">
           <ClientHeader
@@ -181,6 +176,6 @@ export default function ClientPage() {
           /> */}
         </div>
       </div>
-    </CommandCenterShell>
+    </>
   );
 }

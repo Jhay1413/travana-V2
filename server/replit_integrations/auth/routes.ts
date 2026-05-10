@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { authStorage } from "./storage";
 import { isAuthenticated } from "./replitAuth";
 import { getUserId } from "../../utils/get-user-id";
+import { branchMemberRepository } from "../../v2/modules/branch-member/branch-member.repository";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import multer from "multer";
@@ -57,8 +58,24 @@ export function registerAuthRoutes(app: Express): void {
       if (!foundUser) {
         return res.status(404).json({ message: "User not found" });
       }
+
+      let orgRole: string | null = foundUser.orgRole ?? null;
+      let orgId: string | null = foundUser.orgId ?? null;
+      let branchId: string | null = null;
+
+      if (foundUser.role === "platform_admin") {
+        orgRole = "platform_admin";
+      } else {
+        const membership = await branchMemberRepository.findActiveByUserId(userId);
+        if (membership) {
+          orgRole = membership.orgRole;
+          orgId = membership.orgId;
+          branchId = membership.branchId;
+        }
+      }
+
       const { password: _, ...safeUser } = foundUser;
-      res.json(safeUser);
+      res.json({ ...safeUser, orgRole, orgId, branchId });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });

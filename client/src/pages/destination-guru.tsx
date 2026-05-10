@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { ChevronLeft, Sparkles, Search, Plus, Loader2 } from "lucide-react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,26 +67,24 @@ export default function DestinationGuruPage() {
 
   if (selectedDestination) {
     return (
-      <CommandCenterShell role={role} active="destination-guru" title="Destination Guru" theme="light" onRoleChange={() => {}} filterSlot={<></>}>
-        <div className="px-5 pb-8 pt-5" data-testid="page-destination-guru-detail">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 rounded-2xl border-black/10 bg-white/70 mb-4"
-            onClick={() => { setSelectedDestination(null); setSelectedData(null); }}
-            data-testid="button-guru-back"
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            All Destinations
-          </Button>
-          <DestinationGuru destination={selectedDestination} externalData={selectedData || undefined} />
-        </div>
-      </CommandCenterShell>
+      <div className="px-5 pb-8 pt-5" data-testid="page-destination-guru-detail">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9 rounded-2xl border-black/10 bg-white/70 mb-4"
+          onClick={() => { setSelectedDestination(null); setSelectedData(null); }}
+          data-testid="button-guru-back"
+        >
+          <ChevronLeft className="mr-2 h-4 w-4" />
+          All Destinations
+        </Button>
+        <DestinationGuru destination={selectedDestination} externalData={selectedData || undefined} />
+      </div>
     );
   }
 
   return (
-    <CommandCenterShell role={role} active="destination-guru" title="Destination Guru" theme="light" onRoleChange={() => {}} filterSlot={<></>}>
+    <>
       <div className="px-5 pb-8 pt-5" data-testid="page-destination-guru">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
@@ -210,6 +207,6 @@ export default function DestinationGuruPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </CommandCenterShell>
+    </>
   );
 }

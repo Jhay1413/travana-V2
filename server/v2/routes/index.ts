@@ -56,7 +56,7 @@ const router = Router();
 const auth = [isAuthenticated, orgBranchScope] as const;
 
 router.use('/onboarding',         onboardingRoutes);
-router.use('/users',              isAuthenticated, userRoutes);
+router.use('/users',              ...auth, userRoutes);
 router.use('/branches',           ...auth, branchRoutes);
 router.use('/invites',            ...auth, inviteRoutes);
 router.use('/clients',            ...auth, clientRoutes);

@@ -1,4 +1,4 @@
-import type { Role } from "@/components/command-center-shell";
+import type { Role } from "@/types/auth/auth.types";
 
 export type Module =
   | "clients"

@@ -1,4 +1,3 @@
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { useAgency, useTeam, PLAN_DETAILS, type AgencyPlan } from "@/hooks/use-agency";
 import { AlertCircle, CreditCard, Users, Check, Sparkles } from "lucide-react";
@@ -19,7 +18,7 @@ export default function SettingsBillingPage() {
   };
 
   return (
-    <CommandCenterShell active="billing-settings" title="Billing & Plan" subtitle="Manage your subscription" role={role} onRoleChange={setRole}>
+    <>
       {!allowed ? (
         <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
           <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-600" />
@@ -84,6 +83,6 @@ export default function SettingsBillingPage() {
           </div>
         </div>
       )}
-    </CommandCenterShell>
+    </>
   );
 }

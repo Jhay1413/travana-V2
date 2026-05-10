@@ -1,4 +1,3 @@
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import TravanaHR from "./hr/TravanaHR";
 import { ShieldAlert } from "lucide-react";
@@ -8,13 +7,7 @@ export default function HrPage() {
   const allowed = role === "Admin" || role === "Manager";
 
   return (
-    <CommandCenterShell
-      title="HR"
-      theme="light"
-      filterSlot={<></>}
-      role={role}
-      onRoleChange={(r) => r && setRole(r)}
-    >
+    <>
       {allowed ? (
         <div data-testid="page-hr">
           <TravanaHR />
@@ -28,6 +21,6 @@ export default function HrPage() {
           </p>
         </div>
       )}
-    </CommandCenterShell>
+    </>
   );
 }

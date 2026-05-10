@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { useAgency, useTeam, type TeamMember } from "@/hooks/use-agency";
 import { ROLE_LABEL, VISIBLE_ROLES } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Mail, Plus, Trash2, Shield, Users, AlertCircle } from "lucide-react";
-import type { Role } from "@/components/command-center-shell";
+import type { Role } from "@/types/auth/auth.types";
 import { cn } from "@/lib/utils";
 
 export default function SettingsTeamPage() {
@@ -39,7 +38,7 @@ export default function SettingsTeamPage() {
   const toggleSuspend = (id: string) => updateTeam(team.map((m) => m.id === id ? { ...m, status: m.status === "suspended" ? "active" : "suspended" } : m));
 
   return (
-    <CommandCenterShell active="team-settings" title="Team & Seats" subtitle="Manage your agency members" role={role} onRoleChange={setRole}>
+    <>
       {!allowed ? (
         <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
           <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-600" />
@@ -119,7 +118,7 @@ export default function SettingsTeamPage() {
           </div>
         </div>
       )}
-    </CommandCenterShell>
+    </>
   );
 }
 

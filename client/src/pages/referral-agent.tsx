@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { useAgency } from "@/hooks/use-agency";
 import { Button } from "@/components/ui/button";
@@ -53,7 +52,7 @@ export default function ReferralAgentDashboard() {
   const paid = referrals.filter(r => r.status === "PAID").reduce((s, r) => s + r.commission, 0);
 
   return (
-    <CommandCenterShell active="overview" title="Affiliate Hub" subtitle={`Welcome back to ${agency.name}`} role={role} onRoleChange={setRole}>
+    <>
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-4">
           <Stat icon={<Users className="h-4 w-4" />} label="Referrals" value={String(referrals.length)} />
@@ -131,7 +130,7 @@ export default function ReferralAgentDashboard() {
           As a referral agent you only see your own referrals and basic client names. Full client details remain with the agency.
         </div>
       </div>
-    </CommandCenterShell>
+    </>
   );
 }
 

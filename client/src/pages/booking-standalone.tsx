@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { ChevronLeft, Copy, FileText, Filter, MoreHorizontal, Pencil, Star, Tag, Trash2, X, Pin, PinOff, Link as LinkIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CommandCenterShell } from "@/components/command-center-shell";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -91,36 +90,32 @@ export default function BookingPage() {
 
   if (isLoading) {
     return (
-      <CommandCenterShell role={role} title="Booking" theme="light" onRoleChange={() => { }} filterSlot={<></>}>
-        <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-booking">
-          <Spinner className="h-8 w-8" />
-        </div>
-      </CommandCenterShell>
+      <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="loading-booking">
+        <Spinner className="h-8 w-8" />
+      </div>
     );
   }
 
   if (error || !booking) {
     return (
-      <CommandCenterShell role={role} title="Booking" theme="light" onRoleChange={() => { }} filterSlot={<></>}>
-        <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-booking">
-          <div className="text-center">
-            <p className="text-sm text-black/70">Failed to load booking</p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-4"
-              onClick={() => setLocation("/clients")}
-            >
-              Back to Clients
-            </Button>
-          </div>
+      <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-booking">
+        <div className="text-center">
+          <p className="text-sm text-black/70">Failed to load booking</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-4"
+            onClick={() => setLocation("/clients")}
+          >
+            Back to Clients
+          </Button>
         </div>
-      </CommandCenterShell>
+      </div>
     );
   }
 
   return (
-    <CommandCenterShell role={role} title="Booking" theme="light" onRoleChange={() => { }} filterSlot={<></>}>
+    <>
       <div className="px-5 pb-8 pt-5" data-testid="page-booking">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-booking-header">
           <div className="flex items-start gap-3">
@@ -813,6 +808,6 @@ export default function BookingPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </CommandCenterShell>
+    </>
   );
 }
