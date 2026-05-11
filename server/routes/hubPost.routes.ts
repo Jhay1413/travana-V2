@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../config/database";
 import { hubPostsTable, hubPostCommentsTable, hubPostLikesTable, user as userTable } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { getUserId } from "../utils/get-user-id";
 
 const router = Router();

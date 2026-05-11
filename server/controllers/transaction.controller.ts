@@ -4,7 +4,7 @@ import { socialPostService } from "../services/social-post.service";
 import { successResponse } from "../utils/response";
 import { asyncHandler } from "../utils/async-handler";
 import { getUserId } from "../utils/get-user-id";
-import { authStorage } from "../replit_integrations/auth";
+import { authStorage } from "../v2/middlewares/auth";
 
 const BUDGET_TYPE_MAP: Record<string, string> = {
   "Per Person": "PER_PERSON",

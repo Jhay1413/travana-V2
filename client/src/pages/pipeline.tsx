@@ -1,5 +1,5 @@
 import { useRole } from "@/hooks/use-role";
-import PipelineBoard from "@/components/pipeline-board";
+import PipelineBoard from "@/components/boards/pipeline-board";
 
 export default function PipelinePage() {
   const { role } = useRole();

@@ -7,10 +7,54 @@ import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { onboardingController } from "../../modules/onboarding/onboarding.controller";
+import { registrationController } from "../../../controllers/registration.controller";
+import { branchMemberRepository } from "../../modules/branch-member/branch-member.repository";
+import { organizationRepository } from "../../modules/organization/organization.repository";
+import { branchRepository } from "../../modules/branch/branch.repository";
+
+async function resolveOrgAndBranchForUser(user: {
+  id: string;
+  role?: string | null;
+  orgRole?: string | null;
+  orgId?: string | null;
+}): Promise<{
+  orgRole: string | null;
+  orgId: string | null;
+  branchId: string | null;
+  orgName: string | null;
+  branchName: string | null;
+}> {
+  let orgRole: string | null = user.orgRole ?? null;
+  let orgId: string | null = user.orgId ?? null;
+  let branchId: string | null = null;
+
+  if (user.role === "platform_admin") {
+    orgRole = "platform_admin";
+  } else {
+    const membership = await branchMemberRepository.findActiveByUserId(user.id);
+    if (membership) {
+      orgRole = membership.orgRole;
+      orgId = membership.orgId;
+      branchId = membership.branchId;
+    }
+  }
+
+  const [org, branch] = await Promise.all([
+    orgId ? organizationRepository.findById(orgId) : Promise.resolve(null),
+    orgId && branchId ? branchRepository.findById(branchId, orgId) : Promise.resolve(null),
+  ]);
+
+  return {
+    orgRole,
+    orgId,
+    branchId,
+    orgName: org?.name ?? null,
+    branchName: branch?.name ?? null,
+  };
+}
 
 export function registerAuthRoutes(app: Express): void {
-  app.post("/api/auth/register", onboardingController.signup);
+  app.post("/api/auth/register", registrationController.register);
 
   app.post("/api/auth/login", async (req: any, res) => {
     try {
@@ -41,13 +85,14 @@ export function registerAuthRoutes(app: Express): void {
         });
       }
 
-      req.login({ userId: foundUser.id, authType: "password" }, (err: any) => {
+      req.login({ userId: foundUser.id, authType: "password" }, async (err: any) => {
         if (err) {
           console.error("Login error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
         const { password: _, ...safeUser } = foundUser;
-        return res.json(safeUser);
+        const ctx = await resolveOrgAndBranchForUser(foundUser);
+        return res.json({ ...safeUser, ...ctx });
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -66,7 +111,8 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(404).json({ message: "User not found" });
       }
       const { password: _, ...safeUser } = foundUser;
-      res.json(safeUser);
+      const ctx = await resolveOrgAndBranchForUser(foundUser);
+      res.json({ ...safeUser, ...ctx });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -140,7 +186,8 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(404).json({ message: "User not found" });
       }
       const { password: _, ...safeUser } = updated;
-      res.json(safeUser);
+      const ctx = await resolveOrgAndBranchForUser(updated);
+      res.json({ ...safeUser, ...ctx });
     } catch (error) {
       console.error("Update profile error:", error);
       res.status(500).json({ message: "Failed to update profile" });
@@ -249,7 +296,8 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       const { password: _, ...safeUser } = updated;
-      res.json({ ...safeUser, avatar: avatarUrl });
+      const ctx = await resolveOrgAndBranchForUser(updated);
+      res.json({ ...safeUser, ...ctx, avatar: avatarUrl });
     } catch (error) {
       console.error("Avatar upload error:", error);
       res.status(500).json({ message: "Failed to upload avatar" });

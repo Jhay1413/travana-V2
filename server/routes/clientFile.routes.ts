@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { asyncHandler } from "../utils/async-handler";
 import { clientFileController } from "../controllers/clientFile.controller";
 

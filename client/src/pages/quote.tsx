@@ -1,42 +1,48 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, Check, FileText, Filter, MoreHorizontal, Pencil, RefreshCw, Star, Tag, X, Pin, PinOff, Link as LinkIcon, Sparkles, ImagePlus, Trash2, Share2 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChevronLeft, Copy, MoreHorizontal, Pencil, RefreshCw, Link as LinkIcon, Trash2 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useQuote, useBooking, useClient, useNeonClient, useTags, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
-import { useConvertToBooking, useUpdateTransaction, useUpdateQuoteTags, useUpdateQuote, useAdminDeleteQuote } from "@/hooks/mutations";
-import { useSetPrimaryQuoteImage, useUploadQuoteImages, useDeleteQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
+import { useQuote, useClient, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
+import { useUpdateTransaction } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useFavorites } from "@/hooks/queries/use-favorite-queries";
-import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
-import type { Favorite } from "@/api/endpoints/favorite.api";
-import type { DealImage } from "@/types/quote";
-import { QuoteEditDialog } from "@/components/quote-edit-dialog";
-import { QuoteCreateDialog } from "@/components/quote-create-dialog";
-import { DestinationGuru } from "@/components/destination-guru";
-import type { DestinationGuruData } from "@/components/destination-guru";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useDestinationGuruSearch } from "@/hooks/queries/use-destination-guru-queries";
-import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-guru-mutations";
-import { Loader2 } from "lucide-react";
-import axiosClient from "@/api/client/axios-client";
-import { transformQuoteData, currency, formatUKDate, formatLeadSource } from "@/components/quote/quote-types";
+import { QuoteEditDialog } from "@/components/quote/quote-edit-dialog";
+import { QuoteCreateDialog } from "@/components/quote/quote-create-dialog";
+import { transformQuoteData, currency, formatUKDate } from "@/components/quote/quote-types";
 import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
-import { QuoteSummaryTimeline } from "@/components/quote/QuoteSummaryTimeline";
 import { StatusPill } from "@/components/quote/StatusPill";
-import { QuoteEngagement } from "@/pages/quote/components";
+import { QuoteEngagement } from "@/components/quote/QuoteEngagement";
+import { QuoteBookingReferences } from "@/components/quote/QuoteBookingReferences";
+import { QuoteCostingsCard } from "@/components/quote/QuoteCostingsCard";
+import { QuoteShareDialog } from "@/components/quote/QuoteShareDialog";
+import { QuoteConvertDialog } from "@/components/quote/QuoteConvertDialog";
+import { QuoteDeleteDialog } from "@/components/quote/QuoteDeleteDialog";
+import { QuoteExpiryDialog } from "@/components/quote/QuoteExpiryDialog";
+import { QuoteGuruSheet } from "@/components/quote/QuoteGuruSheet";
+import { QuoteTagsCard } from "@/components/quote/QuoteTagsCard";
+import { QuoteMediaPanel } from "@/components/quote/QuoteMediaPanel";
+import { QuoteExpiryPill } from "@/components/quote/QuoteExpiryPill";
+import { QuoteActionsRow } from "@/components/quote/QuoteActionsRow";
+import { QuoteItinerarySpecs } from "@/components/quote/QuoteItinerarySpecs";
+import {
+  useQuoteImages,
+  useQuoteToFormValues,
+  useQuoteGuru,
+  useQuoteShare,
+  useQuoteDelete,
+  useQuoteExpiry,
+  useQuoteTagEditor,
+  useQuoteImageActions,
+  useQuoteConvert,
+  useQuoteStatusUpdate,
+  useQuotePin,
+} from "@/components/quote/hooks";
 
 export default function QuotePage() {
   const [, setLocation] = useLocation();
@@ -55,195 +61,79 @@ export default function QuotePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: currentUser } = useCurrentUser();
-  const { data: userFavorites } = useFavorites();
-  const toggleFavoriteMutation = useToggleFavorite();
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
-  const updateTagsMutation = useUpdateQuoteTags();
   const updateTransactionMutation = useUpdateTransaction();
-  const convertToBookingMutation = useConvertToBooking();
-  const updateQuoteMutation = useUpdateQuote();
-  const setPrimaryImageMutation = useSetPrimaryQuoteImage();
-  const uploadImagesMutation = useUploadQuoteImages();
-  const deleteImageMutation = useDeleteQuoteImage();
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const [showConvertDialog, setShowConvertDialog] = useState(false);
-  const [showSharePopup, setShowSharePopup] = useState(false);
-  const [shareToken, setShareToken] = useState<string | null>(null);
-  const [shareCopied, setShareCopied] = useState(false);
-  const [shareLoading, setShareLoading] = useState(false);
-  const [showGuruSheet, setShowGuruSheet] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteReason, setDeleteReason] = useState("");
-  const [showExpiryDialog, setShowExpiryDialog] = useState(false);
-  const [expiryDate, setExpiryDate] = useState("");
-  const adminDeleteQuoteMutation = useAdminDeleteQuote();
-  const [convertHaysRef, setConvertHaysRef] = useState("");
-  const [convertTourRef, setConvertTourRef] = useState("");
-  const [newTag, setNewTag] = useState("");
-  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
-  const tagInputRef = useRef<HTMLInputElement>(null);
-  const tagSuggestionsRef = useRef<HTMLDivElement>(null);
-  const { data: allTagsData } = useTags();
-  const allTags = useMemo(() => allTagsData?.map(t => t.name) || [], [allTagsData]);
+  const {
+    showSharePopup, setShowSharePopup,
+    shareToken, shareCopied, shareLoading,
+    openShare, copyShareLink,
+  } = useQuoteShare(quoteId);
+  const {
+    showDeleteDialog, setShowDeleteDialog,
+    deleteReason, setDeleteReason,
+    adminDeleteQuoteMutation, openDeleteDialog, confirmDelete,
+  } = useQuoteDelete(quoteId, clientId, "Quote");
+  const {
+    showExpiryDialog, setShowExpiryDialog,
+    expiryDate, setExpiryDate,
+    updateQuoteExpiryMutation, openExpiryDialog, confirmExpiry,
+  } = useQuoteExpiry(quoteId);
+  const {
+    showConvertDialog, setShowConvertDialog,
+    convertHaysRef, setConvertHaysRef,
+    convertTourRef, setConvertTourRef,
+    convertToBookingMutation, confirmConvert,
+  } = useQuoteConvert(quoteId, clientId);
+  const { onStatusChange } = useQuoteStatusUpdate(quoteId, () => setShowConvertDialog(true));
+  const {
+    imageInputRef,
+    uploadImagesMutation,
+    setPrimary: setPrimaryImage,
+    removeImage: deleteImage,
+    uploadFiles: uploadImageFiles,
+    openFilePicker: openImageFilePicker,
+  } = useQuoteImageActions(quoteId);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ellipsisRef.current && !ellipsisRef.current.contains(e.target as Node)) {
         setShowEllipsisMenu(false);
       }
-      if (tagSuggestionsRef.current && !tagSuggestionsRef.current.contains(e.target as Node) &&
-        tagInputRef.current && !tagInputRef.current.contains(e.target as Node)) {
-        setShowTagSuggestions(false);
-      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const images = useMemo(() => {
-    const imgs = quoteData?.images || [];
-    return imgs.map((img: DealImage) => ({ id: img.id, url: img.image_url || "", isPrimary: img.isPrimary, ownerType: img.owner_type || "quote" }));
-  }, [quoteData]);
-  const primaryImage = useMemo(() => images.find((img) => img.isPrimary) || images[0], [images]);
-  const galleryImages = useMemo(() => images.filter((img) => img.id !== primaryImage?.id), [images, primaryImage]);
+  const { primaryImage, galleryImages, quoteImageUrls } = useQuoteImages(quoteData);
 
   const quote = useMemo(() => {
     if (!quoteData) return null;
     return transformQuoteData(quoteData);
   }, [quoteData]);
 
-  const isHotTub = (quoteData as any)?.quote_type === "hot_tub_break" || quote?.packageType?.toLowerCase().includes("hot tub");
-  const guruDestination = isHotTub
-    ? [quote?.lodge?.parkName, quote?.lodge?.parkLocation].filter(Boolean).join(", ")
-    : quote?.destinationName || quote?.destination || "";
-  const { data: guruRecord } = useDestinationGuruSearch(guruDestination);
-  const generateGuruMutation = useGenerateDestinationGuru();
+  const {
+    newTag, setNewTag,
+    showTagSuggestions, setShowTagSuggestions,
+    tagInputRef, tagSuggestionsRef,
+    allTags,
+    removeTag, addTag, addTagFromSuggestion,
+  } = useQuoteTagEditor(quoteId, quote);
 
-  const quoteImageUrls = useMemo(
-    () => (quoteData?.images ?? []).map((img) => img.image_url).filter((url): url is string => Boolean(url)),
-    [quoteData?.images],
-  );
+  const {
+    showGuruSheet, setShowGuruSheet,
+    guruDestination, guruRecord, generateGuruMutation,
+  } = useQuoteGuru(quote, quoteData);
 
-  // Convert quote data to form values for copying
-  const quoteToFormValues = useMemo(() => {
-    if (!quoteData) return {};
+  const { isFavorited, togglePin } = useQuotePin(quoteId, {
+    label: quote?.quoteTitle ?? "",
+    subtitle: `${clientData?.name || ""}${quote?.destinationName ? " · " + quote.destinationName : ""}`,
+  });
 
-    const flights = quoteData.flights || [];
-    const accommodations = quoteData.accommodations || [];
-    const primaryAccom = accommodations.find((a) => a.is_primary) || accommodations[0];
-
-    const outboundFlights = flights.filter((f) => f.flight_type === "outbound").sort((a, b) => (a.leg_order || 0) - (b.leg_order || 0));
-    const inboundFlights = flights.filter((f) => f.flight_type === "inbound").sort((a, b) => (a.leg_order || 0) - (b.leg_order || 0));
-    const outboundFlight = outboundFlights[0];
-    const inboundFlight = inboundFlights[0];
-
-    const splitDateTime = (iso: string) => {
-      if (!iso) return { date: "", time: "" };
-      const [date, time] = iso.split("T");
-      return { date: date || "", time: time ? time.slice(0, 5) : "" };
-    };
-
-    const obDepart = splitDateTime(outboundFlight?.departure_date_time || "");
-    const obArrive = splitDateTime(outboundFlight?.arrival_date_time || "");
-    const ibDepart = splitDateTime(inboundFlight?.departure_date_time || "");
-    const ibArrive = splitDateTime(inboundFlight?.arrival_date_time || "");
-    const checkIn = splitDateTime(primaryAccom?.check_in_date_time || "");
-
-    const childPassengers = (quoteData.passengers || []).filter((p) => p.type === "child");
-
-    return {
-      packageType: quoteData.holiday_type_id || "",
-      quoteTitle: quoteData.title || "",
-      quoteLink: quoteData.quote_ref || "",
-      leadSource: quoteData.lead_source || "",
-      status: "QUOTE_IN_PROGRESS",
-      tourOperatorId: quoteData.main_tour_operator_id || "",
-      travelDate: quoteData.travel_date || "",
-      nights: quoteData.num_of_nights || 7,
-      passengersAdults: quoteData.adult || 2,
-      passengersChildren: quoteData.child || 0,
-      passengersInfants: quoteData.infant || 0,
-      childAges: childPassengers.map((p: any) => p.age || 0),
-      transferType: quoteData.transfer_type || "",
-      preBookedSeats: quoteData.pre_booked_seats || "",
-      flightMeals: quoteData.flight_meals ? "Yes" : "No",
-      country: quoteData.country_id || "",
-      destination: quoteData.destination_id || "",
-      resort: quoteData.resort_id || "",
-      accommodationId: primaryAccom?.accomodation_id || "",
-      boardBasisId: primaryAccom?.board_basis_id || "",
-      checkInDate: checkIn.date,
-      checkInTime: checkIn.time,
-      roomType: primaryAccom?.room_type || "",
-      outboundDepartAirportId: outboundFlight?.departing_airport_id || "",
-      outboundArriveAirportId: outboundFlight?.arrival_airport_id || "",
-      outboundDepartDate: obDepart.date,
-      outboundDepartTime: obDepart.time,
-      outboundArriveDate: obArrive.date,
-      outboundArriveTime: obArrive.time,
-      outboundFlightNumber: outboundFlight?.flight_number || "",
-      outboundConnectingLegs: outboundFlights.slice(1).map((f: any) => {
-        const dep = splitDateTime(f.departure_date_time || "");
-        const arr = splitDateTime(f.arrival_date_time || "");
-        return {
-          departAirportId: f.departing_airport_id || "",
-          departAirport: f.departing_airport_name || "",
-          arriveAirportId: f.arrival_airport_id || "",
-          arriveAirport: f.arrival_airport_name || "",
-          departDate: dep.date,
-          departTime: dep.time,
-          arriveDate: arr.date,
-          arriveTime: arr.time,
-          flightNumber: f.flight_number || "",
-        };
-      }),
-      inboundDepartAirportId: inboundFlight?.departing_airport_id || "",
-      inboundArriveAirportId: inboundFlight?.arrival_airport_id || "",
-      inboundDepartDate: ibDepart.date,
-      inboundDepartTime: ibDepart.time,
-      inboundArriveDate: ibArrive.date,
-      inboundArriveTime: ibArrive.time,
-      inboundFlightNumber: inboundFlight?.flight_number || "",
-      inboundConnectingLegs: inboundFlights.slice(1).map((f: any) => {
-        const dep = splitDateTime(f.departure_date_time || "");
-        const arr = splitDateTime(f.arrival_date_time || "");
-        return {
-          departAirportId: f.departing_airport_id || "",
-          departAirport: f.departing_airport_name || "",
-          arriveAirportId: f.arrival_airport_id || "",
-          arriveAirport: f.arrival_airport_name || "",
-          departDate: dep.date,
-          departTime: dep.time,
-          arriveDate: arr.date,
-          arriveTime: arr.time,
-          flightNumber: f.flight_number || "",
-        };
-      }),
-      lodgeId: quoteData.lodge_id || "",
-      parkId: "",
-      pets: quoteData.pets ?? 0,
-      cruiseTitle: quoteData.cruises?.[0]?.cruise_name || "",
-      cruiseLine: quoteData.cruises?.[0]?.cruise_line || "",
-      shipName: quoteData.cruises?.[0]?.ship || "",
-      cruiseDate: quoteData.cruises?.[0]?.cruise_date || "",
-      cabinType: quoteData.cruises?.[0]?.cabin_type || "",
-      embarkation: "",
-      debarkation: "",
-      cruiseExtras: "",
-      cruiseOnly: false,
-      price: parseFloat(quoteData.sales_price || "0"),
-      commission: parseFloat(quoteData.package_commission || "0"),
-      discount: parseFloat(quoteData.discounts || "0"),
-      serviceCharge: parseFloat(quoteData.service_charge || "0"),
-      pricePerPerson: 0,
-      tags: quoteData.tags || [],
-      not_for_social: quoteData.not_for_social ?? false,
-    };
-  }, [quoteData]);
+  const quoteToFormValues = useQuoteToFormValues(quoteData);
 
   const pageLabel = "Quote";
 
@@ -294,40 +184,7 @@ export default function QuotePage() {
                 <div className="text-base font-semibold" data-testid="text-quote-title">
                   {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.pricePerPerson)}pp</span>
                 </div>
-                <StatusPill
-                  status={quote.status}
-                  onStatusChange={(value) => {
-                    if (value === "WON") {
-                      setShowConvertDialog(true);
-                    } else if (value === "LOST") {
-                      updateQuoteMutation.mutate(
-                        { id: quoteId, data: { quote_status: "LOST" } },
-                        {
-                          onSuccess: () => {
-                            queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
-                            toast({ title: "Quote marked as lost" });
-                          },
-                          onError: () => {
-                            toast({ title: "Failed to update status", variant: "destructive" });
-                          },
-                        }
-                      );
-                    } else {
-                      updateQuoteMutation.mutate(
-                        { id: quoteId, data: { quote_status: value } },
-                        {
-                          onSuccess: () => {
-                            queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
-                            toast({ title: "Quote status updated" });
-                          },
-                          onError: () => {
-                            toast({ title: "Failed to update status", variant: "destructive" });
-                          },
-                        }
-                      );
-                    }
-                  }}
-                />
+                <StatusPill status={quote.status} onStatusChange={onStatusChange} />
                 {quote.isCopyQuote && (
                   <span
                     className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
@@ -337,38 +194,10 @@ export default function QuotePage() {
                   </span>
                 )}
 
-                {(() => {
-                  const now = new Date();
-                  const expiry = quoteData?.date_expiry ? new Date(quoteData.date_expiry) : null;
-                  if (!expiry) {
-                    const created = quoteData?.date_created ? new Date(quoteData.date_created) : null;
-                    if (created && (now.getTime() - created.getTime()) > 7 * 24 * 60 * 60 * 1000) {
-                      return (
-                        <span className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600" data-testid="pill-expiry-expired">
-                          Expired
-                        </span>
-                      );
-                    }
-                    return null;
-                  }
-                  const diffMs = expiry.getTime() - now.getTime();
-                  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-                  if (diffDays < 0) return (
-                    <span className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600" data-testid="pill-expiry-expired">
-                      Expired
-                    </span>
-                  );
-                  if (diffDays <= 2) return (
-                    <span className="inline-flex items-center rounded-full border border-orange-500/25 bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-600" data-testid="pill-expiry-soon">
-                      Expires in {diffDays}d
-                    </span>
-                  );
-                  return (
-                    <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" data-testid="pill-expiry-active">
-                      Expires in {diffDays}d
-                    </span>
-                  );
-                })()}
+                <QuoteExpiryPill
+                  dateExpiry={(quoteData as any)?.date_expiry}
+                  dateCreated={(quoteData as any)?.date_created}
+                />
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
                 <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
@@ -382,86 +211,16 @@ export default function QuotePage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2" data-testid="row-quote-actions">
-            <button
-              type="button"
-              onClick={() => {
-                const current = quoteData?.date_expiry ? new Date(quoteData.date_expiry).toISOString().split("T")[0] : "";
-                setExpiryDate(current);
-                setShowExpiryDialog(true);
-              }}
-              className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-              data-testid="button-update-expiry"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Update Expiry
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                toggleFavoriteMutation.mutate(
-                  { itemType: "quote", itemId: quoteId, label: quote.quoteTitle, subtitle: `${clientData?.name || ""}${quote.destinationName ? " · " + quote.destinationName : ""}` },
-                  { onSuccess: (data: { favorited?: boolean }) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
-                )
-              }
-              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
-              data-testid="button-pin-quote"
-            >
-              {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-              {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? "Unpin" : "Pin"}
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                setShowSharePopup(true);
-                if (!shareToken) {
-                  setShareLoading(true);
-                  try {
-                    const res = await axiosClient.post(`/api/quote-share/${quoteId}/generate-token`);
-                    setShareToken(res.data.token);
-                  } catch {
-                    toast({ title: "Failed to generate share link", variant: "destructive" });
-                  }
-                  setShareLoading(false);
-                }
-              }}
-              className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-              data-testid="button-share-quote"
-            >
-              <Share2 className="h-4 w-4" />
-              Share Quote
-            </button>
-            <Button
-              size="sm"
-              className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
-              data-testid="button-destination-guru"
-              onClick={() => setShowGuruSheet(true)}
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Destination Guru
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-9 rounded-2xl border-black/10 bg-white/70" data-testid="button-quote-actions">
-                  <MoreHorizontal className="mr-2 h-4 w-4" />
-                  Actions
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                <DropdownMenuItem
-                  onClick={() => setShowCopyDialog(true)}
-                  data-testid="button-copy-quote"
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Copy
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { }} data-testid="button-export-quote">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Export
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <QuoteActionsRow
+            dateExpiry={(quoteData as any)?.date_expiry}
+            isFavorited={isFavorited}
+            onTogglePin={togglePin}
+            onUpdateExpiry={openExpiryDialog}
+            onShare={openShare}
+            onOpenGuru={() => setShowGuruSheet(true)}
+            onCopy={() => setShowCopyDialog(true)}
+            onExport={() => {}}
+          />
         </div>
 
         <div className="mt-4" data-testid="layout-quote-body">
@@ -469,275 +228,30 @@ export default function QuotePage() {
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
                 <div className="grid content-start gap-1.5" data-testid="col-itinerary-media">
-                  <div className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]" data-testid="img-itinerary-hero">
-                    {primaryImage ? (
-                      <>
-                        <img
-                          src={primaryImage.url}
-                          alt=""
-                          className="absolute inset-0 h-full w-full object-cover"
-                          data-testid="img-itinerary-hero-photo"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0" aria-hidden />
-                        <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white" data-testid="badge-main-image">
-                          <Star className="h-3 w-3 fill-current" /> Main
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-xs text-black/40" data-testid="placeholder-no-hero">
-                        No images
-                      </div>
-                    )}
-                  </div>
-
-                  {galleryImages.length > 0 && (
-                    <div className="grid grid-cols-3 gap-1.5" data-testid="grid-itinerary-gallery">
-                      {galleryImages.map((img, idx: number) => (
-                        <div
-                          key={img.id}
-                          className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)]"
-                          data-testid={`button-gallery-image-${idx}`}
-                        >
-                          <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" data-testid={`img-gallery-${idx}`} />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100" aria-hidden />
-                          {img.ownerType === "quote" && (
-                            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 bg-black/50 py-0.5 opacity-0 transition group-hover:opacity-100">
-                              <button
-                                type="button"
-                                className="flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-semibold text-white hover:text-amber-300 transition-colors"
-                                data-testid={`button-set-main-${idx}`}
-                                onClick={() => {
-                                  setPrimaryImageMutation.mutate(
-                                    { quoteId, imageId: img.id },
-                                    {
-                                      onSuccess: () => toast({ title: "Main image updated" }),
-                                      onError: () => toast({ title: "Failed to set main image", variant: "destructive" }),
-                                    }
-                                  );
-                                }}
-                                title="Set as main image"
-                              >
-                                <Star className="h-2.5 w-2.5" /> Main
-                              </button>
-                              <button
-                                type="button"
-                                className="flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-semibold text-white hover:text-red-300 transition-colors"
-                                data-testid={`button-delete-image-${idx}`}
-                                onClick={() => {
-                                  deleteImageMutation.mutate(
-                                    { quoteId, imageId: img.id },
-                                    {
-                                      onSuccess: () => toast({ title: "Image removed" }),
-                                      onError: () => toast({ title: "Failed to remove image", variant: "destructive" }),
-                                    }
-                                  );
-                                }}
-                                title="Remove image"
-                              >
-                                <Trash2 className="h-2.5 w-2.5" /> Del
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    data-testid="input-image-upload"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (files.length === 0) return;
-                      uploadImagesMutation.mutate(
-                        { quoteId, files },
-                        {
-                          onSuccess: () => {
-                            toast({ title: `${files.length} image${files.length > 1 ? "s" : ""} uploaded` });
-                            if (imageInputRef.current) imageInputRef.current.value = "";
-                          },
-                          onError: () => {
-                            toast({ title: "Failed to upload images", variant: "destructive" });
-                            if (imageInputRef.current) imageInputRef.current.value = "";
-                          },
-                        }
-                      );
-                    }}
+                  <QuoteMediaPanel
+                    primaryImage={primaryImage}
+                    galleryImages={galleryImages}
+                    imageInputRef={imageInputRef}
+                    isUploading={uploadImagesMutation.isPending}
+                    setPrimary={setPrimaryImage}
+                    deleteImage={deleteImage}
+                    uploadFiles={uploadImageFiles}
+                    openFilePicker={openImageFilePicker}
                   />
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-black/15 bg-black/[0.02] py-2 text-[10px] font-semibold text-black/50 transition hover:border-black/25 hover:bg-black/[0.04] hover:text-black/70"
-                    data-testid="button-upload-images"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={uploadImagesMutation.isPending}
-                  >
-                    {uploadImagesMutation.isPending ? (
-                      <><Loader2 className="h-3 w-3 animate-spin" /> Uploading...</>
-                    ) : (
-                      <><ImagePlus className="h-3 w-3" /> Add Images</>
-                    )}
-                  </button>
 
-                  <div className="mt-3 rounded-2xl border border-black/10 bg-white/60 p-2.5" data-testid="card-quote-tags-inline">
-                    <div className="flex items-center justify-between">
-                      <div className="text-[11px] font-semibold" data-testid="text-tags-title-inline">Tags</div>
-                      <Tag className="h-3 w-3 text-black/35" aria-hidden />
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5" data-testid="list-tags-inline">
-                      {quote.tags.map((t) => (
-                        <span
-                          key={t}
-                          className="group inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70"
-                          data-testid={`pill-tag-inline-${t}`}
-                        >
-                          {t}
-                          <button
-                            type="button"
-                            className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-black/35 transition hover:bg-black/[0.06] hover:text-black/60"
-                            data-testid={`button-remove-tag-inline-${t}`}
-                            onClick={() => {
-                              console.log('🏷️ Removing tag:', t);
-                              const updated = quote.tags.filter((tag) => tag !== t);
-                              updateTagsMutation.mutate(
-                                { id: quoteId, tags: updated },
-                                {
-                                  onSuccess: () => {
-                                    console.log('🏷️ Tag removed successfully');
-                                    queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                                  },
-                                  onError: (error) => {
-                                    console.error('🏷️ Failed to remove tag:', error);
-                                    toast({ title: "Failed to remove tag", variant: "destructive" });
-                                  }
-                                }
-                              );
-                            }}
-                          >
-                            <X className="h-2.5 w-2.5" aria-hidden />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="relative mt-2 flex items-center gap-1.5" data-testid="row-add-tag-inline">
-                      <div className="relative flex-1">
-                        <Input
-                          ref={tagInputRef}
-                          placeholder="Add tag…"
-                          className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
-                          data-testid="input-add-tag-inline"
-                          value={newTag}
-                          onChange={(e) => {
-                            setNewTag(e.target.value);
-                            setShowTagSuggestions(true);
-                          }}
-                          onFocus={() => {
-                            setShowTagSuggestions(true);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && newTag.trim()) {
-                              e.preventDefault();
-                              const updated = [...quote.tags, newTag.trim()];
-                              console.log('🏷️ Adding tag:', newTag.trim(), 'Updated tags:', updated);
-                              updateTagsMutation.mutate(
-                                { id: quoteId, tags: updated },
-                                {
-                                  onSuccess: () => {
-                                    console.log('🏷️ Tag added successfully');
-                                    setNewTag("");
-                                    setShowTagSuggestions(false);
-                                    queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                                    queryClient.invalidateQueries({ queryKey: ["tags"] });
-                                  },
-                                  onError: (error) => {
-                                    console.error('🏷️ Failed to add tag:', error);
-                                    toast({ title: "Failed to add tag", variant: "destructive" });
-                                  }
-                                }
-                              );
-                            }
-                            if (e.key === "Escape") setShowTagSuggestions(false);
-                          }}
-                        />
-                        {showTagSuggestions && (() => {
-                          const filtered = allTags.filter(
-                            (t) => (!newTag.trim() || t.toLowerCase().includes(newTag.trim().toLowerCase())) && !quote.tags.includes(t)
-                          );
-                          if (filtered.length === 0) return null;
-                          return (
-                            <div
-                              ref={tagSuggestionsRef}
-                              className="absolute left-0 top-full z-50 mt-1 max-h-32 w-full overflow-y-auto rounded-xl border border-black/10 bg-white shadow-lg"
-                              data-testid="list-tag-suggestions"
-                            >
-                              {filtered.map((t) => (
-                                <button
-                                  key={t}
-                                  type="button"
-                                  className="w-full px-2.5 py-1.5 text-left text-[11px] text-black/70 transition hover:bg-black/[0.04]"
-                                  data-testid={`button-tag-suggestion-${t}`}
-                                  onClick={() => {
-                                    console.log('🏷️ Adding tag from suggestion:', t);
-                                    const updated = [...quote.tags, t];
-                                    updateTagsMutation.mutate(
-                                      { id: quoteId, tags: updated },
-                                      {
-                                        onSuccess: () => {
-                                          console.log('🏷️ Tag added successfully from suggestion');
-                                          setNewTag("");
-                                          setShowTagSuggestions(false);
-                                          queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                                          queryClient.invalidateQueries({ queryKey: ["tags"] });
-                                        },
-                                        onError: (error) => {
-                                          console.error('🏷️ Failed to add tag from suggestion:', error);
-                                          toast({ title: "Failed to add tag", variant: "destructive" });
-                                        }
-                                      }
-                                    );
-                                  }}
-                                >
-                                  {t}
-                                </button>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      <Button
-                        size="sm"
-                        className="h-7 rounded-xl bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90"
-                        data-testid="button-add-tag-inline"
-                        disabled={!newTag.trim()}
-                        onClick={() => {
-                          if (!newTag.trim()) return;
-                          console.log('🏷️ Adding tag via button:', newTag.trim());
-                          const updated = [...quote.tags, newTag.trim()];
-                          updateTagsMutation.mutate(
-                            { id: quoteId, tags: updated },
-                            {
-                              onSuccess: () => {
-                                console.log('🏷️ Tag added successfully via button');
-                                setNewTag("");
-                                setShowTagSuggestions(false);
-                                queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                                queryClient.invalidateQueries({ queryKey: ["tags"] });
-                              },
-                              onError: (error) => {
-                                console.error('🏷️ Failed to add tag via button:', error);
-                                toast({ title: "Failed to add tag", variant: "destructive" });
-                              }
-                            }
-                          );
-                        }}
-                      >
-                        Add
-                      </Button>
-                    </div>
-                  </div>
+                  <QuoteTagsCard
+                    tags={quote.tags}
+                    newTag={newTag}
+                    setNewTag={setNewTag}
+                    showTagSuggestions={showTagSuggestions}
+                    setShowTagSuggestions={setShowTagSuggestions}
+                    tagInputRef={tagInputRef}
+                    tagSuggestionsRef={tagSuggestionsRef}
+                    allTags={allTags}
+                    removeTag={removeTag}
+                    addTag={addTag}
+                    addTagFromSuggestion={addTagFromSuggestion}
+                  />
 
                 </div>
 
@@ -822,8 +336,7 @@ export default function QuotePage() {
                                       } else if (item.id === "convert") {
                                         setShowConvertDialog(true);
                                       } else if (item.id === "admin-delete") {
-                                        setDeleteReason("");
-                                        setShowDeleteDialog(true);
+                                        openDeleteDialog();
                                       } else {
                                         setShowCopyDialog(true);
                                       }
@@ -857,166 +370,9 @@ export default function QuotePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-itinerary-specs">
-                    {quote.packageType?.toLowerCase().includes("hot tub") ? (
-                      <>
-                        <div className="grid content-start gap-2" data-testid="col-itinerary-left">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lodge-type">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lodge-type-label">Lodge Type</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lodge-type-value">{quote.lodge?.type || "—"}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-pets">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-pets-label">Pets</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-pets-value">{quote.pets}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-guests">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-guests-label">Number of Guests</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-guests-value">{quote.passengers.adults + quote.passengers.children}</div>
-                          </div>
-                        </div>
-                        <div className="grid content-start gap-2" data-testid="col-itinerary-right">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-passengers-value">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children${quote.passengers.childAges?.length ? ` (${quote.passengers.childAges.join(", ")})` : ""}` : ""}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-nights">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-nights-label">Number of Nights</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-nights-value">{quote.nights}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
-                          </div>
-                          {quoteData?.lodge_code && (
-                            <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lodge-code">
-                              <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lodge-code-label">Lodge Code</div>
-                              <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lodge-code-value">{quoteData.lodge_code}</div>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    ) : quote.packageType?.toLowerCase().includes("cruise") ? (
-                      <>
-                        <div className="grid content-start gap-2" data-testid="col-itinerary-left">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cruise-line">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cruise-line-label">Cruise Line</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-cruise-line-value">{quote.cruise?.cruiseLine || "—"}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-ship">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-ship-label">Ship</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-ship-value">{quote.cruise?.ship || "—"}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cabin-type">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cabin-type-label">Cabin Type</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-cabin-type-value">{quote.cruise?.cabinType || "—"}</div>
-                          </div>
-                        </div>
-                        <div className="grid content-start gap-2" data-testid="col-itinerary-right">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-cruise-date">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-cruise-date-label">Cruise Date</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-cruise-date-value">{quote.cruise?.cruiseDate ? formatUKDate(quote.cruise.cruiseDate) : "—"}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-pre-cruise">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-pre-cruise-label">Pre-Cruise Stay</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-pre-cruise-value">{quote.cruise?.preCruiseStay || 0} nights</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-post-cruise">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-post-cruise-label">Post-Cruise Stay</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-post-cruise-value">{quote.cruise?.postCruiseStay || 0} nights</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-passengers-value">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children${quote.passengers.childAges?.length ? ` (${quote.passengers.childAges.join(", ")})` : ""}` : ""}
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="grid content-start gap-2" data-testid="col-itinerary-left">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-travel-date">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-travel-date-label">Travel Date</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-travel-date-value">{formatUKDate(quote.travelDate)}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-hotel">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-hotel-label">Hotel</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-hotel-value">{quote.accommodation.property}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-room">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-room-label">Room Type</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-room-value">{quote.accommodation.roomType}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-board">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-board-label">Board Basis</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-board-value">{quote.accommodation.board}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-transfer">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-transfer-label">Transfer Type</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-transfer-value">{quote.transferType || "Private Transfer"}</div>
-                          </div>
-                        </div>
-                        <div className="grid content-start gap-2" data-testid="col-itinerary-right">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-operator">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-operator-label">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-operator-value">{quote.commissions.tourOperator}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-departure-airport">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-departure-airport-label">Departure Airport</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-departure-airport-value">{quote.flights.outbound.from}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-passengers">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-passengers-label">Passengers</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-passengers-value">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children (${quote.passengers.childAges.join(", ")})` : ""}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-nights">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-nights-label">Number of Nights</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-nights-value">{quote.nights}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-itinerary-lead-source">
-                            <div className="text-xs font-semibold text-black/65" data-testid="text-itinerary-lead-source-label">Lead Source</div>
-                            <div className="text-xs font-semibold text-black" data-testid="text-itinerary-lead-source-value">{formatLeadSource(quote.leadSource)}</div>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  <QuoteItinerarySpecs quote={quote} quoteData={quoteData} />
 
-                  {(quote.status === "accepted" || quote.status === "BOOKED" || quote.haysRef || quote.supplierRef) && (
-                    <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3" data-testid="card-booking-references">
-                      <div className="text-xs font-semibold text-emerald-800 mb-2">Booking References</div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-hays-reference">
-                          <div className="text-xs font-semibold text-black/65">HAYS Reference</div>
-                          <div className="text-xs font-semibold text-black" data-testid="text-hays-reference-value">{quote.haysRef || "—"}</div>
-                        </div>
-                        <div className="flex items-center justify-between rounded-xl border border-emerald-500/15 bg-white/70 px-3 py-2" data-testid="row-tour-reference">
-                          <div className="text-xs font-semibold text-black/65">Supplier Reference</div>
-                          <div className="text-xs font-semibold text-black" data-testid="text-tour-reference-value">{quote.supplierRef || "—"}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <QuoteBookingReferences quote={quote} />
 
                   <QuoteNotesSection transactionId={quote.transaction_id} />
 
@@ -1026,71 +382,7 @@ export default function QuotePage() {
             </Card>
 
             <div className="grid gap-3" data-testid="col-quote-right">
-              <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-summary-right">
-                <Tabs defaultValue="summary" className="w-full">
-                  <TabsList className="mb-3 w-full rounded-2xl border border-black/10 bg-white/70 p-1">
-                    <TabsTrigger value="summary" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-summary">Quote Summary</TabsTrigger>
-                    <TabsTrigger value="costings" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-quote-costings">{pageLabel} Costings</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="summary" className="mt-0">
-                    <QuoteSummaryTimeline quote={quote} />
-                  </TabsContent>
-
-                  <TabsContent value="costings" className="mt-0">
-                    <div className="flex items-center justify-between" data-testid="row-quote-summary-header">
-                      <div>
-                        <div className="text-sm font-semibold" data-testid="text-quote-summary-title">
-                          {pageLabel} Costings
-                        </div>
-                        <div className="mt-1 text-xs text-black/55" data-testid="text-quote-summary-subtitle">
-                          Commission and charges.
-                        </div>
-                      </div>
-                      <FileText className="h-4 w-4 text-black/35" aria-hidden />
-                    </div>
-
-                    <div className="mt-3 grid gap-2" data-testid="list-quote-summary-lines">
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-total-price">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">Total price</div>
-                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-price-value">
-                          {currency.format(quote.commissions.price)}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-commission">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-commission-label">Comm</div>
-                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-commission-value">
-                          {currency.format(quote.commissions.commissionValue)}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-discount">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-discount-label">Discount</div>
-                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-discount-value">
-                          {currency.format(quote.commissions.discounts)}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-quote-summary-service-charge">
-                        <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-service-charge-label">Service charge</div>
-                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-service-charge-value">
-                          {currency.format(quote.commissions.serviceCharge)}
-                        </div>
-                      </div>
-
-                      <div className="my-1 h-px w-full bg-black/10" data-testid="separator-quote-summary" />
-
-                      <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-quote-summary-total-commission">
-                        <div className="text-xs font-semibold text-black/70" data-testid="text-quote-summary-total-commission-label">Total commission</div>
-                        <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-commission-value">
-                          {currency.format(quote.commissions.totalCommission)}
-                        </div>
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </Card>
+              <QuoteCostingsCard quote={quote} pageLabel={pageLabel} />
 
               <QuoteTasksSection quoteId={quoteId} entityType="quote" assignedUserId={quoteData?.user_id} />
 
@@ -1131,273 +423,52 @@ export default function QuotePage() {
           }}
         />
       )}
-      <Dialog open={showSharePopup} onOpenChange={setShowSharePopup}>
-        <DialogContent className="max-w-md rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-share-quote">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold">Share Quote</DialogTitle>
-            <DialogDescription className="text-xs text-black/55">
-              Copy the link below and send it to your customer.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 pt-2">
-            {shareLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-black/40" />
-              </div>
-            ) : shareToken ? (
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={`${window.location.origin}/view-quote/${shareToken}`}
-                  className="flex-1 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-xs text-black/70 outline-none"
-                  data-testid="input-share-link"
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                />
-                <Button
-                  size="sm"
-                  className="h-9 rounded-xl px-4"
-                  data-testid="button-copy-share-link"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(`${window.location.origin}/view-quote/${shareToken}`);
-                    setShareCopied(true);
-                    toast({ title: "Link copied to clipboard!" });
-                    setTimeout(() => setShareCopied(false), 2000);
-                  }}
-                >
-                  {shareCopied ? <Check className="mr-1.5 h-3.5 w-3.5" /> : <Copy className="mr-1.5 h-3.5 w-3.5" />}
-                  {shareCopied ? "Copied" : "Copy"}
-                </Button>
-              </div>
-            ) : (
-              <p className="text-xs text-black/50">Failed to generate link. Please close and try again.</p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <QuoteShareDialog
+        open={showSharePopup}
+        onOpenChange={setShowSharePopup}
+        shareToken={shareToken}
+        shareCopied={shareCopied}
+        shareLoading={shareLoading}
+        onCopy={copyShareLink}
+      />
 
-      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
-        <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-convert-booking">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold">Convert to Booking</DialogTitle>
-            <DialogDescription className="text-xs text-black/55">
-              Enter the booking references to convert this quote.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-3 grid gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">HAYS Reference</Label>
-              <Input
-                value={convertHaysRef}
-                onChange={(e) => setConvertHaysRef(e.target.value)}
-                placeholder="e.g. HAYS-12345"
-                className="h-9 rounded-xl border-black/10 bg-white/70"
-                data-testid="input-convert-hays-ref"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Tour Reference</Label>
-              <Input
-                value={convertTourRef}
-                onChange={(e) => setConvertTourRef(e.target.value)}
-                placeholder="e.g. TOUR-67890"
-                className="h-9 rounded-xl border-black/10 bg-white/70"
-                data-testid="input-convert-tour-ref"
-              />
-            </div>
-            <Button
-              className="h-9 w-full rounded-xl bg-emerald-600 text-white hover:bg-emerald-600/90"
-              data-testid="button-confirm-convert"
-              onClick={() => {
-                convertToBookingMutation.mutate(
-                  { quoteId, haysRef: convertHaysRef, supplierRef: convertTourRef },
-                  {
-                    onSuccess: (booking: any) => {
-                      setShowConvertDialog(false);
-                      setConvertHaysRef("");
-                      setConvertTourRef("");
-                      queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                      toast({ title: "Quote converted to booking" });
-                      const targetClientId = clientId || booking?.client_id;
-                      if (targetClientId) {
-                        setLocation(`/clients/${targetClientId}/bookings/${booking.id}`);
-                      } else {
-                        setLocation(`/bookings/${booking.id}`);
-                      }
-                    },
-                    onError: () => {
-                      toast({ title: "Failed to convert", variant: "destructive" });
-                    },
-                  }
-                );
-              }}
-              disabled={convertToBookingMutation.isPending}
-            >
-              {convertToBookingMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Convert to Booking"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <QuoteConvertDialog
+        open={showConvertDialog}
+        onOpenChange={setShowConvertDialog}
+        haysRef={convertHaysRef}
+        onHaysRefChange={setConvertHaysRef}
+        tourRef={convertTourRef}
+        onTourRefChange={setConvertTourRef}
+        isPending={convertToBookingMutation.isPending}
+        onConfirm={confirmConvert}
+      />
 
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="max-w-sm rounded-2xl border-red-200 bg-white/95 backdrop-blur-xl" data-testid="dialog-admin-delete-quote">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold text-red-600">Delete {pageLabel}</DialogTitle>
-            <DialogDescription className="text-xs text-black/55">
-              This action cannot be undone. Please provide a reason for deleting this {pageLabel.toLowerCase()}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-3 grid gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Reason for deletion</Label>
-              <textarea
-                value={deleteReason}
-                onChange={(e) => setDeleteReason(e.target.value)}
-                placeholder="Enter the reason for deleting this record..."
-                className="min-h-[80px] w-full resize-none rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30"
-                data-testid="textarea-delete-reason"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="h-9 flex-1 rounded-xl border-black/10"
-                onClick={() => setShowDeleteDialog(false)}
-                data-testid="button-cancel-delete"
-              >
-                Cancel
-              </Button>
-              <Button
-                className="h-9 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-700"
-                data-testid="button-confirm-delete"
-                disabled={!deleteReason.trim() || adminDeleteQuoteMutation.isPending}
-                onClick={() => {
-                  adminDeleteQuoteMutation.mutate(
-                    { id: quoteId, reason: deleteReason.trim() },
-                    {
-                      onSuccess: () => {
-                        setShowDeleteDialog(false);
-                        toast({ title: `${pageLabel} deleted successfully` });
-                        setLocation(clientId ? `/clients/${clientId}` : "/quotes");
-                      },
-                      onError: () => {
-                        toast({ title: `Failed to delete ${pageLabel.toLowerCase()}`, variant: "destructive" });
-                      },
-                    }
-                  );
-                }}
-              >
-                {adminDeleteQuoteMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Delete"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <QuoteDeleteDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        pageLabel={pageLabel}
+        reason={deleteReason}
+        onReasonChange={setDeleteReason}
+        isPending={adminDeleteQuoteMutation.isPending}
+        onConfirm={confirmDelete}
+      />
 
-      <Dialog open={showExpiryDialog} onOpenChange={setShowExpiryDialog}>
-        <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-update-expiry">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold">Update Expiry Date</DialogTitle>
-            <DialogDescription className="text-xs text-black/55">
-              Set a new expiry date for this quote.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-3 grid gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Expiry Date</Label>
-              <input
-                type="date"
-                value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
-                className="h-9 w-full rounded-xl border border-black/10 bg-white/70 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                data-testid="input-expiry-date"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="h-9 flex-1 rounded-xl border-black/10" onClick={() => setShowExpiryDialog(false)}>
-                Cancel
-              </Button>
-              <Button
-                className="h-9 flex-1 rounded-xl bg-gray-900 text-white hover:bg-gray-800"
-                disabled={!expiryDate || updateQuoteMutation.isPending}
-                data-testid="button-confirm-expiry"
-                onClick={() => {
-                  updateQuoteMutation.mutate(
-                    { id: quoteId, data: { date_expiry: new Date(expiryDate).toISOString() } as any },
-                    {
-                      onSuccess: () => {
-                        setShowExpiryDialog(false);
-                        queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
-                        toast({ title: "Expiry date updated" });
-                      },
-                      onError: () => toast({ title: "Failed to update expiry", variant: "destructive" }),
-                    }
-                  );
-                }}
-              >
-                {updateQuoteMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Save"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <QuoteExpiryDialog
+        open={showExpiryDialog}
+        onOpenChange={setShowExpiryDialog}
+        expiryDate={expiryDate}
+        onExpiryDateChange={setExpiryDate}
+        isPending={updateQuoteExpiryMutation.isPending}
+        onConfirm={confirmExpiry}
+      />
 
-      <Sheet open={showGuruSheet} onOpenChange={setShowGuruSheet}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0 border-l border-black/10 bg-[#f8f8f8] dark:bg-[#0a0a0a]">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Destination Guru</SheetTitle>
-          </SheetHeader>
-          <div className="p-5 pt-10">
-            {guruRecord ? (
-              <DestinationGuru
-                destination={guruDestination}
-                externalData={(guruRecord as any).data as DestinationGuruData}
-                compact
-                onClose={() => setShowGuruSheet(false)}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Sparkles className="h-10 w-10 text-amber-500 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No intel yet for {guruDestination || "this destination"}</h3>
-                <p className="text-sm text-black/50 dark:text-white/50 mb-6 max-w-sm">
-                  Generate AI-powered destination intelligence including weather, flight times, travel tips, and top activities.
-                </p>
-                <Button
-                  className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-white hover:from-amber-600 hover:to-orange-600"
-                  disabled={!guruDestination || generateGuruMutation.isPending}
-                  data-testid="button-generate-guru-sheet"
-                  onClick={() => {
-                    generateGuruMutation.mutate(guruDestination, {
-                      onSuccess: () => {
-                        toast({ title: `Destination intel generated for ${guruDestination}` });
-                      },
-                      onError: (err: any) => {
-                        toast({ title: "Failed to generate", description: err?.message, variant: "destructive" });
-                      },
-                    });
-                  }}
-                >
-                  {generateGuruMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating…
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      Generate Intel
-                    </>
-                  )}
-                </Button>
-                {generateGuruMutation.isPending && (
-                  <p className="text-xs text-black/40 dark:text-white/40 mt-4 animate-pulse">
-                    AI is researching this destination. This may take 10-20 seconds…
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <QuoteGuruSheet
+        open={showGuruSheet}
+        onOpenChange={setShowGuruSheet}
+        guruDestination={guruDestination}
+        guruRecord={guruRecord as any}
+        generateGuruMutation={generateGuruMutation}
+      />
     </>
   );
 }

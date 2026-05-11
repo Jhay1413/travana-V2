@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { asyncHandler } from "../utils/async-handler";
 import { successResponse } from "../utils/response";
 import { db } from "../config/database";

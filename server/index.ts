@@ -3,7 +3,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import routes from "./routes/index";
 import v2Routes from "./v2/routes/index";
-import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes } from "./v2/middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./repositories/task.repository";
 import { checkStaleTickets } from "./services/ticket-notification.service";

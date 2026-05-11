@@ -16,6 +16,8 @@ export interface AuthUser {
   orgRole: OrgRole | null;
   orgId: string | null;
   branchId: string | null;
+  orgName: string | null;
+  branchName: string | null;
   avatar: string | null;
   image: string | null;
   firstName: string | null;

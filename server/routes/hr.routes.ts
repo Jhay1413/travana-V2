@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { hrRepository } from "../repositories/hr.repository";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { getUserId } from "../utils/get-user-id";
 import { db } from "../config/database";
 import { user as userTable } from "@shared/schema";

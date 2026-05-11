@@ -1,4 +1,4 @@
-import SocialPostsBoard from "@/components/social-posts-board";
+import SocialPostsBoard from "@/components/boards/social-posts-board";
 
 export default function SocialPostsPage() {
   return (

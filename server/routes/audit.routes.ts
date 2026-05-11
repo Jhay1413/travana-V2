@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { auditRepository } from "../repositories/audit.repository";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { getUserId } from "../utils/get-user-id";
 import { db } from "../config/database";
 import { quote, transaction, clientTable, user as userTable, booking, auditLog } from "@shared/schema";

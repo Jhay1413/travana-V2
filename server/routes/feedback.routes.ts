@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { feedbackRepository } from "../repositories/feedback.repository";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { getUserId } from "../utils/get-user-id";
 import { db } from "../config/database";
 import { user as userTable } from "@shared/schema";

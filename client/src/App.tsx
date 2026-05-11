@@ -18,8 +18,9 @@ import PublicQuotePage from "@/pages/public-quote";
 import AgentOverviewPage from "@/pages/agent-overview";
 import BranchOverviewPage from "@/pages/branch-overview";
 import ClientsPage from "@/pages/clients";
+import ClientsListPage from "@/pages/clients-list";
 import ClientPage from "@/pages/client";
-import QuotePage from "@/pages/quote"; // Using original full-featured version
+import QuotePage from "@/pages/quote";
 import EnquiryPage from "@/pages/enquiry";
 import TicketsPage from "@/pages/tickets";
 import AdminImportPage from "@/pages/admin-import";
@@ -30,6 +31,7 @@ import BookingsPage from "@/pages/bookings";
 import TasksPage from "@/pages/tasks";
 import ReportsPage from "@/pages/reports";
 import PipelinePage from "@/pages/pipeline";
+import ChatPage from "@/pages/chat";
 import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";
 import SocialQuotePage from "@/pages/social-quote";
@@ -117,7 +119,8 @@ function AuthenticatedRouter() {
         <RoleRoute path="/tasks" allow={MANAGER_ROLES} component={TasksPage} />
         <RoleRoute path="/reports" allow={MANAGER_ROLES} component={ReportsPage} />
 
-        <RoleRoute path="/clients" allow={STAFF_ROLES} component={ClientsPage} />
+        <RoleRoute path="/clients" allow={STAFF_ROLES} component={ClientsListPage} />
+        <RoleRoute path="/clients/all" allow={STAFF_ROLES} component={ClientsPage} />
         <RoleRoute path="/clients/:clientId" allow={STAFF_ROLES} component={ClientPage} />
         <RoleRoute path="/clients/:clientId/quotes/:quoteId" allow={STAFF_ROLES} component={QuotePage} />
         <RoleRoute path="/quotes/:quoteId" allow={STAFF_ROLES} component={QuotePage} />
@@ -126,6 +129,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/clients/:clientId/enquiries/:enquiryId" allow={STAFF_ROLES} component={EnquiryPage} />
         <RoleRoute path="/enquiries/:enquiryId" allow={STAFF_ROLES} component={EnquiryPage} />
         <RoleRoute path="/pipeline" allow={STAFF_ROLES} component={PipelinePage} />
+        <RoleRoute path="/chat" allow={STAFF_ROLES} component={ChatPage} />
         <RoleRoute path="/destination-guru" allow={STAFF_ROLES} component={DestinationGuruPage} />
         <RoleRoute path="/sms-center" allow={STAFF_ROLES} component={SmsCenterPage} />
         <RoleRoute path="/social-posts" allow={STAFF_ROLES} component={SocialPostsPage} />

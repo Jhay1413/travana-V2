@@ -271,10 +271,10 @@ export function AppSidenav() {
               </div>
               <div className="min-w-0">
                 <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-name">
-                  Travana
+                  {currentUser?.orgName || "Travana"}
                 </div>
                 <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-brand-sub">
-                  Pipeline
+                  {currentUser?.branchName || "—"}
                 </div>
               </div>
             </div>

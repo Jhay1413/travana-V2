@@ -1,5 +1,5 @@
 import { useParams } from "wouter";
-import TicketsBoard from "@/components/tickets-board";
+import TicketsBoard from "@/components/boards/tickets-board";
 
 export default function TicketsPage() {
   const params = useParams<{ ticketId?: string }>();

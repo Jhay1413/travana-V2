@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { authStorage } from '../../replit_integrations/auth/storage';
+import { authStorage } from './auth/storage';
 import { branchMemberRepository } from '../modules/branch-member/branch-member.repository';
 import { getUserId } from '../../utils/get-user-id';
 

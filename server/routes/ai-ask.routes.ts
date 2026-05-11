@@ -3,7 +3,7 @@ import { aiAskService } from "../services/ai-ask.service";
 import { asyncHandler } from "../utils/async-handler";
 import { successResponse } from "../utils/response";
 import { getUserId } from "../utils/get-user-id";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 
 const router = Router();
 router.use(isAuthenticated);

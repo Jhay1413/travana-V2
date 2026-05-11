@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { favoriteService } from "../services/favorite.service";
-import { isAuthenticated } from "../replit_integrations/auth";
+import { isAuthenticated } from "../v2/middlewares/auth";
 import { getUserId } from "../utils/get-user-id";
 
 const router = Router();

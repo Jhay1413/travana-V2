@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../config/database";
 import { userProfiles } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { asyncHandler } from "../utils/async-handler";
 import { successResponse } from "../utils/response";
 import { getUserId } from "../utils/get-user-id";

@@ -1,8 +1,8 @@
 import { Router, Request, Response } from "express";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
-import { isAuthenticated } from "../replit_integrations/auth/replitAuth";
+import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { getUserId } from "../utils/get-user-id";
-import { authStorage } from "../replit_integrations/auth/storage";
+import { authStorage } from "../v2/middlewares/auth/storage";
 
 const shareRouter = Router();
 
