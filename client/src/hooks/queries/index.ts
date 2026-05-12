@@ -12,6 +12,7 @@ export { useAttachments, attachmentKeys, getAttachmentDownloadUrl } from "./use-
 export { useReplies, replyKeys } from "./use-reply-queries";
 export { useNotifications, useUnreadNotifications, notificationKeys } from "./use-notification-queries";
 export { useDashboardStats, useMyProfit, useAdminOverviewStats, useAgentStats, dashboardKeys } from "./use-dashboard-queries";
+export { useBranchOverviewStats, branchOverviewKeys } from "./use-branch-overview-queries";
 export { useRevenueDashboard, useMonthBookings, useMonthForwards, revenueKeys } from "./use-revenue-queries";
 export { useTargetsOverview, useShopTargets, useUpsertShopTargets, useAgentTargets, useAgentTargetsByUserId, useUpsertAgentTargets, useAgents } from "./use-targets-queries";
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";

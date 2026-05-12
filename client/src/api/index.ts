@@ -7,6 +7,7 @@ export { bookingApi } from "./endpoints/booking.api";
 export { enquiryApi } from "./endpoints/enquiry.api";
 export { noteApi } from "./endpoints/note.api";
 export { dashboardApi } from "./endpoints/dashboard.api";
+export { branchOverviewApi } from "./endpoints/branch-overview.api";
 export { revenueApi } from "./endpoints/revenue.api";
 export { targetsApi } from "./endpoints/targets.api";
 export { userApi } from "./endpoints/user.api";
