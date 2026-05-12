@@ -24,11 +24,10 @@ import type {
   BranchOverviewTopRow,
   BranchOverviewTeamRow,
 } from "./branch-overview.types";
+import { buildScopeConditions, needsClientJoin, type ScopeFilter } from "../../utils/scope-conditions";
+import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
 
-interface ScopeFilter {
-  orgId: string | null;
-  branchId: string | null;
-}
+const bookingActiveCond = sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`;
 
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -54,25 +53,6 @@ function addDays(d: Date, days: number) {
   const out = new Date(d);
   out.setDate(out.getDate() + days);
   return out;
-}
-
-/**
- * Branch/org scope conditions that work for any query that joins transaction.
- * branchId takes precedence; otherwise filter by clientTable.orgId (matches the
- * dashboard module's org filter and survives platform_admin's empty orgId).
- */
-function buildScopeConditions(scope: ScopeFilter): SQL[] {
-  const conds: SQL[] = [eq(transaction.is_test, false)];
-  if (scope.branchId) {
-    conds.push(eq(transaction.branch_id, scope.branchId));
-  } else if (scope.orgId) {
-    conds.push(eq(clientTable.orgId, scope.orgId));
-  }
-  return conds;
-}
-
-function needsClientJoin(scope: ScopeFilter): boolean {
-  return !scope.branchId && !!scope.orgId;
 }
 
 export const branchOverviewRepository = {
@@ -111,21 +91,18 @@ export const branchOverviewRepository = {
       (() => {
         const q = db
           .select({
-            todayProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-            weekProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-            monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-            ytdProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-            monthRevenue: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN CAST(${booking.sales_price} AS DECIMAL) ELSE 0 END), 0)`,
-            ytdRevenue: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN CAST(${booking.sales_price} AS DECIMAL) ELSE 0 END), 0)`,
+            todayCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+            weekCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+            monthCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+            ytdCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
             monthBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()})`,
-            monthBookingValue: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN CAST(${booking.sales_price} AS DECIMAL) ELSE 0 END), 0)`,
           })
           .from(booking)
           .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
         const withClient = joinClient
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
-        return withClient.where(and(...baseCond));
+        return withClient.where(and(bookingActiveCond, ...baseCond));
       })(),
 
       // Active clients in last 90 days (distinct client_id on transactions)
@@ -143,7 +120,7 @@ export const branchOverviewRepository = {
       (() => {
         const q = db
           .select({
-            value: sql<number>`COALESCE(SUM(CAST(${quote.sales_price} AS DECIMAL)), 0)`,
+            value: sql<number>`COALESCE(SUM(${totalQuoteCommissionExpr(quote.id)}), 0)`,
             count: sql<number>`COUNT(*)`,
           })
           .from(quote)
@@ -216,13 +193,13 @@ export const branchOverviewRepository = {
         );
       })(),
 
-      // Last 12 months trend (revenue + booking count, bucketed by month)
+      // Last 12 months trend (commission + booking count, bucketed by month)
       (() => {
         const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
         const q = db
           .select({
             month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${booking.date_created}), 'YYYY-MM')`,
-            revenue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS DECIMAL)), 0)`,
+            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
             bookings: sql<number>`COUNT(*)`,
           })
           .from(booking)
@@ -231,7 +208,7 @@ export const branchOverviewRepository = {
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
         return withClient
-          .where(and(gte(booking.date_created, trendStart), ...baseCond))
+          .where(and(gte(booking.date_created, trendStart), bookingActiveCond, ...baseCond))
           .groupBy(sql`DATE_TRUNC('month', ${booking.date_created})`)
           .orderBy(sql`DATE_TRUNC('month', ${booking.date_created}) ASC`);
       })(),
@@ -242,7 +219,7 @@ export const branchOverviewRepository = {
           .select({
             name: destination.name,
             bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
-            revenue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS DECIMAL)), 0)`,
+            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
           })
           .from(booking)
           .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
@@ -253,7 +230,7 @@ export const branchOverviewRepository = {
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
         return withClient
-          .where(and(gte(booking.date_created, yearStart), ...baseCond))
+          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond))
           .groupBy(destination.id, destination.name)
           .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
           .limit(5);
@@ -265,7 +242,7 @@ export const branchOverviewRepository = {
           .select({
             name: resorts.name,
             bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
-            revenue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS DECIMAL)), 0)`,
+            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
           })
           .from(booking)
           .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
@@ -276,13 +253,13 @@ export const branchOverviewRepository = {
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
         return withClient
-          .where(and(gte(booking.date_created, yearStart), ...baseCond))
+          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond))
           .groupBy(resorts.id, resorts.name)
           .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
           .limit(5);
       })(),
 
-      // Team leaderboard — per-user bookings/revenue/commission + quotes for the month
+      // Team leaderboard — per-user bookings/commission + quotes for the month
       this.getTeamLeaderboard(scope, monthStart, monthEnd),
 
       // Attention counts
@@ -291,7 +268,7 @@ export const branchOverviewRepository = {
 
     const kpi = kpiRow[0];
     const monthBookingsCount = Number(kpi.monthBookingsCount);
-    const monthBookingValue = Number(kpi.monthBookingValue);
+    const monthCommission = Number(kpi.monthCommission);
 
     const enquiries = Number(funnelEnquiriesRow[0].count);
     const quotes = Number(funnelQuotesRow[0].count);
@@ -300,7 +277,7 @@ export const branchOverviewRepository = {
     const trend = this.fillTrendGaps(
       trendRows.map((r) => ({
         month: String(r.month),
-        revenue: Number(r.revenue),
+        commission: Number(r.commission),
         bookings: Number(r.bookings),
       })),
       now,
@@ -309,14 +286,12 @@ export const branchOverviewRepository = {
     return {
       branch: branchProfile,
       kpis: {
-        todayProfit: Number(kpi.todayProfit),
-        weekProfit: Number(kpi.weekProfit),
-        monthProfit: Number(kpi.monthProfit),
-        ytdProfit: Number(kpi.ytdProfit),
-        monthRevenue: Number(kpi.monthRevenue),
-        ytdRevenue: Number(kpi.ytdRevenue),
+        todayCommission: Number(kpi.todayCommission),
+        weekCommission: Number(kpi.weekCommission),
+        monthCommission,
+        ytdCommission: Number(kpi.ytdCommission),
         monthBookingsCount,
-        avgBookingValue: monthBookingsCount > 0 ? monthBookingValue / monthBookingsCount : 0,
+        avgCommission: monthBookingsCount > 0 ? monthCommission / monthBookingsCount : 0,
         openQuotesValue: Number(openQuotesRow[0].value),
         openQuotesCount: Number(openQuotesRow[0].count),
         activeClientsCount: Number(activeClientsRow[0].count),
@@ -331,12 +306,12 @@ export const branchOverviewRepository = {
       topDestinations: topDestinationsRows.map((r): BranchOverviewTopRow => ({
         name: r.name ?? "Unknown",
         bookings: Number(r.bookings),
-        revenue: Number(r.revenue),
+        commission: Number(r.commission),
       })),
       topResorts: topResortsRows.map((r): BranchOverviewTopRow => ({
         name: r.name ?? "Unknown",
         bookings: Number(r.bookings),
-        revenue: Number(r.revenue),
+        commission: Number(r.commission),
       })),
       teamLeaderboard: teamRows,
       attention: attentionRow,
@@ -383,8 +358,7 @@ export const branchOverviewRepository = {
         .select({
           agentId: transaction.user_id,
           bookings: sql<number>`COUNT(*)`,
-          revenue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS DECIMAL)), 0)`,
-          commission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+          commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
@@ -396,6 +370,7 @@ export const branchOverviewRepository = {
           and(
             gte(booking.date_created, monthStart),
             sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+            bookingActiveCond,
             ...baseCond,
           ),
         )
@@ -471,7 +446,6 @@ export const branchOverviewRepository = {
         id: u.id,
         name: u.firstName || u.name || u.email || "Agent",
         bookings: 0,
-        revenue: 0,
         commission: 0,
         quotes: 0,
       });
@@ -481,7 +455,6 @@ export const branchOverviewRepository = {
       if (!map.has(r.agentId)) continue;
       const row = map.get(r.agentId)!;
       row.bookings = Number(r.bookings);
-      row.revenue = Number(r.revenue);
       row.commission = Number(r.commission);
     }
     for (const r of quoteRows) {
@@ -516,6 +489,7 @@ export const branchOverviewRepository = {
         and(
           gte(booking.travel_date, todayStart.toISOString().slice(0, 10)),
           lte(booking.travel_date, in7Days.toISOString().slice(0, 10)),
+          bookingActiveCond,
           ...baseCond,
         ),
       );
@@ -533,6 +507,7 @@ export const branchOverviewRepository = {
         and(
           gte(booking.travel_date, todayStart.toISOString().slice(0, 10)),
           lte(booking.travel_date, in30Days.toISOString().slice(0, 10)),
+          bookingActiveCond,
           ...baseCond,
         ),
       );
@@ -598,7 +573,7 @@ export const branchOverviewRepository = {
     for (let i = 11; i >= 0; i -= 1) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      result.push(byMonth.get(key) ?? { month: key, revenue: 0, bookings: 0 });
+      result.push(byMonth.get(key) ?? { month: key, commission: 0, bookings: 0 });
     }
     return result;
   },

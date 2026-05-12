@@ -12,14 +12,14 @@ import { Card } from "@/components/ui/card";
 import { currency, formatMonthLabel } from "./helpers";
 import type { BranchOverviewTrendPoint } from "@/api/endpoints/branch-overview.api";
 
-export function RevenueTrendCard({ trend }: { trend: BranchOverviewTrendPoint[] }) {
+export function CommissionTrendCard({ trend }: { trend: BranchOverviewTrendPoint[] }) {
   const data = trend.map((p) => ({ ...p, label: formatMonthLabel(p.month) }));
   return (
-    <Card className="glass ringed grain rounded-2xl p-4 md:p-5" data-testid="revenue-trend-card">
+    <Card className="glass ringed grain rounded-2xl p-4 md:p-5" data-testid="commission-trend-card">
       <div className="mb-3">
-        <div className="text-sm font-medium">Revenue & bookings — last 12 months</div>
+        <div className="text-sm font-medium">Commission & bookings — last 12 months</div>
         <div className="text-xs text-muted-foreground">
-          Bars: revenue · Line: booking count
+          Bars: commission · Line: booking count
         </div>
       </div>
       <div className="h-64">
@@ -36,7 +36,7 @@ export function RevenueTrendCard({ trend }: { trend: BranchOverviewTrendPoint[] 
             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={30} />
             <RechartsTooltip
               formatter={(value: number, name: string) => {
-                if (name === "revenue") return [currency.format(value), "Revenue"];
+                if (name === "commission") return [currency.format(value), "Commission"];
                 return [value.toLocaleString(), "Bookings"];
               }}
               labelStyle={{ fontSize: 12 }}
@@ -44,8 +44,8 @@ export function RevenueTrendCard({ trend }: { trend: BranchOverviewTrendPoint[] 
             />
             <Bar
               yAxisId="left"
-              dataKey="revenue"
-              fill="rgb(99 102 241)"
+              dataKey="commission"
+              fill="rgb(16 185 129)"
               radius={[4, 4, 0, 0]}
               maxBarSize={28}
             />
@@ -53,7 +53,7 @@ export function RevenueTrendCard({ trend }: { trend: BranchOverviewTrendPoint[] 
               yAxisId="right"
               type="monotone"
               dataKey="bookings"
-              stroke="rgb(16 185 129)"
+              stroke="rgb(99 102 241)"
               strokeWidth={2}
               dot={{ r: 3 }}
             />

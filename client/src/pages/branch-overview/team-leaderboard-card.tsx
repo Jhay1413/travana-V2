@@ -35,7 +35,6 @@ export function TeamLeaderboardCard({ rows }: { rows: BranchOverviewTeamRow[] })
               <TableHead className="w-10">#</TableHead>
               <TableHead>Member</TableHead>
               <TableHead className="text-right">Bookings</TableHead>
-              <TableHead className="text-right">Revenue</TableHead>
               <TableHead className="text-right">Commission</TableHead>
               <TableHead className="text-right">Quotes</TableHead>
             </TableRow>
@@ -55,9 +54,6 @@ export function TeamLeaderboardCard({ rows }: { rows: BranchOverviewTeamRow[] })
                 <TableCell className="font-medium">{row.name}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {row.bookings.toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {currency.format(row.revenue)}
                 </TableCell>
                 <TableCell className="text-right tabular-nums font-semibold">
                   {currency.format(row.commission)}

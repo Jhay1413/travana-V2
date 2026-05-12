@@ -51,7 +51,7 @@ export function TopDestinationsCard({
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead className="text-right">Bookings</TableHead>
-              <TableHead className="text-right">Revenue</TableHead>
+              <TableHead className="text-right">Commission</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -62,7 +62,7 @@ export function TopDestinationsCard({
                   {row.bookings.toLocaleString()}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {currency.format(row.revenue)}
+                  {currency.format(row.commission)}
                 </TableCell>
               </TableRow>
             ))}

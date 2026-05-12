@@ -5,9 +5,9 @@ import {
   TrendingUp,
   Wallet,
   ClipboardList,
-  Receipt,
   Users,
   CalendarRange,
+  CalendarClock,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -66,60 +66,60 @@ export function KpiCards({ kpis }: { kpis: BranchOverviewKpis }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <StatBox
-        label="Month Profit"
-        value={currency.format(kpis.monthProfit)}
-        icon={CircleDollarSign}
+        label="Today's Commission"
+        value={currency.format(kpis.todayCommission)}
+        icon={CalendarClock}
         color="bg-emerald-500"
-        subtext={`Today: ${currency.format(kpis.todayProfit)} · Week: ${currency.format(kpis.weekProfit)}`}
+        subtext="Bookings created today"
       />
       <StatBox
-        label="Month Revenue"
-        value={currency.format(kpis.monthRevenue)}
-        icon={Receipt}
+        label="Week Commission"
+        value={currency.format(kpis.weekCommission)}
+        icon={TrendingUp}
         color="bg-blue-500"
-        subtext="Sum of booking sales price"
+        subtext="Mon–Sun rolling total"
+      />
+      <StatBox
+        label="Month Commission"
+        value={currency.format(kpis.monthCommission)}
+        icon={CircleDollarSign}
+        color="bg-purple-500"
+        subtext={`Across ${kpis.monthBookingsCount} bookings`}
+      />
+      <StatBox
+        label="YTD Commission"
+        value={currency.format(kpis.ytdCommission)}
+        icon={BarChart3}
+        color="bg-fuchsia-500"
+        subtext="Year to date"
       />
       <StatBox
         label="Bookings"
         value={kpis.monthBookingsCount.toLocaleString()}
         icon={ClipboardList}
-        color="bg-purple-500"
-        subtext={`Avg ${currency.format(kpis.avgBookingValue)}`}
+        color="bg-sky-500"
+        subtext="This month"
+      />
+      <StatBox
+        label="Avg Commission"
+        value={currency.format(kpis.avgCommission)}
+        icon={CalendarRange}
+        color="bg-teal-500"
+        subtext="Per booking, this month"
       />
       <StatBox
         label="Open Quotes"
         value={currency.format(kpis.openQuotesValue)}
         icon={Wallet}
         color="bg-amber-500"
-        subtext={`${kpis.openQuotesCount} open`}
+        subtext={`${kpis.openQuotesCount} open · commission`}
       />
       <StatBox
         label="Active Clients"
         value={kpis.activeClientsCount.toLocaleString()}
         icon={Users}
-        color="bg-sky-500"
-        subtext="Activity in last 90 days"
-      />
-      <StatBox
-        label="YTD Profit"
-        value={currency.format(kpis.ytdProfit)}
-        icon={BarChart3}
-        color="bg-fuchsia-500"
-        subtext={`Revenue ${currency.format(kpis.ytdRevenue)}`}
-      />
-      <StatBox
-        label="YTD Revenue"
-        value={currency.format(kpis.ytdRevenue)}
-        icon={TrendingUp}
         color="bg-rose-500"
-        subtext="Year to date"
-      />
-      <StatBox
-        label="Avg Booking"
-        value={currency.format(kpis.avgBookingValue)}
-        icon={CalendarRange}
-        color="bg-teal-500"
-        subtext="Mean of this month"
+        subtext="Activity in last 90 days"
       />
     </div>
   );

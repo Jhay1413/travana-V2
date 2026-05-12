@@ -4,7 +4,7 @@ import { useBranchOverviewStats } from "@/hooks/queries";
 import { BranchProfileStrip } from "./branch-profile-strip";
 import { KpiCards } from "./kpi-cards";
 import { ConversionFunnelCard } from "./conversion-funnel-card";
-import { RevenueTrendCard } from "./revenue-trend-card";
+import { CommissionTrendCard } from "./commission-trend-card";
 import { TopDestinationsCard } from "./top-destinations-card";
 import { TeamLeaderboardCard } from "./team-leaderboard-card";
 import { AttentionCard } from "./attention-card";
@@ -53,7 +53,7 @@ export default function BranchOverviewPage() {
       <KpiCards kpis={data.kpis} />
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_.6fr]">
-        <RevenueTrendCard trend={data.trend} />
+        <CommissionTrendCard trend={data.trend} />
         <ConversionFunnelCard funnel={data.funnel} />
       </div>
 

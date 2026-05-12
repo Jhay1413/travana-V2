@@ -13,14 +13,12 @@ export interface BranchSummary {
 }
 
 export interface BranchOverviewKpis {
-  todayProfit: number;
-  weekProfit: number;
-  monthProfit: number;
-  ytdProfit: number;
-  monthRevenue: number;
-  ytdRevenue: number;
+  todayCommission: number;
+  weekCommission: number;
+  monthCommission: number;
+  ytdCommission: number;
   monthBookingsCount: number;
-  avgBookingValue: number;
+  avgCommission: number;
   openQuotesValue: number;
   openQuotesCount: number;
   activeClientsCount: number;
@@ -35,21 +33,20 @@ export interface BranchOverviewFunnel {
 
 export interface BranchOverviewTrendPoint {
   month: string;
-  revenue: number;
+  commission: number;
   bookings: number;
 }
 
 export interface BranchOverviewTopRow {
   name: string;
   bookings: number;
-  revenue: number;
+  commission: number;
 }
 
 export interface BranchOverviewTeamRow {
   id: string;
   name: string;
   bookings: number;
-  revenue: number;
   commission: number;
   quotes: number;
 }
