@@ -1,10 +1,17 @@
 import { db } from "../../config/database";
-import { organization, branches, branchMembers, user } from "@shared/schema";
+import { organization, branches, branchMembers, user, userProfiles } from "@shared/schema";
 import type { InsertOrganization, InsertBranch, InsertUser, InsertBranchMember } from "@shared/schema";
 
 export interface OnboardingAgentInput {
   userValues: InsertUser;
   branchMember: InsertBranchMember;
+}
+
+export interface AgentProfileInput {
+  address?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactRelationship?: string | null;
+  emergencyContactPhone?: string | null;
 }
 
 export interface OnboardingSignupInput {
@@ -17,6 +24,7 @@ export interface OnboardingSignupInput {
     /** Index into branchInputs (defaults to 0). */
     branchIndex?: number;
     branchMemberRoleAndActive: { orgRole: string; isActive: boolean };
+    profile?: AgentProfileInput;
   }>;
 }
 
@@ -75,6 +83,23 @@ export const onboardingRepository = {
           orgRole: agent.branchMemberRoleAndActive.orgRole,
           isActive: agent.branchMemberRoleAndActive.isActive,
         });
+
+        const profile = agent.profile;
+        const hasProfile =
+          profile &&
+          (profile.address ||
+            profile.emergencyContactName ||
+            profile.emergencyContactRelationship ||
+            profile.emergencyContactPhone);
+        if (hasProfile) {
+          await tx.insert(userProfiles).values({
+            userId: agentUser.id,
+            address: profile!.address ?? null,
+            emergencyContactName: profile!.emergencyContactName ?? null,
+            emergencyContactRelationship: profile!.emergencyContactRelationship ?? null,
+            emergencyContactPhone: profile!.emergencyContactPhone ?? null,
+          });
+        }
       }
 
       return { orgId: org.id, ownerId: ownerUser.id, branchIds };

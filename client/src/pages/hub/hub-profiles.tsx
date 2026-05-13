@@ -8,6 +8,7 @@ import {
   BookOpen,
   Bookmark,
   Calendar,
+  CalendarDays,
   Camera,
   CheckCircle2,
   ChevronDown,
@@ -18,6 +19,7 @@ import {
   GraduationCap,
   Heart,
   Image,
+  Loader2,
   MapPin,
   MessageCircle,
   MoreHorizontal,
@@ -39,6 +41,10 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { type LeaveType, type LeaveEntry } from "@/api/endpoints/hr.api";
+import { useMyHrRecord } from "@/hooks/queries";
+import { useRequestMyLeave } from "@/hooks/mutations";
+import { useToast } from "@/hooks/use-toast";
 import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/components/hub-components";
 import { agentProfiles } from "@/data/hub-mock";
 import { userProfileApi } from "@/api";
@@ -53,12 +59,13 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-type ProfileTab = "timeline" | "knowledge" | "training" | "achievements" | "about";
+type ProfileTab = "timeline" | "knowledge" | "training" | "achievements" | "about" | "leave";
 
 interface TimelinePost {
   id: string;
@@ -925,6 +932,7 @@ export default function HubProfiles() {
     { key: "knowledge", label: "Knowledge", icon: BookOpen },
     { key: "training", label: "Training", icon: GraduationCap },
     { key: "achievements", label: "Achievements", icon: Trophy },
+    { key: "leave", label: "Leave", icon: CalendarDays },
     { key: "about", label: "About", icon: Users },
   ];
 
@@ -1487,6 +1495,12 @@ export default function HubProfiles() {
             </motion.div>
           )}
 
+          {activeTab === "leave" && (
+            <motion.div key="leave" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <MyLeaveSection />
+            </motion.div>
+          )}
+
           {activeTab === "about" && (
             <motion.div key="about" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-4">
@@ -1710,5 +1724,229 @@ export default function HubProfiles() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Self-service Leave section — backed by /api/v2/hr/me + /api/v2/hr/me/leave.
+// Branch managers see submitted requests as "Pending" in the manager HR page.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LEAVE_TYPES: LeaveType[] = ["Annual", "Sick", "Unpaid", "Other"];
+
+function formatDateLine(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function leaveStatusClasses(status: LeaveEntry["status"]): string {
+  switch (status) {
+    case "Approved":  return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    case "Rejected":  return "bg-rose-50 text-rose-700 border-rose-200";
+    case "Cancelled": return "bg-slate-100 text-slate-600 border-slate-200";
+    default:          return "bg-amber-50 text-amber-700 border-amber-200";
+  }
+}
+
+function MyLeaveSection() {
+  const [requestOpen, setRequestOpen] = useState(false);
+  const me = useMyHrRecord();
+
+  if (me.isLoading) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-12 dark:border-slate-800 dark:bg-slate-900 flex items-center justify-center" data-testid="leave-loading">
+        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (me.isError) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900 text-sm text-rose-600" data-testid="leave-error">
+        Couldn't load your leave record. {(me.error as any)?.response?.data?.message ?? "Please refresh."}
+      </div>
+    );
+  }
+
+  const record = me.data!;
+  const allowance = record.holidayAllowance ?? 0;
+  const used = record.holidayUsedDays ?? 0;
+  const remaining = Math.max(0, allowance - used);
+  const pct = allowance ? Math.round((used / allowance) * 100) : 0;
+
+  const sorted = [...record.holidays].sort((a, b) => (a.from < b.from ? 1 : -1));
+  const pending = sorted.filter((h) => h.status === "Pending");
+  const decided = sorted.filter((h) => h.status !== "Pending");
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" data-testid="card-my-allowance">
+          <div className="text-xs text-slate-500 mb-1">Holiday allowance</div>
+          <div className="text-2xl font-semibold text-slate-900 dark:text-white">
+            {used}
+            <span className="text-base font-medium text-slate-400"> / {allowance || "—"} days</span>
+          </div>
+          {allowance > 0 && (
+            <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mt-3 overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+            </div>
+          )}
+          <div className="text-xs text-slate-500 mt-2">{remaining} days remaining</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900" data-testid="card-my-pending">
+          <div className="text-xs text-slate-500 mb-1">Pending requests</div>
+          <div className="text-2xl font-semibold text-slate-900 dark:text-white">{pending.length}</div>
+          <div className="text-xs text-slate-500 mt-3">Awaiting manager approval</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+          <div>
+            <div className="text-xs text-slate-500 mb-1">Need time off?</div>
+            <div className="text-sm font-medium text-slate-900 dark:text-white">
+              Submit a request for approval.
+            </div>
+          </div>
+          <Button onClick={() => setRequestOpen(true)} data-testid="button-request-my-leave" className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="mr-1.5 h-4 w-4" /> Request
+          </Button>
+        </div>
+      </div>
+
+      <RequestLeaveDialog
+        open={requestOpen}
+        onClose={() => setRequestOpen(false)}
+      />
+
+      {pending.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Awaiting approval</h3>
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {pending.map((h) => (
+              <li key={h.id} className="px-5 py-3 flex items-center gap-4" data-testid={`row-my-leave-${h.id}`}>
+                <Clock className="h-4 w-4 text-amber-500 flex-none" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                    {h.type} · {formatDateLine(h.from)} – {formatDateLine(h.to)}
+                  </div>
+                  {h.reason && <div className="text-xs text-slate-500 mt-0.5">{h.reason}</div>}
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${leaveStatusClasses(h.status)}`}>
+                  {h.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">History</h3>
+        </div>
+        {decided.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-slate-500">No past leave on record.</div>
+        ) : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {decided.map((h) => (
+              <li key={h.id} className="px-5 py-3 flex items-center gap-4" data-testid={`row-my-leave-history-${h.id}`}>
+                <CalendarDays className="h-4 w-4 text-slate-400 flex-none" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                    {h.type} · {formatDateLine(h.from)} – {formatDateLine(h.to)}
+                  </div>
+                  {h.reason && <div className="text-xs text-slate-500 mt-0.5">{h.reason}</div>}
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${leaveStatusClasses(h.status)}`}>
+                  {h.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RequestLeaveDialog({
+  open, onClose,
+}: { open: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const [type, setType] = useState<LeaveType>("Annual");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [reason, setReason] = useState("");
+
+  const submit = useRequestMyLeave();
+
+  const handleSubmit = () => {
+    submit.mutate(
+      { type, from, to, reason: reason || undefined },
+      {
+        onSuccess: () => {
+          toast({ title: "Leave requested", description: "Your manager has been notified." });
+          setFrom(""); setTo(""); setReason(""); setType("Annual");
+          onClose();
+        },
+        onError: (err: any) => {
+          toast({
+            title: "Couldn't submit request",
+            description: err?.response?.data?.message ?? "Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  const valid = !!from && !!to && from <= to;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Request leave</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Type</Label>
+            <select value={type} onChange={(e) => setType(e.target.value as LeaveType)}
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+              data-testid="select-request-type">
+              {LEAVE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>From</Label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} data-testid="input-request-from" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>To</Label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} data-testid="input-request-to" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Reason (optional)</Label>
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} data-testid="input-request-reason" />
+          </div>
+          {!valid && from && to && (
+            <p className="text-xs text-rose-600">'To' must be on or after 'From'.</p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={!valid || submit.isPending}
+            data-testid="button-submit-request">
+            {submit.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+            Submit request
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

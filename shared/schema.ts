@@ -129,6 +129,10 @@ export const userProfiles = pgTable("user_profiles", {
   specialisation: text("specialisation"),
   certifications: text("certifications"),
   coverImage: text("cover_image"),
+  address: text("address"),
+  emergencyContactName: text("emergency_contact_name"),
+  emergencyContactRelationship: text("emergency_contact_relationship"),
+  emergencyContactPhone: text("emergency_contact_phone"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -1967,55 +1971,39 @@ export type SmsMessage = typeof smsMessagesTable.$inferSelect;
 export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
 
 // =====================================================================
-// HR (Travana HR module) — graduated from mockup
+// HR — hr_records is keyed to user.id. The legacy hr_employees /
+// hr_reminders tables were dropped: HR rows are now per real user and
+// branch scoping flows through branch_members.
 // =====================================================================
-export const hrEmployeesTable = pgTable("hr_employees", {
-  id: varchar("id", { length: 64 }).primaryKey(),
+export const hrRecordsTable = pgTable("hr_records", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
-  name: varchar("name", { length: 200 }).notNull(),
-  role: varchar("role", { length: 200 }).notNull(),
-  team: varchar("team", { length: 200 }).notNull(),
-  status: varchar("status", { length: 32 }).notNull(),
-  employmentType: varchar("employment_type", { length: 32 }).notNull(),
-  location: varchar("location", { length: 200 }).notNull(),
-  email: varchar("email", { length: 320 }).notNull(),
-  phone: varchar("phone", { length: 50 }).notNull(),
-  startDate: varchar("start_date", { length: 32 }).notNull(),
-  probationEnd: varchar("probation_end", { length: 32 }),
-  manager: varchar("manager", { length: 200 }).notNull(),
-  emergencyContact: jsonb("emergency_contact").notNull(),
-  avatarColor: varchar("avatar_color", { length: 100 }).notNull(),
-  initials: varchar("initials", { length: 8 }).notNull(),
-  holidayAllowance: integer("holiday_allowance").notNull(),
-  holidayUsed: integer("holiday_used").notNull(),
-  sickDaysYTD: integer("sick_days_ytd").notNull(),
-  documents: jsonb("documents").notNull().default(sql`'[]'::jsonb`),
+  userId: text("user_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
+  status: varchar("status", { length: 32 }).notNull().default("Active"),
+  employmentType: varchar("employment_type", { length: 32 }).notNull().default("Full-time"),
+  startDate: date("start_date"),
+  probationEnd: date("probation_end"),
+  managerUserId: text("manager_user_id").references(() => user.id, { onDelete: "set null" }),
+  salary: numeric("salary", { precision: 12, scale: 2 }),
+  salaryCurrency: varchar("salary_currency", { length: 3 }),
+  contractType: varchar("contract_type", { length: 32 }),
+  contractEndDate: date("contract_end_date"),
+  holidayAllowance: integer("holiday_allowance"),
+  taxId: text("tax_id"),
   holidays: jsonb("holidays").notNull().default(sql`'[]'::jsonb`),
-  training: jsonb("training").notNull().default(sql`'[]'::jsonb`),
+  documents: jsonb("documents").notNull().default(sql`'[]'::jsonb`),
   notes: jsonb("notes").notNull().default(sql`'[]'::jsonb`),
-  timeline: jsonb("timeline").notNull().default(sql`'[]'::jsonb`),
-  onboarding: jsonb("onboarding").notNull().default(sql`'[]'::jsonb`),
-  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  idx_hr_records_org: index("idx_hr_records_org_id").on(table.orgId),
+  idx_hr_records_manager: index("idx_hr_records_manager_user_id").on(table.managerUserId),
+}));
 
-export const insertHrEmployeeSchema = createInsertSchema(hrEmployeesTable).omit({
+export const insertHrRecordSchema = createInsertSchema(hrRecordsTable).omit({
+  id: true,
+  createdAt: true,
   updatedAt: true,
 });
-export type HrEmployee = typeof hrEmployeesTable.$inferSelect;
-export type InsertHrEmployee = z.infer<typeof insertHrEmployeeSchema>;
-
-export const hrRemindersTable = pgTable("hr_reminders", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
-  type: varchar("type", { length: 32 }).notNull(),
-  message: text("message").notNull(),
-  employee: varchar("employee", { length: 200 }).notNull(),
-  due: varchar("due", { length: 64 }).notNull(),
-  severity: varchar("severity", { length: 16 }).notNull(),
-  sortOrder: integer("sort_order").notNull().default(0),
-});
-
-export const insertHrReminderSchema = createInsertSchema(hrRemindersTable);
-export type HrReminder = typeof hrRemindersTable.$inferSelect;
-export type InsertHrReminder = z.infer<typeof insertHrReminderSchema>;
+export type HrRecord = typeof hrRecordsTable.$inferSelect;
+export type InsertHrRecord = z.infer<typeof insertHrRecordSchema>;

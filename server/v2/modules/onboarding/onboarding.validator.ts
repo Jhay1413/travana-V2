@@ -17,13 +17,21 @@ const branchSchema = z.object({
   openingHours: z.array(dayHoursSchema).length(7),
 });
 
+const contactPersonSchema = z.object({
+  name: z.string().min(1, "Contact name is required"),
+  relationship: z.enum(["Spouse", "Parent", "Sibling", "Child", "Friend", "Other"]),
+  phone: z.string().min(1, "Contact phone is required"),
+});
+
 const agentSchema = z.object({
   name: z.string().min(1, "Agent name is required"),
   email: z.string().email("Agent email must be valid"),
   phone: z.string().optional(),
+  address: z.string().optional(),
   role: z.enum(["Agent", "Senior Agent", "Manager", "Admin"]),
   active: z.boolean(),
   branchIndex: z.number().int().min(0).optional(),
+  contactPerson: contactPersonSchema.optional(),
 });
 
 export const signupSchema = z.object({

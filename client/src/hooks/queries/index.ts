@@ -33,3 +33,4 @@ export { useFacebookPages, useFacebookConversations, useFacebookMessages, facebo
 export { useCurrentOrganization, useOrgMembers, organizationKeys } from "./use-organization-queries";
 export { useBranches, useBranch, branchKeys } from "./use-branch-queries";
 export { usePendingInvites, useInviteByToken, inviteKeys } from "./use-invite-queries";
+export { useHrEmployees, useHrEmployee, useHrReminders, useMyHrRecord, hrKeys } from "./use-hr-queries";

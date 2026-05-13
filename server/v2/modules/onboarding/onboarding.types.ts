@@ -19,13 +19,29 @@ export interface BranchPayload {
 
 export type AgentRole = "Agent" | "Senior Agent" | "Manager" | "Admin";
 
+export type ContactRelationship =
+  | "Spouse"
+  | "Parent"
+  | "Sibling"
+  | "Child"
+  | "Friend"
+  | "Other";
+
+export interface AgentContactPerson {
+  name: string;
+  relationship: ContactRelationship;
+  phone: string;
+}
+
 export interface AgentPayload {
   name: string;
   email: string;
   phone?: string;
+  address?: string;
   role: AgentRole;
   active: boolean;
   branchIndex?: number;
+  contactPerson?: AgentContactPerson;
 }
 
 export interface SignupPayload {

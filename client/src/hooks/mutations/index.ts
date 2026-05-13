@@ -22,3 +22,15 @@ export { useRegisterAgent } from "./use-registration-mutations";
 export { useUpdateOrganization, useUpdateMemberRole, useSetMemberSuspended, useAssignMemberBranch, useUnassignMemberBranch } from "./use-organization-mutations";
 export { useCreateBranch, useUpdateBranch, useDeleteBranch } from "./use-branch-mutations";
 export { useSendInvite, useResendInvite, useRevokeInvite, useAcceptInvite } from "./use-invite-mutations";
+export {
+  useInviteEmployee,
+  useUpdateHrEmployee,
+  useRequestLeave,
+  useApproveLeave,
+  useRejectLeave,
+  useAddHrNote,
+  useAddHrDocument,
+  useUploadHrDocumentFile,
+  useDeleteHrDocument,
+  useRequestMyLeave,
+} from "./use-hr-mutations";

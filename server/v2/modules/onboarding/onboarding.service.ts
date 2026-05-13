@@ -119,6 +119,11 @@ export const onboardingService = {
       agents: payload.agents.map((agent) => {
         const agentNameParts = agent.name.trim().split(/\s+/);
         const orgRole = mapAgentRoleToOrgRole(agent.role);
+        const address = agent.address?.trim() || null;
+        const contact = agent.contactPerson;
+        const contactName = contact?.name.trim() || null;
+        const contactRel = contact?.relationship ?? null;
+        const contactPhone = contact?.phone.trim() || null;
         return {
           user: {
             id: crypto.randomUUID(),
@@ -133,6 +138,12 @@ export const onboardingService = {
           } as any,
           branchIndex: agent.branchIndex,
           branchMemberRoleAndActive: { orgRole, isActive: agent.active },
+          profile: {
+            address,
+            emergencyContactName: contactName,
+            emergencyContactRelationship: contactRel,
+            emergencyContactPhone: contactPhone,
+          },
         };
       }),
     });

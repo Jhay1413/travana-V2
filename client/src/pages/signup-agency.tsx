@@ -34,15 +34,20 @@ type DaySchedule = {
 
 type AgentRole = "Agent" | "Senior Agent" | "Manager" | "Admin";
 type AgentStatus = "Active" | "Inactive";
+type ContactRelationship = "Spouse" | "Parent" | "Sibling" | "Child" | "Friend" | "Other";
 
 type Agent = {
   id: string;
   name: string;
   email: string;
   phone: string;
+  address: string;
   role: AgentRole;
   status: AgentStatus;
   branchIndex: number;
+  contactName: string;
+  contactRelationship: ContactRelationship;
+  contactPhone: string;
 };
 
 type Branch = {
@@ -57,6 +62,7 @@ type Branch = {
 };
 
 const AGENT_ROLE_OPTIONS: AgentRole[] = ["Agent", "Senior Agent", "Manager", "Admin"];
+const CONTACT_RELATIONSHIP_OPTIONS: ContactRelationship[] = ["Spouse", "Parent", "Sibling", "Child", "Friend", "Other"];
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
 function buildDefaultSchedule(pattern: OpeningPattern): DaySchedule[] {
@@ -72,7 +78,9 @@ function buildDefaultSchedule(pattern: OpeningPattern): DaySchedule[] {
 }
 
 const EMPTY_AGENT_FORM: Omit<Agent, "id"> = {
-  name: "", email: "", phone: "", role: "Agent", status: "Active", branchIndex: 0,
+  name: "", email: "", phone: "", address: "",
+  role: "Agent", status: "Active", branchIndex: 0,
+  contactName: "", contactRelationship: "Spouse", contactPhone: "",
 };
 
 function makeBranch(name = ""): Branch {
@@ -198,7 +206,11 @@ export default function SignupAgencyPage() {
     setAgentForm(EMPTY_AGENT_FORM);
   };
   const editAgent = (agent: Agent) => {
-    setAgentForm({ name: agent.name, email: agent.email, phone: agent.phone, role: agent.role, status: agent.status, branchIndex: agent.branchIndex });
+    setAgentForm({
+      name: agent.name, email: agent.email, phone: agent.phone, address: agent.address,
+      role: agent.role, status: agent.status, branchIndex: agent.branchIndex,
+      contactName: agent.contactName, contactRelationship: agent.contactRelationship, contactPhone: agent.contactPhone,
+    });
     setEditingAgentId(agent.id);
   };
   const removeAgent = (id: string) => {
@@ -241,14 +253,23 @@ export default function SignupAgencyPage() {
         bankHolidaysOpen: b.bankHolidaysOpen,
         openingHours: b.schedule,
       })),
-      agents: agents.map((a) => ({
-        name: a.name.trim(),
-        email: a.email.trim(),
-        phone: a.phone.trim(),
-        role: a.role,
-        active: a.status === "Active",
-        branchIndex: a.branchIndex,
-      })),
+      agents: agents.map((a) => {
+        const contactName = a.contactName.trim();
+        const contactPhone = a.contactPhone.trim();
+        const contactPerson = contactName || contactPhone
+          ? { name: contactName, relationship: a.contactRelationship, phone: contactPhone }
+          : undefined;
+        return {
+          name: a.name.trim(),
+          email: a.email.trim(),
+          phone: a.phone.trim(),
+          address: a.address.trim(),
+          role: a.role,
+          active: a.status === "Active",
+          branchIndex: a.branchIndex,
+          contactPerson,
+        };
+      }),
     };
 
     try {
@@ -575,6 +596,10 @@ export default function SignupAgencyPage() {
                         <Label htmlFor="agent-phone">Phone Number</Label>
                         <Input id="agent-phone" data-testid="input-agent-phone" type="tel" value={agentForm.phone} onChange={(e) => setAgentForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+44 7700 900000" />
                       </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="agent-address">Address</Label>
+                        <Input id="agent-address" data-testid="input-agent-address" value={agentForm.address} onChange={(e) => setAgentForm((f) => ({ ...f, address: e.target.value }))} placeholder="221B Baker Street, London" />
+                      </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="agent-role">Role</Label>
                         <select
@@ -615,6 +640,33 @@ export default function SignupAgencyPage() {
                         </select>
                       </div>
                     </div>
+
+                    <div className="space-y-3 rounded-xl border border-black/10 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-white/60">Contact Person</h4>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="agent-contact-name">Name</Label>
+                          <Input id="agent-contact-name" data-testid="input-agent-contact-name" value={agentForm.contactName} onChange={(e) => setAgentForm((f) => ({ ...f, contactName: e.target.value }))} placeholder="Jane Doe" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="agent-contact-relationship">Relationship</Label>
+                          <select
+                            id="agent-contact-relationship"
+                            value={agentForm.contactRelationship}
+                            onChange={(e) => setAgentForm((f) => ({ ...f, contactRelationship: e.target.value as ContactRelationship }))}
+                            className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
+                            data-testid="select-agent-contact-relationship"
+                          >
+                            {CONTACT_RELATIONSHIP_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="agent-contact-phone">Phone</Label>
+                          <Input id="agent-contact-phone" data-testid="input-agent-contact-phone" type="tel" value={agentForm.contactPhone} onChange={(e) => setAgentForm((f) => ({ ...f, contactPhone: e.target.value }))} placeholder="+44 7700 900001" />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex gap-2">
                       <Button
                         type="button"

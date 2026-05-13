@@ -113,7 +113,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/admin/import" allow={ADMIN_ROLES} component={AdminImportPage} />
         <RoleRoute path="/admin/lookup/:tableSlug" allow={ADMIN_ROLES} component={AdminLookupPage} />
         <RoleRoute path="/settings/:tableSlug" allow={ADMIN_ROLES} component={SettingsLookupPage} />
-        <RoleRoute path="/hr" allow={ADMIN_ROLES} component={HrPage} />
+        <RoleRoute path="/hr" allow={MANAGER_ROLES} component={HrPage} />
 
         <RoleRoute path="/bookings" allow={MANAGER_ROLES} component={BookingsPage} />
         <RoleRoute path="/tasks" allow={MANAGER_ROLES} component={TasksPage} />
