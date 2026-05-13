@@ -643,7 +643,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
 
 type ViewMode = "board" | "list" | "forecast";
 
-type SortField = "client" | "age" | "title" | "stage" | "value" | "profit" | "date" | "agent";
+type SortField = "client" | "title" | "stage" | "value" | "profit" | "date" | "agent";
 type SortDir = "asc" | "desc";
 
 function getStageForTransaction(t: Transaction): PipelineStage {
@@ -680,10 +680,6 @@ function PipelineListView({
       let va: any, vb: any;
       switch (sortField) {
         case "client": va = getClientName(a.client_id); vb = getClientName(b.client_id); break;
-        case "age":
-          va = a.created_at ? new Date(a.created_at).getTime() : 0;
-          vb = b.created_at ? new Date(b.created_at).getTime() : 0;
-          break;
         case "title": va = getTransactionTitle(a); vb = getTransactionTitle(b); break;
         case "stage": va = a.status; vb = b.status; break;
         case "value": va = getTransactionValue(a); vb = getTransactionValue(b); break;
@@ -719,7 +715,6 @@ function PipelineListView({
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <SortHeader field="client" label="Client" />
-              <SortHeader field="age" label="Created" />
               <SortHeader field="title" label="Deal" />
               <SortHeader field="stage" label="Stage" />
               <SortHeader field="value" label="Value" />
@@ -731,7 +726,7 @@ function PipelineListView({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {sorted.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-12 text-sm text-gray-400">No transactions found</td></tr>
+              <tr><td colSpan={8} className="text-center py-12 text-sm text-gray-400">No transactions found</td></tr>
             ) : sorted.map(tx => {
               const stage = getStageForTransaction(tx);
               const value = getTransactionValue(tx);
@@ -752,9 +747,6 @@ function PipelineListView({
                       </div>
                       <span className="text-[13px] font-semibold text-gray-900 truncate max-w-[160px]">{getClientName(tx.client_id)}</span>
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-[12px] text-gray-500 whitespace-nowrap" data-testid={`list-age-${tx.id}`}>{getTimeAgo(tx.created_at)}</span>
                   </td>
                   <td className="px-4 py-3">
                     <div>
