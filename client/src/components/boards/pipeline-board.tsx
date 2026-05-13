@@ -746,6 +746,7 @@ function PipelineListView({
                         <span className="text-[10px] text-white font-medium">{getClientName(tx.client_id)?.[0]?.toUpperCase() || "?"}</span>
                       </div>
                       <span className="text-[13px] font-semibold text-gray-900 truncate max-w-[160px]">{getClientName(tx.client_id)}</span>
+                      <span className="text-[11px] text-gray-400 flex-shrink-0">{getTimeAgo(tx.created_at)}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3">
