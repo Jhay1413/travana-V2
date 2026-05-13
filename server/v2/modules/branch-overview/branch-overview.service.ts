@@ -1,5 +1,9 @@
 import { branchOverviewRepository } from "./branch-overview.repository";
-import type { BranchOverviewStats } from "./branch-overview.types";
+import type {
+  BranchOverviewStats,
+  AgentPerformanceRange,
+  AgentsPerformanceResponse,
+} from "./branch-overview.types";
 import type { Scope } from "../../utils/scope";
 
 function effectiveOrgId(scope: Scope): string | null {
@@ -12,5 +16,19 @@ export const branchOverviewService = {
       orgId: effectiveOrgId(scope),
       branchId: scope.branchId,
     });
+  },
+
+  async getAgentsPerformance(
+    scope: Scope,
+    range: AgentPerformanceRange,
+    from?: Date,
+    to?: Date,
+  ): Promise<AgentsPerformanceResponse> {
+    return branchOverviewRepository.getAgentsPerformance(
+      { orgId: effectiveOrgId(scope), branchId: scope.branchId },
+      range,
+      from,
+      to,
+    );
   },
 };

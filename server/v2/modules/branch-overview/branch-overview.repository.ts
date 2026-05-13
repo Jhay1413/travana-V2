@@ -15,6 +15,9 @@ import {
   tickets,
   task,
   user as userTable,
+  shopTargetTable,
+  agentTargetTable,
+  tour_operator,
 } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNull, ne, desc, inArray, type SQL } from "drizzle-orm";
 import type {
@@ -23,6 +26,9 @@ import type {
   BranchOverviewTrendPoint,
   BranchOverviewTopRow,
   BranchOverviewTeamRow,
+  AgentPerformanceRange,
+  AgentPerformanceRow,
+  AgentsPerformanceResponse,
 } from "./branch-overview.types";
 import { buildScopeConditions, needsClientJoin, type ScopeFilter } from "../../utils/scope-conditions";
 import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
@@ -82,6 +88,7 @@ export const branchOverviewRepository = {
       trendRows,
       topDestinationsRows,
       topResortsRows,
+      topTourOperatorsRows,
       teamRows,
       attentionRow,
     ] = await Promise.all([
@@ -193,9 +200,10 @@ export const branchOverviewRepository = {
         );
       })(),
 
-      // Last 12 months trend (commission + booking count, bucketed by month)
+      // Calendar-year trend (Jan–Dec of the current year), commission + booking count.
       (() => {
-        const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+        const trendStart = new Date(now.getFullYear(), 0, 1);
+        const trendEnd = new Date(now.getFullYear() + 1, 0, 1);
         const q = db
           .select({
             month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${booking.date_created}), 'YYYY-MM')`,
@@ -208,7 +216,14 @@ export const branchOverviewRepository = {
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
         return withClient
-          .where(and(gte(booking.date_created, trendStart), bookingActiveCond, ...baseCond))
+          .where(
+            and(
+              gte(booking.date_created, trendStart),
+              sql`${booking.date_created} < ${trendEnd.toISOString()}`,
+              bookingActiveCond,
+              ...baseCond,
+            ),
+          )
           .groupBy(sql`DATE_TRUNC('month', ${booking.date_created})`)
           .orderBy(sql`DATE_TRUNC('month', ${booking.date_created}) ASC`);
       })(),
@@ -259,12 +274,40 @@ export const branchOverviewRepository = {
           .limit(5);
       })(),
 
+      // Top tour operators by booking count (via booking.main_tour_operator_id)
+      (() => {
+        const q = db
+          .select({
+            name: tour_operator.name,
+            bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
+            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
+          })
+          .from(booking)
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+          .innerJoin(tour_operator, eq(tour_operator.id, booking.main_tour_operator_id));
+        const withClient = joinClient
+          ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          : q;
+        return withClient
+          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond))
+          .groupBy(tour_operator.id, tour_operator.name)
+          .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
+          .limit(5);
+      })(),
+
       // Team leaderboard — per-user bookings/commission + quotes for the month
       this.getTeamLeaderboard(scope, monthStart, monthEnd),
 
       // Attention counts
       this.getAttention(scope, todayStart, in7Days, in30Days, fourteenDaysAgo),
     ]);
+
+    // Monthly target for the branch (current month). Falls back to 0 when no shop
+    // target is configured. TODO(follow-up): allow org-level/default target source.
+    const monthTarget = await this.getMonthlyShopTarget(scope.branchId, now);
+
+    // Per-month shop targets for the calendar year (used by the trend chart).
+    const yearTargets = await this.getYearlyShopTargets(scope.branchId, now.getFullYear());
 
     const kpi = kpiRow[0];
     const monthBookingsCount = Number(kpi.monthBookingsCount);
@@ -274,14 +317,19 @@ export const branchOverviewRepository = {
     const quotes = Number(funnelQuotesRow[0].count);
     const bookings = Number(funnelBookingsRow[0].count);
 
-    const trend = this.fillTrendGaps(
+    const trend = this.buildYearTrend(
       trendRows.map((r) => ({
         month: String(r.month),
         commission: Number(r.commission),
         bookings: Number(r.bookings),
       })),
+      yearTargets,
       now,
     );
+
+    const leftToTargetRaw = monthTarget - monthCommission;
+    const percentToTarget = monthTarget > 0 ? (monthCommission / monthTarget) * 100 : 0;
+    const currentMonthName = now.toLocaleDateString("en-GB", { month: "long" });
 
     return {
       branch: branchProfile,
@@ -295,6 +343,10 @@ export const branchOverviewRepository = {
         openQuotesValue: Number(openQuotesRow[0].value),
         openQuotesCount: Number(openQuotesRow[0].count),
         activeClientsCount: Number(activeClientsRow[0].count),
+        monthTarget,
+        leftToTarget: leftToTargetRaw,
+        percentToTarget,
+        currentMonthName,
       },
       funnel: {
         enquiries,
@@ -309,6 +361,11 @@ export const branchOverviewRepository = {
         commission: Number(r.commission),
       })),
       topResorts: topResortsRows.map((r): BranchOverviewTopRow => ({
+        name: r.name ?? "Unknown",
+        bookings: Number(r.bookings),
+        commission: Number(r.commission),
+      })),
+      topTourOperators: topTourOperatorsRows.map((r): BranchOverviewTopRow => ({
         name: r.name ?? "Unknown",
         bookings: Number(r.bookings),
         commission: Number(r.commission),
@@ -549,12 +606,53 @@ export const branchOverviewRepository = {
       return db.select({ count: sql<number>`COUNT(*)` }).from(task).where(and(...conds));
     })();
 
-    const [u7, u30, sq, ot, od] = await Promise.all([
+    const recentTicketsQ = (() => {
+      const conds: SQL[] = [ne(tickets.status, "Closed")];
+      if (scope.branchId) conds.push(eq(tickets.branchId, scope.branchId));
+      else if (scope.orgId) conds.push(eq(tickets.orgId, scope.orgId));
+      return db
+        .select({
+          id: tickets.id,
+          subject: tickets.subject,
+          status: tickets.status,
+          priority: tickets.priority,
+          dueDate: tickets.dueDate,
+        })
+        .from(tickets)
+        .where(and(...conds))
+        .orderBy(desc(tickets.createdAt))
+        .limit(5);
+    })();
+
+    const recentTasksQ = (() => {
+      const conds: SQL[] = [
+        sql`(${task.status} IS NULL OR LOWER(${task.status}) NOT IN ('completed', 'done', 'closed'))`,
+      ];
+      if (scope.branchId) conds.push(eq(task.branch_id, scope.branchId));
+      else if (scope.orgId) conds.push(eq(task.org_id, scope.orgId));
+      return db
+        .select({
+          id: task.id,
+          title: task.title,
+          taskText: task.task,
+          status: task.status,
+          priority: task.priority,
+          dueDate: task.due_date,
+        })
+        .from(task)
+        .where(and(...conds))
+        .orderBy(sql`${task.due_date} ASC NULLS LAST`)
+        .limit(5);
+    })();
+
+    const [u7, u30, sq, ot, od, rt, rk] = await Promise.all([
       upcoming7,
       upcoming30,
       staleQuotes,
       openTickets,
       overdueTasks,
+      recentTicketsQ,
+      recentTasksQ,
     ]);
 
     return {
@@ -563,17 +661,217 @@ export const branchOverviewRepository = {
       staleQuotes: Number(sq[0]?.count ?? 0),
       openTickets: Number(ot[0]?.count ?? 0),
       overdueTasks: Number(od[0]?.count ?? 0),
+      recentTickets: rt.map((r) => ({
+        id: String(r.id),
+        title: r.subject ?? "Untitled ticket",
+        status: r.status ?? null,
+        priority: r.priority ?? null,
+        dueDate: r.dueDate ? String(r.dueDate) : null,
+      })),
+      recentTasks: rk.map((r) => ({
+        id: String(r.id),
+        title: r.title ?? r.taskText ?? "Untitled task",
+        status: r.status ?? null,
+        priority: r.priority ?? null,
+        dueDate: r.dueDate ? new Date(r.dueDate).toISOString() : null,
+      })),
     };
   },
 
-  /** Insert zero-valued rows for any missing month so the chart renders 12 contiguous buckets. */
-  fillTrendGaps(rows: BranchOverviewTrendPoint[], now: Date): BranchOverviewTrendPoint[] {
+  async getMonthlyShopTarget(branchId: string | null, when: Date): Promise<number> {
+    if (!branchId) return 0;
+    const [row] = await db
+      .select({ amount: shopTargetTable.targetAmount })
+      .from(shopTargetTable)
+      .where(
+        and(
+          eq(shopTargetTable.branchId, branchId),
+          eq(shopTargetTable.year, when.getFullYear()),
+          eq(shopTargetTable.month, when.getMonth() + 1),
+        ),
+      )
+      .limit(1);
+    return row ? Number(row.amount) : 0;
+  },
+
+  async getAgentsPerformance(
+    scope: ScopeFilter,
+    range: AgentPerformanceRange,
+    customFrom?: Date,
+    customTo?: Date,
+  ): Promise<AgentsPerformanceResponse> {
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    const weekStart = startOfWeek(now);
+    const monthStart = startOfMonth(now);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    let from: Date;
+    let to: Date;
+    if (range === "day") {
+      from = todayStart;
+      to = addDays(todayStart, 1);
+    } else if (range === "week") {
+      from = weekStart;
+      to = addDays(todayStart, 1);
+    } else if (range === "month") {
+      from = monthStart;
+      to = monthEnd;
+    } else {
+      from = customFrom ? startOfDay(customFrom) : monthStart;
+      to = customTo ? addDays(startOfDay(customTo), 1) : monthEnd;
+    }
+
+    const joinClient = needsClientJoin(scope);
+    const baseCond = buildScopeConditions(scope);
+
+    // Per-agent aggregation across multiple windows in a single SQL pass.
+    const buildAgg = () => {
+      const q = db
+        .select({
+          agentId: transaction.user_id,
+          today: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          week: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          rangeBookings: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()})`,
+          rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+        })
+        .from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
+      const withClient = joinClient
+        ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        : q;
+      return withClient
+        .where(and(bookingActiveCond, ...baseCond))
+        .groupBy(transaction.user_id);
+    };
+
+    const aggRows = await buildAgg();
+
+    // Build the agent universe: branch members when scoped to a branch, otherwise
+    // every agent that has booking activity in any window.
+    const userIds = new Set<string>();
+    for (const r of aggRows) if (r.agentId) userIds.add(r.agentId);
+
+    const teamUsers = scope.branchId
+      ? await db
+          .select({
+            id: userTable.id,
+            name: userTable.name,
+            firstName: userTable.firstName,
+            lastName: userTable.lastName,
+            email: userTable.email,
+            image: userTable.image,
+          })
+          .from(userTable)
+          .innerJoin(branchMembers, eq(branchMembers.userId, userTable.id))
+          .where(and(eq(branchMembers.branchId, scope.branchId), eq(branchMembers.isActive, true)))
+      : userIds.size > 0
+        ? await db
+            .select({
+              id: userTable.id,
+              name: userTable.name,
+              firstName: userTable.firstName,
+              lastName: userTable.lastName,
+              email: userTable.email,
+              image: userTable.image,
+            })
+            .from(userTable)
+            .where(inArray(userTable.id, Array.from(userIds)))
+        : [];
+
+    // Per-agent target for the current month (only meaningful when scoped to a branch).
+    const targetRows = scope.branchId
+      ? await db
+          .select({
+            userId: agentTargetTable.userId,
+            amount: agentTargetTable.targetAmount,
+          })
+          .from(agentTargetTable)
+          .where(
+            and(
+              eq(agentTargetTable.branchId, scope.branchId),
+              eq(agentTargetTable.year, now.getFullYear()),
+              eq(agentTargetTable.month, now.getMonth() + 1),
+            ),
+          )
+      : [];
+    // TODO(follow-up #35): when no per-agent target row exists for the current
+    // month, fall back to a smarter default (e.g. evenly split shop target across
+    // active branch members, or carry over the previous month's target).
+    const targetByUser = new Map<string, number>();
+    for (const t of targetRows) targetByUser.set(t.userId, Number(t.amount));
+
+    const aggByUser = new Map(aggRows.map((r) => [r.agentId, r] as const));
+
+    const rows: AgentPerformanceRow[] = teamUsers.map((u) => {
+      const a = aggByUser.get(u.id);
+      const today = Number(a?.today ?? 0);
+      const week = Number(a?.week ?? 0);
+      const month = Number(a?.month ?? 0);
+      const rangeBookings = Number(a?.rangeBookings ?? 0);
+      const rangeCommission = Number(a?.rangeCommission ?? 0);
+      const target = targetByUser.get(u.id) ?? 0;
+      const achievedPercent = target > 0 ? (month / target) * 100 : 0;
+      const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+      return {
+        id: u.id,
+        name: fullName || u.name || u.email || "Agent",
+        avatarUrl: u.image ?? null,
+        today,
+        week,
+        month,
+        rangeBookings,
+        rangeCommission,
+        avgPerBooking: rangeBookings > 0 ? rangeCommission / rangeBookings : 0,
+        target,
+        achievedPercent,
+      };
+    });
+
+    // Restrict to agents that actually had activity in the selected range so
+    // that the empty state surfaces correctly when nobody has booked.
+    const filtered = rows.filter((r) => r.rangeBookings > 0 || r.rangeCommission > 0);
+
+    filtered.sort((a, b) => b.rangeCommission - a.rangeCommission || a.name.localeCompare(b.name));
+
+    return {
+      range,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      rows: filtered,
+    };
+  },
+
+  async getYearlyShopTargets(branchId: string | null, year: number): Promise<Map<number, number>> {
+    const map = new Map<number, number>();
+    if (!branchId) return map;
+    const rows = await db
+      .select({ month: shopTargetTable.month, amount: shopTargetTable.targetAmount })
+      .from(shopTargetTable)
+      .where(and(eq(shopTargetTable.branchId, branchId), eq(shopTargetTable.year, year)));
+    for (const r of rows) map.set(Number(r.month), Number(r.amount));
+    return map;
+  },
+
+  /** Build Jan–Dec rows for the current calendar year, filling gaps and attaching targets. */
+  buildYearTrend(
+    rows: Array<Pick<BranchOverviewTrendPoint, "month" | "commission" | "bookings">>,
+    targets: Map<number, number>,
+    now: Date,
+  ): BranchOverviewTrendPoint[] {
     const byMonth = new Map(rows.map((r) => [r.month, r] as const));
+    const year = now.getFullYear();
     const result: BranchOverviewTrendPoint[] = [];
-    for (let i = 11; i >= 0; i -= 1) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      result.push(byMonth.get(key) ?? { month: key, commission: 0, bookings: 0 });
+    for (let m = 1; m <= 12; m += 1) {
+      const key = `${year}-${String(m).padStart(2, "0")}`;
+      const existing = byMonth.get(key);
+      result.push({
+        month: key,
+        commission: existing?.commission ?? 0,
+        bookings: existing?.bookings ?? 0,
+        target: targets.get(m) ?? 0,
+      });
     }
     return result;
   },

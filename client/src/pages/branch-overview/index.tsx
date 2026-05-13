@@ -8,6 +8,7 @@ import { CommissionTrendCard } from "./commission-trend-card";
 import { TopDestinationsCard } from "./top-destinations-card";
 import { TeamLeaderboardCard } from "./team-leaderboard-card";
 import { AttentionCard } from "./attention-card";
+import { AgentsPerformanceCard } from "./agents-performance-card";
 
 export default function BranchOverviewPage() {
   const { data, isLoading, isError, error } = useBranchOverviewStats();
@@ -52,20 +53,23 @@ export default function BranchOverviewPage() {
 
       <KpiCards kpis={data.kpis} />
 
+      <AgentsPerformanceCard />
+
       <div className="grid gap-4 lg:grid-cols-[1.4fr_.6fr]">
         <CommissionTrendCard trend={data.trend} />
-        <ConversionFunnelCard funnel={data.funnel} />
+        <AttentionCard attention={data.attention} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_.6fr]">
         <TeamLeaderboardCard rows={data.teamLeaderboard} />
-        <AttentionCard attention={data.attention} />
+        <TopDestinationsCard
+          destinations={data.topDestinations}
+          resorts={data.topResorts}
+          tourOperators={data.topTourOperators}
+        />
       </div>
 
-      <TopDestinationsCard
-        destinations={data.topDestinations}
-        resorts={data.topResorts}
-      />
+      <ConversionFunnelCard funnel={data.funnel} />
     </section>
   );
 }

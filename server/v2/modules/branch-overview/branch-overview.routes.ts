@@ -10,4 +10,10 @@ router.get(
   branchOverviewController.getStats,
 );
 
+router.get(
+  "/agents-performance",
+  requireOrgRole(["branch_manager", "org_admin", "platform_admin"]),
+  branchOverviewController.getAgentsPerformance,
+);
+
 export default router;

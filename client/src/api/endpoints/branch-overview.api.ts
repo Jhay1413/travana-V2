@@ -22,6 +22,39 @@ export interface BranchOverviewKpis {
   openQuotesValue: number;
   openQuotesCount: number;
   activeClientsCount: number;
+  monthTarget: number;
+  leftToTarget: number;
+  percentToTarget: number;
+  currentMonthName: string;
+}
+
+export type AgentPerformanceRange = "day" | "week" | "month" | "custom";
+
+export interface AgentPerformanceRow {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  today: number;
+  week: number;
+  month: number;
+  rangeBookings: number;
+  rangeCommission: number;
+  avgPerBooking: number;
+  target: number;
+  achievedPercent: number;
+}
+
+export interface AgentsPerformanceResponse {
+  range: AgentPerformanceRange;
+  from: string;
+  to: string;
+  rows: AgentPerformanceRow[];
+}
+
+export interface AgentsPerformanceParams {
+  range: AgentPerformanceRange;
+  from?: string;
+  to?: string;
 }
 
 export interface BranchOverviewFunnel {
@@ -35,6 +68,7 @@ export interface BranchOverviewTrendPoint {
   month: string;
   commission: number;
   bookings: number;
+  target: number;
 }
 
 export interface BranchOverviewTopRow {
@@ -51,12 +85,22 @@ export interface BranchOverviewTeamRow {
   quotes: number;
 }
 
+export interface BranchOverviewAttentionItem {
+  id: string;
+  title: string;
+  status: string | null;
+  priority: string | null;
+  dueDate: string | null;
+}
+
 export interface BranchOverviewAttention {
   upcomingDepartures7d: number;
   upcomingDepartures30d: number;
   staleQuotes: number;
   openTickets: number;
   overdueTasks: number;
+  recentTickets: BranchOverviewAttentionItem[];
+  recentTasks: BranchOverviewAttentionItem[];
 }
 
 export interface BranchOverviewStats {
@@ -66,6 +110,7 @@ export interface BranchOverviewStats {
   trend: BranchOverviewTrendPoint[];
   topDestinations: BranchOverviewTopRow[];
   topResorts: BranchOverviewTopRow[];
+  topTourOperators: BranchOverviewTopRow[];
   teamLeaderboard: BranchOverviewTeamRow[];
   attention: BranchOverviewAttention;
 }
@@ -76,5 +121,14 @@ export const branchOverviewApi = {
       "/api/v2/branch-overview/stats",
     );
     return data?.data ?? (data as unknown as BranchOverviewStats);
+  },
+  getAgentsPerformance: async (
+    params: AgentsPerformanceParams,
+  ): Promise<AgentsPerformanceResponse> => {
+    const { data } = await axiosClient.get<{ data: AgentsPerformanceResponse }>(
+      "/api/v2/branch-overview/agents-performance",
+      { params },
+    );
+    return data?.data ?? (data as unknown as AgentsPerformanceResponse);
   },
 };
