@@ -1,6 +1,7 @@
 import { db } from "../../config/database";
 import { organization, branches, branchMembers, user, userProfiles } from "@shared/schema";
 import type { InsertOrganization, InsertBranch, InsertUser, InsertBranchMember } from "@shared/schema";
+import { sql } from "drizzle-orm";
 
 export interface OnboardingAgentInput {
   userValues: InsertUser;
@@ -46,6 +47,16 @@ export const onboardingRepository = {
   async signupAgency(input: OnboardingSignupInput): Promise<OnboardingSignupResult> {
     return db.transaction(async (tx) => {
       const [org] = await tx.insert(organization).values(input.organization).returning();
+
+      // Seed the new org with copies of the global tour_operator catalog
+      // (rows where org_id IS NULL). Each org maintains its own copies and
+      // edits commissions independently. See migration 0013.
+      await tx.execute(sql`
+        INSERT INTO tour_operator_table (name, commission_percentage, org_id)
+        SELECT name, commission_percentage, ${org.id}
+        FROM tour_operator_table
+        WHERE org_id IS NULL
+      `);
 
       const branchIds: string[] = [];
       for (let i = 0; i < input.branchInputs.length; i++) {

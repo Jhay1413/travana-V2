@@ -2,13 +2,13 @@ import { db } from '../../config/database';
 import { eq, sql, ilike, or } from 'drizzle-orm';
 import {
   accomodation_type, board_basis, country, destination, resorts, accomodation_list,
-  tour_operator, package_type, tour_package_commission, park, cottages, lodges,
+  tour_operator, package_type, park, cottages, lodges,
   cruise_extra_item, deletion_codes, room_type, deal_images, forwardsReport, airport, tags,
 } from '@shared/schema';
 
 export const tableMap: Record<string, any> = {
   accomodation_type, board_basis, country, destination, resorts, accomodation_list,
-  tour_operator, package_type, tour_package_commission, park, cottages, lodges,
+  tour_operator, package_type, park, cottages, lodges,
   cruise_extra_item, deletion_codes, room_type, deal_images, forwards_report: forwardsReport, airport, tags,
 };
 
@@ -19,9 +19,8 @@ export const tableConfig: Record<string, { label: string; columns: string[]; sea
   accomodation_type: { label: 'Accommodation Types', columns: ['id', 'type'], searchFields: ['type'], dependsOn: [] },
   accomodation_list: { label: 'Accommodation List', columns: ['id', 'type_id', 'name', 'resorts_id', 'description'], searchFields: ['name', 'description'], dependsOn: ['accomodation_type', 'resorts'] },
   board_basis: { label: 'Board Basis', columns: ['id', 'type'], searchFields: ['type'], dependsOn: [] },
-  tour_operator: { label: 'Tour Operators', columns: ['id', 'name'], searchFields: ['name'], dependsOn: [] },
+  tour_operator: { label: 'Tour Operators', columns: ['id', 'name', 'commission_percentage'], searchFields: ['name'], dependsOn: [] },
   package_type: { label: 'Package Types', columns: ['id', 'name'], searchFields: ['name'], dependsOn: [] },
-  tour_package_commission: { label: 'Package Commissions', columns: ['package_type_id', 'tour_operator_id', 'percentage_commission'], searchFields: [], dependsOn: ['package_type', 'tour_operator'] },
   park: { label: 'Parks', columns: ['id', 'name', 'image_1', 'image_2', 'location', 'city', 'county', 'code', 'description'], searchFields: ['name', 'location', 'city'], dependsOn: [] },
   cottages: { label: 'Cottages', columns: ['id', 'cottage_name', 'location', 'cottage_code', 'bedrooms', 'bathrooms', 'sleeps', 'pets', 'image_1', 'image_2', 'details_url'], searchFields: ['cottage_name', 'location', 'cottage_code'], dependsOn: [] },
   lodges: { label: 'Lodges', columns: ['id', 'park_id', 'lodge_name', 'lodge_code', 'image', 'adults', 'children', 'bedrooms', 'bathrooms', 'pets', 'sleeps', 'infants'], searchFields: ['lodge_name', 'lodge_code'], dependsOn: ['park'] },

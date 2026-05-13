@@ -3,7 +3,8 @@ import { isAuthenticated } from "../v2/middlewares/auth/session";
 import { asyncHandler } from "../utils/async-handler";
 import { successResponse } from "../utils/response";
 import { db } from "../config/database";
-import { sql, ilike, or, eq, asc } from "drizzle-orm";
+import { sql, ilike, or, eq, and, asc } from "drizzle-orm";
+import { getScope } from "../v2/utils/scope";
 import {
   tour_operator,
   airport,
@@ -14,7 +15,6 @@ import {
   accomodation_list,
   board_basis,
   package_type,
-  tour_package_commission,
   park,
   cottages,
   lodges,
@@ -44,12 +44,21 @@ function buildPaginatedResponse(rows: any[], total: number, page: number, limit:
 }
 
 // ─── TOUR OPERATORS ─────────────────────────────────────────────────────────
+// Org users see only their own copies; platform_admin sees the global seed
+// catalog plus any org-scoped rows. See migration 0013.
+
+function tourOperatorScopeConds(req: Request) {
+  const scope = getScope(req);
+  return scope.orgRole === 'platform_admin' ? [] : [eq(tour_operator.org_id, scope.orgId)];
+}
 
 router.get(
   "/tour-operators",
   asyncHandler(async (req: Request, res: Response) => {
     const { page, limit, search, offset } = parsePagination(req.query);
-    const where = search ? ilike(tour_operator.name, `%${search}%`) : undefined;
+    const conds = tourOperatorScopeConds(req);
+    if (search) conds.push(ilike(tour_operator.name, `%${search}%`));
+    const where = conds.length > 0 ? and(...conds) : undefined;
     const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(tour_operator).where(where);
     const rows = await db.select().from(tour_operator).where(where).orderBy(asc(tour_operator.name)).limit(limit).offset(offset);
     return successResponse(res, buildPaginatedResponse(rows, Number(count), page, limit), "Tour operators retrieved");
@@ -59,7 +68,8 @@ router.get(
 router.get(
   "/tour-operators/:id",
   asyncHandler(async (req: Request, res: Response) => {
-    const [row] = await db.select().from(tour_operator).where(eq(tour_operator.id, req.params.id));
+    const conds = [eq(tour_operator.id, req.params.id as string), ...tourOperatorScopeConds(req)];
+    const [row] = await db.select().from(tour_operator).where(and(...conds));
     if (!row) return res.status(404).json({ success: false, message: "Not found" });
     return successResponse(res, row, "Tour operator retrieved");
   })
@@ -68,8 +78,10 @@ router.get(
 router.post(
   "/tour-operators",
   asyncHandler(async (req: Request, res: Response) => {
-    const { id: _id, ...data } = req.body;
-    const [row] = await db.insert(tour_operator).values(data).returning();
+    const scope = getScope(req);
+    const { id: _id, org_id: bodyOrgId, ...data } = req.body;
+    const org_id = scope.orgRole === 'platform_admin' ? (bodyOrgId ?? null) : scope.orgId;
+    const [row] = await db.insert(tour_operator).values({ ...data, org_id }).returning();
     return successResponse(res, row, "Tour operator created", 201);
   })
 );
@@ -77,8 +89,9 @@ router.post(
 router.patch(
   "/tour-operators/:id",
   asyncHandler(async (req: Request, res: Response) => {
-    const { id: _id, ...updates } = req.body;
-    const [row] = await db.update(tour_operator).set(updates).where(eq(tour_operator.id, req.params.id)).returning();
+    const { id: _id, org_id: _orgId, ...updates } = req.body;
+    const conds = [eq(tour_operator.id, req.params.id as string), ...tourOperatorScopeConds(req)];
+    const [row] = await db.update(tour_operator).set(updates).where(and(...conds)).returning();
     if (!row) return res.status(404).json({ success: false, message: "Not found" });
     return successResponse(res, row, "Tour operator updated");
   })
@@ -87,7 +100,8 @@ router.patch(
 router.delete(
   "/tour-operators/:id",
   asyncHandler(async (req: Request, res: Response) => {
-    await db.delete(tour_operator).where(eq(tour_operator.id, req.params.id));
+    const conds = [eq(tour_operator.id, req.params.id as string), ...tourOperatorScopeConds(req)];
+    await db.delete(tour_operator).where(and(...conds));
     res.status(204).send();
   })
 );
@@ -533,68 +547,6 @@ router.delete(
   "/package-types/:id",
   asyncHandler(async (req: Request, res: Response) => {
     await db.delete(package_type).where(eq(package_type.id, req.params.id));
-    res.status(204).send();
-  })
-);
-
-// ─── PACKAGE COMMISSIONS ─────────────────────────────────────────────────────
-
-router.get(
-  "/package-commissions",
-  asyncHandler(async (req: Request, res: Response) => {
-    const { page, limit, offset } = parsePagination(req.query);
-    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(tour_package_commission);
-    const rows = await db
-      .select({
-        package_type_id: tour_package_commission.package_type_id,
-        tour_operator_id: tour_package_commission.tour_operator_id,
-        percentage_commission: tour_package_commission.percentage_commission,
-        package_type_name: package_type.name,
-        tour_operator_name: tour_operator.name,
-      })
-      .from(tour_package_commission)
-      .leftJoin(package_type, eq(tour_package_commission.package_type_id, package_type.id))
-      .leftJoin(tour_operator, eq(tour_package_commission.tour_operator_id, tour_operator.id))
-      .limit(limit)
-      .offset(offset);
-    return successResponse(res, buildPaginatedResponse(rows, Number(count), page, limit), "Package commissions retrieved");
-  })
-);
-
-router.post(
-  "/package-commissions",
-  asyncHandler(async (req: Request, res: Response) => {
-    const [row] = await db.insert(tour_package_commission).values(req.body).returning();
-    return successResponse(res, row, "Package commission created", 201);
-  })
-);
-
-router.patch(
-  "/package-commissions/:packageTypeId/:tourOperatorId",
-  asyncHandler(async (req: Request, res: Response) => {
-    const { packageTypeId, tourOperatorId } = req.params;
-    const { id: _id, ...updates } = req.body;
-    const [row] = await db
-      .update(tour_package_commission)
-      .set(updates)
-      .where(
-        sql`${tour_package_commission.package_type_id} = ${packageTypeId} AND ${tour_package_commission.tour_operator_id} = ${tourOperatorId}`
-      )
-      .returning();
-    if (!row) return res.status(404).json({ success: false, message: "Not found" });
-    return successResponse(res, row, "Package commission updated");
-  })
-);
-
-router.delete(
-  "/package-commissions/:packageTypeId/:tourOperatorId",
-  asyncHandler(async (req: Request, res: Response) => {
-    const { packageTypeId, tourOperatorId } = req.params;
-    await db
-      .delete(tour_package_commission)
-      .where(
-        sql`${tour_package_commission.package_type_id} = ${packageTypeId} AND ${tour_package_commission.tour_operator_id} = ${tourOperatorId}`
-      );
     res.status(204).send();
   })
 );

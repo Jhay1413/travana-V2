@@ -73,13 +73,6 @@ const TABLE_DEFS: Record<string, { apiKey: string; label: string; navKey: string
     columns: ["name"],
     displayColumns: ["name"],
   },
-  "package-commissions": {
-    apiKey: "tour_package_commission",
-    label: "Package Commissions",
-    navKey: "package-commissions",
-    columns: ["package_type_id", "tour_operator_id", "percentage_commission"],
-    displayColumns: ["package_type_id", "tour_operator_id", "percentage_commission"],
-  },
   parks: {
     apiKey: "park",
     label: "Parks",
@@ -157,7 +150,7 @@ function coerceValues(row: Record<string, string>): Record<string, any> {
   const uuidFields = ["country_id", "destination_id", "resorts_id", "type_id", "park_id", "package_type_id", "tour_operator_id", "owner_id"];
   const intFields = ["month", "year", "bedrooms", "bathrooms", "sleeps", "pets", "adults", "children", "infants"];
   const boolFields = ["is_used", "isPrimary"];
-  const numFields = ["percentage_commission", "target", "company_commission", "agent_commission", "adjustment"];
+  const numFields = ["commission_percentage", "target", "company_commission", "agent_commission", "adjustment"];
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(row)) {
     if (v === "" || v === undefined || v === null) {

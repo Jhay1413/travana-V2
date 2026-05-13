@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -243,6 +243,7 @@ export const tour_operator = pgTable('tour_operator_table', {
     .default(sql`gen_random_uuid()`)
     .primaryKey(),
   name: varchar(),
+  commission_percentage: decimal({ precision: 5, scale: 2 }),
   org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
 });
 export type TourOperatorLookup = typeof tour_operator.$inferSelect;
@@ -256,18 +257,6 @@ export const package_type = pgTable('package_type_table', {
 });
 export type PackageType = typeof package_type.$inferSelect;
 export type InsertPackageType = typeof package_type.$inferInsert;
-
-export const tour_package_commission = pgTable(
-  'tour_package_commission_table',
-  {
-    package_type_id: uuid().notNull().references(() => package_type.id),
-    tour_operator_id: uuid().notNull().references(() => tour_operator.id),
-    percentage_commission: decimal({ precision: 5, scale: 2 }),
-  },
-  (table) => [primaryKey({ name: 'id', columns: [table.package_type_id, table.tour_operator_id] })]
-);
-export type TourPackageCommission = typeof tour_package_commission.$inferSelect;
-export type InsertTourPackageCommission = typeof tour_package_commission.$inferInsert;
 
 export const park = pgTable('park_table', {
   id: uuid().defaultRandom().primaryKey(),

@@ -484,7 +484,6 @@ function ShellNav({
       { key: "accommodation-list", label: "Accommodation List", icon: <Building2 className="h-4 w-4" />, route: "/settings/accommodation-list" },
       { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" />, route: "/settings/board-basis" },
       { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" />, route: "/settings/package-types" },
-      { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" />, route: "/settings/package-commissions" },
       { key: "parks", label: "Parks", icon: <Compass className="h-4 w-4" />, route: "/settings/parks" },
       { key: "cottages-admin", label: "Cottages", icon: <Building2 className="h-4 w-4" />, route: "/settings/cottages" },
       { key: "lodges-admin", label: "Lodges", icon: <Building2 className="h-4 w-4" />, route: "/settings/lodges" },
@@ -502,7 +501,6 @@ function ShellNav({
         label: "Admin Settings",
         items: [
           { key: "package-types", label: "Package Types", icon: <Ticket className="h-4 w-4" />, route: "/settings/package-types" },
-          { key: "package-commissions", label: "Package Commissions", icon: <CircleDollarSign className="h-4 w-4" />, route: "/settings/package-commissions" },
           { key: "board-basis", label: "Board Basis", icon: <ListChecks className="h-4 w-4" />, route: "/settings/board-basis" },
           { key: "deletion-codes", label: "Deletion Codes", icon: <Trash2 className="h-4 w-4" />, route: "/settings/deletion-codes" },
         ],
@@ -1374,7 +1372,6 @@ function TopBar({
       "accommodation-list": "Accommodation List",
       "board-basis": "Board Basis",
       "package-types": "Package Types",
-      "package-commissions": "Package Commissions",
       parks: "Parks",
       "cottages-admin": "Cottages",
       "lodges-admin": "Lodges",

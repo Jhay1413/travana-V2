@@ -391,26 +391,23 @@ export function BookingRHFForm({
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   useEffect(() => {
-    if (tourOperatorId && packageType && tourOperatorsData) {
+    if (tourOperatorId && tourOperatorsData) {
       const currentPrice = Number(price) || 0;
       const currentDiscount = Number(discount) || 0;
       const currentServiceCharge = Number(serviceCharge) || 0;
       const op = tourOperatorsData.find((o: { id: string }) => o.id === tourOperatorId);
-      const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === packageType);
-      
-      if (commission?.percentage_commission != null && currentPrice > 0) {
-        // Calculate base commission from price, then adjust with discount and service charge
-        const baseCommission = (currentPrice * parseFloat(commission.percentage_commission)) / 100;
+
+      if (op?.commission_percentage != null && currentPrice > 0) {
+        const baseCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
         const calculatedCommission = parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2));
-        
-        // Only update if different from current value to avoid infinite loops
+
         const currentCommission = form.getValues("commission");
         if (currentCommission !== calculatedCommission) {
           setValue("commission", calculatedCommission, { shouldValidate: true, shouldDirty: true });
         }
       }
     }
-  }, [tourOperatorId, packageType, price, discount, serviceCharge, tourOperatorsData, form, setValue]);
+  }, [tourOperatorId, price, discount, serviceCharge, tourOperatorsData, form, setValue]);
 
   // ── Flight date sync from check-in date ──────────────────────────────────
   useEffect(() => {
@@ -536,21 +533,7 @@ export function BookingRHFForm({
                   <FormLabel className="text-xs font-medium text-black/60">Package Type *</FormLabel>
                   <Select
                     value={field.value}
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      const currentOperatorId = form.getValues("tourOperatorId");
-                      if (currentOperatorId) {
-                        const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
-                        const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === value);
-                        if (commission?.percentage_commission != null) {
-                          const currentPrice = form.getValues("price");
-                          const currentDiscount = Number(form.getValues("discount")) || 0;
-                          const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-                          const baseCommission = (currentPrice * parseFloat(commission.percentage_commission)) / 100;
-                          setValue("commission", parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
-                        }
-                      }
-                    }}
+                    onValueChange={field.onChange}
                   >
                     <FormControl>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
@@ -604,17 +587,13 @@ export function BookingRHFForm({
                       value={field.value ?? ""}
                       onValueChange={(value) => {
                         field.onChange(value);
-                        const currentPackageType = form.getValues("packageType");
-                        if (currentPackageType) {
-                          const op = tourOperatorsData?.find((o: { id: string }) => o.id === value);
-                          const commission = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === currentPackageType);
-                          if (commission?.percentage_commission != null) {
-                            const currentPrice = form.getValues("price");
-                            const currentDiscount = Number(form.getValues("discount")) || 0;
-                            const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-                            const baseCommission = (currentPrice * parseFloat(commission.percentage_commission)) / 100;
-                            setValue("commission", parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
-                          }
+                        const op = tourOperatorsData?.find((o: { id: string }) => o.id === value);
+                        if (op?.commission_percentage != null) {
+                          const currentPrice = form.getValues("price");
+                          const currentDiscount = Number(form.getValues("discount")) || 0;
+                          const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
+                          const baseCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
+                          setValue("commission", parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
                         }
                       }}
                       placeholder="Select operator..."
@@ -1759,19 +1738,12 @@ export function BookingRHFForm({
                             const currentDiscount = name === "discount" ? parseFloat(e.target.value) || 0 : Number(form.getValues("discount")) || 0;
                             const currentServiceCharge = name === "serviceCharge" ? parseFloat(e.target.value) || 0 : Number(form.getValues("serviceCharge")) || 0;
                             
-                            // Recalculate commission: base commission from price, then adjust with discount/service charge
                             const currentOperatorId = form.getValues("tourOperatorId");
-                            const currentPackageType = form.getValues("packageType");
-                            
-                            if (currentOperatorId && currentPackageType) {
+                            if (currentOperatorId) {
                               const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
-                              const comm = op?.commissions?.find((c: { package_type_id: string | null }) => c.package_type_id === currentPackageType);
-                              
-                              if (comm?.percentage_commission != null) {
-                                // Calculate base commission from original price, then subtract discount and add service charge
-                                const baseCommission = (currentPrice * parseFloat(comm.percentage_commission)) / 100;
+                              if (op?.commission_percentage != null) {
+                                const baseCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
                                 const adjustedCommission = baseCommission - currentDiscount + currentServiceCharge;
-                                
                                 setValue("commission", parseFloat(adjustedCommission.toFixed(2)), { shouldValidate: true, shouldDirty: true });
                               }
                             }

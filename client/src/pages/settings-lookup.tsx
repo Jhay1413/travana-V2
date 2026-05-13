@@ -73,9 +73,13 @@ const TABLE_DEFS: Record<string, TableDef> = {
     label: "Tour Operators",
     apiPath: "/api/settings/tour-operators",
     navKey: "tour-operators",
-    displayColumns: [{ key: "name", label: "Name" }],
+    displayColumns: [
+      { key: "name", label: "Name" },
+      { key: "commission_percentage", label: "Commission %" },
+    ],
     formFields: [
       { key: "name", label: "Name", type: "text", required: true, placeholder: "e.g. TUI, Jet2" },
+      { key: "commission_percentage", label: "Commission %", type: "number", placeholder: "e.g. 10.5" },
     ],
     primaryLabel: (r) => r.name ?? "–",
   },
@@ -186,31 +190,6 @@ const TABLE_DEFS: Record<string, TableDef> = {
       { key: "name", label: "Name", type: "text", required: true, placeholder: "e.g. Package Holiday, Cruise Package" },
     ],
     primaryLabel: (r) => r.name ?? "–",
-  },
-  "package-commissions": {
-    label: "Package Commissions",
-    apiPath: "/api/settings/package-commissions",
-    navKey: "package-commissions",
-    displayColumns: [
-      { key: "package_type_name", label: "Package Type" },
-      { key: "tour_operator_name", label: "Tour Operator" },
-      { key: "percentage_commission", label: "Commission %" },
-    ],
-    formFields: [
-      { key: "package_type_id", label: "Package Type", type: "relation", required: true, lookupApi: "/api/settings/package-types", lookupLabelKey: "name" },
-      { key: "tour_operator_id", label: "Tour Operator", type: "relation", required: true, lookupApi: "/api/settings/tour-operators", lookupLabelKey: "name" },
-      { key: "percentage_commission", label: "Commission %", type: "number", placeholder: "e.g. 10.5" },
-    ],
-    primaryLabel: (r) => `${r.package_type_id ?? "?"} / ${r.tour_operator_id ?? "?"}`,
-    getDeletePath: (r) =>
-      r.package_type_id && r.tour_operator_id
-        ? `/api/settings/package-commissions/${r.package_type_id}/${r.tour_operator_id}`
-        : null,
-    getEditPath: (r) =>
-      r.package_type_id && r.tour_operator_id
-        ? `/api/settings/package-commissions/${r.package_type_id}/${r.tour_operator_id}`
-        : null,
-    getRowId: (r) => r.package_type_id ?? null,
   },
   "parks": {
     label: "Parks",
