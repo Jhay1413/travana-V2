@@ -24,6 +24,18 @@ export const COLORS = {
   creamDark: "#F3F0EB",
   warmGray: "#8B8680",
   charcoal: "#2C2824",
+  navyDark: "#0D1B2A",
+  navyDeep: "#081420",
+  navySoft: "#162A3F",
+  orange: "#E8530A",
+  orangeDark: "#C24308",
+  orangeLight: "#FF6B22",
+  orangeMuted: "rgba(232,83,10,0.12)",
+  slate: "#475569",
+  slateLight: "#64748B",
+  surface: "#F8FAFC",
+  surfaceDark: "#EEF2F6",
+  border: "#E2E8F0",
 };
 
 export const fadeUp = {
@@ -378,5 +390,245 @@ export function PageHero({
         </motion.p>
       </div>
     </section>
+  );
+}
+
+import travanaLogo from "@assets/ChatGPT_Image_May_6,_2026,_03_08_35_PM_(2)_1778078778188.png";
+
+export { travanaLogo };
+
+const growthNavLinks = [
+  { label: "Product", href: "#solution" },
+  { label: "CRM", href: "#crm" },
+  { label: "Training", href: "#training" },
+  { label: "Community", href: "#community" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "Book Demo", href: "#book-demo" },
+];
+
+function smoothScroll(href: string) {
+  if (!href.startsWith("#")) return;
+  const el = document.querySelector(href);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+export function GrowthNavbar() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
+
+  return (
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled || mobileOpen ? "bg-white/95 backdrop-blur-xl shadow-sm border-b" : "bg-transparent"
+      }`}
+      style={{ borderColor: scrolled || mobileOpen ? COLORS.border : "transparent" }}
+      data-testid="nav-growth"
+    >
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-3 flex items-center justify-between">
+        <Link href="/travana">
+          <span className="flex items-center gap-2.5 cursor-pointer" data-testid="link-growth-logo">
+            <img src={travanaLogo} alt="Travana" className="h-9 w-auto" />
+            <span
+              className={`text-lg font-bold tracking-tight hidden sm:inline transition-colors ${
+                scrolled || mobileOpen ? "" : "text-white"
+              }`}
+              style={{ color: scrolled || mobileOpen ? COLORS.navyDark : undefined }}
+            >
+              Travana
+            </span>
+          </span>
+        </Link>
+
+        <div className="hidden lg:flex items-center gap-7">
+          {growthNavLinks.map((link) => (
+            <button
+              key={link.href}
+              onClick={() => smoothScroll(link.href)}
+              className={`text-sm font-medium tracking-wide transition-colors cursor-pointer ${
+                scrolled ? "text-slate-700 hover:text-slate-900" : "text-white/80 hover:text-white"
+              }`}
+              data-testid={`link-growth-nav-${link.label.toLowerCase().replace(/\s+/g, "-")}`}
+            >
+              {link.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="hidden lg:flex items-center gap-3">
+          <Link href="/">
+            <span
+              className={`text-sm font-medium tracking-wide transition-colors cursor-pointer px-3 py-2 ${
+                scrolled ? "text-slate-700 hover:text-slate-900" : "text-white/80 hover:text-white"
+              }`}
+              data-testid="link-growth-login"
+            >
+              Login
+            </span>
+          </Link>
+          <button
+            onClick={() => smoothScroll("#book-demo")}
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold tracking-wide transition-all duration-200 cursor-pointer text-white rounded-lg shadow-sm hover:shadow-md hover:-translate-y-0.5"
+            style={{ backgroundColor: COLORS.orange }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeDark)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+            data-testid="button-growth-nav-demo"
+          >
+            Book a Demo
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <button
+          className="lg:hidden w-10 h-10 flex items-center justify-center"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          data-testid="button-growth-mobile-menu"
+        >
+          {mobileOpen ? (
+            <X className="w-6 h-6" style={{ color: COLORS.navyDark }} />
+          ) : (
+            <Menu className={`w-6 h-6 ${scrolled ? "" : "text-white"}`} style={{ color: scrolled ? COLORS.navyDark : undefined }} />
+          )}
+        </button>
+      </div>
+
+      {mobileOpen && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="lg:hidden bg-white border-t px-5 pb-6"
+          style={{ borderColor: COLORS.border }}
+        >
+          <div className="flex flex-col gap-1 pt-2">
+            {growthNavLinks.map((link) => (
+              <button
+                key={link.href}
+                onClick={() => { smoothScroll(link.href); setMobileOpen(false); }}
+                className="block text-left py-3 text-base font-medium text-slate-700"
+                data-testid={`link-growth-mobile-${link.label.toLowerCase().replace(/\s+/g, "-")}`}
+              >
+                {link.label}
+              </button>
+            ))}
+            <Link href="/">
+              <span className="block py-3 text-base font-medium text-slate-700 cursor-pointer" data-testid="link-growth-mobile-login">
+                Login
+              </span>
+            </Link>
+            <button
+              onClick={() => { smoothScroll("#book-demo"); setMobileOpen(false); }}
+              className="mt-3 w-full py-3 font-semibold text-white text-center rounded-lg"
+              style={{ backgroundColor: COLORS.orange }}
+              data-testid="button-growth-mobile-demo"
+            >
+              Book a Demo
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </nav>
+  );
+}
+
+export function GrowthFooter() {
+  const cols = {
+    Product: ["Features", "CRM", "Training", "Community", "Pricing"],
+    Company: ["About", "Contact", "Careers", "Blog"],
+    Resources: ["Help Center", "Documentation", "Webinars", "Case Studies"],
+    Legal: ["Privacy Policy", "Terms of Service", "GDPR", "Security"],
+  };
+
+  return (
+    <footer style={{ backgroundColor: COLORS.navyDark }} data-testid="footer-growth">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-16">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-10 mb-12">
+          <div className="col-span-2">
+            <div className="flex items-center gap-2.5 mb-5">
+              <img src={travanaLogo} alt="Travana" className="h-10 w-auto" />
+              <span className="text-xl font-bold text-white">Travana</span>
+            </div>
+            <p className="text-sm leading-relaxed mb-5" style={{ color: "rgba(255,255,255,0.6)" }}>
+              The Operating System for Travel Agents. Built for bookings, follow-up, and growth.
+            </p>
+            <button
+              onClick={() => smoothScroll("#book-demo")}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-lg transition-colors"
+              style={{ backgroundColor: COLORS.orange }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orangeDark)}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+              data-testid="button-footer-demo"
+            >
+              Book a Demo
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {Object.entries(cols).map(([title, items]) => (
+            <div key={title}>
+              <h4 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: COLORS.orange }}>
+                {title}
+              </h4>
+              <div className="space-y-2.5">
+                {items.map((label) => (
+                  <a
+                    key={label}
+                    href="#"
+                    className="block text-sm transition-colors"
+                    style={{ color: "rgba(255,255,255,0.55)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.55)")}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          className="pt-8 flex flex-col md:flex-row items-center justify-between gap-4"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
+        >
+          <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+            &copy; 2026 Travana. The Operating System for Travel Agents.
+          </p>
+          <div className="flex gap-3">
+            {[Facebook, Twitter, Instagram, Linkedin].map((Icon, i) => (
+              <a
+                key={i}
+                href="#"
+                className="w-9 h-9 flex items-center justify-center rounded-lg transition-all"
+                style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.orange)}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.06)")}
+                data-testid={`link-growth-social-${i}`}
+              >
+                <Icon className="w-4 h-4 text-white" />
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+export function GrowthPageWrapper({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-white" style={{ fontFamily: sansFont }}>
+      <GrowthNavbar />
+      {children}
+      <GrowthFooter />
+    </div>
   );
 }
