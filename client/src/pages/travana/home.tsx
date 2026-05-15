@@ -350,9 +350,227 @@ function ProblemSection() {
   );
 }
 
-// ====== Solution Section ======
+// ====== Solution Section — Comparison + Visual Mockups ======
+function StatCompare({ label, before, after, beforeNote, afterNote }: { label: string; before: string; after: string; beforeNote: string; afterNote: string }) {
+  return (
+    <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: COLORS.border }} data-testid={`stat-compare-${label.toLowerCase().replace(/\s+/g, "-")}`}>
+      <div className="px-5 py-3 border-b text-xs font-bold uppercase tracking-wider" style={{ borderColor: COLORS.border, color: COLORS.slate, backgroundColor: COLORS.surface }}>
+        {label}
+      </div>
+      <div className="grid grid-cols-2 divide-x" style={{ borderColor: COLORS.border }}>
+        <div className="p-5">
+          <div className="text-[10px] font-bold uppercase tracking-wider mb-2 text-rose-500">Most platforms</div>
+          <div className="text-3xl md:text-4xl font-bold mb-1 text-rose-600 line-through decoration-2 decoration-rose-300">{before}</div>
+          <div className="text-xs leading-snug" style={{ color: COLORS.slate }}>{beforeNote}</div>
+        </div>
+        <div className="p-5" style={{ backgroundColor: COLORS.orangeMuted, borderColor: COLORS.border }}>
+          <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: COLORS.orange }}>With Travana</div>
+          <div className="text-3xl md:text-4xl font-bold mb-1" style={{ color: COLORS.orange }}>{after}</div>
+          <div className="text-xs leading-snug font-medium" style={{ color: COLORS.navyDark }}>{afterNote}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuoteBuilderMockup() {
+  return (
+    <div className="rounded-2xl border bg-white shadow-2xl overflow-hidden" style={{ borderColor: COLORS.border }} data-testid="mockup-quote-builder">
+      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.border, backgroundColor: COLORS.surface }}>
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4" style={{ color: COLORS.orange }} />
+          <span className="text-xs font-bold" style={{ color: COLORS.navyDark }}>Quote Builder</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity }} className="w-1.5 h-1.5 rounded-full bg-green-500" />
+          <span className="text-[10px] font-semibold text-green-600">Generating · 12s</span>
+        </div>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="flex items-center gap-2 text-xs" style={{ color: COLORS.slate }}>
+          <span className="font-semibold" style={{ color: COLORS.navyDark }}>Sarah Mitchell</span>
+          <span>·</span>
+          <span>Maldives · 7nts · 2 adults</span>
+        </div>
+        {[
+          { hotel: "Kuredu Island Resort", board: "All Inclusive", price: "£2,840pp", margin: "£420" },
+          { hotel: "Kandima Maldives", board: "Half Board", price: "£3,180pp", margin: "£510" },
+          { hotel: "Sun Siyam Iru Fushi", board: "All Inclusive", price: "£3,640pp", margin: "£680" },
+        ].map((q, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 8 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.15 }}
+            className="rounded-lg border p-3 flex items-center justify-between"
+            style={{ borderColor: COLORS.border }}
+          >
+            <div>
+              <div className="text-sm font-bold" style={{ color: COLORS.navyDark }}>{q.hotel}</div>
+              <div className="text-[11px]" style={{ color: COLORS.slateLight }}>{q.board} · 7 nights</div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-bold" style={{ color: COLORS.orange }}>{q.price}</div>
+              <div className="text-[10px] font-semibold text-green-600">+{q.margin} margin</div>
+            </div>
+          </motion.div>
+        ))}
+        <div className="flex items-center gap-2 pt-1">
+          <button className="flex-1 px-3 py-2 rounded-md text-xs font-bold text-white" style={{ backgroundColor: COLORS.orange }}>Send via WhatsApp</button>
+          <button className="px-3 py-2 rounded-md text-xs font-semibold border" style={{ borderColor: COLORS.border, color: COLORS.navyDark }}>Email</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FollowUpMockup() {
+  const cadence = [
+    { day: "Day 0", action: "Quote sent", status: "done", channel: "WhatsApp" },
+    { day: "Day 1", action: "Soft check-in", status: "done", channel: "WhatsApp" },
+    { day: "Day 3", action: "Stock-scarcity nudge", status: "done", channel: "SMS" },
+    { day: "Day 5", action: "Owner-to-client voice note", status: "running", channel: "WhatsApp" },
+    { day: "Day 7", action: "Final value reframe", status: "queued", channel: "Email" },
+    { day: "Day 14", action: "Re-engagement script", status: "queued", channel: "WhatsApp" },
+  ];
+  return (
+    <div className="rounded-2xl border bg-white shadow-2xl overflow-hidden" style={{ borderColor: COLORS.border }} data-testid="mockup-followup">
+      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.border, backgroundColor: COLORS.surface }}>
+        <div className="flex items-center gap-2">
+          <Bell className="w-4 h-4" style={{ color: COLORS.orange }} />
+          <span className="text-xs font-bold" style={{ color: COLORS.navyDark }}>Follow-Up Cadence · Sarah Mitchell</span>
+        </div>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: COLORS.orangeMuted, color: COLORS.orange }}>AUTO</span>
+      </div>
+      <div className="p-4 space-y-2">
+        {cadence.map((s, i) => {
+          const dot = s.status === "done" ? "#10B981" : s.status === "running" ? COLORS.orange : COLORS.slateLight;
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -8 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.08 }}
+              className="flex items-center gap-3 rounded-lg p-2.5"
+              style={{ backgroundColor: s.status === "running" ? COLORS.orangeMuted : COLORS.surface }}
+            >
+              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dot }} />
+              <div className="text-[10px] font-bold w-12 flex-shrink-0" style={{ color: COLORS.slate }}>{s.day}</div>
+              <div className="flex-1 text-xs font-semibold" style={{ color: COLORS.navyDark }}>{s.action}</div>
+              <div className="text-[10px] px-2 py-0.5 rounded font-semibold" style={{ backgroundColor: "#fff", border: `1px solid ${COLORS.border}`, color: COLORS.slate }}>{s.channel}</div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OwnerDashMockup() {
+  const agents = [
+    { name: "Rachel M.", booked: 14, conv: 38, trend: "up", val: 28400 },
+    { name: "Daniel K.", booked: 11, conv: 31, trend: "up", val: 21800 },
+    { name: "Sophie L.", booked: 9, conv: 24, trend: "down", val: 15600 },
+    { name: "James W.", booked: 7, conv: 19, trend: "up", val: 12100 },
+  ];
+  return (
+    <div className="rounded-2xl border bg-white shadow-2xl overflow-hidden" style={{ borderColor: COLORS.border }} data-testid="mockup-owner-dash">
+      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.border, backgroundColor: COLORS.surface }}>
+        <div className="flex items-center gap-2">
+          <Eye className="w-4 h-4" style={{ color: COLORS.orange }} />
+          <span className="text-xs font-bold" style={{ color: COLORS.navyDark }}>Agent Performance · This Month</span>
+        </div>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: "#10B98122", color: "#059669" }}>+24% MoM</span>
+      </div>
+      <div className="grid grid-cols-3 divide-x p-4 gap-0" style={{ borderColor: COLORS.border }}>
+        <div className="px-3">
+          <div className="text-[10px] uppercase font-bold" style={{ color: COLORS.slateLight }}>Bookings</div>
+          <div className="text-2xl font-bold" style={{ color: COLORS.navyDark }}>41</div>
+        </div>
+        <div className="px-3">
+          <div className="text-[10px] uppercase font-bold" style={{ color: COLORS.slateLight }}>Revenue</div>
+          <div className="text-2xl font-bold" style={{ color: COLORS.orange }}>£77.9k</div>
+        </div>
+        <div className="px-3">
+          <div className="text-[10px] uppercase font-bold" style={{ color: COLORS.slateLight }}>Conv. rate</div>
+          <div className="text-2xl font-bold text-green-600">28%</div>
+        </div>
+      </div>
+      <div className="px-4 pb-4 space-y-2">
+        {agents.map((a, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 6 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1 }}
+            className="rounded-lg p-2.5 flex items-center gap-3"
+            style={{ backgroundColor: COLORS.surface }}
+          >
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0" style={{ backgroundColor: COLORS.orange }}>
+              {a.name.split(" ").map((n) => n[0]).join("")}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold" style={{ color: COLORS.navyDark }}>{a.name}</div>
+              <div className="h-1.5 rounded-full overflow-hidden mt-1" style={{ backgroundColor: COLORS.surfaceDark }}>
+                <div className="h-full rounded-full" style={{ width: `${a.conv * 2.5}%`, backgroundColor: COLORS.orange }} />
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs font-bold" style={{ color: COLORS.navyDark }}>£{a.val.toLocaleString()}</div>
+              <div className={`text-[10px] font-semibold flex items-center justify-end gap-0.5 ${a.trend === "up" ? "text-green-600" : "text-rose-500"}`}>
+                <TrendingUp className={`w-2.5 h-2.5 ${a.trend === "down" ? "rotate-180" : ""}`} />
+                {a.conv}% conv
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SolutionSection() {
   const { ref, isInView } = useScrollInView();
+
+  const stats = [
+    { label: "Quote Time", before: "20 min", after: "< 30 sec", beforeNote: "Switching tabs, copy-pasting hotel quotes, hunting prices.", afterNote: "Multi-option quote built and sent before the kettle boils." },
+    { label: "Lost Enquiries", before: "~40%", after: "Near zero", beforeNote: "WhatsApp leads forgotten in a sea of unread messages.", afterNote: "Every enquiry captured into the pipeline with auto follow-up." },
+    { label: "Follow-Up Speed", before: "3+ days", after: "Same hour", beforeNote: "Manual reminders, sticky notes, hoping you remember.", afterNote: "Automated cadence fires the moment a quote is sent." },
+    { label: "Pipeline Visibility", before: "Spreadsheets", after: "Live board", beforeNote: "Owners flying blind, no idea which deals are hot.", afterNote: "Every stage, every deal, every agent — visible in real time." },
+    { label: "Onboarding a New Agent", before: "6 weeks", after: "5 days", beforeNote: "Shadowing, guesswork, inconsistent results.", afterNote: "Built-in scripts, training and frameworks day one." },
+    { label: "Average Order Value", before: "£2,400", after: "£3,650", beforeNote: "Whatever the agent remembers to upsell on the day.", afterNote: "Upsell prompts and value-stacking built into every quote." },
+  ];
+
+  const visualBlocks = [
+    {
+      eyebrow: "Quote in seconds, not minutes",
+      title: "Stop losing leads to slow quotes.",
+      copy: "Most agents take 20+ minutes to put together a holiday quote — switching between supplier sites, spreadsheets and WhatsApp. With Travana you build a multi-option quote, branded and ready to send, in under 30 seconds.",
+      bullets: ["Side-by-side hotel options", "Live margin on every line", "One-click WhatsApp send"],
+      mockup: <QuoteBuilderMockup />,
+      reverse: false,
+    },
+    {
+      eyebrow: "Follow up like clockwork",
+      title: "Every enquiry chased automatically.",
+      copy: "On most platforms, follow-ups happen when an agent remembers — usually too late. Travana fires a smart cadence the second a quote is sent, mixing WhatsApp, SMS and email until the lead converts or politely says no.",
+      bullets: ["Auto-cadence per deal stage", "Multi-channel: WhatsApp, SMS, email", "Owner-to-client voice note built in"],
+      mockup: <FollowUpMockup />,
+      reverse: true,
+    },
+    {
+      eyebrow: "See your business at a glance",
+      title: "From flying blind to total visibility.",
+      copy: "Most owners can't tell you which agent is closing, which deals are stuck, or where revenue is leaking — until the month is over. Travana gives you live dashboards built around how a travel agency actually sells.",
+      bullets: ["Live revenue, conversion and pipeline", "Per-agent leaderboard", "Bottleneck alerts on stuck deals"],
+      mockup: <OwnerDashMockup />,
+      reverse: false,
+    },
+  ];
+
   const features = [
     { icon: Users, title: "Built-In CRM", text: "Every client, lead and booking in one organised hub." },
     { icon: Bell, title: "Smart Follow-Up", text: "Automated reminders so no enquiry ever falls through." },
@@ -373,30 +591,80 @@ function SolutionSection() {
       <div className="max-w-7xl mx-auto px-5 md:px-8">
         <motion.div initial="hidden" animate={isInView ? "visible" : "hidden"} variants={stagger} className="text-center max-w-3xl mx-auto mb-16">
           <motion.p variants={fadeUp} className="text-sm font-bold uppercase tracking-[0.2em] mb-4" style={{ color: COLORS.orange }}>
-            The Solution
+            Most platforms vs Travana
           </motion.p>
           <motion.h2 variants={fadeUp} className="text-3xl md:text-5xl font-bold tracking-tight mb-5" style={{ color: COLORS.navyDark }}>
-            One Platform. Every Enquiry.<br />Every Follow-Up. <span style={{ color: COLORS.orange }}>Every Booking Opportunity.</span>
+            The Numbers Travel Agents<br /><span style={{ color: COLORS.orange }}>Actually Care About.</span>
           </motion.h2>
           <motion.p variants={fadeUp} className="text-lg" style={{ color: COLORS.slate }}>
-            Travana brings everything you need to turn enquiries into bookings into one place — built around how travel agents actually work.
+            Real differences — measured against the tools, spreadsheets and inboxes most agencies still rely on today.
           </motion.p>
         </motion.div>
 
-        <motion.div initial="hidden" animate={isInView ? "visible" : "hidden"} variants={stagger} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Stat comparison grid */}
+        <motion.div initial="hidden" animate={isInView ? "visible" : "hidden"} variants={stagger} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-24">
+          {stats.map((s, i) => (
+            <motion.div key={i} variants={fadeUp}>
+              <StatCompare {...s} />
+            </motion.div>
+          ))}
+        </motion.div>
+
+        {/* Visual feature blocks */}
+        <div className="space-y-24 mb-24">
+          {visualBlocks.map((b, i) => (
+            <div key={i} className={`grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center ${b.reverse ? "lg:[&>*:first-child]:order-2" : ""}`}>
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ duration: 0.6 }}
+              >
+                <p className="text-xs font-bold uppercase tracking-[0.2em] mb-3" style={{ color: COLORS.orange }}>{b.eyebrow}</p>
+                <h3 className="text-2xl md:text-4xl font-bold tracking-tight mb-5 leading-[1.15]" style={{ color: COLORS.navyDark }}>{b.title}</h3>
+                <p className="text-base md:text-lg leading-relaxed mb-6" style={{ color: COLORS.slate }}>{b.copy}</p>
+                <ul className="space-y-2.5">
+                  {b.bullets.map((bl, j) => (
+                    <li key={j} className="flex items-start gap-3 text-sm md:text-base font-medium" style={{ color: COLORS.navyDark }}>
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0" style={{ backgroundColor: COLORS.orange }}>
+                        <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                      </div>
+                      {bl}
+                    </li>
+                  ))}
+                </ul>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+              >
+                {b.mockup}
+              </motion.div>
+            </div>
+          ))}
+        </div>
+
+        {/* Quick-scan feature grid */}
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger} className="text-center max-w-2xl mx-auto mb-10">
+          <motion.p variants={fadeUp} className="text-xs font-bold uppercase tracking-[0.2em] mb-3" style={{ color: COLORS.orange }}>Everything in one platform</motion.p>
+          <motion.h3 variants={fadeUp} className="text-2xl md:text-3xl font-bold" style={{ color: COLORS.navyDark }}>The full Travana toolkit.</motion.h3>
+        </motion.div>
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {features.map((f, i) => (
             <motion.div
               key={i}
               variants={fadeUp}
-              className="p-6 rounded-xl bg-white border transition-all duration-300 hover:shadow-lg hover:-translate-y-1 group"
+              className="p-5 rounded-xl bg-white border transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
               style={{ borderColor: COLORS.border }}
               data-testid={`card-solution-${i}`}
             >
-              <div className="w-11 h-11 rounded-lg flex items-center justify-center mb-4 transition-colors" style={{ backgroundColor: COLORS.orangeMuted }}>
-                <f.icon className="w-5 h-5 transition-colors" style={{ color: COLORS.orange }} />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: COLORS.orangeMuted }}>
+                <f.icon className="w-5 h-5" style={{ color: COLORS.orange }} />
               </div>
-              <h3 className="text-base font-bold mb-1.5" style={{ color: COLORS.navyDark }}>{f.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: COLORS.slate }}>{f.text}</p>
+              <h3 className="text-sm font-bold mb-1" style={{ color: COLORS.navyDark }}>{f.title}</h3>
+              <p className="text-xs leading-relaxed" style={{ color: COLORS.slate }}>{f.text}</p>
             </motion.div>
           ))}
         </motion.div>
