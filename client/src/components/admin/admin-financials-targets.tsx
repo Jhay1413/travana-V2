@@ -96,11 +96,11 @@ function CurrencyInput({ value, onChange, placeholder, autoFocus, className, tes
   );
 }
 
-export default function AdminFinancialsTargets() {
-  // Fetch data from API
-  const { data: overview, isLoading, error } = useTargetsOverview();
-  const upsertShopMutation = useUpsertShopTargets();
-  const upsertAgentMutation = useUpsertAgentTargets();
+export default function AdminFinancialsTargets({ branchId }: { branchId?: string } = {}) {
+  // Fetch data from API (scoped to the selected branch when provided)
+  const { data: overview, isLoading, error } = useTargetsOverview(branchId);
+  const upsertShopMutation = useUpsertShopTargets(branchId);
+  const upsertAgentMutation = useUpsertAgentTargets(branchId);
 
   // Transform API data to component state format
   const agents = useMemo(() => {

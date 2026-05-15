@@ -13,6 +13,7 @@ export { useReplies, replyKeys } from "./use-reply-queries";
 export { useNotifications, useUnreadNotifications, notificationKeys } from "./use-notification-queries";
 export { useDashboardStats, useMyProfit, useAdminOverviewStats, useAgentStats, dashboardKeys } from "./use-dashboard-queries";
 export { useBranchOverviewStats, useAgentsPerformance, branchOverviewKeys } from "./use-branch-overview-queries";
+export { useOrganizationOverviewStats, useOrganizationAgentsPerformance, organizationOverviewKeys } from "./use-organization-overview-queries";
 export {
   useSalesReport,
   useAgentPerformanceReport,

@@ -125,14 +125,27 @@ export async function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+  app.get("/api/logout", (req, res, next) => {
+    const user = req.user as { authType?: string } | undefined;
+    const isOidcUser = !!user && user.authType !== "password";
+    const host = req.headers.host ?? req.hostname;
+    const homeUrl = `${req.protocol}://${host}/`;
+
+    req.logout((logoutErr) => {
+      if (logoutErr) return next(logoutErr);
+      req.session.destroy((destroyErr) => {
+        if (destroyErr) return next(destroyErr);
+        res.clearCookie("connect.sid");
+        if (isOidcUser) {
+          return res.redirect(
+            client.buildEndSessionUrl(config, {
+              client_id: process.env.REPL_ID!,
+              post_logout_redirect_uri: homeUrl,
+            }).href
+          );
+        }
+        return res.redirect(homeUrl);
+      });
     });
   });
 }

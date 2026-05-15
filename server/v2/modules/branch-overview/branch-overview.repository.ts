@@ -32,6 +32,7 @@ import type {
 } from "./branch-overview.types";
 import { buildScopeConditions, needsClientJoin, type ScopeFilter } from "../../utils/scope-conditions";
 import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
+import { quoteStatsConds } from "../../utils/quote-conditions";
 
 const bookingActiveCond = sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`;
 
@@ -140,6 +141,7 @@ export const branchOverviewRepository = {
             isNull(quote.deleted_at),
             sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
             sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED', 'LOST'))`,
+            ...quoteStatsConds(),
             ...baseCond,
           ),
         );
@@ -177,6 +179,7 @@ export const branchOverviewRepository = {
             gte(quote.date_created, yearStart),
             isNull(quote.deleted_at),
             sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+            ...quoteStatsConds(),
             ...baseCond,
           ),
         );
@@ -375,6 +378,15 @@ export const branchOverviewRepository = {
     };
   },
 
+  async branchBelongsToOrg(branchId: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: branches.id })
+      .from(branches)
+      .where(and(eq(branches.id, branchId), eq(branches.organizationId, orgId)))
+      .limit(1);
+    return !!row;
+  },
+
   async getBranchProfile(branchId: string | null): Promise<BranchSummary | null> {
     if (!branchId) return null;
     const [row] = await db
@@ -452,6 +464,7 @@ export const branchOverviewRepository = {
             sql`${quote.date_created} < ${monthEnd.toISOString()}`,
             isNull(quote.deleted_at),
             sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+            ...quoteStatsConds(),
             ...baseCond,
           ),
         )
@@ -584,6 +597,7 @@ export const branchOverviewRepository = {
           isNull(quote.deleted_at),
           sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
           sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED', 'LOST'))`,
+          ...quoteStatsConds(),
           ...baseCond,
         ),
       );

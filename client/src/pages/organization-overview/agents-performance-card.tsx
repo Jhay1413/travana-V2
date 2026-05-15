@@ -16,11 +16,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { useAgentsPerformance } from "@/hooks/queries";
+import { useOrganizationAgentsPerformance } from "@/hooks/queries";
 import type {
   AgentPerformanceRange,
   AgentPerformanceRow,
-} from "@/api/endpoints/branch-overview.api";
+} from "@/api/endpoints/organization-overview.api";
 import { currency } from "./helpers";
 
 type SortKey =
@@ -103,7 +103,7 @@ function AchievedBar({ percent }: { percent: number }) {
   );
 }
 
-export function AgentsPerformanceCard({ branchId }: { branchId?: string } = {}) {
+export function AgentsPerformanceCard() {
   const [range, setRange] = useState<AgentPerformanceRange>("month");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [sortKey, setSortKey] = useState<SortKey>("month");
@@ -120,7 +120,7 @@ export function AgentsPerformanceCard({ branchId }: { branchId?: string } = {}) 
     return { range: range === "custom" ? ("month" as const) : range };
   }, [range, dateRange]);
 
-  const { data, isLoading, isError } = useAgentsPerformance(params, branchId);
+  const { data, isLoading, isError } = useOrganizationAgentsPerformance(params);
 
   const sortedRows = useMemo<AgentPerformanceRow[]>(() => {
     const rows = data?.rows ?? [];
@@ -158,7 +158,7 @@ export function AgentsPerformanceCard({ branchId }: { branchId?: string } = {}) 
             Agents Performance
           </div>
           <div className="text-xs text-muted-foreground">
-            Compare commission across the team
+            Compare commission across the whole agency
           </div>
         </div>
         <div

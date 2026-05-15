@@ -17,6 +17,7 @@ import { BrandingApplier } from "@/components/branding-applier";
 import PublicQuotePage from "@/pages/public-quote";
 import AgentOverviewPage from "@/pages/agent-overview";
 import BranchOverviewPage from "@/pages/branch-overview";
+import OrganizationOverviewPage from "@/pages/organization-overview";
 import ClientsPage from "@/pages/clients";
 import ClientsListPage from "@/pages/clients-list";
 import ClientPage from "@/pages/client";
@@ -90,9 +91,11 @@ function AuthenticatedRouter() {
       ? "/referral-hub"
       : orgRole === "platform_admin"
         ? "/platform-admin"
-        : orgRole === "branch_manager"
-          ? "/branch-overview"
-          : "/agent-overview";
+        : orgRole === "org_admin"
+          ? "/agency/overview"
+          : orgRole === "branch_manager"
+            ? "/branch-overview"
+            : "/agent-overview";
 
   return (
     <AppLayout>
@@ -103,12 +106,13 @@ function AuthenticatedRouter() {
 
         <RoleRoute path="/agent-overview" allow={STAFF_ROLES} component={AgentOverviewPage} />
         <RoleRoute path="/branch-overview" allow={MANAGER_ROLES} component={BranchOverviewPage} />
+        <RoleRoute path="/agency/overview" allow={ADMIN_ROLES} component={OrganizationOverviewPage} />
 
         <RoleRoute path="/platform-admin" allow={PLATFORM_ROLES} component={PlatformAdminPage} />
         <RoleRoute path="/referral-hub" allow={REFERRAL_ROLES} component={ReferralAgentDashboard} />
 
         <RoleRoute path="/agency/team" allow={MANAGER_ROLES} component={AgencyPage} />
-        <RoleRoute path="/agency/:rest*" allow={ADMIN_ROLES} component={AgencyPage} />
+        <RoleRoute path="/agency/*" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/admin/import" allow={ADMIN_ROLES} component={AdminImportPage} />
         <RoleRoute path="/admin/lookup/:tableSlug" allow={ADMIN_ROLES} component={AdminLookupPage} />

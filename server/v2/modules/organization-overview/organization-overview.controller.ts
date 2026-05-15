@@ -1,21 +1,15 @@
 import { Request, Response } from "express";
-import { branchOverviewService } from "./branch-overview.service";
+import { organizationOverviewService } from "./organization-overview.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
 
 const ALLOWED_RANGES = new Set(["day", "week", "month", "custom"] as const);
 
-function branchOverrideFrom(req: Request): string | undefined {
-  const raw = req.query.branchId;
-  if (typeof raw === "string" && raw.length > 0) return raw;
-  return undefined;
-}
-
-export const branchOverviewController = {
+export const organizationOverviewController = {
   getStats: asyncHandler(async (req: Request, res: Response) => {
-    const data = await branchOverviewService.getStats(getScope(req), branchOverrideFrom(req));
-    return successResponse(res, data, "Branch overview retrieved successfully");
+    const data = await organizationOverviewService.getStats(getScope(req));
+    return successResponse(res, data, "Organization overview retrieved successfully");
   }),
 
   getAgentsPerformance: asyncHandler(async (req: Request, res: Response) => {
@@ -29,12 +23,11 @@ export const branchOverviewController = {
     const to = req.query.to ? new Date(String(req.query.to)) : undefined;
     const safeFrom = from && !Number.isNaN(from.getTime()) ? from : undefined;
     const safeTo = to && !Number.isNaN(to.getTime()) ? to : undefined;
-    const data = await branchOverviewService.getAgentsPerformance(
+    const data = await organizationOverviewService.getAgentsPerformance(
       getScope(req),
       range,
       safeFrom,
       safeTo,
-      branchOverrideFrom(req),
     );
     return successResponse(res, data, "Agents performance retrieved successfully");
   }),

@@ -1,6 +1,7 @@
 import { db } from "../../config/database";
 import { clientTable, transaction, quote, booking, user as userTable } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNull } from "drizzle-orm";
+import { quoteStatsConds } from "../../utils/quote-conditions";
 
 export const dashboardRepository = {
   async getStats(orgId: string | null) {
@@ -33,8 +34,8 @@ export const dashboardRepository = {
     const quoteStatsScoped = orgId
       ? quoteStatsBase
           .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-          .where(and(isNull(quote.deleted_at), eq(transaction.is_test, false), ...orgFilter))
-      : quoteStatsBase.where(and(isNull(quote.deleted_at), eq(transaction.is_test, false)));
+          .where(and(isNull(quote.deleted_at), eq(transaction.is_test, false), ...quoteStatsConds(), ...orgFilter))
+      : quoteStatsBase.where(and(isNull(quote.deleted_at), eq(transaction.is_test, false), ...quoteStatsConds()));
 
     const revenueStatsBase = db
       .select({
@@ -47,8 +48,8 @@ export const dashboardRepository = {
     const revenueStatsScoped = orgId
       ? revenueStatsBase
           .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-          .where(and(isNull(quote.deleted_at), eq(transaction.is_test, false), ...orgFilter))
-      : revenueStatsBase.where(and(isNull(quote.deleted_at), eq(transaction.is_test, false)));
+          .where(and(isNull(quote.deleted_at), eq(transaction.is_test, false), ...quoteStatsConds(), ...orgFilter))
+      : revenueStatsBase.where(and(isNull(quote.deleted_at), eq(transaction.is_test, false), ...quoteStatsConds()));
 
     const [clientCount, transactionStats, quoteStats, revenueStats] = await Promise.all([
       clientCountQuery,
@@ -135,6 +136,7 @@ export const dashboardRepository = {
             sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
             sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED', 'LOST'))`,
             eq(transaction.is_test, false),
+            ...quoteStatsConds(),
             ...orgFilter,
           ))
       : openQuoteBase.where(and(
@@ -143,6 +145,7 @@ export const dashboardRepository = {
           sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
           sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED', 'LOST'))`,
           eq(transaction.is_test, false),
+          ...quoteStatsConds(),
         ));
 
     const agentBookingBase = db
@@ -187,6 +190,7 @@ export const dashboardRepository = {
             sql`${quote.date_created} < ${monthEnd.toISOString()}`,
             sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
             eq(transaction.is_test, false),
+            ...quoteStatsConds(),
             ...orgFilter,
           ))
           .groupBy(transaction.user_id)
@@ -195,6 +199,7 @@ export const dashboardRepository = {
           sql`${quote.date_created} < ${monthEnd.toISOString()}`,
           sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
           eq(transaction.is_test, false),
+          ...quoteStatsConds(),
         )).groupBy(transaction.user_id);
 
     const allUsersQuery = orgId
@@ -287,6 +292,7 @@ export const dashboardRepository = {
           eq(transaction.user_id, userId),
           sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
           sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED'))`,
+          ...quoteStatsConds(),
         )),
     ]);
 

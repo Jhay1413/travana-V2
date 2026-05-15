@@ -3,82 +3,83 @@ import { targetsApi } from "../../api";
 import type { BulkShopTargetsInput, BulkAgentTargetsInput } from "../../types/targets/targets.types";
 
 const TARGETS_QUERY_KEYS = {
-  overview: ["targets", "overview"] as const,
-  shopTargets: ["targets", "shop"] as const,
-  agentTargets: ["targets", "agent"] as const,
-  agentTargetsByUser: (userId: string) => ["targets", "agent", userId] as const,
-  agents: ["targets", "agents"] as const,
+  overview: (branchId?: string) => ["targets", "overview", branchId ?? null] as const,
+  shopTargets: (branchId?: string) => ["targets", "shop", branchId ?? null] as const,
+  agentTargets: (branchId?: string) => ["targets", "agent", branchId ?? null] as const,
+  agentTargetsByUser: (userId: string, branchId?: string) =>
+    ["targets", "agent", userId, branchId ?? null] as const,
+  agents: (branchId?: string) => ["targets", "agents", branchId ?? null] as const,
 };
 
 // ─── Overview ───────────────────────────────────────────────────────────
 
-export function useTargetsOverview() {
+export function useTargetsOverview(branchId?: string) {
   return useQuery({
-    queryKey: TARGETS_QUERY_KEYS.overview,
-    queryFn: () => targetsApi.getOverview(),
+    queryKey: TARGETS_QUERY_KEYS.overview(branchId),
+    queryFn: () => targetsApi.getOverview(branchId),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
 // ─── Shop Targets ───────────────────────────────────────────────────────────
 
-export function useShopTargets() {
+export function useShopTargets(branchId?: string) {
   return useQuery({
-    queryKey: TARGETS_QUERY_KEYS.shopTargets,
-    queryFn: () => targetsApi.getShopTargets(),
+    queryKey: TARGETS_QUERY_KEYS.shopTargets(branchId),
+    queryFn: () => targetsApi.getShopTargets(branchId),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useUpsertShopTargets() {
+export function useUpsertShopTargets(branchId?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: BulkShopTargetsInput) => targetsApi.upsertShopTargets(input),
+    mutationFn: (input: BulkShopTargetsInput) => targetsApi.upsertShopTargets(input, branchId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TARGETS_QUERY_KEYS.shopTargets });
-      queryClient.invalidateQueries({ queryKey: TARGETS_QUERY_KEYS.overview });
+      queryClient.invalidateQueries({ queryKey: TARGETS_QUERY_KEYS.shopTargets(branchId) });
+      queryClient.invalidateQueries({ queryKey: TARGETS_QUERY_KEYS.overview(branchId) });
     },
   });
 }
 
 // ─── Agent Targets ───────────────────────────────────────────────────────────
 
-export function useAgentTargets() {
+export function useAgentTargets(branchId?: string) {
   return useQuery({
-    queryKey: TARGETS_QUERY_KEYS.agentTargets,
-    queryFn: () => targetsApi.getAgentTargets(),
+    queryKey: TARGETS_QUERY_KEYS.agentTargets(branchId),
+    queryFn: () => targetsApi.getAgentTargets(branchId),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useAgentTargetsByUserId(userId: string) {
+export function useAgentTargetsByUserId(userId: string, branchId?: string) {
   return useQuery({
-    queryKey: TARGETS_QUERY_KEYS.agentTargetsByUser(userId),
-    queryFn: () => targetsApi.getAgentTargetsByUserId(userId),
+    queryKey: TARGETS_QUERY_KEYS.agentTargetsByUser(userId, branchId),
+    queryFn: () => targetsApi.getAgentTargetsByUserId(userId, branchId),
     enabled: !!userId,
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useUpsertAgentTargets() {
+export function useUpsertAgentTargets(branchId?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: BulkAgentTargetsInput) => targetsApi.upsertAgentTargets(input),
+    mutationFn: (input: BulkAgentTargetsInput) => targetsApi.upsertAgentTargets(input, branchId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TARGETS_QUERY_KEYS.agentTargets });
-      queryClient.invalidateQueries({ queryKey: TARGETS_QUERY_KEYS.overview });
+      queryClient.invalidateQueries({ queryKey: TARGETS_QUERY_KEYS.agentTargets(branchId) });
+      queryClient.invalidateQueries({ queryKey: TARGETS_QUERY_KEYS.overview(branchId) });
     },
   });
 }
 
 // ─── Agents ───────────────────────────────────────────────────────────
 
-export function useAgents() {
+export function useAgents(branchId?: string) {
   return useQuery({
-    queryKey: TARGETS_QUERY_KEYS.agents,
-    queryFn: () => targetsApi.getAgents(),
+    queryKey: TARGETS_QUERY_KEYS.agents(branchId),
+    queryFn: () => targetsApi.getAgents(branchId),
     staleTime: 10 * 60 * 1000, // 10 minutes (agents don't change often)
   });
 }

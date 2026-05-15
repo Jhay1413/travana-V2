@@ -1,18 +1,21 @@
 import axiosClient from "../client/axios-client";
 
-export interface BranchSummary {
+export interface OrganizationSummary {
   id: string;
   name: string;
-  code: string | null;
-  address: string | null;
-  phone: string | null;
-  email: string | null;
-  isDefault: boolean;
+  slug: string;
+  plan: string | null;
+  logoUrl: string | null;
   isActive: boolean;
+  seatLimit: number | null;
+  createdAt: string | null;
+  branchCount: number;
+  activeBranchCount: number;
   memberCount: number;
+  clientCount: number;
 }
 
-export interface BranchOverviewKpis {
+export interface OrganizationOverviewKpis {
   todayCommission: number;
   weekCommission: number;
   monthCommission: number;
@@ -57,35 +60,39 @@ export interface AgentsPerformanceParams {
   to?: string;
 }
 
-export interface BranchOverviewFunnel {
+export interface OrganizationOverviewFunnel {
   enquiries: number;
   quotes: number;
   bookings: number;
   conversionRate: number;
 }
 
-export interface BranchOverviewTrendPoint {
+export interface OrganizationOverviewTrendPoint {
   month: string;
   commission: number;
   bookings: number;
   target: number;
 }
 
-export interface BranchOverviewTopRow {
+export interface OrganizationOverviewTopRow {
   name: string;
   bookings: number;
   commission: number;
 }
 
-export interface BranchOverviewTeamRow {
+export interface OrganizationOverviewBranchRow {
   id: string;
   name: string;
+  code: string | null;
   bookings: number;
   commission: number;
   quotes: number;
+  monthTarget: number;
+  percentToTarget: number;
+  memberCount: number;
 }
 
-export interface BranchOverviewAttentionItem {
+export interface OrganizationOverviewAttentionItem {
   id: string;
   title: string;
   status: string | null;
@@ -93,43 +100,41 @@ export interface BranchOverviewAttentionItem {
   dueDate: string | null;
 }
 
-export interface BranchOverviewAttention {
+export interface OrganizationOverviewAttention {
   upcomingDepartures7d: number;
   upcomingDepartures30d: number;
   staleQuotes: number;
   openTickets: number;
   overdueTasks: number;
-  recentTickets: BranchOverviewAttentionItem[];
-  recentTasks: BranchOverviewAttentionItem[];
+  recentTickets: OrganizationOverviewAttentionItem[];
+  recentTasks: OrganizationOverviewAttentionItem[];
 }
 
-export interface BranchOverviewStats {
-  branch: BranchSummary | null;
-  kpis: BranchOverviewKpis;
-  funnel: BranchOverviewFunnel;
-  trend: BranchOverviewTrendPoint[];
-  topDestinations: BranchOverviewTopRow[];
-  topResorts: BranchOverviewTopRow[];
-  topTourOperators: BranchOverviewTopRow[];
-  teamLeaderboard: BranchOverviewTeamRow[];
-  attention: BranchOverviewAttention;
+export interface OrganizationOverviewStats {
+  organization: OrganizationSummary | null;
+  kpis: OrganizationOverviewKpis;
+  funnel: OrganizationOverviewFunnel;
+  trend: OrganizationOverviewTrendPoint[];
+  topDestinations: OrganizationOverviewTopRow[];
+  topResorts: OrganizationOverviewTopRow[];
+  topTourOperators: OrganizationOverviewTopRow[];
+  branchLeaderboard: OrganizationOverviewBranchRow[];
+  attention: OrganizationOverviewAttention;
 }
 
-export const branchOverviewApi = {
-  getStats: async (branchId?: string): Promise<BranchOverviewStats> => {
-    const { data } = await axiosClient.get<{ data: BranchOverviewStats }>(
-      "/api/v2/branch-overview/stats",
-      { params: branchId ? { branchId } : undefined },
+export const organizationOverviewApi = {
+  getStats: async (): Promise<OrganizationOverviewStats> => {
+    const { data } = await axiosClient.get<{ data: OrganizationOverviewStats }>(
+      "/api/v2/organization-overview/stats",
     );
-    return data?.data ?? (data as unknown as BranchOverviewStats);
+    return data?.data ?? (data as unknown as OrganizationOverviewStats);
   },
   getAgentsPerformance: async (
     params: AgentsPerformanceParams,
-    branchId?: string,
   ): Promise<AgentsPerformanceResponse> => {
     const { data } = await axiosClient.get<{ data: AgentsPerformanceResponse }>(
-      "/api/v2/branch-overview/agents-performance",
-      { params: branchId ? { ...params, branchId } : params },
+      "/api/v2/organization-overview/agents-performance",
+      { params },
     );
     return data?.data ?? (data as unknown as AgentsPerformanceResponse);
   },

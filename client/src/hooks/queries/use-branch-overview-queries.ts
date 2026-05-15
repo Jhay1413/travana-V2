@@ -8,21 +8,22 @@ import type {
 
 export const branchOverviewKeys = {
   all: ["branch-overview"] as const,
-  stats: () => [...branchOverviewKeys.all, "stats"] as const,
-  agentsPerformance: (params: AgentsPerformanceParams) =>
-    [...branchOverviewKeys.all, "agents-performance", params] as const,
+  stats: (branchId?: string) =>
+    [...branchOverviewKeys.all, "stats", branchId ?? null] as const,
+  agentsPerformance: (params: AgentsPerformanceParams, branchId?: string) =>
+    [...branchOverviewKeys.all, "agents-performance", params, branchId ?? null] as const,
 };
 
-export function useBranchOverviewStats() {
+export function useBranchOverviewStats(branchId?: string) {
   return useQuery<BranchOverviewStats>({
-    queryKey: branchOverviewKeys.stats(),
-    queryFn: branchOverviewApi.getStats,
+    queryKey: branchOverviewKeys.stats(branchId),
+    queryFn: () => branchOverviewApi.getStats(branchId),
   });
 }
 
-export function useAgentsPerformance(params: AgentsPerformanceParams) {
+export function useAgentsPerformance(params: AgentsPerformanceParams, branchId?: string) {
   return useQuery<AgentsPerformanceResponse>({
-    queryKey: branchOverviewKeys.agentsPerformance(params),
-    queryFn: () => branchOverviewApi.getAgentsPerformance(params),
+    queryKey: branchOverviewKeys.agentsPerformance(params, branchId),
+    queryFn: () => branchOverviewApi.getAgentsPerformance(params, branchId),
   });
 }

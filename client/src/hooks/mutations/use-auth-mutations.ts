@@ -16,9 +16,10 @@ export function useLogin() {
 export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => authApi.logout(),
-    onSuccess: () => {
+    mutationFn: async () => {
       queryClient.setQueryData(authKeys.currentUser(), null);
+      queryClient.clear();
+      authApi.logout();
     },
   });
 }

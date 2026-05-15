@@ -15,6 +15,7 @@ import {
   type ScopeFilter,
 } from "../../utils/scope-conditions";
 import { totalBookingCommissionExpr } from "../../utils/commission-sql";
+import { quoteStatsConds } from "../../utils/quote-conditions";
 import {
   getShopTargetsByDateRange,
   getAgentTargetsByDateRange,
@@ -68,6 +69,7 @@ function quoteRangeConds(scope: ReportScope): SQL[] {
     lte(quote.date_created, scope.to),
     isNull(quote.deleted_at),
     sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+    ...quoteStatsConds(),
     ...buildScopeConditions(scope),
   ];
   if (scope.agentId) conds.push(eq(transaction.user_id, scope.agentId));

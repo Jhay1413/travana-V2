@@ -1,4 +1,5 @@
-import { MapPin, Mail, Phone, Star, Trash2 } from "lucide-react";
+import { Link } from "wouter";
+import { MapPin, Mail, Pencil, Phone, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Branch } from "@/api/endpoints/branch.api";
 
@@ -28,13 +29,13 @@ export function BranchCard({
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <button
-              onClick={onEdit}
+            <Link
+              href={`/agency/branches/${branch.id}`}
               className="truncate text-base font-semibold hover:underline"
-              data-testid={`button-edit-branch-${branch.id}`}
+              data-testid={`link-branch-${branch.id}`}
             >
               {branch.name}
-            </button>
+            </Link>
             {branch.isDefault && (
               <span
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
@@ -98,14 +99,24 @@ export function BranchCard({
             {branch.isActive ? "Archive" : "Reactivate"}
           </button>
         </div>
-        <button
-          onClick={onDelete}
-          className="rounded-lg p-1.5 text-red-600 opacity-0 transition group-hover:opacity-100 hover:bg-red-500/10"
-          data-testid={`button-delete-branch-${branch.id}`}
-          title="Delete branch"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex gap-1">
+          <button
+            onClick={onEdit}
+            className="rounded-lg p-1.5 text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+            data-testid={`button-edit-branch-${branch.id}`}
+            title="Edit branch"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="rounded-lg p-1.5 text-red-600 opacity-0 transition group-hover:opacity-100 hover:bg-red-500/10"
+            data-testid={`button-delete-branch-${branch.id}`}
+            title="Delete branch"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
