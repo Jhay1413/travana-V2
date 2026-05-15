@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -6,6 +6,7 @@ import {
   Command,
   LifeBuoy,
   Mail,
+  Menu,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications } from "@/hooks/queries";
 import { getNavForRole, type NavItem, type NavSection } from "@/config/nav";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const CONNECT_CHANNELS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }>; awaiting: number }> = [
   { key: "whatsapp", label: "WhatsApp", icon: MessageSquare, awaiting: 43 },
@@ -202,11 +204,18 @@ function SectionBlock({
   );
 }
 
-export function AppSidenav() {
+function SidenavInner({
+  collapsed,
+  onToggleCollapsed,
+  sticky = true,
+}: {
+  collapsed: boolean;
+  onToggleCollapsed?: () => void;
+  sticky?: boolean;
+}) {
   const { orgRole } = useRole();
   const [location] = useLocation();
   const sections = getNavForRole(orgRole);
-  const [collapsed, toggleCollapsed] = useSidebarCollapsed();
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
     try {
       const saved = sessionStorage.getItem("admin-nav-expanded");
@@ -237,19 +246,13 @@ export function AppSidenav() {
   const currentSearch = typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
 
   return (
-    <aside
+    <div
       className={cn(
-        "hidden xl:block shrink-0 transition-all duration-250",
-        collapsed ? "w-[72px]" : "w-[320px]"
+        "glass ringed grain rounded-3xl transition-all duration-250",
+        sticky && "sticky top-4",
+        collapsed ? "p-2" : "p-4"
       )}
-      data-testid="app-sidenav"
     >
-      <div
-        className={cn(
-          "glass ringed grain sticky top-4 rounded-3xl transition-all duration-250",
-          collapsed ? "p-2" : "p-4"
-        )}
-      >
         {collapsed ? (
           <div className="flex flex-col items-center gap-1">
             <div
@@ -312,15 +315,17 @@ export function AppSidenav() {
                   </span>
                 )}
               </Link>
-              <button
-                type="button"
-                onClick={toggleCollapsed}
-                className="grid h-10 w-10 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
-                title="Expand sidebar"
-                data-testid="button-expand-sidebar"
-              >
-                <PanelLeftOpen className="h-4 w-4" />
-              </button>
+              {onToggleCollapsed && (
+                <button
+                  type="button"
+                  onClick={onToggleCollapsed}
+                  className="grid h-10 w-10 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
+                  title="Expand sidebar"
+                  data-testid="button-expand-sidebar"
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                </button>
+              )}
             </>
           )}
         </nav>
@@ -444,20 +449,72 @@ export function AppSidenav() {
               })}
             </div>
 
-            <div className="my-4 h-px bg-black/10 dark:bg-white/10" />
+            {onToggleCollapsed && (
+              <>
+                <div className="my-4 h-px bg-black/10 dark:bg-white/10" />
 
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
-              data-testid="button-collapse-sidebar"
-            >
-              <PanelLeftClose className="h-4 w-4" />
-              <span className="text-sm font-medium">Minimise</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={onToggleCollapsed}
+                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
+                  data-testid="button-collapse-sidebar"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                  <span className="text-sm font-medium">Minimise</span>
+                </button>
+              </>
+            )}
           </>
         )}
-      </div>
+    </div>
+  );
+}
+
+export function AppSidenav() {
+  const [collapsed, toggleCollapsed] = useSidebarCollapsed();
+  return (
+    <aside
+      className={cn(
+        "hidden xl:block shrink-0 transition-all duration-250",
+        collapsed ? "w-[72px]" : "w-[320px]"
+      )}
+      data-testid="app-sidenav"
+    >
+      <SidenavInner collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
     </aside>
+  );
+}
+
+export function MobileSidenav() {
+  const [open, setOpen] = useState(false);
+  const [location] = useLocation();
+  const prevLocationRef = useRef(location);
+
+  useEffect(() => {
+    if (location !== prevLocationRef.current) {
+      setOpen(false);
+      prevLocationRef.current = location;
+    }
+  }, [location]);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          aria-label="Open navigation"
+          className="xl:hidden inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+          data-testid="button-open-mobile-sidebar"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </SheetTrigger>
+      <SheetContent
+        side="left"
+        className="w-[320px] sm:max-w-[320px] border-0 bg-transparent p-3 shadow-none"
+      >
+        <SidenavInner collapsed={false} sticky={false} />
+      </SheetContent>
+    </Sheet>
   );
 }

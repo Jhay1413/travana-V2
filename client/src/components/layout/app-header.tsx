@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { HeaderCreateMenu } from "@/components/header-create-menu";
+import { MobileSidenav } from "./app-sidenav";
 import { useAuth } from "@/hooks/use-auth";
 import { useGlobalSearch } from "@/hooks/queries/use-search-queries";
 
@@ -63,6 +64,7 @@ export function AppHeader() {
     <div className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-[100]">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
+          <MobileSidenav />
           <h1
             className="title-serif text-2xl font-semibold tracking-tight md:text-3xl"
             data-testid="text-page-title"
