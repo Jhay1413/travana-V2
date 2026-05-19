@@ -96,31 +96,31 @@ function normalizeBooking(data: any) {
 
 export const transactionController = {
   listTransactions: asyncHandler(async (req: Request, res: Response) => {
-    const { clientId, agentId, status, dateFrom, dateTo } = req.query;
+    const { clientId, agentId, dateFrom, dateTo, branchId } = req.query;
     const scope = getScope(req);
 
-    const parsedDateFrom = dateFrom && typeof dateFrom === "string" ? new Date(dateFrom) : undefined;
-    const parsedDateTo = dateTo && typeof dateTo === "string" ? new Date(dateTo) : undefined;
+    const asString = (v: unknown) =>
+      typeof v === "string" && v.length > 0 ? v : undefined;
+    const asDate = (v: unknown) => {
+      const s = asString(v);
+      if (!s) return undefined;
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    };
 
-    // Enforce session-based agent filter for non-admin/manager users
-    const sessionUserId = getUserId(req as any);
-    let effectiveAgentId = agentId && typeof agentId === "string" ? agentId : undefined;
-    if (sessionUserId) {
-      const sessionUser = await authStorage.getUser(sessionUserId);
-      const isRestricted = sessionUser?.role !== "Admin" && sessionUser?.role !== "Manager";
-      if (isRestricted) {
-        effectiveAgentId = sessionUserId;
-      }
-    }
-
-    let transactions;
-    if (clientId && typeof clientId === "string") {
-      transactions = await transactionService.listTransactionsByClient(clientId, scope);
-    } else if (effectiveAgentId) {
-      transactions = await transactionService.listTransactionsByAgent(effectiveAgentId, scope);
-    } else {
-      transactions = await transactionService.listTransactions(scope, parsedDateFrom, parsedDateTo);
-    }
+    // Authorization is handled in the repository via scope conditions:
+    //   - branch_manager / agent → pinned to scope.branchId
+    //   - homeworker            → pinned to scope.userId
+    //   - org_admin             → branchOverride optional, confined to org
+    //   - platform_admin        → branchOverride optional, no org confinement
+    // Filters below are additive — agentId + date range now work together.
+    const transactions = await transactionService.listTransactions(scope, {
+      clientId: asString(clientId),
+      agentId: asString(agentId),
+      dateFrom: asDate(dateFrom),
+      dateTo: asDate(dateTo),
+      branchOverride: asString(branchId),
+    });
 
     return successResponse(res, transactions, "Transactions retrieved successfully");
   }),

@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
 import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -32,6 +32,75 @@ interface CreateTransactionWithBookingInput {
   scope: Scope;
 }
 
+// Sum line-item commission per quote / per booking. Mirrors the canonical
+// formula in server/v2/utils/commission-sql.ts (totalQuoteCommissionExpr /
+// totalBookingCommissionExpr) — all 7 line-item tables on each side. The
+// caller adds package_commission separately to get the total.
+async function fetchServiceCommissionMaps(
+  quoteIds: string[],
+  bookingIds: string[],
+): Promise<{ quoteMap: Map<string, number>; bookingMap: Map<string, number> }> {
+  const quoteMap = new Map<string, number>();
+  const bookingMap = new Map<string, number>();
+
+  const tasks: Promise<unknown>[] = [];
+
+  if (quoteIds.length > 0) {
+    const addQuote = (rows: Array<{ quote_id: string | null; commission: string | null }>) => {
+      for (const r of rows) {
+        if (!r.quote_id) continue;
+        const amt = parseFloat(r.commission ?? "0") || 0;
+        quoteMap.set(r.quote_id, (quoteMap.get(r.quote_id) || 0) + amt);
+      }
+    };
+    tasks.push(
+      db.select({ quote_id: quote_flights.quote_id, commission: quote_flights.commission })
+        .from(quote_flights).where(inArray(quote_flights.quote_id, quoteIds)).then(addQuote),
+      db.select({ quote_id: quote_accomodation.quote_id, commission: quote_accomodation.commission })
+        .from(quote_accomodation).where(inArray(quote_accomodation.quote_id, quoteIds)).then(addQuote),
+      db.select({ quote_id: quote_transfers.quote_id, commission: quote_transfers.commission })
+        .from(quote_transfers).where(inArray(quote_transfers.quote_id, quoteIds)).then(addQuote),
+      db.select({ quote_id: quote_car_hire.quote_id, commission: quote_car_hire.commission })
+        .from(quote_car_hire).where(inArray(quote_car_hire.quote_id, quoteIds)).then(addQuote),
+      db.select({ quote_id: quote_attraction_ticket.quote_id, commission: quote_attraction_ticket.commission })
+        .from(quote_attraction_ticket).where(inArray(quote_attraction_ticket.quote_id, quoteIds)).then(addQuote),
+      db.select({ quote_id: quote_lounge_pass.quote_id, commission: quote_lounge_pass.commission })
+        .from(quote_lounge_pass).where(inArray(quote_lounge_pass.quote_id, quoteIds)).then(addQuote),
+      db.select({ quote_id: quote_airport_parking.quote_id, commission: quote_airport_parking.commission })
+        .from(quote_airport_parking).where(inArray(quote_airport_parking.quote_id, quoteIds)).then(addQuote),
+    );
+  }
+
+  if (bookingIds.length > 0) {
+    const addBooking = (rows: Array<{ booking_id: string | null; commission: string | null }>) => {
+      for (const r of rows) {
+        if (!r.booking_id) continue;
+        const amt = parseFloat(r.commission ?? "0") || 0;
+        bookingMap.set(r.booking_id, (bookingMap.get(r.booking_id) || 0) + amt);
+      }
+    };
+    tasks.push(
+      db.select({ booking_id: booking_flights.booking_id, commission: booking_flights.commission })
+        .from(booking_flights).where(inArray(booking_flights.booking_id, bookingIds)).then(addBooking),
+      db.select({ booking_id: booking_accomodation.booking_id, commission: booking_accomodation.commission })
+        .from(booking_accomodation).where(inArray(booking_accomodation.booking_id, bookingIds)).then(addBooking),
+      db.select({ booking_id: booking_transfers.booking_id, commission: booking_transfers.commission })
+        .from(booking_transfers).where(inArray(booking_transfers.booking_id, bookingIds)).then(addBooking),
+      db.select({ booking_id: booking_car_hire.booking_id, commission: booking_car_hire.commission })
+        .from(booking_car_hire).where(inArray(booking_car_hire.booking_id, bookingIds)).then(addBooking),
+      db.select({ booking_id: booking_attraction_ticket.booking_id, commission: booking_attraction_ticket.commission })
+        .from(booking_attraction_ticket).where(inArray(booking_attraction_ticket.booking_id, bookingIds)).then(addBooking),
+      db.select({ booking_id: booking_lounge_pass.booking_id, commission: booking_lounge_pass.commission })
+        .from(booking_lounge_pass).where(inArray(booking_lounge_pass.booking_id, bookingIds)).then(addBooking),
+      db.select({ booking_id: booking_airport_parking.booking_id, commission: booking_airport_parking.commission })
+        .from(booking_airport_parking).where(inArray(booking_airport_parking.booking_id, bookingIds)).then(addBooking),
+    );
+  }
+
+  await Promise.all(tasks);
+  return { quoteMap, bookingMap };
+}
+
 function hasFlightData(leg: Partial<InsertQuoteFlight> | Partial<InsertBookingFlight> | null | undefined): boolean {
   if (!leg) return false;
   return Boolean(
@@ -43,16 +112,29 @@ function hasFlightData(leg: Partial<InsertQuoteFlight> | Partial<InsertBookingFl
   );
 }
 
-function buildTxnScopeConds(scope?: Scope): SQL[] {
+function buildTxnScopeConds(scope?: Scope, branchOverride?: string): SQL[] {
   const conds: SQL[] = [];
-  if (!scope || scope.orgRole === "platform_admin") return conds;
+  if (!scope) return conds;
+
+  if (scope.orgRole === "platform_admin") {
+    if (branchOverride) conds.push(eq(transaction.branch_id, branchOverride));
+    return conds;
+  }
+
+  // All non-platform roles are confined to their org.
   conds.push(eq(transaction.org_id, scope.orgId));
-  if (scope.branchId && (scope.orgRole === "branch_manager" || scope.orgRole === "agent")) {
-    conds.push(eq(transaction.branch_id, scope.branchId));
-  }
-  if (scope.orgRole === "homeworker" && scope.userId) {
+
+  if (scope.orgRole === "branch_manager" || scope.orgRole === "agent") {
+    // Branch users are pinned to their own branch — any override is ignored.
+    if (scope.branchId) conds.push(eq(transaction.branch_id, scope.branchId));
+  } else if (scope.orgRole === "homeworker" && scope.userId) {
     conds.push(eq(transaction.user_id, scope.userId));
+  } else if (scope.orgRole === "org_admin" && branchOverride) {
+    // org_admin: optional branch narrowing. org_id condition above already
+    // prevents cross-org access if a foreign branch id is supplied.
+    conds.push(eq(transaction.branch_id, branchOverride));
   }
+
   return conds;
 }
 
@@ -125,7 +207,10 @@ async function enrichTransactions(txns: Transaction[]) {
   if (lodgeIds.length > 0) {
     fetchPromises.push(db.select({ id: lodge_images.id, lodge_id: lodge_images.lodge_id, image_url: lodge_images.image_url, isPrimary: lodge_images.isPrimary }).from(lodge_images).where(inArray(lodge_images.lodge_id, lodgeIds)).then(r => { allLodgeImages = r; }));
   }
+  const serviceCommissionsPromise = fetchServiceCommissionMaps(quoteIds, bookingIds);
   await Promise.all(fetchPromises);
+  const { quoteMap: quoteServiceCommissionMap, bookingMap: bookingServiceCommissionMap } =
+    await serviceCommissionsPromise;
 
   const enquiryMap = new Map<string, any>();
   for (const enq of allEnquiries) {
@@ -138,7 +223,12 @@ async function enrichTransactions(txns: Transaction[]) {
     const dealImgs = allDealImages.filter(img => img.owner_id === q.id);
     const quoteImgs = allQuoteImages.filter(qi => qi.quoteId === q.id).map((qi: any) => ({ id: qi.id, owner_id: qi.quoteId, image_url: qi.url, isPrimary: qi.isPrimary }));
     const images = [...dealImgs, ...quoteImgs];
-    const entry = { ...q, holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id, images };
+    const entry = {
+      ...q,
+      holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
+      images,
+      service_commission: quoteServiceCommissionMap.get(q.id) || 0,
+    };
     if (!quotesMap.has(q.transaction_id)) quotesMap.set(q.transaction_id, []);
     quotesMap.get(q.transaction_id)!.push(entry);
   }
@@ -161,7 +251,12 @@ async function enrichTransactions(txns: Transaction[]) {
         if (url && !seen.has(url)) { seen.add(url); images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.lodge_id, s3Key: null }); }
       }
     }
-    bookingMap.set(b.transaction_id, { ...b, holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id, images });
+    bookingMap.set(b.transaction_id, {
+      ...b,
+      holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id,
+      images,
+      service_commission: bookingServiceCommissionMap.get(b.id) || 0,
+    });
   }
 
   return txns.map(txn => {
@@ -203,31 +298,28 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
   }
 
   const allQuoteIds = allQuotes.map(q => q.id);
-  const serviceCommissionMap = new Map<string, number>();
-  if (allQuoteIds.length > 0) {
-    const [transferRows, carHireRows, attractionRows, loungeRows, parkingRows] = await Promise.all([
-      db.select({ quote_id: quote_transfers.quote_id, commission: quote_transfers.commission }).from(quote_transfers).where(inArray(quote_transfers.quote_id, allQuoteIds)),
-      db.select({ quote_id: quote_car_hire.quote_id, commission: quote_car_hire.commission }).from(quote_car_hire).where(inArray(quote_car_hire.quote_id, allQuoteIds)),
-      db.select({ quote_id: quote_attraction_ticket.quote_id, commission: quote_attraction_ticket.commission }).from(quote_attraction_ticket).where(inArray(quote_attraction_ticket.quote_id, allQuoteIds)),
-      db.select({ quote_id: quote_lounge_pass.quote_id, commission: quote_lounge_pass.commission }).from(quote_lounge_pass).where(inArray(quote_lounge_pass.quote_id, allQuoteIds)),
-      db.select({ quote_id: quote_airport_parking.quote_id, commission: quote_airport_parking.commission }).from(quote_airport_parking).where(inArray(quote_airport_parking.quote_id, allQuoteIds)),
-    ]);
-    for (const row of [...transferRows, ...carHireRows, ...attractionRows, ...loungeRows, ...parkingRows]) {
-      if (!row.quote_id) continue;
-      serviceCommissionMap.set(row.quote_id, (serviceCommissionMap.get(row.quote_id) || 0) + (parseFloat(row.commission || "0") || 0));
-    }
-  }
+  const allBookingIds = allBookings.map(b => b.id);
+  const { quoteMap: quoteServiceCommissionMap, bookingMap: bookingServiceCommissionMap } =
+    await fetchServiceCommissionMaps(allQuoteIds, allBookingIds);
 
   const quotesMap = new Map<string, any[]>();
   for (const q of allQuotes) {
-    const entry = { ...q, holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id, service_commission: serviceCommissionMap.get(q.id) || 0 };
+    const entry = {
+      ...q,
+      holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
+      service_commission: quoteServiceCommissionMap.get(q.id) || 0,
+    };
     if (!quotesMap.has(q.transaction_id)) quotesMap.set(q.transaction_id, []);
     quotesMap.get(q.transaction_id)!.push(entry);
   }
 
   const bookingMap = new Map<string, any>();
   for (const b of allBookings) {
-    bookingMap.set(b.transaction_id, { ...b, holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id });
+    bookingMap.set(b.transaction_id, {
+      ...b,
+      holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id,
+      service_commission: bookingServiceCommissionMap.get(b.id) || 0,
+    });
   }
 
   return txns.map(txn => {
@@ -248,10 +340,18 @@ export const transactionRepository = {
     return result;
   },
 
-  async findAll(scope?: Scope, dateFrom?: Date, dateTo?: Date) {
-    const conditions: SQL[] = [...buildTxnScopeConds(scope)];
-    if (dateFrom) conditions.push(sql`${transaction.created_at} >= ${dateFrom.toISOString()}`);
-    if (dateTo) conditions.push(sql`${transaction.created_at} <= ${dateTo.toISOString()}`);
+  async findAll(scope: Scope | undefined, filters: {
+    clientId?: string;
+    agentId?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+    branchOverride?: string;
+  } = {}) {
+    const conditions: SQL[] = [...buildTxnScopeConds(scope, filters.branchOverride)];
+    if (filters.clientId) conditions.push(eq(transaction.client_id, filters.clientId));
+    if (filters.agentId) conditions.push(eq(transaction.user_id, filters.agentId));
+    if (filters.dateFrom) conditions.push(sql`${transaction.created_at} >= ${filters.dateFrom.toISOString()}`);
+    if (filters.dateTo) conditions.push(sql`${transaction.created_at} <= ${filters.dateTo.toISOString()}`);
 
     let query = db.select().from(transaction);
     if (conditions.length > 0) query = query.where(and(...conditions)) as any;
@@ -306,18 +406,6 @@ export const transactionRepository = {
     const txns = await db.select().from(transaction).where(where).orderBy(desc(transaction.created_at)).limit(limit).offset((page - 1) * limit);
     const enriched = await enrichTransactionsLightweight(txns);
     return { items: enriched, total, page, hasMore: page * limit < total, totalProfit, totalValue };
-  },
-
-  async findByClientId(clientId: string, scope?: Scope) {
-    const conds: SQL[] = [eq(transaction.client_id, clientId), ...buildTxnScopeConds(scope)];
-    const txns = await db.select().from(transaction).where(and(...conds)).orderBy(desc(transaction.created_at));
-    return enrichTransactions(txns);
-  },
-
-  async findByAgentId(agentId: string, scope?: Scope) {
-    const conds: SQL[] = [eq(transaction.user_id, agentId), ...buildTxnScopeConds(scope)];
-    const txns = await db.select().from(transaction).where(and(...conds)).orderBy(desc(transaction.created_at));
-    return enrichTransactions(txns);
   },
 
   async create(data: InsertTransaction, scope?: Scope): Promise<Transaction> {

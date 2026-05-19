@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  useAgentsPerformance,
+  useAgents,
   useCurrentUser,
   useTransactions,
 } from "@/hooks/queries";
@@ -124,21 +124,81 @@ function emptyStat(): StageStat {
 export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
   const [range, setRange] = useState<RangeKey>("month");
   const [agentId, setAgentId] = useState<string>("all");
-  const { data: transactionsAll, isLoading } = useTransactions();
   const { data: currentUser } = useCurrentUser();
-  const { data: agentsPerf } = useAgentsPerformance(
-    { range: "month" },
-    branchId,
-  );
-  const agentRows = agentsPerf?.rows ?? [];
+  const { data: branchAgents } = useAgents(branchId);
 
-  const transactionsData = useMemo(() => {
-    if (!transactionsAll) return [] as any[];
-    let rows = transactionsAll as any[];
-    if (branchId) rows = rows.filter((t) => t.branch_id === branchId);
-    if (agentId !== "all") rows = rows.filter((t) => t.user_id === agentId);
-    return rows;
-  }, [transactionsAll, branchId, agentId]);
+  // Date range → server-side filter. Each tab click changes the query key and
+  // triggers a fresh API call instead of refiltering a stale in-memory list.
+  // "all" intentionally omits the date params.
+  const dateParams = useMemo(() => {
+    if (range === "all") return undefined;
+    const { start, end } = getRange(range);
+    return { dateFrom: start.toISOString(), dateTo: end.toISOString() };
+  }, [range]);
+
+  // One undated query for dropdown options (stays populated when you switch
+  // dates), one filtered query for the table data.
+  const { data: optionsPool = [] } = useTransactions(
+    branchId ? { branchId } : undefined,
+  );
+  const { data: transactionsData = [], isLoading } = useTransactions({
+    ...(branchId ? { branchId } : {}),
+    ...(dateParams ?? {}),
+    ...(agentId !== "all" ? { agentId } : {}),
+  });
+
+  // Agent options: union of branch members + any user IDs that actually own a
+  // transaction in this branch (covers admins/managers who own transactions
+  // without being formal "agent" branch members). Names from useAgents.
+  const agentOptions = useMemo(() => {
+    const ids = new Set<string>();
+    for (const a of branchAgents ?? []) {
+      if (a.id) ids.add(a.id);
+    }
+    for (const t of optionsPool) {
+      if (t.user_id) ids.add(t.user_id);
+    }
+    const nameById = new Map<string, string>();
+    for (const a of branchAgents ?? []) {
+      if (a.id) nameById.set(a.id, a.name);
+    }
+    return Array.from(ids)
+      .map((id) => ({
+        id,
+        name:
+          nameById.get(id) ??
+          (id === currentUser?.id
+            ? `${currentUser?.firstName || currentUser?.name || "Me"} (Me)`
+            : "Agent"),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [optionsPool, branchAgents, currentUser]);
+
+  // Drop the agent selection if it's no longer in the option list (e.g. branch
+  // switched). Otherwise the dropdown shows nothing and the table is empty.
+  useEffect(() => {
+    if (agentId === "all") return;
+    if (!agentOptions.some((a) => a.id === agentId)) setAgentId("all");
+  }, [agentOptions, agentId]);
+
+  // Diagnostic — surface in DevTools what the funnel sees. Remove once the
+  // dropdown / data issue is settled.
+  useEffect(() => {
+    const sample = (transactionsData as any[])[0];
+    // eslint-disable-next-line no-console
+    console.log("[PipelineSynopsis]", {
+      branchId,
+      range,
+      dateParams,
+      agentId,
+      transactionsCount: (transactionsData as any[]).length,
+      optionsPoolCount: (optionsPool as any[]).length,
+      branchAgentsCount: branchAgents?.length ?? 0,
+      sampleBranchId: sample?.branch_id ?? null,
+      sampleUserId: sample?.user_id ?? null,
+      sampleCreatedAt: sample?.created_at ?? null,
+    });
+  }, [transactionsData, optionsPool, branchAgents, branchId, range, dateParams, agentId]);
 
   const stats = useMemo(() => {
     const { start, end } = getRange(range);
@@ -152,8 +212,13 @@ export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
     };
 
     for (const t of transactionsData) {
+      // Every transaction begins as an enquiry, so count any transaction
+      // created in the window as one enquiry — even if it has since
+      // progressed to a quote or booking. Without this, the count only
+      // reflects transactions still sitting in the on_enquiry stage and
+      // is largely insensitive to the date range filter.
       const txDate = new Date(t.created_at);
-      if (t.enquiry && within(txDate)) {
+      if (within(txDate)) {
         map.enquiries.count += 1;
       }
 
@@ -168,8 +233,12 @@ export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
         if (!within(qDate)) continue;
         if (q.isQuoteCopy) continue;
         const status = String(q.quote_status || "").toUpperCase();
-        const price = parseFloat(q.sales_price) || 0;
-        const comm = parseFloat(q.package_commission) || 0;
+        const price = parseFloat(String(q.sales_price ?? "")) || 0;
+        // Total commission = package_commission + sum of line-item commissions.
+        // Server attaches service_commission (all 7 line-item tables).
+        const pkgComm = parseFloat(String(q.package_commission ?? "")) || 0;
+        const svcComm = Number((q as any).service_commission) || 0;
+        const comm = pkgComm + svcComm;
 
         map.quotes.count += 1;
         map.quotes.value += price;
@@ -189,8 +258,10 @@ export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
         const bDate = new Date(t.booking.date_created || t.created_at);
         if (within(bDate)) {
           const bStatus = String(t.booking.booking_status || "").toUpperCase();
-          const price = parseFloat(t.booking.sales_price) || 0;
-          const comm = parseFloat(t.booking.package_commission) || 0;
+          const price = parseFloat(String(t.booking.sales_price ?? "")) || 0;
+          const pkgComm = parseFloat(String(t.booking.package_commission ?? "")) || 0;
+          const svcComm = Number((t.booking as any).service_commission) || 0;
+          const comm = pkgComm + svcComm;
           if (bStatus === "BOOKED") {
             map.booked.count += 1;
             map.booked.value += price;
@@ -285,25 +356,15 @@ export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
                 <SelectItem value="all" data-testid="option-pipeline-agent-all">
                   All Agents
                 </SelectItem>
-                {currentUser?.id && (
+                {agentOptions.map((a) => (
                   <SelectItem
-                    value={currentUser.id}
-                    data-testid={`option-pipeline-agent-${currentUser.id}`}
+                    key={a.id}
+                    value={a.id}
+                    data-testid={`option-pipeline-agent-${a.id}`}
                   >
-                    {currentUser.firstName || currentUser.name || "Me"} (Me)
+                    {a.name}
                   </SelectItem>
-                )}
-                {agentRows
-                  .filter((a: any) => a.id && a.id !== currentUser?.id)
-                  .map((a: any) => (
-                    <SelectItem
-                      key={a.id}
-                      value={a.id}
-                      data-testid={`option-pipeline-agent-${a.id}`}
-                    >
-                      {a.name}
-                    </SelectItem>
-                  ))}
+                ))}
               </SelectContent>
             </Select>
           </div>

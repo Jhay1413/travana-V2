@@ -2,12 +2,13 @@ import axiosClient from "../client/axios-client";
 import type { Transaction, CreateTransactionData } from "@/types/quote";
 
 export const transactionApi = {
-  getAll: async (filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string }): Promise<Transaction[]> => {
+  getAll: async (filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string; branchId?: string }): Promise<Transaction[]> => {
     const params = new URLSearchParams();
     if (filters?.clientId) params.append("clientId", filters.clientId);
     if (filters?.agentId) params.append("agentId", filters.agentId);
     if (filters?.dateFrom) params.append("dateFrom", filters.dateFrom);
     if (filters?.dateTo) params.append("dateTo", filters.dateTo);
+    if (filters?.branchId) params.append("branchId", filters.branchId);
     const query = params.toString();
     const { data } = await axiosClient.get<Transaction[]>(`/api/v2/transactions${query ? `?${query}` : ""}`);
     return data;

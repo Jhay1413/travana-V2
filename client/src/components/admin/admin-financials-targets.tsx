@@ -111,9 +111,12 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
   const [shopTargets, setShopTargets] = useState<Record<string, number>>({});
   const [agentTargets, setAgentTargets] = useState<Record<string, Record<string, number>>>({});
 
-  // Initialize state from API data
+  // Initialize state from API data — skip while a save is in flight so the
+  // partial refetch between two parallel mutations doesn't blast over local
+  // values the user just entered.
+  const isSaving = upsertShopMutation.isPending || upsertAgentMutation.isPending;
   useEffect(() => {
-    if (!overview) return;
+    if (!overview || isSaving) return;
 
     const shopMap: Record<string, number> = {};
     overview.shopTargets.forEach(target => {
@@ -129,7 +132,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
       agentMap[target.userId][key] = parseFloat(target.targetAmount);
     });
     setAgentTargets(agentMap);
-  }, [overview]);
+  }, [overview, isSaving]);
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);

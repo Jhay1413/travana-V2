@@ -92,13 +92,22 @@ export async function getAgentTargetsByUserId(scope: Scope, userId: string, bran
 
 export async function upsertAgentTargets(scope: Scope, targets: AgentTargetInput[], branchOverride?: string) {
   const branchId = await resolveBranchId(scope, branchOverride);
+
+  const uniqueUserIds = new Set<string>();
   for (const t of targets) {
     if (!t.userId) throw new AppError("User ID is required for agent targets.", 400);
     validateMonth(t.month);
     validateYear(t.year);
     validateAmount(t.targetAmount);
-    await assertAgentInBranch(t.userId, branchId);
+    uniqueUserIds.add(t.userId);
   }
+
+  const userIdList = Array.from(uniqueUserIds);
+  const validMembers = await targetsRepository.getActiveBranchMemberIds(branchId, userIdList);
+  for (const userId of userIdList) {
+    if (!validMembers.has(userId)) throw new AppError("Agent not found in this branch", 404);
+  }
+
   return targetsRepository.bulkUpsertAgentTargets(branchId, targets);
 }
 

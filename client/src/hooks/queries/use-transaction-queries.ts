@@ -13,7 +13,7 @@ export const transactionKeys = {
   expiringQuotes: (agentId?: string) => [...transactionKeys.all, "expiring-quotes", agentId] as const,
 };
 
-export function useTransactions(filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string }, options?: { enabled?: boolean }) {
+export function useTransactions(filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string; branchId?: string }, options?: { enabled?: boolean }) {
   return useQuery<Transaction[]>({
     queryKey: transactionKeys.list(filters),
     queryFn: () => transactionApi.getAll(filters),

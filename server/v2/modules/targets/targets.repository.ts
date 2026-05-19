@@ -6,7 +6,7 @@ import {
   branchMembers,
   branches,
 } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import type { ShopTargetInput, AgentTargetInput, AgentInfo } from "./targets.types";
 
 export async function getAllShopTargets(branchId: string) {
@@ -31,40 +31,27 @@ export async function getShopTargetsByDateRange(branchId: string, startYear: num
     .orderBy(shopTargetTable.year, shopTargetTable.month);
 }
 
-export async function upsertShopTarget(branchId: string, target: ShopTargetInput) {
-  const existing = await db
-    .select()
-    .from(shopTargetTable)
-    .where(
-      and(
-        eq(shopTargetTable.branchId, branchId),
-        eq(shopTargetTable.year, target.year),
-        eq(shopTargetTable.month, target.month),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length > 0) {
-    return await db
-      .update(shopTargetTable)
-      .set({ targetAmount: target.targetAmount, updatedAt: new Date() })
-      .where(eq(shopTargetTable.id, existing[0].id))
-      .returning();
-  } else {
-    return await db
-      .insert(shopTargetTable)
-      .values({ branchId, ...target })
-      .returning();
-  }
-}
-
 export async function bulkUpsertShopTargets(branchId: string, targets: ShopTargetInput[]) {
-  const results = [];
-  for (const target of targets) {
-    const result = await upsertShopTarget(branchId, target);
-    results.push(result[0]);
-  }
-  return results;
+  if (targets.length === 0) return [];
+
+  const rows = targets.map(t => ({
+    branchId,
+    year: t.year,
+    month: t.month,
+    targetAmount: t.targetAmount,
+  }));
+
+  return await db
+    .insert(shopTargetTable)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [shopTargetTable.branchId, shopTargetTable.year, shopTargetTable.month],
+      set: {
+        targetAmount: sql`excluded.target_amount`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
 }
 
 export async function getAllAgentTargets(branchId: string) {
@@ -119,41 +106,46 @@ export async function branchBelongsToOrg(branchId: string, orgId: string): Promi
   return !!row;
 }
 
-export async function upsertAgentTarget(branchId: string, target: AgentTargetInput) {
-  const existing = await db
-    .select()
-    .from(agentTargetTable)
-    .where(
-      and(
-        eq(agentTargetTable.branchId, branchId),
-        eq(agentTargetTable.userId, target.userId),
-        eq(agentTargetTable.year, target.year),
-        eq(agentTargetTable.month, target.month),
-      ),
-    )
-    .limit(1);
+export async function bulkUpsertAgentTargets(branchId: string, targets: AgentTargetInput[]) {
+  if (targets.length === 0) return [];
 
-  if (existing.length > 0) {
-    return await db
-      .update(agentTargetTable)
-      .set({ targetAmount: target.targetAmount, updatedAt: new Date() })
-      .where(eq(agentTargetTable.id, existing[0].id))
-      .returning();
-  } else {
-    return await db
-      .insert(agentTargetTable)
-      .values({ branchId, ...target })
-      .returning();
-  }
+  const rows = targets.map(t => ({
+    branchId,
+    userId: t.userId,
+    year: t.year,
+    month: t.month,
+    targetAmount: t.targetAmount,
+  }));
+
+  return await db
+    .insert(agentTargetTable)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [
+        agentTargetTable.branchId,
+        agentTargetTable.userId,
+        agentTargetTable.year,
+        agentTargetTable.month,
+      ],
+      set: {
+        targetAmount: sql`excluded.target_amount`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
 }
 
-export async function bulkUpsertAgentTargets(branchId: string, targets: AgentTargetInput[]) {
-  const results = [];
-  for (const target of targets) {
-    const result = await upsertAgentTarget(branchId, target);
-    results.push(result[0]);
-  }
-  return results;
+export async function getActiveBranchMemberIds(branchId: string, userIds: string[]): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+  const rows = await db
+    .select({ userId: branchMembers.userId })
+    .from(branchMembers)
+    .where(and(
+      eq(branchMembers.branchId, branchId),
+      eq(branchMembers.isActive, true),
+      inArray(branchMembers.userId, userIds),
+    ));
+  return new Set(rows.map(r => r.userId));
 }
 
 export async function getAllAgents(branchId: string): Promise<AgentInfo[]> {

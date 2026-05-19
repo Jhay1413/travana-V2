@@ -135,8 +135,17 @@ function normalizeFlightInput(input: unknown): Partial<InsertQuoteFlight> {
 }
 
 export const transactionService = {
-  async listTransactions(scope: Scope, dateFrom?: Date, dateTo?: Date) {
-    return await transactionRepository.findAll(scope, dateFrom, dateTo);
+  async listTransactions(
+    scope: Scope,
+    filters: {
+      clientId?: string;
+      agentId?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+      branchOverride?: string;
+    } = {},
+  ) {
+    return await transactionRepository.findAll(scope, filters);
   },
 
   async listTransactionsLightweight(scope: Scope) {
@@ -145,14 +154,6 @@ export const transactionService = {
 
   async listPipelineByStatus(scope: Scope, status: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string) {
     return await transactionRepository.findPipelineByStatus(scope, status, page, limit, agentId, quoteStatusFilter);
-  },
-
-  async listTransactionsByClient(clientId: string, scope: Scope) {
-    return await transactionRepository.findByClientId(clientId, scope);
-  },
-
-  async listTransactionsByAgent(agentId: string, scope: Scope) {
-    return await transactionRepository.findByAgentId(agentId, scope);
   },
 
   async getTransactionById(id: string, scope: Scope) {
