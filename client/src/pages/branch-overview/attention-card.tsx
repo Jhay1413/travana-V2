@@ -67,17 +67,25 @@ function ItemRow({
   );
 }
 
-export function AttentionCard({ attention }: { attention: BranchOverviewAttention }) {
+export function AttentionContent({
+  attention,
+  showHeader = true,
+}: {
+  attention: BranchOverviewAttention;
+  showHeader?: boolean;
+}) {
   const [tab, setTab] = useState<"tasks" | "tickets">("tasks");
   const recentTasks = attention.recentTasks ?? [];
   const recentTickets = attention.recentTickets ?? [];
 
   return (
-    <Card className="glass ringed grain rounded-2xl p-4 md:p-5" data-testid="attention-card">
-      <div className="mb-3 flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 text-amber-500" />
-        <div className="text-sm font-medium">Tasks and Tickets</div>
-      </div>
+    <div data-testid="attention-content">
+      {showHeader ? (
+        <div className="mb-3 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <div className="text-sm font-medium">Tasks and Tickets</div>
+        </div>
+      ) : null}
       <Tabs
         value={tab}
         onValueChange={(v) => setTab(v as "tasks" | "tickets")}
@@ -146,6 +154,14 @@ export function AttentionCard({ attention }: { attention: BranchOverviewAttentio
           View all →
         </Link>
       </div>
+    </div>
+  );
+}
+
+export function AttentionCard({ attention }: { attention: BranchOverviewAttention }) {
+  return (
+    <Card className="glass ringed grain rounded-2xl p-4 md:p-5" data-testid="attention-card">
+      <AttentionContent attention={attention} />
     </Card>
   );
 }

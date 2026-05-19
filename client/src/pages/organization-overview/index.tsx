@@ -6,7 +6,6 @@ import { KpiCards } from "./kpi-cards";
 import { ConversionFunnelCard } from "./conversion-funnel-card";
 import { CommissionTrendCard } from "./commission-trend-card";
 import { TopDestinationsCard } from "./top-destinations-card";
-import { BranchLeaderboardCard } from "./branch-leaderboard-card";
 import { AttentionCard } from "./attention-card";
 import { AgentsPerformanceCard } from "./agents-performance-card";
 
@@ -60,7 +59,6 @@ export default function OrganizationOverviewPage() {
         <AttentionCard attention={data.attention} />
       </div>
 
-      <BranchLeaderboardCard rows={data.branchLeaderboard} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <TopDestinationsCard

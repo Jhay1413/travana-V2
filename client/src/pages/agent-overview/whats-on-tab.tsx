@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { ChevronRight, LifeBuoy, ListChecks } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Separator } from "@/components/ui/separator";
-import { useUserTasks } from "@/hooks/queries";
-import { useTicketsByUser } from "@/hooks/queries/use-ticket-queries";
+import { useAllTasksExtended, useUserTasks } from "@/hooks/queries";
+import { useTickets, useTicketsByUser } from "@/hooks/queries/use-ticket-queries";
 
 export type WhatsOnFilter = "all" | "today" | "tomorrow" | "this-week" | "custom";
 
@@ -15,12 +15,16 @@ export function WhatsOnTab({
   whatsOnDate,
   setWhatsOnFilter,
   setWhatsOnDate,
+  allUsers = false,
+  extraControls,
 }: {
   userId: string;
   whatsOnFilter: WhatsOnFilter;
   whatsOnDate: string;
   setWhatsOnFilter: (f: WhatsOnFilter) => void;
   setWhatsOnDate: (d: string) => void;
+  allUsers?: boolean;
+  extraControls?: ReactNode;
 }) {
   const [, navigate] = useLocation();
 
@@ -59,28 +63,58 @@ export function WhatsOnTab({
   const dueFrom = dateRange?.start.toISOString();
   const dueTo = dateRange?.end.toISOString();
 
-  const { data: allTasksData } = useUserTasks(userId, {
+  const { data: userTasksData } = useUserTasks(allUsers ? "" : userId, {
     dueFrom,
     dueTo,
     incomplete: true,
   });
-  const { data: allTicketsData } = useTicketsByUser(userId, {
+  const { data: userTicketsData } = useTicketsByUser(allUsers ? "" : userId, {
     statuses: ["open", "in_progress"],
   });
+  const { data: allTasksRaw } = useAllTasksExtended();
+  const { data: allTicketsRaw } = useTickets();
 
   const filteredTasks = useMemo(() => {
-    if (!allTasksData || !Array.isArray(allTasksData)) return [];
-    return [...allTasksData].sort(
+    if (allUsers) {
+      if (!allTasksRaw || !Array.isArray(allTasksRaw)) return [];
+      const startMs = dateRange?.start.getTime() ?? 0;
+      const endMs = dateRange?.end.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return allTasksRaw
+        .filter((t: any) => !t.completed)
+        .filter((t: any) => {
+          if (!t.dueDate) return false;
+          const due = new Date(t.dueDate).getTime();
+          return due >= startMs && due < endMs;
+        })
+        .sort(
+          (a: any, b: any) =>
+            new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime(),
+        );
+    }
+    if (!userTasksData || !Array.isArray(userTasksData)) return [];
+    return [...userTasksData].sort(
       (a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime(),
     );
-  }, [allTasksData]);
+  }, [allUsers, userTasksData, allTasksRaw, dateRange]);
 
   const filteredTickets = useMemo(() => {
-    if (!allTicketsData || !Array.isArray(allTicketsData)) return [];
-    return [...allTicketsData].sort(
+    if (allUsers) {
+      if (!allTicketsRaw || !Array.isArray(allTicketsRaw)) return [];
+      return allTicketsRaw
+        .filter((t: any) => {
+          const s = String(t.status || "").toLowerCase();
+          return s === "open" || s === "in progress" || s === "in_progress";
+        })
+        .sort(
+          (a: any, b: any) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+    }
+    if (!userTicketsData || !Array.isArray(userTicketsData)) return [];
+    return [...userTicketsData].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [allTicketsData]);
+  }, [allUsers, userTicketsData, allTicketsRaw]);
 
   return (
     <div className="grid gap-4" data-testid="panel-whats-on-overview">
@@ -116,6 +150,7 @@ export function WhatsOnTab({
             data-testid="input-whats-on-date"
           />
         )}
+        {extraControls}
       </div>
 
       <div className="grid gap-3">

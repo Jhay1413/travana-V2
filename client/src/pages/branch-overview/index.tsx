@@ -4,10 +4,6 @@ import { useBranchOverviewStats } from "@/hooks/queries";
 import { BranchProfileStrip } from "./branch-profile-strip";
 import { KpiCards } from "./kpi-cards";
 import { ConversionFunnelCard } from "./conversion-funnel-card";
-import { CommissionTrendCard } from "./commission-trend-card";
-import { TopDestinationsCard } from "./top-destinations-card";
-import { TeamLeaderboardCard } from "./team-leaderboard-card";
-import { AttentionCard } from "./attention-card";
 import { AgentsPerformanceCard } from "./agents-performance-card";
 
 export default function BranchOverviewPage({ branchId }: { branchId?: string } = {}) {
@@ -55,21 +51,7 @@ export default function BranchOverviewPage({ branchId }: { branchId?: string } =
 
       <AgentsPerformanceCard branchId={branchId} />
 
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_.6fr]">
-        <CommissionTrendCard trend={data.trend} />
-        <AttentionCard attention={data.attention} />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_.6fr]">
-        <TeamLeaderboardCard rows={data.teamLeaderboard} />
-        <TopDestinationsCard
-          destinations={data.topDestinations}
-          resorts={data.topResorts}
-          tourOperators={data.topTourOperators}
-        />
-      </div>
-
-      <ConversionFunnelCard funnel={data.funnel} />
+      <ConversionFunnelCard branchId={branchId} />
     </section>
   );
 }

@@ -751,12 +751,28 @@ export const organizationOverviewRepository = {
         month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
         rangeBookings: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()})`,
         rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+        rangeSales: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN COALESCE(${booking.sales_price}, 0) ELSE 0 END), 0)`,
       })
       .from(booking)
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
       .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
       .where(and(bookingActiveCond, scopeCond))
       .groupBy(transaction.user_id);
+
+    const quoteAggRows = await db
+      .select({
+        agentId: transaction.user_id,
+        rangeQuotes: sql<number>`COUNT(*) FILTER (WHERE ${quote.date_created} >= ${from.toISOString()} AND ${quote.date_created} < ${to.toISOString()})`,
+      })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(and(scopeCond, sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`))
+      .groupBy(transaction.user_id);
+    const quotesByUser = new Map<string, number>();
+    for (const q of quoteAggRows) {
+      if (q.agentId) quotesByUser.set(q.agentId, Number(q.rangeQuotes ?? 0));
+    }
 
     const userIds = new Set<string>();
     for (const r of aggRows) if (r.agentId) userIds.add(r.agentId);
@@ -819,32 +835,37 @@ export const organizationOverviewRepository = {
       const month = Number(a?.month ?? 0);
       const rangeBookings = Number(a?.rangeBookings ?? 0);
       const rangeCommission = Number(a?.rangeCommission ?? 0);
+      const rangeSales = Number(a?.rangeSales ?? 0);
+      const rangeQuotes = quotesByUser.get(u.id) ?? 0;
       const target = targetByUser.get(u.id) ?? 0;
       const achievedPercent = target > 0 ? (month / target) * 100 : 0;
       const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+      const firstName = (u.firstName || (fullName ? fullName.split(/\s+/)[0] : "") || u.name || u.email || "Agent").trim();
       return {
         id: u.id,
         name: fullName || u.name || u.email || "Agent",
+        firstName,
         avatarUrl: u.image ?? null,
         today,
         week,
         month,
         rangeBookings,
         rangeCommission,
+        rangeSales,
+        rangeQuotes,
         avgPerBooking: rangeBookings > 0 ? rangeCommission / rangeBookings : 0,
         target,
         achievedPercent,
       };
     });
 
-    const filtered = rows.filter((r) => r.rangeBookings > 0 || r.rangeCommission > 0);
-    filtered.sort((a, b) => b.rangeCommission - a.rangeCommission || a.name.localeCompare(b.name));
+    rows.sort((a, b) => b.rangeCommission - a.rangeCommission || a.name.localeCompare(b.name));
 
     return {
       range,
       from: from.toISOString(),
       to: to.toISOString(),
-      rows: filtered,
+      rows,
     };
   },
 

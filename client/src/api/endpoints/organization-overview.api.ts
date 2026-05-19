@@ -36,12 +36,15 @@ export type AgentPerformanceRange = "day" | "week" | "month" | "custom";
 export interface AgentPerformanceRow {
   id: string;
   name: string;
+  firstName: string;
   avatarUrl: string | null;
   today: number;
   week: number;
   month: number;
   rangeBookings: number;
   rangeCommission: number;
+  rangeSales: number;
+  rangeQuotes: number;
   avgPerBooking: number;
   target: number;
   achievedPercent: number;
