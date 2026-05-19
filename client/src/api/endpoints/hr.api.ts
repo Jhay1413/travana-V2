@@ -7,6 +7,8 @@ export type LeaveStatus = "Pending" | "Approved" | "Rejected" | "Cancelled";
 export type LeaveType = "Annual" | "Sick" | "Unpaid" | "Other";
 export type ReminderKind = "probation_end" | "contract_end" | "work_anniversary";
 export type InvitableRole = "agent" | "branch_manager" | "homeworker" | "referral_agent";
+export type DocumentCategory = "Contract" | "NDA" | "Right to Work" | "Policies" | "Training" | "Other";
+export type DocStatus = "Uploaded" | "Missing" | "Expiring Soon";
 
 export interface LeaveEntry {
   id:        string;
@@ -23,12 +25,16 @@ export interface LeaveEntry {
 export interface DocumentEntry {
   id:          string;
   name:        string;
+  category:    DocumentCategory;
+  status:      DocStatus;
   /** Present when uploaded as a file; download via the download endpoint. */
   s3Key?:      string | null;
   mimeType?:   string | null;
   size?:       number | null;
   /** External URL when added as a link. */
   url?:        string | null;
+  /** YYYY-MM-DD when this credential / certificate expires. */
+  expiresAt?:  string | null;
   uploadedAt:  string;
   uploadedBy?: string | null;
 }
@@ -152,14 +158,32 @@ export const hrApi = {
     const { data } = await axiosClient.post<EmployeeDetail>(`/api/v2/hr/employees/${userId}/notes`, { body });
     return data;
   },
-  addDocument: async (userId: string, name: string, url?: string): Promise<EmployeeDetail> => {
-    const { data } = await axiosClient.post<EmployeeDetail>(`/api/v2/hr/employees/${userId}/documents`, { name, url });
+  addDocument: async (
+    userId: string,
+    input: {
+      name: string;
+      url?: string;
+      category?: DocumentCategory;
+      status?: DocStatus;
+      expiresAt?: string | null;
+    },
+  ): Promise<EmployeeDetail> => {
+    const { data } = await axiosClient.post<EmployeeDetail>(
+      `/api/v2/hr/employees/${userId}/documents`,
+      input,
+    );
     return data;
   },
-  uploadDocumentFile: async (userId: string, file: File, name?: string): Promise<EmployeeDetail> => {
+  uploadDocumentFile: async (
+    userId: string,
+    file: File,
+    options: { name?: string; category?: DocumentCategory; expiresAt?: string | null } = {},
+  ): Promise<EmployeeDetail> => {
     const fd = new FormData();
     fd.append("file", file);
-    if (name) fd.append("name", name);
+    if (options.name) fd.append("name", options.name);
+    if (options.category) fd.append("category", options.category);
+    if (options.expiresAt) fd.append("expiresAt", options.expiresAt);
     const { data } = await axiosClient.post<EmployeeDetail>(
       `/api/v2/hr/employees/${userId}/documents/upload`,
       fd,

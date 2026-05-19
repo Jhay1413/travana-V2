@@ -39,6 +39,10 @@ import SocialQuotePage from "@/pages/social-quote";
 import DestinationGuruPage from "@/pages/destination-guru";
 import SmsCenterPage from "@/pages/sms-center";
 import HrPage from "@/pages/hr";
+import HrV2Page from "@/pages/hr-v2";
+import BranchTargetsPage from "@/pages/branch-targets";
+import OpportunitiesPage from "@/pages/opportunities";
+import MyProfilePage from "@/pages/my-profile";
 import FeedbackPage from "@/pages/feedback";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
@@ -118,6 +122,8 @@ function AuthenticatedRouter() {
         <RoleRoute path="/admin/lookup/:tableSlug" allow={ADMIN_ROLES} component={AdminLookupPage} />
         <RoleRoute path="/settings/:tableSlug" allow={ADMIN_ROLES} component={SettingsLookupPage} />
         <RoleRoute path="/hr" allow={MANAGER_ROLES} component={HrPage} />
+        <RoleRoute path="/hr-v2" allow={MANAGER_ROLES} component={HrV2Page} />
+        <RoleRoute path="/branch/targets" allow={MANAGER_ROLES} component={BranchTargetsPage} />
 
         <RoleRoute path="/bookings" allow={MANAGER_ROLES} component={BookingsPage} />
         <RoleRoute path="/tasks" allow={MANAGER_ROLES} component={TasksPage} />
@@ -133,6 +139,8 @@ function AuthenticatedRouter() {
         <RoleRoute path="/clients/:clientId/enquiries/:enquiryId" allow={STAFF_ROLES} component={EnquiryPage} />
         <RoleRoute path="/enquiries/:enquiryId" allow={STAFF_ROLES} component={EnquiryPage} />
         <RoleRoute path="/pipeline" allow={STAFF_ROLES} component={PipelinePage} />
+        <RoleRoute path="/opportunities" allow={STAFF_ROLES} component={OpportunitiesPage} />
+        <RoleRoute path="/my-profile" allow={STAFF_ROLES} component={MyProfilePage} />
         <RoleRoute path="/chat" allow={STAFF_ROLES} component={ChatPage} />
         <RoleRoute path="/destination-guru" allow={STAFF_ROLES} component={DestinationGuruPage} />
         <RoleRoute path="/sms-center" allow={STAFF_ROLES} component={SmsCenterPage} />

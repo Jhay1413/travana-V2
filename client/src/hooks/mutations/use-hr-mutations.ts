@@ -83,8 +83,17 @@ export function useAddHrNote() {
 export function useAddHrDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ userId, name, url }: { userId: string; name: string; url?: string }) =>
-      hrApi.addDocument(userId, name, url),
+    mutationFn: ({
+      userId,
+      ...rest
+    }: {
+      userId: string;
+      name: string;
+      url?: string;
+      category?: Parameters<typeof hrApi.addDocument>[1]["category"];
+      status?: Parameters<typeof hrApi.addDocument>[1]["status"];
+      expiresAt?: string | null;
+    }) => hrApi.addDocument(userId, rest),
     onSuccess: (_, vars) => {
       invalidateAllHr(qc);
       qc.invalidateQueries({ queryKey: hrKeys.employee(vars.userId) });
@@ -95,8 +104,19 @@ export function useAddHrDocument() {
 export function useUploadHrDocumentFile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ userId, file, name }: { userId: string; file: File; name?: string }) =>
-      hrApi.uploadDocumentFile(userId, file, name),
+    mutationFn: ({
+      userId,
+      file,
+      name,
+      category,
+      expiresAt,
+    }: {
+      userId: string;
+      file: File;
+      name?: string;
+      category?: NonNullable<Parameters<typeof hrApi.uploadDocumentFile>[2]>["category"];
+      expiresAt?: string | null;
+    }) => hrApi.uploadDocumentFile(userId, file, { name, category, expiresAt }),
     onSuccess: (_, vars) => {
       invalidateAllHr(qc);
       qc.invalidateQueries({ queryKey: hrKeys.employee(vars.userId) });

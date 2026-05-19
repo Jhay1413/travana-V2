@@ -1979,9 +1979,6 @@ export const hrRecordsTable = pgTable("hr_records", {
   contractEndDate: date("contract_end_date"),
   holidayAllowance: integer("holiday_allowance"),
   taxId: text("tax_id"),
-  holidays: jsonb("holidays").notNull().default(sql`'[]'::jsonb`),
-  documents: jsonb("documents").notNull().default(sql`'[]'::jsonb`),
-  notes: jsonb("notes").notNull().default(sql`'[]'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
@@ -1996,3 +1993,68 @@ export const insertHrRecordSchema = createInsertSchema(hrRecordsTable).omit({
 });
 export type HrRecord = typeof hrRecordsTable.$inferSelect;
 export type InsertHrRecord = z.infer<typeof insertHrRecordSchema>;
+
+// Per-employee document, leave and note rows. These replace the JSONB
+// arrays previously stored on hr_records (`documents`, `holidays`,
+// `notes`) so we can FK to user, filter on category/status, and query
+// across employees (e.g. "all certificates expiring in the next 30 days").
+
+export const hrDocumentsTable = pgTable("hr_documents", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  hrRecordId: uuid("hr_record_id").notNull().references(() => hrRecordsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  // Contract | NDA | Right to Work | Policies | Training | Other
+  category: varchar("category", { length: 32 }).notNull().default("Other"),
+  // Uploaded | Missing | Expiring Soon
+  status: varchar("status", { length: 32 }).notNull().default("Uploaded"),
+  s3Key: text("s3_key"),
+  mimeType: text("mime_type"),
+  size: integer("size"),
+  url: text("url"),
+  expiresAt: date("expires_at"),
+  uploadedBy: text("uploaded_by").references(() => user.id, { onDelete: "set null" }),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  idx_hr_documents_record: index("idx_hr_documents_hr_record_id").on(table.hrRecordId),
+  idx_hr_documents_category: index("idx_hr_documents_category").on(table.category),
+  idx_hr_documents_expires: index("idx_hr_documents_expires_at").on(table.expiresAt),
+}));
+export type HrDocument = typeof hrDocumentsTable.$inferSelect;
+export type InsertHrDocument = typeof hrDocumentsTable.$inferInsert;
+
+export const hrLeavesTable = pgTable("hr_leaves", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  hrRecordId: uuid("hr_record_id").notNull().references(() => hrRecordsTable.id, { onDelete: "cascade" }),
+  // Annual | Sick | Unpaid | Other
+  type: varchar("type", { length: 16 }).notNull(),
+  fromDate: date("from_date").notNull(),
+  toDate: date("to_date").notNull(),
+  // Pending | Approved | Rejected | Cancelled
+  status: varchar("status", { length: 16 }).notNull().default("Pending"),
+  reason: text("reason"),
+  decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  idx_hr_leaves_record: index("idx_hr_leaves_hr_record_id").on(table.hrRecordId),
+  idx_hr_leaves_status: index("idx_hr_leaves_status").on(table.status),
+  idx_hr_leaves_from: index("idx_hr_leaves_from_date").on(table.fromDate),
+}));
+export type HrLeave = typeof hrLeavesTable.$inferSelect;
+export type InsertHrLeave = typeof hrLeavesTable.$inferInsert;
+
+export const hrNotesTable = pgTable("hr_notes", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  hrRecordId: uuid("hr_record_id").notNull().references(() => hrRecordsTable.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  idx_hr_notes_record: index("idx_hr_notes_hr_record_id").on(table.hrRecordId),
+  idx_hr_notes_created: index("idx_hr_notes_created_at").on(table.createdAt),
+}));
+export type HrNote = typeof hrNotesTable.$inferSelect;
+export type InsertHrNote = typeof hrNotesTable.$inferInsert;

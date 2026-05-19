@@ -17,7 +17,8 @@ import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications } from "@/hooks/queries";
 import { getNavForRole, type NavItem, type NavSection } from "@/config/nav";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import * as SheetPrimitive from "@radix-ui/react-dialog";
+import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
 
 const CONNECT_CHANNELS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }>; awaiting: number }> = [
   { key: "whatsapp", label: "WhatsApp", icon: MessageSquare, awaiting: 43 },
@@ -509,12 +510,16 @@ export function MobileSidenav() {
           <Menu className="h-5 w-5" />
         </button>
       </SheetTrigger>
-      <SheetContent
-        side="left"
-        className="w-[320px] sm:max-w-[320px] border-0 bg-transparent p-3 shadow-none"
-      >
-        <SidenavInner collapsed={false} sticky={false} />
-      </SheetContent>
+      <SheetPortal>
+        <SheetPrimitive.Overlay
+          className="fixed inset-0 z-50 bg-black/30 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        />
+        <SheetPrimitive.Content
+          className="fixed inset-y-0 left-0 z-50 h-full w-[320px] sm:max-w-[320px] p-3 transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+        >
+          <SidenavInner collapsed={false} sticky={false} />
+        </SheetPrimitive.Content>
+      </SheetPortal>
     </Sheet>
   );
 }

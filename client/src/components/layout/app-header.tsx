@@ -61,7 +61,7 @@ export function AppHeader() {
   const userAvatar = user?.image || user?.avatar || user?.profileImageUrl;
 
   return (
-    <div className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-[100]">
+    <div className="glass ringed grain rounded-3xl p-4 md:p-5 relative">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <MobileSidenav />

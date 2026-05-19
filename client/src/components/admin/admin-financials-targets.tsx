@@ -231,109 +231,98 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
 
   const applyWizard = useCallback(async () => {
     const shopVal = parseInt(wizardShopDefault, 10) || 0;
-    
-    // Update local state for shop targets
+
     const shopTargetsToSave: ShopTargetInput[] = [];
-    setShopTargets(prev => {
-      const next = { ...prev };
+    const nextShop: Record<string, number> = { ...shopTargets };
+    MONTHS.forEach(m => {
+      if (wizardApplyMode === "all" || nextShop[m.key] == null) {
+        nextShop[m.key] = shopVal;
+        shopTargetsToSave.push({
+          year: m.year,
+          month: m.monthNum + 1,
+          targetAmount: shopVal.toFixed(2),
+        });
+      }
+    });
+
+    const agentTargetsToSave: AgentTargetInput[] = [];
+    const nextAgent: Record<string, Record<string, number>> = { ...agentTargets };
+    agents.forEach(a => {
+      const val = parseInt(wizardAgentDefaults[a.id] || "0", 10) || 0;
+      nextAgent[a.id] = { ...(nextAgent[a.id] ?? {}) };
       MONTHS.forEach(m => {
-        if (wizardApplyMode === "all" || next[m.key] == null) {
-          next[m.key] = shopVal;
-          shopTargetsToSave.push({
+        if (wizardApplyMode === "all" || nextAgent[a.id]?.[m.key] == null) {
+          nextAgent[a.id][m.key] = val;
+          agentTargetsToSave.push({
+            userId: a.id,
             year: m.year,
             month: m.monthNum + 1,
-            targetAmount: shopVal.toFixed(2),
+            targetAmount: val.toFixed(2),
           });
         }
       });
-      return next;
     });
-    
-    // Update local state for agent targets
-    const agentTargetsToSave: AgentTargetInput[] = [];
-    setAgentTargets(prev => {
-      const next = { ...prev };
-      agents.forEach(a => {
-        const val = parseInt(wizardAgentDefaults[a.id] || "0", 10) || 0;
-        if (!next[a.id]) next[a.id] = {};
-        MONTHS.forEach(m => {
-          if (wizardApplyMode === "all" || next[a.id]?.[m.key] == null) {
-            next[a.id][m.key] = val;
-            agentTargetsToSave.push({
-              userId: a.id,
-              year: m.year,
-              month: m.monthNum + 1,
-              targetAmount: val.toFixed(2),
-            });
-          }
-        });
-      });
-      return next;
-    });
-    
-    // Save to API
+
+    setShopTargets(nextShop);
+    setAgentTargets(nextAgent);
+
     try {
       await Promise.all([
-        shopTargetsToSave.length > 0 && upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }),
-        agentTargetsToSave.length > 0 && upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave }),
+        shopTargetsToSave.length > 0 ? upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }) : Promise.resolve(),
+        agentTargetsToSave.length > 0 ? upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave }) : Promise.resolve(),
       ]);
     } catch (error) {
       console.error("Failed to save wizard targets:", error);
     }
-    
+
     setWizardOpen(false);
     setWizardStep(0);
-  }, [wizardShopDefault, wizardAgentDefaults, wizardApplyMode, agents, upsertShopMutation, upsertAgentMutation]);
+  }, [wizardShopDefault, wizardAgentDefaults, wizardApplyMode, agents, shopTargets, agentTargets, upsertShopMutation, upsertAgentMutation]);
 
   const copyFromPrevQuarter = async () => {
     if (quarter === 0) return;
     const prevMonths = MONTHS.slice((quarter - 1) * 3, (quarter - 1) * 3 + 3);
     const currMonths = MONTHS.slice(quarter * 3, quarter * 3 + 3);
-    
+
     const shopTargetsToSave: ShopTargetInput[] = [];
+    const nextShop: Record<string, number> = { ...shopTargets };
+    currMonths.forEach((cm, i) => {
+      if (prevMonths[i]) {
+        const val = shopTargets[prevMonths[i].key] ?? 0;
+        nextShop[cm.key] = val;
+        shopTargetsToSave.push({
+          year: cm.year,
+          month: cm.monthNum + 1,
+          targetAmount: val.toFixed(2),
+        });
+      }
+    });
+
     const agentTargetsToSave: AgentTargetInput[] = [];
-    
-    setShopTargets(prev => {
-      const next = { ...prev };
+    const nextAgent: Record<string, Record<string, number>> = { ...agentTargets };
+    agents.forEach(a => {
+      nextAgent[a.id] = { ...(nextAgent[a.id] ?? {}) };
       currMonths.forEach((cm, i) => {
         if (prevMonths[i]) {
-          const val = prev[prevMonths[i].key] ?? 0;
-          next[cm.key] = val;
-          shopTargetsToSave.push({
+          const val = agentTargets[a.id]?.[prevMonths[i].key] ?? 0;
+          nextAgent[a.id][cm.key] = val;
+          agentTargetsToSave.push({
+            userId: a.id,
             year: cm.year,
             month: cm.monthNum + 1,
             targetAmount: val.toFixed(2),
           });
         }
       });
-      return next;
     });
-    
-    setAgentTargets(prev => {
-      const next = { ...prev };
-      agents.forEach(a => {
-        if (!next[a.id]) next[a.id] = {};
-        currMonths.forEach((cm, i) => {
-          if (prevMonths[i]) {
-            const val = (prev[a.id]?.[prevMonths[i].key]) ?? 0;
-            next[a.id][cm.key] = val;
-            agentTargetsToSave.push({
-              userId: a.id,
-              year: cm.year,
-              month: cm.monthNum + 1,
-              targetAmount: val.toFixed(2),
-            });
-          }
-        });
-      });
-      return next;
-    });
-    
-    // Save to API
+
+    setShopTargets(nextShop);
+    setAgentTargets(nextAgent);
+
     try {
       await Promise.all([
-        shopTargetsToSave.length > 0 && upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }),
-        agentTargetsToSave.length > 0 && upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave }),
+        shopTargetsToSave.length > 0 ? upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }) : Promise.resolve(),
+        agentTargetsToSave.length > 0 ? upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave }) : Promise.resolve(),
       ]);
     } catch (error) {
       console.error("Failed to copy targets:", error);

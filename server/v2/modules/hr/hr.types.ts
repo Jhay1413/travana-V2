@@ -4,6 +4,8 @@ export type ContractType = "Permanent" | "Fixed-term" | "Casual";
 export type LeaveStatus = "Pending" | "Approved" | "Rejected" | "Cancelled";
 export type LeaveType = "Annual" | "Sick" | "Unpaid" | "Other";
 export type ReminderKind = "probation_end" | "contract_end" | "work_anniversary";
+export type DocumentCategory = "Contract" | "NDA" | "Right to Work" | "Policies" | "Training" | "Other";
+export type DocStatus = "Uploaded" | "Missing" | "Expiring Soon";
 
 export interface LeaveEntry {
   id: string;
@@ -20,12 +22,16 @@ export interface LeaveEntry {
 export interface DocumentEntry {
   id: string;
   name: string;
+  category: DocumentCategory;
+  status: DocStatus;
   /** S3 object key when the doc was uploaded as a file. */
   s3Key?: string | null;
   mimeType?: string | null;
   size?: number | null;
   /** External URL when the doc was added as a link (legacy / non-file). */
   url?: string | null;
+  /** YYYY-MM-DD when this credential / certificate expires. */
+  expiresAt?: string | null;
   uploadedAt: string;
   uploadedBy?: string | null;
 }
@@ -118,4 +124,13 @@ export interface AddNotePayload {
 export interface AddDocumentPayload {
   name: string;
   url?: string;
+  category?: DocumentCategory;
+  status?: DocStatus;
+  expiresAt?: string | null;
+}
+
+export interface UploadDocumentFileOptions {
+  displayName?: string;
+  category?: DocumentCategory;
+  expiresAt?: string | null;
 }

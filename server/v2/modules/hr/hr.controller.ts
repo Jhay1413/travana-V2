@@ -80,11 +80,19 @@ export const hrController = {
     const file = req.file;
     if (!file) return res.status(400).json({ message: "No file provided" });
     const displayName = typeof req.body?.name === "string" ? req.body.name : undefined;
+    const rawCategory = typeof req.body?.category === "string" ? req.body.category : undefined;
+    const VALID_CATEGORIES = ["Contract", "NDA", "Right to Work", "Policies", "Training", "Other"] as const;
+    const category = rawCategory && (VALID_CATEGORIES as readonly string[]).includes(rawCategory)
+      ? (rawCategory as typeof VALID_CATEGORIES[number])
+      : undefined;
+    const expiresAt = typeof req.body?.expiresAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.expiresAt)
+      ? req.body.expiresAt
+      : null;
     const updated = await hrService.uploadDocumentFile(
       req.params.userId as string,
       file,
       getScope(req),
-      displayName,
+      { displayName, category, expiresAt },
     );
     res.status(201).json(updated);
   }),

@@ -1,5 +1,7 @@
 import { userRepository } from "./user.repository";
 import { AppError } from "../../utils/error-handler";
+import { db } from "../../config/database";
+import { hrRecordsTable } from "@shared/schema";
 import type { User, InsertUser } from "./user.types";
 import type { Scope } from "../../utils/scope";
 
@@ -31,7 +33,14 @@ export const userService = {
     const data: InsertUser = callerOrgId
       ? { ...userData, orgId: callerOrgId }
       : userData;
-    return userRepository.create(data);
+    const created = await userRepository.create(data);
+    if (created.orgId) {
+      await db
+        .insert(hrRecordsTable)
+        .values({ orgId: created.orgId, userId: created.id })
+        .onConflictDoNothing({ target: hrRecordsTable.userId });
+    }
+    return created;
   },
 
   async updateUser(id: string, data: Partial<InsertUser>, scope: Scope): Promise<User> {

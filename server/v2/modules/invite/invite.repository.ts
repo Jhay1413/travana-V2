@@ -1,5 +1,5 @@
 import { db } from '../../config/database';
-import { user, branchMembers, branches, organization } from '@shared/schema';
+import { user, branchMembers, branches, organization, hrRecordsTable } from '@shared/schema';
 import { and, eq, isNotNull } from 'drizzle-orm';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -107,6 +107,10 @@ export const inviteRepository = {
     return db.transaction(async (tx) => {
       const newUser = await this.createPendingUser(userValues, tx);
       await this.createBranchMember(branchMember, tx);
+      await tx
+        .insert(hrRecordsTable)
+        .values({ orgId: branchMember.orgId, userId: newUser.id })
+        .onConflictDoNothing({ target: hrRecordsTable.userId });
       return newUser;
     });
   },

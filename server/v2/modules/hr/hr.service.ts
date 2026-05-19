@@ -1,24 +1,29 @@
-import crypto from "crypto";
 import path from "path";
 import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
 import { s3Client, S3_BUCKET } from "../../config/s3";
-import { hrRepository, type HrRepositoryRow } from "./hr.repository";
+import { hrRepository, type HrRepositoryRow, type HrNoteRow } from "./hr.repository";
 import { inviteService } from "../invite/invite.service";
+import type { HrDocument, HrLeave } from "@shared/schema";
 import type {
   AddDocumentPayload,
   AddNotePayload,
+  DocumentCategory,
+  DocStatus,
   DocumentEntry,
   EmployeeDetail,
   EmployeeRow,
   HrReminder,
   InviteEmployeePayload,
   LeaveEntry,
+  LeaveStatus,
+  LeaveType,
   NoteEntry,
   RequestLeavePayload,
   UpdateEmployeePayload,
+  UploadDocumentFileOptions,
 } from "./hr.types";
 
 const SENSITIVE_ROLES = new Set(["org_admin", "platform_admin"]);
@@ -45,6 +50,46 @@ function filterForScope(scope: Scope): { orgId: string; branchId: string | null 
   return { orgId: scope.orgId, branchId: scope.branchId };
 }
 
+function mapHrDocument(row: HrDocument): DocumentEntry {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category as DocumentCategory,
+    status: row.status as DocStatus,
+    s3Key: row.s3Key ?? null,
+    mimeType: row.mimeType ?? null,
+    size: row.size ?? null,
+    url: row.url ?? null,
+    expiresAt: row.expiresAt ?? null,
+    uploadedAt: row.uploadedAt.toISOString(),
+    uploadedBy: row.uploadedBy ?? null,
+  };
+}
+
+function mapHrLeave(row: HrLeave): LeaveEntry {
+  return {
+    id: row.id,
+    type: row.type as LeaveType,
+    from: row.fromDate,
+    to: row.toDate,
+    status: row.status as LeaveStatus,
+    reason: row.reason ?? null,
+    decidedBy: row.decidedBy ?? null,
+    decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function mapHrNote(row: HrNoteRow): NoteEntry {
+  return {
+    id: row.id,
+    body: row.body,
+    author: row.authorName ?? "HR",
+    authorId: row.authorId ?? null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 function countHolidayDays(holidays: LeaveEntry[]): number {
   return holidays
     .filter((h) => h.status === "Approved" && h.type === "Annual")
@@ -56,10 +101,13 @@ function countHolidayDays(holidays: LeaveEntry[]): number {
     }, 0);
 }
 
-function toEmployeeRow(row: HrRepositoryRow, scope: Scope): EmployeeRow {
-  const holidays = (row.holidays as LeaveEntry[] | null) ?? [];
-  const documents = (row.documents as DocumentEntry[] | null) ?? [];
-  const notes = (row.notes as NoteEntry[] | null) ?? [];
+function toEmployeeRow(
+  row: HrRepositoryRow,
+  documents: DocumentEntry[],
+  holidays: LeaveEntry[],
+  notes: NoteEntry[],
+  scope: Scope,
+): EmployeeRow {
   const base: EmployeeRow = {
     userId: row.userId,
     name: row.name,
@@ -94,8 +142,27 @@ function toEmployeeRow(row: HrRepositoryRow, scope: Scope): EmployeeRow {
   return base;
 }
 
-function toEmployeeDetail(row: HrRepositoryRow, scope: Scope): EmployeeDetail {
-  return toEmployeeRow(row, scope);
+async function loadChildrenForRow(
+  row: HrRepositoryRow,
+): Promise<{ documents: DocumentEntry[]; holidays: LeaveEntry[]; notes: NoteEntry[] }> {
+  if (!row.hrId) {
+    return { documents: [], holidays: [], notes: [] };
+  }
+  const [docs, leaves, notes] = await Promise.all([
+    hrRepository.listDocumentsForRecord(row.hrId),
+    hrRepository.listLeavesForRecord(row.hrId),
+    hrRepository.listNotesForRecord(row.hrId),
+  ]);
+  return {
+    documents: docs.map(mapHrDocument),
+    holidays: leaves.map(mapHrLeave),
+    notes: notes.map(mapHrNote),
+  };
+}
+
+async function ensureRecordId(userId: string, orgId: string): Promise<string> {
+  const record = await hrRepository.ensureRecord(userId, orgId);
+  return record.id;
 }
 
 function daysBetween(today: Date, target: Date): number {
@@ -180,14 +247,28 @@ export const hrService = {
   async list(scope: Scope): Promise<EmployeeRow[]> {
     const filter = filterForScope(scope);
     const rows = await hrRepository.list(filter);
-    return rows.map((r) => toEmployeeRow(r, scope));
+    const hrIds = rows.map((r) => r.hrId).filter((id): id is string => !!id);
+
+    const [docsMap, leavesMap, notesMap] = await Promise.all([
+      hrRepository.listDocumentsForRecords(hrIds),
+      hrRepository.listLeavesForRecords(hrIds),
+      hrRepository.listNotesForRecords(hrIds),
+    ]);
+
+    return rows.map((row) => {
+      const documents = (row.hrId ? docsMap.get(row.hrId) ?? [] : []).map(mapHrDocument);
+      const holidays = (row.hrId ? leavesMap.get(row.hrId) ?? [] : []).map(mapHrLeave);
+      const notes = (row.hrId ? notesMap.get(row.hrId) ?? [] : []).map(mapHrNote);
+      return toEmployeeRow(row, documents, holidays, notes, scope);
+    });
   },
 
   async get(userId: string, scope: Scope): Promise<EmployeeDetail> {
     const filter = filterForScope(scope);
     const row = await hrRepository.getOne(userId, filter);
     if (!row) throw new AppError("Employee not found", 404);
-    return toEmployeeDetail(row, scope);
+    const children = await loadChildrenForRow(row);
+    return toEmployeeRow(row, children.documents, children.holidays, children.notes, scope);
   },
 
   async reminders(scope: Scope): Promise<HrReminder[]> {
@@ -197,7 +278,6 @@ export const hrService = {
   },
 
   async invite(payload: InviteEmployeePayload, scope: Scope) {
-    // branch_manager can only invite onto their own branch
     if (scope.orgRole === "branch_manager" && payload.branchId !== scope.branchId) {
       throw new AppError("Branch managers can only invite onto their own branch", 403);
     }
@@ -225,8 +305,7 @@ export const hrService = {
     await hrRepository.ensureRecord(userId, scope.orgId);
     await hrRepository.update(userId, scope.orgId, patch as Record<string, unknown>);
 
-    const fresh = await hrRepository.getOne(userId, filter);
-    return toEmployeeDetail(fresh!, scope);
+    return this.get(userId, scope);
   },
 
   async requestLeave(userId: string, payload: RequestLeavePayload, scope: Scope): Promise<EmployeeDetail> {
@@ -234,20 +313,16 @@ export const hrService = {
     const target = await hrRepository.getOne(userId, filter);
     if (!target) throw new AppError("Employee not found", 404);
 
-    await hrRepository.ensureRecord(userId, scope.orgId);
-    const existing = ((target.holidays as LeaveEntry[] | null) ?? []);
-    const entry: LeaveEntry = {
-      id: `leave-${crypto.randomUUID()}`,
+    const hrId = await ensureRecordId(userId, scope.orgId);
+    await hrRepository.createLeave({
+      hrRecordId: hrId,
       type: payload.type,
-      from: payload.from,
-      to: payload.to,
+      fromDate: payload.from,
+      toDate: payload.to,
       reason: payload.reason ?? null,
       status: "Pending",
-      createdAt: new Date().toISOString(),
-    };
-    await hrRepository.setHolidays(userId, scope.orgId, [...existing, entry]);
-    const fresh = await hrRepository.getOne(userId, filter);
-    return toEmployeeDetail(fresh!, scope);
+    });
+    return this.get(userId, scope);
   },
 
   async getMyRecord(scope: Scope): Promise<EmployeeDetail> {
@@ -255,14 +330,15 @@ export const hrService = {
     const filter = { orgId: scope.orgId, branchId: null };
     const row = await hrRepository.getOne(scope.userId, filter);
     if (!row) throw new AppError("No HR record found for this user", 404);
-    return toEmployeeDetail(row, scope);
+    const children = await loadChildrenForRow(row);
+    return toEmployeeRow(row, children.documents, children.holidays, children.notes, scope);
   },
 
   async uploadDocumentFile(
     userId: string,
     file: Express.Multer.File,
     scope: Scope,
-    displayName?: string,
+    options: UploadDocumentFileOptions = {},
   ): Promise<EmployeeDetail> {
     const filter = filterForScope(scope);
     const target = await hrRepository.getOne(userId, filter);
@@ -282,20 +358,19 @@ export const hrService = {
     );
 
     try {
-      await hrRepository.ensureRecord(userId, scope.orgId);
-      const existing = ((target.documents as DocumentEntry[] | null) ?? []);
-      const entry: DocumentEntry = {
-        id: `doc-${crypto.randomUUID()}`,
-        name: (displayName?.trim() || file.originalname),
+      const hrId = await ensureRecordId(userId, scope.orgId);
+      await hrRepository.createDocument({
+        hrRecordId: hrId,
+        name: options.displayName?.trim() || file.originalname,
+        category: options.category ?? "Other",
+        status: "Uploaded",
         s3Key,
         mimeType: file.mimetype,
         size: file.size,
-        uploadedAt: new Date().toISOString(),
+        expiresAt: options.expiresAt ?? null,
         uploadedBy: scope.userId ?? null,
-      };
-      await hrRepository.setDocuments(userId, scope.orgId, [...existing, entry]);
-      const fresh = await hrRepository.getOne(userId, filter);
-      return toEmployeeDetail(fresh!, scope);
+      });
+      return this.get(userId, scope);
     } catch (err) {
       // Roll back the S3 upload if the DB write fails.
       await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: s3Key })).catch(() => {});
@@ -307,9 +382,9 @@ export const hrService = {
     const filter = filterForScope(scope);
     const target = await hrRepository.getOne(userId, filter);
     if (!target) throw new AppError("Employee not found", 404);
+    if (!target.hrId) throw new AppError("Document not found", 404);
 
-    const documents = ((target.documents as DocumentEntry[] | null) ?? []);
-    const doc = documents.find((d) => d.id === docId);
+    const doc = await hrRepository.findDocument(docId, target.hrId);
     if (!doc) throw new AppError("Document not found", 404);
 
     if (doc.s3Key) {
@@ -333,9 +408,9 @@ export const hrService = {
     const filter = filterForScope(scope);
     const target = await hrRepository.getOne(userId, filter);
     if (!target) throw new AppError("Employee not found", 404);
+    if (!target.hrId) throw new AppError("Document not found", 404);
 
-    const documents = ((target.documents as DocumentEntry[] | null) ?? []);
-    const doc = documents.find((d) => d.id === docId);
+    const doc = await hrRepository.findDocument(docId, target.hrId);
     if (!doc) throw new AppError("Document not found", 404);
 
     if (doc.s3Key) {
@@ -344,13 +419,8 @@ export const hrService = {
         .catch(() => {}); // tolerate already-deleted S3 object
     }
 
-    await hrRepository.setDocuments(
-      userId,
-      scope.orgId,
-      documents.filter((d) => d.id !== docId),
-    );
-    const fresh = await hrRepository.getOne(userId, filter);
-    return toEmployeeDetail(fresh!, scope);
+    await hrRepository.deleteDocument(docId, target.hrId);
+    return this.get(userId, scope);
   },
 
   async requestMyLeave(payload: RequestLeavePayload, scope: Scope): Promise<EmployeeDetail> {
@@ -359,20 +429,16 @@ export const hrService = {
     const target = await hrRepository.getOne(scope.userId, filter);
     if (!target) throw new AppError("No HR record found for this user", 404);
 
-    await hrRepository.ensureRecord(scope.userId, scope.orgId);
-    const existing = ((target.holidays as LeaveEntry[] | null) ?? []);
-    const entry: LeaveEntry = {
-      id: `leave-${crypto.randomUUID()}`,
+    const hrId = await ensureRecordId(scope.userId, scope.orgId);
+    await hrRepository.createLeave({
+      hrRecordId: hrId,
       type: payload.type,
-      from: payload.from,
-      to: payload.to,
+      fromDate: payload.from,
+      toDate: payload.to,
       reason: payload.reason ?? null,
       status: "Pending",
-      createdAt: new Date().toISOString(),
-    };
-    await hrRepository.setHolidays(scope.userId, scope.orgId, [...existing, entry]);
-    const fresh = await hrRepository.getOne(scope.userId, filter);
-    return toEmployeeDetail(fresh!, scope);
+    });
+    return this.getMyRecord(scope);
   },
 
   async decideLeave(
@@ -384,24 +450,17 @@ export const hrService = {
     const filter = filterForScope(scope);
     const target = await hrRepository.getOne(userId, filter);
     if (!target) throw new AppError("Employee not found", 404);
+    if (!target.hrId) throw new AppError("Leave entry not found", 404);
 
-    const existing = ((target.holidays as LeaveEntry[] | null) ?? []);
-    let found = false;
-    const updated = existing.map((h) => {
-      if (h.id !== leaveId) return h;
-      found = true;
-      return {
-        ...h,
-        status: decision,
-        decidedBy: scope.userId,
-        decidedAt: new Date().toISOString(),
-      };
-    });
-    if (!found) throw new AppError("Leave entry not found", 404);
+    const updated = await hrRepository.updateLeaveDecision(
+      leaveId,
+      target.hrId,
+      decision,
+      scope.userId ?? null,
+    );
+    if (!updated) throw new AppError("Leave entry not found", 404);
 
-    await hrRepository.setHolidays(userId, scope.orgId, updated);
-    const fresh = await hrRepository.getOne(userId, filter);
-    return toEmployeeDetail(fresh!, scope);
+    return this.get(userId, scope);
   },
 
   async addNote(userId: string, payload: AddNotePayload, scope: Scope): Promise<EmployeeDetail> {
@@ -409,18 +468,13 @@ export const hrService = {
     const target = await hrRepository.getOne(userId, filter);
     if (!target) throw new AppError("Employee not found", 404);
 
-    await hrRepository.ensureRecord(userId, scope.orgId);
-    const existing = ((target.notes as NoteEntry[] | null) ?? []);
-    const note: NoteEntry = {
-      id: `note-${crypto.randomUUID()}`,
+    const hrId = await ensureRecordId(userId, scope.orgId);
+    await hrRepository.createNote({
+      hrRecordId: hrId,
       body: payload.body,
-      author: target.name ?? "HR",
-      authorId: scope.userId,
-      createdAt: new Date().toISOString(),
-    };
-    await hrRepository.setNotes(userId, scope.orgId, [note, ...existing]);
-    const fresh = await hrRepository.getOne(userId, filter);
-    return toEmployeeDetail(fresh!, scope);
+      authorId: scope.userId ?? null,
+    });
+    return this.get(userId, scope);
   },
 
   async addDocument(userId: string, payload: AddDocumentPayload, scope: Scope): Promise<EmployeeDetail> {
@@ -428,17 +482,16 @@ export const hrService = {
     const target = await hrRepository.getOne(userId, filter);
     if (!target) throw new AppError("Employee not found", 404);
 
-    await hrRepository.ensureRecord(userId, scope.orgId);
-    const existing = ((target.documents as DocumentEntry[] | null) ?? []);
-    const doc: DocumentEntry = {
-      id: `doc-${crypto.randomUUID()}`,
+    const hrId = await ensureRecordId(userId, scope.orgId);
+    await hrRepository.createDocument({
+      hrRecordId: hrId,
       name: payload.name,
+      category: payload.category ?? "Other",
+      status: payload.status ?? "Uploaded",
       url: payload.url ?? null,
-      uploadedAt: new Date().toISOString(),
+      expiresAt: payload.expiresAt ?? null,
       uploadedBy: scope.userId ?? null,
-    };
-    await hrRepository.setDocuments(userId, scope.orgId, [...existing, doc]);
-    const fresh = await hrRepository.getOne(userId, filter);
-    return toEmployeeDetail(fresh!, scope);
+    });
+    return this.get(userId, scope);
   },
 };

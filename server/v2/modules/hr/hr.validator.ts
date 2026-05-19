@@ -47,4 +47,7 @@ export const addNoteBodySchema = z.object({
 export const addDocumentBodySchema = z.object({
   name: z.string().trim().min(1, "Document name is required").max(255),
   url: z.string().url().optional(),
+  category: z.enum(["Contract", "NDA", "Right to Work", "Policies", "Training", "Other"]).optional(),
+  status: z.enum(["Uploaded", "Missing", "Expiring Soon"]).optional(),
+  expiresAt: optionalDate,
 });

@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { organization, branches, branchMembers, user, userProfiles } from "@shared/schema";
+import { organization, branches, branchMembers, user, userProfiles, hrRecordsTable } from "@shared/schema";
 import type { InsertOrganization, InsertBranch, InsertUser, InsertBranchMember } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
@@ -81,6 +81,11 @@ export const onboardingRepository = {
         isActive: input.ownerBranchMemberRoleAndActive.isActive,
       });
 
+      await tx
+        .insert(hrRecordsTable)
+        .values({ orgId: org.id, userId: ownerUser.id })
+        .onConflictDoNothing({ target: hrRecordsTable.userId });
+
       for (const agent of input.agents) {
         const [agentUser] = await tx
           .insert(user)
@@ -94,6 +99,11 @@ export const onboardingRepository = {
           orgRole: agent.branchMemberRoleAndActive.orgRole,
           isActive: agent.branchMemberRoleAndActive.isActive,
         });
+
+        await tx
+          .insert(hrRecordsTable)
+          .values({ orgId: org.id, userId: agentUser.id })
+          .onConflictDoNothing({ target: hrRecordsTable.userId });
 
         const profile = agent.profile;
         const hasProfile =

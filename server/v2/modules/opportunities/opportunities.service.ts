@@ -1,4 +1,5 @@
 import { opportunitiesRepository, type OpportunityFilters } from './opportunities.repository';
+import type { Scope } from '../../utils/scope';
 
 function formatClientName(title: string | null, firstName: string | null, surname: string | null): string {
   return [title !== 'NULL' ? title : '', firstName, surname].filter(Boolean).join(' ') || 'Unknown';
@@ -47,7 +48,7 @@ export const opportunitiesService = {
     return { items, total, page: filters.page, limit: filters.limit, totalPages: Math.ceil(total / filters.limit) };
   },
 
-  async getAgents(orgId: string | null) {
-    return opportunitiesRepository.findAgents(orgId);
+  async getAgents(scope: Scope) {
+    return opportunitiesRepository.findAgents(scope);
   },
 };
