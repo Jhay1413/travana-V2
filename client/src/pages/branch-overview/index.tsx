@@ -9,7 +9,8 @@ import { AgentsPerformanceCard } from "./agents-performance-card";
 export default function BranchOverviewPage({
   branchId,
   hideTitle = false,
-}: { branchId?: string; hideTitle?: boolean } = {}) {
+  hideProfileStrip = false,
+}: { branchId?: string; hideTitle?: boolean; hideProfileStrip?: boolean } = {}) {
   const { data, isLoading, isError, error } = useBranchOverviewStats(branchId);
 
   if (isLoading) {
@@ -50,7 +51,7 @@ export default function BranchOverviewPage({
         </div>
       )}
 
-      {data.branch ? <BranchProfileStrip branch={data.branch} /> : null}
+      {data.branch && !hideProfileStrip ? <BranchProfileStrip branch={data.branch} /> : null}
 
       <KpiCards kpis={data.kpis} />
 

@@ -76,7 +76,7 @@ export default function OrganizationOverviewPage() {
       {demoView === "single-branch" ? (
         <>
           {defaultBranchId ? (
-            <BranchOverviewPage branchId={defaultBranchId} hideTitle />
+            <BranchOverviewPage branchId={defaultBranchId} hideTitle hideProfileStrip />
           ) : null}
 
           <ForwardsSynopsisCard />
