@@ -278,34 +278,23 @@ export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
   }, [transactionsData, range]);
 
   // ---------- Predictions ----------
-  // Quote→Booking conversion rate from historical data within range
-  const quoteToBookRate = useMemo(() => {
-    const totalClosed = stats.booked.count + stats.lost.count;
-    if (totalClosed === 0) return 0;
-    return stats.booked.count / totalClosed;
-  }, [stats]);
-
-  // Enquiry→Quote conversion rate
-  const enquiryToQuoteRate = useMemo(() => {
-    if (stats.enquiries.count === 0) return 0;
-    return Math.min(1, stats.quotes.count / stats.enquiries.count);
-  }, [stats]);
+  // Fixed book rates per pipeline stage
+  const enquiryBookRate = 0.12;
+  const quoteBookRate = 0.20;
+  const inPlayBookRate = 0.26;
 
   const avgBookedCommission =
     stats.booked.count > 0 ? stats.booked.commission / stats.booked.count : 0;
 
-  // Projection: enquiries × enq→quote × quote→book × avg commission
+  // Projection: enquiries × 12% book rate × avg commission
   const projectedFromEnquiries =
-    stats.enquiries.count *
-    enquiryToQuoteRate *
-    quoteToBookRate *
-    avgBookedCommission;
+    stats.enquiries.count * enquiryBookRate * avgBookedCommission;
 
-  // Projection: sum of quote commissions × quote→book rate
-  const projectedFromQuotes = stats.quotes.commission * quoteToBookRate;
+  // Projection: sum of quote commissions × 20% book rate
+  const projectedFromQuotes = stats.quotes.commission * quoteBookRate;
 
-  // Projection: in-play quote commissions × quote→book rate
-  const projectedFromInPlay = stats.inPlay.commission * quoteToBookRate;
+  // Projection: in-play quote commissions × 26% book rate
+  const projectedFromInPlay = stats.inPlay.commission * inPlayBookRate;
 
   const totalProjectedCommission = stats.booked.commission + projectedFromInPlay;
 
@@ -458,9 +447,7 @@ export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
               icon={ClipboardList}
               label="Enquiries Projections"
               value={fmtCurrency(projectedFromEnquiries)}
-              hint={`${stats.enquiries.count} enquiries × ${Math.round(
-                enquiryToQuoteRate * 100,
-              )}% × ${Math.round(quoteToBookRate * 100)}%`}
+              hint={`${stats.enquiries.count} enquiries × ${Math.round(enquiryBookRate * 100)}% book rate`}
               color="text-sky-600 dark:text-sky-400"
               bg="bg-sky-500/10"
               testId="prediction-enquiries"
@@ -469,7 +456,7 @@ export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
               icon={FileText}
               label="Projected from Quotes"
               value={fmtCurrency(projectedFromQuotes)}
-              hint={`${stats.quotes.count} quotes × ${Math.round(quoteToBookRate * 100)}% book rate`}
+              hint={`${stats.quotes.count} quotes × ${Math.round(quoteBookRate * 100)}% book rate`}
               color="text-indigo-600 dark:text-indigo-400"
               bg="bg-indigo-500/10"
               testId="prediction-quotes"
@@ -478,7 +465,7 @@ export function ConversionFunnelCard({ branchId }: { branchId?: string } = {}) {
               icon={PlayCircle}
               label="Projected from In Play"
               value={fmtCurrency(projectedFromInPlay)}
-              hint={`${stats.inPlay.count} in-play × ${Math.round(quoteToBookRate * 100)}%`}
+              hint={`${stats.inPlay.count} in-play × ${Math.round(inPlayBookRate * 100)}% book rate`}
               color="text-amber-600 dark:text-amber-400"
               bg="bg-amber-500/10"
               testId="prediction-in-play"
