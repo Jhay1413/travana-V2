@@ -6,9 +6,8 @@ import { useBranches, useOrganizationOverviewStats } from "@/hooks/queries";
 import { OrgProfileStrip } from "./org-profile-strip";
 import { KpiCards } from "./kpi-cards";
 import { BranchesPerformanceTable } from "./branches-performance-table";
-import { TopDestinationsCard } from "./top-destinations-card";
-import { AttentionCard } from "./attention-card";
 import { AgentsPerformanceCard } from "./agents-performance-card";
+import { ForwardsSynopsisCard } from "./forwards-synopsis-card";
 import BranchOverviewPage from "@/pages/branch-overview";
 
 type DemoView = "single-branch" | "multi-branch";
@@ -80,25 +79,14 @@ export default function OrganizationOverviewPage() {
             <BranchOverviewPage branchId={defaultBranchId} hideTitle />
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <TopDestinationsCard
-              destinations={data.topDestinations}
-              resorts={data.topResorts}
-              tourOperators={data.topTourOperators}
-            />
-            <AttentionCard attention={data.attention} />
-          </div>
+          <ForwardsSynopsisCard />
         </>
       ) : (
         <>
           <KpiCards kpis={data.kpis} />
           <BranchesPerformanceTable />
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="md:col-span-2">
-              <AgentsPerformanceCard agentsOnly />
-            </div>
-            <AttentionCard attention={data.attention} />
-          </div>
+          <ForwardsSynopsisCard />
+          <AgentsPerformanceCard agentsOnly />
         </>
       )}
     </section>
