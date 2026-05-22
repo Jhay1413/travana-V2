@@ -156,6 +156,8 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
   const quartersCount = Math.ceil(MONTHS.length / 3);
   const visibleMonths = MONTHS.slice(quarter * 3, quarter * 3 + 3);
 
+  const [overviewHorizon, setOverviewHorizon] = useState<12 | 18 | 24>(12);
+
   const validationData = useMemo(() => {
     return MONTHS.map((m) => {
       const shop = shopTargets[m.key] ?? 0;
@@ -165,6 +167,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
   }, [shopTargets, agentTargets, agents]);
 
   const validationData12 = validationData.slice(0, 12);
+  const overviewRows = validationData.slice(0, overviewHorizon);
 
   const overallHealth = useMemo(() => {
     const balanced = validationData12.filter(v => Math.abs(v.diff) < 500).length;
@@ -531,9 +534,33 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
       </Card>
 
       <Card className="overflow-hidden rounded-2xl border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="card-full-overview">
-        <div className="p-4 pb-2">
-          <h3 className="text-sm font-semibold">Full 24-Month Overview</h3>
-          <p className="mt-0.5 text-[11px] text-black/40">Click any row to edit that month's targets.</p>
+        <div className="flex items-start justify-between gap-3 p-4 pb-2">
+          <div>
+            <h3 className="text-sm font-semibold" data-testid="text-overview-heading">
+              Full {overviewHorizon}-Month Overview
+            </h3>
+            <p className="mt-0.5 text-[11px] text-black/40">Click any row to edit that month's targets.</p>
+          </div>
+          <div
+            className="flex items-center gap-1 rounded-xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5"
+            data-testid="overview-horizon-toggle"
+          >
+            {([12, 18, 24] as const).map((h) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => setOverviewHorizon(h)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  overviewHorizon === h
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"
+                }`}
+                data-testid={`button-overview-horizon-${h}`}
+              >
+                {h}m
+              </button>
+            ))}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -550,7 +577,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
               </tr>
             </thead>
             <tbody>
-              {validationData.map((row) => (
+              {overviewRows.map((row) => (
                 <tr
                   key={row.key}
                   className="cursor-pointer border-b border-black/[0.03] transition hover:bg-blue-50/50 dark:border-white/[0.03] dark:hover:bg-blue-500/5"
