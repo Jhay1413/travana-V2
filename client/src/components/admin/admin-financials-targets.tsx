@@ -324,7 +324,29 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
   }, [shopTargets, agentTargets, agents]);
 
   const validationData12 = validationData.slice(0, 12);
-  const overviewRows = validationData.slice(0, overviewHorizon);
+
+  const overviewRows = useMemo(() => {
+    const now = new Date();
+    const startYear = now.getFullYear();
+    const rows: typeof validationData = [];
+    for (let i = 0; i < overviewHorizon; i++) {
+      const d = new Date(startYear, i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const shop = shopTargets[key] ?? 0;
+      const agentTotal = agents.reduce((s, a) => s + (agentTargets[a.id]?.[key] ?? 0), 0);
+      rows.push({
+        key,
+        label: d.toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
+        short: d.toLocaleDateString("en-GB", { month: "short" }),
+        monthNum: d.getMonth(),
+        year: d.getFullYear(),
+        shop,
+        agentTotal,
+        diff: agentTotal - shop,
+      });
+    }
+    return rows;
+  }, [overviewHorizon, shopTargets, agentTargets, agents]);
 
   const overallHealth = useMemo(() => {
     const balanced = validationData12.filter(v => Math.abs(v.diff) < 500).length;
