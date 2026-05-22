@@ -6,7 +6,10 @@ import { KpiCards } from "./kpi-cards";
 import { ConversionFunnelCard } from "./conversion-funnel-card";
 import { AgentsPerformanceCard } from "./agents-performance-card";
 
-export default function BranchOverviewPage({ branchId }: { branchId?: string } = {}) {
+export default function BranchOverviewPage({
+  branchId,
+  hideTitle = false,
+}: { branchId?: string; hideTitle?: boolean } = {}) {
   const { data, isLoading, isError, error } = useBranchOverviewStats(branchId);
 
   if (isLoading) {
@@ -40,10 +43,12 @@ export default function BranchOverviewPage({ branchId }: { branchId?: string } =
 
   return (
     <section className="space-y-4" data-testid="branch-overview-page">
-      <div className="flex items-center gap-2">
-        <BarChart3 className="h-5 w-5 text-muted-foreground" aria-hidden />
-        <h1 className="text-xl font-semibold">Branch Overview</h1>
-      </div>
+      {hideTitle ? null : (
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-muted-foreground" aria-hidden />
+          <h1 className="text-xl font-semibold">Branch Overview</h1>
+        </div>
+      )}
 
       {data.branch ? <BranchProfileStrip branch={data.branch} /> : null}
 

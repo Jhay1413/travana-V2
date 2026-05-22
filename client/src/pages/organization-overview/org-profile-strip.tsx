@@ -45,13 +45,13 @@ export function OrgProfileStrip({ organization }: { organization: OrganizationSu
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <Briefcase className="h-3 w-3" />
-                  {organization.activeBranchCount} / {organization.branchCount}{" "}
+                  {organization.branchCount} / {organization.branchLimit ?? "∞"}{" "}
                   {organization.branchCount === 1 ? "branch" : "branches"}
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <Users className="h-3 w-3" /> {organization.memberCount}{" "}
                   {organization.memberCount === 1 ? "member" : "members"}
-                  {organization.seatLimit ? ` / ${organization.seatLimit} seats` : ""}
+                  {" / "}{organization.seatLimit ?? "∞"} seats
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <UserCheck className="h-3 w-3" /> {organization.clientCount.toLocaleString()}{" "}

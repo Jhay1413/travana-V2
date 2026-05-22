@@ -31,4 +31,24 @@ export const organizationOverviewController = {
     );
     return successResponse(res, data, "Agents performance retrieved successfully");
   }),
+
+  getBranchesPerformance: asyncHandler(async (req: Request, res: Response) => {
+    const rawRange = String(req.query.range ?? "month").toLowerCase();
+    const range = (ALLOWED_RANGES.has(rawRange as never) ? rawRange : "month") as
+      | "day"
+      | "week"
+      | "month"
+      | "custom";
+    const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+    const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+    const safeFrom = from && !Number.isNaN(from.getTime()) ? from : undefined;
+    const safeTo = to && !Number.isNaN(to.getTime()) ? to : undefined;
+    const data = await organizationOverviewService.getBranchesPerformance(
+      getScope(req),
+      range,
+      safeFrom,
+      safeTo,
+    );
+    return successResponse(res, data, "Branches performance retrieved successfully");
+  }),
 };

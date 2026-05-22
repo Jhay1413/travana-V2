@@ -16,4 +16,10 @@ router.get(
   organizationOverviewController.getAgentsPerformance,
 );
 
+router.get(
+  "/branches-performance",
+  requireOrgRole(["org_admin", "platform_admin"]),
+  organizationOverviewController.getBranchesPerformance,
+);
+
 export default router;

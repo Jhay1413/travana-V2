@@ -1,16 +1,24 @@
+import { useState } from "react";
 import { AlertCircle, BarChart3, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { useOrganizationOverviewStats } from "@/hooks/queries";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useBranches, useOrganizationOverviewStats } from "@/hooks/queries";
 import { OrgProfileStrip } from "./org-profile-strip";
 import { KpiCards } from "./kpi-cards";
-import { ConversionFunnelCard } from "./conversion-funnel-card";
-import { CommissionTrendCard } from "./commission-trend-card";
+import { BranchesPerformanceTable } from "./branches-performance-table";
 import { TopDestinationsCard } from "./top-destinations-card";
 import { AttentionCard } from "./attention-card";
 import { AgentsPerformanceCard } from "./agents-performance-card";
+import BranchOverviewPage from "@/pages/branch-overview";
+
+type DemoView = "single-branch" | "multi-branch";
 
 export default function OrganizationOverviewPage() {
   const { data, isLoading, isError, error } = useOrganizationOverviewStats();
+  const { data: branches } = useBranches();
+  const [demoView, setDemoView] = useState<DemoView>(
+    data?.kind === "single-branch" ? "single-branch" : "multi-branch",
+  );
 
   if (isLoading) {
     return (
@@ -41,33 +49,58 @@ export default function OrganizationOverviewPage() {
     );
   }
 
+  const defaultBranchId =
+    (branches ?? []).find((b) => b.isDefault)?.id ?? (branches ?? [])[0]?.id;
+
   return (
     <section className="space-y-4" data-testid="organization-overview-page">
-      <div className="flex items-center gap-2">
-        <BarChart3 className="h-5 w-5 text-muted-foreground" aria-hidden />
-        <h1 className="text-xl font-semibold">Agency Overview</h1>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-muted-foreground" aria-hidden />
+          <h1 className="text-xl font-semibold">Agency Overview</h1>
+        </div>
+        {/* TODO: remove — demo-only toggle to preview both overview layouts */}
+        <Tabs
+          value={demoView}
+          onValueChange={(v) => setDemoView(v as DemoView)}
+          data-testid="organization-overview-demo-tabs"
+        >
+          <TabsList>
+            <TabsTrigger value="single-branch">Single branch</TabsTrigger>
+            <TabsTrigger value="multi-branch">Multi branch</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {data.organization ? <OrgProfileStrip organization={data.organization} /> : null}
 
-      <KpiCards kpis={data.kpis} />
+      {demoView === "single-branch" ? (
+        <>
+          {defaultBranchId ? (
+            <BranchOverviewPage branchId={defaultBranchId} hideTitle />
+          ) : null}
 
-      <AgentsPerformanceCard />
-
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_.6fr]">
-        <CommissionTrendCard trend={data.trend} />
-        <AttentionCard attention={data.attention} />
-      </div>
-
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <TopDestinationsCard
-          destinations={data.topDestinations}
-          resorts={data.topResorts}
-          tourOperators={data.topTourOperators}
-        />
-        <ConversionFunnelCard funnel={data.funnel} />
-      </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <TopDestinationsCard
+              destinations={data.topDestinations}
+              resorts={data.topResorts}
+              tourOperators={data.topTourOperators}
+            />
+            <AttentionCard attention={data.attention} />
+          </div>
+        </>
+      ) : (
+        <>
+          <KpiCards kpis={data.kpis} />
+          <BranchesPerformanceTable />
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="md:col-span-2">
+              <AgentsPerformanceCard agentsOnly />
+            </div>
+            <AttentionCard attention={data.attention} />
+          </div>
+        </>
+      )}
     </section>
   );
 }

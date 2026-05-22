@@ -13,7 +13,7 @@ export { useReplies, replyKeys } from "./use-reply-queries";
 export { useNotifications, useUnreadNotifications, notificationKeys } from "./use-notification-queries";
 export { useDashboardStats, useMyProfit, useAdminOverviewStats, useAgentStats, dashboardKeys } from "./use-dashboard-queries";
 export { useBranchOverviewStats, useAgentsPerformance, branchOverviewKeys } from "./use-branch-overview-queries";
-export { useOrganizationOverviewStats, useOrganizationAgentsPerformance, organizationOverviewKeys } from "./use-organization-overview-queries";
+export { useOrganizationOverviewStats, useOrganizationAgentsPerformance, useOrganizationBranchesPerformance, organizationOverviewKeys } from "./use-organization-overview-queries";
 export {
   useSalesReport,
   useAgentPerformanceReport,
@@ -33,6 +33,7 @@ export { useSharedEmailAccount, useEmailAccounts, useEmailMessages, useEmailMess
 export { useFacebookPages, useFacebookConversations, useFacebookMessages, facebookKeys } from "./use-facebook-queries";
 export { useCurrentOrganization, useOrgMembers, organizationKeys } from "./use-organization-queries";
 export { useBranches, useBranch, branchKeys } from "./use-branch-queries";
+export { usePlans, planKeys } from "./use-plan-queries";
 export { usePendingInvites, useInviteByToken, inviteKeys } from "./use-invite-queries";
 export { useHrEmployees, useHrEmployee, useHrReminders, useMyHrRecord, hrKeys } from "./use-hr-queries";
 export { useOpportunityEnquiries, useOpportunityQuotes, useOpportunityBookings, useOpportunityAgents, opportunitiesKeys } from "./use-opportunities-queries";

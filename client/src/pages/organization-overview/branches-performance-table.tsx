@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3,
+  Building2,
+  CalendarClock,
   Globe,
+  LineChart as LineChartIcon,
+  ListChecks,
   Plane,
-  Ship,
-  TrendingDown,
-  TrendingUp,
-  Users,
-  UtensilsCrossed,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -21,20 +21,35 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
-  useOrganizationAgentsPerformance,
+  useOrganizationBranchesPerformance,
   useOrganizationOverviewStats,
   useTourOperators,
   useTransactions,
 } from "@/hooks/queries";
 import { currency } from "./helpers";
+import { CommissionTrendCard } from "./commission-trend-card";
+import {
+  SocialPostsTab,
+  type SocialFilter,
+} from "@/pages/agent-overview/social-posts-tab";
+import {
+  WhatsOnTab,
+  type WhatsOnFilter,
+} from "@/pages/agent-overview/whats-on-tab";
 
 type TabKey =
-  | "agent-performance"
+  | "branch-performance"
+  | "whats-on"
+  | "social-posts"
+  | "commission-trend"
   | "revenue-analytics"
   | "tour-operators";
 
 const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
-  { key: "agent-performance", label: "Agents", icon: Users },
+  { key: "branch-performance", label: "Branches", icon: Building2 },
+  { key: "whats-on", label: "What's On", icon: ListChecks },
+  { key: "social-posts", label: "Social Posts", icon: CalendarClock },
+  { key: "commission-trend", label: "Commission vs Target", icon: LineChartIcon },
   { key: "revenue-analytics", label: "Conversion Stats", icon: BarChart3 },
   { key: "tour-operators", label: "Tour Operators", icon: Plane },
 ];
@@ -62,48 +77,26 @@ function getProfit(item: any): number {
   return parseFloat(item?.package_commission) || 0;
 }
 
-function ProgressBar({
-  value,
-  max,
-  color,
-  height = "h-2",
-}: {
-  value: number;
-  max: number;
-  color: string;
-  height?: string;
-}) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  return (
-    <div
-      className={cn(
-        "relative w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10",
-        height,
-      )}
-    >
-      <motion.div
-        className={cn("absolute inset-y-0 left-0 rounded-full", color)}
-        initial={{ width: 0 }}
-        animate={{ width: `${pct}%` }}
-        transition={{ duration: 1, ease: [0.25, 0.46, 0.45, 0.94] }}
-      />
-    </div>
-  );
-}
-
-export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boolean } = {}) {
-  const visibleTabs = agentsOnly ? TABS.filter((t) => t.key === "agent-performance") : TABS;
-  const [tab, setTab] = useState<TabKey>("agent-performance");
-  const [agentRange, setAgentRange] = useState<
+export function BranchesPerformanceTable() {
+  const [tab, setTab] = useState<TabKey>("branch-performance");
+  const [branchRange, setBranchRange] = useState<
     "day" | "week" | "month" | "custom"
   >("month");
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
 
-  const { data, isLoading, isError } = useOrganizationAgentsPerformance(
-    agentRange === "custom"
+  const today = new Date().toISOString().slice(0, 10);
+  const [socialFilter, setSocialFilter] = useState<SocialFilter>("today");
+  const [socialDateFrom, setSocialDateFrom] = useState<string>(today);
+  const [socialDateTo, setSocialDateTo] = useState<string>(today);
+
+  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("all");
+  const [whatsOnDate, setWhatsOnDate] = useState<string>(today);
+
+  const { data, isLoading, isError } = useOrganizationBranchesPerformance(
+    branchRange === "custom"
       ? { range: "custom", from: customFrom, to: customTo }
-      : { range: agentRange },
+      : { range: branchRange },
   );
   const { data: transactionsData } = useTransactions();
   const { data: tourOperators } = useTourOperators();
@@ -115,87 +108,14 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
     year: "numeric",
   });
 
-  const agentRows = data?.rows ?? [];
+  const branchRows = data?.rows ?? [];
+  const branchNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of branchRows) map.set(b.id, b.name);
+    return map;
+  }, [branchRows]);
 
-  // ---------------- Revenue tab data ----------------
-  const { destinationRevenue, boardBasisRevenue } = useMemo(() => {
-    const empty = { destinationRevenue: [], boardBasisRevenue: [] } as {
-      destinationRevenue: { name: string; revenue: number; bookings: number }[];
-      boardBasisRevenue: { name: string; revenue: number; count: number }[];
-    };
-    if (!transactionsData) return empty;
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const destMap = new Map<
-      string,
-      { name: string; revenue: number; bookings: number }
-    >();
-    const bbMap = new Map<
-      string,
-      { name: string; revenue: number; count: number }
-    >();
-
-    for (const t of transactionsData as any[]) {
-      if (!t.booking) continue;
-      const bDate = new Date(t.booking.date_created || t.created_at);
-      if (bDate < monthStart || bDate >= monthEnd) continue;
-
-      let destName: string | null = null;
-      if (t.booking.accommodations?.[0]?.destination_name) {
-        destName = t.booking.accommodations[0].destination_name;
-      } else if (t.booking.title) {
-        destName = t.booking.title;
-      }
-      if (!destName && t.enquiry?.destinations?.[0]?.name) {
-        destName = t.enquiry.destinations[0].name;
-      }
-      if (!destName) destName = "Unspecified";
-      if (destName !== "Unspecified") {
-        if (!destMap.has(destName)) {
-          destMap.set(destName, { name: destName, revenue: 0, bookings: 0 });
-        }
-        const e = destMap.get(destName)!;
-        e.revenue += getProfit(t.booking);
-        e.bookings += 1;
-      }
-
-      let boardBasis: string | null = null;
-      if (t.booking.accommodations?.[0]?.board_basis_name) {
-        boardBasis = t.booking.accommodations[0].board_basis_name;
-      } else if (t.quotes?.[0]?.accommodations?.[0]?.board_basis_name) {
-        boardBasis = t.quotes[0].accommodations[0].board_basis_name;
-      }
-      if (boardBasis) {
-        if (!bbMap.has(boardBasis)) {
-          bbMap.set(boardBasis, { name: boardBasis, revenue: 0, count: 0 });
-        }
-        const e = bbMap.get(boardBasis)!;
-        e.revenue += getProfit(t.booking);
-        e.count += 1;
-      }
-    }
-
-    return {
-      destinationRevenue: Array.from(destMap.values()).sort(
-        (a, b) => b.revenue - a.revenue,
-      ),
-      boardBasisRevenue: Array.from(bbMap.values()).sort(
-        (a, b) => b.revenue - a.revenue,
-      ),
-    };
-  }, [transactionsData]);
-
-  const topDestinations = destinationRevenue.slice(0, 5);
-  const topDestination = topDestinations[0];
-  const lowestDestination =
-    destinationRevenue.length > 1
-      ? destinationRevenue[destinationRevenue.length - 1]
-      : null;
-  const maxDestRevenue = topDestinations[0]?.revenue ?? 1;
-  const maxBBRevenue = boardBasisRevenue[0]?.revenue ?? 1;
-
-  // ---------------- Tour Operators tab data ----------------
+  // ---------------- Tour Operators tab data (org-wide) ----------------
   const tourOperatorAnalytics = useMemo(() => {
     if (!transactionsData) return [] as {
       id: string;
@@ -270,12 +190,8 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
       .slice(0, 10);
   }, [transactionsData, tourOperators]);
 
-  const maxTOBar = tourOperatorAnalytics.length
-    ? Math.max(...tourOperatorAnalytics.map((t) => t.commission), 1)
-    : 1;
-
-  // ---------------- Conversion stats per agent (Revenue tab) ----------------
-  const conversionStatsByAgent = useMemo(() => {
+  // ---------------- Conversion stats per branch (Revenue tab) ----------------
+  const conversionStatsByBranch = useMemo(() => {
     const map = new Map<
       string,
       {
@@ -307,11 +223,11 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
     };
 
     for (const t of transactionsData as any[]) {
-      const userId = t.user_id;
-      if (!userId) continue;
+      const branchId = t.branch_id;
+      if (!branchId) continue;
       const txDate = new Date(t.created_at);
       if (txDate >= monthStart && txDate < monthEnd) {
-        const e = ensure(userId);
+        const e = ensure(branchId);
         if (t.enquiry) e.enquiries += 1;
       }
 
@@ -319,7 +235,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
       for (const q of quotes) {
         const qDate = new Date(q.date_created || t.created_at);
         if (qDate < monthStart || qDate >= monthEnd) continue;
-        const e = ensure(userId);
+        const e = ensure(branchId);
         e.quotes += 1;
         if (String(q.quote_status).toUpperCase() === "LOST") e.lost += 1;
       }
@@ -327,7 +243,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
       if (t.booking) {
         const bDate = new Date(t.booking.date_created || t.created_at);
         if (bDate >= monthStart && bDate < monthEnd) {
-          const e = ensure(userId);
+          const e = ensure(branchId);
           const bStatus = String(t.booking.booking_status || "").toUpperCase();
           if (bStatus === "LOST" || bStatus === "CANCELLED") {
             e.cancelled += 1;
@@ -350,10 +266,10 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
     >
       <div
         className="rounded-2xl border border-gray-200/80 bg-white/90 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/5"
-        data-testid="agents-performance-card"
+        data-testid="branches-performance-table"
       >
         <div className="flex items-center gap-1 border-b border-gray-100 px-1.5 pt-1.5 dark:border-white/10">
-          {visibleTabs.map((t) => {
+          {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.key;
             return (
@@ -378,23 +294,23 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
 
         <div className="p-5">
           <AnimatePresence mode="wait">
-            {tab === "agent-performance" && (
+            {tab === "branch-performance" && (
               <motion.div
-                key="agent-performance"
+                key="branch-performance"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.3 }}
                 className="space-y-5"
-                data-testid="panel-agent-performance"
+                data-testid="panel-branch-performance"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs font-medium text-gray-400">
-                    {agentRange === "day"
+                    {branchRange === "day"
                       ? "Showing data for today"
-                      : agentRange === "week"
+                      : branchRange === "week"
                         ? "Showing data for this week"
-                        : agentRange === "month"
+                        : branchRange === "month"
                           ? `Showing data for ${monthName}`
                           : customFrom && customTo
                             ? `Showing ${customFrom} → ${customTo}`
@@ -402,7 +318,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                   </p>
                   <div
                     className="inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5 text-xs shadow-sm dark:border-white/10 dark:bg-white/5"
-                    data-testid="agent-range-slider"
+                    data-testid="branch-range-slider"
                   >
                     {(
                       [
@@ -412,19 +328,19 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                         { key: "custom", label: "Date Range" },
                       ] as const
                     ).map((opt) => {
-                      const active = agentRange === opt.key;
+                      const active = branchRange === opt.key;
                       return (
                         <button
                           key={opt.key}
                           type="button"
-                          onClick={() => setAgentRange(opt.key)}
+                          onClick={() => setBranchRange(opt.key)}
                           className={cn(
                             "rounded-full px-3 py-1 font-medium transition-all",
                             active
                               ? "bg-amber-400 text-gray-900 shadow"
                               : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white",
                           )}
-                          data-testid={`agent-range-${opt.key}`}
+                          data-testid={`branch-range-${opt.key}`}
                         >
                           {opt.label}
                         </button>
@@ -432,7 +348,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                     })}
                   </div>
                 </div>
-                {agentRange === "custom" && (
+                {branchRange === "custom" && (
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <label className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
                       From
@@ -441,7 +357,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                         value={customFrom}
                         onChange={(e) => setCustomFrom(e.target.value)}
                         className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
-                        data-testid="agent-range-from"
+                        data-testid="branch-range-from"
                       />
                     </label>
                     <label className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
@@ -451,7 +367,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                         value={customTo}
                         onChange={(e) => setCustomTo(e.target.value)}
                         className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
-                        data-testid="agent-range-to"
+                        data-testid="branch-range-to"
                       />
                     </label>
                   </div>
@@ -460,7 +376,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                 {isError ? (
                   <div className="rounded-2xl border border-dashed border-rose-200 bg-rose-50/50 p-8 text-center dark:border-rose-500/20 dark:bg-rose-500/5">
                     <p className="text-sm text-rose-500">
-                      Couldn't load agents performance.
+                      Couldn't load branches performance.
                     </p>
                   </div>
                 ) : isLoading ? (
@@ -470,7 +386,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                         <div
                           key={i}
                           className="flex items-center gap-3 bg-white px-4 py-3 dark:bg-white/[0.02]"
-                          data-testid={`row-agent-skeleton-${i}`}
+                          data-testid={`row-branch-skeleton-${i}`}
                         >
                           <Skeleton className="h-8 w-8 rounded-lg" />
                           <Skeleton className="h-4 flex-1" />
@@ -484,26 +400,26 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                       ))}
                     </div>
                   </div>
-                ) : agentRows.length === 0 ? (
+                ) : branchRows.length === 0 ? (
                   <div
                     className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-8 text-center dark:border-white/10 dark:bg-white/[0.02]"
-                    data-testid="empty-agent-performance"
+                    data-testid="empty-branch-performance"
                   >
-                    <Users className="mx-auto mb-2 h-8 w-8 text-gray-300" />
+                    <Building2 className="mx-auto mb-2 h-8 w-8 text-gray-300" />
                     <p className="text-sm text-gray-400">
-                      No agent data available
+                      No branch data available
                     </p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-white/10">
                     <table
                       className="w-full text-sm"
-                      data-testid="table-agent-performance"
+                      data-testid="table-branch-performance"
                     >
                       <thead>
                         <tr className="bg-gray-50/80 dark:bg-white/5">
                           <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                            Agent
+                            Branch
                           </th>
                           <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                             Today
@@ -529,28 +445,28 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                         </tr>
                       </thead>
                       <tbody>
-                        {agentRows.map((agent, i) => {
-                          const today = agent.today || 0;
-                          const week = agent.week || 0;
-                          const month = agent.month || 0;
-                          const bookings = agent.rangeBookings || 0;
-                          const quotes = agent.rangeQuotes || 0;
+                        {branchRows.map((branch, i) => {
+                          const today = branch.today || 0;
+                          const week = branch.week || 0;
+                          const month = branch.month || 0;
+                          const bookings = branch.rangeBookings || 0;
+                          const quotes = branch.rangeQuotes || 0;
                           const closeRate =
                             quotes > 0
                               ? Math.round((bookings / quotes) * 100)
                               : 0;
-                          const avgPpb = agent.avgPerBooking || 0;
-                          const target = agent.target || 0;
+                          const avgPpb = branch.avgPerBooking || 0;
+                          const target = branch.target || 0;
                           const overUnder = month - target;
-                          const initials = initialsFor(agent.name);
+                          const initials = initialsFor(branch.name);
                           return (
                             <motion.tr
-                              key={agent.id}
+                              key={branch.id}
                               className="border-t border-gray-50 transition-colors hover:bg-gray-50/50 dark:border-white/5 dark:hover:bg-white/[0.02]"
                               initial={{ opacity: 0, x: -8 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: i * 0.05, duration: 0.3 }}
-                              data-testid={`row-agent-${agent.id}`}
+                              data-testid={`row-branch-${branch.id}`}
                             >
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2.5">
@@ -564,9 +480,13 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                                   >
                                     {initials}
                                   </div>
-                                  <span className="font-medium text-gray-900 dark:text-white">
-                                    {agent.firstName || agent.name}
-                                  </span>
+                                  <Link
+                                    href={`/agency/branches/${branch.id}`}
+                                    className="font-medium text-gray-900 hover:underline dark:text-white"
+                                    data-testid={`link-branch-${branch.id}`}
+                                  >
+                                    {branch.name}
+                                  </Link>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right font-medium tabular-nums text-gray-700 dark:text-gray-300">
@@ -622,6 +542,60 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
               </motion.div>
             )}
 
+            {tab === "whats-on" && (
+              <motion.div
+                key="whats-on"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3 }}
+                data-testid="panel-whats-on"
+              >
+                <WhatsOnTab
+                  userId=""
+                  allUsers
+                  whatsOnFilter={whatsOnFilter}
+                  whatsOnDate={whatsOnDate}
+                  setWhatsOnFilter={setWhatsOnFilter}
+                  setWhatsOnDate={setWhatsOnDate}
+                />
+              </motion.div>
+            )}
+
+            {tab === "social-posts" && (
+              <motion.div
+                key="social-posts"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3 }}
+                data-testid="panel-social-posts"
+              >
+                <SocialPostsTab
+                  tab="calendar"
+                  socialFilter={socialFilter}
+                  socialDateFrom={socialDateFrom}
+                  socialDateTo={socialDateTo}
+                  setSocialFilter={setSocialFilter}
+                  setSocialDateFrom={setSocialDateFrom}
+                  setSocialDateTo={setSocialDateTo}
+                />
+              </motion.div>
+            )}
+
+            {tab === "commission-trend" && (
+              <motion.div
+                key="commission-trend"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3 }}
+                data-testid="panel-commission-trend"
+              >
+                <CommissionTrendCard trend={overviewStats?.trend ?? []} />
+              </motion.div>
+            )}
+
             {tab === "revenue-analytics" && (
               <motion.div
                 key="revenue-analytics"
@@ -641,14 +615,14 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                   </p>
                 </div>
 
-                {agentRows.length === 0 ? (
+                {branchRows.length === 0 ? (
                   <div
                     className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-8 text-center dark:border-white/10 dark:bg-white/[0.02]"
                     data-testid="empty-conversion-stats"
                   >
-                    <Users className="mx-auto mb-2 h-8 w-8 text-gray-300" />
+                    <Building2 className="mx-auto mb-2 h-8 w-8 text-gray-300" />
                     <p className="text-sm text-gray-400">
-                      No agent data available
+                      No branch data available
                     </p>
                   </div>
                 ) : (
@@ -660,7 +634,7 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                       <thead>
                         <tr className="bg-gray-50/80 dark:bg-white/5">
                           <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                            Agent
+                            Branch
                           </th>
                           <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                             Enquiries
@@ -686,32 +660,37 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                         </tr>
                       </thead>
                       <tbody>
-                        {agentRows.map((agent, i) => {
-                          const stats = conversionStatsByAgent.get(agent.id) ?? {
-                            enquiries: 0,
-                            quotes: 0,
-                            bookings: 0,
-                            lost: 0,
-                            cancelled: 0,
-                            bookingProfit: 0,
-                          };
+                        {branchRows.map((branch, i) => {
+                          const stats =
+                            conversionStatsByBranch.get(branch.id) ?? {
+                              enquiries: 0,
+                              quotes: 0,
+                              bookings: 0,
+                              lost: 0,
+                              cancelled: 0,
+                              bookingProfit: 0,
+                            };
                           const avgPpb =
                             stats.bookings > 0
                               ? stats.bookingProfit / stats.bookings
-                              : agent.avgPerBooking || 0;
+                              : branch.avgPerBooking || 0;
                           const closeRate =
                             stats.quotes > 0
-                              ? Math.round((stats.bookings / stats.quotes) * 100)
+                              ? Math.round(
+                                  (stats.bookings / stats.quotes) * 100,
+                                )
                               : 0;
-                          const initials = initialsFor(agent.name);
+                          const initials = initialsFor(
+                            branchNameById.get(branch.id) || branch.name,
+                          );
                           return (
                             <motion.tr
-                              key={agent.id}
+                              key={branch.id}
                               className="border-t border-gray-50 transition-colors hover:bg-gray-50/50 dark:border-white/5 dark:hover:bg-white/[0.02]"
                               initial={{ opacity: 0, x: -8 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: i * 0.05, duration: 0.3 }}
-                              data-testid={`row-conversion-${agent.id}`}
+                              data-testid={`row-conversion-${branch.id}`}
                             >
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2.5">
@@ -725,9 +704,13 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                                   >
                                     {initials}
                                   </div>
-                                  <span className="font-medium text-gray-900 dark:text-white">
-                                    {agent.firstName || agent.name}
-                                  </span>
+                                  <Link
+                                    href={`/agency/branches/${branch.id}`}
+                                    className="font-medium text-gray-900 hover:underline dark:text-white"
+                                    data-testid={`link-branch-${branch.id}`}
+                                  >
+                                    {branch.name}
+                                  </Link>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right font-medium tabular-nums text-gray-700 dark:text-gray-300">
@@ -772,8 +755,6 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
               </motion.div>
             )}
 
-
-
             {tab === "tour-operators" && (
               <motion.div
                 key="tour-operators"
@@ -810,7 +791,9 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                           <TableHead className="w-10">#</TableHead>
                           <TableHead>Name</TableHead>
                           <TableHead className="text-right">Bookings</TableHead>
-                          <TableHead className="text-right">Commission</TableHead>
+                          <TableHead className="text-right">
+                            Commission
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -864,7 +847,9 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                           <TableHead className="w-10">#</TableHead>
                           <TableHead>Name</TableHead>
                           <TableHead className="text-right">Bookings</TableHead>
-                          <TableHead className="text-right">Commission</TableHead>
+                          <TableHead className="text-right">
+                            Commission
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>

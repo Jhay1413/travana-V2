@@ -59,6 +59,21 @@ export const insertBranchSchema = createInsertSchema(branches).omit({ id: true, 
 export type Branch = typeof branches.$inferSelect;
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 
+export const plans = pgTable("plans", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  code: varchar("code").notNull().unique(),
+  name: varchar("name").notNull(),
+  branchLimit: integer("branch_limit"),
+  seatLimit: integer("seat_limit"),
+  priceCents: integer("price_cents").notNull().default(0),
+  features: jsonb("features").default(sql`'{}'`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertPlanSchema = createInsertSchema(plans).omit({ id: true, createdAt: true });
+export type Plan = typeof plans.$inferSelect;
+export type InsertPlan = z.infer<typeof insertPlanSchema>;
+
 export const sessions = pgTable("sessions", {
   sid: varchar("sid").primaryKey(),
   sess: jsonb("sess").notNull(),

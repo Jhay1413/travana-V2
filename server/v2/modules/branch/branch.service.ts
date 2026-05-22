@@ -1,5 +1,6 @@
 import { AppError } from '../../utils/error-handler';
 import { branchRepository } from './branch.repository';
+import { planService } from '../plan/plan.service';
 import type { InsertBranch } from '@shared/schema';
 
 type BranchInput = Partial<Omit<InsertBranch, 'organizationId'>>;
@@ -17,6 +18,8 @@ export const branchService = {
 
   async create(data: BranchInput, orgId: string) {
     if (!data.name?.trim()) throw new AppError('Branch name is required', 400);
+
+    await planService.assertCanAddBranch(orgId);
 
     const existingCount = await branchRepository.countByOrg(orgId);
     const shouldBeDefault = data.isDefault === true || existingCount === 0;

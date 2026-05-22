@@ -4,6 +4,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   FileText,
+  Forward,
   HeartHandshake,
   LayoutGrid,
   LifeBuoy,
@@ -17,6 +18,8 @@ import {
   Sparkles,
   Target,
   TrendingUp,
+  Trophy,
+  Type,
   UserCircle,
   Users,
   type LucideIcon,
@@ -77,26 +80,36 @@ const ORG_ADMIN_NAV: NavConfig = [
   {
     id: "overview",
     items: [
-      { path: "/agency/overview", label: "Agency Overview", icon: LayoutGrid },
+      { path: "/agency/overview", label: "Overview", icon: LayoutGrid },
     ],
   },
   {
-    id: "organization",
-    label: "Organization",
+    id: "organisation",
+    label: "Organisation",
     icon: Building2,
     items: [
       { path: "/agency/profile", label: "Profile & Branding", icon: Sparkles },
+      { path: "/agency/team", label: "Teams & Roles", icon: Users },
       { path: "/agency/branches", label: "Branches", icon: Building2 },
-      { path: "/agency/team", label: "Team & Roles", icon: Users },
-      { path: "/agency/targets", label: "Targets", icon: Target },
+      { path: "/hr", label: "HR", icon: HeartHandshake },
     ],
   },
   {
-    id: "billing",
-    label: "Billing",
+    id: "sales",
+    label: "Sales",
+    icon: TrendingUp,
+    items: [
+      { path: "/agency/targets", label: "Targets", icon: Target },
+      { path: "/agency/forwards", label: "Forwards", icon: Forward },
+      { path: "/agency/leaderboard", label: "Leaderboard", icon: Trophy },
+    ],
+  },
+  {
+    id: "account-info",
+    label: "Account Info",
     icon: CircleDollarSign,
     items: [
-      { path: "/agency/billing", label: "Plan & Seats", icon: CircleDollarSign },
+      { path: "/agency/billing", label: "Billing", icon: CircleDollarSign },
     ],
   },
   {
@@ -104,10 +117,9 @@ const ORG_ADMIN_NAV: NavConfig = [
     label: "Settings",
     icon: Settings2,
     items: [
-      { path: "/hr", label: "HR", icon: HeartHandshake },
       { path: "/agency/tour-operators", label: "Tour Operators", icon: Plane },
       { path: "/agency/templates", label: "Templates", icon: FileText },
-      { path: "/agency/data", label: "Reference Data", icon: ClipboardList },
+      { path: "/agency/texts", label: "Texts", icon: Type },
       { path: "/agency/audit", label: "Audit Log", icon: Activity },
     ],
   },

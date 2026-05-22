@@ -1,6 +1,7 @@
 import { db } from "../../config/database";
 import { booking, transaction, clientTable, user } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNotNull } from "drizzle-orm";
+import { totalBookingCommissionExpr } from "../../utils/commission-sql";
 
 export const revenueRepository = {
   async getForwardsForMonth(year: number, month: number, orgId: string | null): Promise<{
@@ -26,7 +27,7 @@ export const revenueRepository = {
 
     const baseQuery = db
       .select({
-        totalCommission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+        totalCommission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr()}), 0)`,
         dealCount: sql<number>`COUNT(*)`,
       })
       .from(booking);
@@ -70,7 +71,7 @@ export const revenueRepository = {
         clientFirstName: clientTable.firstName,
         clientSurename: clientTable.surename,
         travelDate: booking.travel_date,
-        commission: booking.package_commission,
+        commission: totalBookingCommissionExpr(),
         agentId: user.id,
         agentFirstName: user.firstName,
         agentLastName: user.lastName,
@@ -115,7 +116,7 @@ export const revenueRepository = {
         agentId: user.id,
         agentFirstName: user.firstName,
         agentLastName: user.lastName,
-        totalCommission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+        totalCommission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr()}), 0)`,
         dealCount: sql<number>`COUNT(*)`,
       })
       .from(booking)
@@ -129,7 +130,7 @@ export const revenueRepository = {
     const results = await scoped
       .where(and(...conditions))
       .groupBy(user.id, user.firstName, user.lastName)
-      .orderBy(sql`SUM(CAST(${booking.package_commission} AS DECIMAL)) DESC`);
+      .orderBy(sql`SUM(${totalBookingCommissionExpr()}) DESC`);
 
     return results.map((r) => ({
       agentId: r.agentId,
@@ -158,7 +159,7 @@ export const revenueRepository = {
 
     const baseQuery = db
       .select({
-        totalCommission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+        totalCommission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr()}), 0)`,
         totalDeals: sql<number>`COUNT(*)`,
       })
       .from(booking);

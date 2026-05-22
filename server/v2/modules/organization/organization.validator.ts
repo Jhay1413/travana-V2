@@ -1,10 +1,22 @@
 import { z } from 'zod';
 
+const billingContactSchema = z.object({
+  contactEmail: z.string().email().optional().or(z.literal('')),
+  companyName:  z.string().max(200).optional().or(z.literal('')),
+  addressLine1: z.string().max(200).optional().or(z.literal('')),
+  addressLine2: z.string().max(200).optional().or(z.literal('')),
+  city:         z.string().max(100).optional().or(z.literal('')),
+  postalCode:   z.string().max(20).optional().or(z.literal('')),
+  country:      z.string().max(100).optional().or(z.literal('')),
+  vatNumber:    z.string().max(40).optional().or(z.literal('')),
+}).partial();
+
 const orgSettingsSchema = z.object({
   timezone:   z.string().optional(),
   currency:   z.string().length(3).optional(),
   dateFormat: z.string().optional(),
   weekStart:  z.enum(['sunday', 'monday']).optional(),
+  billing:    billingContactSchema.optional(),
 }).passthrough();
 
 export const createOrganizationSchema = z.object({
@@ -26,5 +38,6 @@ export const updateOrganizationSchema = z.object({
     settings:   orgSettingsSchema.optional(),
     isActive:   z.boolean().optional(),
     seatLimit:  z.number().int().positive().optional(),
+    plan:       z.enum(['starter', 'growth', 'enterprise']).optional(),
   }),
 });

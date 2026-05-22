@@ -1,10 +1,22 @@
 import axiosClient from "../client/axios-client";
 
+export interface OrganizationBillingContact {
+  contactEmail?: string;
+  companyName?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
+  vatNumber?: string;
+}
+
 export interface OrganizationSettings {
   timezone?: string;
   currency?: string;
   dateFormat?: string;
   weekStart?: "sunday" | "monday";
+  billing?: OrganizationBillingContact;
   [key: string]: unknown;
 }
 
@@ -30,6 +42,7 @@ export type OrganizationUpdate = Partial<{
   settings:   OrganizationSettings;
   seatLimit:  number;
   isActive:   boolean;
+  plan:       "starter" | "growth" | "enterprise";
 }>;
 
 export interface OrgMemberBranch {

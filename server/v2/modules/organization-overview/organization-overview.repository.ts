@@ -3,6 +3,7 @@ import {
   organization,
   branches,
   branchMembers,
+  plans,
   clientTable,
   transaction,
   booking,
@@ -22,7 +23,7 @@ import {
 } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNull, ne, desc, inArray } from "drizzle-orm";
 import type {
-  OrganizationOverviewStats,
+  OrganizationOverviewCore,
   OrganizationSummary,
   OrganizationOverviewTrendPoint,
   OrganizationOverviewTopRow,
@@ -30,6 +31,8 @@ import type {
   AgentPerformanceRange,
   AgentPerformanceRow,
   AgentsPerformanceResponse,
+  BranchPerformanceRow,
+  BranchesPerformanceResponse,
 } from "./organization-overview.types";
 import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
 import { quoteStatsConds } from "../../utils/quote-conditions";
@@ -64,7 +67,7 @@ function addDays(d: Date, days: number) {
 }
 
 export const organizationOverviewRepository = {
-  async getStats(orgId: string | null): Promise<OrganizationOverviewStats> {
+  async getStats(orgId: string | null): Promise<OrganizationOverviewCore> {
     const now = new Date();
     const todayStart = startOfDay(now);
     const weekStart = startOfWeek(now);
@@ -337,10 +340,13 @@ export const organizationOverviewRepository = {
         plan: organization.plan,
         logoUrl: organization.logoUrl,
         isActive: organization.isActive,
-        seatLimit: organization.seatLimit,
+        orgSeatLimit: organization.seatLimit,
+        planSeatLimit: plans.seatLimit,
+        planBranchLimit: plans.branchLimit,
         createdAt: organization.createdAt,
       })
       .from(organization)
+      .leftJoin(plans, eq(plans.code, organization.plan))
       .where(eq(organization.id, orgId))
       .limit(1);
     if (!row) return null;
@@ -370,7 +376,8 @@ export const organizationOverviewRepository = {
       plan: row.plan ?? null,
       logoUrl: row.logoUrl ?? null,
       isActive: row.isActive,
-      seatLimit: row.seatLimit ?? null,
+      seatLimit: row.planSeatLimit ?? row.orgSeatLimit ?? null,
+      branchLimit: row.planBranchLimit ?? null,
       createdAt: row.createdAt ? row.createdAt.toISOString() : null,
       branchCount: Number(branchAgg[0]?.total ?? 0),
       activeBranchCount: Number(branchAgg[0]?.active ?? 0),
@@ -860,6 +867,158 @@ export const organizationOverviewRepository = {
     });
 
     rows.sort((a, b) => b.rangeCommission - a.rangeCommission || a.name.localeCompare(b.name));
+
+    return {
+      range,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      rows,
+    };
+  },
+
+  async getBranchesPerformance(
+    orgId: string | null,
+    range: AgentPerformanceRange,
+    customFrom?: Date,
+    customTo?: Date,
+  ): Promise<BranchesPerformanceResponse> {
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    const weekStart = startOfWeek(now);
+    const monthStart = startOfMonth(now);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    let from: Date;
+    let to: Date;
+    if (range === "day") {
+      from = todayStart;
+      to = addDays(todayStart, 1);
+    } else if (range === "week") {
+      from = weekStart;
+      to = addDays(todayStart, 1);
+    } else if (range === "month") {
+      from = monthStart;
+      to = monthEnd;
+    } else {
+      from = customFrom ? startOfDay(customFrom) : monthStart;
+      to = customTo ? addDays(startOfDay(customTo), 1) : monthEnd;
+    }
+
+    const branchRows = orgId
+      ? await db
+          .select({
+            id: branches.id,
+            name: branches.name,
+            code: branches.code,
+          })
+          .from(branches)
+          .where(eq(branches.organizationId, orgId))
+      : await db
+          .select({
+            id: branches.id,
+            name: branches.name,
+            code: branches.code,
+          })
+          .from(branches);
+
+    if (branchRows.length === 0) {
+      return { range, from: from.toISOString(), to: to.toISOString(), rows: [] };
+    }
+
+    const branchIds = branchRows.map((b) => b.id);
+
+    const scopeCond = orgId
+      ? and(testCond, eq(clientTable.orgId, orgId))
+      : testCond;
+
+    const [bookingAgg, quoteAgg, targetRows] = await Promise.all([
+      db
+        .select({
+          branchId: transaction.branch_id,
+          today: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          week: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          rangeBookings: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()})`,
+          rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          rangeSales: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN COALESCE(${booking.sales_price}, 0) ELSE 0 END), 0)`,
+        })
+        .from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(and(bookingActiveCond, scopeCond, inArray(transaction.branch_id, branchIds)))
+        .groupBy(transaction.branch_id),
+      db
+        .select({
+          branchId: transaction.branch_id,
+          rangeQuotes: sql<number>`COUNT(*) FILTER (WHERE ${quote.date_created} >= ${from.toISOString()} AND ${quote.date_created} < ${to.toISOString()})`,
+        })
+        .from(quote)
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(
+          and(
+            scopeCond,
+            sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+            inArray(transaction.branch_id, branchIds),
+          ),
+        )
+        .groupBy(transaction.branch_id),
+      db
+        .select({
+          branchId: shopTargetTable.branchId,
+          amount: shopTargetTable.targetAmount,
+        })
+        .from(shopTargetTable)
+        .where(
+          and(
+            eq(shopTargetTable.year, now.getFullYear()),
+            eq(shopTargetTable.month, now.getMonth() + 1),
+            inArray(shopTargetTable.branchId, branchIds),
+          ),
+        ),
+    ]);
+
+    const bookingByBranch = new Map(
+      bookingAgg.map((r) => [r.branchId ?? "", r] as const),
+    );
+    const quoteByBranch = new Map(
+      quoteAgg.map((r) => [r.branchId ?? "", Number(r.rangeQuotes ?? 0)] as const),
+    );
+    const targetByBranch = new Map(
+      targetRows.map((r) => [r.branchId, Number(r.amount)] as const),
+    );
+
+    const rows: BranchPerformanceRow[] = branchRows.map((b) => {
+      const bk = bookingByBranch.get(b.id);
+      const today = Number(bk?.today ?? 0);
+      const week = Number(bk?.week ?? 0);
+      const month = Number(bk?.month ?? 0);
+      const rangeBookings = Number(bk?.rangeBookings ?? 0);
+      const rangeCommission = Number(bk?.rangeCommission ?? 0);
+      const rangeSales = Number(bk?.rangeSales ?? 0);
+      const rangeQuotes = quoteByBranch.get(b.id) ?? 0;
+      const target = targetByBranch.get(b.id) ?? 0;
+      const achievedPercent = target > 0 ? (month / target) * 100 : 0;
+      return {
+        id: b.id,
+        name: b.name,
+        code: b.code ?? null,
+        today,
+        week,
+        month,
+        rangeBookings,
+        rangeCommission,
+        rangeSales,
+        rangeQuotes,
+        avgPerBooking: rangeBookings > 0 ? rangeCommission / rangeBookings : 0,
+        target,
+        achievedPercent,
+      };
+    });
+
+    rows.sort(
+      (a, b) => b.rangeCommission - a.rangeCommission || a.name.localeCompare(b.name),
+    );
 
     return {
       range,
