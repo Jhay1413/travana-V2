@@ -22,12 +22,12 @@ export const revenueService = {
   async getRevenueDashboard(scope: Scope): Promise<RevenueDashboardData> {
     const orgId = effectiveOrgId(scope);
     const now = new Date();
-    const currentYear = now.getFullYear();
     const monthlyData: MonthForwards[] = [];
 
-    for (let month = 1; month <= 12; month++) {
-      const targetDate = new Date(currentYear, month - 1, 1);
+    for (let i = 0; i < 12; i++) {
+      const targetDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const year = targetDate.getFullYear();
+      const month = targetDate.getMonth() + 1;
 
       const { totalCommission, dealCount } = await revenueRepository.getForwardsForMonth(year, month, orgId);
 
@@ -52,9 +52,7 @@ export const revenueService = {
       avgProfit: agent.dealCount > 0 ? agent.totalCommission / agent.dealCount : 0,
     }));
 
-    const currentMonth = now.getMonth() + 1;
-    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
-    const nextMonthData = monthlyData.find(m => m.monthNumber === nextMonth) || monthlyData[0];
+    const nextMonthData = monthlyData[1] || monthlyData[0];
 
     const nextMonthForwards = nextMonthData?.forwards || 0;
     const total12MonthForwards = monthlyData.reduce((sum, m) => sum + m.forwards, 0);
