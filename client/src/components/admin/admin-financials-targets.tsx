@@ -23,13 +23,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowRight,
-  Copy,
+  TrendingUp,
   Loader2,
 } from "lucide-react";
 import { 
   useTargetsOverview, 
   useUpsertShopTargets, 
-  useUpsertAgentTargets 
+  useUpsertAgentTargets,
+  useMonthBookings,
 } from "@/hooks/queries";
 import type { ShopTargetInput, AgentTargetInput } from "@/types/targets/targets.types";
 
@@ -69,6 +70,166 @@ function StatusBadge({ diff }: { diff: number }) {
     ? "border-red-500/25 bg-red-500/10 text-red-700"
     : "border-amber-500/25 bg-amber-500/10 text-amber-700";
   return <Badge className={`${cls} hover:${cls}`}>{s.label}</Badge>;
+}
+
+function LiveProjectionsCard({
+  agents,
+  agentTargets,
+  shopTargets,
+}: {
+  agents: { id: string; name: string }[];
+  agentTargets: Record<string, Record<string, number>>;
+  shopTargets: Record<string, number>;
+}) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const monthLabel = now.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const dayOfMonth = Math.min(now.getDate(), daysInMonth);
+  const runRateFactor = dayOfMonth > 0 ? daysInMonth / dayOfMonth : 1;
+
+  const { data: monthBookings, isLoading } = useMonthBookings(year, month);
+
+  const liveByAgent = useMemo(() => {
+    const map: Record<string, number> = {};
+    (monthBookings?.bookings ?? []).forEach((b) => {
+      map[b.agentId] = (map[b.agentId] ?? 0) + (b.commission ?? 0);
+    });
+    return map;
+  }, [monthBookings]);
+
+  const shopTarget = shopTargets[monthKey] ?? 0;
+  const shopLive = agents.reduce((s, a) => s + (liveByAgent[a.id] ?? 0), 0);
+  const shopProjected = shopLive * runRateFactor;
+  const shopPctOfTarget = shopTarget > 0 ? Math.round((shopProjected / shopTarget) * 100) : 0;
+  const shopOnTrack = shopProjected >= shopTarget;
+
+  return (
+    <Card
+      className="rounded-2xl border-black/10 bg-white/80 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5"
+      data-testid="card-live-projections"
+    >
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <TrendingUp className="h-4 w-4 text-blue-500" /> Live & Projections
+          </h3>
+          <p className="mt-0.5 text-[11px] text-black/40">
+            {monthLabel} · day {dayOfMonth} of {daysInMonth} · projected from run-rate
+          </p>
+        </div>
+        <div
+          className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+            shopOnTrack
+              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
+              : "border-amber-500/25 bg-amber-500/10 text-amber-700"
+          }`}
+          data-testid="badge-shop-projection"
+        >
+          {shopOnTrack ? (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          ) : (
+            <AlertTriangle className="h-3.5 w-3.5" />
+          )}
+          <span>
+            Shop: {fmt(shopProjected)} / {fmt(shopTarget)} ({shopPctOfTarget}%)
+          </span>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 py-6 text-xs text-black/50">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading live sales…
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-black/5 dark:border-white/5">
+                <th className="px-3 py-2 text-left text-xs font-medium text-black/50">Agent</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-black/50">Target</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-black/50">Live MTD</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-black/50">Projected</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-black/50">vs Target</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-black/50">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agents.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-xs text-black/40">
+                    No agents with targets yet.
+                  </td>
+                </tr>
+              ) : (
+                agents.map((a) => {
+                  const target = agentTargets[a.id]?.[monthKey] ?? 0;
+                  const live = liveByAgent[a.id] ?? 0;
+                  const projected = live * runRateFactor;
+                  const diff = projected - target;
+                  const onTrack = target > 0 ? projected >= target : false;
+                  const pct = target > 0 ? Math.min(100, Math.round((projected / target) * 100)) : 0;
+                  const barColor = onTrack
+                    ? "bg-emerald-500"
+                    : pct >= 75
+                      ? "bg-amber-500"
+                      : "bg-rose-500";
+                  return (
+                    <tr
+                      key={a.id}
+                      className="border-b border-black/[0.03] dark:border-white/[0.03]"
+                      data-testid={`row-live-${a.id}`}
+                    >
+                      <td className="px-3 py-2.5">
+                        <div className="text-sm font-medium">{a.name}</div>
+                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/5">
+                          <div
+                            className={`h-full rounded-full ${barColor} transition-all`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-sm tabular-nums">{fmt(target)}</td>
+                      <td className="px-3 py-2.5 text-right text-sm font-medium tabular-nums">{fmt(live)}</td>
+                      <td className="px-3 py-2.5 text-right text-sm font-semibold tabular-nums">
+                        {fmt(Math.round(projected))}
+                      </td>
+                      <td
+                        className={`px-3 py-2.5 text-right text-sm font-medium tabular-nums ${
+                          diff >= 0 ? "text-emerald-600" : "text-rose-600"
+                        }`}
+                      >
+                        {diff >= 0 ? "+" : ""}
+                        {fmt(Math.round(diff))}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {target === 0 ? (
+                          <Badge className="border-black/10 bg-black/5 text-black/50 hover:bg-black/5">
+                            No target
+                          </Badge>
+                        ) : onTrack ? (
+                          <Badge className="border-emerald-500/25 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10">
+                            On track
+                          </Badge>
+                        ) : (
+                          <Badge className="border-amber-500/25 bg-amber-500/10 text-amber-700 hover:bg-amber-500/10">
+                            Behind
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
 }
 
 function CurrencyInput({ value, onChange, placeholder, autoFocus, className, testId }: {
@@ -151,10 +312,6 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
 
   const [editMonth, setEditMonth] = useState<string | null>(null);
   const [editDrafts, setEditDrafts] = useState<{ shop: string; agents: Record<string, string> }>({ shop: "", agents: {} });
-
-  const [quarter, setQuarter] = useState(0);
-  const quartersCount = Math.ceil(MONTHS.length / 3);
-  const visibleMonths = MONTHS.slice(quarter * 3, quarter * 3 + 3);
 
   const [overviewHorizon, setOverviewHorizon] = useState<12 | 18 | 24>(12);
 
@@ -285,56 +442,6 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
     setWizardStep(0);
   }, [wizardShopDefault, wizardAgentDefaults, wizardApplyMode, agents, shopTargets, agentTargets, upsertShopMutation, upsertAgentMutation]);
 
-  const copyFromPrevQuarter = async () => {
-    if (quarter === 0) return;
-    const prevMonths = MONTHS.slice((quarter - 1) * 3, (quarter - 1) * 3 + 3);
-    const currMonths = MONTHS.slice(quarter * 3, quarter * 3 + 3);
-
-    const shopTargetsToSave: ShopTargetInput[] = [];
-    const nextShop: Record<string, number> = { ...shopTargets };
-    currMonths.forEach((cm, i) => {
-      if (prevMonths[i]) {
-        const val = shopTargets[prevMonths[i].key] ?? 0;
-        nextShop[cm.key] = val;
-        shopTargetsToSave.push({
-          year: cm.year,
-          month: cm.monthNum + 1,
-          targetAmount: val.toFixed(2),
-        });
-      }
-    });
-
-    const agentTargetsToSave: AgentTargetInput[] = [];
-    const nextAgent: Record<string, Record<string, number>> = { ...agentTargets };
-    agents.forEach(a => {
-      nextAgent[a.id] = { ...(nextAgent[a.id] ?? {}) };
-      currMonths.forEach((cm, i) => {
-        if (prevMonths[i]) {
-          const val = agentTargets[a.id]?.[prevMonths[i].key] ?? 0;
-          nextAgent[a.id][cm.key] = val;
-          agentTargetsToSave.push({
-            userId: a.id,
-            year: cm.year,
-            month: cm.monthNum + 1,
-            targetAmount: val.toFixed(2),
-          });
-        }
-      });
-    });
-
-    setShopTargets(nextShop);
-    setAgentTargets(nextAgent);
-
-    try {
-      await Promise.all([
-        shopTargetsToSave.length > 0 ? upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }) : Promise.resolve(),
-        agentTargetsToSave.length > 0 ? upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave }) : Promise.resolve(),
-      ]);
-    } catch (error) {
-      console.error("Failed to copy targets:", error);
-    }
-  };
-
   const wizardSteps = [
     { title: "Shop Target", icon: Store, desc: "Set the default monthly shop target" },
     { title: "Agent Targets", icon: Users, desc: "Set default targets for each agent" },
@@ -429,109 +536,11 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
         </Card>
       </div>
 
-      <Card className="rounded-2xl border-black/10 bg-white/80 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="card-quarter-nav">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Monthly Targets</h3>
-          <div className="flex items-center gap-2">
-            {quarter > 0 && (
-              <Button variant="ghost" size="sm" className="gap-1 rounded-xl text-xs" onClick={copyFromPrevQuarter} data-testid="button-copy-prev-quarter">
-                <Copy className="h-3 w-3" />
-                Copy Previous Quarter
-              </Button>
-            )}
-            <div className="flex items-center gap-1 rounded-xl bg-black/5 p-0.5 dark:bg-white/5">
-              <button
-                onClick={() => setQuarter(q => Math.max(0, q - 1))}
-                disabled={quarter === 0}
-                className="rounded-lg p-1.5 transition hover:bg-white disabled:opacity-30 dark:hover:bg-white/10"
-                data-testid="button-prev-quarter"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="min-w-[100px] px-2 text-center text-xs font-medium">
-                {visibleMonths[0]?.short} {visibleMonths[0]?.year} – {visibleMonths[visibleMonths.length - 1]?.short} {visibleMonths[visibleMonths.length - 1]?.year}
-              </span>
-              <button
-                onClick={() => setQuarter(q => Math.min(quartersCount - 1, q + 1))}
-                disabled={quarter >= quartersCount - 1}
-                className="rounded-lg p-1.5 transition hover:bg-white disabled:opacity-30 dark:hover:bg-white/10"
-                data-testid="button-next-quarter"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          {visibleMonths.map((m) => {
-            const shop = shopTargets[m.key] ?? 0;
-            const agentTotal = agents.reduce((s, a) => s + (agentTargets[a.id]?.[m.key] ?? 0), 0);
-            const diff = agentTotal - shop;
-            const si = statusInfo(diff);
-            const borderColor = si.color === "emerald" ? "border-emerald-200" : si.color === "red" ? "border-red-200" : "border-amber-200";
-
-            return (
-              <div
-                key={m.key}
-                className={`group relative rounded-2xl border-2 ${borderColor} bg-white p-4 transition hover:shadow-md dark:bg-white/5`}
-                data-testid={`month-card-${m.key}`}
-              >
-                <button
-                  className="absolute right-3 top-3 rounded-lg bg-black/5 p-1.5 text-black/40 opacity-0 transition hover:bg-blue-500 hover:text-white group-hover:opacity-100"
-                  onClick={() => openEditMonth(m.key)}
-                  data-testid={`button-edit-${m.key}`}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-
-                <h4 className="text-sm font-semibold">{m.label}</h4>
-
-                <div className="mt-3 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs text-black/50">
-                      <Store className="h-3 w-3" /> Shop Target
-                    </span>
-                    <span className="text-sm font-bold">{fmt(shop)}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs text-black/50">
-                      <Users className="h-3 w-3" /> Agent Total
-                    </span>
-                    <span className="text-sm font-semibold">{fmt(agentTotal)}</span>
-                  </div>
-
-                  <div className="h-px bg-black/5 dark:bg-white/5" />
-
-                  <div className="flex items-center justify-between">
-                    <StatusBadge diff={diff} />
-                    <span className={`text-xs font-medium ${si.color === "emerald" ? "text-emerald-600" : si.color === "red" ? "text-red-600" : "text-amber-600"}`}>
-                      {diff >= 0 ? "+" : ""}{fmt(diff)}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1 pt-1">
-                    {agents.map(a => {
-                      const av = agentTargets[a.id]?.[m.key] ?? 0;
-                      const pct = shop > 0 ? (av / shop) * 100 : 0;
-                      return (
-                        <div key={a.id} className="flex items-center gap-2">
-                          <span className="w-16 truncate text-[11px] text-black/50">{a.name.split(" ")[0]}</span>
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/5">
-                            <div className="h-full rounded-full bg-blue-400 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
-                          </div>
-                          <span className="w-14 text-right text-[11px] font-medium">{fmt(av)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+      <LiveProjectionsCard
+        agents={agents}
+        agentTargets={agentTargets}
+        shopTargets={shopTargets}
+      />
 
       <Card className="overflow-hidden rounded-2xl border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="card-full-overview">
         <div className="flex items-start justify-between gap-3 p-4 pb-2">
