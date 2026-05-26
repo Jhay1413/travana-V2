@@ -35,22 +35,32 @@ const agentSchema = z.object({
 });
 
 export const signupSchema = z.object({
-  body: z.object({
-    agencyName: z.string().min(1, "Agency name is required"),
-    slug: z
-      .string()
-      .min(3)
-      .max(40)
-      .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
-    brandColor: z.string().optional(),
-    logoUrl: z.string().url().optional(),
-    ownerName: z.string().min(1, "Owner name is required"),
-    ownerEmail: z.string().email("Owner email must be valid"),
-    ownerPhone: z.string().min(1, "Owner phone is required"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    branches: z.array(branchSchema).min(1, "At least one branch is required"),
-    agents: z.array(agentSchema).default([]),
-  }),
+  body: z
+    .object({
+      agencyName: z.string().min(1, "Agency name is required"),
+      slug: z
+        .string()
+        .min(3)
+        .max(40)
+        .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+      brandColor: z.string().optional(),
+      logoUrl: z.string().url().optional(),
+      ownerName: z.string().min(1, "Owner name is required"),
+      ownerEmail: z.string().email("Owner email must be valid"),
+      ownerPhone: z.string().min(1, "Owner phone is required"),
+      password: z.string().min(8, "Password must be at least 8 characters"),
+      branches: z.array(branchSchema).min(1, "At least one branch is required"),
+      agents: z.array(agentSchema).default([]),
+      hasHomeworkers: z.boolean().default(false),
+      homeworkerCommission: z.number().int().min(1).max(100).optional(),
+    })
+    .refine(
+      (data) => !data.hasHomeworkers || typeof data.homeworkerCommission === "number",
+      {
+        message: "Homeworker commission % is required when 'has homeworkers' is on",
+        path: ["homeworkerCommission"],
+      },
+    ),
 });
 
 export const verifyEmailSchema = z.object({

@@ -19,6 +19,17 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
   }
 
   if (dbUser.role === 'platform_admin') {
+    // Impersonating: scope the request to the target org as if we were an org_admin there.
+    // This makes tenant services apply org filtering instead of the cross-tenant
+    // short-circuit (e.g. booking.service.ts effectiveOrgId).
+    const impersonateOrgId = req.session?.impersonateOrgId;
+    if (impersonateOrgId) {
+      req.orgId    = impersonateOrgId;
+      req.branchId = null;
+      req.orgRole  = 'org_admin';
+      return next();
+    }
+
     req.orgId    = '';
     req.branchId = null;
     req.orgRole  = 'platform_admin';

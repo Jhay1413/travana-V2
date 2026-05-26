@@ -10,7 +10,11 @@ import LandingPage from "@/pages/landing";
 import SignupAgencyPage from "@/pages/signup-agency";
 import WelcomeTeamPage from "@/pages/welcome-team";
 import AgencyPage from "@/pages/agency";
+import PlatformAdminDashboard from "@/pages/platform-admin-dashboard";
 import PlatformAdminPage from "@/pages/platform-admin";
+import PlatformAdminOrgPage from "@/pages/platform-admin-org";
+import PlatformAdminUsersPage from "@/pages/platform-admin-users";
+import PlatformAdminAuditPage from "@/pages/platform-admin-audit";
 import ReferralAgentDashboard from "@/pages/referral-agent";
 import { useRole } from "@/hooks/use-role";
 import { BrandingApplier } from "@/components/branding-applier";
@@ -112,7 +116,11 @@ function AuthenticatedRouter() {
         <RoleRoute path="/branch-overview" allow={MANAGER_ROLES} component={BranchOverviewPage} />
         <RoleRoute path="/agency/overview" allow={ADMIN_ROLES} component={OrganizationOverviewPage} />
 
-        <RoleRoute path="/platform-admin" allow={PLATFORM_ROLES} component={PlatformAdminPage} />
+        <RoleRoute path="/platform-admin/audit-log" allow={PLATFORM_ROLES} component={PlatformAdminAuditPage} />
+        <RoleRoute path="/platform-admin/users" allow={PLATFORM_ROLES} component={PlatformAdminUsersPage} />
+        <RoleRoute path="/platform-admin/organizations/:id" allow={PLATFORM_ROLES} component={PlatformAdminOrgPage} />
+        <RoleRoute path="/platform-admin/organizations" allow={PLATFORM_ROLES} component={PlatformAdminPage} />
+        <RoleRoute path="/platform-admin" allow={PLATFORM_ROLES} component={PlatformAdminDashboard} />
         <RoleRoute path="/referral-hub" allow={REFERRAL_ROLES} component={ReferralAgentDashboard} />
 
         <RoleRoute path="/agency/team" allow={MANAGER_ROLES} component={AgencyPage} />

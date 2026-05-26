@@ -129,8 +129,10 @@ const PLATFORM_ADMIN_NAV: NavConfig = [
   {
     id: "main",
     items: [
-      { path: "/platform-admin", label: "All Agencies", icon: Building2 },
-      { path: "/", label: "Demo Workspace", icon: LayoutGrid },
+      { path: "/platform-admin", label: "Dashboard", icon: LayoutGrid },
+      { path: "/platform-admin/organizations", label: "All Agencies", icon: Building2 },
+      { path: "/platform-admin/users", label: "All Users", icon: Users },
+      { path: "/platform-admin/audit-log", label: "Audit Log", icon: Activity },
     ],
   },
 ];

@@ -55,6 +55,8 @@ export interface SignupPayload {
   password: string;
   branches: BranchPayload[];
   agents: AgentPayload[];
+  hasHomeworkers: boolean;
+  homeworkerCommission?: number;
 }
 
 export interface SignupResult {

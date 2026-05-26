@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { NotificationToast } from "@/components/notification-toast";
 import { AppHeader } from "./app-header";
 import { AppSidenav } from "./app-sidenav";
+import { ImpersonationBanner } from "@/components/platform-admin/impersonation-banner";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <AppSidenav />
         <div className="flex min-w-0 flex-1 flex-col gap-3" data-testid="app-content">
           <AppHeader />
+          <ImpersonationBanner />
           <main className="min-w-0 flex-1">{children}</main>
         </div>
       </div>

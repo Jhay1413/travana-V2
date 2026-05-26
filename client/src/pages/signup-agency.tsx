@@ -125,6 +125,10 @@ export default function SignupAgencyPage() {
   const [extraBranches, setExtraBranches] = useState<Branch[]>([]);
   const [editingExtraId, setEditingExtraId] = useState<string | null>(null);
 
+  // Step 4: Homeworkers (commission % applies to all homeworker agents in this agency)
+  const [hasHomeworkers, setHasHomeworkers] = useState(false);
+  const [homeworkerCommission, setHomeworkerCommission] = useState<number | "">("");
+
   // Step 5: Agents
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentForm, setAgentForm] = useState<Omit<Agent, "id">>(EMPTY_AGENT_FORM);
@@ -228,9 +232,16 @@ export default function SignupAgencyPage() {
     if (step === 2)
       return !!ownerName.trim() && !!ownerEmail.trim() && isValidEmail(ownerEmail)
         && !!ownerPhone.trim() && password.length >= 8;
-    if (step === 4)
-      return extraBranches.every((b) => !!b.name.trim() && !!b.address.trim() && !!b.phone.trim()
+    if (step === 4) {
+      const branchesOk = extraBranches.every((b) => !!b.name.trim() && !!b.address.trim() && !!b.phone.trim()
         && !!b.email.trim() && isValidEmail(b.email));
+      if (!branchesOk) return false;
+      if (hasHomeworkers) {
+        const n = Number(homeworkerCommission);
+        if (!Number.isInteger(n) || n < 1 || n > 100) return false;
+      }
+      return true;
+    }
     return true;
   };
 
@@ -270,6 +281,8 @@ export default function SignupAgencyPage() {
           contactPerson,
         };
       }),
+      hasHomeworkers,
+      homeworkerCommission: hasHomeworkers ? Number(homeworkerCommission) : undefined,
     };
 
     try {
@@ -491,6 +504,49 @@ export default function SignupAgencyPage() {
                     <p className="mt-1 text-sm text-black/60 dark:text-white/60">
                       Optional. Your default branch ({companyName.trim() || "main"}) is already set up — add more locations here.
                     </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-black/10 bg-blue-50/40 p-4 dark:border-white/10 dark:bg-blue-500/5">
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={hasHomeworkers}
+                        onChange={(e) => setHasHomeworkers(e.target.checked)}
+                        className="mt-1 h-4 w-4 accent-blue-500"
+                        data-testid="checkbox-has-homeworkers"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-semibold">This agency has homeworkers</div>
+                        <div className="mt-0.5 text-xs text-black/60 dark:text-white/60">
+                          Homeworkers are remote agents who only see their own deals. We'll create a Homeworkers group you can assign agents to after signup.
+                        </div>
+                      </div>
+                    </label>
+                    {hasHomeworkers && (
+                      <div className="mt-4 space-y-1.5">
+                        <Label htmlFor="homeworker-commission">Commission % for homeworkers</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="homeworker-commission"
+                            data-testid="input-homeworker-commission"
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={homeworkerCommission}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setHomeworkerCommission(v === "" ? "" : Number(v));
+                            }}
+                            placeholder="e.g. 60"
+                            className="max-w-[160px]"
+                          />
+                          <span className="text-sm text-black/60 dark:text-white/60">%</span>
+                        </div>
+                        {homeworkerCommission !== "" && (Number(homeworkerCommission) < 1 || Number(homeworkerCommission) > 100) && (
+                          <p className="text-xs text-red-600">Enter a value between 1 and 100</p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-3">
@@ -765,6 +821,18 @@ export default function SignupAgencyPage() {
                       </div>
                     </div>
                   ))}
+
+                  <div className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+                    <h3 className="mb-3 text-sm font-semibold text-black/80 dark:text-white/80">Homeworkers</h3>
+                    {hasHomeworkers ? (
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                        <dt className="text-black/50 dark:text-white/50">Enabled</dt><dd className="font-medium">Yes</dd>
+                        <dt className="text-black/50 dark:text-white/50">Commission</dt><dd className="font-medium">{homeworkerCommission || "—"}%</dd>
+                      </dl>
+                    ) : (
+                      <p className="text-sm text-black/40 dark:text-white/40">Not enabled.</p>
+                    )}
+                  </div>
 
                   <div className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
                     <h3 className="mb-3 text-sm font-semibold text-black/80 dark:text-white/80">Agents ({agents.length})</h3>

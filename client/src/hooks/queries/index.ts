@@ -37,3 +37,17 @@ export { usePlans, planKeys } from "./use-plan-queries";
 export { usePendingInvites, useInviteByToken, inviteKeys } from "./use-invite-queries";
 export { useHrEmployees, useHrEmployee, useHrReminders, useMyHrRecord, hrKeys } from "./use-hr-queries";
 export { useOpportunityEnquiries, useOpportunityQuotes, useOpportunityBookings, useOpportunityAgents, opportunitiesKeys } from "./use-opportunities-queries";
+export { useSmsTemplates, smsKeys } from "./use-sms-queries";
+export {
+  useAdminOrgs,
+  useAdminOrg,
+  useAdminUsers,
+  useAdminUser,
+  useAdminOrgUsers,
+  useAdminOrgBranches,
+  useAdminAuditLog,
+  useAdminCreditSummary,
+  useAdminCreditUsage,
+  useAdminCreditCharges,
+  platformAdminKeys,
+} from "./use-platform-admin-queries";

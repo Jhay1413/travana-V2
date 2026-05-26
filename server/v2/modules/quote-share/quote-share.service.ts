@@ -21,7 +21,8 @@ export const quoteShareService = {
   async verifyAccess(quoteId: string, userId: string, userRole: string) {
     const agentId = await quotePublicRepository.getAgentUserIdByQuoteId(quoteId);
     if (!agentId) throw new AppError('Quote not found', 404);
-    if (agentId !== userId && userRole !== 'admin' && userRole !== 'manager') {
+    const allowed = new Set(['admin', 'manager', 'agent', 'homeworker']);
+    if (agentId !== userId && !allowed.has(userRole)) {
       throw new AppError('Access denied', 403);
     }
   },

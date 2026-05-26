@@ -8,6 +8,7 @@ import { pushNotificationService } from '../notification/push-notification.servi
 import { quotePublicRepository } from '../quote/quote-public.repository';
 import { portalRepository } from './portal.repository';
 import { neonClientRepository } from '../neon-client/neon-client.repository';
+import { fireAutoTriggerForClient } from '../sms/sms.service';
 import { bridgePortalMessageToChat } from '../../../services/portal-chat-bridge';
 import { getUserId } from '../../utils/get-user-id';
 import bcrypt from 'bcryptjs';
@@ -703,6 +704,12 @@ portalRouter.post('/staff/set-pin', requireStaffAuth, async (req: Request, res: 
     }
     const hash = await bcrypt.hash(pin, 10);
     await neonClientRepository.setPortalPin(clientId, hash);
+    void fireAutoTriggerForClient({
+      clientId,
+      autoTrigger: 'on_pin_set',
+      triggerSource: 'portal.staff.set-pin',
+      dedupeSince: new Date(Date.now() - 5 * 60 * 1000),
+    });
     res.json({ success: true });
   } catch (err: any) {
     console.error('Set PIN error:', err);
@@ -742,6 +749,12 @@ portalStaffRouter.post('/set-pin', requireStaffAuth, async (req: Request, res: R
     }
     const hash = await bcrypt.hash(pin, 10);
     await neonClientRepository.setPortalPin(clientId, hash);
+    void fireAutoTriggerForClient({
+      clientId,
+      autoTrigger: 'on_pin_set',
+      triggerSource: 'portal.staff.set-pin',
+      dedupeSince: new Date(Date.now() - 5 * 60 * 1000),
+    });
     res.json({ success: true });
   } catch (err: any) {
     console.error('Set PIN error:', err);

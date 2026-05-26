@@ -7,6 +7,7 @@ import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./modules/task/task.repository";
 import { checkStaleTickets } from "./modules/ticket/ticket-notification.service";
 import { expireStaleEnquiriesAndQuotes } from "./modules/enquiry/expiry.service";
+import { runDaysBeforeDepartureSweep } from "./modules/sms/sms.cron";
 import quotePublicRoutes from "./modules/quote/quote-public.routes";
 import websitePublicRoutes from "./modules/website-public/website-public.routes";
 import portalRoutes, { portalStaffRouter } from "./modules/portal/portal.routes";
@@ -139,6 +140,17 @@ app.use((req, res, next) => {
           await expireStaleEnquiriesAndQuotes();
         } catch (err) {
           console.error("Expiry cron job failed:", err);
+        }
+      });
+
+      // 09:00 UTC daily: fire SMS templates with autoTrigger='days_before_departure'
+      // for bookings whose travel_date matches today + triggerDaysBefore.
+      cron.schedule("0 9 * * *", async () => {
+        try {
+          const summary = await runDaysBeforeDepartureSweep();
+          log(`[sms.cron] days-before-departure: ${JSON.stringify(summary)}`);
+        } catch (err) {
+          console.error("Days-before-departure SMS cron failed:", err);
         }
       });
     },

@@ -12,12 +12,15 @@ import { branchMemberRepository } from "../../modules/branch-member/branch-membe
 import { organizationRepository } from "../../modules/organization/organization.repository";
 import { branchRepository } from "../../modules/branch/branch.repository";
 
-async function resolveOrgAndBranchForUser(user: {
-  id: string;
-  role?: string | null;
-  orgRole?: string | null;
-  orgId?: string | null;
-}): Promise<{
+async function resolveOrgAndBranchForUser(
+  user: {
+    id: string;
+    role?: string | null;
+    orgRole?: string | null;
+    orgId?: string | null;
+  },
+  session?: { impersonateOrgId?: string | undefined },
+): Promise<{
   orgRole: string | null;
   orgId: string | null;
   branchId: string | null;
@@ -29,7 +32,17 @@ async function resolveOrgAndBranchForUser(user: {
   let branchId: string | null = null;
 
   if (user.role === "platform_admin") {
-    orgRole = "platform_admin";
+    // Impersonating: pretend to be an org_admin inside the target org so the
+    // rest of the app applies normal tenant scoping. ImpersonationBanner on the
+    // frontend detects the mismatch (role=platform_admin AND orgRole!=platform_admin)
+    // and offers "Stop impersonating".
+    if (session?.impersonateOrgId) {
+      orgRole = "org_admin";
+      orgId = session.impersonateOrgId;
+      branchId = null;
+    } else {
+      orgRole = "platform_admin";
+    }
   } else {
     const membership = await branchMemberRepository.findActiveByUserId(user.id);
     if (membership) {
@@ -91,7 +104,7 @@ export function registerAuthRoutes(app: Express): void {
           return res.status(500).json({ message: "Login failed" });
         }
         const { password: _, ...safeUser } = foundUser;
-        const ctx = await resolveOrgAndBranchForUser(foundUser);
+        const ctx = await resolveOrgAndBranchForUser(foundUser, req.session);
         return res.json({ ...safeUser, ...ctx });
       });
     } catch (error) {
@@ -111,7 +124,7 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(404).json({ message: "User not found" });
       }
       const { password: _, ...safeUser } = foundUser;
-      const ctx = await resolveOrgAndBranchForUser(foundUser);
+      const ctx = await resolveOrgAndBranchForUser(foundUser, req.session);
       res.json({ ...safeUser, ...ctx });
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -186,7 +199,7 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(404).json({ message: "User not found" });
       }
       const { password: _, ...safeUser } = updated;
-      const ctx = await resolveOrgAndBranchForUser(updated);
+      const ctx = await resolveOrgAndBranchForUser(updated, req.session);
       res.json({ ...safeUser, ...ctx });
     } catch (error) {
       console.error("Update profile error:", error);
@@ -296,7 +309,7 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       const { password: _, ...safeUser } = updated;
-      const ctx = await resolveOrgAndBranchForUser(updated);
+      const ctx = await resolveOrgAndBranchForUser(updated, req.session);
       res.json({ ...safeUser, ...ctx, avatar: avatarUrl });
     } catch (error) {
       console.error("Avatar upload error:", error);

@@ -430,6 +430,7 @@ export default function QuotePage() {
         shareCopied={shareCopied}
         shareLoading={shareLoading}
         onCopy={copyShareLink}
+        clientId={clientId || undefined}
       />
 
       <QuoteConvertDialog

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { AppError } from '../../utils/error-handler';
+import { getPublicBaseUrl } from '../../utils/public-url';
 import { getEmailProvider } from '../../../services/email-provider';
 import { inviteRepository, type PendingInviteRow } from './invite.repository';
 import { branchRepository } from '../branch/branch.repository';
@@ -13,7 +14,7 @@ type AllowedRole = (typeof ALLOWED_ROLES)[number];
 const BRANCH_MANAGER_INVITABLE: ReadonlySet<AllowedRole> = new Set<AllowedRole>(['agent', 'homeworker']);
 
 function buildInviteUrl(token: string): string {
-  const base = process.env.APP_URL ?? 'http://localhost:5000';
+  const base = getPublicBaseUrl() || 'http://localhost:5000';
   return `${base}/accept-invite?token=${encodeURIComponent(token)}`;
 }
 

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,27 +13,13 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MessageSquare, Send, Plus, Pencil, Trash2, Inbox, Cog, AlertTriangle } from "lucide-react";
-
-type SmsTemplate = {
-  id: string;
-  name: string;
-  category: "weekly_deals" | "balance_due" | "booking_confirmation" | "tickets_ready" | "portal_login" | "custom";
-  body: string;
-  autoTrigger:
-    | "manual"
-    | "on_booking_create"
-    | "on_pin_set"
-    | "on_tickets_uploaded"
-    | "days_before_departure"
-    | "weekly_schedule";
-  triggerDaysBefore: number | null;
-  triggerWeekday: number | null;
-  triggerHour: number | null;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
+import { MessageSquare, Send, Inbox, Cog, AlertTriangle } from "lucide-react";
+import {
+  SmsTemplatesManager,
+  SMS_CATEGORY_LABELS,
+} from "@/components/sms/templates-manager";
+import { useSmsTemplates } from "@/hooks/queries/use-sms-queries";
+import type { SmsTemplate } from "@/api/endpoints/sms.api";
 
 type SmsMessage = {
   id: string;
@@ -50,38 +35,6 @@ type SmsMessage = {
 };
 
 type StatusResp = { connected: boolean; fromPhone?: string; error?: string };
-
-const CATEGORY_LABELS: Record<SmsTemplate["category"], string> = {
-  weekly_deals: "Weekly Deals",
-  balance_due: "Balance Due",
-  booking_confirmation: "Booking Confirmation",
-  tickets_ready: "Tickets Ready",
-  portal_login: "Portal Login",
-  custom: "Custom",
-};
-
-const TRIGGER_LABELS: Record<SmsTemplate["autoTrigger"], string> = {
-  manual: "Manual only",
-  on_booking_create: "Auto: when booking is created",
-  on_pin_set: "Auto: when portal PIN is set",
-  on_tickets_uploaded: "Auto: when tickets are uploaded",
-  days_before_departure: "Auto: N days before departure",
-  weekly_schedule: "Auto: weekly on schedule",
-};
-
-const PLACEHOLDERS = [
-  "first_name",
-  "last_name",
-  "destination",
-  "departure_date",
-  "balance_due",
-  "balance_due_date",
-  "hays_ref",
-  "supplier_ref",
-  "portal_link",
-  "agent_name",
-  "company_name",
-];
 
 function statusBadge(status: SmsMessage["status"]) {
   const map: Record<SmsMessage["status"], { label: string; className: string }> = {
@@ -105,7 +58,7 @@ function ConnectionBanner({ status }: { status?: StatusResp }) {
         data-testid="banner-sms-connected"
       >
         <MessageSquare className="h-4 w-4" />
-        ClickSend connected{status.fromPhone ? ` — sending as ${status.fromPhone}` : ""}.
+        Connexa connected{status.fromPhone ? ` — sending as ${status.fromPhone}` : ""}.
       </div>
     );
   }
@@ -116,7 +69,7 @@ function ConnectionBanner({ status }: { status?: StatusResp }) {
     >
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
       <div>
-        <div>ClickSend is not connected yet — templates can be edited, but sending is disabled until ClickSend credentials are added to project secrets.</div>
+        <div>Connexa is not connected yet — templates can be edited, but sending is disabled until Connexa credentials are added to project secrets.</div>
         {status.error && (
           <div className="mt-1 text-xs opacity-80">Provider says: {status.error}</div>
         )}
@@ -171,7 +124,7 @@ export default function SmsCenterPage() {
         </TabsContent>
 
         <TabsContent value="templates" className="mt-4">
-          <TemplatesTab />
+          <SmsTemplatesManager />
         </TabsContent>
 
         <TabsContent value="log" className="mt-4">
@@ -182,292 +135,14 @@ export default function SmsCenterPage() {
   );
 }
 
-/* -------------------------- Templates tab -------------------------- */
-function TemplatesTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const templatesQ = useQuery<SmsTemplate[]>({
-    queryKey: ["sms", "templates"],
-    queryFn: async () => {
-      const r = (await axios.get("/sms/templates")).data;
-      const arr = r?.data ?? r;
-      return Array.isArray(arr) ? arr : [];
-    },
-  });
-  const templates: SmsTemplate[] = Array.isArray(templatesQ.data) ? templatesQ.data : [];
-  const [editing, setEditing] = useState<SmsTemplate | null>(null);
-  const [creating, setCreating] = useState(false);
-
-  const remove = useMutation({
-    mutationFn: async (id: string) => axios.delete(`/sms/templates/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sms", "templates"] });
-      toast({ title: "Template deleted" });
-    },
-    onError: (e: any) => toast({ title: "Delete failed", description: e?.response?.data?.message ?? e.message, variant: "destructive" }),
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Default templates are seeded automatically. Edit the body to match your tone of voice; trigger paths control when each one fires.
-        </p>
-        <Button onClick={() => setCreating(true)} data-testid="button-new-template">
-          <Plus className="mr-2 h-4 w-4" /> New template
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {templates.map((t) => (
-          <Card key={t.id} data-testid={`card-template-${t.id}`}>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <CardTitle className="text-base" data-testid={`text-template-name-${t.id}`}>{t.name}</CardTitle>
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    <Badge variant="outline">{CATEGORY_LABELS[t.category]}</Badge>
-                    <Badge
-                      variant="outline"
-                      className={t.autoTrigger === "manual" ? "border-slate-300" : "border-emerald-300 text-emerald-700"}
-                    >
-                      {TRIGGER_LABELS[t.autoTrigger]}
-                    </Badge>
-                    {!t.active && <Badge variant="secondary">Inactive</Badge>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => setEditing(t)} data-testid={`button-edit-template-${t.id}`}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      if (confirm(`Delete template "${t.name}"?`)) remove.mutate(t.id);
-                    }}
-                    data-testid={`button-delete-template-${t.id}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <pre className="whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-xs leading-relaxed">{t.body}</pre>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {(editing || creating) && (
-        <TemplateEditorDialog
-          template={editing}
-          open={!!editing || creating}
-          onClose={() => {
-            setEditing(null);
-            setCreating(false);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function TemplateEditorDialog({
-  template,
-  open,
-  onClose,
-}: {
-  template: SmsTemplate | null;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [name, setName] = useState(template?.name ?? "");
-  const [category, setCategory] = useState<SmsTemplate["category"]>(template?.category ?? "custom");
-  const [body, setBody] = useState(template?.body ?? "");
-  const [autoTrigger, setAutoTrigger] = useState<SmsTemplate["autoTrigger"]>(template?.autoTrigger ?? "manual");
-  const [triggerDaysBefore, setTriggerDaysBefore] = useState<string>(template?.triggerDaysBefore?.toString() ?? "");
-  const [triggerWeekday, setTriggerWeekday] = useState<string>(template?.triggerWeekday?.toString() ?? "");
-  const [triggerHour, setTriggerHour] = useState<string>(template?.triggerHour?.toString() ?? "9");
-  const [active, setActive] = useState<boolean>(template?.active ?? true);
-
-  const isEdit = !!template;
-
-  const save = useMutation({
-    mutationFn: async () => {
-      const payload = {
-        name,
-        category,
-        body,
-        autoTrigger,
-        triggerDaysBefore: autoTrigger === "days_before_departure" ? Number(triggerDaysBefore) || 0 : null,
-        triggerWeekday: autoTrigger === "weekly_schedule" ? Number(triggerWeekday) || 0 : null,
-        triggerHour: autoTrigger === "weekly_schedule" || autoTrigger === "days_before_departure" ? Number(triggerHour) || 9 : null,
-        active,
-      };
-      if (isEdit) {
-        return axios.put(`/sms/templates/${template!.id}`, payload);
-      }
-      return axios.post("/sms/templates", payload);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sms", "templates"] });
-      toast({ title: isEdit ? "Template updated" : "Template created" });
-      onClose();
-    },
-    onError: (e: any) =>
-      toast({ title: "Save failed", description: e?.response?.data?.message ?? e.message, variant: "destructive" }),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle data-testid="text-template-editor-title">
-            {isEdit ? "Edit template" : "New template"}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-2">
-          <div className="grid gap-2">
-            <Label>Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-template-name" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label>Category</Label>
-              <Select value={category} onValueChange={(v) => setCategory(v as any)}>
-                <SelectTrigger data-testid="select-template-category"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
-                    <SelectItem key={v} value={v}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Trigger path</Label>
-              <Select value={autoTrigger} onValueChange={(v) => setAutoTrigger(v as any)}>
-                <SelectTrigger data-testid="select-template-trigger"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(TRIGGER_LABELS).map(([v, l]) => (
-                    <SelectItem key={v} value={v}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {autoTrigger === "days_before_departure" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label>Days before departure</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={triggerDaysBefore}
-                  onChange={(e) => setTriggerDaysBefore(e.target.value)}
-                  data-testid="input-trigger-days"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Send hour (0-23)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={triggerHour}
-                  onChange={(e) => setTriggerHour(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-          {autoTrigger === "weekly_schedule" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label>Weekday (0=Sun ... 6=Sat)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={6}
-                  value={triggerWeekday}
-                  onChange={(e) => setTriggerWeekday(e.target.value)}
-                  data-testid="input-trigger-weekday"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Send hour (0-23)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={triggerHour}
-                  onChange={(e) => setTriggerHour(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="grid gap-2">
-            <Label>Message body</Label>
-            <Textarea
-              rows={6}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Hi {{first_name}}, your booking to {{destination}} is confirmed. Ref: {{hays_ref}}"
-              data-testid="textarea-template-body"
-            />
-            <div className="flex flex-wrap gap-1">
-              {PLACEHOLDERS.map((p) => (
-                <button
-                  type="button"
-                  key={p}
-                  className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
-                  onClick={() => setBody((b) => `${b}{{${p}}}`)}
-                  data-testid={`button-placeholder-${p}`}
-                >
-                  {`{{${p}}}`}
-                </button>
-              ))}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {body.length}/1600 characters · approx {Math.ceil(body.length / 160)} SMS segment(s)
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label>Active</Label>
-            <Switch checked={active} onCheckedChange={setActive} data-testid="switch-template-active" />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => save.mutate()} disabled={save.isPending || !name || !body} data-testid="button-save-template">
-            {save.isPending ? "Saving..." : isEdit ? "Save changes" : "Create template"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /* -------------------------- Compose tab -------------------------- */
 type RecipientMode = "all_optin" | "vip_tier" | "badge" | "client";
 
 function ComposeTab({ canSend }: { canSend: boolean }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const templatesQ = useQuery<SmsTemplate[]>({
-    queryKey: ["sms", "templates"],
-    queryFn: async () => {
-      const r = (await axios.get("/sms/templates")).data;
-      const arr = r?.data ?? r;
-      return Array.isArray(arr) ? arr : [];
-    },
-  });
-  const templates: SmsTemplate[] = Array.isArray(templatesQ.data) ? templatesQ.data : [];
+  const templatesQ = useSmsTemplates();
+  const templates: SmsTemplate[] = templatesQ.data ?? [];
   const clientsQ = useQuery<any[]>({
     queryKey: ["clients", "neon-list"],
     queryFn: async () => (await axios.get("/neon-clients?limit=200")).data,
@@ -581,7 +256,7 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
                 <SelectContent>
                   {templates.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.name} <span className="text-muted-foreground">— {CATEGORY_LABELS[t.category]}</span>
+                      {t.name} <span className="text-muted-foreground">— {SMS_CATEGORY_LABELS[t.category]}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -703,7 +378,7 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
           data-testid="button-send-sms"
         >
           <Send className="mr-2 h-4 w-4" />
-          {sendM.isPending || confirmedSendM.isPending ? "Sending..." : canSend ? "Send now" : "Connect ClickSend to send"}
+          {sendM.isPending || confirmedSendM.isPending ? "Sending..." : canSend ? "Send now" : "Connect Connexa to send"}
         </Button>
       </div>
 

@@ -29,8 +29,12 @@ export const organization = pgTable("organization", {
   brandColor: varchar("brand_color"),
   logoUrl: varchar("logo_url"),
   settings: jsonb("settings").default(sql`'{}'`),
+  homeworkerCommission: integer("homeworker_commission"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   trialEndsAt: timestamp("trial_ends_at"),
+  monthlySmsCreditLimit: integer("monthly_sms_credit_limit").notNull().default(100),
+  smsOveragePriceCents:  integer("sms_overage_price_cents").notNull().default(5),
+  smsCreditsEnabled:     boolean("sms_credits_enabled").notNull().default(true),
 });
 
 export const insertOrganizationSchema = createInsertSchema(organization).omit({ id: true, createdAt: true });
@@ -50,6 +54,7 @@ export const branches = pgTable("branches", {
   openingHours: jsonb("opening_hours").default(sql`'[]'`),
   isDefault: boolean("is_default").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  branchType: varchar("branch_type", { length: 16 }).notNull().default("shop"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   idx_branches_org: index("idx_branches_org_id").on(table.organizationId),
@@ -1905,6 +1910,7 @@ export const sms_template_category_enum = pgEnum("sms_template_category", [
   "booking_confirmation",
   "tickets_ready",
   "portal_login",
+  "quote_link",
   "custom",
 ]);
 
@@ -1919,6 +1925,7 @@ export const sms_auto_trigger_enum = pgEnum("sms_auto_trigger", [
 
 export const smsTemplatesTable = pgTable("sms_templates", {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 200 }).notNull(),
   category: sms_template_category_enum("category").notNull().default("custom"),
   body: text("body").notNull(),
@@ -1930,7 +1937,9 @@ export const smsTemplatesTable = pgTable("sms_templates", {
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  idx_sms_templates_org: index("idx_sms_templates_org_id").on(table.orgId),
+}));
 
 export const insertSmsTemplateSchema = createInsertSchema(smsTemplatesTable).omit({
   id: true,
@@ -2073,3 +2082,62 @@ export const hrNotesTable = pgTable("hr_notes", {
 }));
 export type HrNote = typeof hrNotesTable.$inferSelect;
 export type InsertHrNote = typeof hrNotesTable.$inferInsert;
+
+// ─── Platform-admin audit log (cross-tenant; separate from per-tenant audit_log) ─
+
+export const adminAuditLog = pgTable("admin_audit_log", {
+  id:           uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  actorUserId:  text("actor_user_id").notNull().references(() => user.id, { onDelete: "restrict" }),
+  action:       varchar("action", { length: 64 }).notNull(),
+  targetOrgId:  uuid("target_org_id").references(() => organization.id, { onDelete: "set null" }),
+  targetUserId: text("target_user_id").references(() => user.id, { onDelete: "set null" }),
+  metadata:     jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+  ipAddress:    varchar("ip_address", { length: 64 }),
+  userAgent:    text("user_agent"),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  idx_admin_audit_actor:      index("idx_admin_audit_actor").on(table.actorUserId),
+  idx_admin_audit_target_org: index("idx_admin_audit_target_org").on(table.targetOrgId),
+  idx_admin_audit_created:    index("idx_admin_audit_created").on(table.createdAt),
+}));
+
+export type AdminAuditLog       = typeof adminAuditLog.$inferSelect;
+export type InsertAdminAuditLog = typeof adminAuditLog.$inferInsert;
+
+// ─── SMS credit accounting (free monthly allowance + paid overage) ─────────────
+
+export const smsCreditUsage = pgTable("sms_credit_usage", {
+  id:             uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId:          uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  periodStart:    date("period_start").notNull(),
+  creditsUsed:    integer("credits_used").notNull().default(0),
+  creditsGranted: integer("credits_granted").notNull().default(0),
+  createdAt:      timestamp("created_at").notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  unique_org_period: unique("sms_credit_usage_org_period_unique").on(table.orgId, table.periodStart),
+  idx_org_period:    index("idx_sms_credit_usage_org_period").on(table.orgId, table.periodStart),
+}));
+
+export type SmsCreditUsage       = typeof smsCreditUsage.$inferSelect;
+export type InsertSmsCreditUsage = typeof smsCreditUsage.$inferInsert;
+
+export const smsCreditCharge = pgTable("sms_credit_charge", {
+  id:             uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId:          uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  smsMessageId:   uuid("sms_message_id").references(() => smsMessagesTable.id, { onDelete: "set null" }),
+  periodStart:    date("period_start").notNull(),
+  credits:        integer("credits").notNull().default(1),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  amountCents:    integer("amount_cents").notNull(),
+  status:         varchar("status", { length: 16 }).notNull().default("pending"),
+  invoicedAt:     timestamp("invoiced_at"),
+  paidAt:         timestamp("paid_at"),
+  createdAt:      timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  idx_org_status: index("idx_sms_credit_charge_org_status").on(table.orgId, table.status),
+  idx_org_period: index("idx_sms_credit_charge_period").on(table.orgId, table.periodStart),
+}));
+
+export type SmsCreditCharge       = typeof smsCreditCharge.$inferSelect;
+export type InsertSmsCreditCharge = typeof smsCreditCharge.$inferInsert;

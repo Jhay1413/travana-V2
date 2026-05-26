@@ -15,6 +15,7 @@ router.delete('/templates/:id', smsController.deleteTemplate);
 router.post('/preview-recipients', smsController.previewRecipients);
 router.post('/send', smsController.send);
 router.get('/messages', smsController.listMessages);
+router.get('/credits/summary', smsController.creditsSummary);
 router.put('/clients/:id/opt-in', smsController.setOptIn);
 
 export default router;

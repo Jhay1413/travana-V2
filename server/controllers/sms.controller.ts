@@ -87,10 +87,11 @@ const DEFAULT_TEMPLATES = [
 ];
 
 async function ensureSeed() {
-  const count = await smsRepository.countTemplates();
-  if (count > 0) return;
+  // Legacy v1 controller is no longer reachable from the frontend (v2 owns SMS).
+  // Per-org seeding lives in server/v2/modules/sms/sms.controller.ts.
+  return;
   for (const t of DEFAULT_TEMPLATES) {
-    await smsRepository.createTemplate({
+    await (smsRepository.createTemplate as any)({
       name: t.name,
       category: t.category,
       body: t.body,

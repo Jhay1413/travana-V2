@@ -5,6 +5,7 @@ import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { referralService } from "../referral/referral.service";
 import { walletService } from "../wallet/wallet.service";
+import { fireAutoTriggerForClient } from "../sms/sms.service";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
 import type {
@@ -322,6 +323,19 @@ export const bookingService = {
       }
     }
 
+    if (txn.client_id) {
+      // Fire auto-SMS templates with autoTrigger='on_booking_create'. Best-effort:
+      // never blocks or fails the booking. 5-minute dedupe window guards against
+      // duplicate event processing.
+      const dedupeSince = new Date(Date.now() - 5 * 60 * 1000);
+      void fireAutoTriggerForClient({
+        clientId: txn.client_id,
+        autoTrigger: 'on_booking_create',
+        triggerSource: 'booking.convertQuoteToBooking',
+        dedupeSince,
+      });
+    }
+
     return { ...b, client_id: txn.client_id ?? null };
   },
 
@@ -369,6 +383,15 @@ export const bookingService = {
           commission: b.package_commission ?? undefined,
         });
       }
+
+      // Auto-fire SMS for on_booking_create — best-effort.
+      const dedupeSince = new Date(Date.now() - 5 * 60 * 1000);
+      void fireAutoTriggerForClient({
+        clientId: txn.client_id,
+        autoTrigger: 'on_booking_create',
+        triggerSource: 'booking.createBooking',
+        dedupeSince,
+      });
     }
 
     return b;

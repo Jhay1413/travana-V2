@@ -4,7 +4,19 @@ import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
 import { AppError } from '../../utils/error-handler';
 import { smsRepository } from './sms.repository';
-import { pingSmsConnection, sendSms, mergeTemplate, normalisePhone } from './sms.service';
+import {
+  pingSmsConnection,
+  sendSms,
+  mergeTemplate,
+  normalisePhone,
+  consumeSmsCredit,
+  attachChargeToMessage,
+} from './sms.service';
+import {
+  platformAdminCreditsRepository,
+  startOfMonthUtc,
+} from '../platform-admin/platform-admin-credits.repository';
+import { getPublicBaseUrl } from '../../utils/public-url';
 import { userRepository } from '../user/user.repository';
 import { getUserId } from '../../utils/get-user-id';
 import { getScope, type Scope } from '../../utils/scope';
@@ -45,45 +57,80 @@ const DEFAULT_TEMPLATES = [
   { name: 'Weekly Deals', category: 'weekly_deals' as const, body: 'Hi {{first_name}}, this week\'s hottest holiday deals just dropped. Check them out: {{portal_link}} - Tina\'s Travel', autoTrigger: 'manual' as const },
   { name: 'Balance Due Reminder', category: 'balance_due' as const, body: 'Hi {{first_name}}, a friendly reminder that your balance of {{balance_due}} for your {{destination}} trip is due by {{balance_due_date}}. Reply or call us if you need help. - Tina\'s Travel', autoTrigger: 'days_before_departure' as const },
   { name: 'Booking Confirmation', category: 'booking_confirmation' as const, body: 'Hi {{first_name}}, your booking to {{destination}} is confirmed! Reference: {{hays_ref}}. We\'ll be in touch with next steps. - Tina\'s Travel', autoTrigger: 'on_booking_create' as const },
-  { name: 'Tickets Ready', category: 'tickets_ready' as const, body: 'Hi {{first_name}}, great news - your tickets for {{destination}} are ready! Log in to your portal to view: {{portal_link}} - Tina\'s Travel', autoTrigger: 'on_tickets_uploaded' as const },
+  { name: 'Tickets Ready', category: 'tickets_ready' as const, body: 'Hi {{first_name}}, great news - your tickets for {{destination}} are ready! Log in to your portal to view: {{portal_link}} - Tina\'s Travel', autoTrigger: 'manual' as const },
   { name: 'Portal Login', category: 'portal_login' as const, body: 'Hi {{first_name}}, your client portal is ready. Log in here: {{portal_link}} (use your email and the PIN we shared). - Tina\'s Travel', autoTrigger: 'on_pin_set' as const },
+  { name: 'Quote Link', category: 'quote_link' as const, body: "Hi {{first_name}}, here's the link for your quote: {{quote_url}} - Tina's Travel", autoTrigger: 'manual' as const },
 ];
 
-async function ensureSeed() {
-  const count = await smsRepository.countTemplates();
-  if (count > 0) return;
+/** Seed the default template set for a single org if any are missing. */
+async function ensureSeed(orgId: string) {
   for (const t of DEFAULT_TEMPLATES) {
+    const existing = await smsRepository.findTemplateByCategory(orgId, t.category);
+    if (existing) continue;
     await smsRepository.createTemplate({
+      orgId,
       name: t.name, category: t.category, body: t.body, autoTrigger: t.autoTrigger, active: true,
       triggerDaysBefore: t.category === 'balance_due' ? 14 : null, triggerWeekday: null, triggerHour: null, createdBy: null,
     });
   }
 }
 
-async function requireAdminOrManager(req: Request) {
+async function loadActor(req: Request) {
   const userId = getUserId(req);
   if (!userId) throw new AppError('Not authenticated', 401);
   const u = await userRepository.findById(userId);
   if (!u) throw new AppError('User not found', 404);
-  const role = (u.role || '').toLowerCase();
-  if (role !== 'admin' && role !== 'manager') throw new AppError('Only Admin or Manager can manage texts', 403);
-  // orgId comes from the orgBranchScope middleware. Platform admins see across orgs.
-  const orgId = req.orgRole === 'platform_admin' ? null : (req.orgId || null);
-  if (req.orgRole !== 'platform_admin' && !orgId) {
+  const orgRole = req.orgRole || '';
+  const orgId = orgRole === 'platform_admin' ? null : (req.orgId || null);
+  if (orgRole !== 'platform_admin' && !orgId) {
     throw new AppError('No organisation context', 403);
   }
-  return { user: u, userId, orgId };
+  return { user: u, userId, orgId, orgRole, legacyRole: (u.role || '').toLowerCase() };
+}
+
+/** Send / read access: any org member (admin, manager, agent, homeworker). */
+async function requireSenderAccess(req: Request) {
+  const actor = await loadActor(req);
+  const allowedByOrgRole =
+    actor.orgRole === 'platform_admin' ||
+    actor.orgRole === 'org_admin' ||
+    actor.orgRole === 'branch_manager' ||
+    actor.orgRole === 'agent' ||
+    actor.orgRole === 'homeworker';
+  const allowedByLegacyRole =
+    actor.legacyRole === 'admin' || actor.legacyRole === 'manager' || actor.legacyRole === 'agent';
+  if (!allowedByOrgRole && !allowedByLegacyRole) {
+    throw new AppError('Not authorised to use texts', 403);
+  }
+  return { user: actor.user, userId: actor.userId, orgId: actor.orgId };
+}
+
+/** Manage templates + opt-in: admin / manager only. */
+async function requireAdminOrManager(req: Request) {
+  const actor = await loadActor(req);
+  const allowedByOrgRole =
+    actor.orgRole === 'org_admin' ||
+    actor.orgRole === 'branch_manager' ||
+    actor.orgRole === 'platform_admin';
+  const allowedByLegacyRole = actor.legacyRole === 'admin' || actor.legacyRole === 'manager';
+  if (!allowedByOrgRole && !allowedByLegacyRole) {
+    throw new AppError('Only Admin or Manager can manage texts', 403);
+  }
+  return { user: actor.user, userId: actor.userId, orgId: actor.orgId };
 }
 
 function buildPortalLink() {
-  const base = process.env.PUBLIC_BASE_URL || process.env.REPLIT_URL || '';
-  return `${base.replace(/\/$/, '')}/portal/login`;
+  return `${getPublicBaseUrl()}/portal/login`;
+}
+
+function buildQuoteUrl(token: string): string {
+  return `${getPublicBaseUrl()}/view-quote/${token}`;
 }
 
 async function buildContextForClient(client: any) {
   const ctx: any = {
     first_name: client.firstName, last_name: client.surename, portal_link: buildPortalLink(),
-    company_name: "Tina's Travel", destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '',
+    company_name: "Tina's Travel", destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
   };
   try {
     const bookingRow = await smsRepository.findLatestActiveBookingForClient(client.id);
@@ -102,25 +149,29 @@ async function buildContextForClient(client: any) {
       }
     }
   } catch { /* best-effort */ }
+  try {
+    const quoteRow = await smsRepository.findLatestTokenedQuoteForClient(client.id);
+    if (quoteRow?.token) ctx.quote_url = buildQuoteUrl(quoteRow.token);
+  } catch { /* best-effort */ }
   return ctx;
 }
 
 export const smsController = {
   status: asyncHandler(async (req: Request, res: Response) => {
-    await requireAdminOrManager(req);
+    await requireSenderAccess(req);
     const ping = await pingSmsConnection();
     return successResponse(res, ping, 'SMS provider status');
   }),
 
   listTemplates: asyncHandler(async (req: Request, res: Response) => {
-    await requireAdminOrManager(req);
-    await ensureSeed();
-    const rows = await smsRepository.listTemplates();
+    const { orgId } = await requireSenderAccess(req);
+    if (orgId) await ensureSeed(orgId);
+    const rows = await smsRepository.listTemplates(orgId);
     return successResponse(res, rows, 'Templates retrieved');
   }),
 
   previewRecipients: asyncHandler(async (req: Request, res: Response) => {
-    await requireAdminOrManager(req);
+    await requireSenderAccess(req);
     const scope = getScope(req);
     const recipients = req.body?.recipients;
     if (!recipients || typeof recipients !== 'object') throw new AppError('recipients filter is required', 400);
@@ -135,33 +186,38 @@ export const smsController = {
   }),
 
   createTemplate: asyncHandler(async (req: Request, res: Response) => {
-    const { userId } = await requireAdminOrManager(req);
-    const row = await smsRepository.createTemplate({ ...req.body, createdBy: userId });
+    const { userId, orgId } = await requireAdminOrManager(req);
+    if (!orgId) throw new AppError('Cannot create templates without an organisation context', 400);
+    // Strip any org_id supplied by client — orgId is server-controlled.
+    const { orgId: _ignored, ...body } = req.body ?? {};
+    const row = await smsRepository.createTemplate({ ...body, orgId, createdBy: userId });
     return successResponse(res, row, 'Template created', 201);
   }),
 
   updateTemplate: asyncHandler(async (req: Request, res: Response) => {
-    await requireAdminOrManager(req);
-    const row = await smsRepository.updateTemplate(req.params.id as string, req.body);
+    const { orgId } = await requireAdminOrManager(req);
+    // Don't allow orgId reassignment via PATCH.
+    const { orgId: _ignored, ...patch } = req.body ?? {};
+    const row = await smsRepository.updateTemplate(req.params.id as string, orgId, patch);
     if (!row) throw new AppError('Template not found', 404);
     return successResponse(res, row, 'Template updated');
   }),
 
   deleteTemplate: asyncHandler(async (req: Request, res: Response) => {
-    await requireAdminOrManager(req);
-    await smsRepository.deleteTemplate(req.params.id as string);
+    const { orgId } = await requireAdminOrManager(req);
+    await smsRepository.deleteTemplate(req.params.id as string, orgId);
     return successResponse(res, null, 'Template deleted');
   }),
 
   send: asyncHandler(async (req: Request, res: Response) => {
-    const { user, userId } = await requireAdminOrManager(req);
+    const { user, userId } = await requireSenderAccess(req);
     const scope = getScope(req);
     const orgId = effectiveOrgId(scope);
     const { templateId, bodyOverride, recipients, triggerSource, confirmBulk } = req.body as any;
 
     let template: { id?: string; name?: string; body: string } | null = null;
     if (templateId) {
-      const t = await smsRepository.findTemplate(templateId);
+      const t = await smsRepository.findTemplate(templateId, orgId);
       if (!t) throw new AppError('Template not found', 404);
       template = { id: t.id, name: t.name, body: t.body };
     }
@@ -200,20 +256,55 @@ export const smsController = {
         await smsRepository.createMessage({ ...msgBase, toPhone: c.phoneNumber || '', status: 'skipped_no_phone' });
         skipped++; results.push({ clientId: c.id, status: 'skipped_no_phone' }); continue;
       }
+      // Credit gate: counts only attempted sends (post opt-in + phone checks).
+      // platform_admin without an org context isn't billed against any tenant.
+      const credit = orgId ? await consumeSmsCredit(orgId) : { enabled: false, overage: false, chargeId: null };
       try {
         const result = await sendSms({ to: phone, body });
-        await smsRepository.createMessage({ ...msgBase, toPhone: phone, status: 'sent', providerMessageId: result.sid });
-        sent++; results.push({ clientId: c.id, status: 'sent', sid: result.sid });
+        const msg = await smsRepository.createMessage({ ...msgBase, toPhone: phone, status: 'sent', providerMessageId: result.sid });
+        if (credit.chargeId && msg?.id) await attachChargeToMessage(credit.chargeId, msg.id);
+        sent++; results.push({ clientId: c.id, status: 'sent', sid: result.sid, overage: credit.overage });
       } catch (err: any) {
-        await smsRepository.createMessage({ ...msgBase, toPhone: phone, status: 'failed', providerError: err?.message || String(err) });
+        const msg = await smsRepository.createMessage({ ...msgBase, toPhone: phone, status: 'failed', providerError: err?.message || String(err) });
+        if (credit.chargeId && msg?.id) await attachChargeToMessage(credit.chargeId, msg.id);
         failed++; results.push({ clientId: c.id, status: 'failed', error: err?.message });
       }
     }
     return successResponse(res, { sent, skipped, failed, total: clients.length, results }, `Sent ${sent}, skipped ${skipped}, failed ${failed}`);
   }),
 
+  creditsSummary: asyncHandler(async (req: Request, res: Response) => {
+    const { orgId } = await requireSenderAccess(req);
+    if (!orgId) throw new AppError('No organisation context', 403);
+
+    const cfg = await platformAdminCreditsRepository.findOrgCreditConfig(orgId);
+    if (!cfg) throw new AppError('Organization not found', 404);
+    const periodStart = startOfMonthUtc();
+    const usage   = await platformAdminCreditsRepository.findCurrentUsage(orgId, periodStart);
+    const pending = await platformAdminCreditsRepository.sumPendingCharges(orgId);
+
+    const creditsUsed    = usage?.creditsUsed    ?? 0;
+    const creditsGranted = usage?.creditsGranted ?? 0;
+    const allowance      = cfg.monthlySmsCreditLimit + creditsGranted;
+
+    return successResponse(res, {
+      enabled:           cfg.smsCreditsEnabled,
+      monthlyLimit:      cfg.monthlySmsCreditLimit,
+      overagePriceCents: cfg.smsOveragePriceCents,
+      currentPeriod: {
+        periodStart,
+        creditsUsed,
+        creditsGranted,
+        allowance,
+        remaining:      Math.max(0, allowance - creditsUsed),
+        overageCredits: Math.max(0, creditsUsed - allowance),
+      },
+      pendingChargesCents: pending,
+    }, 'Credit summary');
+  }),
+
   listMessages: asyncHandler(async (req: Request, res: Response) => {
-    await requireAdminOrManager(req);
+    await requireSenderAccess(req);
     const scope = getScope(req);
     const limit = Math.min(parseInt(String(req.query.limit ?? '200'), 10) || 200, 1000);
     const clientId = req.query.clientId ? String(req.query.clientId) : undefined;

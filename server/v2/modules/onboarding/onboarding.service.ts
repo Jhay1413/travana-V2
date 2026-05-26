@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { AppError } from "../../utils/error-handler";
+import { getPublicBaseUrl } from "../../utils/public-url";
 import { getEmailProvider } from "../../../services/email-provider";
 import { onboardingRepository } from "./onboarding.repository";
 import { organizationRepository } from "../organization/organization.repository";
@@ -25,7 +26,7 @@ function mapAgentRoleToOrgRole(agentRole: string): string {
 }
 
 function buildVerificationUrl(token: string): string {
-  const base = process.env.APP_URL ?? "http://localhost:5000";
+  const base = getPublicBaseUrl() || "http://localhost:5000";
   return `${base}/verify-email?token=${encodeURIComponent(token)}`;
 }
 
@@ -80,6 +81,32 @@ export const onboardingService = {
     const ownerFirstName = ownerNameParts[0];
     const ownerLastName = ownerNameParts.slice(1).join(" ") || "—";
 
+    const branchInputs: any[] = payload.branches.map((b) => ({
+      name: b.name.trim(),
+      address: b.address.trim(),
+      phone: b.phone.trim(),
+      email: b.email.trim().toLowerCase(),
+      openingPattern: b.openingPattern,
+      bankHolidaysOpen: b.bankHolidaysOpen,
+      openingHours: b.openingHours,
+      isActive: true,
+      branchType: "shop",
+    }));
+
+    if (payload.hasHomeworkers) {
+      branchInputs.push({
+        name: "Homeworkers",
+        address: "",
+        phone: "",
+        email: "",
+        openingPattern: "mon-fri",
+        bankHolidaysOpen: false,
+        openingHours: [],
+        isActive: true,
+        branchType: "homeworker",
+      });
+    }
+
     const result = await onboardingRepository.signupAgency({
       organization: {
         name: payload.agencyName.trim(),
@@ -89,18 +116,10 @@ export const onboardingService = {
         seatLimit: 15,
         brandColor: payload.brandColor ?? "#2563eb",
         logoUrl: payload.logoUrl ?? null,
+        homeworkerCommission: payload.hasHomeworkers ? payload.homeworkerCommission ?? null : null,
         trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
       } as any,
-      branchInputs: payload.branches.map((b) => ({
-        name: b.name.trim(),
-        address: b.address.trim(),
-        phone: b.phone.trim(),
-        email: b.email.trim().toLowerCase(),
-        openingPattern: b.openingPattern,
-        bankHolidaysOpen: b.bankHolidaysOpen,
-        openingHours: b.openingHours,
-        isActive: true,
-      } as any)),
+      branchInputs,
       ownerUser: {
         id: crypto.randomUUID(),
         name: payload.ownerName.trim(),

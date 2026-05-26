@@ -1,17 +1,66 @@
 import { Router } from 'express';
 import { platformAdminController } from './platform-admin.controller';
-import { isAuthenticated } from '../../middlewares/auth';
-
-const isPlatformAdmin = isAuthenticated; // TODO: add role = platform_admin guard
+import { isAuthenticated, requirePlatformAdmin } from '../../middlewares/auth';
+import { validate } from '../../middlewares/validation.middleware';
+import {
+  orgIdParamSchema,
+  suspendOrgSchema,
+  activateOrgSchema,
+  changePlanSchema,
+  auditLogQuerySchema,
+  listUsersQuerySchema,
+  userIdParamSchema,
+  changeUserRoleSchema,
+  deactivateUserSchema,
+  updateCreditLimitSchema,
+  updateOveragePriceSchema,
+  topUpCreditsSchema,
+  usageHistoryQuerySchema,
+  listChargesQuerySchema,
+  writeOffChargeSchema,
+} from './platform-admin.validator';
 
 const router = Router();
-router.use(isPlatformAdmin);
 
-router.get('/organizations',               platformAdminController.listOrgs);
-router.get('/organizations/:id',           platformAdminController.getOrg);
-router.patch('/organizations/:id/suspend', platformAdminController.suspend);
-router.patch('/organizations/:id/activate',platformAdminController.activate);
-router.patch('/organizations/:id/plan',    platformAdminController.changePlan);
-router.post('/organizations/:id/impersonate', platformAdminController.impersonate);
+// Router-level guards: every endpoint in this module requires authentication
+// AND a verified platform_admin role (DB-backed; never trusts req.orgRole).
+router.use(isAuthenticated);
+router.use(requirePlatformAdmin);
+
+// Organizations
+router.get(   '/organizations',                requirePlatformAdmin,                                          platformAdminController.listOrgs);
+router.get(   '/organizations/:id',            requirePlatformAdmin, validate(orgIdParamSchema),              platformAdminController.getOrg);
+router.patch( '/organizations/:id/suspend',    requirePlatformAdmin, validate(suspendOrgSchema),              platformAdminController.suspend);
+router.patch( '/organizations/:id/activate',   requirePlatformAdmin, validate(activateOrgSchema),             platformAdminController.activate);
+router.patch( '/organizations/:id/plan',       requirePlatformAdmin, validate(changePlanSchema),              platformAdminController.changePlan);
+
+// Cross-org user directory
+router.get(   '/users',                        requirePlatformAdmin, validate(listUsersQuerySchema),          platformAdminController.listUsers);
+router.get(   '/users/:id',                    requirePlatformAdmin, validate(userIdParamSchema),             platformAdminController.getUser);
+
+// Org-scoped users (recovery actions)
+router.get(   '/organizations/:id/users',                requirePlatformAdmin, validate(orgIdParamSchema),     platformAdminController.listOrgUsers);
+router.patch( '/organizations/:id/users/:userId/role',   requirePlatformAdmin, validate(changeUserRoleSchema), platformAdminController.changeUserRole);
+router.patch( '/organizations/:id/users/:userId/deactivate', requirePlatformAdmin, validate(deactivateUserSchema), platformAdminController.deactivateUser);
+router.patch( '/organizations/:id/users/:userId/reactivate', requirePlatformAdmin, validate(deactivateUserSchema), platformAdminController.reactivateUser);
+
+// Org-scoped branches (read-only — admin uses impersonation for writes)
+router.get(   '/organizations/:id/branches',   requirePlatformAdmin, validate(orgIdParamSchema),              platformAdminController.listOrgBranches);
+
+// Impersonation
+router.post(  '/organizations/:id/impersonate', requirePlatformAdmin, validate(orgIdParamSchema),             platformAdminController.impersonate);
+router.delete('/impersonate',                   requirePlatformAdmin,                                          platformAdminController.stopImpersonating);
+
+// SMS credits (per-org configuration + usage + overage billing)
+router.get(   '/organizations/:id/credits',                          requirePlatformAdmin, validate(orgIdParamSchema),            platformAdminController.getCreditSummary);
+router.patch( '/organizations/:id/credits/limit',                    requirePlatformAdmin, validate(updateCreditLimitSchema),     platformAdminController.updateCreditLimit);
+router.patch( '/organizations/:id/credits/price',                    requirePlatformAdmin, validate(updateOveragePriceSchema),    platformAdminController.updateOveragePrice);
+router.post(  '/organizations/:id/credits/topup',                    requirePlatformAdmin, validate(topUpCreditsSchema),          platformAdminController.topUpCredits);
+router.get(   '/organizations/:id/credits/usage',                    requirePlatformAdmin, validate(usageHistoryQuerySchema),     platformAdminController.getUsageHistory);
+router.get(   '/organizations/:id/credits/charges',                  requirePlatformAdmin, validate(listChargesQuerySchema),      platformAdminController.listCharges);
+router.patch( '/organizations/:id/credits/charges/:chargeId/write-off', requirePlatformAdmin, validate(writeOffChargeSchema),     platformAdminController.writeOffCharge);
+
+// Audit log
+router.get(   '/audit-log',                    requirePlatformAdmin, validate(auditLogQuerySchema),           platformAdminController.listAudit);
 
 export default router;

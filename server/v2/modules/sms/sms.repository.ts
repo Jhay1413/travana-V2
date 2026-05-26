@@ -5,27 +5,84 @@ import {
   clientTable,
   transaction as transactionTable,
   booking as bookingTable,
+  quote as quoteTable,
+  organization as organizationTable,
 } from '@shared/schema';
-import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, inArray, sql } from 'drizzle-orm';
 
 export const smsRepository = {
-  async listTemplates() {
-    return db.select().from(smsTemplatesTable).orderBy(desc(smsTemplatesTable.updatedAt));
+  /** List templates owned by an org, or all of them when orgId is null (platform_admin). */
+  async listTemplates(orgId: string | null) {
+    const q = db.select().from(smsTemplatesTable);
+    const scoped = orgId ? q.where(eq(smsTemplatesTable.orgId, orgId)) : q;
+    return scoped.orderBy(desc(smsTemplatesTable.updatedAt));
   },
 
-  async findTemplate(id: string) {
-    const [row] = await db.select().from(smsTemplatesTable).where(eq(smsTemplatesTable.id, id)).limit(1);
+  /** Find a template by id, optionally scoped to an org (returns undefined if not owned). */
+  async findTemplate(id: string, orgId: string | null = null) {
+    const conditions = [eq(smsTemplatesTable.id, id)];
+    if (orgId) conditions.push(eq(smsTemplatesTable.orgId, orgId));
+    const [row] = await db.select().from(smsTemplatesTable).where(and(...conditions)).limit(1);
     return row || undefined;
   },
 
-  async findTemplateByCategory(category: string) {
+  /** Used by ensureSeed() to check whether an org already has a template of this category. */
+  async findTemplateByCategory(orgId: string, category: string) {
     const [row] = await db
       .select()
       .from(smsTemplatesTable)
-      .where(and(eq(smsTemplatesTable.category, category as any), eq(smsTemplatesTable.active, true)))
+      .where(and(
+        eq(smsTemplatesTable.orgId, orgId),
+        eq(smsTemplatesTable.category, category as any),
+      ))
       .orderBy(desc(smsTemplatesTable.updatedAt))
       .limit(1);
     return row || undefined;
+  },
+
+  /** Active templates with a given auto-trigger for a single org, used by the auto-fire engine. */
+  async findActiveTemplatesByTrigger(orgId: string, autoTrigger: string) {
+    return db
+      .select()
+      .from(smsTemplatesTable)
+      .where(and(
+        eq(smsTemplatesTable.orgId, orgId),
+        eq(smsTemplatesTable.autoTrigger, autoTrigger as any),
+        eq(smsTemplatesTable.active, true),
+      ))
+      .orderBy(desc(smsTemplatesTable.updatedAt));
+  },
+
+  /** All active templates with a given auto-trigger across every org. Used by the cron sweep. */
+  async findAllActiveTemplatesByTrigger(autoTrigger: string) {
+    return db
+      .select()
+      .from(smsTemplatesTable)
+      .where(and(
+        eq(smsTemplatesTable.autoTrigger, autoTrigger as any),
+        eq(smsTemplatesTable.active, true),
+      ))
+      .orderBy(desc(smsTemplatesTable.updatedAt));
+  },
+
+  /**
+   * Has this template already been auto-sent to this client since `since`?
+   * Used as idempotency for the days-before-departure cron and to avoid
+   * accidentally re-firing on_booking_create / on_pin_set if the same event
+   * is processed twice.
+   */
+  async hasRecentAutoSend(templateId: string, clientId: string, since: Date) {
+    const [row] = await db
+      .select({ id: smsMessagesTable.id })
+      .from(smsMessagesTable)
+      .where(and(
+        eq(smsMessagesTable.templateId, templateId),
+        eq(smsMessagesTable.clientId, clientId),
+        gte(smsMessagesTable.sentAt, since),
+        inArray(smsMessagesTable.status, ['queued', 'sent', 'delivered'] as any),
+      ))
+      .limit(1);
+    return !!row;
   },
 
   async createTemplate(input: any) {
@@ -33,21 +90,28 @@ export const smsRepository = {
     return row;
   },
 
-  async updateTemplate(id: string, patch: any) {
+  async updateTemplate(id: string, orgId: string | null, patch: any) {
+    const conditions = [eq(smsTemplatesTable.id, id)];
+    if (orgId) conditions.push(eq(smsTemplatesTable.orgId, orgId));
     const [row] = await db
       .update(smsTemplatesTable)
       .set({ ...patch, updatedAt: new Date() })
-      .where(eq(smsTemplatesTable.id, id))
+      .where(and(...conditions))
       .returning();
     return row || undefined;
   },
 
-  async deleteTemplate(id: string) {
-    await db.delete(smsTemplatesTable).where(eq(smsTemplatesTable.id, id));
+  async deleteTemplate(id: string, orgId: string | null) {
+    const conditions = [eq(smsTemplatesTable.id, id)];
+    if (orgId) conditions.push(eq(smsTemplatesTable.orgId, orgId));
+    await db.delete(smsTemplatesTable).where(and(...conditions));
   },
 
-  async countTemplates(): Promise<number> {
-    const [row] = await db.select({ c: sql<number>`count(*)::int` }).from(smsTemplatesTable);
+  async countTemplates(orgId: string): Promise<number> {
+    const [row] = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(smsTemplatesTable)
+      .where(eq(smsTemplatesTable.orgId, orgId));
     return row?.c ?? 0;
   },
 
@@ -95,6 +159,25 @@ export const smsRepository = {
     return row || undefined;
   },
 
+  async findOrgNameById(orgId: string): Promise<string | undefined> {
+    const [row] = await db
+      .select({ name: organizationTable.name })
+      .from(organizationTable)
+      .where(eq(organizationTable.id, orgId))
+      .limit(1);
+    return row?.name ?? undefined;
+  },
+
+  /** Look up the org of a client, used to scope auto-fire template lookups. */
+  async findClientOrgId(clientId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ orgId: clientTable.orgId })
+      .from(clientTable)
+      .where(eq(clientTable.id, clientId))
+      .limit(1);
+    return row?.orgId ?? null;
+  },
+
   /**
    * Find the most recent active booking for a client (used to fill SMS template
    * merge fields like balance_due, hays_ref, departure_date).
@@ -113,6 +196,47 @@ export const smsRepository = {
       .where(and(eq(bookingTable.transaction_id, latestTxn.id), eq(bookingTable.is_active, true)))
       .limit(1);
     return bookingRow || undefined;
+  },
+
+  /**
+   * Active bookings whose travel_date is exactly `targetDate`. Used by the
+   * days-before-departure cron to fan out per-booking auto-fires.
+   */
+  async findActiveBookingsByTravelDate(targetDate: string) {
+    return db
+      .select({
+        bookingId: bookingTable.id,
+        clientId: transactionTable.client_id,
+        transactionId: bookingTable.transaction_id,
+      })
+      .from(bookingTable)
+      .innerJoin(transactionTable, eq(bookingTable.transaction_id, transactionTable.id))
+      .where(and(
+        eq(bookingTable.is_active, true),
+        eq(transactionTable.is_active, true),
+        eq(bookingTable.travel_date, targetDate),
+        isNotNull(transactionTable.client_id),
+      ));
+  },
+
+  /**
+   * Find the most recent active quote for a client that has a public share
+   * token. Returned `{ token }` is used to render the {{quote_url}} SMS
+   * placeholder.
+   */
+  async findLatestTokenedQuoteForClient(clientId: string) {
+    const [row] = await db
+      .select({ token: quoteTable.quote_token, id: quoteTable.id })
+      .from(quoteTable)
+      .innerJoin(transactionTable, eq(quoteTable.transaction_id, transactionTable.id))
+      .where(and(
+        eq(transactionTable.client_id, clientId),
+        eq(transactionTable.is_active, true),
+        isNotNull(quoteTable.quote_token),
+      ))
+      .orderBy(desc(quoteTable.date_created))
+      .limit(1);
+    return row || undefined;
   },
 
   async findClientByIdInOrg(id: string, orgId: string) {
