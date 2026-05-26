@@ -28,7 +28,7 @@ export function OrgProfileStrip({ organization }: { organization: OrganizationSu
               <img
                 src={organization.logoUrl}
                 alt={organization.name}
-                className="max-h-[100px] w-auto rounded-xl object-contain"
+                className="max-h-[56px] w-auto rounded-xl object-contain"
                 data-testid="img-org-logo"
               />
             ) : (
