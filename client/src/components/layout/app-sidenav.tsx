@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
-import { useCurrentUser, useUnreadNotifications } from "@/hooks/queries";
+import { useCurrentUser, useUnreadNotifications, useCurrentOrganization } from "@/hooks/queries";
 import { getNavForRole, type NavItem, type NavSection } from "@/config/nav";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
@@ -227,6 +227,7 @@ function SidenavInner({
   });
 
   const { data: currentUser } = useCurrentUser();
+  const { data: currentOrganization } = useCurrentOrganization();
   const { data: hubUnreadNotifs } = useUnreadNotifications(currentUser?.id || "");
   const hubUnreadCount = useMemo(() => {
     if (!hubUnreadNotifs || !Array.isArray(hubUnreadNotifs)) return 0;
@@ -262,6 +263,15 @@ function SidenavInner({
             >
               <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
             </div>
+          </div>
+        ) : currentOrganization?.logoUrl ? (
+          <div className="flex items-center justify-center px-2 py-1">
+            <img
+              src={currentOrganization.logoUrl}
+              alt={currentOrganization.name || currentUser?.orgName || "Logo"}
+              className="max-h-14 w-auto object-contain"
+              data-testid="img-brand-logo"
+            />
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
