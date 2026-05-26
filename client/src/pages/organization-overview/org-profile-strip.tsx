@@ -24,17 +24,18 @@ export function OrgProfileStrip({ organization }: { organization: OrganizationSu
       >
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500 overflow-hidden">
-              {organization.logoUrl ? (
-                <img
-                  src={organization.logoUrl}
-                  alt={organization.name}
-                  className="h-10 w-10 object-cover"
-                />
-              ) : (
+            {organization.logoUrl ? (
+              <img
+                src={organization.logoUrl}
+                alt={organization.name}
+                className="max-h-[100px] w-auto rounded-xl object-contain"
+                data-testid="img-org-logo"
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500 overflow-hidden">
                 <Building2 className="h-5 w-5 text-white" />
-              )}
-            </div>
+              </div>
+            )}
             <div className="space-y-0.5">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold leading-none" data-testid="text-org-name">
