@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications, useCurrentOrganization } from "@/hooks/queries";
+import travanaLogoUrl from "@assets/WhatsApp_Image_2026-05-26_at_15.30.15_1779805924113.jpeg";
 import { getNavForRole, type NavItem, type NavSection } from "@/config/nav";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
@@ -257,12 +258,12 @@ function SidenavInner({
     >
         {collapsed ? (
           <div className="flex flex-col items-center gap-1">
-            <div
-              className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+            <img
+              src={travanaLogoUrl}
+              alt="Travana"
+              className="h-11 w-11 rounded-2xl object-contain"
               data-testid="img-brand-mark"
-            >
-              <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
-            </div>
+            />
           </div>
         ) : currentOrganization?.logoUrl ? (
           <div className="flex items-center justify-start">
@@ -274,24 +275,13 @@ function SidenavInner({
             />
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div
-                className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-                data-testid="img-brand-mark"
-              >
-                <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
-                <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
-              </div>
-              <div className="min-w-0">
-                <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-name">
-                  {currentUser?.orgName || "Travana"}
-                </div>
-                <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-brand-sub">
-                  {currentUser?.branchName || "—"}
-                </div>
-              </div>
-            </div>
+          <div className="flex items-center justify-start">
+            <img
+              src={travanaLogoUrl}
+              alt="Travana"
+              className="max-h-14 w-auto object-contain"
+              data-testid="img-brand-logo"
+            />
           </div>
         )}
 
