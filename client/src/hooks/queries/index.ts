@@ -49,5 +49,6 @@ export {
   useAdminCreditSummary,
   useAdminCreditUsage,
   useAdminCreditCharges,
+  useAdminUserRoles,
   platformAdminKeys,
 } from "./use-platform-admin-queries";

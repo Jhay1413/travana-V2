@@ -167,6 +167,20 @@ export const platformAdminApi = {
   changeUserRole: async (orgId: string, userId: string, orgRole: AssignableOrgRole): Promise<void> => {
     await axiosClient.patch(`${BASE}/organizations/${orgId}/users/${userId}/role`, { orgRole });
   },
+
+  // Multi-role per user (chip editor)
+  listUserRoles: async (orgId: string, userId: string): Promise<AssignableOrgRole[]> => {
+    const { data } = await axiosClient.get<{ roles: AssignableOrgRole[] }>(
+      `${BASE}/organizations/${orgId}/users/${userId}/roles`,
+    );
+    return data?.roles ?? [];
+  },
+  addUserRole: async (orgId: string, userId: string, role: AssignableOrgRole): Promise<void> => {
+    await axiosClient.post(`${BASE}/organizations/${orgId}/users/${userId}/roles`, { role });
+  },
+  removeUserRole: async (orgId: string, userId: string, role: AssignableOrgRole): Promise<void> => {
+    await axiosClient.delete(`${BASE}/organizations/${orgId}/users/${userId}/roles/${role}`);
+  },
   deactivateUser: async (orgId: string, userId: string, reason?: string): Promise<void> => {
     await axiosClient.patch(`${BASE}/organizations/${orgId}/users/${userId}/deactivate`, reason ? { reason } : {});
   },

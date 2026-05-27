@@ -5,6 +5,7 @@ import { BranchProfileStrip } from "./branch-profile-strip";
 import { KpiCards } from "./kpi-cards";
 import { ConversionFunnelCard } from "./conversion-funnel-card";
 import { AgentsPerformanceCard } from "./agents-performance-card";
+import { SalesModeToggle } from "@/components/agency/sales-mode-toggle";
 
 export default function BranchOverviewPage({
   branchId,
@@ -50,6 +51,11 @@ export default function BranchOverviewPage({
           <h1 className="text-xl font-semibold">Branch Overview</h1>
         </div>
       )}
+
+      {/* Self-service toggle for branch_manager / org_admin to also sell.
+          Self-hides for ineligible roles. Only shown on the top-level page,
+          not when embedded inside other layouts. */}
+      {!hideTitle && <SalesModeToggle />}
 
       {data.branch && !hideProfileStrip ? <BranchProfileStrip branch={data.branch} /> : null}
 

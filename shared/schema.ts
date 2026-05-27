@@ -2141,3 +2141,21 @@ export const smsCreditCharge = pgTable("sms_credit_charge", {
 
 export type SmsCreditCharge       = typeof smsCreditCharge.$inferSelect;
 export type InsertSmsCreditCharge = typeof smsCreditCharge.$inferInsert;
+
+// ─── Multi-role per user (org-level roles; platform_admin is NOT here) ─────────
+
+export const userOrgRoles = pgTable("user_org_roles", {
+  id:        uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  userId:    text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  orgId:     uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  role:      varchar("role", { length: 32 }).notNull(),
+  grantedAt: timestamp("granted_at").notNull().defaultNow(),
+  grantedBy: text("granted_by").references(() => user.id, { onDelete: "set null" }),
+}, (table) => ({
+  unique_user_org_role: unique("user_org_roles_user_org_role_unique").on(table.userId, table.orgId, table.role),
+  idx_user:             index("idx_user_org_roles_user").on(table.userId, table.orgId),
+  idx_org:              index("idx_user_org_roles_org").on(table.orgId),
+}));
+
+export type UserOrgRole       = typeof userOrgRoles.$inferSelect;
+export type InsertUserOrgRole = typeof userOrgRoles.$inferInsert;

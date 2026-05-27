@@ -11,6 +11,7 @@ import {
   type CreditUsageRow,
   type CreditChargeRow,
   type ChargesFilters,
+  type AssignableOrgRole,
 } from "@/api/endpoints/platform-admin.api";
 
 export const platformAdminKeys = {
@@ -21,6 +22,7 @@ export const platformAdminKeys = {
   user:       (id: string) => [...platformAdminKeys.all, "user", id] as const,
   orgUsers:   (orgId: string) => [...platformAdminKeys.all, "org", orgId, "users"] as const,
   orgBranches: (orgId: string) => [...platformAdminKeys.all, "org", orgId, "branches"] as const,
+  userRoles:   (orgId: string, userId: string) => [...platformAdminKeys.all, "org", orgId, "user", userId, "roles"] as const,
   credits:     (orgId: string) => [...platformAdminKeys.all, "org", orgId, "credits"] as const,
   creditUsage: (orgId: string, months: number) => [...platformAdminKeys.all, "org", orgId, "credit-usage", months] as const,
   creditCharges: (orgId: string, filters: ChargesFilters) => [...platformAdminKeys.all, "org", orgId, "credit-charges", filters] as const,
@@ -93,6 +95,14 @@ export function useAdminCreditUsage(orgId: string | undefined, months = 12) {
     queryKey: platformAdminKeys.creditUsage(orgId ?? "", months),
     queryFn:  () => platformAdminApi.getUsageHistory(orgId as string, months),
     enabled:  !!orgId,
+  });
+}
+
+export function useAdminUserRoles(orgId: string | undefined, userId: string | undefined) {
+  return useQuery<AssignableOrgRole[]>({
+    queryKey: platformAdminKeys.userRoles(orgId ?? "", userId ?? ""),
+    queryFn:  () => platformAdminApi.listUserRoles(orgId as string, userId as string),
+    enabled:  !!orgId && !!userId,
   });
 }
 

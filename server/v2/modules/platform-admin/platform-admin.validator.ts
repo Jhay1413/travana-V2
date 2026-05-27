@@ -114,3 +114,34 @@ export const writeOffChargeSchema = z.object({
   }),
   body: z.object({ reason: z.string().max(500).optional() }).optional(),
 });
+
+const ASSIGNABLE_ROLE = z.enum([
+  'org_admin',
+  'branch_manager',
+  'agent',
+  'homeworker',
+  'referral_agent',
+]);
+
+export const orgUserIdParamsSchema = z.object({
+  params: z.object({
+    id:     z.string().uuid(),
+    userId: z.string().min(1),
+  }),
+});
+
+export const addUserRoleBodySchema = z.object({
+  params: z.object({
+    id:     z.string().uuid(),
+    userId: z.string().min(1),
+  }),
+  body: z.object({ role: ASSIGNABLE_ROLE }),
+});
+
+export const removeUserRoleParamsSchema = z.object({
+  params: z.object({
+    id:     z.string().uuid(),
+    userId: z.string().min(1),
+    role:   ASSIGNABLE_ROLE,
+  }),
+});

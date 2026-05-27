@@ -52,3 +52,36 @@ export function useRole() {
 
   return { role, orgRole, can, canAccess };
 }
+
+/**
+ * Multi-role aware companion to useRole(). Returns the FULL set of org-level
+ * roles the user holds in their current org (the union of user_org_roles +
+ * any active branch_members.orgRole), plus the derived primary.
+ *
+ * Existing call sites that only care about the primary role should keep using
+ * useRole(). New code that wants union-aware behavior (e.g. merged nav,
+ * "does the user have at least one of these roles?") should use useRoles().
+ */
+export function useRoles() {
+  const { data: user } = useCurrentUser();
+
+  // Prefer the explicit array from the backend; fall back to a singleton from
+  // the primary role for any path that hasn't been migrated to return orgRoles
+  // yet (e.g. older cached payloads).
+  const primary: OrgRole | null =
+    (user?.orgRole as OrgRole | undefined) ?? null;
+
+  const roles: OrgRole[] =
+    user?.orgRoles && user.orgRoles.length > 0
+      ? (user.orgRoles as OrgRole[])
+      : primary
+        ? [primary]
+        : [];
+
+  return {
+    roles,
+    primary,
+    hasRole:    (r: OrgRole)    => roles.includes(r),
+    hasAnyRole: (rs: OrgRole[]) => rs.some((r) => roles.includes(r)),
+  };
+}

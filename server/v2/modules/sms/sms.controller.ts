@@ -19,7 +19,7 @@ import {
 import { getPublicBaseUrl } from '../../utils/public-url';
 import { userRepository } from '../user/user.repository';
 import { getUserId } from '../../utils/get-user-id';
-import { getScope, type Scope } from '../../utils/scope';
+import { getScope, hasAnyRole, type OrgRole, type Scope } from '../../utils/scope';
 
 const BULK_CONFIRM_THRESHOLD = 25;
 const MAX_RECIPIENTS_PER_REQUEST = 500;
@@ -80,26 +80,24 @@ async function loadActor(req: Request) {
   if (!userId) throw new AppError('Not authenticated', 401);
   const u = await userRepository.findById(userId);
   if (!u) throw new AppError('User not found', 404);
-  const orgRole = req.orgRole || '';
-  const orgId = orgRole === 'platform_admin' ? null : (req.orgId || null);
-  if (orgRole !== 'platform_admin' && !orgId) {
+  const orgRole  = req.orgRole || '';
+  const orgRoles = (req.orgRoles ?? (orgRole ? [orgRole] : [])) as OrgRole[];
+  const orgId = hasAnyRole(orgRoles, ['platform_admin']) ? null : (req.orgId || null);
+  if (!hasAnyRole(orgRoles, ['platform_admin']) && !orgId) {
     throw new AppError('No organisation context', 403);
   }
-  return { user: u, userId, orgId, orgRole, legacyRole: (u.role || '').toLowerCase() };
+  return { user: u, userId, orgId, orgRole, orgRoles, legacyRole: (u.role || '').toLowerCase() };
 }
+
+const SENDER_ROLES: OrgRole[] = ['platform_admin', 'org_admin', 'branch_manager', 'agent', 'homeworker'];
+const MANAGER_ROLES: OrgRole[] = ['platform_admin', 'org_admin', 'branch_manager'];
 
 /** Send / read access: any org member (admin, manager, agent, homeworker). */
 async function requireSenderAccess(req: Request) {
   const actor = await loadActor(req);
-  const allowedByOrgRole =
-    actor.orgRole === 'platform_admin' ||
-    actor.orgRole === 'org_admin' ||
-    actor.orgRole === 'branch_manager' ||
-    actor.orgRole === 'agent' ||
-    actor.orgRole === 'homeworker';
   const allowedByLegacyRole =
     actor.legacyRole === 'admin' || actor.legacyRole === 'manager' || actor.legacyRole === 'agent';
-  if (!allowedByOrgRole && !allowedByLegacyRole) {
+  if (!hasAnyRole(actor.orgRoles, SENDER_ROLES) && !allowedByLegacyRole) {
     throw new AppError('Not authorised to use texts', 403);
   }
   return { user: actor.user, userId: actor.userId, orgId: actor.orgId };
@@ -108,12 +106,8 @@ async function requireSenderAccess(req: Request) {
 /** Manage templates + opt-in: admin / manager only. */
 async function requireAdminOrManager(req: Request) {
   const actor = await loadActor(req);
-  const allowedByOrgRole =
-    actor.orgRole === 'org_admin' ||
-    actor.orgRole === 'branch_manager' ||
-    actor.orgRole === 'platform_admin';
   const allowedByLegacyRole = actor.legacyRole === 'admin' || actor.legacyRole === 'manager';
-  if (!allowedByOrgRole && !allowedByLegacyRole) {
+  if (!hasAnyRole(actor.orgRoles, MANAGER_ROLES) && !allowedByLegacyRole) {
     throw new AppError('Only Admin or Manager can manage texts', 403);
   }
   return { user: actor.user, userId: actor.userId, orgId: actor.orgId };

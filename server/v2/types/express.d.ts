@@ -5,7 +5,8 @@ declare global {
     interface Request {
       orgId:    string;
       branchId: string | null;
-      orgRole:  string;
+      orgRole:  string;          // primary role (highest-ranked from orgRoles) — back-compat
+      orgRoles: string[];        // full union of the user's roles for this org
       user?: User & { authType?: string; userId?: string; claims?: { sub?: string } };
     }
   }

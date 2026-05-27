@@ -159,3 +159,53 @@ export function getNavForRole(orgRole: OrgRole | null | undefined): NavConfig {
   if (!orgRole) return AGENT_NAV;
   return NAV_BY_ROLE[orgRole] ?? AGENT_NAV;
 }
+
+// Ranking mirrors the server-side ROLE_RANK in user-org-roles.service.ts so
+// the higher-power role's nav sections appear first when multiple roles merge.
+const ROLE_RANK: Record<OrgRole, number> = {
+  platform_admin: 120,
+  org_admin:      100,
+  branch_manager:  80,
+  agent:           60,
+  homeworker:      40,
+  referral_agent:  20,
+};
+
+/**
+ * Merge nav configs from multiple roles into one. Sections with the same `id`
+ * are merged (items concatenated); items with the same `path` deduplicate so
+ * a user with org_admin + agent doesn't see /destination-guru twice. The
+ * higher-ranked role's sections appear first.
+ *
+ * Single-role users get the same result as `getNavForRole(roles[0])`.
+ */
+export function getNavForRoles(roles: OrgRole[] | null | undefined): NavConfig {
+  if (!roles || roles.length === 0) return AGENT_NAV;
+  if (roles.length === 1) return getNavForRole(roles[0]);
+
+  const ordered = roles.slice().sort((a, b) => (ROLE_RANK[b] ?? 0) - (ROLE_RANK[a] ?? 0));
+
+  const sectionsById = new Map<string, NavSection>();
+  const seenPaths    = new Set<string>();
+  const result: NavSection[] = [];
+
+  for (const role of ordered) {
+    const cfg = NAV_BY_ROLE[role] ?? [];
+    for (const section of cfg) {
+      const newItems = section.items.filter((it) => !seenPaths.has(it.path));
+      if (newItems.length === 0) continue;
+      newItems.forEach((it) => seenPaths.add(it.path));
+
+      const existing = sectionsById.get(section.id);
+      if (existing) {
+        existing.items = [...existing.items, ...newItems];
+      } else {
+        const merged: NavSection = { ...section, items: newItems };
+        sectionsById.set(section.id, merged);
+        result.push(merged);
+      }
+    }
+  }
+
+  return result;
+}

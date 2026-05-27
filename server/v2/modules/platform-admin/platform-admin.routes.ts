@@ -18,6 +18,9 @@ import {
   usageHistoryQuerySchema,
   listChargesQuerySchema,
   writeOffChargeSchema,
+  orgUserIdParamsSchema,
+  addUserRoleBodySchema,
+  removeUserRoleParamsSchema,
 } from './platform-admin.validator';
 
 const router = Router();
@@ -43,6 +46,11 @@ router.get(   '/organizations/:id/users',                requirePlatformAdmin, v
 router.patch( '/organizations/:id/users/:userId/role',   requirePlatformAdmin, validate(changeUserRoleSchema), platformAdminController.changeUserRole);
 router.patch( '/organizations/:id/users/:userId/deactivate', requirePlatformAdmin, validate(deactivateUserSchema), platformAdminController.deactivateUser);
 router.patch( '/organizations/:id/users/:userId/reactivate', requirePlatformAdmin, validate(deactivateUserSchema), platformAdminController.reactivateUser);
+
+// Multi-role: full role-set management per user (used by the chip editor).
+router.get(   '/organizations/:id/users/:userId/roles',         requirePlatformAdmin, validate(orgUserIdParamsSchema),      platformAdminController.listUserRoles);
+router.post(  '/organizations/:id/users/:userId/roles',         requirePlatformAdmin, validate(addUserRoleBodySchema),      platformAdminController.addUserRoleMulti);
+router.delete('/organizations/:id/users/:userId/roles/:role',   requirePlatformAdmin, validate(removeUserRoleParamsSchema), platformAdminController.removeUserRoleMulti);
 
 // Org-scoped branches (read-only — admin uses impersonation for writes)
 router.get(   '/organizations/:id/branches',   requirePlatformAdmin, validate(orgIdParamSchema),              platformAdminController.listOrgBranches);

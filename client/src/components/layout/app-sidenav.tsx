@@ -14,9 +14,9 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRole } from "@/hooks/use-role";
+import { useRoles } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications, useCurrentOrganization } from "@/hooks/queries";
-import { getNavForRole, type NavItem, type NavSection } from "@/config/nav";
+import { getNavForRoles, type NavItem, type NavSection } from "@/config/nav";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
 
@@ -214,9 +214,9 @@ function SidenavInner({
   onToggleCollapsed?: () => void;
   sticky?: boolean;
 }) {
-  const { orgRole } = useRole();
+  const { roles } = useRoles();
   const [location] = useLocation();
-  const sections = getNavForRole(orgRole);
+  const sections = getNavForRoles(roles);
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
     try {
       const saved = sessionStorage.getItem("admin-nav-expanded");
@@ -269,7 +269,7 @@ function SidenavInner({
             <img
               src={currentOrganization.logoUrl}
               alt={currentOrganization.name || currentUser?.orgName || "Logo"}
-              className="max-h-14 w-auto object-contain"
+              className="max-h-24 w-auto object-contain"
               data-testid="img-brand-logo"
             />
           </div>

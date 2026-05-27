@@ -54,6 +54,7 @@ import organizationRoutes from '../modules/organization/organization.routes';
 import planRoutes from '../modules/plan/plan.routes';
 import inviteRoutes from '../modules/invite/invite.routes';
 import platformAdminRoutes from '../modules/platform-admin/platform-admin.routes';
+import userOrgRolesRoutes from '../modules/user-org-roles/user-org-roles.routes';
 import lookupRoutes from '../lookup/lookup.routes';
 import settingsRoutes from '../settings';
 
@@ -112,6 +113,7 @@ router.use('/admin',              ...auth, adminImportRoutes);
 router.use('/quote-share',        isAuthenticated, quoteShareRoutes);
 router.use('/portal',             portalRoutes);
 router.use('/platform-admin',     isAuthenticated, platformAdminRoutes);
+router.use('/user-org-roles',     ...auth, userOrgRolesRoutes);
 router.use('/lookup',             lookupRoutes);
 router.use('/settings',           isAuthenticated, settingsRoutes);
 

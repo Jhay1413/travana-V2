@@ -23,31 +23,16 @@ import {
 import {
   useActivateOrg,
   useStartImpersonation,
-  useChangeUserRole,
   useDeactivateUser,
   useReactivateUser,
 } from "@/hooks/mutations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { SuspendOrgDialog } from "@/components/platform-admin/suspend-org-dialog";
 import { ChangePlanDialog } from "@/components/platform-admin/change-plan-dialog";
 import { CreditsTab } from "@/components/platform-admin/credits-tab";
-import type { AdminUserRow, AssignableOrgRole } from "@/api/endpoints/platform-admin.api";
-
-const ASSIGNABLE_ROLES: AssignableOrgRole[] = [
-  "org_admin",
-  "branch_manager",
-  "agent",
-  "homeworker",
-  "referral_agent",
-];
+import { RoleChipEditor } from "@/components/platform-admin/role-chip-editor";
+import type { AdminUserRow } from "@/api/endpoints/platform-admin.api";
 
 const formatDate = (iso: string | null | undefined) => (iso ? new Date(iso).toISOString().slice(0, 10) : "");
 const formatDateTime = (iso: string | null | undefined) => {
@@ -226,7 +211,6 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function UsersTab({ orgId }: { orgId: string }) {
   const { data: users = [], isLoading } = useAdminOrgUsers(orgId);
-  const changeRole = useChangeUserRole();
   const deactivate = useDeactivateUser();
   const reactivate = useReactivateUser();
 
@@ -243,7 +227,7 @@ function UsersTab({ orgId }: { orgId: string }) {
         <thead className="border-b border-black/5 bg-black/[0.02] text-xs uppercase tracking-wider text-black/50 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/50">
           <tr>
             <th className="px-4 py-3 text-left">User</th>
-            <th className="px-4 py-3 text-left">Role</th>
+            <th className="px-4 py-3 text-left">Roles</th>
             <th className="px-4 py-3 text-left">Status</th>
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
@@ -252,9 +236,8 @@ function UsersTab({ orgId }: { orgId: string }) {
           {users.map((u) => (
             <UserRow
               key={u.id}
+              orgId={orgId}
               user={u}
-              changing={changeRole.isPending && changeRole.variables?.userId === u.id}
-              onRoleChange={(orgRole) => changeRole.mutate({ orgId, userId: u.id, orgRole })}
               onDeactivate={() => deactivate.mutate({ orgId, userId: u.id })}
               onReactivate={() => reactivate.mutate({ orgId, userId: u.id })}
             />
@@ -266,20 +249,17 @@ function UsersTab({ orgId }: { orgId: string }) {
 }
 
 function UserRow({
+  orgId,
   user,
-  changing,
-  onRoleChange,
   onDeactivate,
   onReactivate,
 }: {
+  orgId: string;
   user: AdminUserRow;
-  changing: boolean;
-  onRoleChange: (role: AssignableOrgRole) => void;
   onDeactivate: () => void;
   onReactivate: () => void;
 }) {
   const banned = !!user.banned;
-  const currentRole = (user.orgRole as AssignableOrgRole) ?? "agent";
   return (
     <tr className="border-b border-black/5 last:border-0 dark:border-white/10" data-testid={`row-user-${user.id}`}>
       <td className="px-4 py-3">
@@ -287,20 +267,7 @@ function UserRow({
         <div className="text-xs text-black/50 dark:text-white/50">{user.email}</div>
       </td>
       <td className="px-4 py-3">
-        <Select
-          value={currentRole}
-          onValueChange={(v) => onRoleChange(v as AssignableOrgRole)}
-          disabled={changing || banned}
-        >
-          <SelectTrigger className="h-8 w-44" data-testid={`select-role-${user.id}`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ASSIGNABLE_ROLES.map((r) => (
-              <SelectItem key={r} value={r}>{r}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <RoleChipEditor orgId={orgId} userId={user.id} disabled={banned} />
       </td>
       <td className="px-4 py-3">
         {banned ? (

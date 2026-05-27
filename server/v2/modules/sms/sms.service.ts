@@ -35,7 +35,7 @@ export async function attachChargeToMessage(chargeId: string, smsMessageId: stri
 const CONNEXA_BASE = 'https://cnxa.io';
 const DEFAULT_TOKEN_TTL_MS = 55 * 60 * 1000;
 const TOKEN_REFRESH_LEAD_MS = 30_000;
-const DEFAULT_SENDER = 'Travana';
+const DEFAULT_SENDER = 'Quotehub by';
 
 function getCreds() {
   const email = process.env.CONNEXA_EMAIL ?? '';
@@ -117,8 +117,11 @@ function toConnexaPhone(phone: string): string {
 
 /** Connexa sender_id rule: 3-11 chars, alphanumeric, at least one letter. */
 export function sanitiseSenderId(name: string | null | undefined): string {
-  const cleaned = (name ?? '').replace(/[^a-zA-Z0-9]/g, '');
-  if (cleaned.length >= 3 && /[a-zA-Z]/.test(cleaned)) return cleaned.slice(0, 11);
+  const cleaned = (name ?? '')
+    .replace(/[^a-zA-Z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.length >= 3 && /[a-zA-Z]/.test(cleaned)) return cleaned.slice(0, 11).trimEnd();
   return DEFAULT_SENDER;
 }
 

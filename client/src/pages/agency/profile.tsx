@@ -13,6 +13,7 @@ import { LogoPicker } from "./components/LogoPicker";
 import { LiveBrandPreview } from "./components/LiveBrandPreview";
 import { SettingsField } from "./components/SettingsField";
 import { COMMON_TIMEZONES, CURRENCIES } from "./utils/branding-options";
+import { SalesModeToggle } from "@/components/agency/sales-mode-toggle";
 import type { OrganizationSettings } from "@/api/endpoints/organization.api";
 
 export default function AgencyProfilePage() {
@@ -73,9 +74,11 @@ export default function AgencyProfilePage() {
   if (isLoading) return <PageLoading />;
 
   return (
-    <div className="grid gap-6 md:grid-cols-[1fr_360px]">
-      <div className="space-y-6 rounded-3xl border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-white/5">
-        <SettingsField label="Agency name">
+    <div className="space-y-6">
+      <SalesModeToggle />
+      <div className="grid gap-6 md:grid-cols-[1fr_360px]">
+        <div className="space-y-6 rounded-3xl border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-white/5">
+          <SettingsField label="Agency name">
           <Input id="b-name" value={name} onChange={(e) => setName(e.target.value)} data-testid="input-branding-name" />
         </SettingsField>
 
@@ -148,7 +151,8 @@ export default function AgencyProfilePage() {
         </div>
       </div>
 
-      <LiveBrandPreview name={name} slug={slug} logoUrl={logoUrl} brandColor={brandColor} />
+        <LiveBrandPreview name={name} slug={slug} logoUrl={logoUrl} brandColor={brandColor} />
+      </div>
     </div>
   );
 }

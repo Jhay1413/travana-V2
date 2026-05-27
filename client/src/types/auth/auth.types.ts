@@ -14,6 +14,13 @@ export interface AuthUser {
   email: string;
   role: string;
   orgRole: OrgRole | null;
+  /**
+   * Full union of org-level roles the user holds in their current org. Populated
+   * by /api/auth/user via the user_org_roles junction table plus any active
+   * branch_members.orgRole. `orgRole` above is the primary (highest-ranked)
+   * derived from this array.
+   */
+  orgRoles: OrgRole[];
   orgId: string | null;
   branchId: string | null;
   orgName: string | null;

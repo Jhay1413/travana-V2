@@ -1,5 +1,5 @@
 import { db } from '../../config/database';
-import { user, branchMembers, branches, organization, hrRecordsTable } from '@shared/schema';
+import { user, branchMembers, branches, organization, hrRecordsTable, userOrgRoles } from '@shared/schema';
 import { and, eq, isNotNull } from 'drizzle-orm';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -107,6 +107,15 @@ export const inviteRepository = {
     return db.transaction(async (tx) => {
       const newUser = await this.createPendingUser(userValues, tx);
       await this.createBranchMember(branchMember, tx);
+
+      // Multi-role: seed the junction table with the invited user's role.
+      if (userValues.orgRole && newUser.orgId) {
+        await tx
+          .insert(userOrgRoles)
+          .values({ userId: newUser.id, orgId: newUser.orgId, role: userValues.orgRole })
+          .onConflictDoNothing({ target: [userOrgRoles.userId, userOrgRoles.orgId, userOrgRoles.role] });
+      }
+
       await tx
         .insert(hrRecordsTable)
         .values({ orgId: branchMember.orgId, userId: newUser.id })

@@ -11,6 +11,8 @@ import { registrationController } from "../../../controllers/registration.contro
 import { branchMemberRepository } from "../../modules/branch-member/branch-member.repository";
 import { organizationRepository } from "../../modules/organization/organization.repository";
 import { branchRepository } from "../../modules/branch/branch.repository";
+import { userOrgRolesRepository } from "../../modules/user-org-roles/user-org-roles.repository";
+import { primaryRole } from "../../modules/user-org-roles/user-org-roles.service";
 
 async function resolveOrgAndBranchForUser(
   user: {
@@ -22,12 +24,14 @@ async function resolveOrgAndBranchForUser(
   session?: { impersonateOrgId?: string | undefined },
 ): Promise<{
   orgRole: string | null;
+  orgRoles: string[];
   orgId: string | null;
   branchId: string | null;
   orgName: string | null;
   branchName: string | null;
 }> {
   let orgRole: string | null = user.orgRole ?? null;
+  let orgRoles: string[] = [];
   let orgId: string | null = user.orgId ?? null;
   let branchId: string | null = null;
 
@@ -38,17 +42,27 @@ async function resolveOrgAndBranchForUser(
     // and offers "Stop impersonating".
     if (session?.impersonateOrgId) {
       orgRole = "org_admin";
+      orgRoles = ["org_admin"];
       orgId = session.impersonateOrgId;
       branchId = null;
     } else {
       orgRole = "platform_admin";
+      orgRoles = ["platform_admin"];
     }
   } else {
     const membership = await branchMemberRepository.findActiveByUserId(user.id);
     if (membership) {
-      orgRole = membership.orgRole;
       orgId = membership.orgId;
       branchId = membership.branchId;
+    }
+    if (orgId) {
+      const fromJunction = await userOrgRolesRepository.findRolesByUserAndOrg(user.id, orgId);
+      const set = new Set<string>(fromJunction);
+      if (membership?.orgRole) set.add(membership.orgRole);
+      // Defensive fallback if backfill missed this user.
+      if (set.size === 0 && user.orgRole) set.add(user.orgRole);
+      orgRoles = Array.from(set);
+      orgRole  = primaryRole(orgRoles) ?? user.orgRole ?? null;
     }
   }
 
@@ -59,6 +73,7 @@ async function resolveOrgAndBranchForUser(
 
   return {
     orgRole,
+    orgRoles,
     orgId,
     branchId,
     orgName: org?.name ?? null,

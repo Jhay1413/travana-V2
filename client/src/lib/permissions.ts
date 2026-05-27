@@ -166,6 +166,27 @@ export function canAccessModule(role: Role, mod: Module, overrides?: Overrides):
   return getEffectivePermission(role, mod, overrides) !== "none";
 }
 
+/**
+ * Multi-role permission check: returns true if ANY of the user's roles grants
+ * the action on the module. Permissions are additive across roles.
+ */
+export function canAny(
+  roles: Role[],
+  action: Action,
+  mod: Module,
+  scope: "own" | "any" = "any",
+  overrides?: Overrides
+): boolean {
+  return roles.some((r) => can(r, action, mod, scope, overrides));
+}
+
+/**
+ * Multi-role module access: true if any of the user's roles can access the module.
+ */
+export function canAccessModuleAny(roles: Role[], mod: Module, overrides?: Overrides): boolean {
+  return roles.some((r) => canAccessModule(r, mod, overrides));
+}
+
 export const ACCESS_LEVEL_LABEL: Record<AccessLevel, string> = {
   none: "No access",
   read_own: "View own only",

@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { organization, branches, branchMembers, user, userProfiles, hrRecordsTable } from "@shared/schema";
+import { organization, branches, branchMembers, user, userProfiles, hrRecordsTable, userOrgRoles } from "@shared/schema";
 import type { InsertOrganization, InsertBranch, InsertUser, InsertBranchMember } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
@@ -81,6 +81,16 @@ export const onboardingRepository = {
         isActive: input.ownerBranchMemberRoleAndActive.isActive,
       });
 
+      // Multi-role: seed the junction table with the owner's primary org role.
+      // The junction is the source of truth going forward; user.orgRole stays
+      // populated as a derived "primary" for back-compat.
+      if (input.ownerUser.orgRole) {
+        await tx
+          .insert(userOrgRoles)
+          .values({ userId: ownerUser.id, orgId: org.id, role: input.ownerUser.orgRole })
+          .onConflictDoNothing({ target: [userOrgRoles.userId, userOrgRoles.orgId, userOrgRoles.role] });
+      }
+
       await tx
         .insert(hrRecordsTable)
         .values({ orgId: org.id, userId: ownerUser.id })
@@ -99,6 +109,13 @@ export const onboardingRepository = {
           orgRole: agent.branchMemberRoleAndActive.orgRole,
           isActive: agent.branchMemberRoleAndActive.isActive,
         });
+
+        if (agent.user.orgRole) {
+          await tx
+            .insert(userOrgRoles)
+            .values({ userId: agentUser.id, orgId: org.id, role: agent.user.orgRole })
+            .onConflictDoNothing({ target: [userOrgRoles.userId, userOrgRoles.orgId, userOrgRoles.role] });
+        }
 
         await tx
           .insert(hrRecordsTable)

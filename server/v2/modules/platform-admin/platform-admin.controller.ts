@@ -9,6 +9,7 @@ import {
   type AssignableOrgRole,
 } from './platform-admin.service';
 import { platformAdminCreditsService } from './platform-admin-credits.service';
+import { userOrgRolesService } from '../user-org-roles/user-org-roles.service';
 
 function getStrParam(req: Request, key: string): string {
   const raw = req.params[key];
@@ -135,6 +136,31 @@ export const platformAdminController = {
       req.session.save((err) => (err ? reject(err) : resolve())),
     );
     successResponse(res, null, 'Stopped impersonating');
+  }),
+
+  listUserRoles: asyncHandler(async (req: Request, res: Response) => {
+    const orgId  = getStrParam(req, 'id');
+    const userId = getStrParam(req, 'userId');
+    const roles = await userOrgRolesService.listForUser(userId, orgId);
+    successResponse(res, { roles });
+  }),
+
+  addUserRoleMulti: asyncHandler(async (req: Request, res: Response) => {
+    const actor  = buildActor(req);
+    const orgId  = getStrParam(req, 'id');
+    const userId = getStrParam(req, 'userId');
+    const role   = String(req.body?.role ?? '');
+    await userOrgRolesService.addRole(userId, orgId, role, actor);
+    successResponse(res, null, 'Role added');
+  }),
+
+  removeUserRoleMulti: asyncHandler(async (req: Request, res: Response) => {
+    const actor  = buildActor(req);
+    const orgId  = getStrParam(req, 'id');
+    const userId = getStrParam(req, 'userId');
+    const role   = getStrParam(req, 'role');
+    await userOrgRolesService.removeRole(userId, orgId, role, actor);
+    successResponse(res, null, 'Role removed');
   }),
 
   getCreditSummary: asyncHandler(async (req: Request, res: Response) => {

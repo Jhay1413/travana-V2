@@ -59,6 +59,32 @@ export function useChangeUserRole() {
   });
 }
 
+export function useAddUserRole() {
+  const invalidate = useInvalidateOrg();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orgId, userId, role }: { orgId: string; userId: string; role: AssignableOrgRole }) =>
+      platformAdminApi.addUserRole(orgId, userId, role),
+    onSuccess: (_d, vars) => {
+      invalidate(vars.orgId);
+      qc.invalidateQueries({ queryKey: platformAdminKeys.userRoles(vars.orgId, vars.userId) });
+    },
+  });
+}
+
+export function useRemoveUserRole() {
+  const invalidate = useInvalidateOrg();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orgId, userId, role }: { orgId: string; userId: string; role: AssignableOrgRole }) =>
+      platformAdminApi.removeUserRole(orgId, userId, role),
+    onSuccess: (_d, vars) => {
+      invalidate(vars.orgId);
+      qc.invalidateQueries({ queryKey: platformAdminKeys.userRoles(vars.orgId, vars.userId) });
+    },
+  });
+}
+
 export function useDeactivateUser() {
   const invalidate = useInvalidateOrg();
   return useMutation({
