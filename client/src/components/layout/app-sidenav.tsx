@@ -269,7 +269,7 @@ function SidenavInner({
             <img
               src={currentOrganization.logoUrl}
               alt={currentOrganization.name || currentUser?.orgName || "Logo"}
-              className="max-h-20 w-auto object-contain"
+              className="max-h-28 w-auto object-contain"
               data-testid="img-brand-logo"
             />
           </div>
