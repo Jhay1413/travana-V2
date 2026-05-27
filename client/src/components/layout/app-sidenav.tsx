@@ -265,7 +265,7 @@ function SidenavInner({
             </div>
           </div>
         ) : currentOrganization?.logoUrl ? (
-          <div className="flex items-center justify-start">
+          <div className="flex items-center justify-start -my-3">
             <img
               src={currentOrganization.logoUrl}
               alt={currentOrganization.name || currentUser?.orgName || "Logo"}
