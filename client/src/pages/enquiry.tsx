@@ -299,7 +299,7 @@ function EnquiryNotesSection({ transactionId }: { transactionId: string }) {
   };
 
   return (
-    <Card className="rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-enquiry-notes">
+    <Card className="rounded-3xl border-black/10 bg-white/70 p-4 mt-[20px] mb-[20px]" data-testid="card-enquiry-notes">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-black/50" />
