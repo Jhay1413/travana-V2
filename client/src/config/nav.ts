@@ -1,5 +1,6 @@
 import {
   Activity,
+  Briefcase,
   Building2,
   CircleDollarSign,
   ClipboardList,
@@ -15,6 +16,7 @@ import {
   Plane,
   Settings2,
   Share2,
+  Shield,
   Sparkles,
   Target,
   TrendingUp,
@@ -171,40 +173,44 @@ const ROLE_RANK: Record<OrgRole, number> = {
   referral_agent:  20,
 };
 
+const ROLE_GROUP_META: Record<OrgRole, { label: string; icon: LucideIcon }> = {
+  platform_admin: { label: "Platform",  icon: Activity },
+  org_admin:      { label: "Admin",     icon: Shield },
+  branch_manager: { label: "Branch",    icon: Briefcase },
+  agent:          { label: "Agent",     icon: TrendingUp },
+  homeworker:     { label: "Homeworker", icon: TrendingUp },
+  referral_agent: { label: "Affiliate", icon: Link2 },
+};
+
 /**
- * Merge nav configs from multiple roles into one. Sections with the same `id`
- * are merged (items concatenated); items with the same `path` deduplicate so
- * a user with org_admin + agent doesn't see /destination-guru twice. The
- * higher-ranked role's sections appear first.
+ * Build the sidebar for a user's roles.
  *
- * Single-role users get the same result as `getNavForRole(roles[0])`.
+ * - Single role: returns that role's nav as-is (existing layout preserved).
+ * - Multiple roles: each role becomes ONE top-level collapsible group
+ *   (e.g. "Admin", "Agent") containing every item from that role's nav,
+ *   flattened from any sub-sections. Each group is self-contained — items
+ *   are NOT deduped across groups, so e.g. an agent who is also a branch
+ *   manager still sees Pipeline/Tickets/etc. under the Agent dropdown.
  */
 export function getNavForRoles(roles: OrgRole[] | null | undefined): NavConfig {
   if (!roles || roles.length === 0) return AGENT_NAV;
   if (roles.length === 1) return getNavForRole(roles[0]);
 
   const ordered = roles.slice().sort((a, b) => (ROLE_RANK[b] ?? 0) - (ROLE_RANK[a] ?? 0));
-
-  const sectionsById = new Map<string, NavSection>();
-  const seenPaths    = new Set<string>();
   const result: NavSection[] = [];
 
   for (const role of ordered) {
     const cfg = NAV_BY_ROLE[role] ?? [];
-    for (const section of cfg) {
-      const newItems = section.items.filter((it) => !seenPaths.has(it.path));
-      if (newItems.length === 0) continue;
-      newItems.forEach((it) => seenPaths.add(it.path));
+    const items: NavItem[] = cfg.flatMap((section) => section.items);
+    if (items.length === 0) continue;
 
-      const existing = sectionsById.get(section.id);
-      if (existing) {
-        existing.items = [...existing.items, ...newItems];
-      } else {
-        const merged: NavSection = { ...section, items: newItems };
-        sectionsById.set(section.id, merged);
-        result.push(merged);
-      }
-    }
+    const meta = ROLE_GROUP_META[role];
+    result.push({
+      id:    `role-${role}`,
+      label: meta.label,
+      icon:  meta.icon,
+      items,
+    });
   }
 
   return result;

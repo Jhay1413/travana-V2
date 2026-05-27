@@ -3,6 +3,7 @@ import { user } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { AppError } from '../../utils/error-handler';
 import { userOrgRolesRepository } from './user-org-roles.repository';
+import { branchMemberRepository } from '../branch-member/branch-member.repository';
 import { platformAdminAuditRepository } from '../platform-admin/platform-admin-audit.repository';
 
 /**
@@ -135,13 +136,25 @@ export const userOrgRolesService = {
     const existing = await userOrgRolesRepository.findRolesByUserAndOrg(userId, orgId);
     if (!existing.includes(roleToRemove)) return; // idempotent
 
-    if (existing.length <= 1) {
-      throw new AppError('Cannot remove the user\'s last role', 400);
+    const remaining = existing.filter((r) => r !== roleToRemove);
+
+    // "Last role" check must consider every source of access, not just
+    // user_org_roles rows. A branch_manager who toggled "also sell" has only
+    // `agent` in user_org_roles but still holds branch_manager via
+    // branch_members.orgRole — removing agent does not leave them roleless.
+    if (remaining.length === 0) {
+      const [membership, userRow] = await Promise.all([
+        branchMemberRepository.findActiveByUserId(userId),
+        db.select({ role: user.role }).from(user).where(eq(user.id, userId)).limit(1),
+      ]);
+      const hasMembershipRole = membership?.orgId === orgId && !!membership.orgRole;
+      const isPlatformAdmin = userRow[0]?.role === 'platform_admin';
+      if (!hasMembershipRole && !isPlatformAdmin) {
+        throw new AppError('Cannot remove the user\'s last role', 400);
+      }
     }
 
     await userOrgRolesRepository.removeRole(userId, orgId, roleToRemove);
-
-    const remaining = existing.filter((r) => r !== roleToRemove);
     const newPrimary = primaryRole(remaining);
     if (newPrimary) {
       await db

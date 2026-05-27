@@ -796,51 +796,137 @@ export default function EnquiryPage() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-5xl px-4 pb-12 pt-6">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <div className="mb-6 flex items-center gap-3">
-            <button type="button" onClick={() => navigate(clientId ? `/clients/${clientId}?tab=enquiries` : "/")} className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.04]" data-testid="button-back">
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h1 className="truncate text-xl font-bold text-black/90" data-testid="text-enquiry-title">{enquiry.title || "Untitled Enquiry"}</h1>
+      <div className="px-5 pb-8 pt-5" data-testid="page-enquiry">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-enquiry-header">
+          <div className="flex items-start gap-3">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-2xl border-black/10 bg-white/70"
+              data-testid="button-back"
+              onClick={() => navigate(clientId ? `/clients/${clientId}?tab=enquiries` : "/")}
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Enquiries
+            </Button>
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-base font-semibold" data-testid="text-enquiry-title">
+                  {enquiry.title || "Untitled Enquiry"}
+                  {enquiry.budget ? (
+                    <>
+                      , <span className="text-sm font-semibold text-[#000000]">
+                        {currency.format(parseFloat(enquiry.budget))}
+                        {enquiry.budget_type ? ` ${enquiry.budget_type.toLowerCase()}` : ""}
+                      </span>
+                    </>
+                  ) : null}
+                </div>
                 <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusColor}`} data-testid="badge-enquiry-status">{enquiry.status}</span>
               </div>
-              <div className="mt-0.5 text-xs text-black/50">
-                Created {formatUKDate(enquiry.date_created)}
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-enquiry-meta">
+                {(isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames) && (
+                  <>
+                    <span data-testid="text-enquiry-meta-destination">{isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames}</span>
+                    <span className="text-black/25">•</span>
+                  </>
+                )}
+                {enquiry.travel_date && (
+                  <>
+                    <span data-testid="text-enquiry-meta-dates">
+                      {formatUKDate(enquiry.travel_date)}{enquiry.no_of_nights ? ` · ${enquiry.no_of_nights} nights` : ""}
+                    </span>
+                    <span className="text-black/25">•</span>
+                  </>
+                )}
+                <span data-testid="text-enquiry-meta-created">Created {formatUKDate(enquiry.date_created)}</span>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  toggleFavoriteMutation.mutate(
-                    { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + (enquiry as any).holiday_type_name || "—" : ""}` },
-                    { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
-                  )
-                }
-                className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isEnquiryPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
-                data-testid="button-pin-enquiry"
-              >
-                {isEnquiryPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-                {isEnquiryPinned ? "Unpin" : "Pin"}
-              </button>
-              <Button size="sm" variant="outline" className="h-9 rounded-2xl border-black/10 px-3" onClick={() => setShowEditWizard(true)} data-testid="button-edit-enquiry">
-                <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
-              </Button>
-              {enquiry.status !== "Converted" && (
-                <Button size="sm" className="h-9 rounded-2xl bg-black px-4 text-white hover:bg-black/90" onClick={handleConvertToQuote} data-testid="button-convert-to-quote">
-                  <ArrowRight className="mr-2 h-3.5 w-3.5" />
-                  Convert to Quote
-                </Button>
-              )}
             </div>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-            <div className="space-y-5">
-              <Card className="rounded-3xl border-black/10 bg-white/70 p-5" data-testid="card-holiday-details">
+          <div className="flex items-center gap-2" data-testid="row-enquiry-actions">
+            <button
+              type="button"
+              onClick={() =>
+                toggleFavoriteMutation.mutate(
+                  { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + (enquiry as any).holiday_type_name || "—" : ""}` },
+                  { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                )
+              }
+              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isEnquiryPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
+              data-testid="button-pin-enquiry"
+            >
+              {isEnquiryPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+              {isEnquiryPinned ? "Unpin" : "Pin"}
+            </button>
+            <Button size="sm" variant="outline" className="h-9 rounded-2xl border-black/10 px-3" onClick={() => setShowEditWizard(true)} data-testid="button-edit-enquiry">
+              <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
+            </Button>
+            {enquiry.status !== "Converted" && (
+              <Button size="sm" className="h-9 rounded-2xl bg-black px-4 text-white hover:bg-black/90" onClick={handleConvertToQuote} data-testid="button-convert-to-quote">
+                <ArrowRight className="mr-2 h-3.5 w-3.5" />
+                Convert to Quote
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4" data-testid="layout-enquiry-body">
+          <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-enquiry-sections">
+            <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-enquiry-itinerary">
+              <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
+                <div className="grid content-start gap-3" data-testid="col-enquiry-summary">
+                  <Card className="rounded-2xl border-black/10 bg-white/70 p-3" data-testid="card-enquiry-quick-summary">
+                    <div className="text-xs font-bold mb-2">Quick Summary</div>
+                    <div className="space-y-1.5">
+                      {[
+                        { label: "Type", value: holidayTypeName || "—" },
+                        { label: "Destination", value: isCruise ? (cruiseDestinationNames || destinationNames || "—") : (destinationNames || "—") },
+                        { label: isCruise ? "Cruise Date" : "Travel Date", value: formatUKDate(enquiry.travel_date) },
+                        isHotTub
+                          ? { label: "Guests", value: enquiry.no_of_guests ? `${enquiry.no_of_guests} guest${enquiry.no_of_guests !== 1 ? "s" : ""}` : "—" }
+                          : { label: "Passengers", value: passengerBreakdown || "—" },
+                        { label: "Duration", value: enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : "—" },
+                        isHotTub && enquiry.no_of_pets != null
+                          ? { label: "Pets", value: `${enquiry.no_of_pets} pet${enquiry.no_of_pets !== 1 ? "s" : ""}` }
+                          : null,
+                        isCruise ? { label: "Cruise Line", value: cruiseLineNames || "—" } : null,
+                        isCruise && enquiry.cabin_type ? { label: "Cabin", value: enquiry.cabin_type } : null,
+                        { label: "Budget", value: enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : "—" },
+                      ].filter(Boolean).map((item: any) => (
+                        <div key={item.label} className="flex items-center justify-between gap-2 rounded-lg bg-black/[0.02] px-2 py-1">
+                          <span className="text-[10px] font-medium text-black/50">{item.label}</span>
+                          <span className="text-[11px] font-semibold text-black/80 text-right truncate">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2">
+                      <div className="text-[10px] font-medium text-black/45 mb-1">Assigned To</div>
+                      <UserReassignSelect
+                        value={enquiry?.user_id || currentUser?.id || ""}
+                        onValueChange={(userId) => {
+                          updateTransactionMutation.mutate(
+                            { id: enquiry.transaction_id, data: { user_id: userId } },
+                            {
+                              onSuccess: () => {
+                                toast({ title: "Enquiry reassigned successfully" });
+                                queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
+                              },
+                              onError: () => {
+                                toast({ title: "Failed to reassign enquiry", variant: "destructive" });
+                              },
+                            }
+                          );
+                        }}
+                        data-testid="select-enquiry-reassign"
+                      />
+                    </div>
+                  </Card>
+                </div>
+
+                <div className="min-w-0 space-y-3" data-testid="section-enquiry-summary">
+                  <Card className="rounded-3xl border-black/10 bg-white/70 p-5" data-testid="card-holiday-details">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10">
                     <Sparkles className="h-4 w-4 text-blue-600" />
@@ -897,67 +983,19 @@ export default function EnquiryPage() {
                   <InfoRow icon={Wallet} label="Budget" value={enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : null} />
                 </div>
               </Card>
-            </div>
 
-            <div className="space-y-5">
-              <Card className="rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-enquiry-summary">
-                <div className="text-sm font-bold mb-3">Quick Summary</div>
-                <div className="space-y-2">
-                  {[
-                    { label: "Type", value: holidayTypeName || "—", color: "bg-blue-500/10 text-blue-700" },
-                    { label: "Destination", value: isCruise ? (cruiseDestinationNames || destinationNames || "—") : (destinationNames || "—") },
-                    { label: isCruise ? "Cruise Date" : "Travel Date", value: formatUKDate(enquiry.travel_date) },
-                    isHotTub
-                      ? { label: "Guests", value: enquiry.no_of_guests ? `${enquiry.no_of_guests} guest${enquiry.no_of_guests !== 1 ? "s" : ""}` : "—" }
-                      : { label: "Passengers", value: passengerBreakdown || "—" },
-                    { label: "Duration", value: enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : "—" },
-                    isHotTub && enquiry.no_of_pets != null
-                      ? { label: "Pets", value: `${enquiry.no_of_pets} pet${enquiry.no_of_pets !== 1 ? "s" : ""}` }
-                      : null,
-                    isCruise
-                      ? { label: "Cruise Line", value: cruiseLineNames || "—" }
-                      : null,
-                    isCruise && enquiry.cabin_type
-                      ? { label: "Cabin", value: enquiry.cabin_type }
-                      : null,
-                    { label: "Budget", value: enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : "—" },
-                  ].filter(Boolean).map((item: any) => (
-                    <div key={item.label} className="flex items-center justify-between gap-3 rounded-xl bg-black/[0.02] px-3 py-2">
-                      <span className="text-[11px] font-medium text-black/50">{item.label}</span>
-                      <span className={cn("text-xs font-semibold text-black/80", item.color)}>{item.value}</span>
-                    </div>
-                  ))}
-                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-black/[0.02] px-3 py-2">
-                    <span className="text-[11px] font-medium text-black/50">Assigned To</span>
-                    <UserReassignSelect
-                      value={enquiry?.user_id || currentUser?.id || ""}
-                      onValueChange={(userId) => {
-                        updateTransactionMutation.mutate(
-                          { id: enquiry.transaction_id, data: { user_id: userId } },
-                          {
-                            onSuccess: () => {
-                              toast({ title: "Enquiry reassigned successfully" });
-                              queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
-                            },
-                            onError: () => {
-                              toast({ title: "Failed to reassign enquiry", variant: "destructive" });
-                            },
-                          }
-                        );
-                      }}
-                      className="max-w-[200px]"
-                      data-testid="select-enquiry-reassign"
-                    />
-                  </div>
+                  {enquiry.transaction_id && (
+                    <EnquiryNotesSection transactionId={enquiry.transaction_id} />
+                  )}
                 </div>
-              </Card>
+              </div>
+            </Card>
 
+            <div className="grid gap-3" data-testid="col-enquiry-right">
               <EnquiryTasksSection enquiryId={enquiryId} assignedUserId={enquiry.user_id} />
-
-              {enquiry.transaction_id && <EnquiryNotesSection transactionId={enquiry.transaction_id} />}
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
 
       <EnquiryWizard
