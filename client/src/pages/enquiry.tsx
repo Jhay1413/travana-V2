@@ -1,42 +1,30 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import {
-  Anchor,
   ArrowRight,
   Bold,
-  Calendar,
   CheckSquare,
   ChevronLeft,
   Circle,
-  Dog,
-  Globe,
-  Home,
-  Hotel,
   Italic,
   Link as LinkIcon,
   List,
   ListOrdered,
-  MapPin,
   MessageSquare,
+  MoreHorizontal,
   Pencil,
-  Plane,
+  Pin,
+  PinOff,
   Plus,
   Redo,
   Reply,
   Send,
-  Ship,
   SmilePlus,
-  Sparkles,
-  Star,
   Trash2,
   Undo,
-  Users,
-  Wallet,
   X,
-  Pin,
-  PawPrint,
-  PinOff,
 } from "lucide-react";
+import stockHolidayImage from "@assets/Luxury-Coco-Beach-Resort_1769950332124.jpg";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -339,16 +327,17 @@ function EnquiryNotesSection({ transactionId }: { transactionId: string }) {
   );
 }
 
-function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string | null | undefined }) {
-  if (!value) return null;
+function SpecRow({ testId, label, value }: { testId: string; label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 py-2" data-testid={`info-row-${label.toLowerCase().replace(/\s/g, "-")}`}>
-      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-black/[0.04]">
-        <Icon className="h-3.5 w-3.5 text-black/50" />
+    <div
+      className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
+      data-testid={`row-enquiry-spec-${testId}`}
+    >
+      <div className="text-xs font-semibold text-black/65" data-testid={`text-enquiry-spec-${testId}-label`}>
+        {label}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-medium text-black/45">{label}</div>
-        <div className="text-sm font-semibold text-black/80">{value}</div>
+      <div className="text-xs font-semibold text-black text-right" data-testid={`text-enquiry-spec-${testId}-value`}>
+        {value || "—"}
       </div>
     </div>
   );
@@ -662,6 +651,19 @@ export default function EnquiryPage() {
 
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
+  const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
+  const ellipsisRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showEllipsisMenu) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ellipsisRef.current && !ellipsisRef.current.contains(event.target as Node)) {
+        setShowEllipsisMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEllipsisMenu]);
 
   const { data: packageTypesData } = usePackageTypes();
 
@@ -860,15 +862,6 @@ export default function EnquiryPage() {
               {isEnquiryPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
               {isEnquiryPinned ? "Unpin" : "Pin"}
             </button>
-            <Button size="sm" variant="outline" className="h-9 rounded-2xl border-black/10 px-3" onClick={() => setShowEditWizard(true)} data-testid="button-edit-enquiry">
-              <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
-            </Button>
-            {enquiry.status !== "Converted" && (
-              <Button size="sm" className="h-9 rounded-2xl bg-black px-4 text-white hover:bg-black/90" onClick={handleConvertToQuote} data-testid="button-convert-to-quote">
-                <ArrowRight className="mr-2 h-3.5 w-3.5" />
-                Convert to Quote
-              </Button>
-            )}
           </div>
         </div>
 
@@ -876,113 +869,183 @@ export default function EnquiryPage() {
           <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-enquiry-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-enquiry-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
-                <div className="grid content-start gap-3" data-testid="col-enquiry-summary">
-                  <Card className="rounded-2xl border-black/10 bg-white/70 p-3" data-testid="card-enquiry-quick-summary">
-                    <div className="text-xs font-bold mb-2">Quick Summary</div>
-                    <div className="space-y-1.5">
-                      {[
-                        { label: "Type", value: holidayTypeName || "—" },
-                        { label: "Destination", value: isCruise ? (cruiseDestinationNames || destinationNames || "—") : (destinationNames || "—") },
-                        { label: isCruise ? "Cruise Date" : "Travel Date", value: formatUKDate(enquiry.travel_date) },
-                        isHotTub
-                          ? { label: "Guests", value: enquiry.no_of_guests ? `${enquiry.no_of_guests} guest${enquiry.no_of_guests !== 1 ? "s" : ""}` : "—" }
-                          : { label: "Passengers", value: passengerBreakdown || "—" },
-                        { label: "Duration", value: enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : "—" },
-                        isHotTub && enquiry.no_of_pets != null
-                          ? { label: "Pets", value: `${enquiry.no_of_pets} pet${enquiry.no_of_pets !== 1 ? "s" : ""}` }
-                          : null,
-                        isCruise ? { label: "Cruise Line", value: cruiseLineNames || "—" } : null,
-                        isCruise && enquiry.cabin_type ? { label: "Cabin", value: enquiry.cabin_type } : null,
-                        { label: "Budget", value: enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : "—" },
-                      ].filter(Boolean).map((item: any) => (
-                        <div key={item.label} className="flex items-center justify-between gap-2 rounded-lg bg-black/[0.02] px-2 py-1">
-                          <span className="text-[10px] font-medium text-black/50">{item.label}</span>
-                          <span className="text-[11px] font-semibold text-black/80 text-right truncate">{item.value}</span>
+                <div className="grid content-start gap-1.5" data-testid="col-enquiry-media">
+                  <div className="relative overflow-hidden rounded-2xl border border-black/10 bg-black/[0.04]" data-testid="img-enquiry-stock-wrapper">
+                    <img
+                      src={stockHolidayImage}
+                      alt="Stock holiday photo"
+                      className="aspect-square w-full object-cover"
+                      data-testid="img-enquiry-stock"
+                    />
+                  </div>
+                </div>
+
+                <div className="min-w-0" data-testid="section-enquiry-summary">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between" data-testid="row-enquiry-itinerary-top">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3" data-testid="row-enquiry-itinerary-title">
+                        <div className="min-w-0" data-testid="col-enquiry-itinerary-title-left">
+                          <div className="flex items-center gap-2" data-testid="text-enquiry-itinerary-title">
+                            <span className="truncate text-base font-semibold">{enquiry.title || "Untitled Enquiry"},</span>
+                            <span className="flex items-center gap-1.5 font-semibold text-[14px] text-[#000000]" data-testid="text-enquiry-itinerary-summary">
+                              {enquiry.no_of_nights ? (
+                                <>
+                                  <span>{enquiry.no_of_nights} nights</span>
+                                  {enquiry.budget && <span className="text-black/25">•</span>}
+                                </>
+                              ) : null}
+                              {enquiry.budget && (
+                                <span>
+                                  {currency.format(parseFloat(enquiry.budget))}
+                                  {enquiry.budget_type ? ` ${enquiry.budget_type.toLowerCase()}` : ""}
+                                </span>
+                              )}
+                            </span>
+                          </div>
                         </div>
-                      ))}
+                        <div className="flex items-center gap-2">
+                          <UserReassignSelect
+                            value={enquiry?.user_id || currentUser?.id || ""}
+                            onValueChange={(userId) => {
+                              updateTransactionMutation.mutate(
+                                { id: enquiry.transaction_id, data: { user_id: userId } },
+                                {
+                                  onSuccess: () => {
+                                    toast({ title: "Enquiry reassigned successfully" });
+                                    queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
+                                  },
+                                  onError: () => {
+                                    toast({ title: "Failed to reassign enquiry", variant: "destructive" });
+                                  },
+                                }
+                              );
+                            }}
+                            data-testid="select-enquiry-itinerary-owner"
+                          />
+
+                          <div className="relative" ref={ellipsisRef}>
+                            <button
+                              type="button"
+                              onClick={() => setShowEllipsisMenu((v) => !v)}
+                              className="grid h-8 w-8 place-items-center rounded-full border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
+                              data-testid="button-enquiry-ellipsis"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {showEllipsisMenu && (
+                              <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-enquiry-ellipsis">
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                  data-testid="button-enquiry-edit"
+                                  onClick={() => {
+                                    setShowEllipsisMenu(false);
+                                    setShowEditWizard(true);
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Edit Enquiry
+                                </button>
+                                {enquiry.status !== "Converted" && (
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                    data-testid="button-enquiry-convert"
+                                    onClick={() => {
+                                      setShowEllipsisMenu(false);
+                                      handleConvertToQuote();
+                                    }}
+                                  >
+                                    <ArrowRight className="h-3.5 w-3.5" />
+                                    Convert to Quote
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {(isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames) && (
+                        <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-enquiry-itinerary-destination">
+                          <span className="text-sm text-black/55" data-testid="text-enquiry-itinerary-location">
+                            {isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-2">
-                      <div className="text-[10px] font-medium text-black/45 mb-1">Assigned To</div>
-                      <UserReassignSelect
-                        value={enquiry?.user_id || currentUser?.id || ""}
-                        onValueChange={(userId) => {
-                          updateTransactionMutation.mutate(
-                            { id: enquiry.transaction_id, data: { user_id: userId } },
-                            {
-                              onSuccess: () => {
-                                toast({ title: "Enquiry reassigned successfully" });
-                                queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
-                              },
-                              onError: () => {
-                                toast({ title: "Failed to reassign enquiry", variant: "destructive" });
-                              },
-                            }
-                          );
-                        }}
-                        data-testid="select-enquiry-reassign"
+                  </div>
+
+                  <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-enquiry-specs">
+                    <div className="grid content-start gap-2" data-testid="col-enquiry-spec-left">
+                      <SpecRow testId="holiday-type" label="Holiday Type" value={holidayTypeName} />
+                      <SpecRow testId="travel-date" label={isCruise ? "Cruise Date" : "Travel Date"} value={formatUKDate(enquiry.travel_date)} />
+                      {!isHotTub && !isCruise && (
+                        <SpecRow testId="departure-airport" label="Departure Airport" value={airportNames} />
+                      )}
+                      {isCruise && (
+                        <SpecRow testId="departure-port" label="Departure Port" value={portNames} />
+                      )}
+                      {isHotTub && (
+                        <SpecRow testId="weekend-lodge" label="Weekend Lodge" value={enquiry.weekend_lodge} />
+                      )}
+                      {!isCruise && (
+                        <SpecRow testId="resort" label="Resort" value={resortNames} />
+                      )}
+                      {isCruise && (
+                        <SpecRow testId="cruise-line" label="Cruise Line" value={cruiseLineNames} />
+                      )}
+                      {isHotTub ? (
+                        <SpecRow
+                          testId="guests"
+                          label="Guests"
+                          value={enquiry.no_of_guests ? `${enquiry.no_of_guests} guest${enquiry.no_of_guests !== 1 ? "s" : ""}` : null}
+                        />
+                      ) : (
+                        <SpecRow
+                          testId="passengers"
+                          label="Passengers"
+                          value={totalPassengers > 0 ? `${adultsCount} Adult${adultsCount !== 1 ? "s" : ""}, ${childrenCount} Children ${infantsCount} Infants` : null}
+                        />
+                      )}
+                      {!isCruise && !isHotTub && (
+                        <SpecRow testId="board-basis" label="Board Basis" value={boardBaseNames} />
+                      )}
+                      {isCruise && enquiry.cabin_type && (
+                        <SpecRow testId="cabin-type" label="Cabin Type" value={enquiry.cabin_type} />
+                      )}
+                    </div>
+                    <div className="grid content-start gap-2" data-testid="col-enquiry-spec-right">
+                      <SpecRow
+                        testId="budget"
+                        label="Budget"
+                        value={enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : null}
                       />
+                      <SpecRow testId="flexibility" label="Flexibility" value={enquiry.flexibility_date || enquiry.flexible_date} />
+                      {!isCruise && (
+                        <SpecRow testId="destination" label="Destination" value={destinationNames} />
+                      )}
+                      {isCruise && (
+                        <SpecRow testId="cruise-destinations" label="Cruise Destinations" value={cruiseDestinationNames} />
+                      )}
+                      <SpecRow
+                        testId="nights"
+                        label="Nights"
+                        value={enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : null}
+                      />
+                      {isHotTub && enquiry.no_of_pets != null && (
+                        <SpecRow testId="pets" label="Pets" value={`${enquiry.no_of_pets} pet${enquiry.no_of_pets !== 1 ? "s" : ""}`} />
+                      )}
+                      {isCruise && enquiry.pre_cruise_stay != null && (
+                        <SpecRow testId="pre-cruise" label="Pre-Cruise Stay" value={`${enquiry.pre_cruise_stay} nights`} />
+                      )}
+                      {isCruise && enquiry.post_cruise_stay != null && (
+                        <SpecRow testId="post-cruise" label="Post-Cruise Stay" value={`${enquiry.post_cruise_stay} nights`} />
+                      )}
+                      {!isCruise && !isHotTub && (
+                        <SpecRow testId="star-rating" label="Min Star Rating" value={enquiry.accom_min_star_rating ? `${enquiry.accom_min_star_rating} Star` : null} />
+                      )}
                     </div>
-                  </Card>
-                </div>
-
-                <div className="min-w-0 space-y-3" data-testid="section-enquiry-summary">
-                  <Card className="rounded-3xl border-black/10 bg-white/70 p-5" data-testid="card-holiday-details">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10">
-                    <Sparkles className="h-4 w-4 text-blue-600" />
                   </div>
-                  <div className="text-sm font-bold">Holiday Details</div>
-                </div>
-                <div className="divide-y divide-black/5">
-                  <InfoRow icon={Globe} label="Holiday Type" value={holidayTypeName || "—"} />
-                  <InfoRow icon={MapPin} label="Destination" value={destinationNames} />
-                  {!isCruise && <InfoRow icon={MapPin} label="Resort" value={resortNames} />}
-                  {isCruise && <InfoRow icon={Ship} label="Cruise Destinations" value={cruiseDestinationNames} />}
-                  {isCruise && <InfoRow icon={Anchor} label="Cruise Lines" value={cruiseLineNames} />}
-                </div>
-              </Card>
-
-              <Card className="rounded-3xl border-black/10 bg-white/70 p-5" data-testid="card-travel-details">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10">
-                    {isCruise ? <Ship className="h-4 w-4 text-emerald-600" /> : isHotTub ? <Home className="h-4 w-4 text-emerald-600" /> : <Plane className="h-4 w-4 text-emerald-600" />}
-                  </div>
-                  <div className="text-sm font-bold">{isCruise ? "Cruise & Passengers" : isHotTub ? "Stay & Guests" : "Travel & Passengers"}</div>
-                </div>
-                <div className="divide-y divide-black/5">
-                  {!isHotTub && !isCruise && <InfoRow icon={Plane} label="Departure Airport" value={airportNames} />}
-                  {isCruise && <InfoRow icon={Anchor} label="Departure Port" value={portNames} />}
-                  {isHotTub && <InfoRow icon={Home} label="Weekend Lodge" value={enquiry.weekend_lodge} />}
-                  <InfoRow icon={Calendar} label={isCruise ? "Cruise Date" : "Travel Date"} value={formatUKDate(enquiry.travel_date)} />
-                  <InfoRow icon={Calendar} label="Flexibility" value={enquiry.flexibility_date || enquiry.flexible_date} />
-                  {isHotTub ? (
-                    <>
-                      <InfoRow icon={Users} label="Guests" value={enquiry.no_of_guests ? `${enquiry.no_of_guests} guest${enquiry.no_of_guests !== 1 ? "s" : ""}` : null} />
-                      <InfoRow icon={Dog} label="Pets" value={enquiry.no_of_pets != null ? `${enquiry.no_of_pets} pet${enquiry.no_of_pets !== 1 ? "s" : ""}` : null} />
-                    </>
-                  ) : (
-                    <InfoRow icon={Users} label="Passengers" value={totalPassengers > 0 ? `${totalPassengers} total — ${passengerBreakdown}` : null} />
-                  )}
-                </div>
-              </Card>
-
-              <Card className="rounded-3xl border-black/10 bg-white/70 p-5" data-testid="card-accommodation-details">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
-                    {isCruise ? <Ship className="h-4 w-4 text-amber-600" /> : <Hotel className="h-4 w-4 text-amber-600" />}
-                  </div>
-                  <div className="text-sm font-bold">{isCruise ? "Cabin & Budget" : isHotTub ? "Lodge & Budget" : "Accommodation & Budget"}</div>
-                </div>
-                <div className="divide-y divide-black/5">
-                  <InfoRow icon={Calendar} label="Nights" value={enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : null} />
-                  {isCruise && <InfoRow icon={Ship} label="Cabin Type" value={enquiry.cabin_type} />}
-                  {isCruise && <InfoRow icon={Calendar} label="Pre-Cruise Stay" value={enquiry.pre_cruise_stay != null ? `${enquiry.pre_cruise_stay} nights` : null} />}
-                  {isCruise && <InfoRow icon={Calendar} label="Post-Cruise Stay" value={enquiry.post_cruise_stay != null ? `${enquiry.post_cruise_stay} nights` : null} />}
-                  {!isCruise && !isHotTub && <InfoRow icon={Star} label="Star Rating" value={enquiry.accom_min_star_rating} />}
-                  {!isCruise && !isHotTub && <InfoRow icon={Hotel} label="Board Basis" value={boardBaseNames} />}
-                  <InfoRow icon={Wallet} label="Budget" value={enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : null} />
-                </div>
-              </Card>
 
                   {enquiry.transaction_id && (
                     <EnquiryNotesSection transactionId={enquiry.transaction_id} />
