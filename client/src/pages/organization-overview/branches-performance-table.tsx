@@ -79,11 +79,6 @@ function getProfit(item: any): number {
 
 export function BranchesPerformanceTable() {
   const [tab, setTab] = useState<TabKey>("branch-performance");
-  const [branchRange, setBranchRange] = useState<
-    "day" | "week" | "month" | "custom"
-  >("month");
-  const [customFrom, setCustomFrom] = useState<string>("");
-  const [customTo, setCustomTo] = useState<string>("");
 
   const today = new Date().toISOString().slice(0, 10);
   const [socialFilter, setSocialFilter] = useState<SocialFilter>("today");
@@ -93,11 +88,9 @@ export function BranchesPerformanceTable() {
   const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("all");
   const [whatsOnDate, setWhatsOnDate] = useState<string>(today);
 
-  const { data, isLoading, isError } = useOrganizationBranchesPerformance(
-    branchRange === "custom"
-      ? { range: "custom", from: customFrom, to: customTo }
-      : { range: branchRange },
-  );
+  const { data, isLoading, isError } = useOrganizationBranchesPerformance({
+    range: "month",
+  });
   const { data: transactionsData } = useTransactions();
   const { data: tourOperators } = useTourOperators();
   const { data: overviewStats } = useOrganizationOverviewStats();
@@ -306,72 +299,9 @@ export function BranchesPerformanceTable() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs font-medium text-gray-400">
-                    {branchRange === "day"
-                      ? "Showing data for today"
-                      : branchRange === "week"
-                        ? "Showing data for this week"
-                        : branchRange === "month"
-                          ? `Showing data for ${monthName}`
-                          : customFrom && customTo
-                            ? `Showing ${customFrom} → ${customTo}`
-                            : "Pick a date range"}
+                    {`Showing data for ${monthName}`}
                   </p>
-                  <div
-                    className="inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5 text-xs shadow-sm dark:border-white/10 dark:bg-white/5"
-                    data-testid="branch-range-slider"
-                  >
-                    {(
-                      [
-                        { key: "day", label: "Day" },
-                        { key: "week", label: "Week" },
-                        { key: "month", label: "Month" },
-                        { key: "custom", label: "Date Range" },
-                      ] as const
-                    ).map((opt) => {
-                      const active = branchRange === opt.key;
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => setBranchRange(opt.key)}
-                          className={cn(
-                            "rounded-full px-3 py-1 font-medium transition-all",
-                            active
-                              ? "bg-amber-400 text-gray-900 shadow"
-                              : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white",
-                          )}
-                          data-testid={`branch-range-${opt.key}`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
-                {branchRange === "custom" && (
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <label className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                      From
-                      <input
-                        type="date"
-                        value={customFrom}
-                        onChange={(e) => setCustomFrom(e.target.value)}
-                        className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
-                        data-testid="branch-range-from"
-                      />
-                    </label>
-                    <label className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                      To
-                      <input
-                        type="date"
-                        value={customTo}
-                        onChange={(e) => setCustomTo(e.target.value)}
-                        className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
-                        data-testid="branch-range-to"
-                      />
-                    </label>
-                  </div>
-                )}
 
                 {isError ? (
                   <div className="rounded-2xl border border-dashed border-rose-200 bg-rose-50/50 p-8 text-center dark:border-rose-500/20 dark:bg-rose-500/5">
