@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { quoteImages, deal_images } from "@shared/schema";
+import { quoteImages, deal_images, accommodation_images, lodge_images } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -43,12 +43,21 @@ export const quoteImageRepository = {
   },
 
   /**
-   * Delete a specific image
+   * Delete a specific image.
+   *
+   * A quote's `images` array is a merge of quoteImages, accommodation_images
+   * and lodge_images (see quote.repository `getById`), each labelled with the
+   * row's own id. The incoming imageId therefore belongs to whichever source
+   * table that row came from, so we try the delete against every source. The
+   * accommodation_images / lodge_images delete is a global removal because
+   * those tables are master records shared across all consumers.
    */
   async deleteImage(quoteId: string, imageId: string) {
     await Promise.all([
       db.delete(quoteImages).where(and(eq(quoteImages.id, imageId), eq(quoteImages.quoteId, quoteId))),
       db.delete(deal_images).where(and(eq(deal_images.id, imageId), eq(deal_images.owner_id, quoteId))),
+      db.delete(accommodation_images).where(eq(accommodation_images.id, imageId)),
+      db.delete(lodge_images).where(eq(lodge_images.id, imageId)),
     ]);
   },
 

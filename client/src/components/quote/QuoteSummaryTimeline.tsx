@@ -105,14 +105,18 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       quote.flights.outbound.departDate ||
       quote.flights.outbound.flightNo
     );
-    const hasOutboundConnecting = quote.flights.outboundConnecting.some(
+    const validOutboundConnecting = quote.flights.outboundConnecting.filter(
       (leg) => leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo,
     );
+    const hasOutboundConnecting = validOutboundConnecting.length > 0;
+    const outboundLegCount = (hasOutboundPrimary ? 1 : 0) + validOutboundConnecting.length;
+    const buildSortKey = (date: string, section: string, time?: string) =>
+      `${date || "9999-12-31"}#${section}#${time || "00:00"}`;
 
     if (hasOutboundPrimary) {
       timelineItems.push({
         type: "outbound",
-        sortKey: "010",
+        sortKey: buildSortKey(quote.flights.outbound.departDate, "0", quote.flights.outbound.departTime),
         content: (
           <div className="flex gap-2.5" data-testid="timeline-outbound">
             <div className="flex flex-col items-center">
@@ -147,54 +151,55 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
     }
 
     if (hasOutboundConnecting) {
-      quote.flights.outboundConnecting.forEach((leg, idx) => {
-        if (leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo) {
-          timelineItems.push({
-            type: "outbound-connecting",
-            sortKey: "01" + String(idx + 1).padStart(2, "0"),
-            content: (
-              <div className="flex gap-2.5" data-testid={`timeline-outbound-connecting-${idx}`}>
-                <div className="flex flex-col items-center">
-                  <div className="grid h-7 w-7 place-items-center rounded-full border border-blue-200 bg-blue-50/60 text-blue-500">
-                    <Plane className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="mt-1 h-full w-px bg-black/10" />
+      validOutboundConnecting.forEach((leg, idx) => {
+        const legNumber = (hasOutboundPrimary ? 1 : 0) + idx + 1;
+        timelineItems.push({
+          type: "outbound-connecting",
+          sortKey: buildSortKey(leg.departDate || quote.flights.outbound.departDate, "1", leg.departTime),
+          content: (
+            <div className="flex gap-2.5" data-testid={`timeline-outbound-connecting-${idx}`}>
+              <div className="flex flex-col items-center">
+                <div className="grid h-7 w-7 place-items-center rounded-full border border-blue-200 bg-blue-50/60 text-blue-500">
+                  <Plane className="h-3.5 w-3.5" />
                 </div>
-                <div className="flex-1 pb-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-500">Connecting Flight {hasOutboundPrimary ? idx + 2 : idx + 1}</div>
-                  <div className="mt-0.5 text-xs font-semibold">{leg.from} → {leg.to}</div>
-                  <div className="mt-1 grid gap-1">
-                    {leg.departDate && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                        <Calendar className="h-3 w-3 shrink-0" />
-                        <span>{formatTimelineDate(leg.departDate)}</span>
-                      </div>
-                    )}
-                    {leg.departTime && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                        <Clock className="h-3 w-3 shrink-0" />
-                        <span>Depart {formatTime24(leg.departTime)}{leg.arriveTime ? ` — Arrive ${formatTime24(leg.arriveTime)}` : ""}</span>
-                      </div>
-                    )}
-                    {leg.flightNo && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                        <Plane className="h-3 w-3 shrink-0" />
-                        <span>{leg.flightNo}</span>
-                      </div>
-                    )}
-                  </div>
+                <div className="mt-1 h-full w-px bg-black/10" />
+              </div>
+              <div className="flex-1 pb-4">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-500">Connecting Flight {legNumber}</div>
+                <div className="mt-0.5 text-xs font-semibold">{leg.from} → {leg.to}</div>
+                <div className="mt-1 grid gap-1">
+                  {leg.departDate && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      <span>{formatTimelineDate(leg.departDate)}</span>
+                    </div>
+                  )}
+                  {leg.departTime && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                      <Clock className="h-3 w-3 shrink-0" />
+                      <span>Depart {formatTime24(leg.departTime)}{leg.arriveTime ? ` — Arrive ${formatTime24(leg.arriveTime)}` : ""}</span>
+                    </div>
+                  )}
+                  {leg.flightNo && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                      <Plane className="h-3 w-3 shrink-0" />
+                      <span>{leg.flightNo}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            ),
-          });
-        }
+            </div>
+          ),
+        });
       });
     }
 
     if (quote.transferType && !isCruise) {
+      const transferDate = quote.checkInDate || quote.travelDate || quote.flights.outbound.departDate;
+      const transferTime = quote.checkInTime || "14:00";
       timelineItems.push({
         type: "transfer",
-        sortKey: "020",
+        sortKey: buildSortKey(transferDate, "2", transferTime),
         content: (
           <div className="flex gap-2.5" data-testid="timeline-transfer">
             <div className="flex flex-col items-center">
@@ -222,7 +227,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       const cruiseDate = quote.cruise.cruiseDate || quote.travelDate;
       timelineItems.push({
         type: "cruise-embarkation",
-        sortKey: "040",
+        sortKey: buildSortKey(cruiseDate, "3", "00:00"),
         content: (
           <div className="flex gap-2.5" data-testid="timeline-cruise-embarkation">
             <div className="flex flex-col items-center">
@@ -260,7 +265,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       const checkInTime = quote.checkInTime || "14:00";
       timelineItems.push({
         type: "hotel",
-        sortKey: "030",
+        sortKey: buildSortKey(checkIn, "3", checkInTime),
         content: (
           <div className="flex gap-2.5" data-testid="timeline-hotel">
             <div className="flex flex-col items-center">
@@ -309,9 +314,10 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       quote.flights.inbound.departDate ||
       quote.returnDate
     );
-    const hasInboundConnecting = quote.flights.inboundConnecting.some(
+    const validInboundConnecting = quote.flights.inboundConnecting.filter(
       (leg) => leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo,
     );
+    const hasInboundConnecting = validInboundConnecting.length > 0;
 
     if (hasInboundPrimary) {
       const ibDate = quote.flights.inbound.departDate || quote.returnDate;
@@ -319,7 +325,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       const ibTo = quote.flights.inbound.to || quote.flights.outbound.from || "";
       timelineItems.push({
         type: "inbound",
-        sortKey: "050",
+        sortKey: buildSortKey(ibDate, "4", quote.flights.inbound.departTime),
         content: (
           <div className="flex gap-2.5" data-testid="timeline-inbound">
             <div className="flex flex-col items-center">
@@ -355,54 +361,53 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
     }
 
     if (hasInboundConnecting) {
-      quote.flights.inboundConnecting.forEach((leg, idx) => {
-        if (leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo) {
-          timelineItems.push({
-            type: "inbound-connecting",
-            sortKey: "05" + String(idx + 1).padStart(2, "0"),
-            content: (
-              <div className="flex gap-2.5" data-testid={`timeline-inbound-connecting-${idx}`}>
-                <div className="flex flex-col items-center">
-                  <div className="grid h-7 w-7 place-items-center rounded-full border border-purple-200 bg-purple-50/60 text-purple-500">
-                    <Plane className="h-3.5 w-3.5 rotate-180" />
-                  </div>
-                  <div className="mt-1 h-full w-px bg-black/10" />
+      validInboundConnecting.forEach((leg, idx) => {
+        const legNumber = outboundLegCount + (hasInboundPrimary ? 1 : 0) + idx + 1;
+        timelineItems.push({
+          type: "inbound-connecting",
+          sortKey: buildSortKey(leg.departDate || quote.flights.inbound.departDate || quote.returnDate, "5", leg.departTime),
+          content: (
+            <div className="flex gap-2.5" data-testid={`timeline-inbound-connecting-${idx}`}>
+              <div className="flex flex-col items-center">
+                <div className="grid h-7 w-7 place-items-center rounded-full border border-purple-200 bg-purple-50/60 text-purple-500">
+                  <Plane className="h-3.5 w-3.5 rotate-180" />
                 </div>
-                <div className="flex-1 pb-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-500">Connecting Flight {hasInboundPrimary ? idx + 2 : idx + 1}</div>
-                  <div className="mt-0.5 text-xs font-semibold">{leg.from} → {leg.to}</div>
-                  <div className="mt-1 grid gap-1">
-                    {leg.departDate && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                        <Calendar className="h-3 w-3 shrink-0" />
-                        <span>{formatTimelineDate(leg.departDate)}</span>
-                      </div>
-                    )}
-                    {leg.departTime && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                        <Clock className="h-3 w-3 shrink-0" />
-                        <span>Depart {formatTime24(leg.departTime)}{leg.arriveTime ? ` — Arrive ${formatTime24(leg.arriveTime)}` : ""}</span>
-                      </div>
-                    )}
-                    {leg.flightNo && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                        <Plane className="h-3 w-3 shrink-0" />
-                        <span>{leg.flightNo}</span>
-                      </div>
-                    )}
-                  </div>
+                <div className="mt-1 h-full w-px bg-black/10" />
+              </div>
+              <div className="flex-1 pb-4">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-500">Connecting Flight {legNumber}</div>
+                <div className="mt-0.5 text-xs font-semibold">{leg.from} → {leg.to}</div>
+                <div className="mt-1 grid gap-1">
+                  {leg.departDate && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      <span>{formatTimelineDate(leg.departDate)}</span>
+                    </div>
+                  )}
+                  {leg.departTime && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                      <Clock className="h-3 w-3 shrink-0" />
+                      <span>Depart {formatTime24(leg.departTime)}{leg.arriveTime ? ` — Arrive ${formatTime24(leg.arriveTime)}` : ""}</span>
+                    </div>
+                  )}
+                  {leg.flightNo && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                      <Plane className="h-3 w-3 shrink-0" />
+                      <span>{leg.flightNo}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            ),
-          });
-        }
+            </div>
+          ),
+        });
       });
     }
 
     if (quote.flightMeals || quote.preBookedSeats) {
       timelineItems.push({
         type: "flight-extras",
-        sortKey: "999",
+        sortKey: "9999-12-31#9#23:59",
         content: (
           <div className="flex gap-2.5" data-testid="timeline-flight-extras">
             <div className="flex flex-col items-center">
@@ -431,6 +436,15 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
 
   timelineItems.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 
+  const sortByKey = <T,>(items: T[], getKey: (item: T) => string | null | undefined) =>
+    [...items].sort((a, b) => (getKey(a) || "￿").localeCompare(getKey(b) || "￿"));
+  const sortedTransfers = sortByKey(quote.transfers, (t) => t.pickUpTime);
+  const sortedCarHires = sortByKey(quote.carHires, (c) => c.pickUpTime);
+  const sortedAttractionTickets = sortByKey(quote.attractionTickets, (t) => t.dateOfVisit);
+  const sortedLoungePasses = sortByKey(quote.loungePasses, (p) => p.dateOfUsage);
+  const sortedAirportParkings = sortByKey(quote.airportParkings, (p) => p.parkingDate);
+  const sortedExtraAccommodations = sortByKey(quote.extraAccommodations, (a) => a.checkInDate);
+
   return (
     <div data-testid="card-quote-summary-timeline">
       <div className="mb-3">
@@ -457,7 +471,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
         <div className="mt-4 pt-4 border-t border-black/8" data-testid="section-extras">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-black/40 mb-3">Extras</div>
           <div className="space-y-2">
-            {quote.transfers.map((t, idx) => (
+            {sortedTransfers.map((t, idx) => (
               <div key={idx} className="flex gap-2.5" data-testid={`extra-transfer-${idx}`}>
                 <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-sky-200 bg-sky-50 text-sky-600">
                   <ArrowLeftRight className="h-3.5 w-3.5" />
@@ -481,7 +495,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
               </div>
             ))}
 
-            {quote.carHires.map((c, idx) => (
+            {sortedCarHires.map((c, idx) => (
               <div key={idx} className="flex gap-2.5" data-testid={`extra-carhire-${idx}`}>
                 <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
                   <Car className="h-3.5 w-3.5" />
@@ -504,7 +518,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
               </div>
             ))}
 
-            {quote.attractionTickets.map((t, idx) => (
+            {sortedAttractionTickets.map((t, idx) => (
               <div key={idx} className="flex gap-2.5" data-testid={`extra-ticket-${idx}`}>
                 <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-purple-200 bg-purple-50 text-purple-600">
                   <Ticket className="h-3.5 w-3.5" />
@@ -526,7 +540,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
               </div>
             ))}
 
-            {quote.loungePasses.map((p, idx) => (
+            {sortedLoungePasses.map((p, idx) => (
               <div key={idx} className="flex gap-2.5" data-testid={`extra-lounge-${idx}`}>
                 <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-rose-200 bg-rose-50 text-rose-600">
                   <Coffee className="h-3.5 w-3.5" />
@@ -550,7 +564,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
               </div>
             ))}
 
-            {quote.airportParkings.map((p, idx) => (
+            {sortedAirportParkings.map((p, idx) => (
               <div key={idx} className="flex gap-2.5" data-testid={`extra-parking-${idx}`}>
                 <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
                   <ParkingSquare className="h-3.5 w-3.5" />
@@ -574,7 +588,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
               </div>
             ))}
 
-            {quote.extraAccommodations.map((a, idx) => (
+            {sortedExtraAccommodations.map((a, idx) => (
               <div key={idx} className="flex gap-2.5" data-testid={`extra-accommodation-${idx}`}>
                 <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-600">
                   <Hotel className="h-3.5 w-3.5" />

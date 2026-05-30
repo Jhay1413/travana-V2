@@ -3,7 +3,7 @@ import {
   booking, booking_flights, booking_accomodation, booking_transfers,
   booking_car_hire, booking_attraction_ticket, booking_lounge_pass,
   booking_airport_parking, booking_cruise, booking_cruise_item_extra,
-  booking_cruise_itinerary, passengers, deal_images, accommodation_images, lodge_images,
+  booking_cruise_itinerary, passengers, deal_images, bookingImages, accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type, referral, clientTable,
 } from "@shared/schema";
@@ -64,7 +64,7 @@ export const bookingRepository = {
       .select({
         id: booking.id,
         transaction_id: booking.transaction_id,
-        clientOrgId: clientTable.orgId,
+        clientOrgId: sql<string | null>`COALESCE(${clientTable.orgId}, ${transaction.org_id})`,
       })
       .from(booking)
       .leftJoin(transaction, eq(booking.transaction_id, transaction.id))
@@ -151,8 +151,10 @@ export const bookingRepository = {
     const bookingIds = bookings.map(b => b.id);
     const lodgeIds = bookings.map(b => b.lodge_id).filter((id): id is string => id !== null);
 
-    const [dealImgs, accommodationImgs, lodgeImgs] = await Promise.all([
+    const [dealImgs, bookingImgs, accommodationImgs, lodgeImgs] = await Promise.all([
       db.select().from(deal_images).where(inArray(deal_images.owner_id, bookingIds)),
+
+      db.select().from(bookingImages).where(inArray(bookingImages.bookingId, bookingIds)),
 
       db.select({
         booking_id: booking_accomodation.booking_id,
@@ -187,6 +189,14 @@ export const bookingRepository = {
       dealImgsByBookingId.set(img.owner_id, list);
     }
 
+    const bookingImgsByBookingId = new Map<string, typeof bookingImgs>();
+    for (const img of bookingImgs) {
+      if (!img.bookingId) continue;
+      const list = bookingImgsByBookingId.get(img.bookingId) ?? [];
+      list.push(img);
+      bookingImgsByBookingId.set(img.bookingId, list);
+    }
+
     const accomImgsByBookingId = new Map<string, (typeof accommodationImgs)[number][]>();
     for (const img of accommodationImgs) {
       if (!img.booking_id) continue;
@@ -206,6 +216,13 @@ export const bookingRepository = {
       const seen = new Set<string>();
       const images: { id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; s3Key: string | null }[] = [];
 
+      for (const img of bookingImgsByBookingId.get(b.id) ?? []) {
+        const url = img.url || '';
+        if (url && !seen.has(url)) {
+          seen.add(url);
+          images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: b.id, s3Key: null });
+        }
+      }
       for (const img of dealImgsByBookingId.get(b.id) ?? []) {
         const url = img.image_url || '';
         if (url && !seen.has(url)) { seen.add(url); images.push(img); }
@@ -260,7 +277,7 @@ export const bookingRepository = {
     const bookingTransactionId = b.booking.transaction_id;
     const bookingLodgeId = b.booking.lodge_id;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, referralRows, accommodationImgs, lodgeImgs] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, bookingImgs, referralRows, accommodationImgs, lodgeImgs] = await Promise.all([
       db.select({
         flight: booking_flights,
         departing_airport_name: sql<string>`concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')')`,
@@ -350,6 +367,7 @@ export const bookingRepository = {
 
       db.select().from(passengers).where(eq(passengers.booking_id, id)),
       db.select().from(deal_images).where(eq(deal_images.owner_id, id)),
+      db.select().from(bookingImages).where(eq(bookingImages.bookingId, id)),
       bookingTransactionId
         ? db.select({ id: referral.id }).from(referral).where(eq(referral.transactionId, bookingTransactionId)).limit(1)
         : Promise.resolve([]),
@@ -416,6 +434,13 @@ export const bookingRepository = {
       images: (() => {
         const seen = new Set<string>();
         const result: any[] = [];
+        for (const img of bookingImgs) {
+          const url = img.url || '';
+          if (url && !seen.has(url)) {
+            seen.add(url);
+            result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: id, s3Key: null });
+          }
+        }
         for (const img of images) {
           const url = img.image_url || '';
           if (url && !seen.has(url)) { seen.add(url); result.push(img); }
@@ -597,5 +622,16 @@ export const bookingRepository = {
       const [result] = await db.insert(booking_accomodation).values({ ...converted, booking_id: bookingId, is_primary: true }).returning();
       return result;
     }
+  },
+
+  async addImages(bookingId: string, images: Array<{ url: string; isPrimary?: boolean | null }>) {
+    if (images.length === 0) return [];
+    const rows = images.map((img) => ({
+      id: crypto.randomUUID(),
+      bookingId,
+      url: img.url,
+      isPrimary: img.isPrimary ?? false,
+    }));
+    return db.insert(bookingImages).values(rows).returning();
   },
 };

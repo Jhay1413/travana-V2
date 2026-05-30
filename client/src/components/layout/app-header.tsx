@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ChevronDown,
@@ -50,12 +50,36 @@ export function AppHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const { data: globalSearchData } = useGlobalSearch(debouncedQuery);
-  const hasResults =
-    !!globalSearchData &&
-    (globalSearchData.clients.length > 0 ||
-      globalSearchData.quotes.length > 0 ||
-      globalSearchData.bookings.length > 0);
+  const {
+    data: globalSearchData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useGlobalSearch(debouncedQuery);
+
+  const clients = useMemo(
+    () => globalSearchData?.pages.flatMap((p) => p.clients) ?? [],
+    [globalSearchData],
+  );
+  const hasResults = clients.length > 0;
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const container = scrollContainerRef.current;
+    if (!sentinel || !container || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { root: container, rootMargin: "120px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, clients.length]);
 
   const userName = user?.firstName || user?.name || "";
   const userAvatar = user?.image || user?.avatar || user?.profileImageUrl;
@@ -90,76 +114,35 @@ export function AppHeader() {
             />
 
             {showSearchResults && query.trim() && hasResults && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden max-h-[420px] overflow-y-auto">
-                {globalSearchData!.clients.length > 0 && (
-                  <SearchGroup label="Clients" count={globalSearchData!.clients.length} pillClass="bg-blue-500/10 text-blue-600 border-blue-500/30" pillLabel="Client">
-                    {globalSearchData!.clients.map((c) => (
-                      <SearchRow
-                        key={c.id}
-                        title={c.name}
-                        subtitle={c.subtitle}
-                        onClick={() => {
-                          navigate(`/clients/${c.id}`);
-                          setShowSearchResults(false);
-                          setQuery("");
-                        }}
-                        testId={`search-result-${c.id}`}
-                      />
-                    ))}
-                  </SearchGroup>
-                )}
-                {globalSearchData!.quotes.length > 0 && (
-                  <SearchGroup label="Quotes" count={globalSearchData!.quotes.length} pillClass="bg-amber-500/10 text-amber-600 border-amber-500/30" pillLabel="Quote">
-                    {globalSearchData!.quotes.map((q) => {
-                      const dest = q.destination || q.country || q.holidayType || "Quote";
-                      const price = q.salesPrice ? `£${parseFloat(q.salesPrice).toLocaleString("en-GB")}` : "";
-                      const date = q.travelDate
-                        ? new Date(q.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-                        : "";
-                      return (
-                        <SearchRow
-                          key={q.id}
-                          title={`${dest}${q.clientName ? ` — ${q.clientName}` : ""}`}
-                          subtitle={[q.accommodation, price, date].filter(Boolean).join(" · ")}
-                          onClick={() => {
-                            navigate(q.clientId ? `/clients/${q.clientId}/quotes/${q.id}` : `/quotes/${q.id}`);
-                            setShowSearchResults(false);
-                            setQuery("");
-                          }}
-                          testId={`search-result-quote-${q.id}`}
-                        />
-                      );
-                    })}
-                  </SearchGroup>
-                )}
-                {globalSearchData!.bookings.length > 0 && (
-                  <SearchGroup label="Bookings" count={globalSearchData!.bookings.length} pillClass="bg-emerald-500/10 text-emerald-600 border-emerald-500/30" pillLabel="Booking">
-                    {globalSearchData!.bookings.map((b) => {
-                      const dest = b.destination || b.country || b.holidayType || "Booking";
-                      const price = b.salesPrice ? `£${parseFloat(b.salesPrice).toLocaleString("en-GB")}` : "";
-                      const date = b.travelDate
-                        ? new Date(b.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-                        : "";
-                      return (
-                        <SearchRow
-                          key={b.id}
-                          title={`${dest}${b.clientName ? ` — ${b.clientName}` : ""}`}
-                          subtitle={[b.haysRef && `Ref: ${b.haysRef}`, b.accommodation, price, date].filter(Boolean).join(" · ")}
-                          onClick={() => {
-                            navigate(b.clientId ? `/clients/${b.clientId}/bookings/${b.id}` : `/bookings/${b.id}`);
-                            setShowSearchResults(false);
-                            setQuery("");
-                          }}
-                          testId={`search-result-booking-${b.id}`}
-                        />
-                      );
-                    })}
-                  </SearchGroup>
-                )}
+              <div
+                ref={scrollContainerRef}
+                className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] max-h-[420px] overflow-y-auto"
+              >
+                <SearchGroup label="Clients" count={clients.length}>
+                  {clients.map((c) => (
+                    <SearchRow
+                      key={c.id}
+                      title={c.name}
+                      subtitle={c.subtitle}
+                      onClick={() => {
+                        navigate(`/clients/${c.id}`);
+                        setShowSearchResults(false);
+                        setQuery("");
+                      }}
+                      testId={`search-result-${c.id}`}
+                    />
+                  ))}
+                  <div ref={sentinelRef} className="h-px w-full" aria-hidden />
+                  {isFetchingNextPage && (
+                    <div className="px-4 py-2 text-center text-xs text-black/50 dark:text-white/50">
+                      Loading more…
+                    </div>
+                  )}
+                </SearchGroup>
               </div>
             )}
 
-            {showSearchResults && query.trim() && debouncedQuery && globalSearchData && !hasResults && (
+            {showSearchResults && query.trim() && debouncedQuery && globalSearchData?.pages?.length && !hasResults && (
               <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] p-4">
                 <p className="text-center text-sm text-black/50 dark:text-white/50">
                   No results found for "{query}"
@@ -222,14 +205,10 @@ export function AppHeader() {
 function SearchGroup({
   label,
   count,
-  pillClass,
-  pillLabel,
   children,
 }: {
   label: string;
   count: number;
-  pillClass: string;
-  pillLabel: string;
   children: React.ReactNode;
 }) {
   return (

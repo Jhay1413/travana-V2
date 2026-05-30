@@ -1473,6 +1473,17 @@ export const insertQuoteImageSchema = createInsertSchema(quoteImages);
 export type QuoteImage = typeof quoteImages.$inferSelect;
 export type InsertQuoteImage = z.infer<typeof insertQuoteImageSchema>;
 
+export const bookingImages = pgTable("booking_images", {
+  id: varchar("id").primaryKey(),
+  bookingId: uuid("booking_id").references(() => booking.id, { onDelete: 'cascade' }),
+  url: text("url"),
+  isPrimary: boolean("is_primary"),
+});
+
+export const insertBookingImageSchema = createInsertSchema(bookingImages);
+export type BookingImage = typeof bookingImages.$inferSelect;
+export type InsertBookingImage = z.infer<typeof insertBookingImageSchema>;
+
 export const tags = pgTable("tags", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull().unique(),

@@ -147,7 +147,12 @@ export default function PortalQuotesPage() {
                           <MapPin className="w-3 h-3" /> {quote.destination}
                         </p>
                       </div>
-                      <span className="text-white font-bold text-lg" data-testid={`text-quote-price-${quote.id}`}>{formatCurrency(quote.price)}</span>
+                      <div className="text-right" data-testid={`text-quote-price-${quote.id}`}>
+                        <div className="text-white font-bold text-lg leading-tight">{formatCurrency(quote.price)}</div>
+                        {quote.price_per_person > 0 && (
+                          <div className="text-white/70 text-xs">{formatCurrency(quote.price_per_person)} pp</div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="p-4">

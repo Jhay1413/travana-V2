@@ -73,7 +73,7 @@ export function SocialPostsTab({
 
   const { data: freeQuotesData } = useFreeQuotesInfinite(
     50,
-    false,
+    true,
     "none",
     "",
     rangeStart,

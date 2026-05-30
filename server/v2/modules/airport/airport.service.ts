@@ -2,8 +2,8 @@ import { airportRepository } from './airport.repository';
 import { AppError } from '../../utils/error-handler';
 
 export const airportService = {
-  async listAirports() {
-    return airportRepository.findAll();
+  async listAirports(opts?: { countryIds?: string[] }) {
+    return airportRepository.findAll(opts);
   },
 
   async createAirport(data: any) {

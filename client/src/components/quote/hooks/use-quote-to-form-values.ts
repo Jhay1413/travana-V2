@@ -120,7 +120,7 @@ export function useQuoteToFormValues(quoteData: any) {
       commission: parseFloat(quoteData.package_commission || "0"),
       discount: parseFloat(quoteData.discounts || "0"),
       serviceCharge: parseFloat(quoteData.service_charge || "0"),
-      pricePerPerson: 0,
+      pricePerPerson: parseFloat(quoteData.price_per_person || "0"),
       tags: quoteData.tags || [],
       not_for_social: quoteData.not_for_social ?? false,
     };

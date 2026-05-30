@@ -53,4 +53,27 @@ export const bookingApi = {
   removeAccommodation: async (bookingId: string, accommodationId: string): Promise<void> => {
     await axiosClient.delete(`/api/v2/bookings/${bookingId}/accommodations/${accommodationId}`);
   },
+
+  addImages: async (bookingId: string, imageUrls: string[]): Promise<any> => {
+    const { data } = await axiosClient.post(`/api/v2/bookings/${bookingId}/images`, { images: imageUrls });
+    return data;
+  },
+
+  uploadImages: async (bookingId: string, files: File[]): Promise<any> => {
+    const formData = new FormData();
+    files.forEach(file => formData.append("images", file));
+    const { data } = await axiosClient.post(`/api/v2/bookings/${bookingId}/images/upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+
+  removeImage: async (bookingId: string, imageId: string): Promise<void> => {
+    await axiosClient.delete(`/api/v2/bookings/${bookingId}/images/${imageId}`);
+  },
+
+  setPrimaryImage: async (bookingId: string, imageId: string): Promise<any> => {
+    const { data } = await axiosClient.patch(`/api/v2/bookings/${bookingId}/images/${imageId}/primary`);
+    return data;
+  },
 };

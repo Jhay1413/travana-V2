@@ -6,38 +6,14 @@ export type GlobalSearchResponse = {
     name: string;
     subtitle: string;
   }>;
-  quotes: Array<{
-    id: string;
-    transactionId: string;
-    clientId: string | null;
-    clientName: string;
-    destination: string;
-    country: string;
-    accommodation: string;
-    salesPrice: string;
-    travelDate: string;
-    quoteStatus: string;
-    holidayType: string;
-  }>;
-  bookings: Array<{
-    id: string;
-    transactionId: string;
-    clientId: string | null;
-    clientName: string;
-    destination: string;
-    country: string;
-    accommodation: string;
-    salesPrice: string;
-    travelDate: string;
-    haysRef: string;
-    supplierRef: string;
-    holidayType: string;
-  }>;
+  nextOffset: number | null;
 };
 
 export const searchApi = {
-  globalSearch: async (q: string): Promise<GlobalSearchResponse> => {
-    const { data } = await axiosClient.get<GlobalSearchResponse>("/api/v2/search", { params: { q } });
+  globalSearch: async (q: string, offset = 0): Promise<GlobalSearchResponse> => {
+    const { data } = await axiosClient.get<GlobalSearchResponse>("/api/v2/search", {
+      params: { q, offset },
+    });
     return data;
   },
 };

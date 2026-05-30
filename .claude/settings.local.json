@@ -12,7 +12,11 @@
       "Bash(npm run *)",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
       "Bash(grep -E \"\\\\.ts$\")",
-      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")"
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(git stash *)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }

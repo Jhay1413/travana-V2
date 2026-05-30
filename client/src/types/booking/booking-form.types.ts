@@ -243,11 +243,16 @@ export const defaultBookingFormValues: BookingFormValues = {
 
 export interface BookingRHFFormProps {
   defaultValues?: Partial<BookingFormValues>;
-  onSubmit: (values: BookingFormValues) => Promise<void> | void;
+  onSubmit: (
+    values: BookingFormValues,
+    images?: { files: File[]; urls: string[]; deletedImageIds: string[] }
+  ) => Promise<void> | void;
   isLoading?: boolean;
   submitLabel?: string;
   onCancel?: () => void;
   initialExtraAccomLabels?: string[];
+  existingImages?: Array<{ id: string; url: string }>;
+  initialImageUrls?: string[];
   clientId?: string;
 }
 

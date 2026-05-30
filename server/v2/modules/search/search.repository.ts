@@ -1,15 +1,16 @@
 import { db } from '../../config/database';
 import { clientTable } from '@shared/schema';
-import { and, eq, or, ilike, sql } from 'drizzle-orm';
+import { and, asc, eq, or, ilike, sql } from 'drizzle-orm';
 
 interface SearchOpts {
   orgId: string | null;
   limit?: number;
+  offset?: number;
 }
 
 export const searchRepository = {
   async globalSearch(searchTerm: string, opts: SearchOpts) {
-    const { orgId, limit = 15 } = opts;
+    const { orgId, limit = 15, offset = 0 } = opts;
     const term = `%${searchTerm}%`;
     const words = searchTerm.trim().split(/\s+/).filter(Boolean);
     const fullName = sql`concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename})`;
@@ -29,7 +30,7 @@ export const searchRepository = {
       ? and(matchCondition, eq(clientTable.orgId, orgId))
       : matchCondition;
 
-    const clients = await db
+    const rows = await db
       .select({
         id: clientTable.id,
         title: clientTable.title,
@@ -55,11 +56,16 @@ export const searchRepository = {
           THEN 3
           ELSE 4
         END`,
+        asc(clientTable.id),
       )
-      .limit(limit);
+      .limit(limit + 1)
+      .offset(offset);
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
     return {
-      clients: clients.map((c) => ({
+      clients: pageRows.map((c) => ({
         id: c.id,
         name: [c.title, c.firstName, c.surename]
           .filter((v) => v && v !== 'NULL')
@@ -67,8 +73,7 @@ export const searchRepository = {
           .trim() || 'Unknown',
         subtitle: [c.phoneNumber, c.email, c.city].filter(Boolean).join(' · '),
       })),
-      quotes: [] as never[],
-      bookings: [] as never[],
+      nextOffset: hasMore ? offset + limit : null,
     };
   },
 };

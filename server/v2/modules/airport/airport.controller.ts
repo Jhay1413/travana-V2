@@ -4,8 +4,12 @@ import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
 
 export const airportController = {
-  listAirports: asyncHandler(async (_req: Request, res: Response) => {
-    const airports = await airportService.listAirports();
+  listAirports: asyncHandler(async (req: Request, res: Response) => {
+    const raw = req.query.countryIds;
+    const countryIds = typeof raw === 'string' && raw.length
+      ? raw.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+    const airports = await airportService.listAirports({ countryIds });
     return successResponse(res, airports, 'Airports retrieved successfully');
   }),
 

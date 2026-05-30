@@ -5,6 +5,7 @@ export { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from
 export { useCreateSocialQuote, useCreateQuote, useDuplicateQuote, useUpdateQuote, useDeleteQuote, useUpdateQuoteTags, useAdminDeleteQuote } from "./use-quote-mutations";
 export { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage, useSetPrimaryQuoteImage } from "./use-quote-image-mutations";
 export { useConvertToBooking, useUpdateBooking, useDeleteBooking, useAdminDeleteBooking } from "./use-booking-mutations";
+export { useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage, useSetPrimaryBookingImage } from "./use-booking-image-mutations";
 export { useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "./use-enquiry-mutations";
 export { useCreateNote, useUpdateNote, useDeleteNote } from "./use-note-mutations";
 export { useCreateTicket, useUpdateTicket, useDeleteTicket } from "./use-ticket-mutations";

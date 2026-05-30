@@ -1,4 +1,5 @@
 import { quotePublicRepository } from "../repositories/quote-public.repository";
+import { noteRepository } from "../repositories/note.repository";
 import { AppError } from "../utils/error-handler";
 import type { InsertQuoteView } from "@shared/schema";
 
@@ -23,6 +24,18 @@ export const quotePublicService = {
       "Quote Viewed",
       `A customer just viewed their quote for ${dest}`,
     );
+
+    const txnInfo = await quotePublicRepository.getTransactionAndAgentByQuoteId(quoteId);
+    if (txnInfo) {
+      const viewer = viewData.viewerName?.trim();
+      const device = viewData.deviceType ? ` from ${viewData.deviceType}` : "";
+      const who = viewer ? viewer : "Someone";
+      await noteRepository.create({
+        transaction_id: txnInfo.transactionId,
+        agent_id: txnInfo.agentUserId,
+        content: `${who} viewed the ${dest} quote${device}.`,
+      });
+    }
 
     return view;
   },

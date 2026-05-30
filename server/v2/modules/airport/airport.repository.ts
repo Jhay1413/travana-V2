@@ -1,10 +1,14 @@
 import { db } from '../../config/database';
 import { airport } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 export const airportRepository = {
-  async findAll() {
-    return db.select().from(airport).orderBy(airport.airport_name);
+  async findAll(opts?: { countryIds?: string[] }) {
+    const query = db.select().from(airport);
+    if (opts?.countryIds?.length) {
+      return query.where(inArray(airport.country_id, opts.countryIds)).orderBy(airport.airport_name);
+    }
+    return query.orderBy(airport.airport_name);
   },
 
   async findById(id: string) {

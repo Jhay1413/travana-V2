@@ -324,6 +324,7 @@ portalRouter.get('/quotes', portalAuth, async (req: Request, res: Response) => {
         destination: dest,
         hotel: r.accommodationName || '',
         price: parseFloat(r.salesPrice || '0'),
+        price_per_person: parseFloat(r.pricePerPerson || '0'),
         travel_date: r.travelDate,
         return_date: returnDate,
         expiry_date: r.dateExpiry

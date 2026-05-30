@@ -140,15 +140,31 @@ export const emailService = {
     });
   },
 
-  async fetchMessages(id: string, userId: string, folder = "INBOX", limit = 20): Promise<EmailMessage[]> {
+  async fetchMessages(
+    id: string,
+    userId: string,
+    folder = "INBOX",
+    page = 1,
+    pageSize = 50,
+  ): Promise<{ messages: EmailMessage[]; totalCount: number; page: number; pageSize: number; totalPages: number }> {
     const account = await loadOwnedAccount(id, userId);
+    const safePage = Math.max(1, Math.floor(page));
+    const safePageSize = Math.max(1, Math.min(200, Math.floor(pageSize)));
 
     return withImap(account, async (client) => {
       const mailbox = await client.mailboxOpen(folder);
-      if (mailbox.exists === 0) return [];
+      const totalCount = mailbox.exists;
+      const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
+      if (totalCount === 0) {
+        return { messages: [], totalCount: 0, page: safePage, pageSize: safePageSize, totalPages: 1 };
+      }
 
-      const start = Math.max(1, mailbox.exists - limit + 1);
-      const range = `${start}:*`;
+      const end = totalCount - (safePage - 1) * safePageSize;
+      const start = Math.max(1, end - safePageSize + 1);
+      if (end < 1) {
+        return { messages: [], totalCount, page: safePage, pageSize: safePageSize, totalPages };
+      }
+      const range = `${start}:${end}`;
 
       const messages: EmailMessage[] = [];
       for await (const msg of client.fetch(range, { envelope: true, flags: true })) {
@@ -164,7 +180,13 @@ export const emailService = {
         });
       }
 
-      return messages.reverse();
+      return {
+        messages: messages.reverse(),
+        totalCount,
+        page: safePage,
+        pageSize: safePageSize,
+        totalPages,
+      };
     });
   },
 

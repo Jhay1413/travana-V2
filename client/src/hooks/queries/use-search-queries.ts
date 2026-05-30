@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { searchApi } from "@/api";
 
 export const searchKeys = {
@@ -7,9 +7,11 @@ export const searchKeys = {
 };
 
 export function useGlobalSearch(q: string) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: searchKeys.query(q),
-    queryFn: () => searchApi.globalSearch(q),
+    queryFn: ({ pageParam = 0 }) => searchApi.globalSearch(q, pageParam as number),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
     enabled: q.length >= 2,
     staleTime: 30_000,
   });

@@ -60,9 +60,9 @@ export function PipelineTab({
   const [, navigate] = useLocation();
   const enabled = tab === "pipeline" && !!userId;
 
-  const newLeadQuery = usePipelineColumn("on_enquiry", 10, userId, undefined, { enabled });
-  const inPlayQuery = usePipelineColumn("on_quote", 10, userId, undefined, { enabled });
-  const bookedQuery = usePipelineColumn("on_booking", 10, userId, undefined, { enabled });
+  const newLeadQuery = usePipelineColumn("enquiry", 10, userId, undefined, { enabled });
+  const inPlayQuery = usePipelineColumn("quote", 10, userId, undefined, { enabled });
+  const bookedQuery = usePipelineColumn("booking", 10, userId, undefined, { enabled });
 
   const newLeadItems = useMemo(() => {
     if (!enabled || !newLeadQuery.data) return [];

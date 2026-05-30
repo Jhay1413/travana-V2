@@ -38,6 +38,14 @@ export interface ImapMessageFull extends ImapMessage {
   attachments: EmailAttachment[];
 }
 
+export interface EmailMessagesPage {
+  messages: ImapMessage[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface CreateEmailAccountData {
   userId: string;
   label: string;
@@ -84,10 +92,16 @@ export const emailApi = {
     return data;
   },
 
-  fetchMessages: async (accountId: string, folder = "INBOX", limit = 50): Promise<ImapMessage[]> => {
-    const { data } = await axiosClient.get<ImapMessage[]>(`/api/v2/emails/accounts/${accountId}/messages`, {
-      params: { folder, limit },
-    });
+  fetchMessages: async (
+    accountId: string,
+    folder = "INBOX",
+    page = 1,
+    pageSize = 50,
+  ): Promise<EmailMessagesPage> => {
+    const { data } = await axiosClient.get<EmailMessagesPage>(
+      `/api/v2/emails/accounts/${accountId}/messages`,
+      { params: { folder, page, pageSize } },
+    );
     return data;
   },
 

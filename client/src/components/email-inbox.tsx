@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Mail,
@@ -15,6 +15,7 @@ import {
   Paperclip,
   MoreHorizontal,
   ChevronLeft,
+  ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
   Clock,
@@ -302,6 +303,8 @@ export default function EmailInbox() {
   const [folder, setFolder] = useState<EmailFolder>("inbox");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const EMAILS_PAGE_SIZE = 50;
   const signature = `\n\n--\n${user?.name ?? ""}${account?.emailAddress ? `\n${account.emailAddress}` : ""}`;
 
   const [composing, setComposing] = useState(false);
@@ -315,11 +318,20 @@ export default function EmailInbox() {
   const sendEmail = useSendEmail();
 
   const imapFolder = IMAP_FOLDER[folder];
-  const { data: imapMessages = [], isLoading: messagesLoading } = useEmailMessages(
+  const { data: messagesPage, isLoading: messagesLoading, isFetching: messagesFetching } = useEmailMessages(
     account?.id ?? "",
     imapFolder,
+    page,
+    EMAILS_PAGE_SIZE,
     !!account,
   );
+  const imapMessages = messagesPage?.messages ?? [];
+  const totalPages = messagesPage?.totalPages ?? 1;
+  const totalCount = messagesPage?.totalCount ?? 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [folder, account?.id]);
 
   const selectedUid = selectedId ? parseInt(selectedId, 10) : 0;
   const { data: fullMessage, isLoading: bodyLoading } = useEmailMessage(
@@ -585,7 +597,9 @@ export default function EmailInbox() {
         <div className="border-b border-black/10 px-4 py-3 dark:border-white/10">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-semibold capitalize">{folder === "starred" ? "Starred" : folder}</div>
-            <span className="text-xs text-black/50 dark:text-white/50">{filteredEmails.length} emails</span>
+            <span className="text-xs text-black/50 dark:text-white/50">
+              {totalCount > 0 ? `${totalCount} emails` : `${filteredEmails.length} emails`}
+            </span>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-black/40 dark:text-white/40" />
@@ -659,6 +673,34 @@ export default function EmailInbox() {
             ))
           )}
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-black/10 px-4 py-2 dark:border-white/10">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || messagesFetching}
+              className="inline-flex h-7 items-center gap-1 rounded-lg border border-black/10 bg-white/70 px-2 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
+              data-testid="button-emails-prev-page"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Prev
+            </button>
+            <span className="text-xs text-black/60 dark:text-white/60" data-testid="text-emails-page-indicator">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || messagesFetching}
+              className="inline-flex h-7 items-center gap-1 rounded-lg border border-black/10 bg-white/70 px-2 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/5 dark:text-white/70"
+              data-testid="button-emails-next-page"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </Card>
 
       {/* Email detail / Compose */}

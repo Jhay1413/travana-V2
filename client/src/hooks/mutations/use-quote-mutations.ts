@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
-import { quoteKeys, transactionKeys } from "@/hooks/queries";
+import { quoteKeys, transactionKeys, dashboardKeys } from "@/hooks/queries";
 import type { CreateQuoteData } from "@/types/quote";
 
 export function useCreateSocialQuote() {
@@ -21,6 +21,7 @@ export function useCreateQuote() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -33,6 +34,7 @@ export function useDuplicateQuote() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -44,6 +46,7 @@ export function useUpdateQuote() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -55,6 +58,7 @@ export function useDeleteQuote() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -67,6 +71,7 @@ export function useAdminDeleteQuote() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }

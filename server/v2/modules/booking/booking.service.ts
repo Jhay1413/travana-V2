@@ -1,5 +1,6 @@
 import { bookingRepository } from "./booking.repository";
 import { newQuoteRepository } from "../quote/quote.repository";
+import { quoteImageRepository } from "../quote/quote-image.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
@@ -295,6 +296,16 @@ export const bookingService = {
           } as InsertBookingCruiseItinerary);
         }
       }
+    }
+
+    const quoteImgs = await quoteImageRepository.getByQuoteId(quoteId);
+    if (quoteImgs.length > 0) {
+      await bookingRepository.addImages(
+        b.id,
+        quoteImgs
+          .filter((img): img is typeof img & { url: string } => !!img.url)
+          .map((img) => ({ url: img.url, isPrimary: img.isPrimary })),
+      );
     }
 
     await newQuoteRepository.update(quoteId, { quote_status: 'WON' });

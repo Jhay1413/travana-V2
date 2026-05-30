@@ -2,7 +2,7 @@ export { useCurrentUser, authKeys } from "./use-auth-queries";
 export { useClients, useClient, clientKeys } from "./use-client-queries";
 export { useNeonClients, useNeonClient, neonClientKeys } from "./use-neon-client-queries";
 export { useTransactions, usePipelineTransactions, usePipelineColumn, useTransaction, useTransactionStats, useExpiringQuotes, transactionKeys } from "./use-transaction-queries";
-export { useQuotes, useQuote, quoteKeys } from "./use-quote-queries";
+export { useQuotes, useQuote, useRecentQuoteEngagement, quoteKeys } from "./use-quote-queries";
 export { useBookings, useBooking, useBookingByTransaction, bookingKeys } from "./use-booking-queries";
 export { useEnquiries, useEnquiry, useEnquiryByTransaction, enquiryKeys } from "./use-enquiry-queries";
 export { useNotes, noteKeys } from "./use-note-queries";
@@ -24,7 +24,7 @@ export {
 export { useRevenueDashboard, useMonthBookings, useMonthForwards, revenueKeys } from "./use-revenue-queries";
 export { useTargetsOverview, useShopTargets, useUpsertShopTargets, useAgentTargets, useAgentTargetsByUserId, useUpsertAgentTargets, useAgents } from "./use-targets-queries";
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";
-export { useAirports, airportKeys } from "./use-airport-queries";
+export { useAirports, useAirportsByCountries, airportKeys } from "./use-airport-queries";
 export { useAllTasks, useAllTasksExtended, useTasks, useUserTasks, taskKeys } from "./use-task-queries";
 export { useTags, useSearchTags, tagKeys } from "./use-tags";
 export { usePackageTypes, useCountries, useDestinations, useDestinationSearch, useResorts, useResortSearch, useAccommodations, useAccommodationSearch, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, useAccommodationImages, useLodgeImages, useCruiseLines, useShips, useCruiseItineraries, lookupKeys } from "./use-lookup-queries";

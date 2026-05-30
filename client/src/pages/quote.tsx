@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, Copy, MoreHorizontal, Pencil, RefreshCw, Link as LinkIcon, Trash2 } from "lucide-react";
+import { ChevronLeft, Link as LinkIcon, Pin, PinOff, Share2, Sparkles } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -61,11 +61,9 @@ export default function QuotePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: currentUser } = useCurrentUser();
-  const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
-  const ellipsisRef = useRef<HTMLDivElement>(null);
   const updateTransactionMutation = useUpdateTransaction();
   const {
     showSharePopup, setShowSharePopup,
@@ -97,16 +95,6 @@ export default function QuotePage() {
     uploadFiles: uploadImageFiles,
     openFilePicker: openImageFilePicker,
   } = useQuoteImageActions(quoteId);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ellipsisRef.current && !ellipsisRef.current.contains(e.target as Node)) {
-        setShowEllipsisMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   const { primaryImage, galleryImages, quoteImageUrls } = useQuoteImages(quoteData);
 
@@ -182,7 +170,8 @@ export default function QuotePage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-base font-semibold" data-testid="text-quote-title">
-                  {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.pricePerPerson)}pp</span>
+                  {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price)}</span>
+                  <span className="text-xs font-medium text-black/55"> ({currency.format(quote.pricePerPerson)}pp)</span>
                 </div>
                 <StatusPill status={quote.status} onStatusChange={onStatusChange} />
                 {quote.isCopyQuote && (
@@ -197,6 +186,7 @@ export default function QuotePage() {
                 <QuoteExpiryPill
                   dateExpiry={(quoteData as any)?.date_expiry}
                   dateCreated={(quoteData as any)?.date_created}
+                  onUpdateExpiry={openExpiryDialog}
                 />
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
@@ -211,16 +201,38 @@ export default function QuotePage() {
             </div>
           </div>
 
-          <QuoteActionsRow
-            dateExpiry={(quoteData as any)?.date_expiry}
-            isFavorited={isFavorited}
-            onTogglePin={togglePin}
-            onUpdateExpiry={openExpiryDialog}
-            onShare={openShare}
-            onOpenGuru={() => setShowGuruSheet(true)}
-            onCopy={() => setShowCopyDialog(true)}
-            onExport={() => {}}
-          />
+          <div className="flex items-center gap-2">
+            <UserReassignSelect
+              value={(quoteData as any)?.user_id || currentUser?.id || ""}
+              onValueChange={(userId) => {
+                updateTransactionMutation.mutate(
+                  { id: quote.transaction_id, data: { user_id: userId } },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "Transaction reassigned successfully" });
+                      queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+                      queryClient.invalidateQueries({ queryKey: bookingKeys.detail(quoteId) });
+                    },
+                    onError: () => {
+                      toast({ title: "Failed to reassign transaction", variant: "destructive" });
+                    },
+                  }
+                );
+              }}
+              data-testid="select-itinerary-owner"
+            />
+
+            <QuoteActionsRow
+              pageLabel={pageLabel}
+              canConvert={quote.status !== "accepted"}
+              isAdmin={role === "Admin"}
+              onEdit={() => setShowEditDialog(true)}
+              onConvert={() => setShowConvertDialog(true)}
+              onDuplicate={() => setShowCopyDialog(true)}
+              onExport={() => {}}
+              onDelete={openDeleteDialog}
+            />
+          </div>
         </div>
 
         <div className="mt-4" data-testid="layout-quote-body">
@@ -270,7 +282,7 @@ export default function QuotePage() {
                                 return `${nights} nights`;
                               })()}</span>
                               <span className="text-black/25">•</span>
-                              <span>{currency.format(quote.pricePerPerson)}pp</span>
+                              <span>{currency.format(quote.commissions.price)} <span className="text-black/55">({currency.format(quote.pricePerPerson)}pp)</span></span>
                               {quoteData?.quote_ref && (
                                 <a
                                   href={quoteData.quote_ref}
@@ -286,69 +298,40 @@ export default function QuotePage() {
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <UserReassignSelect
-                            value={quoteData?.user_id || currentUser?.id || ""}
-                            onValueChange={(userId) => {
-                              updateTransactionMutation.mutate(
-                                { id: quote.transaction_id, data: { user_id: userId } },
-                                {
-                                  onSuccess: () => {
-                                    toast({ title: "Transaction reassigned successfully" });
-                                    queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
-                                    queryClient.invalidateQueries({ queryKey: bookingKeys.detail(quoteId) });
-                                  },
-                                  onError: () => {
-                                    toast({ title: "Failed to reassign transaction", variant: "destructive" });
-                                  },
-                                }
-                              );
-                            }}
-                            data-testid="select-itinerary-owner"
-                          />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={togglePin}
+                            className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${
+                              isFavorited
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15"
+                                : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"
+                            }`}
+                            data-testid="button-pin-quote"
+                          >
+                            {isFavorited ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                            {isFavorited ? "Unpin" : "Pin"}
+                          </button>
 
-                          <div className="relative" ref={ellipsisRef}>
-                            <button
-                              type="button"
-                              onClick={() => setShowEllipsisMenu((v) => !v)}
-                              className="grid h-8 w-8 place-items-center rounded-full border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
-                              data-testid="button-quote-ellipsis"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                            {showEllipsisMenu && (
-                              <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-quote-ellipsis">
-                                {[
-                                  { label: `Edit ${pageLabel}`, icon: Pencil, id: "edit" },
-                                  ...(quote.status !== "accepted" ? [{ label: "Convert to Booking", icon: RefreshCw, id: "convert" }] : []),
-                                  { label: `Duplicate ${pageLabel}`, icon: Copy, id: "duplicate" },
-                                  ...(role === "Admin" ? [{ label: `Delete ${pageLabel}`, icon: Trash2, id: "admin-delete" }] : []),
-                                ].map((item) => (
-                                  <button
-                                    key={item.id}
-                                    type="button"
-                                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium transition hover:bg-black/[0.05] ${item.id === "admin-delete" ? "text-red-600 hover:bg-red-50" : "text-black/75"}`}
-                                    data-testid={`button-quote-${item.id}`}
-                                    onClick={() => {
-                                      setShowEllipsisMenu(false);
-                                      if (item.id === "edit") {
-                                        setShowEditDialog(true);
-                                      } else if (item.id === "convert") {
-                                        setShowConvertDialog(true);
-                                      } else if (item.id === "admin-delete") {
-                                        openDeleteDialog();
-                                      } else {
-                                        setShowCopyDialog(true);
-                                      }
-                                    }}
-                                  >
-                                    <item.icon className="h-3.5 w-3.5" />
-                                    {item.label}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={openShare}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+                            data-testid="button-share-quote"
+                          >
+                            <Share2 className="h-4 w-4" />
+                            Share Quote
+                          </button>
+
+                          <Button
+                            size="sm"
+                            className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
+                            data-testid="button-destination-guru"
+                            onClick={() => setShowGuruSheet(true)}
+                          >
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            Destination Guru
+                          </Button>
                         </div>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
@@ -374,6 +357,8 @@ export default function QuotePage() {
 
                   <QuoteBookingReferences quote={quote} />
 
+                  <QuoteEngagement quoteId={quoteId}  />
+
                   <QuoteNotesSection transactionId={quote.transaction_id} />
 
 
@@ -385,8 +370,6 @@ export default function QuotePage() {
               <QuoteCostingsCard quote={quote} pageLabel={pageLabel} />
 
               <QuoteTasksSection quoteId={quoteId} entityType="quote" assignedUserId={quoteData?.user_id} />
-
-              <QuoteEngagement quoteId={quoteId} />
 
             </div>
           </div>

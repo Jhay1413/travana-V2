@@ -18,6 +18,7 @@ import { SocialPostsTab, type SocialFilter } from "./social-posts-tab";
 import { NewsTab } from "./news-tab";
 import { NotesTab } from "./notes-tab";
 import { PinnedSection } from "./pinned-section";
+import { EngagementSection } from "./engagement-section";
 import { ExpiringQuotesSection } from "./expiring-quotes-section";
 
 export default function AgentOverviewPage() {
@@ -81,7 +82,7 @@ export default function AgentOverviewPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1">
               <div className="text-sm font-medium" data-testid="text-overview-title">
-                Overview
+                Agent Dashboard
               </div>
               <div className="text-xs text-muted-foreground" data-testid="text-overview-subtitle">
                 Your dashboard at a glance.
@@ -149,6 +150,7 @@ export default function AgentOverviewPage() {
         </Card>
 
         <div className="flex flex-col gap-4">
+          <EngagementSection />
           <PinnedSection />
           <ExpiringQuotesSection userId={userId} tab={tab} />
         </div>

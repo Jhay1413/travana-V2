@@ -53,6 +53,7 @@ export interface PortalQuote {
   destination: string;
   hotel: string;
   price: number;
+  price_per_person: number;
   travel_date: string;
   return_date: string;
   expiry_date: string;

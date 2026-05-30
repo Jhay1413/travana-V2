@@ -1,5 +1,6 @@
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
+import type { QuoteEngagementRow } from "@/api/endpoints/quote.api";
 import type { EnrichedQuote, QuoteFilters } from "@/types/quote";
 
 export const quoteKeys = {
@@ -9,7 +10,17 @@ export const quoteKeys = {
   freeQuotes: () => [...quoteKeys.all, "free"] as const,
   details: () => [...quoteKeys.all, "detail"] as const,
   detail: (id: string) => [...quoteKeys.details(), id] as const,
+  recentEngagement: (limit: number) => [...quoteKeys.all, "engagement", limit] as const,
 };
+
+export function useRecentQuoteEngagement(limit = 10, options?: { enabled?: boolean }) {
+  return useQuery<QuoteEngagementRow[]>({
+    queryKey: quoteKeys.recentEngagement(limit),
+    queryFn: () => quoteApi.getRecentClientEngagement(limit),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
+  });
+}
 
 export function useQuotes(filters?: QuoteFilters) {
   return useQuery<EnrichedQuote[]>({

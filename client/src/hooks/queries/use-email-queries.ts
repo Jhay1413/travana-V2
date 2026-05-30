@@ -1,12 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { emailApi } from "@/api/endpoints/email.api";
-import type { EmailAccountPublic, ImapMessage, ImapMessageFull } from "@/api/endpoints/email.api";
+import type {
+  EmailAccountPublic,
+  EmailMessagesPage,
+  ImapMessageFull,
+} from "@/api/endpoints/email.api";
 
 export const emailKeys = {
   all: ["emails"] as const,
   sharedAccount: [...["emails"], "shared-account"] as const,
   accounts: (userId: string) => [...emailKeys.all, "accounts", userId] as const,
-  messages: (accountId: string, folder: string) => [...emailKeys.all, "messages", accountId, folder] as const,
+  messages: (accountId: string, folder: string, page: number, pageSize: number) =>
+    [...emailKeys.all, "messages", accountId, folder, page, pageSize] as const,
   message: (accountId: string, uid: number, folder: string) => [...emailKeys.all, "message", accountId, uid, folder] as const,
 };
 
@@ -25,12 +30,19 @@ export function useEmailAccounts(userId: string) {
   });
 }
 
-export function useEmailMessages(accountId: string, folder: string, enabled = true) {
-  return useQuery<ImapMessage[]>({
-    queryKey: emailKeys.messages(accountId, folder),
-    queryFn: () => emailApi.fetchMessages(accountId, folder),
+export function useEmailMessages(
+  accountId: string,
+  folder: string,
+  page = 1,
+  pageSize = 50,
+  enabled = true,
+) {
+  return useQuery<EmailMessagesPage>({
+    queryKey: emailKeys.messages(accountId, folder, page, pageSize),
+    queryFn: () => emailApi.fetchMessages(accountId, folder, page, pageSize),
     enabled: !!accountId && enabled,
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });
 }
 

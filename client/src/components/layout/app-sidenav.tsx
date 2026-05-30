@@ -16,15 +16,15 @@ import {
 import { cn } from "@/lib/utils";
 import { useRoles } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications, useCurrentOrganization } from "@/hooks/queries";
-import { getNavForRoles, type NavItem, type NavSection } from "@/config/nav";
+import { getNavForRoles, isNavItem, type NavItem, type NavSection } from "@/config/nav";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
 
-const CONNECT_CHANNELS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }>; awaiting: number }> = [
+const CONNECT_CHANNELS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }>; awaiting: number; href?: string }> = [
   { key: "whatsapp", label: "WhatsApp", icon: MessageSquare, awaiting: 43 },
   { key: "facebook", label: "Facebook", icon: Users, awaiting: 2 },
   { key: "instagram", label: "Instagram", icon: Sparkles, awaiting: 0 },
-  { key: "email", label: "Email", icon: Mail, awaiting: 9 },
+  { key: "email", label: "Email", icon: Mail, awaiting: 9, href: "/email" },
 ];
 
 const COLLAPSED_KEY = "sidebar-collapsed";
@@ -115,25 +115,47 @@ function ItemRow({ item, active, collapsed }: { item: NavItem; active: boolean; 
   );
 }
 
+function collectLeafItems(entries: Array<NavItem | NavSection>): NavItem[] {
+  const leaves: NavItem[] = [];
+  for (const entry of entries) {
+    if (isNavItem(entry)) {
+      leaves.push(entry);
+    } else {
+      leaves.push(...collectLeafItems(entry.items));
+    }
+  }
+  return leaves;
+}
+
+function collectLabelledSectionIds(entries: Array<NavItem | NavSection>): string[] {
+  const ids: string[] = [];
+  for (const entry of entries) {
+    if (isNavItem(entry)) continue;
+    if (entry.label) ids.push(entry.id);
+    ids.push(...collectLabelledSectionIds(entry.items));
+  }
+  return ids;
+}
+
 function SectionBlock({
   section,
   currentPath,
   currentSearch,
   collapsed,
-  expanded,
+  expandedIds,
   onToggle,
 }: {
   section: NavSection;
   currentPath: string;
   currentSearch: string;
   collapsed: boolean;
-  expanded: boolean;
-  onToggle: () => void;
+  expandedIds: string[];
+  onToggle: (id: string) => void;
 }) {
   if (collapsed) {
     return (
       <>
-        {section.items.map((item) => (
+        {collectLeafItems(section.items).map((item) => (
           <ItemRow
             key={item.path + item.label}
             item={item}
@@ -145,27 +167,39 @@ function SectionBlock({
     );
   }
 
-  if (!section.label) {
-    return (
-      <div className="space-y-1">
-        {section.items.map((item) => (
-          <ItemRow
-            key={item.path + item.label}
-            item={item}
-            active={isActive(currentPath, currentSearch, item.path)}
-            collapsed={false}
-          />
-        ))}
-      </div>
+  const renderChildren = () =>
+    section.items.map((child) =>
+      isNavItem(child) ? (
+        <ItemRow
+          key={child.path + child.label}
+          item={child}
+          active={isActive(currentPath, currentSearch, child.path)}
+          collapsed={false}
+        />
+      ) : (
+        <SectionBlock
+          key={child.id}
+          section={child}
+          currentPath={currentPath}
+          currentSearch={currentSearch}
+          collapsed={false}
+          expandedIds={expandedIds}
+          onToggle={onToggle}
+        />
+      )
     );
+
+  if (!section.label) {
+    return <div className="space-y-1">{renderChildren()}</div>;
   }
 
+  const expanded = expandedIds.includes(section.id);
   const SectionIcon = section.icon;
   return (
     <div className="space-y-1">
       <button
         type="button"
-        onClick={onToggle}
+        onClick={() => onToggle(section.id)}
         className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
         data-testid={`nav-section-${section.id}`}
       >
@@ -188,16 +222,7 @@ function SectionBlock({
             transition={{ duration: 0.2 }}
             className="overflow-hidden pl-4"
           >
-            <div className="space-y-1">
-              {section.items.map((item) => (
-                <ItemRow
-                  key={item.path + item.label}
-                  item={item}
-                  active={isActive(currentPath, currentSearch, item.path)}
-                  collapsed={false}
-                />
-              ))}
-            </div>
+            <div className="space-y-1">{renderChildren()}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -218,11 +243,12 @@ function SidenavInner({
   const [location] = useLocation();
   const sections = getNavForRoles(roles);
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
+    const defaults = collectLabelledSectionIds(sections);
     try {
       const saved = sessionStorage.getItem("admin-nav-expanded");
-      return saved ? JSON.parse(saved) : sections.filter((s) => s.label).map((s) => s.id);
+      return saved ? JSON.parse(saved) : defaults;
     } catch {
-      return sections.filter((s) => s.label).map((s) => s.id);
+      return defaults;
     }
   });
 
@@ -305,8 +331,8 @@ function SidenavInner({
               currentPath={currentPath}
               currentSearch={currentSearch}
               collapsed={collapsed}
-              expanded={expandedSections.includes(section.id)}
-              onToggle={() => toggleSection(section.id)}
+              expandedIds={expandedSections}
+              onToggle={toggleSection}
             />
           ))}
 
@@ -400,12 +426,13 @@ function SidenavInner({
             />
 
             <div className="space-y-1" data-testid="section-connect">
-              {CONNECT_CHANNELS.map(({ key, label, icon: Icon, awaiting }) => {
-                const isActiveChannel = currentSearch === `s=connect-${key}`;
+              {CONNECT_CHANNELS.map(({ key, label, icon: Icon, awaiting, href }) => {
+                const channelHref = href ?? `/?s=connect-${key}`;
+                const isActiveChannel = href ? currentPath === href : currentSearch === `s=connect-${key}`;
                 return (
                   <Link
                     key={key}
-                    href={`/?s=connect-${key}`}
+                    href={channelHref}
                     className={cn(
                       "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition no-underline",
                       isActiveChannel

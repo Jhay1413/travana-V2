@@ -2,8 +2,10 @@ import axiosClient from "../client/axios-client";
 import type { Airport } from "@/types/airport";
 
 export const airportApi = {
-  getAll: async (): Promise<Airport[]> => {
-    const { data } = await axiosClient.get<Airport[]>("/api/v2/airports");
+  getAll: async (countryIds?: string[]): Promise<Airport[]> => {
+    const params: Record<string, string> = {};
+    if (countryIds?.length) params.countryIds = countryIds.join(",");
+    const { data } = await axiosClient.get<Airport[]>("/api/v2/airports", { params });
     return data;
   },
 

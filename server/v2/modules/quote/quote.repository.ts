@@ -3,7 +3,7 @@ import {
   quote, quote_flights, quote_accomodation, quote_transfers, quote_car_hire,
   quote_attraction_ticket, quote_lounge_pass, quote_airport_parking,
   quote_cruise, quote_cruise_item_extra, quote_cruise_itinerary,
-  passengers, deal_images, quoteImages, tags, quoteTags,
+  passengers, deal_images, quoteImages, quoteViewsTable, tags, quoteTags,
   accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type,
@@ -99,7 +99,7 @@ export const newQuoteRepository = {
       .select({
         id: quote.id,
         transaction_id: quote.transaction_id,
-        clientOrgId: clientTable.orgId,
+        clientOrgId: sql<string | null>`COALESCE(${clientTable.orgId}, ${transaction.org_id})`,
       })
       .from(quote)
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
@@ -1080,5 +1080,82 @@ export const newQuoteRepository = {
         is_included_in_package: (a.is_included_in_package as boolean) ?? true,
       } as InsertQuoteAccomodation);
     }
+  },
+
+  async findRecentClientEngagement(opts: {
+    orgId: string | null;
+    userId?: string | null;
+    limit?: number;
+  }) {
+    const { orgId, userId, limit = 10 } = opts;
+    const whereParts: any[] = [isNotNull(quoteViewsTable.viewerName)];
+    if (orgId) whereParts.push(eq(transaction.org_id, orgId));
+    if (userId) whereParts.push(eq(transaction.user_id, userId));
+
+    const grouped = await db
+      .select({
+        quoteId: quoteViewsTable.quoteId,
+        viewCount: sql<number>`count(*)::int`,
+        lastViewedAt: sql<Date>`max(${quoteViewsTable.viewedAt})`,
+        quoteTitle: quote.title,
+        destinationName: destination.name,
+        countryName: country.country_name,
+        clientId: transaction.client_id,
+        clientFirstName: clientTable.firstName,
+        clientSurename: clientTable.surename,
+      })
+      .from(quoteViewsTable)
+      .innerJoin(quote, eq(quote.id, quoteViewsTable.quoteId))
+      .innerJoin(transaction, eq(transaction.id, quote.transaction_id))
+      .leftJoin(clientTable, eq(clientTable.id, transaction.client_id))
+      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
+      .leftJoin(accomodation_list, eq(accomodation_list.id, quote_accomodation.accomodation_id))
+      .leftJoin(resorts, eq(resorts.id, accomodation_list.resorts_id))
+      .leftJoin(destination, eq(destination.id, resorts.destination_id))
+      .leftJoin(country, eq(country.id, destination.country_id))
+      .where(and(...whereParts))
+      .groupBy(
+        quoteViewsTable.quoteId,
+        quote.title,
+        destination.name,
+        country.country_name,
+        transaction.client_id,
+        clientTable.firstName,
+        clientTable.surename,
+      )
+      .orderBy(desc(sql`max(${quoteViewsTable.viewedAt})`))
+      .limit(limit);
+
+    if (grouped.length === 0) return [];
+
+    const quoteIds = grouped.map((g) => g.quoteId);
+    const allViews = await db
+      .select({
+        quoteId: quoteViewsTable.quoteId,
+        viewedAt: quoteViewsTable.viewedAt,
+        viewerName: quoteViewsTable.viewerName,
+        deviceType: quoteViewsTable.deviceType,
+        browser: quoteViewsTable.browser,
+      })
+      .from(quoteViewsTable)
+      .where(and(inArray(quoteViewsTable.quoteId, quoteIds), isNotNull(quoteViewsTable.viewerName)))
+      .orderBy(desc(quoteViewsTable.viewedAt));
+
+    const viewsByQuote = new Map<string, typeof allViews>();
+    for (const v of allViews) {
+      const list = viewsByQuote.get(v.quoteId) ?? [];
+      list.push(v);
+      viewsByQuote.set(v.quoteId, list);
+    }
+
+    return grouped.map((g) => ({
+      quoteId: g.quoteId,
+      quoteTitle: g.quoteTitle || g.destinationName || g.countryName || "Quote",
+      clientId: g.clientId,
+      clientName: [g.clientFirstName, g.clientSurename].filter((v) => v && v !== "NULL").join(" ").trim() || "Unknown",
+      clientViewCount: g.viewCount,
+      lastViewedAt: g.lastViewedAt,
+      views: viewsByQuote.get(g.quoteId) ?? [],
+    }));
   },
 };

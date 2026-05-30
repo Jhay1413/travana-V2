@@ -11,8 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
-import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResorts, useBoardBasis, useAirports, useAccommodationTypes } from "@/hooks/queries";
+import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirports, useAirportsByCountries, useAccommodationTypes } from "@/hooks/queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 
 const FLEXIBILITY_OPTIONS = [
@@ -58,10 +59,10 @@ const CRUISE_NIGHTS_OPTIONS = [
 interface EnquiryForm {
   enquiryTitle: string;
   holidayType: string;
-  country: string;
-  destination: string;
-  resort: string;
-  departureAirport: string;
+  countries: string[];
+  destinations: string[];
+  resorts: string[];
+  departureAirports: string[];
   travelDate: string;
   flexibility: string;
   passengersAdults: number;
@@ -69,7 +70,7 @@ interface EnquiryForm {
   passengersInfants: number;
   nights: number;
   starRating: string;
-  boardBasis: string;
+  boardBases: string[];
   budget: string;
   budgetType: string;
   notes: string;
@@ -86,17 +87,22 @@ interface EnquiryForm {
   cabinType: string;
   preCruiseStayDays: string;
   postCruiseStayDays: string;
-  destinationLabel: string;
+  /** id -> display label cache, for rendering chips of async-fetched options */
+  labels: Record<string, string>;
+  /** destinationId|resortId -> countryId, for pruning when a country is removed */
+  countryOf: Record<string, string>;
+  /** resortId -> destinationId, for pruning when a destination is removed */
+  destinationOf: Record<string, string>;
   is_test: boolean;
 }
 
 const defaultForm: EnquiryForm = {
   enquiryTitle: "",
   holidayType: "",
-  country: "",
-  destination: "",
-  resort: "",
-  departureAirport: "",
+  countries: [],
+  destinations: [],
+  resorts: [],
+  departureAirports: [],
   travelDate: "",
   flexibility: "",
   passengersAdults: 2,
@@ -104,7 +110,7 @@ const defaultForm: EnquiryForm = {
   passengersInfants: 0,
   nights: 7,
   starRating: "",
-  boardBasis: "",
+  boardBases: [],
   budget: "",
   budgetType: "Per Person",
   notes: "",
@@ -121,30 +127,65 @@ const defaultForm: EnquiryForm = {
   cabinType: "",
   preCruiseStayDays: "",
   postCruiseStayDays: "",
-  destinationLabel: "",
+  labels: {},
+  countryOf: {},
+  destinationOf: {},
   is_test: false,
 };
 
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
-  const destRecord = (enquiry.destinations as any)?.[0];
-  const resortRecord = (enquiry.resorts as any)?.[0];
-  const bbRecord = (enquiry.boardBases as any)?.[0];
-  const airportRecord = (enquiry.airports as any)?.[0];
+  const destRecords = ((enquiry.destinations as any[]) || []);
+  const resortRecords = ((enquiry.resorts as any[]) || []);
+  const bbRecords = ((enquiry.boardBases as any[]) || []);
+  const airportRecords = ((enquiry.airports as any[]) || []);
 
-  const destinationId = destRecord?.destination_id || destRecord?.destination || "";
-  const destinationLabel = destRecord?.destination_name || destRecord?.name || "";
-  const countryId = destRecord?.country_id || "";
-  const resortId = resortRecord?.resorts_id || resortRecord?.resort || "";
-  const boardBasisId = bbRecord?.board_basis_id || bbRecord?.board_basis || "";
-  const airportId = airportRecord?.airport_id || airportRecord?.airport || "";
+  const labels: Record<string, string> = {};
+  const countryOf: Record<string, string> = {};
+
+  const destinations: string[] = [];
+  const countries: string[] = [];
+  for (const d of destRecords) {
+    const id = d?.destination_id || d?.destination;
+    if (!id) continue;
+    destinations.push(id);
+    if (d?.destination_name || d?.name) labels[id] = d.destination_name || d.name;
+    if (d?.country_id) {
+      countryOf[id] = d.country_id;
+      if (!countries.includes(d.country_id)) countries.push(d.country_id);
+    }
+  }
+
+  const resorts: string[] = [];
+  for (const r of resortRecords) {
+    const id = r?.resorts_id || r?.resort;
+    if (!id) continue;
+    resorts.push(id);
+    if (r?.resort_name || r?.name) labels[id] = r.resort_name || r.name;
+  }
+
+  const boardBases: string[] = [];
+  for (const b of bbRecords) {
+    const id = b?.board_basis_id || b?.board_basis;
+    if (id) boardBases.push(id);
+  }
+
+  const departureAirports: string[] = [];
+  for (const a of airportRecords) {
+    const id = a?.airport_id || a?.airport;
+    if (!id) continue;
+    departureAirports.push(id);
+    if (a?.airport_name) labels[id] = a.airport_name;
+  }
+
+  const destRecord = destRecords[0];
 
   return {
     enquiryTitle: enquiry.title || "",
     holidayType: enquiry.holiday_type_id || "",
-    country: countryId,
-    destination: destinationId,
-    resort: resortId,
-    departureAirport: airportId,
+    countries,
+    destinations,
+    resorts,
+    departureAirports,
     travelDate: enquiry.travel_date || "",
     flexibility: enquiry.flexibility_date || enquiry.flexible_date || "",
     passengersAdults: enquiry.adults || 2,
@@ -152,7 +193,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     passengersInfants: enquiry.infants || 0,
     nights: enquiry.no_of_nights || 7,
     starRating: enquiry.accom_min_star_rating || "",
-    boardBasis: boardBasisId,
+    boardBases,
     budget: enquiry.budget || "",
     budgetType: enquiry.budget_type || "Per Person",
     notes: "",
@@ -169,7 +210,10 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     cabinType: enquiry.cabin_type || "",
     preCruiseStayDays: enquiry.pre_cruise_stay ? String(enquiry.pre_cruise_stay) : "",
     postCruiseStayDays: enquiry.post_cruise_stay ? String(enquiry.post_cruise_stay) : "",
-    destinationLabel,
+    labels,
+    countryOf,
+    destinationOf: {},
+    is_test: (enquiry as any).is_test ?? false,
   };
 }
 
@@ -212,12 +256,28 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<EnquiryForm>(defaultForm);
   const [direction, setDirection] = useState(1);
+  const [resortSearch, setResortSearch] = useState("");
+
+  const primaryCountry = form.countries[0];
+  const primaryDestination = form.destinations[0];
+
   const { data: countriesData } = useCountries();
-  const { data: destinationsData } = useDestinations(form.country || undefined);
+  const { data: singleCountryDestinations } = useDestinations(
+    form.countries.length === 1 ? primaryCountry : undefined,
+  );
   const { data: allDestinationsData } = useAllDestinations();
-  const { data: resortsData } = useResorts(form.destination);
+  const destinationsData = form.countries.length === 1 ? singleCountryDestinations : allDestinationsData;
+  // While the user is typing a search, ignore the selected destination/country pivot
+  // so they can find ANY resort. With no search term, scope to the selected
+  // destination (or country) to give a sensible default list.
+  const { data: resortsData } = useResortSearch(
+    resortSearch,
+    resortSearch ? undefined : primaryDestination || undefined,
+    resortSearch || primaryDestination ? undefined : primaryCountry || undefined,
+  );
   const { data: boardBasisData } = useBoardBasis();
   const { data: airportsData } = useAirports();
+  const { data: countryAirportsData } = useAirportsByCountries(form.countries);
   const { data: packageTypesData } = usePackageTypes();
   const { data: accommodationTypesData } = useAccommodationTypes();
 
@@ -234,10 +294,93 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
       setStep(0);
       setForm(enquiry ? formFromEnquiry(enquiry) : defaultForm);
       setDirection(1);
+      setResortSearch("");
     }
   }, [open, enquiry]);
 
   const set = (key: keyof EnquiryForm, val: any) => setForm((prev) => ({ ...prev, [key]: val }));
+
+  // ----- Multi-select handlers (Country / Destination / Resort) -----
+
+  const handleCountriesChange = (next: string[]) => {
+    setForm((prev) => {
+      const removed = prev.countries.filter((c) => !next.includes(c));
+      if (removed.length === 0) return { ...prev, countries: next };
+      // Prune destinations/resorts that belonged only to removed countries
+      const destinations = prev.destinations.filter((d) => {
+        const c = prev.countryOf[d];
+        return !c || next.includes(c);
+      });
+      const resorts = prev.resorts.filter((r) => {
+        const c = prev.countryOf[r];
+        return !c || next.includes(c);
+      });
+      return { ...prev, countries: next, destinations, resorts };
+    });
+  };
+
+  const handleDestinationsChange = (next: string[]) => {
+    setForm((prev) => {
+      const removed = prev.destinations.filter((d) => !next.includes(d));
+      const labels = { ...prev.labels };
+      const countryOf = { ...prev.countryOf };
+      for (const id of next) {
+        if (!labels[id]) {
+          const d = (destinationsData || []).find((x: any) => x.id === id);
+          if (d) {
+            labels[id] = d.name;
+            if (d.country_id) countryOf[id] = d.country_id;
+          }
+        }
+      }
+      let resorts = prev.resorts;
+      if (removed.length) {
+        resorts = prev.resorts.filter((r) => {
+          const dest = prev.destinationOf[r];
+          return !dest || next.includes(dest);
+        });
+      }
+      return { ...prev, destinations: next, resorts, labels, countryOf };
+    });
+  };
+
+  const handleResortsChange = (next: string[]) => {
+    setForm((prev) => {
+      const labels = { ...prev.labels };
+      const countryOf = { ...prev.countryOf };
+      const destinationOf = { ...prev.destinationOf };
+      const destinations = [...prev.destinations];
+      const countries = [...prev.countries];
+      const added = next.filter((r) => !prev.resorts.includes(r));
+      for (const id of added) {
+        const r = (resortsData || []).find((x: any) => x.id === id);
+        if (!r) continue;
+        labels[id] = r.name;
+        if (r.destination_id) {
+          destinationOf[id] = r.destination_id;
+          if (!destinations.includes(r.destination_id)) {
+            destinations.push(r.destination_id);
+            if (r.destination_name) labels[r.destination_id] = r.destination_name;
+          }
+          if (r.country_id) countryOf[r.destination_id] = r.country_id;
+        }
+        if (r.country_id) {
+          countryOf[id] = r.country_id;
+          if (!countries.includes(r.country_id)) countries.push(r.country_id);
+        }
+      }
+      return { ...prev, resorts: next, destinations, countries, labels, countryOf, destinationOf };
+    });
+  };
+
+  // Departure airport options: country-filtered when countries selected, else UK default list
+  const airportOptions = form.countries.length > 0
+    ? (countryAirportsData || []).map((a) => ({ value: a.id, label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}` }))
+    : getDepartureAirportOptions(airportsData);
+  const airportLabels = airportOptions.reduce<Record<string, string>>((acc, o) => {
+    acc[o.value] = o.label;
+    return acc;
+  }, { ...form.labels });
 
   const canProceed = () => {
     if (step === 0) return form.enquiryTitle.trim() !== "" && form.holidayType !== "";
@@ -278,7 +421,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         flexible_date: form.flexibleOnDate || undefined,
         weekend_lodge: form.weekendLodge || undefined,
         accomodation_type_id: form.accommodationType || undefined,
-        destinations: form.destination ? [form.destination] : undefined,
+        destinations: form.destinations.length ? form.destinations : undefined,
       });
     } else if (holidayTypeName === "Cruise Package") {
       Object.assign(base, {
@@ -294,7 +437,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         pre_cruise_stay: form.preCruiseStayDays ? parseInt(form.preCruiseStayDays) : undefined,
         post_cruise_stay: form.postCruiseStayDays ? parseInt(form.postCruiseStayDays) : undefined,
         destinations: form.cruiseDestination ? [form.cruiseDestination] : undefined,
-        departureAirports: form.departureAirport ? [form.departureAirport] : undefined,
+        departureAirports: form.departureAirports.length ? form.departureAirports : undefined,
       });
     } else {
       Object.assign(base, {
@@ -307,10 +450,10 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         budget_type: form.budgetType || undefined,
         accom_min_star_rating: form.starRating || undefined,
         flexibility_date: form.flexibility || undefined,
-        destinations: form.destination ? [form.destination] : undefined,
-        resorts: form.resort ? [form.resort] : undefined,
-        boardBases: form.boardBasis ? [form.boardBasis] : undefined,
-        departureAirports: form.departureAirport ? [form.departureAirport] : undefined,
+        destinations: form.destinations.length ? form.destinations : undefined,
+        resorts: form.resorts.length ? form.resorts : undefined,
+        boardBases: form.boardBases.length ? form.boardBases : undefined,
+        departureAirports: form.departureAirports.length ? form.departureAirports : undefined,
       });
     }
 
@@ -428,14 +571,11 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                         </Select>
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Destination</Label>
-                        <SearchableSelect
-                          value={form.destination}
-                          onValueChange={(v) => {
-                            const label = (allDestinationsData || []).find((d: any) => d.id === v)?.name || "";
-                            setForm((prev) => ({ ...prev, destination: v, destinationLabel: label }));
-                          }}
-                          selectedLabel={form.destinationLabel}
+                        <Label className="text-xs font-medium text-black/60">Destinations</Label>
+                        <MultiSearchableSelect
+                          value={form.destinations}
+                          onValueChange={handleDestinationsChange}
+                          selectedLabels={form.labels}
                           options={(allDestinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
                           placeholder="Search destinations..."
                           searchPlaceholder="Search destinations..."
@@ -454,9 +594,9 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                           value={form.cruiseDestination}
                           onValueChange={(v) => {
                             const label = (allDestinationsData || []).find((d: any) => d.id === v)?.name || "";
-                            setForm((prev) => ({ ...prev, cruiseDestination: v, destinationLabel: label }));
+                            setForm((prev) => ({ ...prev, cruiseDestination: v, labels: { ...prev.labels, [v]: label } }));
                           }}
-                          selectedLabel={form.destinationLabel}
+                          selectedLabel={form.labels[form.cruiseDestination]}
                           options={(allDestinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
                           placeholder="Search destinations..."
                           searchPlaceholder="Search destinations..."
@@ -507,40 +647,39 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                   {!isHotTub && !isCruise && (
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Country</Label>
-                        <SearchableSelect
-                          value={form.country}
-                          onValueChange={(v) => setForm(prev => ({ ...prev, country: v, destination: "", resort: "", destinationLabel: "" }))}
+                        <Label className="text-xs font-medium text-black/60">Countries</Label>
+                        <MultiSearchableSelect
+                          value={form.countries}
+                          onValueChange={handleCountriesChange}
                           options={(countriesData || []).map((c: any) => ({ value: c.id, label: c.country_name }))}
-                          placeholder="Select country..."
+                          placeholder="Select countries..."
                           searchPlaceholder="Search countries..."
                           emptyMessage="No countries found."
                           data-testid="select-enquiry-country"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Destination</Label>
-                        <SearchableSelect
-                          value={form.destination}
-                          onValueChange={(v) => {
-                            const label = (destinationsData || []).find((d: any) => d.id === v)?.name || "";
-                            setForm((prev) => ({ ...prev, destination: v, resort: "", destinationLabel: label }));
-                          }}
-                          selectedLabel={form.destinationLabel}
+                        <Label className="text-xs font-medium text-black/60">Destinations</Label>
+                        <MultiSearchableSelect
+                          value={form.destinations}
+                          onValueChange={handleDestinationsChange}
+                          selectedLabels={form.labels}
                           options={(destinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
-                          placeholder={form.country ? "Select destination..." : "Select country first"}
+                          placeholder="Select destinations..."
                           searchPlaceholder="Search destinations..."
                           emptyMessage="No destinations found."
                           data-testid="select-enquiry-destination"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Resort</Label>
-                        <SearchableSelect
-                          value={form.resort}
-                          onValueChange={(v) => set("resort", v)}
+                        <Label className="text-xs font-medium text-black/60">Resorts</Label>
+                        <MultiSearchableSelect
+                          value={form.resorts}
+                          onValueChange={handleResortsChange}
+                          selectedLabels={form.labels}
                           options={(resortsData || []).map((r: any) => ({ value: r.id, label: r.name }))}
-                          placeholder={form.destination ? "Select resort..." : "Select destination first"}
+                          onSearch={setResortSearch}
+                          placeholder="Search resorts..."
                           searchPlaceholder="Search resorts..."
                           emptyMessage="No resorts found."
                           data-testid="select-enquiry-resort"
@@ -755,19 +894,17 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
               {step === 1 && !isHotTub && !isCruise && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Departure Airport</Label>
-                    <Select value={form.departureAirport} onValueChange={(v) => set("departureAirport", v)}>
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="input-departure-airport">
-                        <SelectValue placeholder="Select airport..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getDepartureAirportOptions(airportsData).map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-xs font-medium text-black/60">Departure Airports</Label>
+                    <MultiSearchableSelect
+                      value={form.departureAirports}
+                      onValueChange={(v) => set("departureAirports", v)}
+                      selectedLabels={airportLabels}
+                      options={airportOptions}
+                      placeholder="Select airports..."
+                      searchPlaceholder="Search airports..."
+                      emptyMessage="No airports found."
+                      data-testid="input-departure-airport"
+                    />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
@@ -1017,16 +1154,15 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Board Basis</Label>
-                    <Select value={form.boardBasis} onValueChange={(v) => set("boardBasis", v)}>
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-board-basis">
-                        <SelectValue placeholder="Select board basis..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(boardBasisData || []).map((b: any) => (
-                          <SelectItem key={b.id} value={b.id}>{b.type}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <MultiSearchableSelect
+                      value={form.boardBases}
+                      onValueChange={(v) => set("boardBases", v)}
+                      options={(boardBasisData || []).map((b: any) => ({ value: b.id, label: b.type }))}
+                      placeholder="Select board basis..."
+                      searchPlaceholder="Search board basis..."
+                      emptyMessage="No board basis found."
+                      data-testid="select-board-basis"
+                    />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">

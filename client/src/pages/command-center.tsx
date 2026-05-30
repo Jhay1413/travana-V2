@@ -530,13 +530,12 @@ function ShellNav({
     ];
 
     const base: NavItem[] = [
-      { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+      { key: "overview", label: "Dashboard", icon: <LayoutGrid className="h-4 w-4" /> },
       { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
       { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, badge: openTicketCount },
       { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
       { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
       { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" />, route: "/destination-guru" },
-      { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
       { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
     ];
 
@@ -549,7 +548,7 @@ function ShellNav({
             label: "Admin",
             icon: <Shield className="h-4 w-4" />,
             items: [
-              { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+              { key: "overview", label: "Admin Dashboard", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
               { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
               { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
@@ -570,14 +569,13 @@ function ShellNav({
             label: "Agent Tools",
             icon: <Users className="h-4 w-4" />,
             items: [
-              { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+              { key: "agent-overview", label: "Agent Dashboard", icon: <LayoutGrid className="h-4 w-4" /> },
               { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
               { key: "tickets", label: "Tickets", icon: <LifeBuoy className="h-4 w-4" />, badge: openTicketCount },
               { key: "connect-internal-chat", label: "Live Chat", icon: <MessageSquare className="h-4 w-4" />, badge: unreadChatCount },
               { key: "social-posts", label: "Social Posts", icon: <Share2 className="h-4 w-4" /> },
               { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" />, route: "/destination-guru" },
               { key: "sms-center", label: "Texts", icon: <MessageSquare className="h-4 w-4" />, route: "/sms-center" },
-              { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
               { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },
             ] as NavItem[],
           },
@@ -588,7 +586,7 @@ function ShellNav({
 
     if (role === "Manager") {
       return { grouped: false as const, items: [
-        { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+        { key: "overview", label: "Dashboard", icon: <LayoutGrid className="h-4 w-4" /> },
         { key: "team", label: "Team Pipeline", icon: <BarChart3 className="h-4 w-4" /> },
         { key: "coverage", label: "Coverage", icon: <Compass className="h-4 w-4" /> },
         { key: "coaching", label: "Coaching", icon: <BadgeCheck className="h-4 w-4" /> },
@@ -1344,8 +1342,8 @@ function TopBar({
   
   const title = useMemo(() => {
     const map: Record<string, string> = {
-      overview: "Overview",
-      "agent-overview": "Overview",
+      overview: "Dashboard",
+      "agent-overview": "Agent Dashboard",
       clients: "Clients",
       enquiries: "Enquiries",
       quotes: "Quotes",
@@ -1430,16 +1428,18 @@ function TopBar({
               className="h-10 rounded-2xl border-black/10 bg-black/5 pl-10 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/45"
               data-testid="input-search"
             />
-            {showSearchResults && query.trim() && globalSearchData && (globalSearchData.clients.length > 0 || globalSearchData.quotes.length > 0 || globalSearchData.bookings.length > 0) && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden max-h-[420px] overflow-y-auto">
-                {globalSearchData.clients.length > 0 && (
+            {(() => {
+              const clientsFlat = globalSearchData?.pages.flatMap((p) => p.clients) ?? [];
+              if (!(showSearchResults && query.trim() && clientsFlat.length > 0)) return null;
+              return (
+                <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] overflow-hidden max-h-[420px] overflow-y-auto">
                   <div>
                     <div className="flex items-center gap-2 px-4 py-2 bg-black/[0.03] dark:bg-white/[0.03] border-b border-black/5 dark:border-white/5">
                       <Users className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Clients</span>
-                      <span className="text-[10px] text-muted-foreground/60">({globalSearchData.clients.length})</span>
+                      <span className="text-[10px] text-muted-foreground/60">({clientsFlat.length})</span>
                     </div>
-                    {globalSearchData.clients.map((c) => (
+                    {clientsFlat.map((c) => (
                       <button key={c.id} onClick={() => { navigate(`/clients/${c.id}`); setShowSearchResults(false); onQuery(""); }} className="w-full px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors" data-testid={`search-result-${c.id}`}>
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
@@ -1451,60 +1451,13 @@ function TopBar({
                       </button>
                     ))}
                   </div>
-                )}
-                {globalSearchData.quotes.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-black/[0.03] dark:bg-white/[0.03] border-b border-black/5 dark:border-white/5">
-                      <Compass className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Quotes</span>
-                      <span className="text-[10px] text-muted-foreground/60">({globalSearchData.quotes.length})</span>
-                    </div>
-                    {globalSearchData.quotes.map((q) => {
-                      const dest = q.destination || q.country || q.holidayType || "Quote";
-                      const price = q.salesPrice ? `£${parseFloat(q.salesPrice).toLocaleString("en-GB")}` : "";
-                      const date = q.travelDate ? new Date(q.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
-                      return (
-                        <button key={q.id} onClick={() => { navigate(q.clientId ? `/clients/${q.clientId}/quotes/${q.id}` : `/quotes/${q.id}`); setShowSearchResults(false); onQuery(""); }} className="w-full px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors" data-testid={`search-result-quote-${q.id}`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-sm truncate">{dest}{q.clientName ? ` — ${q.clientName}` : ""}</div>
-                              <div className="text-xs text-black/50 dark:text-white/50 truncate mt-0.5">{[q.accommodation, price, date].filter(Boolean).join(" · ")}</div>
-                            </div>
-                            <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-medium bg-amber-500/10 text-amber-600 border-amber-500/30">Quote</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {globalSearchData.bookings.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-black/[0.03] dark:bg-white/[0.03] border-b border-black/5 dark:border-white/5">
-                      <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Bookings</span>
-                      <span className="text-[10px] text-muted-foreground/60">({globalSearchData.bookings.length})</span>
-                    </div>
-                    {globalSearchData.bookings.map((b) => {
-                      const dest = b.destination || b.country || b.holidayType || "Booking";
-                      const price = b.salesPrice ? `£${parseFloat(b.salesPrice).toLocaleString("en-GB")}` : "";
-                      const date = b.travelDate ? new Date(b.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
-                      return (
-                        <button key={b.id} onClick={() => { navigate(b.clientId ? `/clients/${b.clientId}/bookings/${b.id}` : `/bookings/${b.id}`); setShowSearchResults(false); onQuery(""); }} className="w-full px-4 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5 last:border-b-0 transition-colors" data-testid={`search-result-booking-${b.id}`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-sm truncate">{dest}{b.clientName ? ` — ${b.clientName}` : ""}</div>
-                              <div className="text-xs text-black/50 dark:text-white/50 truncate mt-0.5">{[b.haysRef && `Ref: ${b.haysRef}`, b.accommodation, price, date].filter(Boolean).join(" · ")}</div>
-                            </div>
-                            <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-medium bg-emerald-500/10 text-emerald-600 border-emerald-500/30">Booking</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-            {showSearchResults && query.trim() && debouncedQuery && globalSearchData && globalSearchData.clients.length === 0 && globalSearchData.quotes.length === 0 && globalSearchData.bookings.length === 0 && (
+                </div>
+              );
+            })()}
+            {(() => {
+              const clientsFlat = globalSearchData?.pages.flatMap((p) => p.clients) ?? [];
+              return showSearchResults && query.trim() && debouncedQuery && globalSearchData?.pages.length && clientsFlat.length === 0;
+            })() && (
               <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] p-4">
                 <p className="text-center text-sm text-black/50 dark:text-white/50 mb-3">
                   No results found for "{query}"
@@ -2803,7 +2756,7 @@ export default function CommandCenterPage() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
                 <div className="text-sm font-medium" data-testid="text-overview-title">
-                  Overview
+                  Agent Dashboard
                 </div>
                 <div className="text-xs text-muted-foreground" data-testid="text-overview-subtitle">
                   Your dashboard at a glance.
@@ -7157,7 +7110,7 @@ export default function CommandCenterPage() {
         {
           groupLabel: "Admin",
           items: [
-            { key: "overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
+            { key: "overview", label: "Admin Dashboard", icon: <LayoutGrid className="h-4 w-4" /> },
             { key: "org", label: "Organisation", icon: <Building2 className="h-4 w-4" /> },
             { key: "users", label: "Users & Roles", icon: <Shield className="h-4 w-4" /> },
             { key: "audit", label: "Audit", icon: <Activity className="h-4 w-4" /> },
@@ -7170,8 +7123,7 @@ export default function CommandCenterPage() {
         {
           groupLabel: "Agent Tools",
           items: [
-            { key: "agent-overview", label: "Overview", icon: <LayoutGrid className="h-4 w-4" /> },
-            { key: "clients", label: "Clients", icon: <Users className="h-4 w-4" /> },
+            { key: "agent-overview", label: "Agent Dashboard", icon: <LayoutGrid className="h-4 w-4" /> },
             { key: "pipeline", label: "Pipeline", icon: <TrendingUp className="h-4 w-4" /> },
             { key: "destination-guru", label: "Destination Guru", icon: <Sparkles className="h-4 w-4" />, route: "/destination-guru" },
             { key: "opportunities", label: "Opportunities", icon: <Target className="h-4 w-4" /> },

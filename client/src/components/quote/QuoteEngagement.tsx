@@ -66,6 +66,7 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
   const { data: viewStats, isLoading: viewsLoading } = useQuoteViews(quoteId);
   const { data: actions, isLoading: actionsLoading } = useQuoteCustomerActions(quoteId);
   const [showPublicHistory, setShowPublicHistory] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   const isLoading = viewsLoading || actionsLoading;
   const clientViews: QuoteClientViewEntry[] = viewStats?.clientViews ?? [];
@@ -73,10 +74,11 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
   const publicViewCount = viewStats?.publicViewCount ?? 0;
   const uniqueViews = viewStats?.uniqueViews ?? 0;
   const hasData = clientViews.length > 0 || publicViewCount > 0 || (actions && actions.length > 0);
+  const totalViews = clientViews.length + publicViewCount;
 
   if (isLoading) {
     return (
-      <Card className="rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-engagement">
+      <Card className="rounded-3xl border-black/10 bg-white/70 p-3" data-testid="card-quote-engagement">
         <div className="flex items-center gap-2 mb-3">
           <Eye className="h-4 w-4 text-black/50" />
           <h3 className="text-sm font-semibold">Quote Engagement</h3>
@@ -90,7 +92,7 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
 
   if (!hasData) {
     return (
-      <Card className="rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-engagement">
+      <Card className="rounded-3xl border-black/10 bg-white/70 p-3" data-testid="card-quote-engagement">
         <div className="flex items-center gap-2 mb-3">
           <Eye className="h-4 w-4 text-black/50" />
           <h3 className="text-sm font-semibold">Quote Engagement</h3>
@@ -103,153 +105,177 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
   }
 
   return (
-    <Card className="rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-engagement">
-      <div className="flex items-center gap-2 mb-3">
-        <Eye className="h-4 w-4 text-black/50" />
-        <h3 className="text-sm font-semibold">Quote Engagement</h3>
-      </div>
-
-      {/* ── Client Views ─────────────────────────────────────────── */}
-      {clientViews.length > 0 && (
-        <div className="mb-3" data-testid="section-client-views">
-          <div className="flex items-center gap-1.5 mb-2">
-            <User className="h-3 w-3 text-violet-500" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
-              Client Views
-            </span>
-          </div>
-          <div className="space-y-1.5">
-            {clientViews.map((v) => {
-              const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
-              return (
-                <div
-                  key={v.id}
-                  className="flex items-start gap-2 rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2"
-                  data-testid={`client-view-${v.id}`}
-                >
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-[9px] font-bold mt-0.5">
-                    {v.viewerName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium text-black/80">
-                      {v.viewerName}
-                    </span>
-                    <span className="text-xs text-black/50"> viewed this quote</span>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <IconComp className="h-2.5 w-2.5 text-black/30" />
-                      <span className="text-[10px] text-black/40">{formatDateTime(v.viewedAt)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+    <Card className="rounded-3xl border-black/10 bg-white/70 p-3 my-4" data-testid="card-quote-engagement">
+      <button
+        type="button"
+        onClick={() => setCollapsed((v) => !v)}
+        className="flex w-full items-center justify-between gap-2"
+        data-testid="btn-toggle-engagement"
+        aria-expanded={!collapsed}
+      >
+        <div className="flex items-center gap-2">
+          <Eye className="h-4 w-4 text-black/50" />
+          <h3 className="text-sm font-semibold">Quote Engagement</h3>
         </div>
-      )}
-
-      {/* ── Public Views ─────────────────────────────────────────── */}
-      {publicViewCount > 0 && (
-        <div className="mb-3" data-testid="section-public-views">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Globe className="h-3 w-3 text-blue-500" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
-              Public Views
+        <div className="flex items-center gap-2">
+          {collapsed && (
+            <span className="text-xs font-medium text-black/60" data-testid="text-total-views-summary">
+              Viewed {totalViews} {totalViews === 1 ? "time" : "times"}
             </span>
-          </div>
-
-          <div className="flex items-center justify-between rounded-xl border border-black/5 bg-blue-50/30 px-3 py-2 mb-2">
-            <div className="flex items-center gap-2">
-              <Eye className="h-3.5 w-3.5 text-blue-600" />
-              <span className="text-xs font-medium" data-testid="text-public-view-count">
-                Viewed {publicViewCount} {publicViewCount === 1 ? "time" : "times"}
-              </span>
-              {uniqueViews > 0 && (
-                <span className="text-[10px] text-black/40" data-testid="text-unique-views">
-                  · {uniqueViews} unique {uniqueViews === 1 ? "visitor" : "visitors"}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {publicViews.length > 0 && (
-            <>
-              <button
-                type="button"
-                onClick={() => setShowPublicHistory(!showPublicHistory)}
-                className="inline-flex items-center gap-1 text-[10px] font-medium text-black/50 hover:text-black/70 transition"
-                data-testid="btn-toggle-public-history"
-              >
-                {showPublicHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                {showPublicHistory ? "Hide" : "Show"} view history
-              </button>
-
-              {showPublicHistory && (
-                <div className="mt-2 space-y-1 max-h-40 overflow-y-auto" data-testid="public-history-list">
-                  {publicViews.map((v) => {
-                    const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
-                    return (
-                      <div
-                        key={v.id}
-                        className="flex items-center gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5"
-                        data-testid={`public-view-${v.id}`}
-                      >
-                        <IconComp className="h-3 w-3 shrink-0 text-black/30" />
-                        <span className="text-[10px] text-black/60 flex-1">
-                          {v.browser || "Unknown browser"}
-                          {v.deviceType && v.deviceType !== "desktop" && (
-                            <span className="text-black/40"> · {v.deviceType}</span>
-                          )}
-                        </span>
-                        <span className="text-[10px] text-black/40 shrink-0">
-                          {formatTimeAgo(v.viewedAt)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
+          )}
+          {collapsed ? (
+            <ChevronDown className="h-4 w-4 text-black/40" />
+          ) : (
+            <ChevronUp className="h-4 w-4 text-black/40" />
           )}
         </div>
-      )}
+      </button>
 
-      {/* ── Customer Responses ───────────────────────────────────── */}
-      {actions && actions.length > 0 && (
-        <div className="space-y-2" data-testid="section-customer-actions">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
-            Customer Responses
-          </div>
-          {actions.map((action: any) => (
-            <div
-              key={action.id}
-              className={`rounded-xl border px-3 py-2 ${
-                action.actionType === "accepted"
-                  ? "border-green-200 bg-green-50/50"
-                  : "border-amber-200 bg-amber-50/50"
-              }`}
-              data-testid={`action-${action.id}`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                {action.actionType === "accepted" ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                ) : (
-                  <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
-                )}
-                <span className="text-xs font-semibold">
-                  {action.actionType === "accepted" ? "Wants to Book" : "Changes Requested"}
-                </span>
-                <span className="ml-auto text-[10px] text-black/40">
-                  {formatTimeAgo(action.createdAt)}
+      {!collapsed && (
+        <div className="mt-3">
+          {/* ── Client Views ─────────────────────────────────────────── */}
+          {clientViews.length > 0 && (
+            <div className="mb-3" data-testid="section-client-views">
+              <div className="flex items-center gap-1.5 mb-2">
+                <User className="h-3 w-3 text-violet-500" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
+                  Client Views
                 </span>
               </div>
-              {action.customerName && (
-                <p className="text-[10px] text-black/50">From: {action.customerName}</p>
-              )}
-              {action.message && (
-                <p className="mt-1 text-xs text-black/70 italic">"{action.message}"</p>
+              <div className="space-y-1.5">
+                {clientViews.map((v) => {
+                  const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
+                  return (
+                    <div
+                      key={v.id}
+                      className="flex items-start gap-2 rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2"
+                      data-testid={`client-view-${v.id}`}
+                    >
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-[9px] font-bold mt-0.5">
+                        {v.viewerName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-medium text-black/80">
+                          {v.viewerName}
+                        </span>
+                        <span className="text-xs text-black/50"> viewed this quote</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <IconComp className="h-2.5 w-2.5 text-black/30" />
+                          <span className="text-[10px] text-black/40">{formatDateTime(v.viewedAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Public Views ─────────────────────────────────────────── */}
+          {publicViewCount > 0 && (
+            <div className="mb-3" data-testid="section-public-views">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Globe className="h-3 w-3 text-blue-500" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
+                  Public Views
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-black/5 bg-blue-50/30 px-3 py-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <Eye className="h-3.5 w-3.5 text-blue-600" />
+                  <span className="text-xs font-medium" data-testid="text-public-view-count">
+                    Viewed {publicViewCount} {publicViewCount === 1 ? "time" : "times"}
+                  </span>
+                  {uniqueViews > 0 && (
+                    <span className="text-[10px] text-black/40" data-testid="text-unique-views">
+                      · {uniqueViews} unique {uniqueViews === 1 ? "visitor" : "visitors"}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {publicViews.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowPublicHistory(!showPublicHistory)}
+                    className="inline-flex items-center gap-1 text-[10px] font-medium text-black/50 hover:text-black/70 transition"
+                    data-testid="btn-toggle-public-history"
+                  >
+                    {showPublicHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {showPublicHistory ? "Hide" : "Show"} view history
+                  </button>
+
+                  {showPublicHistory && (
+                    <div className="mt-2 space-y-1 max-h-40 overflow-y-auto" data-testid="public-history-list">
+                      {publicViews.map((v) => {
+                        const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
+                        return (
+                          <div
+                            key={v.id}
+                            className="flex items-center gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5"
+                            data-testid={`public-view-${v.id}`}
+                          >
+                            <IconComp className="h-3 w-3 shrink-0 text-black/30" />
+                            <span className="text-[10px] text-black/60 flex-1">
+                              {v.browser || "Unknown browser"}
+                              {v.deviceType && v.deviceType !== "desktop" && (
+                                <span className="text-black/40"> · {v.deviceType}</span>
+                              )}
+                            </span>
+                            <span className="text-[10px] text-black/40 shrink-0">
+                              {formatTimeAgo(v.viewedAt)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </div>
-          ))}
+          )}
+
+          {/* ── Customer Responses ───────────────────────────────────── */}
+          {actions && actions.length > 0 && (
+            <div className="space-y-2" data-testid="section-customer-actions">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-black/40">
+                Customer Responses
+              </div>
+              {actions.map((action: any) => (
+                <div
+                  key={action.id}
+                  className={`rounded-xl border px-3 py-2 ${
+                    action.actionType === "accepted"
+                      ? "border-green-200 bg-green-50/50"
+                      : "border-amber-200 bg-amber-50/50"
+                  }`}
+                  data-testid={`action-${action.id}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {action.actionType === "accepted" ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                    ) : (
+                      <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                    )}
+                    <span className="text-xs font-semibold">
+                      {action.actionType === "accepted" ? "Wants to Book" : "Changes Requested"}
+                    </span>
+                    <span className="ml-auto text-[10px] text-black/40">
+                      {formatTimeAgo(action.createdAt)}
+                    </span>
+                  </div>
+                  {action.customerName && (
+                    <p className="text-[10px] text-black/50">From: {action.customerName}</p>
+                  )}
+                  {action.message && (
+                    <p className="mt-1 text-xs text-black/70 italic">"{action.message}"</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </Card>

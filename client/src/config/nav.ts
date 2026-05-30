@@ -38,22 +38,25 @@ export type NavSection = {
   id: string;
   label?: string;
   icon?: LucideIcon;
-  items: NavItem[];
+  items: Array<NavItem | NavSection>;
 };
 
 export type NavConfig = NavSection[];
+
+export function isNavItem(entry: NavItem | NavSection): entry is NavItem {
+  return "path" in entry;
+}
 
 const AGENT_NAV: NavConfig = [
   {
     id: "main",
     items: [
-      { path: "/agent-overview", label: "Overview", icon: LayoutGrid },
+      { path: "/agent-overview", label: "Agent Dashboard", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/tickets", label: "Tickets", icon: LifeBuoy },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
       { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
-      { path: "/clients", label: "Clients", icon: Users },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/my-profile", label: "My Profile", icon: UserCircle },
     ],
@@ -82,7 +85,7 @@ const ORG_ADMIN_NAV: NavConfig = [
   {
     id: "overview",
     items: [
-      { path: "/agency/overview", label: "Overview", icon: LayoutGrid },
+      { path: "/agency/overview", label: "Admin Dashboard", icon: LayoutGrid },
     ],
   },
   {
@@ -103,7 +106,7 @@ const ORG_ADMIN_NAV: NavConfig = [
     items: [
       { path: "/agency/targets", label: "Targets", icon: Target },
       { path: "/agency/forwards", label: "Forwards", icon: Forward },
-      { path: "/agency/leaderboard", label: "Leaderboard", icon: Trophy },
+      { path: "/agency/leaderboard", label: "Leader Board", icon: Trophy },
     ],
   },
   {
@@ -187,10 +190,11 @@ const ROLE_GROUP_META: Record<OrgRole, { label: string; icon: LucideIcon }> = {
  *
  * - Single role: returns that role's nav as-is (existing layout preserved).
  * - Multiple roles: each role becomes ONE top-level collapsible group
- *   (e.g. "Admin", "Agent") containing every item from that role's nav,
- *   flattened from any sub-sections. Each group is self-contained — items
- *   are NOT deduped across groups, so e.g. an agent who is also a branch
- *   manager still sees Pipeline/Tickets/etc. under the Agent dropdown.
+ *   (e.g. "Admin", "Agent"). Inside each group, the role's labelled
+ *   sub-sections (e.g. Organisation, Sales) are preserved as nested
+ *   collapsibles; unlabelled sections are flattened to loose items at
+ *   the top of the group. Each group is self-contained — items are NOT
+ *   deduped across groups.
  */
 export function getNavForRoles(roles: OrgRole[] | null | undefined): NavConfig {
   if (!roles || roles.length === 0) return AGENT_NAV;
@@ -201,7 +205,14 @@ export function getNavForRoles(roles: OrgRole[] | null | undefined): NavConfig {
 
   for (const role of ordered) {
     const cfg = NAV_BY_ROLE[role] ?? [];
-    const items: NavItem[] = cfg.flatMap((section) => section.items);
+    const items: Array<NavItem | NavSection> = [];
+    for (const section of cfg) {
+      if (section.label) {
+        items.push(section);
+      } else {
+        items.push(...section.items);
+      }
+    }
     if (items.length === 0) continue;
 
     const meta = ROLE_GROUP_META[role];

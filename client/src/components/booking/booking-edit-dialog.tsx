@@ -8,7 +8,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
-import { useUpdateBooking } from "@/hooks/mutations";
+import { useUpdateBooking, useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage } from "@/hooks/mutations";
 import { useBooking, usePackageTypes } from "@/hooks/queries";
 import { BookingRHFForm } from "./booking-rhf-form";
 import { defaultBookingFormValues } from "@/types/booking";
@@ -373,20 +373,61 @@ export function BookingEditDialog({
 }: BookingUpdateDialogProps) {
   const { toast } = useToast();
   const updateBooking = useUpdateBooking();
+  const uploadImages = useUploadBookingImages();
+  const addImageUrls = useAddBookingImageUrls();
+  const deleteImage = useDeleteBookingImage();
   const { data: packageTypesData } = usePackageTypes();
   const { data: bookingData, isLoading, isError } = useBooking(bookingId);
   const defaultValues = bookingData ? buildDefaultValues(bookingData) : undefined;
   const initialExtraAccomLabels = (bookingData?.accommodations || [])
     .filter((a: any) => !a.is_primary)
     .map((a: any) => a.accomodation_name || "");
+  const existingImages = ((bookingData as any)?.images || []).map((img: any) => ({ id: img.id, url: img.image_url }));
 
-  const handleSubmit = async (values: BookingFormValues) => {
+  const handleSubmit = async (
+    values: BookingFormValues,
+    images?: { files: File[]; urls: string[]; deletedImageIds: string[] }
+  ) => {
     const payload = buildUpdatePayload(values, packageTypesData);
+    const imageFiles = images?.files || [];
+    const imageUrls = images?.urls || [];
+    const deletedImageIds = images?.deletedImageIds || [];
+
     updateBooking.mutate(
       { id: bookingId, data: payload as any },
       {
         onSuccess: async () => {
-          toast({ title: "Booking updated", description: "Changes saved successfully." });
+          let imageUploadFailed = false;
+
+          if (deletedImageIds.length > 0) {
+            await Promise.allSettled(
+              deletedImageIds.map((imageId) => deleteImage.mutateAsync({ bookingId, imageId }))
+            );
+          }
+
+          if (imageFiles.length > 0) {
+            try {
+              await uploadImages.mutateAsync({ bookingId, files: imageFiles });
+            } catch {
+              imageUploadFailed = true;
+            }
+          }
+
+          if (imageUrls.length > 0) {
+            try {
+              await addImageUrls.mutateAsync({ bookingId, urls: imageUrls });
+            } catch {
+              imageUploadFailed = true;
+            }
+          }
+
+          toast({
+            title: "Booking updated",
+            description: imageUploadFailed
+              ? "Changes saved, but some images failed to upload."
+              : "Changes saved successfully.",
+            variant: imageUploadFailed ? "destructive" : "default",
+          });
           onOpenChange(false);
           onSuccess?.();
         },
@@ -428,6 +469,7 @@ export function BookingEditDialog({
                 key={bookingId + open}
                 defaultValues={defaultValues}
                 initialExtraAccomLabels={initialExtraAccomLabels}
+                existingImages={existingImages}
                 onSubmit={handleSubmit}
                 isLoading={updateBooking.isPending}
                 submitLabel="Save Changes"

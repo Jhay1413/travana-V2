@@ -390,6 +390,17 @@ export const quotePublicRepository = {
     return result?.userId || null;
   },
 
+  async getTransactionAndAgentByQuoteId(quoteId: string): Promise<{ transactionId: string; agentUserId: string | null } | null> {
+    const [result] = await db
+      .select({ transactionId: transaction.id, agentUserId: transaction.user_id })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(eq(quote.id, quoteId))
+      .limit(1);
+    if (!result) return null;
+    return { transactionId: result.transactionId, agentUserId: result.agentUserId };
+  },
+
   async notifyAgent(quoteId: string, title: string, message: string, link?: string) {
     const agentUserId = await this.getAgentUserIdByQuoteId(quoteId);
     if (!agentUserId) return;

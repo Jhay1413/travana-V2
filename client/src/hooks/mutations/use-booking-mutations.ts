@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { bookingApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
-import { bookingKeys, transactionKeys, quoteKeys } from "@/hooks/queries";
+import { bookingKeys, transactionKeys, quoteKeys, dashboardKeys } from "@/hooks/queries";
 import type { Booking } from "@/types/quote";
 
 export function useConvertToBooking() {
@@ -13,6 +13,7 @@ export function useConvertToBooking() {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -25,6 +26,7 @@ export function useUpdateBooking() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -36,6 +38,7 @@ export function useDeleteBooking() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -48,6 +51,7 @@ export function useAdminDeleteBooking() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }

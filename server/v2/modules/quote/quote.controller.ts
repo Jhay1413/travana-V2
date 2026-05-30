@@ -260,4 +260,12 @@ export const quoteController = {
     });
     res.json({ success: true, sent });
   }),
+
+  listRecentClientEngagement: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const limitRaw = Number.parseInt((req.query.limit as string) ?? "10", 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 50) : 10;
+    const rows = await newQuoteService.getRecentClientEngagement(scope, limit);
+    return successResponse(res, rows, "Recent client engagement");
+  }),
 };

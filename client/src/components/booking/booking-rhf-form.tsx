@@ -286,6 +286,8 @@ export function BookingRHFForm({
   submitLabel = "Save",
   onCancel,
   initialExtraAccomLabels = [],
+  existingImages = [],
+  initialImageUrls = [],
   clientId,
 }: BookingRHFFormProps) {
   const form = useForm<BookingFormValues>({
@@ -293,7 +295,9 @@ export function BookingRHFForm({
     defaultValues: { ...defaultBookingFormValues, ...defaultValues },
   });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>(initialImageUrls);
+  const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
+  const [existingImagesState, setExistingImagesState] = useState<{ id: string; url: string }[]>(existingImages);
   const [destSearch, setDestSearch] = useState("");
   const [destLabel, setDestLabel] = useState("");
   const [accomSearch, setAccomSearch] = useState("");
@@ -459,7 +463,7 @@ export function BookingRHFForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit((values) => onSubmit(values, { files: imageFiles, urls: imageUrls, deletedImageIds }))} className="space-y-4">
 
         <div className="flex items-center justify-end">
           <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
@@ -660,6 +664,28 @@ export function BookingRHFForm({
                 Add images
               </Button>
             </div>
+
+            {existingImagesState.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                {existingImagesState.map((img) => (
+                  <div key={img.id} className="group relative overflow-hidden rounded-xl border border-black/10">
+                    <img src={img.url} alt="Existing image" className="h-20 w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeletedImageIds((prev) => [...prev, img.id]);
+                        setExistingImagesState((prev) => prev.filter((i) => i.id !== img.id));
+                      }}
+                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                      data-testid={`button-remove-existing-image-${img.id}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white">Saved</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {(imageFiles.length > 0 || imageUrls.length > 0) && (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">

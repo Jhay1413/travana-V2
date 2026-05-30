@@ -460,5 +460,13 @@ export const newQuoteService = {
     if (!row) throw new AppError("Quote not found", 404);
     return row;
   },
+
+  async getRecentClientEngagement(scope: ScopeOrTrusted, limit = 10) {
+    const orgId = effectiveOrgId(scope);
+    const role = (scope as Scope).orgRole;
+    const isManagerLevel = role === "platform_admin" || role === "org_admin" || role === "branch_manager";
+    const userId = isManagerLevel ? null : (scope as Scope).userId;
+    return newQuoteRepository.findRecentClientEngagement({ orgId, userId, limit });
+  },
 };
 

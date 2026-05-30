@@ -139,4 +139,30 @@ export const quoteApi = {
     const { data } = await axiosClient.get<string[]>(`/api/v2/quotes/${quoteId}/tags`);
     return data;
   },
+
+  getRecentClientEngagement: async (limit = 10): Promise<QuoteEngagementRow[]> => {
+    const { data } = await axiosClient.get<QuoteEngagementRow[]>(
+      `/api/v2/quotes/engagement/recent`,
+      { params: { limit } },
+    );
+    return data;
+  },
 };
+
+export interface QuoteEngagementView {
+  quoteId: string;
+  viewedAt: string;
+  viewerName: string | null;
+  deviceType: string | null;
+  browser: string | null;
+}
+
+export interface QuoteEngagementRow {
+  quoteId: string;
+  quoteTitle: string;
+  clientId: string | null;
+  clientName: string;
+  clientViewCount: number;
+  lastViewedAt: string;
+  views: QuoteEngagementView[];
+}

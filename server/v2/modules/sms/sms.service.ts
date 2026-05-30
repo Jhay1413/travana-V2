@@ -133,9 +133,9 @@ export async function sendSms({ to, body }: { to: string; body: string }): Promi
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
-    },
+    },                                                                                    
     body: JSON.stringify({
-      sender_id: getSenderId(),
+      sender_id: "447477234424",
       message: body,
       contact_number: toConnexaPhone(to),
     }),

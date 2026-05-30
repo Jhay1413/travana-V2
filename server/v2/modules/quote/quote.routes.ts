@@ -21,6 +21,7 @@ const upload = multer({
 });
 
 router.get("/free", quoteController.listFreeQuotes);
+router.get("/engagement/recent", quoteController.listRecentClientEngagement);
 router.get("/", quoteController.listQuotes);
 router.get("/:id", quoteController.getQuoteById);
 router.post("/social-post", upload.array("images", 50), quoteController.createSocialQuote);
