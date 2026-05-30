@@ -176,10 +176,10 @@ export function HubShell({
               onClick={() => setShowAskAi(true)}
               className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 px-3 text-white shadow-sm shadow-blue-500/30 transition-shadow hover:shadow-md hover:shadow-blue-500/40"
               data-testid="button-hub-ai-assistant"
-              aria-label="Ask Terry"
+              aria-label="Ask Luna"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              <span className="text-[11px] font-semibold leading-none">Ask Terry</span>
+              <span className="text-[11px] font-semibold leading-none">Ask Luna</span>
             </motion.button>
 
             <Button

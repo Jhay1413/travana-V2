@@ -3,6 +3,7 @@ import { useLocation, useRoute } from "wouter";
 import { ChevronLeft, Link as LinkIcon, Pin, PinOff, Share2, Sparkles } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useQuote, useClient, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
@@ -153,7 +154,7 @@ export default function QuotePage() {
 
   return (
     <>
-      <div className="px-5 pb-8 pt-5" data-testid="page-quote">
+      <div className="px-5 " data-testid="page-quote">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-quote-header">
           <div className="flex items-start gap-3">
             <Button
@@ -166,39 +167,6 @@ export default function QuotePage() {
               <ChevronLeft className="mr-2 h-4 w-4" />
               Quotes
             </Button>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-base font-semibold" data-testid="text-quote-title">
-                  {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price)}</span>
-                  <span className="text-xs font-medium text-black/55"> ({currency.format(quote.pricePerPerson)}pp)</span>
-                </div>
-                <StatusPill status={quote.status} onStatusChange={onStatusChange} />
-                {quote.isCopyQuote && (
-                  <span
-                    className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
-                    data-testid="pill-quote-copy"
-                  >
-                    Copy Quote
-                  </span>
-                )}
-
-                <QuoteExpiryPill
-                  dateExpiry={(quoteData as any)?.date_expiry}
-                  dateCreated={(quoteData as any)?.date_created}
-                  onUpdateExpiry={openExpiryDialog}
-                />
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
-                <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
-                <span className="text-black/25">•</span>
-                <span data-testid="text-quote-meta-dates">
-                  {formatUKDate(quote.travelDate)} → {formatUKDate(quote.returnDate)}
-                </span>
-                <span className="text-black/25">•</span>
-                <span data-testid="text-quote-meta-created">Created {formatUKDate(quote.createdAt)}</span>
-              </div>
-            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -229,14 +197,14 @@ export default function QuotePage() {
               onEdit={() => setShowEditDialog(true)}
               onConvert={() => setShowConvertDialog(true)}
               onDuplicate={() => setShowCopyDialog(true)}
-              onExport={() => {}}
+              onExport={() => { }}
               onDelete={openDeleteDialog}
             />
           </div>
         </div>
 
         <div className="mt-4" data-testid="layout-quote-body">
-          <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-quote-sections">
+          <div className="grid gap-3 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_340px]" data-testid="grid-quote-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
                 <div className="grid content-start gap-1.5" data-testid="col-itinerary-media">
@@ -272,9 +240,9 @@ export default function QuotePage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-3" data-testid="row-itinerary-title">
                         <div className="min-w-0" data-testid="col-itinerary-title-left">
-                          <div className="flex items-center gap-2" data-testid="text-itinerary-quote-title">
-                            <span className="truncate text-base font-semibold">{quote.quoteTitle},</span>
-                            <span className="flex items-center gap-1.5 font-semibold text-[14px] text-[#000000]" data-testid="text-itinerary-quote-summary">
+                          {/* <div className="flex items-center gap-2" data-testid="text-itinerary-quote-title">
+                            <span className="truncate text-sm font-semibold md:text-base">{quote.quoteTitle},</span>
+                            <span className="flex items-center gap-1.5 font-semibold text-xs text-[#000000] md:text-[14px]" data-testid="text-itinerary-quote-summary">
                               <span>{(() => {
                                 const start = new Date(quote.travelDate);
                                 const end = new Date(quote.returnDate);
@@ -296,46 +264,94 @@ export default function QuotePage() {
                                 </a>
                               )}
                             </span>
+                          </div> */}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-base font-semibold" data-testid="text-quote-title">
+                                {quote.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(quote.commissions.price)}</span>
+                                <span className="text-xs font-medium text-black/55"> ({currency.format(quote.pricePerPerson)}pp)</span>
+                              </div>
+                              <StatusPill status={quote.status} onStatusChange={onStatusChange} />
+                              {quote.isCopyQuote && (
+                                <span
+                                  className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
+                                  data-testid="pill-quote-copy"
+                                >
+                                  Copy Quote
+                                </span>
+                              )}
+
+                              <QuoteExpiryPill
+                                dateExpiry={(quoteData as any)?.date_expiry}
+                                dateCreated={(quoteData as any)?.date_created}
+                                onUpdateExpiry={openExpiryDialog}
+                              />
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
+                              <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
+                              <span className="text-black/25">•</span>
+                              <span data-testid="text-quote-meta-dates">
+                                {formatUKDate(quote.travelDate)} → {formatUKDate(quote.returnDate)}
+                              </span>
+                              <span className="text-black/25">•</span>
+                              <span data-testid="text-quote-meta-created">Created {formatUKDate(quote.createdAt)}</span>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={togglePin}
-                            className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${
-                              isFavorited
-                                ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15"
-                                : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"
-                            }`}
-                            data-testid="button-pin-quote"
-                          >
-                            {isFavorited ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-                            {isFavorited ? "Unpin" : "Pin"}
-                          </button>
+                        <TooltipProvider>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={togglePin}
+                                  className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isFavorited
+                                      ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15"
+                                      : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"
+                                    }`}
+                                  data-testid="button-pin-quote"
+                                  aria-label={isFavorited ? "Unpin" : "Pin"}
+                                >
+                                  {isFavorited ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="xl:hidden">{isFavorited ? "Unpin" : "Pin"}</TooltipContent>
+                            </Tooltip>
 
-                          <button
-                            type="button"
-                            onClick={openShare}
-                            className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-                            data-testid="button-share-quote"
-                          >
-                            <Share2 className="h-4 w-4" />
-                            Share Quote
-                          </button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={openShare}
+                                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+                                  data-testid="button-share-quote"
+                                  aria-label="Share Quote"
+                                >
+                                  <Share2 className="h-4 w-4" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="xl:hidden">Share Quote</TooltipContent>
+                            </Tooltip>
 
-                          <Button
-                            size="sm"
-                            className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
-                            data-testid="button-destination-guru"
-                            onClick={() => setShowGuruSheet(true)}
-                          >
-                            <Sparkles className="mr-2 h-4 w-4" />
-                            Destination Guru
-                          </Button>
-                        </div>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
+                                  data-testid="button-destination-guru"
+                                  onClick={() => setShowGuruSheet(true)}
+                                  aria-label="Destination Guru"
+                                >
+                                  <Sparkles className="xl:mr-2 h-4 w-4" />
+                                 
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="xl:hidden">Destination Guru</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipProvider>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
-                        <span className="text-sm text-black/55" data-testid="text-itinerary-location">{quote.destinationName || quote.destination}</span>
                         {quote.tags.length > 0 && (
                           <div className="flex flex-wrap items-center gap-2" data-testid="list-itinerary-tags-inline">
                             {quote.tags.map((t) => (
@@ -357,7 +373,7 @@ export default function QuotePage() {
 
                   <QuoteBookingReferences quote={quote} />
 
-                  <QuoteEngagement quoteId={quoteId}  />
+                  <QuoteEngagement quoteId={quoteId} />
 
                   <QuoteNotesSection transactionId={quote.transaction_id} />
 
@@ -366,7 +382,7 @@ export default function QuotePage() {
               </div>
             </Card>
 
-            <div className="grid gap-3" data-testid="col-quote-right">
+            <div className="grid gap-3 text-sm xl:text-base" data-testid="col-quote-right">
               <QuoteCostingsCard quote={quote} pageLabel={pageLabel} />
 
               <QuoteTasksSection quoteId={quoteId} entityType="quote" assignedUserId={quoteData?.user_id} />

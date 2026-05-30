@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, LinkIcon, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, LinkIcon, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,7 +22,6 @@ import { QuoteDeleteDialog } from "@/components/quote/QuoteDeleteDialog";
 import { QuoteTagsCard } from "@/components/quote/QuoteTagsCard";
 
 import { useBookingPin, useBookingDelete, useBookingTagEditor } from "@/components/booking/hooks";
-import { BookingActionsRow } from "@/components/booking/BookingActionsRow";
 import { BookingMediaPanel } from "@/components/booking/BookingMediaPanel";
 import { BookingItinerarySpecs } from "@/components/booking/BookingItinerarySpecs";
 import { BookingCostingsCard } from "@/components/booking/BookingCostingsCard";
@@ -115,7 +114,7 @@ export default function BookingPage() {
 
   return (
     <>
-      <div className="px-5 pb-8 pt-5" data-testid="page-booking">
+      <div className="px-5 " data-testid="page-booking">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-booking-header">
           <div className="flex items-start gap-3">
             <Button
@@ -128,41 +127,85 @@ export default function BookingPage() {
               <ChevronLeft className="mr-2 h-4 w-4" />
               Bookings
             </Button>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-base font-semibold" data-testid="text-booking-title">
-                  {booking.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(booking.pricePerPerson)}pp</span>
-                </div>
-                <span
-                  className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
-                  data-testid="pill-booking-status"
-                >
-                  Booked
-                </span>
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-booking-meta">
-                <span data-testid="text-booking-meta-destination">{booking.destinationName || booking.destination}</span>
-                <span className="text-black/25">•</span>
-                <span data-testid="text-booking-meta-dates">
-                  {formatUKDate(booking.travelDate)} → {formatUKDate(booking.returnDate)}
-                </span>
-                <span className="text-black/25">•</span>
-                <span data-testid="text-booking-meta-created">Created {formatUKDate(booking.createdAt)}</span>
-              </div>
-            </div>
           </div>
 
-          <BookingActionsRow
-            isFavorited={isFavorited}
-            onTogglePin={togglePin}
-            onCopy={() => navigator.clipboard.writeText(`${booking.quoteTitle} (${booking.id})`)}
-            onExport={() => {}}
-          />
+          <div className="flex items-center gap-2">
+            <UserReassignSelect
+              value={(bookingData as any)?.user_id || currentUser?.id || ""}
+              onValueChange={(userId) => {
+                updateTransactionMutation.mutate(
+                  { id: booking.transaction_id, data: { user_id: userId } },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "Transaction reassigned successfully" });
+                      queryClient.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
+                    },
+                    onError: () => {
+                      toast({ title: "Failed to reassign transaction", variant: "destructive" });
+                    },
+                  }
+                );
+              }}
+              data-testid="select-itinerary-owner"
+            />
+
+            <div className="relative" ref={ellipsisRef}>
+              <button
+                type="button"
+                onClick={() => setShowEllipsisMenu((v) => !v)}
+                className="grid h-9 w-9 place-items-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
+                data-testid="button-booking-ellipsis"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+              {showEllipsisMenu && (
+                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-booking-ellipsis">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                    data-testid="button-booking-pin"
+                    onClick={() => {
+                      setShowEllipsisMenu(false);
+                      togglePin();
+                    }}
+                  >
+                    {isFavorited ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                    {isFavorited ? "Unpin" : "Pin"}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                    data-testid="button-booking-edit"
+                    onClick={() => {
+                      setShowEllipsisMenu(false);
+                      setShowEditDialog(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit Booking
+                  </button>
+                  {role === "Admin" && (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-red-600 transition hover:bg-red-50"
+                      data-testid="button-booking-admin-delete"
+                      onClick={() => {
+                        setShowEllipsisMenu(false);
+                        openDeleteDialog();
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete Booking
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="mt-4" data-testid="layout-booking-body">
-          <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-booking-sections">
+          <div className="grid gap-3 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_340px]" data-testid="grid-booking-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-booking-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
                 <div className="grid content-start gap-1.5" data-testid="col-itinerary-media">
@@ -189,96 +232,43 @@ export default function BookingPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-3" data-testid="row-itinerary-title">
                         <div className="min-w-0" data-testid="col-itinerary-title-left">
-                          <div className="flex items-center gap-2" data-testid="text-itinerary-booking-title">
-                            <span className="truncate text-base font-semibold">{booking.quoteTitle},</span>
-                            <span className="flex items-center gap-1.5 font-semibold text-[14px] text-[#000000]" data-testid="text-itinerary-booking-summary">
-                              <span>{(() => {
-                                const start = new Date(booking.travelDate);
-                                const end = new Date(booking.returnDate);
-                                const nights = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-                                return `${nights} nights`;
-                              })()}</span>
-                              <span className="text-black/25">•</span>
-                              <span>{currency.format(booking.pricePerPerson)}pp</span>
-                            </span>
-                          </div>
-                          {booking.quoteLink && booking.quoteLink !== "#" && (
-                            <a
-                              href={booking.quoteLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#3b82f6] transition hover:text-[#3b82f6]/80"
-                              data-testid="link-booking-link"
-                            >
-                              <LinkIcon className="h-3 w-3" />
-                              View Booking Link
-                            </a>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <UserReassignSelect
-                            value={(bookingData as any)?.user_id || currentUser?.id || ""}
-                            onValueChange={(userId) => {
-                              updateTransactionMutation.mutate(
-                                { id: booking.transaction_id, data: { user_id: userId } },
-                                {
-                                  onSuccess: () => {
-                                    toast({ title: "Transaction reassigned successfully" });
-                                    queryClient.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
-                                  },
-                                  onError: () => {
-                                    toast({ title: "Failed to reassign transaction", variant: "destructive" });
-                                  },
-                                }
-                              );
-                            }}
-                            data-testid="select-itinerary-owner"
-                          />
-
-                          <div className="relative" ref={ellipsisRef}>
-                            <button
-                              type="button"
-                              onClick={() => setShowEllipsisMenu((v) => !v)}
-                              className="grid h-8 w-8 place-items-center rounded-full border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
-                              data-testid="button-booking-ellipsis"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                            {showEllipsisMenu && (
-                              <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-booking-ellipsis">
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                                  data-testid="button-booking-edit"
-                                  onClick={() => {
-                                    setShowEllipsisMenu(false);
-                                    setShowEditDialog(true);
-                                  }}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                  Edit Booking
-                                </button>
-                                {role === "Admin" && (
-                                  <button
-                                    type="button"
-                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-red-600 transition hover:bg-red-50"
-                                    data-testid="button-booking-admin-delete"
-                                    onClick={() => {
-                                      setShowEllipsisMenu(false);
-                                      openDeleteDialog();
-                                    }}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                    Delete Booking
-                                  </button>
-                                )}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-base font-semibold" data-testid="text-booking-title">
+                                {booking.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(booking.pricePerPerson)}pp</span>
                               </div>
+                              <span
+                                className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                                data-testid="pill-booking-status"
+                              >
+                                Booked
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-booking-meta">
+                              <span data-testid="text-booking-meta-destination">{booking.destinationName || booking.destination}</span>
+                              <span className="text-black/25">•</span>
+                              <span data-testid="text-booking-meta-dates">
+                                {formatUKDate(booking.travelDate)} → {formatUKDate(booking.returnDate)}
+                              </span>
+                              <span className="text-black/25">•</span>
+                              <span data-testid="text-booking-meta-created">Created {formatUKDate(booking.createdAt)}</span>
+                            </div>
+                            {booking.quoteLink && booking.quoteLink !== "#" && (
+                              <a
+                                href={booking.quoteLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[#3b82f6] transition hover:text-[#3b82f6]/80"
+                                data-testid="link-booking-link"
+                              >
+                                <LinkIcon className="h-3 w-3" />
+                                View Booking Link
+                              </a>
                             )}
                           </div>
                         </div>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
-                        <span className="text-sm text-black/55" data-testid="text-itinerary-location">{booking.destinationName || booking.destination}</span>
                         {booking.tags.length > 0 && (
                           <div className="flex flex-wrap items-center gap-2" data-testid="list-itinerary-tags-inline">
                             {booking.tags.map((t) => (
@@ -296,9 +286,9 @@ export default function BookingPage() {
                     </div>
                   </div>
 
-                  <QuoteBookingReferences quote={booking} />
-
                   <BookingItinerarySpecs booking={booking} />
+
+                  <QuoteBookingReferences quote={booking} />
 
                   <QuoteNotesSection transactionId={booking.transaction_id} />
 
@@ -306,7 +296,7 @@ export default function BookingPage() {
               </div>
             </Card>
 
-            <div className="grid gap-3" data-testid="col-booking-right">
+            <div className="grid gap-3 text-sm xl:text-base" data-testid="col-booking-right">
               <BookingCostingsCard booking={booking} hasReferral={!!(bookingData as any)?.hasReferral} />
 
               <QuoteTasksSection quoteId={bookingId} entityType="booking" assignedUserId={(bookingData as any)?.user_id} />

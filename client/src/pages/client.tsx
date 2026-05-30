@@ -200,7 +200,7 @@ export default function ClientPage() {
 
   return (
     <>
-      <div className="relative min-h-[calc(100vh-56px)] w-full px-2 pb-3 md:px-3 md:pb-4">
+      <div className="relative min-h-[calc(100vh-56px)] w-full ">
         <div className="relative mt-2 grid gap-2 lg:grid-cols-12" data-testid="layout-client-page">
           <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-3 lg:col-span-4">
             <div className="flex items-center justify-between gap-3">

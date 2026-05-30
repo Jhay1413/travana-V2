@@ -514,7 +514,7 @@ export function AppSidenav() {
     <aside
       className={cn(
         "hidden xl:block shrink-0 transition-all duration-250",
-        collapsed ? "w-[72px]" : "w-[320px]"
+        collapsed ? "w-[72px]" : "w-[300px]"
       )}
       data-testid="app-sidenav"
     >

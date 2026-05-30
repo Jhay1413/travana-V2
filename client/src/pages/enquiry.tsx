@@ -798,7 +798,7 @@ export default function EnquiryPage() {
 
   return (
     <>
-      <div className="px-5 pb-8 pt-5" data-testid="page-enquiry">
+      <div className="px-5 " data-testid="page-enquiry">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between" data-testid="row-enquiry-header">
           <div className="flex items-start gap-3">
             <Button
@@ -811,62 +811,88 @@ export default function EnquiryPage() {
               <ChevronLeft className="mr-2 h-4 w-4" />
               Enquiries
             </Button>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-base font-semibold" data-testid="text-enquiry-title">
-                  {enquiry.title || "Untitled Enquiry"}
-                  {enquiry.budget ? (
-                    <>
-                      , <span className="text-sm font-semibold text-[#000000]">
-                        {currency.format(parseFloat(enquiry.budget))}
-                        {enquiry.budget_type ? ` ${enquiry.budget_type.toLowerCase()}` : ""}
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusColor}`} data-testid="badge-enquiry-status">{enquiry.status}</span>
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-enquiry-meta">
-                {(isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames) && (
-                  <>
-                    <span data-testid="text-enquiry-meta-destination">{isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames}</span>
-                    <span className="text-black/25">•</span>
-                  </>
-                )}
-                {enquiry.travel_date && (
-                  <>
-                    <span data-testid="text-enquiry-meta-dates">
-                      {formatUKDate(enquiry.travel_date)}{enquiry.no_of_nights ? ` · ${enquiry.no_of_nights} nights` : ""}
-                    </span>
-                    <span className="text-black/25">•</span>
-                  </>
-                )}
-                <span data-testid="text-enquiry-meta-created">Created {formatUKDate(enquiry.date_created)}</span>
-              </div>
-            </div>
           </div>
 
           <div className="flex items-center gap-2" data-testid="row-enquiry-actions">
-            <button
-              type="button"
-              onClick={() =>
-                toggleFavoriteMutation.mutate(
-                  { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + (enquiry as any).holiday_type_name || "—" : ""}` },
-                  { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
-                )
-              }
-              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${isEnquiryPinned ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15" : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"}`}
-              data-testid="button-pin-enquiry"
-            >
-              {isEnquiryPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-              {isEnquiryPinned ? "Unpin" : "Pin"}
-            </button>
+            <UserReassignSelect
+              value={enquiry?.user_id || currentUser?.id || ""}
+              onValueChange={(userId) => {
+                updateTransactionMutation.mutate(
+                  { id: enquiry.transaction_id, data: { user_id: userId } },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "Enquiry reassigned successfully" });
+                      queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
+                    },
+                    onError: () => {
+                      toast({ title: "Failed to reassign enquiry", variant: "destructive" });
+                    },
+                  }
+                );
+              }}
+              data-testid="select-enquiry-itinerary-owner"
+            />
+
+            <div className="relative" ref={ellipsisRef}>
+              <button
+                type="button"
+                onClick={() => setShowEllipsisMenu((v) => !v)}
+                className="grid h-9 w-9 place-items-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
+                data-testid="button-enquiry-ellipsis"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+              {showEllipsisMenu && (
+                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-enquiry-ellipsis">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                    data-testid="button-pin-enquiry"
+                    onClick={() => {
+                      setShowEllipsisMenu(false);
+                      toggleFavoriteMutation.mutate(
+                        { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + (enquiry as any).holiday_type_name || "—" : ""}` },
+                        { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                      );
+                    }}
+                  >
+                    {isEnquiryPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                    {isEnquiryPinned ? "Unpin" : "Pin"}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                    data-testid="button-enquiry-edit"
+                    onClick={() => {
+                      setShowEllipsisMenu(false);
+                      setShowEditWizard(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit Enquiry
+                  </button>
+                  {enquiry.status !== "Converted" && (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                      data-testid="button-enquiry-convert"
+                      onClick={() => {
+                        setShowEllipsisMenu(false);
+                        handleConvertToQuote();
+                      }}
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                      Convert to Quote
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="mt-4" data-testid="layout-enquiry-body">
-          <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-enquiry-sections">
+          <div className="grid gap-3 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_340px]" data-testid="grid-enquiry-sections">
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-enquiry-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
                 <div className="grid content-start gap-1.5" data-testid="col-enquiry-media">
@@ -885,93 +911,41 @@ export default function EnquiryPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-3" data-testid="row-enquiry-itinerary-title">
                         <div className="min-w-0" data-testid="col-enquiry-itinerary-title-left">
-                          <div className="flex items-center gap-2" data-testid="text-enquiry-itinerary-title">
-                            <span className="truncate text-base font-semibold">{enquiry.title || "Untitled Enquiry"},</span>
-                            <span className="flex items-center gap-1.5 font-semibold text-[14px] text-[#000000]" data-testid="text-enquiry-itinerary-summary">
-                              {enquiry.no_of_nights ? (
-                                <>
-                                  <span>{enquiry.no_of_nights} nights</span>
-                                  {enquiry.budget && <span className="text-black/25">•</span>}
-                                </>
-                              ) : null}
-                              {enquiry.budget && (
-                                <span>
-                                  {currency.format(parseFloat(enquiry.budget))}
-                                  {enquiry.budget_type ? ` ${enquiry.budget_type.toLowerCase()}` : ""}
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <UserReassignSelect
-                            value={enquiry?.user_id || currentUser?.id || ""}
-                            onValueChange={(userId) => {
-                              updateTransactionMutation.mutate(
-                                { id: enquiry.transaction_id, data: { user_id: userId } },
-                                {
-                                  onSuccess: () => {
-                                    toast({ title: "Enquiry reassigned successfully" });
-                                    queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
-                                  },
-                                  onError: () => {
-                                    toast({ title: "Failed to reassign enquiry", variant: "destructive" });
-                                  },
-                                }
-                              );
-                            }}
-                            data-testid="select-enquiry-itinerary-owner"
-                          />
-
-                          <div className="relative" ref={ellipsisRef}>
-                            <button
-                              type="button"
-                              onClick={() => setShowEllipsisMenu((v) => !v)}
-                              className="grid h-8 w-8 place-items-center rounded-full border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
-                              data-testid="button-enquiry-ellipsis"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                            {showEllipsisMenu && (
-                              <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-enquiry-ellipsis">
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                                  data-testid="button-enquiry-edit"
-                                  onClick={() => {
-                                    setShowEllipsisMenu(false);
-                                    setShowEditWizard(true);
-                                  }}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                  Edit Enquiry
-                                </button>
-                                {enquiry.status !== "Converted" && (
-                                  <button
-                                    type="button"
-                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                                    data-testid="button-enquiry-convert"
-                                    onClick={() => {
-                                      setShowEllipsisMenu(false);
-                                      handleConvertToQuote();
-                                    }}
-                                  >
-                                    <ArrowRight className="h-3.5 w-3.5" />
-                                    Convert to Quote
-                                  </button>
-                                )}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-base font-semibold" data-testid="text-enquiry-title">
+                                {enquiry.title || "Untitled Enquiry"}
+                                {enquiry.budget ? (
+                                  <>
+                                    , <span className="text-sm font-semibold text-[#000000]">
+                                      {currency.format(parseFloat(enquiry.budget))}
+                                      {enquiry.budget_type ? ` ${enquiry.budget_type.toLowerCase()}` : ""}
+                                    </span>
+                                  </>
+                                ) : null}
                               </div>
-                            )}
+                              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusColor}`} data-testid="badge-enquiry-status">{enquiry.status}</span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-enquiry-meta">
+                              {(isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames) && (
+                                <>
+                                  <span data-testid="text-enquiry-meta-destination">{isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames}</span>
+                                  <span className="text-black/25">•</span>
+                                </>
+                              )}
+                              {enquiry.travel_date && (
+                                <>
+                                  <span data-testid="text-enquiry-meta-dates">
+                                    {formatUKDate(enquiry.travel_date)}{enquiry.no_of_nights ? ` · ${enquiry.no_of_nights} nights` : ""}
+                                  </span>
+                                  <span className="text-black/25">•</span>
+                                </>
+                              )}
+                              <span data-testid="text-enquiry-meta-created">Created {formatUKDate(enquiry.date_created)}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                      {(isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames) && (
-                        <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-enquiry-itinerary-destination">
-                          <span className="text-sm text-black/55" data-testid="text-enquiry-itinerary-location">
-                            {isCruise ? (cruiseDestinationNames || destinationNames) : destinationNames}
-                          </span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -1054,7 +1028,7 @@ export default function EnquiryPage() {
               </div>
             </Card>
 
-            <div className="grid gap-3" data-testid="col-enquiry-right">
+            <div className="grid gap-3 text-sm xl:text-base" data-testid="col-enquiry-right">
               <EnquiryTasksSection enquiryId={enquiryId} assignedUserId={enquiry.user_id} />
             </div>
           </div>

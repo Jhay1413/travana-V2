@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { motion } from "framer-motion";
 import {
   ChevronDown,
   LogOut,
   Search,
   Settings2,
+  Sparkles,
   User2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AskAiDialog } from "@/components/ask-ai-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +30,7 @@ export function AppHeader() {
   const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [showAskAi, setShowAskAi] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -155,6 +159,18 @@ export function AppHeader() {
         <div className="flex items-center gap-2">
           <HeaderCreateMenu />
 
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowAskAi(true)}
+            className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 px-3 text-white shadow-sm shadow-blue-500/30 transition-shadow hover:shadow-md hover:shadow-blue-500/40"
+            data-testid="button-ask-luna"
+            aria-label="Ask Luna"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="text-[11px] font-semibold leading-none">Ask Luna</span>
+          </motion.button>
+
           {user && <NotificationsDropdown userId={user.id} />}
 
           {userName && (
@@ -198,6 +214,8 @@ export function AppHeader() {
           )}
         </div>
       </div>
+
+      <AskAiDialog open={showAskAi} onOpenChange={setShowAskAi} />
     </div>
   );
 }
