@@ -97,17 +97,10 @@ export function AgentsPerformanceCard({
 }: { agentsOnly?: boolean; embedded?: boolean } = {}) {
   const visibleTabs = agentsOnly ? TABS.filter((t) => t.key === "agent-performance") : TABS;
   const [tab, setTab] = useState<TabKey>("agent-performance");
-  const [agentRange, setAgentRange] = useState<
-    "day" | "week" | "month" | "custom"
-  >("month");
-  const [customFrom, setCustomFrom] = useState<string>("");
-  const [customTo, setCustomTo] = useState<string>("");
 
-  const { data, isLoading, isError } = useOrganizationAgentsPerformance(
-    agentRange === "custom"
-      ? { range: "custom", from: customFrom, to: customTo }
-      : { range: agentRange },
-  );
+  const { data, isLoading, isError } = useOrganizationAgentsPerformance({
+    range: "month",
+  });
   const { data: transactionsData } = useTransactions();
   const { data: tourOperators } = useTourOperators();
   const { data: overviewStats } = useOrganizationOverviewStats();
@@ -359,72 +352,9 @@ export function AgentsPerformanceCard({
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs font-medium text-gray-400">
-                    {agentRange === "day"
-                      ? "Showing data for today"
-                      : agentRange === "week"
-                        ? "Showing data for this week"
-                        : agentRange === "month"
-                          ? `Showing data for ${monthName}`
-                          : customFrom && customTo
-                            ? `Showing ${customFrom} → ${customTo}`
-                            : "Pick a date range"}
+                    {`Showing data for ${monthName}`}
                   </p>
-                  <div
-                    className="inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5 text-xs shadow-sm dark:border-white/10 dark:bg-white/5"
-                    data-testid="agent-range-slider"
-                  >
-                    {(
-                      [
-                        { key: "day", label: "Day" },
-                        { key: "week", label: "Week" },
-                        { key: "month", label: "Month" },
-                        { key: "custom", label: "Date Range" },
-                      ] as const
-                    ).map((opt) => {
-                      const active = agentRange === opt.key;
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => setAgentRange(opt.key)}
-                          className={cn(
-                            "rounded-full px-3 py-1 font-medium transition-all",
-                            active
-                              ? "bg-amber-400 text-gray-900 shadow"
-                              : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white",
-                          )}
-                          data-testid={`agent-range-${opt.key}`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
-                {agentRange === "custom" && (
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <label className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                      From
-                      <input
-                        type="date"
-                        value={customFrom}
-                        onChange={(e) => setCustomFrom(e.target.value)}
-                        className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
-                        data-testid="agent-range-from"
-                      />
-                    </label>
-                    <label className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                      To
-                      <input
-                        type="date"
-                        value={customTo}
-                        onChange={(e) => setCustomTo(e.target.value)}
-                        className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
-                        data-testid="agent-range-to"
-                      />
-                    </label>
-                  </div>
-                )}
 
                 {isError ? (
                   <div className="rounded-2xl border border-dashed border-rose-200 bg-rose-50/50 p-8 text-center dark:border-rose-500/20 dark:bg-rose-500/5">
