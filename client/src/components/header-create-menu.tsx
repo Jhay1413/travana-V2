@@ -152,12 +152,12 @@ export function HeaderCreateMenu() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            className="h-10 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+            className="flex h-8 items-center gap-1.5 rounded-full bg-[#3b82f6] px-3 text-[11px] font-semibold text-white hover:bg-[#3b82f6]/90"
             data-testid="button-primary-action"
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Create
-            <ChevronDown className="ml-2 h-4 w-4" />
+            <ChevronDown className="h-3.5 w-3.5" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 rounded-xl z-[200]">
