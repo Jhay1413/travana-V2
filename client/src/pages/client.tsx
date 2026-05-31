@@ -37,6 +37,7 @@ import { ClientFilesTab } from "@/components/client/tabs/ClientFilesTab";
 import { ClientTicketsTab } from "@/components/client/tabs/ClientTicketsTab";
 import { ClientVipClubTab } from "@/components/client/tabs/ClientVipClubTab";
 import { ReferrerSelector } from "@/components/client/sections/ReferrerSelector";
+import { ClientProfileHeader } from "@/components/client/sections/ClientProfileHeader";
 import { ClientContactDetails } from "@/components/client/sections/ClientContactDetails";
 import { CreateTaskDialog } from "@/components/client/modals/CreateTaskDialog";
 import { CreateTicketDialog } from "@/components/client/modals/CreateTicketDialog";
@@ -121,6 +122,33 @@ export default function ClientPage() {
     return transformNeonClientData(clientData);
   }, [clientData]);
 
+  const isFavorited = useMemo(
+    () => userFavorites?.some((f) => f.itemId === clientId && f.itemType === "client") ?? false,
+    [userFavorites, clientId],
+  );
+
+  function handleToggleClientPin() {
+    if (!client) return;
+    toggleFavoriteMutation.mutate(
+      { itemType: "client", itemId: clientId, label: client.name, subtitle: client.email || undefined },
+      {
+        onSuccess: () =>
+          toast({ title: isFavorited ? "Client unpinned" : "Client pinned" }),
+        onError: () => toast({ title: "Failed to update pin", variant: "destructive" }),
+      },
+    );
+  }
+
+  function handleChangeClientBadge(badge: string | null) {
+    editForm.updateNeonClientMutation.mutate(
+      { id: clientId, data: { badge } },
+      {
+        onSuccess: () => toast({ title: "Badge updated" }),
+        onError: () => toast({ title: "Failed to update badge", variant: "destructive" }),
+      },
+    );
+  }
+
   const transactions = useMemo(() => transactionsData || [], [transactionsData]);
   const quotes = useMemo(() => transactions.flatMap((t: Transaction) => t.quotes || []), [transactions]);
   const enquiries = useMemo(
@@ -204,19 +232,31 @@ export default function ClientPage() {
         <div className="relative mt-2 grid gap-2 lg:grid-cols-12" data-testid="layout-client-page">
           <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-3 lg:col-span-4">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex w-full items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => navigate("/clients")}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-                  data-testid="button-back-clients"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Back
-                </button>
+              <button
+                type="button"
+                onClick={() => navigate("/clients")}
+                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+                data-testid="button-back-clients"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </button>
+            </div>
 
+            <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-3" data-testid="box-client-profile">
+              <ClientProfileHeader
+                name={client.name}
+                phone={clientData?.phoneNumber}
+                badge={clientData?.badge}
+                isFavorited={isFavorited}
+                onToggleFavorite={handleToggleClientPin}
+                onChangeBadge={handleChangeClientBadge}
+              />
+
+              <div className="mt-3 border-t border-black/10 pt-3">
+                <div className="mb-1.5 text-[11px] font-semibold text-black/50">Referred by</div>
                 <ReferrerSelector
-                  className="min-w-0 flex-1"
+                  className="w-full"
                   currentReferredByClientId={clientData?.referredByClientId}
                   excludeClientId={clientId}
                   onSelect={(referredByClientId) => {
@@ -345,9 +385,12 @@ export default function ClientPage() {
                 <TabsContent value="booked" className="mt-3">
                   <ClientBookedTab
                     bookings={bookings}
+                    quotes={quotes}
                     clientId={clientId}
                     navigate={navigate}
                     onAddBooking={() => setShowBookingCreateDialog(true)}
+                    expandedCopyGroups={expandedCopyGroups}
+                    setExpandedCopyGroups={setExpandedCopyGroups}
                     client={client}
                     userFavorites={userFavorites}
                     toggleFavoriteMutation={toggleFavoriteMutation}

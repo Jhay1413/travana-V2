@@ -20,8 +20,8 @@ async function loadScopedUser(id: string, scope: Scope): Promise<User> {
 }
 
 export const userService = {
-  async listUsers(scope?: Scope): Promise<User[]> {
-    return userRepository.findAll(scope);
+  async listUsers(scope?: Scope, opts?: { salesAgentsOnly?: boolean }): Promise<User[]> {
+    return userRepository.findAll(scope, opts);
   },
 
   async getUserById(id: string, scope: Scope): Promise<User> {

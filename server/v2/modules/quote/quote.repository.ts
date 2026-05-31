@@ -19,6 +19,7 @@ import type {
 } from "@shared/schema";
 import { eq, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 function toDateOrNull(value: unknown): Date | null {
   if (value == null) return null;
@@ -94,27 +95,23 @@ export const newQuoteRepository = {
     return result;
   },
 
-  async findByIdWithOrg(id: string) {
-    const [result] = await db
-      .select({
-        id: quote.id,
-        transaction_id: quote.transaction_id,
-        clientOrgId: sql<string | null>`COALESCE(${clientTable.orgId}, ${transaction.org_id})`,
-      })
+  /** Scope-aware existence check: does quote `id` fall within the caller's scope? */
+  async quoteInScope(id: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: quote.id })
       .from(quote)
-      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(eq(quote.id, id))
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(and(eq(quote.id, id), ...buildTransactionScopeConds(scope)))
       .limit(1);
-    return result ?? null;
+    return !!row;
   },
 
-  async transactionBelongsToOrg(transactionId: string, orgId: string): Promise<boolean> {
+  /** Scope-aware existence check: does transaction `transactionId` fall within the caller's scope? */
+  async transactionInScope(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
     const [row] = await db
       .select({ id: transaction.id })
       .from(transaction)
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(transaction.id, transactionId), eq(clientTable.orgId, orgId)))
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionScopeConds(scope)))
       .limit(1);
     return !!row;
   },
@@ -167,39 +164,38 @@ export const newQuoteRepository = {
     return !!row;
   },
 
-  async findByTransactionId(transactionId: string): Promise<Quote[]> {
-    return await db.select().from(quote).where(and(eq(quote.transaction_id, transactionId), isNull(quote.deleted_at))).orderBy(desc(quote.date_created));
-  },
-
-  async findAll(orgId: string | null): Promise<Quote[]> {
-    if (!orgId) {
-      return db.select().from(quote).where(and(eq(quote.isFreeQuote, false), isNull(quote.deleted_at))).orderBy(desc(quote.date_created));
-    }
+  async findByTransactionId(transactionId: string, scope: ScopeOrTrusted): Promise<Quote[]> {
     const rows = await db
       .select({ quote })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(quote.isFreeQuote, false), isNull(quote.deleted_at), eq(clientTable.orgId, orgId)))
+      .where(and(eq(quote.transaction_id, transactionId), isNull(quote.deleted_at), ...buildTransactionScopeConds(scope)))
       .orderBy(desc(quote.date_created));
     return rows.map((r) => r.quote);
   },
 
-  async findByStatus(status: Quote['quote_status'], orgId: string | null): Promise<Quote[]> {
-    if (!orgId) {
-      return db.select().from(quote).where(and(sql`${quote.quote_status} = ${status}`, isNull(quote.deleted_at))).orderBy(desc(quote.date_created));
-    }
+  async findAll(scope: ScopeOrTrusted): Promise<Quote[]> {
     const rows = await db
       .select({ quote })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(sql`${quote.quote_status} = ${status}`, isNull(quote.deleted_at), eq(clientTable.orgId, orgId)))
+      .where(and(eq(quote.isFreeQuote, false), isNull(quote.deleted_at), ...buildTransactionScopeConds(scope)))
       .orderBy(desc(quote.date_created));
     return rows.map((r) => r.quote);
   },
 
-  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", orgId: string | null = null) {
+  async findByStatus(status: Quote['quote_status'], scope: ScopeOrTrusted): Promise<Quote[]> {
+    const rows = await db
+      .select({ quote })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(and(sql`${quote.quote_status} = ${status}`, isNull(quote.deleted_at), ...buildTransactionScopeConds(scope)))
+      .orderBy(desc(quote.date_created));
+    return rows.map((r) => r.quote);
+  },
+
+  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted) {
+    const scopeConds = buildTransactionScopeConds(scope);
     const offset = page * pageSize;
     const searchPattern = search.trim() ? `%${search.trim().toLowerCase()}%` : null;
 
@@ -228,9 +224,8 @@ export const newQuoteRepository = {
       eq(quote.is_active, true),
       eq(transaction.is_test, false),
       eq(quote.not_for_social, false),
-      ...(orgId ? [eq(transaction.org_id, orgId)] : []),
+      ...scopeConds,
       ...(searchCondition ? [searchCondition] : []),
-      ...(orgId ? [eq(clientTable.orgId, orgId)] : []),
     ];
 
     let ids: string[];
@@ -245,32 +240,20 @@ export const newQuoteRepository = {
         ] : []),
       ];
 
-      const baseQuery = db
+      const allRows = await db
         .selectDistinct({ id: quote.id, date_created: quote.date_created })
         .from(quote)
         .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-        .innerJoin(travel_deal, and(...dealJoinConditions));
-
-      const scoped = orgId
-        ? baseQuery.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        : baseQuery;
-
-      const allRows = await scoped
+        .innerJoin(travel_deal, and(...dealJoinConditions))
         .where(and(...baseWhereConditions))
         .orderBy(desc(quote.date_created));
 
       ids = allRows.slice(offset, offset + pageSize).map(r => r.id);
     } else {
-      const baseQuery = db
+      const rows = await db
         .select({ id: quote.id })
         .from(quote)
-        .innerJoin(transaction, eq(quote.transaction_id, transaction.id));
-
-      const scoped = orgId
-        ? baseQuery.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        : baseQuery;
-
-      const rows = await scoped
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
         .where(and(...baseWhereConditions))
         .orderBy(desc(quote.date_created))
         .limit(pageSize)

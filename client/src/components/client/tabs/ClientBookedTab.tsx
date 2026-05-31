@@ -1,4 +1,5 @@
 import {
+  ChevronDown,
   ChevronRight,
   ImagePlus,
   Pin,
@@ -9,13 +10,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { DealImage } from "@/types/quote";
 import type { Favorite } from "@/api/endpoints/favorite.api";
-import { currency, formatUKDate, type BookingWithJoins, type Client } from "../client-types";
+import { currency, formatUKDate, type BookingWithJoins, type QuoteWithJoins, type Client } from "../client-types";
+import { QuoteRowCard } from "./QuoteRowCard";
+import { quoteToRow } from "../hooks/use-client-quote-groups";
 
 interface ClientBookedTabProps {
   bookings: BookingWithJoins[];
+  quotes: QuoteWithJoins[];
   clientId: string;
   navigate: (to: string) => void;
   onAddBooking: () => void;
+  expandedCopyGroups: Record<string, boolean>;
+  setExpandedCopyGroups: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   client: Client | null;
   userFavorites: Favorite[] | undefined;
   toggleFavoriteMutation: { mutate: (args: { itemType: string; itemId: string; label: string; subtitle: string }) => void };
@@ -24,9 +30,12 @@ interface ClientBookedTabProps {
 
 export function ClientBookedTab({
   bookings,
+  quotes,
   clientId,
   navigate,
   onAddBooking,
+  expandedCopyGroups,
+  setExpandedCopyGroups,
   client,
   userFavorites,
   toggleFavoriteMutation,
@@ -61,9 +70,14 @@ export function ClientBookedTab({
               No bookings yet. Add a booking or convert a quote.
             </div>
           ) : (
-            bookings.map((b: BookingWithJoins) => (
+            bookings.map((b: BookingWithJoins) => {
+              const duplicates = quotes.filter(
+                (q: QuoteWithJoins) => q.transaction_id === b.transaction_id && q.isQuoteCopy,
+              );
+              const isExpanded = Boolean(expandedCopyGroups[b.id]);
+              return (
+              <div key={b.id} className="grid gap-2" data-testid={`group-booking-${b.id}`}>
               <button
-                key={b.id}
                 type="button"
                 className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                 data-testid={`card-booking-${b.id}`}
@@ -164,7 +178,42 @@ export function ClientBookedTab({
                   </div>
                 </div>
               </button>
-            ))
+
+              {duplicates.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="ml-6 inline-flex w-fit items-center gap-1 rounded-xl border border-black/10 bg-white/70 px-2 py-1 text-[11px] font-semibold text-black/65 transition hover:bg-black/[0.03]"
+                    data-testid={`button-toggle-copy-bookings-${b.id}`}
+                    onClick={() =>
+                      setExpandedCopyGroups((prev) => ({
+                        ...prev,
+                        [b.id]: !prev[b.id],
+                      }))
+                    }
+                  >
+                    <ChevronDown className={`h-3.5 w-3.5 transition ${isExpanded ? "rotate-180" : ""}`} />
+                    {isExpanded ? "Hide" : "Show"} {duplicates.length}{" "}
+                    {duplicates.length === 1 ? "copy" : "copies"}
+                  </button>
+                  {isExpanded &&
+                    duplicates.map((q: QuoteWithJoins) => (
+                      <QuoteRowCard
+                        key={q.id}
+                        row={quoteToRow(q, "NEW_LEAD")}
+                        isChild
+                        clientId={clientId}
+                        navigate={navigate}
+                        client={client}
+                        userFavorites={userFavorites}
+                        toggleFavoriteMutation={toggleFavoriteMutation}
+                      />
+                    ))}
+                </>
+              )}
+              </div>
+              );
+            })
           )}
         </div>
       </Card>

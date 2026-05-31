@@ -4,10 +4,11 @@ import {
   enquiry_board_basis, enquiry_departure_airport, enquiry_departure_port,
   enquiry_cruise_line, enquiry_cruise_destination, enquiry_passenger,
   package_type, destination, resorts, accomodation_list, board_basis, airport,
-  port, cruise_line, cruise_destination, transaction, park, lodges, clientTable,
+  port, cruise_line, cruise_destination, transaction, park, lodges,
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, type SQL } from "drizzle-orm";
+import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export const enquiryTableRepository = {
   async findById(id: string): Promise<EnquiryTable | undefined> {
@@ -15,27 +16,23 @@ export const enquiryTableRepository = {
     return result;
   },
 
-  async findByIdWithOrg(id: string) {
-    const [result] = await db
-      .select({
-        id: enquiry_table.id,
-        transaction_id: enquiry_table.transaction_id,
-        clientOrgId: clientTable.orgId,
-      })
+  /** True when the enquiry exists AND its transaction is within the caller's scope. */
+  async enquiryInScope(id: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: enquiry_table.id })
       .from(enquiry_table)
-      .leftJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
-      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(eq(enquiry_table.id, id))
+      .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
+      .where(and(eq(enquiry_table.id, id), ...buildTransactionScopeConds(scope)))
       .limit(1);
-    return result ?? null;
+    return !!row;
   },
 
-  async transactionBelongsToOrg(transactionId: string, orgId: string): Promise<boolean> {
+  /** True when the transaction exists AND is within the caller's scope. */
+  async transactionInScope(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
     const [row] = await db
       .select({ id: transaction.id })
       .from(transaction)
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(transaction.id, transactionId), eq(clientTable.orgId, orgId)))
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionScopeConds(scope)))
       .limit(1);
     return !!row;
   },
@@ -45,23 +42,19 @@ export const enquiryTableRepository = {
     return result;
   },
 
-  async findAll(orgId: string | null): Promise<EnquiryTable[]> {
-    const conditions: any[] = [
+  async findAll(scope: ScopeOrTrusted): Promise<EnquiryTable[]> {
+    const conditions: SQL[] = [
       eq(transaction.status, "on_enquiry"),
       eq(transaction.is_active, true),
+      ...buildTransactionScopeConds(scope),
     ];
-    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
 
-    const baseQuery = db
+    const rows = await db
       .select({ enquiry: enquiry_table })
       .from(enquiry_table)
-      .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id));
-
-    const scoped = orgId
-      ? baseQuery.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      : baseQuery;
-
-    const rows = await scoped.where(and(...conditions)).orderBy(desc(enquiry_table.date_created));
+      .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
+      .where(and(...conditions))
+      .orderBy(desc(enquiry_table.date_created));
 
     return rows.map((r) => r.enquiry);
   },

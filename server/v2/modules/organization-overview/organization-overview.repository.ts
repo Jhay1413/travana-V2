@@ -22,6 +22,7 @@ import {
   tour_operator,
 } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNull, ne, desc, inArray } from "drizzle-orm";
+import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 import type {
   OrganizationOverviewCore,
   OrganizationSummary,
@@ -835,7 +836,12 @@ export const organizationOverviewRepository = {
 
     const aggByUser = new Map(aggRows.map((r) => [r.agentId, r] as const));
 
-    const rows: AgentPerformanceRow[] = teamUsers.map((u) => {
+    // Only rank sales agents. Branch managers who also sell hold the `agent`
+    // role and stay; non-selling roles (pure managers/admins) are excluded.
+    const agentIds = await userOrgRolesRepository.findSalesAgentUserIds({ orgId });
+    const agentSet = new Set(agentIds);
+
+    const rows: AgentPerformanceRow[] = teamUsers.filter((u) => agentSet.has(u.id)).map((u) => {
       const a = aggByUser.get(u.id);
       const today = Number(a?.today ?? 0);
       const week = Number(a?.week ?? 0);

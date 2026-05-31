@@ -137,6 +137,54 @@ function collectLabelledSectionIds(entries: Array<NavItem | NavSection>): string
   return ids;
 }
 
+// The labelled section whose items contain the current route (for accordion default).
+function findActiveSectionId(
+  entries: Array<NavItem | NavSection>,
+  currentPath: string,
+  currentSearch: string,
+): string | null {
+  for (const entry of entries) {
+    if (isNavItem(entry)) continue;
+    if (entry.label) {
+      const leaves = collectLeafItems(entry.items);
+      if (leaves.some((it) => isActive(currentPath, currentSearch, it.path))) return entry.id;
+    }
+    const nested = findActiveSectionId(entry.items, currentPath, currentSearch);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+// Map each labelled section id -> its nearest labelled-section ancestor (or null
+// for top level). Used so the accordion only collapses same-level siblings,
+// never a parent. Unlabelled sections are transparent (don't change parentage).
+function buildSectionParentMap(
+  entries: Array<NavItem | NavSection>,
+  parent: string | null = null,
+  map: Map<string, string | null> = new Map(),
+): Map<string, string | null> {
+  for (const entry of entries) {
+    if (isNavItem(entry)) continue;
+    if (entry.label) {
+      map.set(entry.id, parent);
+      buildSectionParentMap(entry.items, entry.id, map);
+    } else {
+      buildSectionParentMap(entry.items, parent, map);
+    }
+  }
+  return map;
+}
+
+function ancestorChain(id: string, parentMap: Map<string, string | null>): string[] {
+  const chain: string[] = [];
+  let cur: string | null = id;
+  while (cur) {
+    chain.push(cur);
+    cur = parentMap.get(cur) ?? null;
+  }
+  return chain;
+}
+
 function SectionBlock({
   section,
   currentPath,
@@ -242,14 +290,22 @@ function SidenavInner({
   const { roles } = useRoles();
   const [location] = useLocation();
   const sections = getNavForRoles(roles);
+  const sectionParent = useMemo(() => buildSectionParentMap(sections), [sections]);
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
-    const defaults = collectLabelledSectionIds(sections);
+    // Accordion: open only the branch containing the current route (the active
+    // section plus its ancestors). Fall back to a saved selection, else none.
+    const activePath = location.split("?")[0] || "/";
+    const activeSearch = typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
+    const active = findActiveSectionId(sections, activePath, activeSearch);
+    if (active) return ancestorChain(active, sectionParent);
     try {
       const saved = sessionStorage.getItem("admin-nav-expanded");
-      return saved ? JSON.parse(saved) : defaults;
-    } catch {
-      return defaults;
-    }
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return arr;
+      }
+    } catch {}
+    return [];
   });
 
   const { data: currentUser } = useCurrentUser();
@@ -264,7 +320,38 @@ function SidenavInner({
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      // Expand the descendant subtree of every id in `seed` into `toClose`.
+      const expandSubtree = (seed: string[]) => {
+        const set = new Set<string>(seed);
+        let changed = true;
+        while (changed) {
+          changed = false;
+          sectionParent.forEach((parent, child) => {
+            if (parent && set.has(parent) && !set.has(child)) {
+              set.add(child);
+              changed = true;
+            }
+          });
+        }
+        return set;
+      };
+
+      let next: string[];
+      if (prev.includes(id)) {
+        // Closing: drop this section and any of its open descendants.
+        const toClose = expandSubtree([id]);
+        next = prev.filter((x) => !toClose.has(x));
+      } else {
+        // Opening: close same-level siblings (and their subtrees), keep ancestors
+        // and unrelated branches, then open this section.
+        const parent = sectionParent.get(id) ?? null;
+        const siblings = Array.from(sectionParent.keys()).filter(
+          (k) => k !== id && (sectionParent.get(k) ?? null) === parent,
+        );
+        const toClose = expandSubtree(siblings);
+        next = prev.filter((x) => !toClose.has(x));
+        next.push(id);
+      }
       try { sessionStorage.setItem("admin-nav-expanded", JSON.stringify(next)); } catch {}
       return next;
     });
@@ -277,7 +364,7 @@ function SidenavInner({
     <div
       className={cn(
         "glass ringed grain rounded-3xl transition-all duration-250",
-        sticky && "sticky top-4",
+        sticky && "sticky ",
         collapsed ? "p-2" : "p-4"
       )}
     >

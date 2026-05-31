@@ -28,18 +28,12 @@ function effectiveOrgId(scope: ScopeOrTrusted): string | null {
 }
 
 async function assertQuoteInScope(id: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const row = await newQuoteRepository.findByIdWithOrg(id);
-  if (!row || row.clientOrgId !== orgId) {
-    throw new AppError("Quote not found", 404);
-  }
+  const ok = await newQuoteRepository.quoteInScope(id, scope);
+  if (!ok) throw new AppError("Quote not found", 404);
 }
 
 async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await newQuoteRepository.transactionBelongsToOrg(transactionId, orgId);
+  const ok = await newQuoteRepository.transactionInScope(transactionId, scope);
   if (!ok) throw new AppError("Quote not found", 404);
 }
 
@@ -139,20 +133,20 @@ async function resolveAndGenerateGuru(accommodationId: string, userId?: string) 
 
 export const newQuoteService = {
   async listQuotes(scope: ScopeOrTrusted) {
-    return newQuoteRepository.findAll(effectiveOrgId(scope));
+    return newQuoteRepository.findAll(scope);
   },
 
   async listQuotesByTransaction(transactionId: string, scope: ScopeOrTrusted) {
     await assertTransactionInScope(transactionId, scope);
-    return newQuoteRepository.findByTransactionId(transactionId);
+    return newQuoteRepository.findByTransactionId(transactionId, scope);
   },
 
   async listQuotesByStatus(status: Quote['quote_status'], scope: ScopeOrTrusted) {
-    return newQuoteRepository.findByStatus(status, effectiveOrgId(scope));
+    return newQuoteRepository.findByStatus(status, scope);
   },
 
   async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted) {
-    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, effectiveOrgId(scope));
+    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope);
   },
 
   async getQuoteById(id: string, scope: ScopeOrTrusted) {

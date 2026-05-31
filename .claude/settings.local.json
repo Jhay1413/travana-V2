@@ -13,7 +13,11 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
       "Bash(grep -E \"\\\\.ts$\")",
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(sed -n '1,30p' server/v2/modules/organization-overview/organization-overview.repository.ts)",
+      "Bash(sed -n '1,30p' server/v2/modules/branch-overview/branch-overview.repository.ts)",
+      "Bash(echo \"=== server error count: $\\(npx tsc --noEmit 2>&1)",
+      "Bash(echo \"exit-grep: $?\")"
     ],
     "additionalDirectories": [
       "/tmp"

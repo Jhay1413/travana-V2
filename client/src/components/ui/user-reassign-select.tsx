@@ -34,7 +34,8 @@ export function UserReassignSelect({
   allLabel = "All Agents",
 }: UserReassignSelectProps) {
   const [open, setOpen] = useState(false);
-  const { data: users, isLoading } = useUsers();
+  // This is the agent/deal-owner picker, so it only lists sales agents.
+  const { data: users, isLoading } = useUsers({ salesAgentsOnly: true });
 
   const isAll = allowAll && value === "all";
   const selectedUser = isAll ? null : users?.find((user) => user.id === value);

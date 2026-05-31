@@ -80,4 +80,22 @@ export const bookingController = {
     await bookingService.removeAccommodation(accommodationId, scope);
     res.status(204).send();
   }),
+
+  getBookingTags: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    const tags = await bookingService.getBookingTags(id, scope);
+    return successResponse(res, tags, "Booking tags retrieved");
+  }),
+
+  updateBookingTags: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    const { tags } = req.body;
+    if (!Array.isArray(tags)) {
+      return res.status(400).json({ error: "tags must be an array of tag names" });
+    }
+    const updated = await bookingService.updateBookingTags(id, tags, scope);
+    return successResponse(res, updated, "Booking tags updated");
+  }),
 };

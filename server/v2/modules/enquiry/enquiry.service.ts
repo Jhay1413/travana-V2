@@ -2,35 +2,21 @@ import { enquiryTableRepository } from "./enquiry.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { AppError } from "../../utils/error-handler";
 import type { InsertEnquiryTable } from "@shared/schema";
-import type { Scope } from "../../utils/scope";
-
-type ScopeOrTrusted = Scope | { orgId: null };
-
-function effectiveOrgId(scope: ScopeOrTrusted): string | null {
-  if (scope.orgId === null) return null;
-  if ((scope as Scope).orgRole === "platform_admin") return null;
-  return (scope as Scope).orgId || null;
-}
+import type { ScopeOrTrusted } from "../../utils/scope-conditions";
 
 async function assertEnquiryInScope(id: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const row = await enquiryTableRepository.findByIdWithOrg(id);
-  if (!row || row.clientOrgId !== orgId) {
-    throw new AppError("Enquiry not found", 404);
-  }
+  const ok = await enquiryTableRepository.enquiryInScope(id, scope);
+  if (!ok) throw new AppError("Enquiry not found", 404);
 }
 
 async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await enquiryTableRepository.transactionBelongsToOrg(transactionId, orgId);
+  const ok = await enquiryTableRepository.transactionInScope(transactionId, scope);
   if (!ok) throw new AppError("Enquiry not found", 404);
 }
 
 export const newEnquiryService = {
   async listEnquiries(scope: ScopeOrTrusted) {
-    return enquiryTableRepository.findAll(effectiveOrgId(scope));
+    return enquiryTableRepository.findAll(scope);
   },
 
   async getEnquiryById(id: string, scope: ScopeOrTrusted) {

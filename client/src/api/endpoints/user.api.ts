@@ -2,8 +2,10 @@ import axiosClient from "../client/axios-client";
 import type { User } from "@/types/user";
 
 export const userApi = {
-  getAll: async (): Promise<User[]> => {
-    const { data } = await axiosClient.get<User[]>("/api/v2/users");
+  getAll: async (params?: { salesAgentsOnly?: boolean }): Promise<User[]> => {
+    const { data } = await axiosClient.get<User[]>("/api/v2/users", {
+      params: params?.salesAgentsOnly ? { salesAgentsOnly: true } : undefined,
+    });
     return data;
   },
 

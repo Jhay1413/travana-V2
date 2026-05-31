@@ -5,6 +5,7 @@ import { transactionRepository } from "../transaction/transaction.repository";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { referralService } from "../referral/referral.service";
+import { tagService } from "../tag/tag.service";
 import { walletService } from "../wallet/wallet.service";
 import { fireAutoTriggerForClient } from "../sms/sms.service";
 import { AppError } from "../../utils/error-handler";
@@ -32,32 +33,26 @@ function effectiveOrgId(scope: ScopeOrTrusted): string | null {
 }
 
 async function assertBookingInScope(id: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const row = await bookingRepository.findByIdWithOrg(id);
-  if (!row || row.clientOrgId !== orgId) {
-    throw new AppError("Booking not found", 404);
-  }
+  if (effectiveOrgId(scope) === null) return;
+  const ok = await bookingRepository.bookingInScope(id, scope);
+  if (!ok) throw new AppError("Booking not found", 404);
 }
 
 async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await bookingRepository.transactionBelongsToOrg(transactionId, orgId);
+  if (effectiveOrgId(scope) === null) return;
+  const ok = await bookingRepository.transactionInScope(transactionId, scope);
   if (!ok) throw new AppError("Booking not found", 404);
 }
 
 async function assertFlightInScope(flightId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await bookingRepository.flightBelongsToOrg(flightId, orgId);
+  if (effectiveOrgId(scope) === null) return;
+  const ok = await bookingRepository.flightInScope(flightId, scope);
   if (!ok) throw new AppError("Flight not found", 404);
 }
 
 async function assertAccommodationInScope(accommodationId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await bookingRepository.accommodationBelongsToOrg(accommodationId, orgId);
+  if (effectiveOrgId(scope) === null) return;
+  const ok = await bookingRepository.accommodationInScope(accommodationId, scope);
   if (!ok) throw new AppError("Accommodation not found", 404);
 }
 
@@ -90,7 +85,7 @@ type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
 
 export const bookingService = {
   async listBookings(scope: ScopeOrTrusted) {
-    return bookingRepository.findAllWithImages(effectiveOrgId(scope));
+    return bookingRepository.findAllWithImages(scope);
   },
 
   async getBookingById(id: string, scope: ScopeOrTrusted) {
@@ -538,5 +533,16 @@ export const bookingService = {
   async removeAccommodation(accommodationId: string, scope: ScopeOrTrusted) {
     await assertAccommodationInScope(accommodationId, scope);
     await bookingRepository.removeAccommodation(accommodationId);
+  },
+
+  async getBookingTags(id: string, scope: ScopeOrTrusted) {
+    await assertBookingInScope(id, scope);
+    return tagService.getBookingTags(id);
+  },
+
+  async updateBookingTags(id: string, tags: string[], scope: ScopeOrTrusted) {
+    await assertBookingInScope(id, scope);
+    await tagService.updateBookingTags(id, tags);
+    return tagService.getBookingTags(id);
   },
 };

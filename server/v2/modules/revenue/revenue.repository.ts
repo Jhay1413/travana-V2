@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { booking, transaction, clientTable, user } from "@shared/schema";
+import { booking, transaction, clientTable, user, forwardsReport } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNotNull } from "drizzle-orm";
 import { totalBookingCommissionExpr } from "../../utils/commission-sql";
 
@@ -44,6 +44,92 @@ export const revenueRepository = {
       totalCommission: Number(result[0]?.totalCommission || 0),
       dealCount: Number(result[0]?.dealCount || 0),
     };
+  },
+
+  // Same forwards window as getForwardsForMonth, but returns the contributing
+  // booking IDs (for forwards_report.deal_ids) alongside the commission total.
+  async getForwardsWithIdsForMonth(year: number, month: number, orgId: string | null): Promise<{
+    totalCommission: number;
+    dealIds: string[];
+  }> {
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const travelDateStart = new Date(monthStart);
+    travelDateStart.setDate(travelDateStart.getDate() + 56);
+    const travelDateEnd = new Date(monthEnd);
+    travelDateEnd.setDate(travelDateEnd.getDate() + 56);
+
+    const conditions: any[] = [
+      gte(booking.travel_date, travelDateStart.toISOString().split('T')[0]),
+      lte(booking.travel_date, travelDateEnd.toISOString().split('T')[0]),
+      eq(booking.is_active, true),
+      isNotNull(booking.package_commission),
+    ];
+    if (orgId) conditions.push(eq(clientTable.orgId, orgId));
+
+    const base = db
+      .select({ id: booking.id, commission: totalBookingCommissionExpr() })
+      .from(booking);
+
+    const scoped = orgId
+      ? base
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      : base;
+
+    const rows = await scoped.where(and(...conditions));
+
+    return {
+      dealIds: rows.map((r) => r.id),
+      totalCommission: rows.reduce((sum, r) => sum + Number(r.commission || 0), 0),
+    };
+  },
+
+  // Upsert a single month's forwards_report row by (year, month). Updates the
+  // computed columns and leaves manual `adjustment` + `historical_ids` intact.
+  async upsertForwardsReportMonth(input: {
+    year: number;
+    month: number;
+    monthName: string;
+    target: number;
+    companyCommission: number;
+    dealIds: string[];
+  }): Promise<"inserted" | "updated"> {
+    const company = input.companyCommission.toFixed(2);
+    const target = input.target.toFixed(2);
+
+    const [existing] = await db
+      .select({ id: forwardsReport.id })
+      .from(forwardsReport)
+      .where(and(eq(forwardsReport.year, input.year), eq(forwardsReport.month, input.month)))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(forwardsReport)
+        .set({
+          monthName: input.monthName,
+          target,
+          company_commission: company,
+          agent_commission: "0.00",
+          deal_ids: input.dealIds,
+        })
+        .where(eq(forwardsReport.id, existing.id));
+      return "updated";
+    }
+
+    await db.insert(forwardsReport).values({
+      month: input.month,
+      monthName: input.monthName,
+      year: input.year,
+      target,
+      company_commission: company,
+      agent_commission: "0.00",
+      deal_ids: input.dealIds,
+      historical_ids: [],
+    });
+    return "inserted";
   },
 
   async getBookingsForMonth(year: number, month: number, orgId: string | null) {

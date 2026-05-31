@@ -44,8 +44,13 @@ import {
   ArrowUpDown,
   Users,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { revenueApi } from "@/api/endpoints/revenue.api";
 import type { BookingDetail } from "@/types/revenue/revenue.types";
 import { useRevenueDashboard, useMonthBookings } from "@/hooks/queries/use-revenue-queries";
 
@@ -99,6 +104,23 @@ export default function AdminFinancials() {
   const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("commission");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const regenerateMutation = useMutation({
+    mutationFn: () => revenueApi.regenerateForwards(),
+    onSuccess: (res) => {
+      toast({
+        title: "Forwards report regenerated",
+        description: `${res.monthsWritten} months written (${res.inserted} new, ${res.updated} updated)`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin", "tables"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Regenerate failed", description: err?.message, variant: "destructive" });
+    },
+  });
 
   // Fetch dashboard data
   const { data: dashboardData, isLoading, error } = useRevenueDashboard();
@@ -219,6 +241,18 @@ export default function AdminFinancials() {
             Monitor future commission income ("Forwards") and track performance against monthly targets.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => regenerateMutation.mutate()}
+          disabled={regenerateMutation.isPending}
+          className="gap-1.5 rounded-xl text-xs"
+          data-testid="button-regenerate-forwards"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+          {regenerateMutation.isPending ? "Regenerating…" : "Regenerate Report"}
+        </Button>
         <div className="flex gap-1.5 rounded-2xl bg-black/5 p-1 dark:bg-white/5" data-testid="toggle-view">
           <button
             onClick={() => setView("chart")}
@@ -240,6 +274,7 @@ export default function AdminFinancials() {
             <TableIcon className="h-3.5 w-3.5" />
             Table View
           </button>
+        </div>
         </div>
       </div>
 
@@ -306,42 +341,6 @@ export default function AdminFinancials() {
         </Card>
       </div>
 
-      {view === "chart" && (
-        <Card className="rounded-2xl border-black/10 bg-white/80 p-5 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="chart-forwards">
-          <h3 className="mb-4 text-sm font-semibold">12 Month Forwards</h3>
-          <div className="h-[320px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={MONTHS_DATA} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                <XAxis dataKey="shortMonth" tick={{ fontSize: 11, fill: "rgba(0,0,0,0.45)" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "rgba(0,0,0,0.45)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} />
-                <RechartsTooltip content={<CustomTooltip />} />
-                <Bar dataKey="forwards" radius={[6, 6, 0, 0]} maxBarSize={40}>
-                  {MONTHS_DATA.map((entry, i) => (
-                    <Cell key={i} fill={barColor(entry.forwards, entry.target)} />
-                  ))}
-                </Bar>
-                <Line type="monotone" dataKey="target" stroke="#6366f1" strokeWidth={2} strokeDasharray="6 3" dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-3 flex items-center gap-4 text-[11px] text-black/40 dark:text-white/40">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Above target
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-500" /> Close to target
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" /> Below target
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-6 border-t-2 border-dashed border-indigo-500" /> Monthly target
-            </span>
-          </div>
-        </Card>
-      )}
-
       <Card className="overflow-hidden rounded-2xl border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="table-forwards">
         <div className="p-4 pb-2">
           <h3 className="text-sm font-semibold">Monthly Forwards Breakdown</h3>
@@ -395,6 +394,42 @@ export default function AdminFinancials() {
           </Table>
         </div>
       </Card>
+
+      {view === "chart" && (
+        <Card className="rounded-2xl border-black/10 bg-white/80 p-5 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="chart-forwards">
+          <h3 className="mb-4 text-sm font-semibold">12 Month Forwards</h3>
+          <div className="h-[320px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={MONTHS_DATA} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                <XAxis dataKey="shortMonth" tick={{ fontSize: 11, fill: "rgba(0,0,0,0.45)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "rgba(0,0,0,0.45)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} />
+                <RechartsTooltip content={<CustomTooltip />} />
+                <Bar dataKey="forwards" radius={[6, 6, 0, 0]} maxBarSize={40}>
+                  {MONTHS_DATA.map((entry, i) => (
+                    <Cell key={i} fill={barColor(entry.forwards, entry.target)} />
+                  ))}
+                </Bar>
+                <Line type="monotone" dataKey="target" stroke="#6366f1" strokeWidth={2} strokeDasharray="6 3" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-3 flex items-center gap-4 text-[11px] text-black/40 dark:text-white/40">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Above target
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-500" /> Close to target
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" /> Below target
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-6 border-t-2 border-dashed border-indigo-500" /> Monthly target
+            </span>
+          </div>
+        </Card>
+      )}
 
       <Card className="rounded-2xl border-black/10 bg-white/80 p-5 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="section-agent-performance">
         <div className="mb-4 flex items-center gap-2">

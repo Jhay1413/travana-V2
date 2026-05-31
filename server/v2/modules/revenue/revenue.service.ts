@@ -69,6 +69,35 @@ export const revenueService = {
     };
   },
 
+  // Regenerate the persisted forwards_report table from live bookings for the
+  // rolling 12-month forward window. Commission is recorded entirely as company
+  // commission (agent_commission = 0). Manual `adjustment` / `historical_ids` on
+  // existing rows are preserved. Feeds the Admin → Data → Forwards Reports table.
+  async regenerateForwardsReport(scope: Scope): Promise<{ monthsWritten: number; inserted: number; updated: number }> {
+    const orgId = effectiveOrgId(scope);
+    const now = new Date();
+    let inserted = 0;
+    let updated = 0;
+
+    for (let i = 0; i < 12; i++) {
+      const targetDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth() + 1;
+      const monthName = targetDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+
+      const { totalCommission, dealIds } = await revenueRepository.getForwardsWithIdsForMonth(year, month, orgId);
+      const target = DEFAULT_MONTHLY_TARGETS[month] || 10000;
+
+      const result = await revenueRepository.upsertForwardsReportMonth({
+        year, month, monthName, target, companyCommission: totalCommission, dealIds,
+      });
+      if (result === "inserted") inserted++;
+      else updated++;
+    }
+
+    return { monthsWritten: 12, inserted, updated };
+  },
+
   async getMonthBookings(year: number, month: number, scope: Scope): Promise<MonthBookingsData> {
     const bookingsData = await revenueRepository.getBookingsForMonth(year, month, effectiveOrgId(scope));
 

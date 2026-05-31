@@ -16,6 +16,7 @@ import type {
 } from "@shared/schema";
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 function toDateOrNull(value: unknown): Date | null {
   if (value == null) return null;
@@ -59,51 +60,47 @@ export const bookingRepository = {
     return result;
   },
 
-  async findByIdWithOrg(id: string) {
-    const [result] = await db
-      .select({
-        id: booking.id,
-        transaction_id: booking.transaction_id,
-        clientOrgId: sql<string | null>`COALESCE(${clientTable.orgId}, ${transaction.org_id})`,
-      })
-      .from(booking)
-      .leftJoin(transaction, eq(booking.transaction_id, transaction.id))
-      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(eq(booking.id, id))
-      .limit(1);
-    return result ?? null;
-  },
-
-  async transactionBelongsToOrg(transactionId: string, orgId: string): Promise<boolean> {
+  async bookingInScope(id: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const scopeConds = buildTransactionScopeConds(scope);
     const [row] = await db
-      .select({ id: transaction.id })
-      .from(transaction)
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(transaction.id, transactionId), eq(clientTable.orgId, orgId)))
+      .select({ id: booking.id })
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .where(and(eq(booking.id, id), ...scopeConds))
       .limit(1);
     return !!row;
   },
 
-  async flightBelongsToOrg(flightId: string, orgId: string): Promise<boolean> {
+  async transactionInScope(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const scopeConds = buildTransactionScopeConds(scope);
+    const [row] = await db
+      .select({ id: transaction.id })
+      .from(transaction)
+      .where(and(eq(transaction.id, transactionId), ...scopeConds))
+      .limit(1);
+    return !!row;
+  },
+
+  async flightInScope(flightId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const scopeConds = buildTransactionScopeConds(scope);
     const [row] = await db
       .select({ id: booking_flights.id })
       .from(booking_flights)
       .innerJoin(booking, eq(booking_flights.booking_id, booking.id))
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(booking_flights.id, flightId), eq(clientTable.orgId, orgId)))
+      .where(and(eq(booking_flights.id, flightId), ...scopeConds))
       .limit(1);
     return !!row;
   },
 
-  async accommodationBelongsToOrg(accommodationId: string, orgId: string): Promise<boolean> {
+  async accommodationInScope(accommodationId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const scopeConds = buildTransactionScopeConds(scope);
     const [row] = await db
       .select({ id: booking_accomodation.id })
       .from(booking_accomodation)
       .innerJoin(booking, eq(booking_accomodation.booking_id, booking.id))
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(booking_accomodation.id, accommodationId), eq(clientTable.orgId, orgId)))
+      .where(and(eq(booking_accomodation.id, accommodationId), ...scopeConds))
       .limit(1);
     return !!row;
   },
@@ -136,16 +133,16 @@ export const bookingRepository = {
     return rows.map((r) => r.booking);
   },
 
-  async findAllWithImages(orgId: string | null) {
-    const bookings = orgId
-      ? (await db
-          .select({ booking })
-          .from(booking)
-          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-          .where(eq(clientTable.orgId, orgId))
-          .orderBy(desc(booking.date_created))).map((r) => r.booking)
-      : await db.select().from(booking).orderBy(desc(booking.date_created));
+  async findAllWithImages(scope: ScopeOrTrusted) {
+    const scopeConds = buildTransactionScopeConds(scope);
+    const baseQuery = db
+      .select({ booking })
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
+    const rows = scopeConds.length > 0
+      ? await baseQuery.where(and(...scopeConds)).orderBy(desc(booking.date_created))
+      : await baseQuery.orderBy(desc(booking.date_created));
+    const bookings = rows.map((r) => r.booking);
     if (bookings.length === 0) return [];
 
     const bookingIds = bookings.map(b => b.id);

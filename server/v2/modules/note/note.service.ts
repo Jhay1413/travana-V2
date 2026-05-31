@@ -18,6 +18,13 @@ async function assertTransactionInScope(transactionId: string, scope: ScopeOrTru
   if (!ok) throw new AppError("Notes not found", 404);
 }
 
+async function assertClientInScope(clientId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId);
+  if (!ok) throw new AppError("Notes not found", 404);
+}
+
 async function loadScopedNote(id: string, scope: ScopeOrTrusted): Promise<Note> {
   const orgId = effectiveOrgId(scope);
   if (!orgId) {
@@ -45,8 +52,16 @@ export const noteService = {
   },
 
   async createNote(data: InsertNote, scope: ScopeOrTrusted): Promise<Note> {
+    if (!data.transaction_id && !data.client_id) {
+      throw new AppError("A note must be attached to a transaction or client", 400);
+    }
+    // Verify ownership of EVERY supplied parent before inserting, otherwise a
+    // caller could attach a note to another org's transaction or client.
     if (data.transaction_id) {
       await assertTransactionInScope(data.transaction_id, scope);
+    }
+    if (data.client_id) {
+      await assertClientInScope(data.client_id, scope);
     }
     return noteRepository.create(data);
   },

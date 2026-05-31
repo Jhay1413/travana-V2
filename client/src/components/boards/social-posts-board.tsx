@@ -335,7 +335,7 @@ export default function SocialPostsBoard() {
 
   const handlePortalToggle = useCallback(async (quoteId: string, checked: boolean) => {
     try {
-      await axiosClient.patch(`/api/quotes/${quoteId}/portal-visibility`, { show_on_portal: checked });
+      await axiosClient.patch(`/api/v2/quotes/${quoteId}/portal-visibility`, { show_on_portal: checked });
       toast({ title: checked ? "Added to portal" : "Removed from portal" });
       queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     } catch {
@@ -345,7 +345,7 @@ export default function SocialPostsBoard() {
 
   const handleFeaturedToggle = useCallback(async (quoteId: string, checked: boolean) => {
     try {
-      await axiosClient.patch(`/api/quotes/${quoteId}/featured`, { is_featured: checked });
+      await axiosClient.patch(`/api/v2/quotes/${quoteId}/featured`, { is_featured: checked });
       toast({ title: checked ? "Marked as featured deal" : "Removed from featured deals" });
       queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     } catch {
@@ -355,7 +355,7 @@ export default function SocialPostsBoard() {
 
   const handlePushNotify = useCallback(async (quoteId: string) => {
     try {
-      const res = await axiosClient.post(`/api/quotes/${quoteId}/portal-push`);
+      const res = await axiosClient.post(`/api/v2/quotes/${quoteId}/portal-push`);
       const sent = res?.data?.sent ?? res?.sent ?? 0;
       toast({ title: `Push notification sent to ${sent} device${sent !== 1 ? "s" : ""}` });
     } catch {

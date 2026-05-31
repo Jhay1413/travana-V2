@@ -24,7 +24,7 @@ const NET_PRICE = (sales: string | null | undefined, disc: string | null | undef
 const PRIMARY_IMAGE = (images: DealImage[] | undefined | null): string | null =>
   images?.find((img: DealImage) => img.isPrimary)?.image_url || images?.[0]?.image_url || null;
 
-function quoteToRow(q: QuoteWithJoins, fallbackStatus: string): QuoteRowCardData {
+export function quoteToRow(q: QuoteWithJoins, fallbackStatus: string): QuoteRowCardData {
   return {
     id: q.id,
     transactionId: q.transaction_id,

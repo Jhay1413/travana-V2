@@ -1,0 +1,1 @@
+ALTER TABLE "hub_post_comments" ADD COLUMN "test" varchar(500);

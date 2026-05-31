@@ -20,6 +20,7 @@ import {
   tour_operator,
 } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNull, ne, desc, inArray, type SQL } from "drizzle-orm";
+import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 import type {
   BranchOverviewStats,
   BranchSummary,
@@ -510,8 +511,17 @@ export const branchOverviewRepository = {
               .where(inArray(userTable.id, Array.from(userIds)))
           : [];
 
+    // Leaderboards only rank sales agents. A branch manager who also sells
+    // holds the `agent` role, so they stay; pure managers/admins drop out.
+    const agentIds = await userOrgRolesRepository.findSalesAgentUserIds({
+      orgId: scope.orgId,
+      branchId: scope.branchId,
+    });
+    const agentSet = new Set(agentIds);
+
     const map = new Map<string, BranchOverviewTeamRow>();
     for (const u of teamUsers) {
+      if (!agentSet.has(u.id)) continue;
       map.set(u.id, {
         id: u.id,
         name: u.firstName || u.name || u.email || "Agent",

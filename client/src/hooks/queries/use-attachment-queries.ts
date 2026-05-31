@@ -16,5 +16,5 @@ export function useAttachments(ticketId: string, options?: { enabled?: boolean }
 }
 
 export function getAttachmentDownloadUrl(id: string): string {
-  return `/api/attachments/${id}/download`;
+  return `/api/v2/attachments/${id}/download`;
 }

@@ -20,4 +20,10 @@ export const revenueApi = {
     );
     return data;
   },
+
+  regenerateForwards: async (): Promise<{ monthsWritten: number; inserted: number; updated: number }> => {
+    const { data } = await axiosClient.post<any>("/api/v2/revenue/forwards/regenerate");
+    // successResponse wraps as { success, message, data }; tolerate either shape
+    return data?.data ?? data;
+  },
 };

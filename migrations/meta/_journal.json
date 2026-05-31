@@ -5,43 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1773014359293,
-      "tag": "0000_romantic_inertia",
+      "when": 1780202599673,
+      "tag": "0000_fat_franklin_storm",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1744588800000,
-      "tag": "0001_referral_payout_withdrawal",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1745280000000,
-      "tag": "0002_add_is_test_to_transaction",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1745366400000,
-      "tag": "0003_add_quote_views",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1746057600000,
-      "tag": "0004_add_portal_chat_columns",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1746662400000,
-      "tag": "0005_add_wallet_transaction",
+      "when": 1780202911903,
+      "tag": "0001_abandoned_the_hood",
       "breakpoints": true
     }
   ]

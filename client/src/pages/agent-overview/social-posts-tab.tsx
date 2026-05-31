@@ -310,13 +310,23 @@ export function SocialPostsTab({
                           View Quote
                         </Button>
                       </Link>
-                      <Button
-                        className="w-full rounded-xl text-sm font-medium gap-2 bg-blue-500 hover:bg-blue-600 text-white"
-                        data-testid={`button-schedule-post-overview-${quote.id}`}
-                      >
-                        <CalendarClock className="w-4 h-4" />
-                        Schedule Post
-                      </Button>
+                      {quote.postSchedule ? (
+                        <Button
+                          className="w-full rounded-xl text-sm font-medium gap-2 bg-green-500 hover:bg-green-600 text-white"
+                          data-testid={`button-scheduled-overview-${quote.id}`}
+                        >
+                          <CalendarClock className="w-4 h-4" />
+                          Scheduled: {spFormatDate(quote.postSchedule)}
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full rounded-xl text-sm font-medium gap-2 bg-blue-500 hover:bg-blue-600 text-white"
+                          data-testid={`button-schedule-post-overview-${quote.id}`}
+                        >
+                          <CalendarClock className="w-4 h-4" />
+                          Schedule Post
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </motion.div>

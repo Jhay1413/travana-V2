@@ -488,7 +488,7 @@ export const transactionService = {
     if (!txn) throw new AppError("Transaction not found", 404);
 
     if (data.user_id && data.user_id !== oldTxn.user_id) {
-      const quotes = await newQuoteRepository.findByTransactionId(id);
+      const quotes = await newQuoteRepository.findByTransactionId(id, { orgId: null });
       const bookings = await bookingRepository.findByTransactionId(id);
       const enquiries = await enquiryTableRepository.findByTransactionId(id);
 

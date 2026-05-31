@@ -60,6 +60,15 @@ export const noteRepository = {
     return !!row;
   },
 
+  async clientBelongsToOrg(clientId: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: clientTable.id })
+      .from(clientTable)
+      .where(and(eq(clientTable.id, clientId), eq(clientTable.orgId, orgId)))
+      .limit(1);
+    return !!row;
+  },
+
   async create(note: InsertNote): Promise<Note> {
     const [result] = await db.insert(notes).values(note).returning();
     return result;

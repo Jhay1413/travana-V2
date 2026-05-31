@@ -35,7 +35,8 @@ export function FilterStrip({ filters, onChange, inactiveKeys = [] }: FilterStri
   const { orgRole } = useRole();
   const showBranchSelector = orgRole === "org_admin" || orgRole === "platform_admin";
   const { data: branches = [] } = useBranches();
-  const { data: users = [] } = useUsers();
+  // Reports are filtered by sales agent only.
+  const { data: users = [] } = useUsers({ salesAgentsOnly: true });
 
   const isInactive = (k: keyof ReportFilters) => inactiveKeys.includes(k);
 

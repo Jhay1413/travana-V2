@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"lib/api broken-import count: $\\(npx tsc --noEmit 2>&1)",
+      "Bash(echo \"deletion-related TS2307 count: $\\(npx tsc --noEmit 2>&1)",
+      "Bash(cd /home/runner/workspace; git rm -q migrations/*.sql migrations/meta/*.json 2>/dev/null; rm -f migrations/*.sql migrations/meta/*.json; echo \"=== remaining in migrations/ ===\"; find migrations -type f | sort; echo \"files left: $\\(find migrations -type f | wc -l\\)\"; echo \"=== dir still present? ===\"; [ -d migrations ] && echo \"migrations/ dir exists \\(empty, ready for fresh generate\\)\" ; [ -d migrations/meta ] && echo \"migrations/meta/ exists\" || echo \"migrations/meta/ removed\")",
+      "Bash(grep -nE 'pgTable\\\\\\(['\\\\''\"].*\\(__TRACKED_VAR__\\)' shared/schema.ts)",
+      "Bash(echo \"=== are these 'to-drop' tables defined in schema.ts? ===\")",
+      "Bash(echo '--- __TRACKED_VAR__ ---')",
+      "Bash(grep -nE 'pgTable\\\\\\(['\\\\''\"].*__TRACKED_VAR__' shared/schema.ts)",
+      "Bash(echo \"  NOT in schema.ts \\(push would DROP it\\)\")",
+      "Bash(echo)",
+      "Bash(sed -n '2158,2167p' shared/schema.ts)",
+      "Bash(sed -n '88,120p' shared/schema.ts)",
+      "Bash(grep -nA15 \"forwardsReport = pgTable\\\\|forwards_report\" shared/schema.ts)",
+      "Bash(grep -nA20 \"getForwardsForMonth\" server/v2/modules/revenue/revenue.repository.ts)",
+      "Bash(grep -nA8 \"successResponse\")",
+      "Bash(grep -nA4 \"getDashboard\\\\|useRevenueDashboard\" client/src/hooks/queries/use-revenue-queries.ts)",
+      "Bash(sed -n '1,30p' client/src/components/admin/admin-financials.tsx)",
+      "Bash(sed -n '205,245p' client/src/components/admin/admin-financials.tsx)"
+    ],
+    "additionalDirectories": [
+      "/home/runner/workspace/migrations"
+    ]
+  }
+}

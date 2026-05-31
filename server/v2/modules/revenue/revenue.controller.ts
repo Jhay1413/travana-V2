@@ -39,4 +39,9 @@ export const revenueController = {
     const data = await revenueService.getMonthForwards(year, month, getScope(req));
     return successResponse(res, data, "Month forwards retrieved successfully");
   }),
+
+  regenerateForwards: asyncHandler(async (req: Request, res: Response) => {
+    const data = await revenueService.regenerateForwardsReport(getScope(req));
+    return successResponse(res, data, "Forwards report regenerated successfully");
+  }),
 };

@@ -2,6 +2,7 @@ import { db } from "../../config/database";
 import { user, branchMembers, type User, type InsertUser, type UpsertUser } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
+import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 
 export const userRepository = {
   async findById(id: string): Promise<User | undefined> {
@@ -110,19 +111,43 @@ export const userRepository = {
     await db.delete(user).where(eq(user.id, id));
   },
 
-  async findAll(scope?: Scope): Promise<User[]> {
+  /**
+   * Scoped user roster. With `salesAgentsOnly`, only sales agents (the `agent`
+   * role) are returned, so non-selling roles never appear as assignable deal
+   * owners or in agent filters. A branch manager who also sells holds the
+   * `agent` role too, so they're kept. Without the flag, the full scoped roster
+   * is returned (e.g. for @-mentions, chat, ticket assignment).
+   */
+  async findAll(scope?: Scope, opts?: { salesAgentsOnly?: boolean }): Promise<User[]> {
+    const salesOnly = opts?.salesAgentsOnly === true;
+
     if (!scope || scope.orgRole === "platform_admin") {
-      return await db.select().from(user);
+      if (!salesOnly) return await db.select().from(user);
+      const agentIds = await userOrgRolesRepository.findSalesAgentUserIds();
+      if (agentIds.length === 0) return [];
+      return await db.select().from(user).where(inArray(user.id, agentIds));
     }
     if (scope.orgRole === "org_admin") {
-      return await db.select().from(user).where(eq(user.orgId, scope.orgId));
+      if (!salesOnly) return await db.select().from(user).where(eq(user.orgId, scope.orgId));
+      const agentIds = await userOrgRolesRepository.findSalesAgentUserIds({ orgId: scope.orgId });
+      if (agentIds.length === 0) return [];
+      return await db
+        .select()
+        .from(user)
+        .where(and(eq(user.orgId, scope.orgId), inArray(user.id, agentIds)));
     }
     if (!scope.branchId) return [];
     const memberRows = await db
       .select({ userId: branchMembers.userId })
       .from(branchMembers)
       .where(and(eq(branchMembers.branchId, scope.branchId), eq(branchMembers.isActive, true)));
-    const ids = memberRows.map(r => r.userId);
+    let ids = memberRows.map(r => r.userId);
+    if (salesOnly) {
+      const agentSet = new Set(
+        await userOrgRolesRepository.findSalesAgentUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
+      );
+      ids = ids.filter(id => agentSet.has(id));
+    }
     if (ids.length === 0) return [];
     return await db.select().from(user).where(inArray(user.id, ids));
   },
