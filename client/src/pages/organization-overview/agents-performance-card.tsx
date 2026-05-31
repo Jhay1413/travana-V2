@@ -91,7 +91,10 @@ function ProgressBar({
   );
 }
 
-export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boolean } = {}) {
+export function AgentsPerformanceCard({
+  agentsOnly = false,
+  embedded = false,
+}: { agentsOnly?: boolean; embedded?: boolean } = {}) {
   const visibleTabs = agentsOnly ? TABS.filter((t) => t.key === "agent-performance") : TABS;
   const [tab, setTab] = useState<TabKey>("agent-performance");
   const [agentRange, setAgentRange] = useState<
@@ -342,42 +345,8 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
     return map;
   }, [transactionsData]);
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-    >
-      <div
-        className="rounded-2xl border border-gray-200/80 bg-white/90 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/5"
-        data-testid="agents-performance-card"
-      >
-        <div className="flex items-center gap-1 border-b border-gray-100 px-1.5 pt-1.5 dark:border-white/10">
-          {visibleTabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTab(t.key)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-t-xl px-4 py-2.5 text-xs font-medium transition-all",
-                  active
-                    ? "border-b-2 border-gray-900 bg-gray-50 text-gray-900 dark:border-white dark:bg-white/5 dark:text-white"
-                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300",
-                )}
-                data-testid={`tab-${t.key}`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="p-5">
-          <AnimatePresence mode="wait">
+  const panels = (
+    <AnimatePresence mode="wait">
             {tab === "agent-performance" && (
               <motion.div
                 key="agent-performance"
@@ -893,8 +862,48 @@ export function AgentsPerformanceCard({ agentsOnly = false }: { agentsOnly?: boo
                 </div>
               </motion.div>
             )}
-          </AnimatePresence>
+    </AnimatePresence>
+  );
+
+  if (embedded) {
+    return panels;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <div
+        className="rounded-2xl border border-gray-200/80 bg-white/90 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/5"
+        data-testid="agents-performance-card"
+      >
+        <div className="flex items-center gap-1 border-b border-gray-100 px-1.5 pt-1.5 dark:border-white/10">
+          {visibleTabs.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-t-xl px-4 py-2.5 text-xs font-medium transition-all",
+                  active
+                    ? "border-b-2 border-gray-900 bg-gray-50 text-gray-900 dark:border-white dark:bg-white/5 dark:text-white"
+                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300",
+                )}
+                data-testid={`tab-${t.key}`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
+
+        <div className="p-5">{panels}</div>
       </div>
     </motion.div>
   );

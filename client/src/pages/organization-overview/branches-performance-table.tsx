@@ -9,6 +9,7 @@ import {
   LineChart as LineChartIcon,
   ListChecks,
   Plane,
+  Users,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -28,6 +29,7 @@ import {
 } from "@/hooks/queries";
 import { currency } from "./helpers";
 import { CommissionTrendCard } from "./commission-trend-card";
+import { AgentsPerformanceCard } from "./agents-performance-card";
 import {
   SocialPostsTab,
   type SocialFilter,
@@ -38,6 +40,7 @@ import {
 } from "@/pages/agent-overview/whats-on-tab";
 
 type TabKey =
+  | "agent-performance"
   | "branch-performance"
   | "whats-on"
   | "social-posts"
@@ -46,6 +49,7 @@ type TabKey =
   | "tour-operators";
 
 const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
+  { key: "agent-performance", label: "Agents", icon: Users },
   { key: "branch-performance", label: "Branches", icon: Building2 },
   { key: "whats-on", label: "What's On", icon: ListChecks },
   { key: "social-posts", label: "Social Posts", icon: CalendarClock },
@@ -78,7 +82,7 @@ function getProfit(item: any): number {
 }
 
 export function BranchesPerformanceTable() {
-  const [tab, setTab] = useState<TabKey>("branch-performance");
+  const [tab, setTab] = useState<TabKey>("agent-performance");
 
   const today = new Date().toISOString().slice(0, 10);
   const [socialFilter, setSocialFilter] = useState<SocialFilter>("today");
@@ -287,6 +291,18 @@ export function BranchesPerformanceTable() {
 
         <div className="p-5">
           <AnimatePresence mode="wait">
+            {tab === "agent-performance" && (
+              <motion.div
+                key="agent-performance"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3 }}
+              >
+                <AgentsPerformanceCard embedded />
+              </motion.div>
+            )}
+
             {tab === "branch-performance" && (
               <motion.div
                 key="branch-performance"

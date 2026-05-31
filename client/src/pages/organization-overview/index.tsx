@@ -6,7 +6,6 @@ import { useBranches, useOrganizationOverviewStats } from "@/hooks/queries";
 import { OrgProfileStrip } from "./org-profile-strip";
 import { KpiCards } from "./kpi-cards";
 import { BranchesPerformanceTable } from "./branches-performance-table";
-import { AgentsPerformanceCard } from "./agents-performance-card";
 import { ForwardsSynopsisCard } from "./forwards-synopsis-card";
 import BranchOverviewPage from "@/pages/branch-overview";
 
@@ -86,7 +85,6 @@ export default function OrganizationOverviewPage() {
           <KpiCards kpis={data.kpis} />
           <BranchesPerformanceTable />
           <ForwardsSynopsisCard />
-          <AgentsPerformanceCard agentsOnly />
         </>
       )}
     </section>
