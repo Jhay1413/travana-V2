@@ -6,30 +6,7 @@ import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
 import { getScope } from "../../utils/scope";
 import { authStorage } from "../../middlewares/auth";
-
-const BUDGET_TYPE_MAP: Record<string, string> = {
-  "Per Person": "PER_PERSON",
-  "per person": "PER_PERSON",
-  "PER_PERSON": "PER_PERSON",
-  "Package": "PACKAGE",
-  "package": "PACKAGE",
-  "PACKAGE": "PACKAGE",
-};
-
-const ENQUIRY_STATUS_MAP: Record<string, string> = {
-  "Active": "ACTIVE",
-  "active": "ACTIVE",
-  "ACTIVE": "ACTIVE",
-  "New Lead": "NEW_LEAD",
-  "new_lead": "NEW_LEAD",
-  "NEW_LEAD": "NEW_LEAD",
-  "Lost": "LOST",
-  "LOST": "LOST",
-  "Inactive": "INACTIVE",
-  "INACTIVE": "INACTIVE",
-  "Expired": "EXPIRED",
-  "EXPIRED": "EXPIRED",
-};
+import { normalizeEnquiry } from "../../utils/enum-normalizers";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   "In Play": "QUOTE_IN_PROGRESS",
@@ -57,17 +34,6 @@ const QUOTE_STATUS_MAP: Record<string, string> = {
   "Expired": "EXPIRED",
   "EXPIRED": "EXPIRED",
 };
-
-function normalizeEnquiry(data: any) {
-  const normalized = { ...data };
-  if (normalized.budget_type) {
-    normalized.budget_type = BUDGET_TYPE_MAP[normalized.budget_type] || "PACKAGE";
-  }
-  if (normalized.status) {
-    normalized.status = ENQUIRY_STATUS_MAP[normalized.status] || "NEW_LEAD";
-  }
-  return normalized;
-}
 
 function normalizeQuote(data: any) {
   const normalized = { ...data };

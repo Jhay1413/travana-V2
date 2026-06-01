@@ -3,6 +3,7 @@ import { newEnquiryService } from "./enquiry.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
+import { normalizeEnquiry } from "../../utils/enum-normalizers";
 
 export const enquiryController = {
   listEnquiries: asyncHandler(async (req: Request, res: Response) => {
@@ -27,7 +28,7 @@ export const enquiryController = {
 
   createEnquiry: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
-    const enquiry = await newEnquiryService.createEnquiry(req.body, scope);
+    const enquiry = await newEnquiryService.createEnquiry(normalizeEnquiry(req.body), scope);
     return successResponse(res, enquiry, "Enquiry created successfully", 201);
   }),
 
@@ -36,7 +37,7 @@ export const enquiryController = {
     const id = req.params.id as string;
     const { destinations, resorts, boardBases, departureAirports, passengers, ...enquiryData } = req.body;
     const relations = { destinations, resorts, boardBases, departureAirports, passengers };
-    const enquiry = await newEnquiryService.updateEnquiry(id, enquiryData, relations, scope);
+    const enquiry = await newEnquiryService.updateEnquiry(id, normalizeEnquiry(enquiryData), relations, scope);
     return successResponse(res, enquiry, "Enquiry updated successfully");
   }),
 

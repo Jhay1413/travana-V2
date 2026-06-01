@@ -1016,7 +1016,7 @@ export default function EnquiryPage() {
                         <SpecRow testId="post-cruise" label="Post-Cruise Stay" value={`${enquiry.post_cruise_stay} nights`} />
                       )}
                       {!isCruise && !isHotTub && (
-                        <SpecRow testId="star-rating" label="Min Star Rating" value={enquiry.accom_min_star_rating ? `${enquiry.accom_min_star_rating} Star` : null} />
+                        <SpecRow testId="star-rating" label="Min Star Rating" value={enquiry.accom_min_star_rating || null} />
                       )}
                     </div>
                   </div>

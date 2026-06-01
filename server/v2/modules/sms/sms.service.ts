@@ -325,3 +325,4 @@ export async function pingSmsConnection(): Promise<{ connected: boolean; fromPho
     return { connected: false, error: err?.message ?? String(err) };
   }
 }
+              
