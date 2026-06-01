@@ -66,6 +66,11 @@ const currency = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 0,
 });
 
+function formatBudgetType(budgetType?: string | null) {
+  if (!budgetType) return "";
+  return budgetType === "PER_PERSON" ? "pp" : ` ${budgetType.toLowerCase()}`;
+}
+
 function formatRelativeTime(date: string | Date) {
   const now = new Date();
   const d = typeof date === "string"
@@ -919,7 +924,7 @@ export default function EnquiryPage() {
                                   <>
                                     , <span className="text-sm font-semibold text-[#000000]">
                                       {currency.format(parseFloat(enquiry.budget))}
-                                      {enquiry.budget_type ? ` ${enquiry.budget_type.toLowerCase()}` : ""}
+                                      {formatBudgetType(enquiry.budget_type)}
                                     </span>
                                   </>
                                 ) : null}
@@ -978,7 +983,7 @@ export default function EnquiryPage() {
                         <SpecRow
                           testId="passengers"
                           label="Passengers"
-                          value={totalPassengers > 0 ? `${adultsCount} Adult${adultsCount !== 1 ? "s" : ""}, ${childrenCount} Children ${infantsCount} Infants` : null}
+                          value={totalPassengers > 0 ? passengerBreakdown : null}
                         />
                       )}
                       {!isCruise && !isHotTub && (
@@ -992,7 +997,7 @@ export default function EnquiryPage() {
                       <SpecRow
                         testId="budget"
                         label="Budget"
-                        value={enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))} ${enquiry.budget_type?.toLowerCase() || ""}` : null}
+                        value={enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))}${formatBudgetType(enquiry.budget_type)}` : null}
                       />
                       <SpecRow testId="flexibility" label="Flexibility" value={enquiry.flexibility_date || enquiry.flexible_date} />
                       {!isCruise && (
