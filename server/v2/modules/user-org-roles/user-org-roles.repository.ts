@@ -7,6 +7,12 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** The org-role string that marks a user as a sales agent. */
 const SALES_AGENT_ROLE = 'agent';
 
+/** Support role that should not appear in agent pickers, leaderboards or stats. */
+const SOCIAL_MEDIA_ROLE = 'social_media_manager';
+
+/** Operational roles — a user holding any of these is a real team member. */
+const OPERATIONAL_ROLES = ['org_admin', 'branch_manager', 'agent', 'homeworker'];
+
 export const userOrgRolesRepository = {
   /**
    * User IDs of everyone who is a sales agent — i.e. holds the `agent` role,
@@ -39,6 +45,45 @@ export const userOrgRolesRepository = {
     for (const r of junctionRows) ids.add(r.userId);
     for (const r of memberRows) ids.add(r.userId);
     return Array.from(ids);
+  },
+
+  /**
+   * User IDs whose ONLY role is `social_media_manager` (i.e. they hold no
+   * operational role like agent/homeworker/branch_manager/org_admin). These are
+   * excluded from agent pickers, target lists, leaderboards and performance
+   * stats. A social media manager who is ALSO an agent keeps their operational
+   * role and is NOT returned here, so they still show up where appropriate.
+   */
+  async findSocialOnlyUserIds(opts?: { orgId?: string | null; branchId?: string | null }): Promise<string[]> {
+    const orgId = opts?.orgId ?? null;
+    const branchId = opts?.branchId ?? null;
+
+    const memberConds = [eq(branchMembers.isActive, true)];
+    if (branchId) memberConds.push(eq(branchMembers.branchId, branchId));
+    else if (orgId) memberConds.push(eq(branchMembers.orgId, orgId));
+
+    const junctionBase = db.select({ userId: userOrgRoles.userId, role: userOrgRoles.role }).from(userOrgRoles);
+    const [junctionRows, memberRows] = await Promise.all([
+      orgId ? junctionBase.where(eq(userOrgRoles.orgId, orgId)) : junctionBase,
+      db.select({ userId: branchMembers.userId, role: branchMembers.orgRole }).from(branchMembers).where(and(...memberConds)),
+    ]);
+
+    const rolesByUser = new Map<string, Set<string>>();
+    const add = (userId: string, role: string) => {
+      let set = rolesByUser.get(userId);
+      if (!set) { set = new Set(); rolesByUser.set(userId, set); }
+      set.add(role);
+    };
+    for (const r of junctionRows) add(r.userId, r.role);
+    for (const r of memberRows) add(r.userId, r.role);
+
+    const result: string[] = [];
+    rolesByUser.forEach((roles, userId) => {
+      if (roles.has(SOCIAL_MEDIA_ROLE) && !OPERATIONAL_ROLES.some((r) => roles.has(r))) {
+        result.push(userId);
+      }
+    });
+    return result;
   },
 
   /** Returns the full junction rows for a (user, org). */

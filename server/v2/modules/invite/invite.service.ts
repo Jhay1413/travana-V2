@@ -7,7 +7,7 @@ import { inviteRepository, type PendingInviteRow } from './invite.repository';
 import { branchRepository } from '../branch/branch.repository';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const ALLOWED_ROLES = ['branch_manager', 'agent', 'homeworker', 'referral_agent'] as const;
+const ALLOWED_ROLES = ['branch_manager', 'agent', 'homeworker', 'referral_agent', 'social_media_manager'] as const;
 type AllowedRole = (typeof ALLOWED_ROLES)[number];
 
 // Branch managers can only invite "downstream" — agents and homeworkers.

@@ -1,0 +1,1 @@
+ALTER TABLE "hub_post_comments" DROP COLUMN "test";

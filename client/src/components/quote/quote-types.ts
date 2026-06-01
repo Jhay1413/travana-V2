@@ -285,7 +285,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
       serviceCharge: serviceCharge,
       totalCommission: packageCommission,
       haysDeduction: parseFloat((packageCommission * 0.10).toFixed(2)),
-      netCommission: parseFloat((packageCommission - (packageCommission - packageCommission * 0.10) * 0.25).toFixed(2)),
+      netCommission: packageCommission,
       referralPayout: parseFloat(((packageCommission - packageCommission * 0.10) * 0.25).toFixed(2)),
       agentSplitPercent: 0,
       agentSplitValue: 0,

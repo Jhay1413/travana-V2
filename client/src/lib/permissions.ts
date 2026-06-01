@@ -68,6 +68,15 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     financials: "read_own", team: "none", billing: "none", branding: "none",
     permissions: "none", audit: "none", platform_admin: "none",
   },
+  SocialMediaManager: {
+    // Full control of Social Posts; read-only on the deals they post about.
+    social: "admin",
+    pipeline: "read_all", quotes: "read_all", clients: "read_all",
+    bookings: "none", enquiries: "none", tickets: "none", hr: "none", sms: "none",
+    destination_guru: "none", financials: "none", referrals: "none", team: "none",
+    billing: "none", branding: "none", permissions: "none", audit: "none",
+    platform_admin: "none",
+  },
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
@@ -77,6 +86,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   Agent: "Agent",
   Homeworker: "Homeworker",
   Referer: "Referral Agent",
+  SocialMediaManager: "Social Media Manager",
 };
 
 export const ROLE_DESCRIPTION: Record<Role, string> = {
@@ -86,10 +96,11 @@ export const ROLE_DESCRIPTION: Record<Role, string> = {
   Agent: "Sells and manages their own assigned clients",
   Homeworker: "Independent agent — sees only their own clients",
   Referer: "Submits referrals and tracks commission",
+  SocialMediaManager: "Creates and schedules the agency's social media posts",
 };
 
-const ALL_ROLES: Role[] = ["PlatformAdmin", "Admin", "Manager", "Agent", "Homeworker", "Referer"];
-export const VISIBLE_ROLES: Role[] = ["Admin", "Manager", "Agent", "Homeworker", "Referer"];
+const ALL_ROLES: Role[] = ["PlatformAdmin", "Admin", "Manager", "Agent", "Homeworker", "Referer", "SocialMediaManager"];
+export const VISIBLE_ROLES: Role[] = ["Admin", "Manager", "Agent", "Homeworker", "Referer", "SocialMediaManager"];
 export const ALL_MODULES: Module[] = [
   "clients", "quotes", "bookings", "enquiries", "pipeline", "tickets",
   "hr", "sms", "social", "destination_guru", "financials", "referrals",

@@ -16,6 +16,7 @@ import {
 } from "../../utils/scope-conditions";
 import { totalBookingCommissionExpr } from "../../utils/commission-sql";
 import { quoteStatsConds } from "../../utils/quote-conditions";
+import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 import {
   getShopTargetsByDateRange,
   getAgentTargetsByDateRange,
@@ -276,8 +277,14 @@ export const reportsRepository = {
               .where(inArray(userTable.id, Array.from(userIds)))
           : [];
 
+    // Pure social media managers aren't sales agents — keep them out of the report.
+    const socialOnly = new Set(
+      await userOrgRolesRepository.findSocialOnlyUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
+    );
+
     const map = new Map<string, AgentPerformanceRow>();
     for (const u of seedUsers) {
+      if (socialOnly.has(u.id)) continue;
       map.set(u.id, {
         id: u.id,
         name: u.firstName || u.name || u.email || "Agent",

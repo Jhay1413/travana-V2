@@ -28,12 +28,14 @@ export const socialPostController = {
     if (!postSchedule || isNaN(new Date(postSchedule).getTime())) {
       return res.status(400).json({ success: false, message: "Invalid or missing postSchedule" });
     }
+    // Local wall-clock string for OnlySocials; falls back to the UTC value for old clients.
+    const postScheduleLocal = (req.body.postScheduleLocal as string) || postSchedule;
     let existingImageIds: number[] = [];
     let imageUrls: string[] = [];
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.schedulePost(id, postSchedule, existingImageIds, newFiles, imageUrls, getScope(req));
+    const deal = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, imageUrls, getScope(req));
     return successResponse(res, deal, "Post scheduled successfully");
   }),
 
@@ -43,13 +45,15 @@ export const socialPostController = {
     if (!postSchedule || isNaN(new Date(postSchedule).getTime())) {
       return res.status(400).json({ success: false, message: "Invalid or missing postSchedule" });
     }
+    // Local wall-clock string for OnlySocials; falls back to the UTC value for old clients.
+    const postScheduleLocal = (req.body.postScheduleLocal as string) || postSchedule;
     const postContent = (req.body.postContent as string) || "";
     let existingImageIds: number[] = [];
     let imageUrls: string[] = [];
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.reschedulePost(id, postSchedule, existingImageIds, newFiles, postContent, imageUrls, getScope(req));
+    const deal = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, imageUrls, getScope(req));
     return successResponse(res, deal, "Post rescheduled successfully");
   }),
 

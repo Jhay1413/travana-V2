@@ -35,7 +35,7 @@ async function assertDealInScope(dealId: string, scope: ScopeOrTrusted): Promise
   if (!deal) throw new AppError("Travel deal not found", 404);
   if (!orgId) return deal;
   const row = await socialPostRepository.findByIdWithOrg(dealId);
-  if (!row || row.clientOrgId !== orgId) {
+  if (!row || row.orgId !== orgId) {
     throw new AppError("Travel deal not found", 404);
   }
   return deal;
@@ -288,6 +288,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
   async schedulePost(
     id: string,
     postSchedule: string,
+    postScheduleLocal: string,
     existingImageIds: number[],
     newFiles: Express.Multer.File[],
     imageUrls: string[] = [],
@@ -306,7 +307,9 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       allImageIds = [...allImageIds, ...urlMediaIds];
     }
 
-    const result = await scheduleOnlySocialsPost(postSchedule, deal.post, allImageIds);
+    // OnlySocials stores the date/time verbatim (no timezone), so give it the
+    // user's local wall-clock value; the DB keeps the absolute UTC instant.
+    const result = await scheduleOnlySocialsPost(postScheduleLocal, deal.post, allImageIds);
 
     return await socialPostRepository.update(id, {
       onlySocialsId: result.uuid,
@@ -317,6 +320,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
   async reschedulePost(
     id: string,
     newPostSchedule: string,
+    newPostScheduleLocal: string,
     existingImageIds: number[],
     newFiles: Express.Multer.File[],
     postContent: string,
@@ -337,9 +341,10 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       allImageIds = [...allImageIds, ...urlMediaIds];
     }
 
+    // OnlySocials gets the local wall-clock value; the DB keeps the UTC instant.
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
-      newPostSchedule,
+      newPostScheduleLocal,
       postContent,
       allImageIds
     );

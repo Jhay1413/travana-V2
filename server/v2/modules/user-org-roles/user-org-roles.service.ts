@@ -15,14 +15,15 @@ import { platformAdminAuditRepository } from '../platform-admin/platform-admin-a
  * user_org_roles, and is handled separately in middleware.
  */
 const ROLE_RANK: Record<string, number> = {
-  org_admin:      100,
-  branch_manager:  80,
-  agent:           60,
-  homeworker:      40,
-  referral_agent:  20,
+  org_admin:            100,
+  branch_manager:        80,
+  agent:                 60,
+  social_media_manager:  50,
+  homeworker:            40,
+  referral_agent:        20,
 };
 
-const INTERNAL_ROLES = new Set(['org_admin', 'branch_manager', 'agent', 'homeworker']);
+const INTERNAL_ROLES = new Set(['org_admin', 'branch_manager', 'agent', 'homeworker', 'social_media_manager']);
 
 export function primaryRole(roles: string[]): string | null {
   if (roles.length === 0) return null;

@@ -115,9 +115,16 @@ function toConnexaPhone(phone: string): string {
   return phone.startsWith('+') ? phone.slice(1) : phone;
 }
 
-/** Connexa sender_id rule: 3-11 chars, alphanumeric, at least one letter. */
+/**
+ * Connexa sender_id accepts either:
+ *  - alphanumeric: 3-11 chars with at least one letter (e.g. "YourBrand"), or
+ *  - a subscribed Virtual Long Number in 447 format (digits only, up to 12 chars).
+ */
 export function sanitiseSenderId(name: string | null | undefined): string {
-  const cleaned = (name ?? '')
+  const raw = (name ?? '').trim();
+  // Subscribed Virtual Long Number (447 + up to 9 digits) — pass through as-is.
+  if (/^447\d{6,9}$/.test(raw)) return raw;
+  const cleaned = raw
     .replace(/[^a-zA-Z0-9 ]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -135,7 +142,7 @@ export async function sendSms({ to, body }: { to: string; body: string }): Promi
       Accept: 'application/json',
     },                                                                                    
     body: JSON.stringify({
-      sender_id: "447477234424",
+      sender_id: getSenderId(),
       message: body,
       contact_number: toConnexaPhone(to),
     }),

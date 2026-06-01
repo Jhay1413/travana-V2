@@ -17,7 +17,11 @@
       "Bash(grep -nA8 \"successResponse\")",
       "Bash(grep -nA4 \"getDashboard\\\\|useRevenueDashboard\" client/src/hooks/queries/use-revenue-queries.ts)",
       "Bash(sed -n '1,30p' client/src/components/admin/admin-financials.tsx)",
-      "Bash(sed -n '205,245p' client/src/components/admin/admin-financials.tsx)"
+      "Bash(sed -n '205,245p' client/src/components/admin/admin-financials.tsx)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(git -C /home/runner/workspace stash list)",
+      "Bash(git -C /home/runner/workspace diff --name-only)"
     ],
     "additionalDirectories": [
       "/home/runner/workspace/migrations"

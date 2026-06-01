@@ -3,7 +3,6 @@ import {
   travel_deal,
   quote,
   transaction,
-  clientTable,
   quote_accomodation,
   accomodation_list,
   accommodation_images,
@@ -39,28 +38,31 @@ export const socialPostRepository = {
   },
 
   async findByIdWithOrg(id: string) {
+    // Scope by the transaction's org rather than the client's — marketing/social
+    // deals often have no client, which would otherwise leave the org null.
     const [result] = await db
       .select({
         id: travel_deal.id,
         quote_id: travel_deal.quote_id,
-        clientOrgId: clientTable.orgId,
+        orgId: transaction.org_id,
       })
       .from(travel_deal)
       .leftJoin(quote, eq(travel_deal.quote_id, quote.id))
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
       .where(eq(travel_deal.id, id))
       .limit(1);
     return result ?? null;
   },
 
   async quoteBelongsToOrg(quoteId: string, orgId: string): Promise<boolean> {
+    // Scope by transaction.org_id (the canonical pattern) rather than the client's
+    // org — free/marketing quotes used for social posts often have no client, so a
+    // client join would wrongly exclude them.
     const [row] = await db
       .select({ id: quote.id })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(quote.id, quoteId), eq(clientTable.orgId, orgId)))
+      .where(and(eq(quote.id, quoteId), eq(transaction.org_id, orgId)))
       .limit(1);
     return !!row;
   },

@@ -1,6 +1,6 @@
 import axiosClient from "../client/axios-client";
 
-export type InviteOrgRole = "branch_manager" | "agent" | "homeworker" | "referral_agent";
+export type InviteOrgRole = "branch_manager" | "agent" | "homeworker" | "referral_agent" | "social_media_manager";
 
 export interface SendInvitePayload {
   email:    string;

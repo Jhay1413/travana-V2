@@ -828,7 +828,12 @@ export const branchOverviewRepository = {
 
     const aggByUser = new Map(aggRows.map((r) => [r.agentId, r] as const));
 
-    const rows: AgentPerformanceRow[] = teamUsers.map((u) => {
+    // Pure social media managers aren't sales agents — exclude from the stats.
+    const socialOnly = new Set(
+      await userOrgRolesRepository.findSocialOnlyUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
+    );
+
+    const rows: AgentPerformanceRow[] = teamUsers.filter((u) => !socialOnly.has(u.id)).map((u) => {
       const a = aggByUser.get(u.id);
       const today = Number(a?.today ?? 0);
       const week = Number(a?.week ?? 0);

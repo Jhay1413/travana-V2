@@ -78,7 +78,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 Comm
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-commission-value">
-                {currency.format(booking.commissions.commissionValue)}
+                {currencyPence.format(booking.commissions.commissionValue)}
               </div>
             </div>
 

@@ -3,7 +3,7 @@ import { branchMemberRepository } from '../branch-member/branch-member.repositor
 import { branchRepository } from '../branch/branch.repository';
 import { userRepository } from '../user/user.repository';
 
-const ALLOWED_ORG_ROLES = ['org_admin', 'branch_manager', 'agent', 'homeworker', 'referral_agent'] as const;
+const ALLOWED_ORG_ROLES = ['org_admin', 'branch_manager', 'agent', 'homeworker', 'referral_agent', 'social_media_manager'] as const;
 type OrgRole = (typeof ALLOWED_ORG_ROLES)[number];
 
 function assertRole(role: string): asserts role is OrgRole {

@@ -11,9 +11,10 @@ import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
-import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirports, useAirportsByCountries, useAccommodationTypes } from "@/hooks/queries";
+import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirports, useAccommodationTypes } from "@/hooks/queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
+import { AddAirportModal } from "@/components/lookups/add-airport-modal";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 
 const FLEXIBILITY_OPTIONS = [
@@ -257,6 +258,9 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   const [form, setForm] = useState<EnquiryForm>(defaultForm);
   const [direction, setDirection] = useState(1);
   const [resortSearch, setResortSearch] = useState("");
+  const [airportSearch, setAirportSearch] = useState("");
+  const [showAddAirport, setShowAddAirport] = useState(false);
+  const [addedAirportLabels, setAddedAirportLabels] = useState<Record<string, string>>({});
 
   const primaryCountry = form.countries[0];
   const primaryDestination = form.destinations[0];
@@ -277,7 +281,6 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   );
   const { data: boardBasisData } = useBoardBasis();
   const { data: airportsData } = useAirports();
-  const { data: countryAirportsData } = useAirportsByCountries(form.countries);
   const { data: packageTypesData } = usePackageTypes();
   const { data: accommodationTypesData } = useAccommodationTypes();
 
@@ -299,6 +302,17 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   }, [open, enquiry]);
 
   const set = (key: keyof EnquiryForm, val: any) => setForm((prev) => ({ ...prev, [key]: val }));
+
+  // Default the Holiday Type to "Package Holiday" for new enquiries once the
+  // lookup loads. Options are keyed by id, so we resolve the name to its id.
+  useEffect(() => {
+    if (!open || enquiry || !packageTypesData) return;
+    setForm((prev) => {
+      if (prev.holidayType) return prev;
+      const pkg = packageTypesData.find((p: any) => p.name === "Package Holiday");
+      return pkg ? { ...prev, holidayType: pkg.id } : prev;
+    });
+  }, [open, enquiry, packageTypesData]);
 
   // ----- Multi-select handlers (Country / Destination / Resort) -----
 
@@ -373,14 +387,14 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
     });
   };
 
-  // Departure airport options: country-filtered when countries selected, else UK default list
-  const airportOptions = form.countries.length > 0
-    ? (countryAirportsData || []).map((a) => ({ value: a.id, label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}` }))
-    : getDepartureAirportOptions(airportsData);
-  const airportLabels = airportOptions.reduce<Record<string, string>>((acc, o) => {
-    acc[o.value] = o.label;
+  // Departure airport options: always the UK departure airport list.
+  const airportOptions = getDepartureAirportOptions(airportsData);
+  // Dropdown stays the curated UK list, but resolve chip labels from the full
+  // airport set so any selected airport (incl. ones added inline) displays.
+  const airportLabels = (airportsData || []).reduce<Record<string, string>>((acc, a) => {
+    acc[a.id] = `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`;
     return acc;
-  }, { ...form.labels });
+  }, { ...form.labels, ...addedAirportLabels });
 
   const canProceed = () => {
     if (step === 0) return form.enquiryTitle.trim() !== "" && form.holidayType !== "";
@@ -652,7 +666,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                           value={form.countries}
                           onValueChange={handleCountriesChange}
                           options={(countriesData || []).map((c: any) => ({ value: c.id, label: c.country_name }))}
-                          placeholder="Select countries..."
+                          placeholder="Select ..."
                           searchPlaceholder="Search countries..."
                           emptyMessage="No countries found."
                           data-testid="select-enquiry-country"
@@ -665,7 +679,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                           onValueChange={handleDestinationsChange}
                           selectedLabels={form.labels}
                           options={(destinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
-                          placeholder="Select destinations..."
+                          placeholder="Select ..."
                           searchPlaceholder="Search destinations..."
                           emptyMessage="No destinations found."
                           data-testid="select-enquiry-destination"
@@ -679,7 +693,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                           selectedLabels={form.labels}
                           options={(resortsData || []).map((r: any) => ({ value: r.id, label: r.name }))}
                           onSearch={setResortSearch}
-                          placeholder="Search resorts..."
+                          placeholder="Search ..."
                           searchPlaceholder="Search resorts..."
                           emptyMessage="No resorts found."
                           data-testid="select-enquiry-resort"
@@ -903,7 +917,24 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                       placeholder="Select airports..."
                       searchPlaceholder="Search airports..."
                       emptyMessage="No airports found."
+                      onSearchCapture={setAirportSearch}
+                      onAddNew={airportSearch ? () => setShowAddAirport(true) : undefined}
+                      addNewLabel="Add Airport"
                       data-testid="input-departure-airport"
+                    />
+                    <AddAirportModal
+                      open={showAddAirport}
+                      onOpenChange={setShowAddAirport}
+                      initialName={airportSearch}
+                      onSuccess={(airport) => {
+                        const label = `${airport.airport_name}${airport.airport_code ? ` (${airport.airport_code})` : ""}`;
+                        setAddedAirportLabels((prev) => ({ ...prev, [airport.id]: label }));
+                        setForm((prev) => ({
+                          ...prev,
+                          departureAirports: [...prev.departureAirports, airport.id],
+                        }));
+                        setAirportSearch("");
+                      }}
                     />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">

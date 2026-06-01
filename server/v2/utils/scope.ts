@@ -7,7 +7,8 @@ export type OrgRole =
   | "branch_manager"
   | "agent"
   | "homeworker"
-  | "referral_agent";
+  | "referral_agent"
+  | "social_media_manager";
 
 /**
  * Per-request scope.

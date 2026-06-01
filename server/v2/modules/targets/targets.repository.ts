@@ -8,6 +8,7 @@ import {
 } from "@shared/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import type { ShopTargetInput, AgentTargetInput, AgentInfo } from "./targets.types";
+import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 
 export async function getAllShopTargets(branchId: string) {
   return await db
@@ -160,7 +161,9 @@ export async function getAllAgents(branchId: string): Promise<AgentInfo[]> {
     .innerJoin(branchMembers, eq(branchMembers.userId, user.id))
     .where(and(eq(branchMembers.branchId, branchId), eq(branchMembers.isActive, true)));
 
-  return agents;
+  // Exclude pure social media managers — they don't carry sales targets.
+  const socialOnly = new Set(await userOrgRolesRepository.findSocialOnlyUserIds({ branchId }));
+  return agents.filter((a) => !socialOnly.has(a.id));
 }
 
 export async function getTargetSummaryByDateRange(branchId: string, startYear: number, startMonth: number, endYear: number, endMonth: number) {

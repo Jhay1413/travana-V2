@@ -58,7 +58,8 @@ export type AssignableOrgRole =
   | "branch_manager"
   | "agent"
   | "homeworker"
-  | "referral_agent";
+  | "referral_agent"
+  | "social_media_manager";
 
 export interface UsersListFilters {
   orgId?:  string;

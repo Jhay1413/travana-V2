@@ -2,6 +2,7 @@ import { db } from '../../config/database';
 import { enquiry_table, quote, booking, transaction, clientTable, user, branchMembers } from '@shared/schema';
 import { eq, and, sql, ilike, or, gte, lte, count, isNull, type SQL } from 'drizzle-orm';
 import type { Scope } from '../../utils/scope';
+import { userOrgRolesRepository } from '../user-org-roles/user-org-roles.repository';
 
 export interface OpportunityFilters {
   page: number;
@@ -98,18 +99,23 @@ export const opportunitiesRepository = {
     if (scope.orgRole === 'platform_admin') {
       return db.select({ id: user.id, name: user.name, firstName: user.firstName }).from(user).orderBy(user.firstName);
     }
-    if (scope.branchId && (scope.orgRole === 'branch_manager' || scope.orgRole === 'agent')) {
-      return db
-        .select({ id: user.id, name: user.name, firstName: user.firstName })
-        .from(user)
-        .innerJoin(branchMembers, and(eq(branchMembers.userId, user.id), eq(branchMembers.isActive, true)))
-        .where(and(eq(user.orgId, scope.orgId), eq(branchMembers.branchId, scope.branchId)))
-        .orderBy(user.firstName);
-    }
-    return db
-      .select({ id: user.id, name: user.name, firstName: user.firstName })
-      .from(user)
-      .where(eq(user.orgId, scope.orgId))
-      .orderBy(user.firstName);
+    // Pure social media managers aren't sales agents — keep them out of the picker.
+    const socialOnly = new Set(
+      await userOrgRolesRepository.findSocialOnlyUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
+    );
+    const rows =
+      scope.branchId && (scope.orgRole === 'branch_manager' || scope.orgRole === 'agent')
+        ? await db
+            .select({ id: user.id, name: user.name, firstName: user.firstName })
+            .from(user)
+            .innerJoin(branchMembers, and(eq(branchMembers.userId, user.id), eq(branchMembers.isActive, true)))
+            .where(and(eq(user.orgId, scope.orgId), eq(branchMembers.branchId, scope.branchId)))
+            .orderBy(user.firstName)
+        : await db
+            .select({ id: user.id, name: user.name, firstName: user.firstName })
+            .from(user)
+            .where(eq(user.orgId, scope.orgId))
+            .orderBy(user.firstName);
+    return rows.filter((r) => !socialOnly.has(r.id));
   },
 };

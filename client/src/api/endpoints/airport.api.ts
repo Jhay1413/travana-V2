@@ -9,7 +9,7 @@ export const airportApi = {
     return data;
   },
 
-  create: async (airportData: Omit<Airport, "id" | "createdAt">): Promise<Airport> => {
+  create: async (airportData: { airport_name: string; airport_code: string; country_id?: string }): Promise<Airport> => {
     const { data } = await axiosClient.post<Airport>("/api/v2/airports", airportData);
     return data;
   },

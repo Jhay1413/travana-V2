@@ -18,6 +18,7 @@ const ALL_ROLES: AssignableOrgRole[] = [
   "agent",
   "homeworker",
   "referral_agent",
+  "social_media_manager",
 ];
 
 const INTERNAL_ROLES = new Set<AssignableOrgRole>([
@@ -25,14 +26,16 @@ const INTERNAL_ROLES = new Set<AssignableOrgRole>([
   "branch_manager",
   "agent",
   "homeworker",
+  "social_media_manager",
 ]);
 
 const ROLE_LABEL: Record<AssignableOrgRole, string> = {
-  org_admin:      "Org admin",
-  branch_manager: "Branch manager",
-  agent:          "Agent",
-  homeworker:     "Homeworker",
-  referral_agent: "Referral agent",
+  org_admin:            "Org admin",
+  branch_manager:       "Branch manager",
+  agent:                "Agent",
+  homeworker:           "Homeworker",
+  referral_agent:       "Referral agent",
+  social_media_manager: "Social media manager",
 };
 
 /**

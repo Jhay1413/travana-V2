@@ -292,9 +292,13 @@ export function SocialPostPreviewDialog({
     }
 
     const currentHtml = postRef.current?.innerHTML ?? "";
-    // Convert the local datetime-local value to a UTC ISO string so the backend
-    // stores the correct UTC time and OnlySocials receives the right schedule.
-    const postScheduleIso = new Date(scheduleDate).toISOString();
+    // Two representations of the same moment:
+    //  - postScheduleLocal: the raw wall-clock the user picked. OnlySocials stores
+    //    date/time verbatim (no timezone), so it must get this unconverted.
+    //  - postScheduleUtc: the absolute UTC instant, stored in the DB so the
+    //    dashboard's date filters and timezone-correct display work.
+    const postScheduleLocal = scheduleDate;
+    const postScheduleUtc = new Date(scheduleDate).toISOString();
     const existingIds = imageOrder
       .filter((i) => i.type === "existing")
       .map((i) => (i.data as ExistingImage).id);
@@ -322,7 +326,8 @@ export function SocialPostPreviewDialog({
 
     try {
       const formData = new FormData();
-      formData.append("postSchedule", postScheduleIso);
+      formData.append("postSchedule", postScheduleUtc);
+      formData.append("postScheduleLocal", postScheduleLocal);
       formData.append("existingImageIds", JSON.stringify(existingIds));
       formData.append("imageUrls", JSON.stringify(selectedUrls));
       newFiles.forEach((file) => formData.append("files", file));

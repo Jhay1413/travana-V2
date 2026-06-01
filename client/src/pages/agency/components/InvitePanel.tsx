@@ -8,7 +8,7 @@ import { useSendInvite } from "@/hooks/mutations/use-invite-mutations";
 import { ASSIGNABLE_ROLES } from "../utils/role-helpers";
 import type { InviteOrgRole } from "@/api/endpoints/invite.api";
 
-const ALL_INVITABLE_ROLES: InviteOrgRole[] = ["branch_manager", "agent", "homeworker", "referral_agent"];
+const ALL_INVITABLE_ROLES: InviteOrgRole[] = ["branch_manager", "agent", "homeworker", "social_media_manager", "referral_agent"];
 
 export function InvitePanel({
   brandColor,

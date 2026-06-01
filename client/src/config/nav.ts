@@ -53,10 +53,10 @@ const AGENT_NAV: NavConfig = [
     items: [
       { path: "/agent-overview", label: "Agent Dashboard", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
-      { path: "/tickets", label: "Tickets", icon: LifeBuoy },
-      { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
       { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
+      { path: "/tickets", label: "Tickets", icon: LifeBuoy },
+      { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/my-profile", label: "My Profile", icon: UserCircle },
     ],
@@ -151,6 +151,18 @@ const REFERRAL_NAV: NavConfig = [
   },
 ];
 
+const SOCIAL_MEDIA_NAV: NavConfig = [
+  {
+    id: "main",
+    items: [
+      { path: "/agent-overview", label: "Dashboard", icon: LayoutGrid },
+      { path: "/social-posts", label: "Social Posts", icon: Share2 },
+      { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
+      { path: "/my-profile", label: "My Profile", icon: UserCircle },
+    ],
+  },
+];
+
 export const NAV_BY_ROLE: Record<OrgRole, NavConfig> = {
   agent: AGENT_NAV,
   homeworker: AGENT_NAV,
@@ -158,6 +170,7 @@ export const NAV_BY_ROLE: Record<OrgRole, NavConfig> = {
   org_admin: ORG_ADMIN_NAV,
   platform_admin: PLATFORM_ADMIN_NAV,
   referral_agent: REFERRAL_NAV,
+  social_media_manager: SOCIAL_MEDIA_NAV,
 };
 
 export function getNavForRole(orgRole: OrgRole | null | undefined): NavConfig {
@@ -168,21 +181,23 @@ export function getNavForRole(orgRole: OrgRole | null | undefined): NavConfig {
 // Ranking mirrors the server-side ROLE_RANK in user-org-roles.service.ts so
 // the higher-power role's nav sections appear first when multiple roles merge.
 const ROLE_RANK: Record<OrgRole, number> = {
-  platform_admin: 120,
-  org_admin:      100,
-  branch_manager:  80,
-  agent:           60,
-  homeworker:      40,
-  referral_agent:  20,
+  platform_admin:       120,
+  org_admin:            100,
+  branch_manager:        80,
+  agent:                 60,
+  social_media_manager:  50,
+  homeworker:            40,
+  referral_agent:        20,
 };
 
 const ROLE_GROUP_META: Record<OrgRole, { label: string; icon: LucideIcon }> = {
-  platform_admin: { label: "Platform",  icon: Activity },
-  org_admin:      { label: "Admin",     icon: Shield },
-  branch_manager: { label: "Branch",    icon: Briefcase },
-  agent:          { label: "Agent",     icon: TrendingUp },
-  homeworker:     { label: "Homeworker", icon: TrendingUp },
-  referral_agent: { label: "Affiliate", icon: Link2 },
+  platform_admin:       { label: "Platform",  icon: Activity },
+  org_admin:            { label: "Admin",     icon: Shield },
+  branch_manager:       { label: "Branch",    icon: Briefcase },
+  agent:                { label: "Agent",     icon: TrendingUp },
+  social_media_manager: { label: "Social",    icon: Share2 },
+  homeworker:           { label: "Homeworker", icon: TrendingUp },
+  referral_agent:       { label: "Affiliate", icon: Link2 },
 };
 
 /**

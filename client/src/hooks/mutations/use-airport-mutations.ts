@@ -1,12 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { airportApi } from "@/api";
 import { airportKeys } from "@/hooks/queries";
-import type { Airport } from "@/types/airport";
 
 export function useCreateAirport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Omit<Airport, "id" | "createdAt">) =>
+    mutationFn: (data: { airport_name: string; airport_code: string; country_id?: string }) =>
       airportApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: airportKeys.lists() });

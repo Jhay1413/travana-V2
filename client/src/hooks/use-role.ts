@@ -12,6 +12,7 @@ function normalizeRole(raw?: string): Role {
   if (lower === "manager") return "Manager";
   if (lower === "homeworker") return "Homeworker";
   if (lower === "referer" || lower === "referral_agent" || lower === "referral agent") return "Referer";
+  if (lower === "socialmediamanager" || lower === "social_media_manager" || lower === "social media manager") return "SocialMediaManager";
   return "Agent";
 }
 
@@ -22,19 +23,21 @@ function deriveOrgRoleFromRole(role: Role): OrgRole {
     case "Manager": return "branch_manager";
     case "Homeworker": return "homeworker";
     case "Referer": return "referral_agent";
+    case "SocialMediaManager": return "social_media_manager";
     default: return "agent";
   }
 }
 
 function roleFromOrgRole(orgRole: OrgRole | null | undefined): Role | null {
   switch (orgRole) {
-    case "platform_admin": return "PlatformAdmin";
-    case "org_admin":      return "Admin";
-    case "branch_manager": return "Manager";
-    case "agent":          return "Agent";
-    case "homeworker":     return "Homeworker";
-    case "referral_agent": return "Referer";
-    default:               return null;
+    case "platform_admin":       return "PlatformAdmin";
+    case "org_admin":            return "Admin";
+    case "branch_manager":       return "Manager";
+    case "agent":                return "Agent";
+    case "homeworker":           return "Homeworker";
+    case "referral_agent":       return "Referer";
+    case "social_media_manager": return "SocialMediaManager";
+    default:                     return null;
   }
 }
 

@@ -1,14 +1,67 @@
-import { useFormContext, useFieldArray, type Control } from "react-hook-form";
+import { useState } from "react";
+import { useFormContext, useFieldArray, useWatch, type Control } from "react-hook-form";
 import { Plane, Plus, X } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { AddAirportModal } from "@/components/lookups/add-airport-modal";
 import { useAirports } from "@/hooks/queries";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { SectionHeader } from "@/components/quote/sections/SectionHeader";
 import type { QuoteFormValues, FlightLegValue } from "@/types/quote";
+
+/**
+ * Airport picker that also lets the user create an airport inline when the one
+ * they need isn't in the dropdown (mirrors the "Add Accommodation" flow).
+ */
+function AirportSelectField({
+  value,
+  onValueChange,
+  options,
+  defaultCountryId,
+}: {
+  value: string;
+  onValueChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  defaultCountryId?: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [addedLabel, setAddedLabel] = useState<string | undefined>(undefined);
+
+  return (
+    <>
+      <SearchableSelect
+        options={options}
+        value={value}
+        selectedLabel={addedLabel}
+        onValueChange={(v) => {
+          onValueChange(v);
+          setAddedLabel(undefined);
+        }}
+        onSearchCapture={setSearch}
+        onAddNew={search ? () => setShowAdd(true) : undefined}
+        addNewLabel="Add Airport"
+        placeholder="Select airport..."
+      />
+      <AddAirportModal
+        open={showAdd}
+        onOpenChange={setShowAdd}
+        initialName={search}
+        initialCountryId={defaultCountryId || ""}
+        onSuccess={(airport) => {
+          onValueChange(airport.id);
+          setAddedLabel(
+            `${airport.airport_name}${airport.airport_code ? ` (${airport.airport_code})` : ""}`,
+          );
+          setSearch("");
+        }}
+      />
+    </>
+  );
+}
 
 const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",
@@ -138,6 +191,7 @@ function ConnectingLegFields({ control, direction, index, airportOptions, onRemo
 
 export function QuoteFlightsSection() {
   const { control } = useFormContext<QuoteFormValues>();
+  const countryId = useWatch({ control, name: "country" });
   const { data: airportsData } = useAirports();
   const airportOptions = (airportsData || []).map(
     (a: { id: string; airport_name: string; airport_code?: string | null }) => ({
@@ -182,7 +236,7 @@ export function QuoteFlightsSection() {
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Arriving Airport</FormLabel>
               <FormControl>
-                <SearchableSelect options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport..." />
+                <AirportSelectField options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} defaultCountryId={countryId} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -286,7 +340,7 @@ export function QuoteFlightsSection() {
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
               <FormControl>
-                <SearchableSelect options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport..." />
+                <AirportSelectField options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} defaultCountryId={countryId} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -299,7 +353,7 @@ export function QuoteFlightsSection() {
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Arriving Airport</FormLabel>
               <FormControl>
-                <SearchableSelect options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport..." />
+                <AirportSelectField options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} defaultCountryId={countryId} />
               </FormControl>
               <FormMessage />
             </FormItem>
