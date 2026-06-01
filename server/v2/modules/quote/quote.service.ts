@@ -251,7 +251,10 @@ export const newQuoteService = {
       throw new AppError("Cannot create social post for a quote marked as not for social", 400);
     }
 
-    const txn = await transactionRepository.create({ status: 'on_quote', user_id: userId } as InsertTransaction);
+    const txn = await transactionRepository.create(
+      { status: 'on_quote', user_id: userId } as InsertTransaction,
+      scope.orgId !== null ? scope : undefined,
+    );
     return newQuoteService.createQuote({ ...data, transaction_id: txn.id, isFreeQuote: true } as CreateQuotePayload, { orgId: null });
   },
 
