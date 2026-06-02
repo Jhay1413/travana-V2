@@ -202,7 +202,6 @@ const ORG_ADMIN_NAV: NavConfig = [
     label: "Settings",
     icon: Settings2,
     items: [
-      { path: "/agency/tour-operators", label: "Tour Operators", icon: Plane },
       { path: "/agency/templates", label: "Templates", icon: FileText },
       { path: "/agency/texts", label: "Texts", icon: Type },
       { path: "/agency/audit", label: "Audit Log", icon: Activity },

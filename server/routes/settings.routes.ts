@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { isAuthenticated } from "../v2/middlewares/auth/session";
+import { orgBranchScope } from "../v2/middlewares/org-branch-scope";
 import { asyncHandler } from "../utils/async-handler";
 import { successResponse } from "../utils/response";
 import { db } from "../config/database";
@@ -30,6 +31,11 @@ import {
 
 const router = Router();
 router.use(isAuthenticated);
+// Populate req.orgId / req.orgRole so org-scoped lookups (e.g. tour operators)
+// filter correctly. The legacy /api chain does not run this globally, so the
+// settings router applies it itself. Without it getScope() sees an undefined
+// orgId and org-scoped queries return zero rows.
+router.use(orgBranchScope);
 
 function parsePagination(query: Record<string, any>) {
   const page = Math.max(1, parseInt(query.page as string) || 1);
