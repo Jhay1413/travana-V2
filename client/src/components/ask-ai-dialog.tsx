@@ -279,11 +279,11 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
               transition={{ duration: 0.4 }}
               className="flex flex-col items-center px-2 pt-2 text-center"
             >
-              <div className="relative">
+              <div className="flex items-center justify-center gap-1">
                 <motion.img
                   src={lunaImg}
                   alt="Luna"
-                  className="h-56 w-auto drop-shadow-xl"
+                  className="h-56 w-auto shrink-0 drop-shadow-xl"
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 120, damping: 14 }}
@@ -292,7 +292,7 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
                   initial={{ opacity: 0, scale: 0.8, x: -10 }}
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   transition={{ delay: 0.25, type: "spring", stiffness: 200, damping: 16 }}
-                  className="absolute right-0 top-6 max-w-[180px] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3.5 py-2.5 text-left text-sm font-medium text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="max-w-[170px] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3.5 py-2.5 text-left text-sm font-medium text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 >
                   Hi, I'm Luna <span className="text-amber-400">✦</span>
                   <br />
