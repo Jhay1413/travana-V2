@@ -7,7 +7,7 @@ export function useMarkNotificationRead(userId: string) {
   return useMutation({
     mutationFn: (id: string) => notificationApi.markRead(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.byUser(userId) });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
     },
   });
 }
@@ -17,7 +17,7 @@ export function useMarkAllNotificationsRead(userId: string) {
   return useMutation({
     mutationFn: () => notificationApi.markAllRead(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.byUser(userId) });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
     },
   });
 }
@@ -27,7 +27,7 @@ export function useDeleteNotification(userId: string) {
   return useMutation({
     mutationFn: (id: string) => notificationApi.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.byUser(userId) });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
     },
   });
 }

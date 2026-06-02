@@ -13,7 +13,7 @@ export function useNotifications(userId: string) {
     queryKey: notificationKeys.byUser(userId),
     queryFn: () => notificationApi.getAll(),
     enabled: !!userId,
-    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -22,6 +22,6 @@ export function useUnreadNotifications(userId: string) {
     queryKey: notificationKeys.unread(userId),
     queryFn: () => notificationApi.getUnread(),
     enabled: !!userId,
-    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 }

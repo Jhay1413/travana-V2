@@ -1,10 +1,24 @@
 import type { EnrichedQuote, EnrichedBooking, Passenger, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "@/types/quote";
 
-export const currency = new Intl.NumberFormat("en-GB", {
+const currencyWhole = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "GBP",
   maximumFractionDigits: 0,
 });
+
+const currencyDecimal = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+// Show pence only when the amount isn't a whole number: £1,234 stays £1,234,
+// but £1,234.5 becomes £1,234.50 — never rounds a fractional amount to whole.
+export const currency = {
+  format: (value: number) =>
+    Number.isInteger(value) ? currencyWhole.format(value) : currencyDecimal.format(value),
+};
 
 export function formatUKDate(input: string) {
   const datePart = input.includes("T") ? input.substring(0, 10) : input.substring(0, 10);

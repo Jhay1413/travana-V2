@@ -4,13 +4,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { currency } from "@/components/quote/quote-types";
 import { QuoteSummaryTimeline } from "@/components/quote/QuoteSummaryTimeline";
 
-const currencyPence = new Intl.NumberFormat("en-GB", {
-  style: "currency",
-  currency: "GBP",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 interface BookingCostingsCardProps {
   booking: any;
   hasReferral: boolean;
@@ -78,7 +71,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 Comm
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-commission-value">
-                {currencyPence.format(booking.commissions.commissionValue)}
+                {currency.format(booking.commissions.commissionValue)}
               </div>
             </div>
 
@@ -151,7 +144,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                     className="text-xs font-semibold text-amber-700"
                     data-testid="text-booking-summary-referral-payout-value"
                   >
-                    {currencyPence.format(booking.commissions.referralPayout)}
+                    {currency.format(booking.commissions.referralPayout)}
                   </div>
                 </div>
               </>
@@ -167,7 +160,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 Net commission
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-net-commission-value">
-                {currencyPence.format(booking.commissions.netCommission)}
+                {currency.format(booking.commissions.netCommission)}
               </div>
             </div>
           </div>
