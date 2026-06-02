@@ -121,7 +121,9 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
 
-      setInterval(async () => {
+      // Every 30 minutes: check due tasks and stale tickets. Runs on a cron
+      // schedule (not a 60s setInterval) so the DB can scale to zero when idle.
+      cron.schedule("*/30 * * * *", async () => {
         try {
           await taskRepository.checkAndNotifyDueTasks();
         } catch (err) {
@@ -132,7 +134,7 @@ app.use((req, res, next) => {
         } catch (err) {
           console.error("Ticket notification check failed:", err);
         }
-      }, 60_000);
+      });
 
       // Run at midnight every day to expire enquiries and quotes older than 7 days
       cron.schedule("0 0 * * *", async () => {
