@@ -30,6 +30,7 @@ export function quoteToRow(q: QuoteWithJoins, fallbackStatus: string): QuoteRowC
     transactionId: q.transaction_id,
     title: q.title || q.holiday_type_name || "Trip",
     isQuoteCopy: Boolean(q.isQuoteCopy),
+    quoteType: (q as any).quote_type ?? null,
     destination: q.holiday_type_name || (q as any).quote_type || "—",
     travelDate: q.travel_date,
     createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
@@ -109,8 +110,14 @@ export function useClientQuoteGroups(
       const sorted = [...group.rows].sort(
         (a, b) => new Date(b.createdAtRaw || 0).getTime() - new Date(a.createdAtRaw || 0).getTime(),
       );
-      const mainRows = sorted.filter((r) => !r.isQuoteCopy);
-      const copyRows = sorted.filter((r) => r.isQuoteCopy);
+
+      // In Play nests by the primary/secondary quote hierarchy (plus copies);
+      // Lost keeps the copy-only nesting.
+      const isChildRow = (r: QuoteRowCardData) =>
+        group.id === "in-play" ? r.isQuoteCopy || r.quoteType === "secondary" : r.isQuoteCopy;
+
+      const mainRows = sorted.filter((r) => !isChildRow(r));
+      const childRows = sorted.filter(isChildRow);
 
       const items: GroupRowItem[] = [];
 
@@ -118,9 +125,11 @@ export function useClientQuoteGroups(
         items.push({ type: "quote", row: main, isChild: false });
 
         if (group.id === "won") {
-          // Show all sibling quotes from the same transaction as collapsible children.
+          // Show sibling quotes from the same transaction as collapsible children,
+          // excluding the WON quote that was converted into this booking (it is
+          // already represented by the parent booking row).
           const related = quotes
-            .filter((q) => q.transaction_id === main.transactionId)
+            .filter((q) => q.transaction_id === main.transactionId && q.quote_status !== "WON")
             .map((q) => ({ ...quoteToRow(q, "NEW_LEAD"), isBooking: false }));
 
           if (related.length > 0) {
@@ -130,19 +139,21 @@ export function useClientQuoteGroups(
             }
           }
         } else {
-          // For In Play and Lost: show copies from the same transaction.
-          const copies = copyRows.filter((c) => c.transactionId === main.transactionId);
-          if (copies.length > 0) {
-            items.push({ type: "toggle", parentId: main.id, count: copies.length, label: "copy" });
+          // In Play: nest secondary quotes/copies under their primary parent.
+          // Lost: nest copies from the same transaction.
+          const children = childRows.filter((c) => c.transactionId === main.transactionId);
+          if (children.length > 0) {
+            const label = group.id === "in-play" ? "quote" : "copy";
+            items.push({ type: "toggle", parentId: main.id, count: children.length, label });
             if (expandedCopyGroups[main.id]) {
-              for (const c of copies) items.push({ type: "quote", row: c, isChild: true });
+              for (const c of children) items.push({ type: "quote", row: c, isChild: true });
             }
           }
         }
       }
 
-      // Append any orphan copies (no main row in the same transaction).
-      const orphans = copyRows.filter(
+      // Append any orphan children (no main row in the same transaction).
+      const orphans = childRows.filter(
         (c) => !mainRows.some((m) => m.transactionId === c.transactionId),
       );
       for (const o of orphans) items.push({ type: "quote", row: o, isChild: true });

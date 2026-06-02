@@ -7,6 +7,7 @@ export interface QuoteRowCardData {
   transactionId: string;
   title: string;
   isQuoteCopy: boolean;
+  quoteType?: string | null;
   destination: string;
   travelDate: string;
   createdAt: string;

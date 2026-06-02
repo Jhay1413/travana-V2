@@ -24,7 +24,8 @@
       "Bash(git -C /home/runner/workspace diff --name-only)",
       "Bash(awk 'NR>=240 && NR<=290 && /async |scope:|function /' server/v2/modules/transaction/transaction.service.ts)",
       "Bash(sed -n '248,262p' server/v2/modules/transaction/transaction.service.ts)",
-      "Bash(awk '/async createTransaction/{print NR\": \"$0}' server/v2/modules/transaction/transaction.service.ts)"
+      "Bash(awk '/async createTransaction/{print NR\": \"$0}' server/v2/modules/transaction/transaction.service.ts)",
+      "Bash(grep -E \"\\\\.\\(ts|sql\\)$\")"
     ],
     "additionalDirectories": [
       "/home/runner/workspace/migrations"

@@ -71,8 +71,10 @@ export function ClientBookedTab({
             </div>
           ) : (
             bookings.map((b: BookingWithJoins) => {
+              // All sibling quotes from this transaction, excluding the WON quote
+              // that was converted into this booking (already shown as the parent).
               const duplicates = quotes.filter(
-                (q: QuoteWithJoins) => q.transaction_id === b.transaction_id && q.isQuoteCopy,
+                (q: QuoteWithJoins) => q.transaction_id === b.transaction_id && q.quote_status !== "WON",
               );
               const isExpanded = Boolean(expandedCopyGroups[b.id]);
               return (
@@ -194,7 +196,7 @@ export function ClientBookedTab({
                   >
                     <ChevronDown className={`h-3.5 w-3.5 transition ${isExpanded ? "rotate-180" : ""}`} />
                     {isExpanded ? "Hide" : "Show"} {duplicates.length}{" "}
-                    {duplicates.length === 1 ? "copy" : "copies"}
+                    {duplicates.length === 1 ? "quote" : "quotes"}
                   </button>
                   {isExpanded &&
                     duplicates.map((q: QuoteWithJoins) => (

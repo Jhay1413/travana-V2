@@ -1,29 +1,42 @@
 import {
   Activity,
+  Anchor,
+  BedDouble,
   Briefcase,
   Building2,
   CircleDollarSign,
   ClipboardList,
+  Database,
   FileText,
   Forward,
+  Globe,
   HeartHandshake,
+  Hotel,
   LayoutGrid,
   LifeBuoy,
   Link2,
   ListChecks,
+  Map,
+  MapPin,
   MessageCircle,
   MessageSquare,
+  Package,
   Plane,
   Settings2,
   Share2,
   Shield,
+  Ship,
   Sparkles,
+  Tag,
   Target,
+  Tent,
+  Trash2,
   TrendingUp,
   Trophy,
   Type,
   UserCircle,
   Users,
+  Waves,
   type LucideIcon,
 } from "lucide-react";
 import type { OrgRole } from "@/types/auth/auth.types";
@@ -81,6 +94,73 @@ const BRANCH_MANAGER_NAV: NavConfig = [
   },
 ];
 
+// Platform-wide reference data (global catalog shared across all agencies),
+// grouped under one "Data Management" dropdown. Each link renders the generic
+// lookup CRUD page (/settings/:tableSlug). Shared by platform_admin and
+// org_admin navs so both stay in sync.
+const DATA_MANAGEMENT_SECTION: NavSection = {
+  id: "data-management",
+  label: "Data Management",
+  icon: Database,
+  items: [
+    {
+      id: "catalog-destinations",
+      label: "Destinations",
+      icon: Globe,
+      items: [
+        { path: "/settings/countries", label: "Countries", icon: Globe },
+        { path: "/settings/destinations", label: "Destinations", icon: Map },
+        { path: "/settings/resorts", label: "Resorts", icon: MapPin },
+        { path: "/settings/airports", label: "Airports", icon: Plane },
+      ],
+    },
+    {
+      id: "catalog-accommodation",
+      label: "Accommodation",
+      icon: Hotel,
+      items: [
+        { path: "/settings/accommodation-list", label: "Accommodations", icon: Hotel },
+        { path: "/settings/accommodation-types", label: "Accommodation Types", icon: BedDouble },
+        { path: "/settings/board-basis", label: "Board Basis", icon: Package },
+        { path: "/settings/room-types", label: "Room Types", icon: BedDouble },
+        { path: "/settings/package-types", label: "Package Types", icon: Package },
+      ],
+    },
+    {
+      id: "catalog-parks",
+      label: "Parks & Lodges",
+      icon: Tent,
+      items: [
+        { path: "/settings/parks", label: "Parks", icon: Tent },
+        { path: "/settings/lodges", label: "Lodges", icon: Tent },
+        { path: "/settings/cottages", label: "Cottages", icon: Hotel },
+      ],
+    },
+    {
+      id: "catalog-cruise",
+      label: "Cruise",
+      icon: Ship,
+      items: [
+        { path: "/settings/cruise-lines", label: "Cruise Lines", icon: Ship },
+        { path: "/settings/cruise-ships", label: "Cruise Ships", icon: Anchor },
+        { path: "/settings/cruise-itineraries", label: "Cruise Itineraries", icon: Map },
+        { path: "/settings/cruise-voyages", label: "Cruise Voyages", icon: Waves },
+        { path: "/settings/cruise-extras", label: "Cruise Extras", icon: Package },
+      ],
+    },
+    {
+      id: "catalog-other",
+      label: "Other Data",
+      icon: Settings2,
+      items: [
+        { path: "/settings/tour-operators", label: "Tour Operators", icon: Plane },
+        { path: "/settings/tags", label: "Tags", icon: Tag },
+        { path: "/settings/deletion-codes", label: "Deletion Codes", icon: Trash2 },
+      ],
+    },
+  ],
+};
+
 const ORG_ADMIN_NAV: NavConfig = [
   {
     id: "overview",
@@ -128,6 +208,7 @@ const ORG_ADMIN_NAV: NavConfig = [
       { path: "/agency/audit", label: "Audit Log", icon: Activity },
     ],
   },
+  DATA_MANAGEMENT_SECTION,
 ];
 
 const PLATFORM_ADMIN_NAV: NavConfig = [
@@ -140,6 +221,7 @@ const PLATFORM_ADMIN_NAV: NavConfig = [
       { path: "/platform-admin/audit-log", label: "Audit Log", icon: Activity },
     ],
   },
+  DATA_MANAGEMENT_SECTION,
 ];
 
 const REFERRAL_NAV: NavConfig = [
