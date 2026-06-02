@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useClients } from "@/hooks/queries";
 import axiosClient from "@/api/client/axios-client";
 import { cn } from "@/lib/utils";
-import lunaImg from "@assets/Ask_Luna_1780415191359.png";
+import lunaImg from "@assets/ChatGPT_Image_Jun_2,_2026,_05_00_35_PM_1780416076113.png";
 
 function renderInline(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
