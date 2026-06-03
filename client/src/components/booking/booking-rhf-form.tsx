@@ -47,6 +47,8 @@ import {
 import { useTags } from "@/hooks/queries/use-tags";
 import { useToast } from "@/hooks/use-toast";
 import { AddAccommodationModal } from "@/components/lookups/add-accommodation-modal";
+import { AddBoardBasisModal } from "@/components/lookups/add-board-basis-modal";
+import { AddRoomTypeModal } from "@/components/lookups/add-room-type-modal";
 
 const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",
@@ -304,6 +306,10 @@ export function BookingRHFForm({
   const [accomLabel, setAccomLabel] = useState("");
   const [resortLabel, setResortLabel] = useState("");
   const [showAddAccomModal, setShowAddAccomModal] = useState(false);
+  const [showAddBoardBasisModal, setShowAddBoardBasisModal] = useState(false);
+  const [showAddRoomTypeModal, setShowAddRoomTypeModal] = useState(false);
+  const [boardBasisSearch, setBoardBasisSearch] = useState("");
+  const [roomTypeSearch, setRoomTypeSearch] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const skipLodgeResetRef = useRef(false);
   
@@ -402,8 +408,8 @@ export function BookingRHFForm({
       const op = tourOperatorsData.find((o: { id: string }) => o.id === tourOperatorId);
 
       if (op?.commission_percentage != null && currentPrice > 0) {
-        const baseCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
-        const calculatedCommission = parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2));
+        const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
+        const calculatedCommission = parseFloat((baseCommission + currentServiceCharge).toFixed(2));
 
         const currentCommission = form.getValues("commission");
         if (currentCommission !== calculatedCommission) {
@@ -596,8 +602,8 @@ export function BookingRHFForm({
                           const currentPrice = form.getValues("price");
                           const currentDiscount = Number(form.getValues("discount")) || 0;
                           const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-                          const baseCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
-                          setValue("commission", parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
+                          const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
+                          setValue("commission", parseFloat((baseCommission + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
                         }
                       }}
                       placeholder="Select operator..."
@@ -1386,6 +1392,20 @@ export function BookingRHFForm({
                 }}
               />
 
+              <AddBoardBasisModal
+                open={showAddBoardBasisModal}
+                onOpenChange={setShowAddBoardBasisModal}
+                initialName={boardBasisSearch}
+                onSuccess={(bb) => { setValue("boardBasisId", bb.id); setBoardBasisSearch(""); }}
+              />
+
+              <AddRoomTypeModal
+                open={showAddRoomTypeModal}
+                onOpenChange={setShowAddRoomTypeModal}
+                initialName={roomTypeSearch}
+                onSuccess={(rt) => { setValue("roomType", rt.id); setRoomTypeSearch(""); }}
+              />
+
               <FormField
                 control={control}
                 name="boardBasisId"
@@ -1402,6 +1422,9 @@ export function BookingRHFForm({
                         )}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
+                        onSearchCapture={setBoardBasisSearch}
+                        onAddNew={() => setShowAddBoardBasisModal(true)}
+                        addNewLabel="Add Board Basis"
                         placeholder="Select board basis..."
                       />
                     </FormControl>
@@ -1426,6 +1449,9 @@ export function BookingRHFForm({
                         )}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
+                        onSearchCapture={setRoomTypeSearch}
+                        onAddNew={() => setShowAddRoomTypeModal(true)}
+                        addNewLabel="Add Room Type"
                         placeholder="Select room type..."
                       />
                     </FormControl>
@@ -1768,8 +1794,8 @@ export function BookingRHFForm({
                             if (currentOperatorId) {
                               const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
                               if (op?.commission_percentage != null) {
-                                const baseCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
-                                const adjustedCommission = baseCommission - currentDiscount + currentServiceCharge;
+                                const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
+                                const adjustedCommission = baseCommission + currentServiceCharge;
                                 setValue("commission", parseFloat(adjustedCommission.toFixed(2)), { shouldValidate: true, shouldDirty: true });
                               }
                             }
@@ -1799,27 +1825,35 @@ export function BookingRHFForm({
             const currentCommission = Number(commission) || 0;
             const currentWalletCredit = Number(walletCreditAmount) || 0;
             const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0 || currentWalletCredit > 0;
+            const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
 
-            if (hasAdjustments) {
-              return (
-                <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
-                  <div className="text-xs font-medium text-blue-900">
-                    Commission Adjusted: £{currentCommission.toFixed(2)}
+            return (
+              <>
+                {currentPrice > 0 && (
+                  <div className="mt-3 flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2">
+                    <span className="text-xs font-semibold text-black/65">Final Total</span>
+                    <span className="text-sm font-semibold text-black">£{finalTotal.toFixed(2)}</span>
                   </div>
-                  <div className="mt-1 text-[10px] text-blue-700/70">
-                    {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
-                    {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)} `}
-                    {currentWalletCredit > 0 && <span className="text-emerald-700">Wallet Credit: -£{currentWalletCredit.toFixed(2)}</span>}
-                  </div>
-                  {currentWalletCredit > 0 && (
-                    <div className="mt-1.5 text-[10px] text-blue-700/60">
-                      Net payable: £{(currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit).toFixed(2)}
+                )}
+                {hasAdjustments && (
+                  <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
+                    <div className="text-xs font-medium text-blue-900">
+                      Commission Adjusted: £{currentCommission.toFixed(2)}
                     </div>
-                  )}
-                </div>
-              );
-            }
-            return null;
+                    <div className="mt-1 text-[10px] text-blue-700/70">
+                      {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
+                      {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)} `}
+                      {currentWalletCredit > 0 && <span className="text-emerald-700">Wallet Credit: -£{currentWalletCredit.toFixed(2)}</span>}
+                    </div>
+                    {currentWalletCredit > 0 && (
+                      <div className="mt-1.5 text-[10px] text-blue-700/60">
+                        Net payable: £{(currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit).toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            );
           })()}
         </div>
 

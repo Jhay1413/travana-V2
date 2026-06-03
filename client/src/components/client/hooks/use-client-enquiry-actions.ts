@@ -73,6 +73,9 @@ export function useClientEnquiryActions(
               (typeof data.nights === "number" ? data.nights : undefined) ||
               (typeof data.no_of_nights === "number" ? data.no_of_nights : undefined) ||
               undefined,
+            flexible_nights: Array.isArray(data.flexible_nights)
+              ? (data.flexible_nights as number[])
+              : undefined,
             budget: data.budget || undefined,
             max_budget: data.max_budget || undefined,
             budget_type:

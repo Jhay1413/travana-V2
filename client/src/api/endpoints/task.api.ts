@@ -1,7 +1,14 @@
 import axiosClient from "../client/axios-client";
 import type { TaskNew, InsertTaskNew } from "@shared/schema";
 
-export type TaskWithClient = TaskNew & { clientId: string | null; clientName: string | null; tags: string[] };
+export type TaskWithClient = TaskNew & {
+  clientId: string | null;
+  clientName: string | null;
+  tags: string[];
+  entityTitle: string | null;
+  entityPrice: string | null;
+  entityCommission: string | null;
+};
 
 export const taskApi = {
   getAll: async (): Promise<TaskWithClient[]> => {

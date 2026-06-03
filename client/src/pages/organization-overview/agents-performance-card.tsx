@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3,
@@ -95,6 +96,7 @@ export function AgentsPerformanceCard({
   agentsOnly = false,
   embedded = false,
 }: { agentsOnly?: boolean; embedded?: boolean } = {}) {
+  const [, navigate] = useLocation();
   const visibleTabs = agentsOnly ? TABS.filter((t) => t.key === "agent-performance") : TABS;
   const [tab, setTab] = useState<TabKey>("agent-performance");
 
@@ -445,10 +447,11 @@ export function AgentsPerformanceCard({
                           return (
                             <motion.tr
                               key={agent.id}
-                              className="border-t border-gray-50 transition-colors hover:bg-gray-50/50 dark:border-white/5 dark:hover:bg-white/[0.02]"
+                              className="cursor-pointer border-t border-gray-50 transition-colors hover:bg-gray-50/50 dark:border-white/5 dark:hover:bg-white/[0.02]"
                               initial={{ opacity: 0, x: -8 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: i * 0.05, duration: 0.3 }}
+                              onClick={() => navigate(`/agents/${agent.id}`)}
                               data-testid={`row-agent-${agent.id}`}
                             >
                               <td className="px-4 py-3">
@@ -606,10 +609,11 @@ export function AgentsPerformanceCard({
                           return (
                             <motion.tr
                               key={agent.id}
-                              className="border-t border-gray-50 transition-colors hover:bg-gray-50/50 dark:border-white/5 dark:hover:bg-white/[0.02]"
+                              className="cursor-pointer border-t border-gray-50 transition-colors hover:bg-gray-50/50 dark:border-white/5 dark:hover:bg-white/[0.02]"
                               initial={{ opacity: 0, x: -8 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: i * 0.05, duration: 0.3 }}
+                              onClick={() => navigate(`/agents/${agent.id}`)}
                               data-testid={`row-conversion-${agent.id}`}
                             >
                               <td className="px-4 py-3">

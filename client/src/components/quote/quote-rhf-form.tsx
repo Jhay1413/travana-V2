@@ -130,8 +130,8 @@ export function QuoteRHFForm({
       const op = tourOperatorsData.find((o: { id: string }) => o.id === tourOperatorId);
 
       if (op?.commission_percentage != null && currentPrice > 0) {
-        const baseCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
-        const calculatedCommission = parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2));
+        const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
+        const calculatedCommission = parseFloat((baseCommission + currentServiceCharge).toFixed(2));
 
         const currentCommission = form.getValues("commission");
         if (currentCommission !== calculatedCommission) {

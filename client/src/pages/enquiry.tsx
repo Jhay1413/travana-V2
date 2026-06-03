@@ -38,6 +38,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
@@ -333,17 +334,34 @@ function EnquiryNotesSection({ transactionId }: { transactionId: string }) {
 }
 
 function SpecRow({ testId, label, value }: { testId: string; label: string; value: React.ReactNode }) {
+  const display = value || "—";
+  const valueEl = (
+    <div
+      className="min-w-0 flex-1 truncate text-right text-xs font-semibold text-black"
+      data-testid={`text-enquiry-spec-${testId}-value`}
+    >
+      {display}
+    </div>
+  );
+
   return (
     <div
-      className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
+      className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
       data-testid={`row-enquiry-spec-${testId}`}
     >
-      <div className="text-xs font-semibold text-black/65" data-testid={`text-enquiry-spec-${testId}-label`}>
+      <div className="shrink-0 text-xs font-semibold text-black/65" data-testid={`text-enquiry-spec-${testId}-label`}>
         {label}
       </div>
-      <div className="text-xs font-semibold text-black text-right" data-testid={`text-enquiry-spec-${testId}-value`}>
-        {value || "—"}
-      </div>
+      {typeof display === "string" && display !== "—" ? (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>{valueEl}</TooltipTrigger>
+            <TooltipContent className="max-w-[280px] break-words">{display}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        valueEl
+      )}
     </div>
   );
 }
@@ -1009,7 +1027,11 @@ export default function EnquiryPage() {
                       <SpecRow
                         testId="nights"
                         label="Nights"
-                        value={enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : null}
+                        value={
+                          Array.isArray(enquiry.flexible_nights) && enquiry.flexible_nights.length > 0
+                            ? `${enquiry.flexible_nights.join(", ")} nights`
+                            : enquiry.no_of_nights ? `${enquiry.no_of_nights} nights` : null
+                        }
                       />
                       {isHotTub && enquiry.no_of_pets != null && (
                         <SpecRow testId="pets" label="Pets" value={`${enquiry.no_of_pets} pet${enquiry.no_of_pets !== 1 ? "s" : ""}`} />

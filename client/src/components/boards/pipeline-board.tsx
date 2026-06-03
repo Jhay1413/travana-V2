@@ -167,11 +167,40 @@ function getQuoteExpiry(t: Transaction): Date | null {
   return null;
 }
 
+// Quotes pulse red when within 2 days of expiry.
 function isQuoteNearExpiry(t: Transaction): boolean {
   const expiry = getQuoteExpiry(t);
   if (!expiry) return false;
   const ms = expiry.getTime() - Date.now();
+  return ms > 0 && ms <= 2 * 24 * 60 * 60 * 1000;
+}
+
+function getEnquiryExpiry(t: Transaction): Date | null {
+  const e = t.enquiry as any;
+  if (!e) return null;
+  if (e.date_expiry) return new Date(e.date_expiry);
+  if (e.date_created) {
+    const d = new Date(e.date_created);
+    d.setDate(d.getDate() + 7);
+    return d;
+  }
+  return null;
+}
+
+// Enquiries pulse red when within 1 day of expiry.
+function isEnquiryNearExpiry(t: Transaction): boolean {
+  const expiry = getEnquiryExpiry(t);
+  if (!expiry) return false;
+  const ms = expiry.getTime() - Date.now();
   return ms > 0 && ms <= 24 * 60 * 60 * 1000;
+}
+
+// Stage-aware near-expiry: enquiries (1 day) on the Enquiry stage, quotes
+// (2 days) on the Quoted / In Play stages.
+function isCardNearExpiry(t: Transaction, stage: PipelineStage): boolean {
+  if (stage === "Enquiry") return isEnquiryNearExpiry(t);
+  if (stage === "Quoted" || stage === "In Play") return isQuoteNearExpiry(t);
+  return false;
 }
 
 function getAgentInitial(t: Transaction): string {
@@ -199,7 +228,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
   const profit = getTransactionProfit(t);
   const value = getTransactionValue(t);
   const { dest, country } = getDest(t);
-  const nearExpiry = isQuoteNearExpiry(t);
+  const nearExpiry = isCardNearExpiry(t, stage);
   const tourOp = getTourOp(t);
   const quoteCount = t.quotes?.length || 0;
   const quoteStatus = (t.quotes?.[0] as any)?.quote_status || null;
@@ -241,7 +270,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
 
   return (
     <div
-      className={`group/card bg-white rounded-xl border border-gray-100 shadow-sm relative cursor-grab active:cursor-grabbing hover:shadow-md hover:border-gray-200 transition-all duration-200 active:scale-[1.02] ${isDragging ? "opacity-40" : ""}`}
+      className={`group/card bg-white rounded-xl border shadow-sm relative cursor-grab active:cursor-grabbing hover:shadow-md transition-all duration-200 active:scale-[1.02] ${isDragging ? "opacity-40" : ""} ${nearExpiry ? "animate-pulse border-red-300 ring-2 ring-red-400/70" : "border-gray-100 hover:border-gray-200"}`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("application/json", JSON.stringify({ transactionId: t.id, fromStage: stage }));

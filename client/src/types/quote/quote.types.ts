@@ -166,6 +166,7 @@ export interface EnquiryTable {
   weekend_lodge: string | null;
   accom_min_star_rating: string | null;
   no_of_nights: number | null;
+  flexible_nights: number[] | null;
   budget: string | null;
   max_budget: string | null;
   budget_type: string | null;

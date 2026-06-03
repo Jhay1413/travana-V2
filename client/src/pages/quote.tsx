@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useQuote, useClient, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
+import { useQuote, useClient, useUsers, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction } from "@/hooks/mutations";
+import { CreateTicketDialog } from "@/components/client/modals/CreateTicketDialog";
+import { useClientTicketCreate } from "@/components/client/hooks";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -124,6 +126,10 @@ export default function QuotePage() {
 
   const quoteToFormValues = useQuoteToFormValues(quoteData);
 
+  const ticketClientId = clientId || (quoteData as any)?.client_id || "";
+  const { data: usersData } = useUsers();
+  const ticketCreate = useClientTicketCreate(ticketClientId, currentUser?.id);
+
   const pageLabel = "Quote";
 
   if (isLoading) {
@@ -198,6 +204,7 @@ export default function QuotePage() {
               onConvert={() => setShowConvertDialog(true)}
               onDuplicate={() => setShowCopyDialog(true)}
               onExport={() => { }}
+              onTicket={() => ticketCreate.setShowTicketDialog(true)}
               onDelete={openDeleteDialog}
             />
           </div>
@@ -392,7 +399,10 @@ export default function QuotePage() {
 
                   <QuoteBookingReferences quote={quote} />
 
-                  <QuoteEngagement quoteId={quoteId} />
+                  <div className="mt-3 grid items-start gap-3 md:grid-cols-2" data-testid="grid-quote-engagement-tasks">
+                    <QuoteEngagement quoteId={quoteId} />
+                    <QuoteTasksSection quoteId={quoteId} entityType="quote" assignedUserId={(quoteData as any)?.user_id} />
+                  </div>
 
                   <QuoteNotesSection transactionId={quote.transaction_id} />
 
@@ -403,9 +413,6 @@ export default function QuotePage() {
 
             <div className="grid gap-3 text-sm xl:text-base" data-testid="col-quote-right">
               <QuoteCostingsCard quote={quote} pageLabel={pageLabel} />
-
-              <QuoteTasksSection quoteId={quoteId} entityType="quote" assignedUserId={quoteData?.user_id} />
-
             </div>
           </div>
         </div>
@@ -487,6 +494,24 @@ export default function QuotePage() {
         guruDestination={guruDestination}
         guruRecord={guruRecord as any}
         generateGuruMutation={generateGuruMutation}
+      />
+
+      <CreateTicketDialog
+        open={ticketCreate.showTicketDialog}
+        onOpenChange={ticketCreate.setShowTicketDialog}
+        clientName={clientData?.name || quote.quoteTitle || "this client"}
+        ticketForm={ticketCreate.ticketForm}
+        setTicketForm={ticketCreate.setTicketForm}
+        ticketPendingFiles={ticketCreate.ticketPendingFiles}
+        ticketFileInputRef={ticketCreate.ticketFileInputRef}
+        isUploading={ticketCreate.isTicketUploading}
+        isPending={ticketCreate.createTicketMutation.isPending}
+        users={usersData ?? []}
+        onFileSelect={ticketCreate.handleTicketFileSelect}
+        removePendingFile={ticketCreate.removeTicketPendingFile}
+        formatFileSize={ticketCreate.formatTicketFileSize}
+        onConfirm={ticketCreate.handleCreateTicket}
+        onReset={ticketCreate.resetTicketForm}
       />
     </>
   );

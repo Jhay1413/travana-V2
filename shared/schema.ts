@@ -592,6 +592,7 @@ export const enquiry_table = pgTable('enquiry_table', {
   weekend_lodge: varchar(),
   accom_min_star_rating: varchar(),
   no_of_nights: integer(),
+  flexible_nights: integer().array().default(sql`ARRAY[]::integer[]`),
   budget: numeric(),
   max_budget: numeric().default('0.00'),
   budget_type: budget_type_enum().default('PACKAGE'),

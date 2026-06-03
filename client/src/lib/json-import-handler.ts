@@ -235,10 +235,25 @@ function handleFallbackJson(data: Record<string, any>, deps: JsonImportDeps): vo
   setIfPresent("inboundDepartTime", data.flights?.inbound?.departTime || data.inbound?.time);
   setIfPresent("inboundArriveDate", toIsoDate(data.flights?.inbound?.arriveDate));
   setIfPresent("inboundArriveTime", data.flights?.inbound?.arriveTime);
-  setIfPresent("price", data.commissions?.price || data.price || data.total);
+  // The form's `price` field holds the GROSS sales price, whereas `commissions.price`
+  // is the NET total (sales − discount + service charge). Read the adjustments first so
+  // that when only the net total is available we can reconstruct the gross — otherwise
+  // re-importing an exported quote would apply the discount/charge a second time.
+  const importedDiscount = data.commissions?.discount ?? data.commissions?.discounts ?? data.discount ?? data.discounts;
+  const importedServiceCharge = data.commissions?.serviceCharge ?? data.serviceCharge ?? data.service_charge;
+  const discountNum = Number(importedDiscount) || 0;
+  const serviceChargeNum = Number(importedServiceCharge) || 0;
+
+  const grossPrice =
+    data.sales_price ?? data.salesPrice ?? data.price ?? data.total ??
+    (data.commissions?.price != null
+      ? Number(data.commissions.price) + discountNum - serviceChargeNum
+      : undefined);
+
+  setIfPresent("price", grossPrice);
   setIfPresent("commission", data.commissions?.commission || data.commission);
-  setIfPresent("discount", data.commissions?.discount || data.discount);
-  setIfPresent("serviceCharge", data.commissions?.serviceCharge || data.serviceCharge || data.service_charge);
+  setIfPresent("discount", importedDiscount);
+  setIfPresent("serviceCharge", importedServiceCharge);
   setIfPresent("pricePerPerson", data.commissions?.pricePerPerson || data.pricePerPerson || data.price_per_person || data.ppp);
 
   if (fallbackFieldMapper) {

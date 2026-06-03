@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Spinner } from "@/components/ui/spinner";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/types/enquiry";
 import type { EnquiryTable } from "@/types/quote";
@@ -52,10 +53,31 @@ const HOT_TUB_FLEXIBILITY_OPTIONS = [
 
 const CABIN_TYPES = ["Inside Cabin", "Outside Cabin", "Balcony", "Suite"];
 
-const CRUISE_NIGHTS_OPTIONS = [
-  ...Array.from({ length: 20 }, (_, i) => String(i + 1)),
-  "21+",
-];
+// Options for the "number of nights" multi-select — an enquiry can capture
+// one or several acceptable durations (e.g. 7, 10 or 14 nights). The first
+// selected value is stored as the primary no_of_nights.
+const NIGHTS_MULTI_OPTIONS = Array.from({ length: 21 }, (_, i) => ({
+  value: String(i + 1),
+  label: `${i + 1} night${i === 0 ? "" : "s"}`,
+}));
+
+function NightsMultiField({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+      <MultiSearchableSelect
+        value={value}
+        onValueChange={onChange}
+        options={NIGHTS_MULTI_OPTIONS}
+        placeholder="Select nights..."
+        searchPlaceholder="Search nights..."
+        emptyMessage="No options."
+        data-testid="select-nights"
+      />
+      <p className="text-[10px] text-black/40">Select one or more durations the customer would consider.</p>
+    </div>
+  );
+}
 
 interface EnquiryForm {
   enquiryTitle: string;
@@ -70,6 +92,8 @@ interface EnquiryForm {
   passengersChildren: number;
   passengersInfants: number;
   nights: number;
+  /** Selected night durations (as strings). First entry is the primary no_of_nights. */
+  flexibleNights: string[];
   starRating: string;
   boardBases: string[];
   budget: string;
@@ -110,6 +134,7 @@ const defaultForm: EnquiryForm = {
   passengersChildren: 0,
   passengersInfants: 0,
   nights: 7,
+  flexibleNights: ["7"],
   starRating: "",
   boardBases: [],
   budget: "",
@@ -193,6 +218,9 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     passengersChildren: enquiry.children || 0,
     passengersInfants: enquiry.infants || 0,
     nights: enquiry.no_of_nights || 7,
+    flexibleNights: Array.isArray(enquiry.flexible_nights) && enquiry.flexible_nights.length
+      ? enquiry.flexible_nights.map((n) => String(n))
+      : (enquiry.no_of_nights ? [String(enquiry.no_of_nights)] : []),
     starRating: enquiry.accom_min_star_rating || "",
     boardBases,
     budget: enquiry.budget || "",
@@ -416,6 +444,13 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
   };
 
   const handleSubmit = () => {
+    if (isSaving) return;
+    // The "Number of Nights" field is a multi-select. All chosen durations are
+    // stored in flexible_nights; the first one is the primary no_of_nights.
+    const selectedNights = form.flexibleNights.map(Number).filter((n) => !Number.isNaN(n));
+    const primaryNights = selectedNights[0];
+    const flexibleNights = selectedNights.length ? selectedNights : undefined;
+
     const base: Record<string, any> = {
       title: form.enquiryTitle,
       holiday_type_id: form.holidayType,
@@ -428,7 +463,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         budget: form.minBudget || form.maxBudget || undefined,
         max_budget: form.maxBudget || undefined,
         budget_type: form.budgetType || undefined,
-        no_of_nights: form.nights || undefined,
+        no_of_nights: primaryNights ?? undefined,
+        flexible_nights: flexibleNights,
         no_of_guests: form.guests || undefined,
         no_of_pets: form.pets !== "No" ? parseInt(form.pets) || 0 : 0,
         travel_date: form.travelDate || undefined,
@@ -440,7 +476,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
     } else if (holidayTypeName === "Cruise Package") {
       Object.assign(base, {
         travel_date: form.travelDate || undefined,
-        no_of_nights: form.cruiseNights ? (form.cruiseNights === "21+" ? 21 : parseInt(form.cruiseNights)) : undefined,
+        no_of_nights: primaryNights ?? undefined,
+        flexible_nights: flexibleNights,
         budget: form.minBudget || form.maxBudget || undefined,
         max_budget: form.maxBudget || undefined,
         budget_type: form.budgetType || undefined,
@@ -459,7 +496,8 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         adults: form.passengersAdults,
         children: form.passengersChildren,
         infants: form.passengersInfants,
-        no_of_nights: form.nights || undefined,
+        no_of_nights: primaryNights ?? undefined,
+        flexible_nights: flexibleNights,
         budget: form.budget || undefined,
         budget_type: form.budgetType || undefined,
         accom_min_star_rating: form.starRating || undefined,
@@ -628,19 +666,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                             data-testid="input-travel-date"
                           />
                         </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
-                          <Select value={form.cruiseNights} onValueChange={(v) => set("cruiseNights", v)}>
-                            <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-cruise-nights">
-                              <SelectValue placeholder="Select nights..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {CRUISE_NIGHTS_OPTIONS.map((n) => (
-                                <SelectItem key={n} value={n}>{n}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <NightsMultiField value={form.flexibleNights} onChange={(v) => set("flexibleNights", v)} />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-black/60">Flexibility</Label>
@@ -1013,17 +1039,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
               {/* ===== STEP 2: HOT TUB ===== */}
               {step === 2 && isHotTub && (
                 <>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={form.nights}
-                      onChange={(e) => set("nights", parseInt(e.target.value) || 1)}
-                      className="h-10 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-nights"
-                    />
-                  </div>
+                  <NightsMultiField value={form.flexibleNights} onChange={(v) => set("flexibleNights", v)} />
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-black/60">Weekend Lodge</Label>
@@ -1158,17 +1174,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
               {step === 2 && !isHotTub && !isCruise && (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={form.nights}
-                        onChange={(e) => set("nights", parseInt(e.target.value) || 1)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-nights"
-                      />
-                    </div>
+                    <NightsMultiField value={form.flexibleNights} onChange={(v) => set("flexibleNights", v)} />
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-black/60">Min Star Rating</Label>
                       <Select value={form.starRating} onValueChange={(v) => set("starRating", v)}>
@@ -1289,10 +1295,15 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                 size="sm"
                 onClick={handleSubmit}
                 disabled={isSaving || !canProceed()}
-                className="h-9 rounded-2xl bg-[#3b82f6] px-4 text-xs font-semibold text-white hover:bg-[#3b82f6]/90"
+                className="h-9 rounded-2xl bg-[#3b82f6] px-4 text-xs font-semibold text-white hover:bg-[#3b82f6]/90 disabled:opacity-70"
                 data-testid="button-wizard-submit"
               >
-                {isSaving ? "Saving..." : isEdit ? "Update Enquiry" : "Create Enquiry"}
+                {isSaving ? (
+                  <>
+                    <Spinner className="mr-1.5 h-3.5 w-3.5" />
+                    Saving...
+                  </>
+                ) : isEdit ? "Update Enquiry" : "Create Enquiry"}
               </Button>
             )}
           </div>

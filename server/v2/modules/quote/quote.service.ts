@@ -290,7 +290,19 @@ export const newQuoteService = {
       tags: sourceDetails?.tags ?? [],
     };
 
-    return newQuoteService.createQuote(payload, scope);
+    const newQuote = await newQuoteService.createQuote(payload, scope);
+
+    // The child count comes across via the quote columns, but the individual
+    // child ages live in the passengers table — copy them from the source so
+    // the duplicate keeps the same children.
+    const childAges = (sourceDetails?.passengers || [])
+      .filter((p: Record<string, unknown>) => p.type === "child")
+      .map((p: Record<string, unknown>) => Number(p.age) || 0);
+    if (childAges.length > 0) {
+      await newQuoteRepository.replaceChildPassengers(newQuote.id, "quote", childAges);
+    }
+
+    return newQuote;
   },
 
   async updateQuote(id: string, data: UpdateQuotePayload, scope: ScopeOrTrusted) {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -29,7 +29,7 @@ interface SearchableSelectProps {
   isLoading?: boolean;
   /** Label to display for the selected value when it may not be present in current options */
   selectedLabel?: string;
-  /** If provided, an "Add" button is shown in the empty state and this callback is invoked when clicked */
+  /** If provided, an "Add" button is always shown pinned at the bottom of the list and this callback is invoked when clicked */
   onAddNew?: () => void;
   /** Label for the add-new button (default: "Add new") */
   addNewLabel?: string;
@@ -88,28 +88,7 @@ export function SearchableSelect({
             }}
           />
           <CommandList>
-            <CommandEmpty>
-              {isLoading ? (
-                "Searching…"
-              ) : onAddNew ? (
-                <div className="flex flex-col items-center gap-2 py-1">
-                  <span className="text-sm text-muted-foreground">{emptyMessage}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onAddNew();
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-                  >
-                    + {addNewLabel}
-                  </button>
-                </div>
-              ) : (
-                emptyMessage
-              )}
-            </CommandEmpty>
+            <CommandEmpty>{isLoading ? "Searching…" : emptyMessage}</CommandEmpty>
             <CommandGroup>
               {options.map((opt) => (
                 <CommandItem
@@ -131,6 +110,23 @@ export function SearchableSelect({
               ))}
             </CommandGroup>
           </CommandList>
+          {onAddNew && (
+            <div className="border-t border-black/10 p-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setOpen(false);
+                  onAddNew();
+                }}
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                data-testid="button-searchable-add-new"
+              >
+                <Plus className="h-3.5 w-3.5" /> {addNewLabel}
+              </button>
+            </div>
+          )}
         </Command>
       </PopoverContent>
     </Popover>

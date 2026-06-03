@@ -25,7 +25,9 @@
       "Bash(awk 'NR>=240 && NR<=290 && /async |scope:|function /' server/v2/modules/transaction/transaction.service.ts)",
       "Bash(sed -n '248,262p' server/v2/modules/transaction/transaction.service.ts)",
       "Bash(awk '/async createTransaction/{print NR\": \"$0}' server/v2/modules/transaction/transaction.service.ts)",
-      "Bash(grep -E \"\\\\.\\(ts|sql\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|sql\\)$\")",
+      "Read(//home/router/workspace/client/src/components/boards/**)",
+      "Bash(awk '/export const booking = pgTable/,/^}\\\\\\);/' shared/schema.ts)"
     ],
     "additionalDirectories": [
       "/home/runner/workspace/migrations"

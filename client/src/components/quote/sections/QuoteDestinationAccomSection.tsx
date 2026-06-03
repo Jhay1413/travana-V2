@@ -331,7 +331,7 @@ export function QuoteDestinationAccomSection() {
                   value={field.value ?? ""}
                   onValueChange={field.onChange}
                   onSearchCapture={setBoardBasisSearch}
-                  onAddNew={boardBasisSearch ? () => setShowAddBoardBasisModal(true) : undefined}
+                  onAddNew={() => setShowAddBoardBasisModal(true)}
                   addNewLabel="Add Board Basis"
                   placeholder="Select board basis..."
                 />
@@ -356,7 +356,7 @@ export function QuoteDestinationAccomSection() {
                   value={field.value ?? ""}
                   onValueChange={field.onChange}
                   onSearchCapture={setRoomTypeSearch}
-                  onAddNew={roomTypeSearch ? () => setShowAddRoomTypeModal(true) : undefined}
+                  onAddNew={() => setShowAddRoomTypeModal(true)}
                   addNewLabel="Add Room Type"
                   placeholder="Select room type..."
                 />

@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { AddBoardBasisModal } from "@/components/lookups/add-board-basis-modal";
+import { AddRoomTypeModal } from "@/components/lookups/add-room-type-modal";
 import {
   FormField,
   FormItem,
@@ -503,10 +505,26 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
   useEffect(() => { if (initialLabel && !accomLabel) setAccomLabel(initialLabel); }, [initialLabel]);
   const { data: accommodationsData, isFetching: isAccomFetching } = useAccommodationSearch(accomSearch);
   const accommodationOptions = (accommodationsData || []).map((a: any) => ({ value: a.id, label: a.name || a.id }));
+  const [showAddBoardBasis, setShowAddBoardBasis] = useState(false);
+  const [showAddRoomType, setShowAddRoomType] = useState(false);
+  const [boardBasisSearch, setBoardBasisSearch] = useState("");
+  const [roomTypeSearch, setRoomTypeSearch] = useState("");
 
   return (
     <ExtraCard icon={Hotel} title={`Extra Accommodation ${index + 1}`} iconColor="text-blue-600" onRemove={onRemove}>
       <p className="text-[10px] text-black/40 dark:text-white/40 -mt-1">Will be added with <span className="font-semibold">is_primary = false</span></p>
+      <AddBoardBasisModal
+        open={showAddBoardBasis}
+        onOpenChange={setShowAddBoardBasis}
+        initialName={boardBasisSearch}
+        onSuccess={(bb) => { setValue(`${p}.boardBasisId`, bb.id); setBoardBasisSearch(""); }}
+      />
+      <AddRoomTypeModal
+        open={showAddRoomType}
+        onOpenChange={setShowAddRoomType}
+        initialName={roomTypeSearch}
+        onSuccess={(rt) => { setValue(`${p}.roomType`, rt.id); setRoomTypeSearch(""); }}
+      />
       <FieldGrid>
         <FormField control={control} name={`${p}.accommodationId` as any} render={({ field }) => (
           <FormItem className="sm:col-span-2">
@@ -533,12 +551,15 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Board Basis</FormLabel>
             <FormControl>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="rounded-xl text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent>
-                  {boardBasisOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={boardBasisOptions}
+                value={field.value ?? ""}
+                onValueChange={field.onChange}
+                onSearchCapture={setBoardBasisSearch}
+                onAddNew={() => setShowAddBoardBasis(true)}
+                addNewLabel="Add Board Basis"
+                placeholder="Select board basis..."
+              />
             </FormControl>
           </FormItem>
         )} />
@@ -546,12 +567,15 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Room Type</FormLabel>
             <FormControl>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="rounded-xl text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent>
-                  {roomTypeOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={roomTypeOptions}
+                value={field.value ?? ""}
+                onValueChange={field.onChange}
+                onSearchCapture={setRoomTypeSearch}
+                onAddNew={() => setShowAddRoomType(true)}
+                addNewLabel="Add Room Type"
+                placeholder="Select room type..."
+              />
             </FormControl>
           </FormItem>
         )} />

@@ -370,6 +370,17 @@ function SidenavInner({
     >
         {collapsed ? (
           <div className="flex flex-col items-center gap-1">
+            {onToggleCollapsed && (
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                className="grid h-10 w-10 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
+                title="Expand sidebar"
+                data-testid="button-expand-sidebar"
+              >
+                <PanelLeftOpen className="h-6 w-6" />
+              </button>
+            )}
             <div
               className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
               data-testid="img-brand-mark"
@@ -377,34 +388,47 @@ function SidenavInner({
               <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
             </div>
           </div>
-        ) : currentOrganization?.logoUrl ? (
-          <div className="flex items-center justify-start">
-            <img
-              src={currentOrganization.logoUrl}
-              alt={currentOrganization.name || currentUser?.orgName || "Logo"}
-              className="max-h-[82px] w-auto object-contain"
-              data-testid="img-brand-logo"
-            />
-          </div>
         ) : (
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div
-                className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-                data-testid="img-brand-mark"
-              >
-                <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
-                <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
-              </div>
-              <div className="min-w-0">
-                <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-name">
-                  {currentUser?.orgName || "Travana"}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {currentOrganization?.logoUrl ? (
+                <img
+                  src={currentOrganization.logoUrl}
+                  alt={currentOrganization.name || currentUser?.orgName || "Logo"}
+                  className="max-h-[82px] w-auto object-contain"
+                  data-testid="img-brand-logo"
+                />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div
+                    className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
+                    data-testid="img-brand-mark"
+                  >
+                    <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
+                    <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-name">
+                      {currentUser?.orgName || "Travana"}
+                    </div>
+                    <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-brand-sub">
+                      {currentUser?.branchName || "—"}
+                    </div>
+                  </div>
                 </div>
-                <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-brand-sub">
-                  {currentUser?.branchName || "—"}
-                </div>
-              </div>
+              )}
             </div>
+            {onToggleCollapsed && (
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                className="shrink-0 grid h-9 w-9 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
+                title="Minimise sidebar"
+                data-testid="button-collapse-sidebar"
+              >
+                <PanelLeftClose className="h-6 w-6" />
+              </button>
+            )}
           </div>
         )}
 
@@ -439,17 +463,6 @@ function SidenavInner({
                   </span>
                 )}
               </Link>
-              {onToggleCollapsed && (
-                <button
-                  type="button"
-                  onClick={onToggleCollapsed}
-                  className="grid h-10 w-10 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
-                  title="Expand sidebar"
-                  data-testid="button-expand-sidebar"
-                >
-                  <PanelLeftOpen className="h-4 w-4" />
-                </button>
-              )}
             </>
           )}
         </nav>
@@ -574,21 +587,6 @@ function SidenavInner({
               })}
             </div>
 
-            {onToggleCollapsed && (
-              <>
-                <div className="my-4 h-px bg-black/10 dark:bg-white/10" />
-
-                <button
-                  type="button"
-                  onClick={onToggleCollapsed}
-                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
-                  data-testid="button-collapse-sidebar"
-                >
-                  <PanelLeftClose className="h-4 w-4" />
-                  <span className="text-sm font-medium">Minimise</span>
-                </button>
-              </>
-            )}
           </>
         )}
     </div>

@@ -74,8 +74,8 @@ export function QuoteOverviewSection() {
                       const currentPrice = getValues("price");
                       const currentDiscount = Number(getValues("discount")) || 0;
                       const currentServiceCharge = Number(getValues("serviceCharge")) || 0;
-                      const baseCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
-                      setValue("commission", parseFloat((baseCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
+                      const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
+                      setValue("commission", parseFloat((baseCommission + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
                     }
                   }}
                   placeholder="Select operator..."

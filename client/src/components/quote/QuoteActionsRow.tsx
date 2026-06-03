@@ -1,4 +1,4 @@
-import { Copy, FileText, MoreHorizontal, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, FileText, MoreHorizontal, Pencil, RefreshCw, Ticket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ interface QuoteActionsRowProps {
   onConvert: () => void;
   onDuplicate: () => void;
   onExport: () => void;
+  onTicket: () => void;
   onDelete: () => void;
 }
 
@@ -27,6 +28,7 @@ export function QuoteActionsRow({
   onConvert,
   onDuplicate,
   onExport,
+  onTicket,
   onDelete,
 }: QuoteActionsRowProps) {
   return (
@@ -61,6 +63,10 @@ export function QuoteActionsRow({
           <DropdownMenuItem onClick={onExport} data-testid="button-export-quote">
             <FileText className="mr-2 h-4 w-4" />
             Export
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onTicket} data-testid="button-quote-ticket">
+            <Ticket className="mr-2 h-4 w-4" />
+            Ticket
           </DropdownMenuItem>
           {isAdmin && (
             <>

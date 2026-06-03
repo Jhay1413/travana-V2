@@ -31,7 +31,14 @@ function entityLink(entityType: string, entityId: string): string {
   return `${base}/${entityId}`;
 }
 
-export type TaskWithClient = TaskNew & { clientId: string | null; clientName: string | null; tags: string[] };
+export type TaskWithClient = TaskNew & {
+  clientId: string | null;
+  clientName: string | null;
+  tags: string[];
+  entityTitle: string | null;
+  entityPrice: string | null;
+  entityCommission: string | null;
+};
 
 async function resolveTaskClients(
   allTasks: TaskNew[],
@@ -42,32 +49,56 @@ async function resolveTaskClients(
 ) {
   const transactionIdMap = new Map<string, string>();
   const directClientMap = new Map<string, string>();
+  // Maps each task key (`${type}:${entityId}`) to the canonical entity PK to
+  // navigate to. entityId is usually the entity's own id, but some tasks store
+  // the transaction id instead — resolve those to the real quote/booking/
+  // enquiry id so the entity page can load it.
+  const navIdMap = new Map<string, string>();
+  // Maps each task key to the linked entity's title / price / commission so task
+  // rows can show context (quote title, total price, commission).
+  type EntityMeta = { title: string | null; price: string | null; commission: string | null };
+  const entityMetaMap = new Map<string, EntityMeta>();
 
   if (quoteEntityIds.length > 0) {
     const quoteRows = await db
-      .select({ id: quote.id, transaction_id: quote.transaction_id })
+      .select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, price: quote.sales_price, commission: quote.package_commission })
       .from(quote)
       .where(inArray(quote.id, quoteEntityIds));
     for (const q of quoteRows) {
       transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
+      navIdMap.set(`quote:${q.id}`, q.id);
+      entityMetaMap.set(`quote:${q.id}`, { title: q.title, price: q.price, commission: q.commission });
     }
+    // entityIds that aren't quote PKs may be transaction ids — resolve each to
+    // its main (non-copy, non-free) quote so navigation lands on a real quote.
     const unresolvedIds = quoteEntityIds.filter(id => !quoteRows.some(q => q.id === id));
     if (unresolvedIds.length > 0) {
-      const txDirect = await db
-        .select({ id: transaction.id })
-        .from(transaction)
-        .where(inArray(transaction.id, unresolvedIds));
-      for (const tx of txDirect) {
-        transactionIdMap.set(`quote:${tx.id}`, tx.id);
+      const quotesByTx = await db
+        .select({ id: quote.id, transaction_id: quote.transaction_id, isQuoteCopy: quote.isQuoteCopy, isFreeQuote: quote.isFreeQuote, title: quote.title, price: quote.sales_price, commission: quote.package_commission })
+        .from(quote)
+        .where(inArray(quote.transaction_id, unresolvedIds));
+      const mainByTx = new Map<string, { id: string; isQuoteCopy: boolean | null; meta: EntityMeta }>();
+      for (const q of quotesByTx) {
+        if (q.isFreeQuote) continue;
+        const existing = mainByTx.get(q.transaction_id);
+        if (!existing || (existing.isQuoteCopy && !q.isQuoteCopy)) {
+          mainByTx.set(q.transaction_id, { id: q.id, isQuoteCopy: q.isQuoteCopy, meta: { title: q.title, price: q.price, commission: q.commission } });
+        }
       }
-      const stillUnresolved = unresolvedIds.filter(id => !txDirect.some(tx => tx.id === id));
+      for (const [txId, main] of Array.from(mainByTx.entries())) {
+        transactionIdMap.set(`quote:${txId}`, txId);
+        navIdMap.set(`quote:${txId}`, main.id);
+        entityMetaMap.set(`quote:${txId}`, main.meta);
+      }
+      // Transaction ids with no quote — still resolve the client link.
+      const stillUnresolved = unresolvedIds.filter(id => !mainByTx.has(id));
       if (stillUnresolved.length > 0) {
-        const quotesByTx = await db
-          .select({ id: quote.id, transaction_id: quote.transaction_id })
-          .from(quote)
-          .where(inArray(quote.transaction_id, stillUnresolved));
-        for (const q of quotesByTx) {
-          transactionIdMap.set(`quote:${q.transaction_id}`, q.transaction_id);
+        const txDirect = await db
+          .select({ id: transaction.id })
+          .from(transaction)
+          .where(inArray(transaction.id, stillUnresolved));
+        for (const tx of txDirect) {
+          transactionIdMap.set(`quote:${tx.id}`, tx.id);
         }
       }
     }
@@ -75,40 +106,69 @@ async function resolveTaskClients(
 
   if (bookingEntityIds.length > 0) {
     const bookingRows = await db
-      .select({ id: booking.id, transaction_id: booking.transaction_id })
+      .select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, price: booking.sales_price, commission: booking.package_commission })
       .from(booking)
       .where(inArray(booking.id, bookingEntityIds));
     for (const b of bookingRows) {
       transactionIdMap.set(`booking:${b.id}`, b.transaction_id);
+      navIdMap.set(`booking:${b.id}`, b.id);
+      entityMetaMap.set(`booking:${b.id}`, { title: b.title, price: b.price, commission: b.commission });
     }
     const unresolvedIds = bookingEntityIds.filter(id => !bookingRows.some(b => b.id === id));
     if (unresolvedIds.length > 0) {
-      const txDirect = await db
-        .select({ id: transaction.id })
-        .from(transaction)
-        .where(inArray(transaction.id, unresolvedIds));
-      for (const tx of txDirect) {
-        transactionIdMap.set(`booking:${tx.id}`, tx.id);
+      const bookingsByTx = await db
+        .select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, price: booking.sales_price, commission: booking.package_commission })
+        .from(booking)
+        .where(inArray(booking.transaction_id, unresolvedIds));
+      for (const b of bookingsByTx) {
+        if (!b.transaction_id) continue;
+        transactionIdMap.set(`booking:${b.transaction_id}`, b.transaction_id);
+        navIdMap.set(`booking:${b.transaction_id}`, b.id);
+        entityMetaMap.set(`booking:${b.transaction_id}`, { title: b.title, price: b.price, commission: b.commission });
+      }
+      const stillUnresolved = unresolvedIds.filter(id => !bookingsByTx.some(b => b.transaction_id === id));
+      if (stillUnresolved.length > 0) {
+        const txDirect = await db
+          .select({ id: transaction.id })
+          .from(transaction)
+          .where(inArray(transaction.id, stillUnresolved));
+        for (const tx of txDirect) {
+          transactionIdMap.set(`booking:${tx.id}`, tx.id);
+        }
       }
     }
   }
 
   if (enquiryEntityIds.length > 0) {
     const enquiryRows = await db
-      .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id })
+      .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, price: enquiry_table.budget })
       .from(enquiry_table)
       .where(inArray(enquiry_table.id, enquiryEntityIds));
     for (const e of enquiryRows) {
       transactionIdMap.set(`enquiry:${e.id}`, e.transaction_id);
+      navIdMap.set(`enquiry:${e.id}`, e.id);
+      entityMetaMap.set(`enquiry:${e.id}`, { title: e.title, price: e.price, commission: null });
     }
     const unresolvedIds = enquiryEntityIds.filter(id => !enquiryRows.some(e => e.id === id));
     if (unresolvedIds.length > 0) {
-      const txDirect = await db
-        .select({ id: transaction.id })
-        .from(transaction)
-        .where(inArray(transaction.id, unresolvedIds));
-      for (const tx of txDirect) {
-        transactionIdMap.set(`enquiry:${tx.id}`, tx.id);
+      const enquiriesByTx = await db
+        .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, price: enquiry_table.budget })
+        .from(enquiry_table)
+        .where(inArray(enquiry_table.transaction_id, unresolvedIds));
+      for (const e of enquiriesByTx) {
+        transactionIdMap.set(`enquiry:${e.transaction_id}`, e.transaction_id);
+        navIdMap.set(`enquiry:${e.transaction_id}`, e.id);
+        entityMetaMap.set(`enquiry:${e.transaction_id}`, { title: e.title, price: e.price, commission: null });
+      }
+      const stillUnresolved = unresolvedIds.filter(id => !enquiriesByTx.some(e => e.transaction_id === id));
+      if (stillUnresolved.length > 0) {
+        const txDirect = await db
+          .select({ id: transaction.id })
+          .from(transaction)
+          .where(inArray(transaction.id, stillUnresolved));
+        for (const tx of txDirect) {
+          transactionIdMap.set(`enquiry:${tx.id}`, tx.id);
+        }
       }
     }
   }
@@ -154,7 +214,7 @@ async function resolveTaskClients(
     }
   }
 
-  return { directClientMap, txClientMap, clientNameMap };
+  return { directClientMap, txClientMap, clientNameMap, navIdMap, entityMetaMap };
 }
 
 export const taskRepository = {
@@ -186,7 +246,18 @@ export const taskRepository = {
       const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
       const clientId = resolvedData.directClientMap.get(key) ?? resolvedData.txClientMap.get(key) ?? null;
       const clientName = clientId ? resolvedData.clientNameMap.get(clientId) ?? null : null;
-      return { ...t, clientId, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
+      const entityId = resolvedData.navIdMap.get(key) ?? t.entityId;
+      const meta = resolvedData.entityMetaMap.get(key);
+      return {
+        ...t,
+        entityId,
+        clientId,
+        clientName,
+        tags: [t.entityType ?? ""].filter(Boolean),
+        entityTitle: meta?.title ?? null,
+        entityPrice: meta?.price ?? null,
+        entityCommission: meta?.commission ?? null,
+      };
     });
   },
 
@@ -310,7 +381,18 @@ export const taskRepository = {
       const key = `${t.entityType ?? ""}:${t.entityId ?? ""}`;
       const clientId = resolvedData.directClientMap.get(key) ?? resolvedData.txClientMap.get(key) ?? null;
       const clientName = clientId ? resolvedData.clientNameMap.get(clientId) ?? null : null;
-      return { ...t, clientId, clientName, tags: [t.entityType ?? ""].filter(Boolean) };
+      const entityId = resolvedData.navIdMap.get(key) ?? t.entityId;
+      const meta = resolvedData.entityMetaMap.get(key);
+      return {
+        ...t,
+        entityId,
+        clientId,
+        clientName,
+        tags: [t.entityType ?? ""].filter(Boolean),
+        entityTitle: meta?.title ?? null,
+        entityPrice: meta?.price ?? null,
+        entityCommission: meta?.commission ?? null,
+      };
     });
   },
 

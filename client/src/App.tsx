@@ -20,6 +20,7 @@ import { useRole } from "@/hooks/use-role";
 import { BrandingApplier } from "@/components/branding-applier";
 import PublicQuotePage from "@/pages/public-quote";
 import AgentOverviewPage from "@/pages/agent-overview";
+import AgentStatsPage from "@/pages/agent-stats";
 import BranchOverviewPage from "@/pages/branch-overview";
 import OrganizationOverviewPage from "@/pages/organization-overview";
 import ClientsPage from "@/pages/clients";
@@ -116,6 +117,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/agent-overview" allow={STAFF_ROLES} component={AgentOverviewPage} />
         <RoleRoute path="/branch-overview" allow={MANAGER_ROLES} component={BranchOverviewPage} />
         <RoleRoute path="/agency/overview" allow={ADMIN_ROLES} component={OrganizationOverviewPage} />
+        <RoleRoute path="/agents/:agentId" allow={MANAGER_ROLES} component={AgentStatsPage} />
 
         <RoleRoute path="/platform-admin/audit-log" allow={PLATFORM_ROLES} component={PlatformAdminAuditPage} />
         <RoleRoute path="/platform-admin/users" allow={PLATFORM_ROLES} component={PlatformAdminUsersPage} />

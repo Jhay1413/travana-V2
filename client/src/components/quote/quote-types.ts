@@ -292,9 +292,11 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     pricePerPerson: parseFloat(String(apiData.price_per_person || "0")) || 0,
     commissions: {
       tourOperator: apiData.main_tour_operator_name || "",
-      price: salesPrice,
+      // Overall total the customer pays = base price − discount + service charge.
+      price: salesPrice - discounts + serviceCharge,
       commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
-      commissionValue: (packageCommission - serviceCharge) + discounts,
+      // Operator commission portion (on the discounted base, excludes the flat service charge).
+      commissionValue: packageCommission - serviceCharge,
       discounts: discounts,
       serviceCharge: serviceCharge,
       totalCommission: packageCommission,
