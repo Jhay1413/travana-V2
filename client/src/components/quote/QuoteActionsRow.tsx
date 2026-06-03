@@ -1,4 +1,4 @@
-import { Copy, FileText, MoreHorizontal, Pencil, RefreshCw, Ticket, Trash2 } from "lucide-react";
+import { CheckSquare, Copy, FileText, MoreHorizontal, Pencil, RefreshCw, Ticket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ interface QuoteActionsRowProps {
   onDuplicate: () => void;
   onExport: () => void;
   onTicket: () => void;
+  onAddTask: () => void;
   onDelete: () => void;
 }
 
@@ -29,6 +30,7 @@ export function QuoteActionsRow({
   onDuplicate,
   onExport,
   onTicket,
+  onAddTask,
   onDelete,
 }: QuoteActionsRowProps) {
   return (
@@ -67,6 +69,10 @@ export function QuoteActionsRow({
           <DropdownMenuItem onClick={onTicket} data-testid="button-quote-ticket">
             <Ticket className="mr-2 h-4 w-4" />
             Ticket
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onAddTask} data-testid="button-quote-add-task">
+            <CheckSquare className="mr-2 h-4 w-4" />
+            Add Task
           </DropdownMenuItem>
           {isAdmin && (
             <>

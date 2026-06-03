@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useClients } from "@/hooks/queries";
 import axiosClient from "@/api/client/axios-client";
 import { cn } from "@/lib/utils";
-import lunaImg from "@assets/Luna-Platform-600_1780474454496.jpg";
+import lunaImg from "@assets/Luna-With-Bag-Laptop-Full_1780475687075.jpg";
 
 function renderInline(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
@@ -279,31 +279,37 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
               transition={{ duration: 0.4 }}
               className="flex flex-col items-center px-2 pt-2 text-center"
             >
-              <div className="flex items-center justify-center gap-1">
+              <div className="flex items-center justify-center gap-3">
                 <motion.img
                   src={lunaImg}
                   alt="Luna"
-                  className="h-56 w-auto shrink-0 drop-shadow-xl"
+                  className="h-72 w-auto shrink-0 drop-shadow-xl"
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 120, damping: 14 }}
                 />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8, x: -10 }}
-                  animate={{ opacity: 1, scale: 1, x: 0 }}
-                  transition={{ delay: 0.25, type: "spring", stiffness: 200, damping: 16 }}
-                  className="max-w-[170px] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3.5 py-2.5 text-left text-sm font-medium text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                >
-                  Hi, I'm Luna <span className="text-amber-400">✦</span>
-                  <br />
-                  How can I help you today?
-                </motion.div>
+                <div className="flex max-w-[200px] flex-col justify-center gap-3 text-left">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    transition={{ delay: 0.25, type: "spring", stiffness: 200, damping: 16 }}
+                    className="rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    Hi, I'm Luna <span className="text-amber-400">✦</span>
+                    <br />
+                    How can I help you today?
+                  </motion.div>
+                  <motion.p
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
+                    className="text-sm text-slate-500 dark:text-slate-400"
+                  >
+                    Ask me anything about destinations, resorts, or trip ideas — then save my answer straight to a
+                    client's notes.
+                  </motion.p>
+                </div>
               </div>
-
-              <p className="mt-4 max-w-sm text-sm text-slate-500 dark:text-slate-400">
-                Ask me anything about destinations, resorts, or trip ideas — then save my answer straight to a
-                client's notes.
-              </p>
 
               <div className="mt-5 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((s, i) => (

@@ -12,6 +12,7 @@ import { useTasks, useCurrentUser } from "@/hooks/queries";
 import { useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import { cn } from "@/lib/utils";
 
 const TASK_PRESETS_BY_ENTITY: Record<string, string[]> = {
   general: [
@@ -69,7 +70,7 @@ function formatTaskDue(date: Date | string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
-export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserId }: { quoteId: string; entityType?: "enquiry" | "quote" | "booking"; assignedUserId?: string }) {
+export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserId, addOpen, onAddOpenChange, hideAddButton, className }: { quoteId: string; entityType?: "enquiry" | "quote" | "booking"; assignedUserId?: string; addOpen?: boolean; onAddOpenChange?: (open: boolean) => void; hideAddButton?: boolean; className?: string }) {
   const taskEntityType = entityType === "booking" ? "quote" : entityType;
   const { data: tasksData, isLoading } = useTasks(taskEntityType, quoteId);
   const { data: currentUser } = useCurrentUser();
@@ -77,7 +78,15 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
   const toggleMutation = useToggleTask(taskEntityType, quoteId);
   const deleteMutation = useDeleteTask(taskEntityType, quoteId);
   const { toast } = useToast();
-  const [showAddDialog, setShowAddDialog] = useState(false);
+  // The add-task dialog can be controlled by a parent (e.g. opened from the
+  // quote Actions dropdown) or managed internally via the in-card button.
+  const [internalShowAddDialog, setInternalShowAddDialog] = useState(false);
+  const isAddControlled = onAddOpenChange !== undefined;
+  const showAddDialog = isAddControlled ? !!addOpen : internalShowAddDialog;
+  const setShowAddDialog = (open: boolean) => {
+    if (isAddControlled) onAddOpenChange!(open);
+    else setInternalShowAddDialog(open);
+  };
   const [taskCategory, setTaskCategory] = useState<string>(entityType);
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
@@ -119,7 +128,7 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
 
   return (
     <>
-      <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-quote-tasks">
+      <Card className={cn("glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4", className)} data-testid="card-quote-tasks">
         <div className="flex items-center justify-between" data-testid="row-tasks-header">
           <div>
             <div className="text-sm font-semibold" data-testid="text-tasks-title">Tasks</div>
@@ -198,17 +207,19 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
           )}
         </div>
 
-        <div className="mt-3">
-          <Button
-            size="sm"
-            className="w-full h-9 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-            data-testid="button-add-task"
-            onClick={() => setShowAddDialog(true)}
-          >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add Task
-          </Button>
-        </div>
+        {!hideAddButton && (
+          <div className="mt-3">
+            <Button
+              size="sm"
+              className="w-full h-9 rounded-2xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+              data-testid="button-add-task"
+              onClick={() => setShowAddDialog(true)}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add Task
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

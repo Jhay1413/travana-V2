@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -22,6 +23,7 @@ import {
 
 interface QuoteEngagementProps {
   quoteId: string;
+  className?: string;
 }
 
 function formatTimeAgo(dateStr: string | Date | null): string {
@@ -62,7 +64,7 @@ const deviceIcons: Record<string, typeof Monitor> = {
   tablet: Tablet,
 };
 
-export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
+export function QuoteEngagement({ quoteId, className }: QuoteEngagementProps) {
   const { data: viewStats, isLoading: viewsLoading } = useQuoteViews(quoteId);
   const { data: actions, isLoading: actionsLoading } = useQuoteCustomerActions(quoteId);
   const [showPublicHistory, setShowPublicHistory] = useState(false);
@@ -78,7 +80,7 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
 
   if (isLoading) {
     return (
-      <Card className="rounded-3xl border-black/10 bg-white/70 p-3" data-testid="card-quote-engagement">
+      <Card className={cn("rounded-3xl border-black/10 bg-white/70 p-3", className)} data-testid="card-quote-engagement">
         <div className="flex items-center gap-2 mb-3">
           <Eye className="h-4 w-4 text-black/50" />
           <h3 className="text-sm font-semibold">Quote Engagement</h3>
@@ -92,7 +94,7 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
 
   if (!hasData) {
     return (
-      <Card className="rounded-3xl border-black/10 bg-white/70 p-3" data-testid="card-quote-engagement">
+      <Card className={cn("rounded-3xl border-black/10 bg-white/70 p-3", className)} data-testid="card-quote-engagement">
         <div className="flex items-center gap-2 mb-3">
           <Eye className="h-4 w-4 text-black/50" />
           <h3 className="text-sm font-semibold">Quote Engagement</h3>
@@ -105,7 +107,7 @@ export function QuoteEngagement({ quoteId }: QuoteEngagementProps) {
   }
 
   return (
-    <Card className="rounded-3xl border-black/10 bg-white/70 p-3 my-4" data-testid="card-quote-engagement">
+    <Card className={cn("rounded-3xl border-black/10 bg-white/70 p-3", className)} data-testid="card-quote-engagement">
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}

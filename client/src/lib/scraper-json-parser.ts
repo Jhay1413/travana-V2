@@ -214,6 +214,7 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
 
   return {
     fields: {
+      quoteLink: (data.link || data.quote_link || data.quoteLink || data.url || data.source_url || "") as string,
       travelDate: convertToIsoDate(data.travel_date || ""),
       tourOperator: data.tour_operator || hotel?.tour_operator || "",
       sales: salesAmount,

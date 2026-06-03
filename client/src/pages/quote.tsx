@@ -67,6 +67,7 @@ export default function QuotePage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
   const updateTransactionMutation = useUpdateTransaction();
   const {
     showSharePopup, setShowSharePopup,
@@ -205,6 +206,7 @@ export default function QuotePage() {
               onDuplicate={() => setShowCopyDialog(true)}
               onExport={() => { }}
               onTicket={() => ticketCreate.setShowTicketDialog(true)}
+              onAddTask={() => setShowAddTaskDialog(true)}
               onDelete={openDeleteDialog}
             />
           </div>
@@ -288,7 +290,10 @@ export default function QuotePage() {
                               )}
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">
-                              <span data-testid="text-quote-meta-destination">{quote.destinationName || quote.destination}</span>
+                              <span data-testid="text-quote-meta-destination">
+                                {quote.destinationName || quote.destination}
+                                {quote.countryName ? `, ${quote.countryName}` : ""}
+                              </span>
                               <span className="text-black/25">•</span>
                               <span data-testid="text-quote-meta-dates">
                                 {formatUKDate(quote.travelDate)} → {formatUKDate(quote.returnDate)}
@@ -399,9 +404,17 @@ export default function QuotePage() {
 
                   <QuoteBookingReferences quote={quote} />
 
-                  <div className="mt-3 grid items-start gap-3 md:grid-cols-2" data-testid="grid-quote-engagement-tasks">
-                    <QuoteEngagement quoteId={quoteId} />
-                    <QuoteTasksSection quoteId={quoteId} entityType="quote" assignedUserId={(quoteData as any)?.user_id} />
+                  <div className="mt-3 grid items-stretch gap-3 md:grid-cols-2" data-testid="grid-quote-engagement-tasks">
+                    <QuoteEngagement quoteId={quoteId} className="h-full" />
+                    <QuoteTasksSection
+                      quoteId={quoteId}
+                      entityType="quote"
+                      assignedUserId={(quoteData as any)?.user_id}
+                      addOpen={showAddTaskDialog}
+                      onAddOpenChange={setShowAddTaskDialog}
+                      hideAddButton
+                      className="h-full"
+                    />
                   </div>
 
                   <QuoteNotesSection transactionId={quote.transaction_id} />
