@@ -248,44 +248,29 @@ export function WhatsOnTab({
                         </span>
                       ))}
                     </div>
-                    {(task.entityTitle || task.entityPrice || task.entityCommission) && (
-                      <div
-                        className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-4 text-[11px] text-black/55 dark:text-white/55"
-                        data-testid={`text-whats-on-task-meta-${task.id}`}
-                      >
-                        {task.entityTitle && (
-                          <span className="truncate font-medium text-black/70 dark:text-white/70">
-                            {task.entityTitle}
-                          </span>
-                        )}
-                        {task.entityPrice != null && task.entityPrice !== "" && (
-                          <span data-testid={`text-whats-on-task-price-${task.id}`}>
-                            {currency.format(parseFloat(task.entityPrice) || 0)}
-                          </span>
-                        )}
-                        {task.entityCommission != null && task.entityCommission !== "" && (
-                          <span
-                            className="font-semibold text-emerald-600 dark:text-emerald-400"
-                            data-testid={`text-whats-on-task-commission-${task.id}`}
-                          >
-                            Comm {currency.format(parseFloat(task.entityCommission) || 0)}
-                          </span>
-                        )}
-                      </div>
-                    )}
                     <div
-                      className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-4 text-[11px] text-black/45 dark:text-white/45"
-                      data-testid={`text-whats-on-task-dates-${task.id}`}
+                      className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-4 text-[11px] text-black/55 dark:text-white/55"
+                      data-testid={`text-whats-on-task-meta-${task.id}`}
                     >
                       <span data-testid={`text-whats-on-task-created-${task.id}`}>
                         Created {fmtDate(task.createdAt) ?? "—"}
                       </span>
+                      {task.entityTitle && (
+                        <span className="truncate font-medium text-black/70 dark:text-white/70">
+                          {task.entityTitle}
+                        </span>
+                      )}
                       {task.entityTravelDate && (
                         <span
                           className="font-medium text-sky-600 dark:text-sky-400"
                           data-testid={`text-whats-on-task-travel-${task.id}`}
                         >
                           Travel {fmtDate(task.entityTravelDate)}
+                        </span>
+                      )}
+                      {task.entityPrice != null && task.entityPrice !== "" && (
+                        <span data-testid={`text-whats-on-task-price-${task.id}`}>
+                          {currency.format(parseFloat(task.entityPrice) || 0)}
                         </span>
                       )}
                     </div>

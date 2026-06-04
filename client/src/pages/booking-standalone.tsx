@@ -21,7 +21,7 @@ import { QuoteBookingReferences } from "@/components/quote/QuoteBookingReference
 import { QuoteDeleteDialog } from "@/components/quote/QuoteDeleteDialog";
 import { QuoteTagsCard } from "@/components/quote/QuoteTagsCard";
 
-import { useBookingPin, useBookingDelete, useBookingTagEditor } from "@/components/booking/hooks";
+import { useBookingPin, useBookingDelete, useBookingTagEditor, useBookingImageActions } from "@/components/booking/hooks";
 import { BookingMediaPanel } from "@/components/booking/BookingMediaPanel";
 import { BookingItinerarySpecs } from "@/components/booking/BookingItinerarySpecs";
 import { BookingCostingsCard } from "@/components/booking/BookingCostingsCard";
@@ -61,6 +61,14 @@ export default function BookingPage() {
   }, []);
 
   const { primaryImage, galleryImages } = useQuoteImages(bookingData);
+  const {
+    imageInputRef,
+    uploadImagesMutation,
+    setPrimary: setPrimaryImage,
+    removeImage: deleteImage,
+    uploadFiles: uploadImageFiles,
+    openFilePicker: openImageFilePicker,
+  } = useBookingImageActions(bookingId);
 
   const booking = useMemo(() => {
     if (!bookingData) return null;
@@ -209,7 +217,16 @@ export default function BookingPage() {
             <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-booking-itinerary">
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-itinerary-hero">
                 <div className="grid content-start gap-1.5" data-testid="col-itinerary-media">
-                  <BookingMediaPanel primaryImage={primaryImage} galleryImages={galleryImages} />
+                  <BookingMediaPanel
+                    primaryImage={primaryImage}
+                    galleryImages={galleryImages}
+                    imageInputRef={imageInputRef}
+                    isUploading={uploadImagesMutation.isPending}
+                    setPrimary={setPrimaryImage}
+                    deleteImage={deleteImage}
+                    uploadFiles={uploadImageFiles}
+                    openFilePicker={openImageFilePicker}
+                  />
 
                   <QuoteTagsCard
                     tags={booking.tags}
