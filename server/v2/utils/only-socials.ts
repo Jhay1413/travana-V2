@@ -69,6 +69,7 @@ export const scheduleOnlySocialsPost = async (
   const baseUrl = `${getApiBase()}/posts`;
 
   try {
+    const tCreate = Date.now();
     const response = await fetch(baseUrl, {
       method: "POST",
       headers: { ...getAuthHeader(), "Content-Type": "application/json" },
@@ -95,6 +96,7 @@ export const scheduleOnlySocialsPost = async (
     });
 
     const data = (await response.json()) as { id: string; uuid: string; name: string; hexColor: string };
+    console.log(`[OnlySocials][timing] create post POST /posts: ${Date.now() - tCreate}ms`);
 
     if (!response.ok) {
       console.error("[OnlySocials] create post failed:", JSON.stringify(data));
@@ -103,11 +105,13 @@ export const scheduleOnlySocialsPost = async (
 
     console.log("[OnlySocials] post created:", data.id, data.uuid);
 
+    const tConfirm = Date.now();
     const scheduled = await fetch(`${baseUrl}/schedule/${data.uuid}`, {
       method: "POST",
       headers: { ...getAuthHeader(), "Content-Type": "application/json" },
       body: JSON.stringify({ postNow: false }),
     });
+    console.log(`[OnlySocials][timing] schedule confirm POST /posts/schedule: ${Date.now() - tConfirm}ms`);
 
     if (!scheduled.ok) {
       const schedData = await scheduled.json();
@@ -138,6 +142,7 @@ export const rescheduleOnlySocialsPost = async (
   const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
 
   try {
+    const tPut = Date.now();
     const response = await fetch(url, {
       method: "PUT",
       headers: { ...getAuthHeader(), "Content-Type": "application/json" },
@@ -164,6 +169,7 @@ export const rescheduleOnlySocialsPost = async (
     });
 
     const data = (await response.json()) as { id: string; uuid: string; name: string; hexColor: string };
+    console.log(`[OnlySocials][timing] reschedule PUT /posts: ${Date.now() - tPut}ms`);
 
     if (!response.ok) {
       console.error("[OnlySocials] reschedule failed:", JSON.stringify(data));
@@ -227,6 +233,7 @@ export const uploadMediaFromUrl = async (
   altText?: string
 ): Promise<OnlySocialsMediaUploadResponse> => {
   try {
+    const tDownload = Date.now();
     const response = await axios.get(imageUrl, {
       responseType: "arraybuffer",
       timeout: 30000,
@@ -235,6 +242,9 @@ export const uploadMediaFromUrl = async (
 
     const buffer = Buffer.from(response.data);
     const contentType = response.headers["content-type"] || "image/jpeg";
+    console.log(
+      `[OnlySocials][timing] download from URL (${Math.round(buffer.length / 1024)}KB): ${Date.now() - tDownload}ms — ${imageUrl}`,
+    );
 
     const extMap: Record<string, string> = {
       "image/jpeg": ".jpg",
@@ -253,6 +263,7 @@ export const uploadMediaFromUrl = async (
     });
     formData.append("alt_text", altText ?? fileName);
 
+    const tUpload = Date.now();
     const uploadResponse = await axios.post(`${getApiBase()}/media`, formData, {
       headers: {
         ...getAuthHeader(),
@@ -261,6 +272,7 @@ export const uploadMediaFromUrl = async (
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
     });
+    console.log(`[OnlySocials][timing] upload to /media: ${Date.now() - tUpload}ms — ${imageUrl}`);
 
     console.log(`[OnlySocials] Uploaded image from URL: ${imageUrl} -> id: ${uploadResponse.data.id}`);
     return uploadResponse.data as OnlySocialsMediaUploadResponse;
@@ -295,6 +307,7 @@ export const uploadOnlySocialsMedia = async (
   formData.append("alt_text", altText ?? fileName);
 
   try {
+    const tUpload = Date.now();
     const response = await axios.post(`${getApiBase()}/media`, formData, {
       headers: {
         ...getAuthHeader(),
@@ -303,6 +316,7 @@ export const uploadOnlySocialsMedia = async (
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
     });
+    console.log(`[OnlySocials][timing] upload file to /media: ${Date.now() - tUpload}ms — ${fileName}`);
     return response.data as OnlySocialsMediaUploadResponse;
   } catch (error) {
     if (axios.isAxiosError(error)) {

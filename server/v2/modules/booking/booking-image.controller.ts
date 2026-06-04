@@ -55,7 +55,6 @@ export const bookingImageController = {
     const MAX_FILE_SIZE = 5 * 1024 * 1024;
     const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
-    const dataUrls: string[] = [];
     for (const file of files) {
       if (!ALLOWED_MIMES.includes(file.mimetype)) {
         return res.status(400).json({ success: false, message: `Unsupported file type: ${file.mimetype}` });
@@ -63,11 +62,9 @@ export const bookingImageController = {
       if (file.size > MAX_FILE_SIZE) {
         return res.status(400).json({ success: false, message: `File too large (max 5MB): ${file.originalname}` });
       }
-      const base64 = file.buffer.toString("base64");
-      dataUrls.push(`data:${file.mimetype};base64,${base64}`);
     }
 
-    const addedImages = await bookingImageService.addImages(bookingId, dataUrls);
+    const addedImages = await bookingImageService.uploadFiles(bookingId, files);
     return successResponse(res, addedImages, `${addedImages.length} image(s) uploaded successfully`, 201);
   }),
 };

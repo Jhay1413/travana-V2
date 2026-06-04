@@ -7,14 +7,23 @@ import type { Scope } from "../../utils/scope";
 type TaskNew = typeof tasks.$inferSelect;
 type InsertTaskNew = typeof tasks.$inferInsert;
 
-function buildTaskScopeConds(scope?: Scope): SQL[] {
+function buildTaskScopeConds(scope?: Scope, opts?: { entityScoped?: boolean }): SQL[] {
   const conds: SQL[] = [];
   if (!scope || scope.orgRole === "platform_admin") return conds;
   conds.push(eq(tasks.orgId, scope.orgId));
   if (scope.orgRole === "branch_manager" && scope.branchId) {
     conds.push(eq(tasks.branchId, scope.branchId));
   }
-  if ((scope.orgRole === "agent" || scope.orgRole === "homeworker") && scope.userId) {
+  // For entity-scoped reads (a single quote/enquiry/booking's task list) we
+  // deliberately skip the per-assignee restriction: anyone who can open the
+  // record should see ALL of its tasks (org/branch scoped), not only the ones
+  // assigned to them. Otherwise a task assigned to the record owner is hidden
+  // from an agent who just created it. List/dashboard reads keep the filter.
+  if (
+    !opts?.entityScoped &&
+    (scope.orgRole === "agent" || scope.orgRole === "homeworker") &&
+    scope.userId
+  ) {
     conds.push(eq(tasks.userId, scope.userId));
   }
   return conds;
@@ -400,7 +409,7 @@ export const taskRepository = {
   },
 
   async findByEntity(entityType: string, entityId: string, scope?: Scope): Promise<TaskNew[]> {
-    const conds: SQL[] = [eq(tasks.entityType, entityType), eq(tasks.entityId, entityId), ...buildTaskScopeConds(scope)];
+    const conds: SQL[] = [eq(tasks.entityType, entityType), eq(tasks.entityId, entityId), ...buildTaskScopeConds(scope, { entityScoped: true })];
     return await db
       .select()
       .from(tasks)

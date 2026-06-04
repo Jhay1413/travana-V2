@@ -1,7 +1,17 @@
 import { bookingImageRepository } from "./booking-image.repository";
 import { AppError } from "../../utils/error-handler";
+import { uploadImageToS3, deleteImageByStoredUrl } from "../../utils/image-storage";
 
 export const bookingImageService = {
+  /** Upload image files to S3 and persist their proxy URLs against the booking. */
+  async uploadFiles(bookingId: string, files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new AppError("No images provided", 400);
+    }
+    const urls = await Promise.all(files.map((file) => uploadImageToS3(file, "booking-images")));
+    return bookingImageRepository.addImages(bookingId, urls);
+  },
+
   async addImages(bookingId: string, imageUrls: string[]) {
     if (!imageUrls || imageUrls.length === 0) {
       throw new AppError("No images provided", 400);
@@ -33,7 +43,10 @@ export const bookingImageService = {
   },
 
   async deleteImage(bookingId: string, imageId: string) {
+    const url = await bookingImageRepository.getImageUrl(bookingId, imageId);
     await bookingImageRepository.deleteImage(bookingId, imageId);
+    // Best-effort: remove the backing S3 object (no-op for legacy/base64 urls).
+    await deleteImageByStoredUrl(url).catch(() => {});
   },
 
   async setPrimaryImage(bookingId: string, imageId: string) {

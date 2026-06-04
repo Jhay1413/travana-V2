@@ -7,6 +7,7 @@ import {
   rescheduleOnlySocialsPost,
   deleteOnlySocialsPost,
   uploadMultipleOnlySocialsMedia,
+  uploadOnlySocialsMedia,
   uploadMediaFromUrl,
   fetchOnlySocialsPost,
 } from "../../utils/only-socials";
@@ -20,6 +21,93 @@ function effectiveOrgId(scope: ScopeOrTrusted): string | null {
   if (scope.orgId === null) return null;
   if ((scope as Scope).orgRole === "platform_admin") return null;
   return (scope as Scope).orgId || null;
+}
+
+// Cap on concurrent uploads to the external OnlySocials API. Kept modest so we
+// parallelise without tripping their rate limits.
+const MEDIA_UPLOAD_CONCURRENCY = 4;
+
+/** Run async tasks with a bounded number in flight at once; results keep input order. */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+type MediaTask =
+  | { kind: "file"; file: Express.Multer.File }
+  | { kind: "url"; url: string };
+
+/**
+ * Upload new files and quote-image URLs to OnlySocials and return the full
+ * ordered list of media ids (existing + uploaded). Files and URLs are uploaded
+ * together through a single bounded-concurrency queue, so total time scales with
+ * the slowest few uploads rather than the image count. File upload errors fail
+ * the operation; URL fetch/upload errors are logged and skipped (best-effort).
+ */
+async function resolveMediaIds(
+  existingImageIds: number[],
+  newFiles: Express.Multer.File[],
+  imageUrls: string[],
+): Promise<number[]> {
+  const tasks: MediaTask[] = [
+    ...newFiles.map((file): MediaTask => ({ kind: "file", file })),
+    ...imageUrls.map((url): MediaTask => ({ kind: "url", url })),
+  ];
+
+  console.log(
+    `[SocialPost][timing] resolveMediaIds start: existing=${existingImageIds.length} files=${newFiles.length} urls=${imageUrls.length} concurrency=${MEDIA_UPLOAD_CONCURRENCY}`,
+  );
+
+  if (tasks.length === 0) {
+    console.log("[SocialPost][timing] resolveMediaIds: nothing to upload (existing-only)");
+    return [...existingImageIds];
+  }
+
+  const startedAt = Date.now();
+  const uploaded = await mapWithConcurrency(tasks, MEDIA_UPLOAD_CONCURRENCY, async (task, index) => {
+    const label = task.kind === "file" ? `file#${index} (${task.file.originalname})` : `url#${index} (${task.url})`;
+    const taskStart = Date.now();
+    if (task.kind === "file") {
+      const result = await uploadOnlySocialsMedia(task.file);
+      console.log(`[SocialPost][timing]   uploaded ${label} in ${Date.now() - taskStart}ms`);
+      return Number(result.id);
+    }
+    try {
+      const result = await uploadMediaFromUrl(task.url);
+      console.log(`[SocialPost][timing]   uploaded ${label} in ${Date.now() - taskStart}ms`);
+      return Number(result.id);
+    } catch (err) {
+      console.error(
+        `[SocialPost][timing]   FAILED ${label} after ${Date.now() - taskStart}ms:`,
+        err,
+      );
+      return null;
+    }
+  });
+
+  const ok = uploaded.filter((id): id is number => id !== null).length;
+  console.log(
+    `[SocialPost][timing] resolveMediaIds done: ${ok}/${tasks.length} uploaded in ${Date.now() - startedAt}ms total`,
+  );
+
+  return [
+    ...existingImageIds,
+    ...uploaded.filter((id): id is number => id !== null),
+  ];
 }
 
 async function assertQuoteInScope(quoteId: string, scope: ScopeOrTrusted) {
@@ -294,27 +382,29 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     imageUrls: string[] = [],
     scope: ScopeOrTrusted = { orgId: null }
   ): Promise<TravelDeal> {
+    const t0 = Date.now();
+    console.log(`[SocialPost][timing] schedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
+    console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
 
-    let allImageIds = [...existingImageIds];
-    if (newFiles.length > 0) {
-      const uploaded = await uploadMultipleOnlySocialsMedia(newFiles);
-      const newIds = uploaded.map((u) => Number(u.id));
-      allImageIds = [...allImageIds, ...newIds];
-    }
-    if (imageUrls.length > 0) {
-      const urlMediaIds = await socialPostService.uploadImageUrls(imageUrls);
-      allImageIds = [...allImageIds, ...urlMediaIds];
-    }
+    const tMedia = Date.now();
+    const allImageIds = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
+    console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids)`);
 
     // OnlySocials stores the date/time verbatim (no timezone), so give it the
     // user's local wall-clock value; the DB keeps the absolute UTC instant.
+    const tSchedule = Date.now();
     const result = await scheduleOnlySocialsPost(postScheduleLocal, deal.post, allImageIds);
+    console.log(`[SocialPost][timing] scheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);
 
-    return await socialPostRepository.update(id, {
+    const tDb = Date.now();
+    const updated = await socialPostRepository.update(id, {
       onlySocialsId: result.uuid,
       postSchedule: new Date(postSchedule),
     });
+    console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
+    console.log(`[SocialPost][timing] schedulePost DONE id=${id} total=${Date.now() - t0}ms`);
+    return updated;
   },
 
   async reschedulePost(
@@ -327,32 +417,34 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     imageUrls: string[] = [],
     scope: ScopeOrTrusted = { orgId: null }
   ): Promise<TravelDeal> {
+    const t0 = Date.now();
+    console.log(`[SocialPost][timing] reschedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
+    console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
 
-    let allImageIds = [...existingImageIds];
-    if (newFiles.length > 0) {
-      const uploaded = await uploadMultipleOnlySocialsMedia(newFiles);
-      const newIds = uploaded.map((u) => Number(u.id));
-      allImageIds = [...allImageIds, ...newIds];
-    }
-    if (imageUrls.length > 0) {
-      const urlMediaIds = await socialPostService.uploadImageUrls(imageUrls);
-      allImageIds = [...allImageIds, ...urlMediaIds];
-    }
+    const tMedia = Date.now();
+    const allImageIds = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
+    console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids)`);
 
     // OnlySocials gets the local wall-clock value; the DB keeps the UTC instant.
+    const tSchedule = Date.now();
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
       newPostScheduleLocal,
       postContent,
       allImageIds
     );
+    console.log(`[SocialPost][timing] rescheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);
 
-    return await socialPostRepository.update(id, {
+    const tDb = Date.now();
+    const updated = await socialPostRepository.update(id, {
       onlySocialsId: result.uuid,
       postSchedule: new Date(newPostSchedule),
     });
+    console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
+    console.log(`[SocialPost][timing] reschedulePost DONE id=${id} total=${Date.now() - t0}ms`);
+    return updated;
   },
 
   async deleteScheduledPost(id: string, scope: ScopeOrTrusted): Promise<TravelDeal> {
@@ -381,19 +473,6 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       console.error("[SocialPost] Error fetching quote images:", err);
     }
     return images.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
-  },
-
-  async uploadImageUrls(urls: string[]): Promise<number[]> {
-    const mediaIds: number[] = [];
-    for (const url of urls) {
-      try {
-        const result = await uploadMediaFromUrl(url);
-        mediaIds.push(Number(result.id));
-      } catch (err) {
-        console.error(`[SocialPost] Failed to upload image from URL ${url}:`, err);
-      }
-    }
-    return mediaIds;
   },
 
   async getPostMedia(id: string, scope: ScopeOrTrusted): Promise<{ media: OnlySocialsMediaContent[]; postContent: string }> {

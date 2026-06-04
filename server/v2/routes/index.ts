@@ -57,10 +57,12 @@ import platformAdminRoutes from '../modules/platform-admin/platform-admin.routes
 import userOrgRolesRoutes from '../modules/user-org-roles/user-org-roles.routes';
 import lookupRoutes from '../lookup/lookup.routes';
 import settingsRoutes from '../settings';
+import fileRoutes from '../modules/files/file.routes';
 
 const router = Router();
 const auth = [isAuthenticated, orgBranchScope] as const;
 
+router.use('/files',              fileRoutes);
 router.use('/onboarding',         onboardingRoutes);
 router.use('/users',              ...auth, userRoutes);
 router.use('/branches',           ...auth, branchRoutes);

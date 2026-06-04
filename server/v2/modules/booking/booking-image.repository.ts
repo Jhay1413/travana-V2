@@ -27,6 +27,18 @@ export const bookingImageRepository = {
     return insertedImages;
   },
 
+  /**
+   * Get the stored URL for a single booking image (used to clean up S3 on delete).
+   */
+  async getImageUrl(bookingId: string, imageId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ url: bookingImages.url })
+      .from(bookingImages)
+      .where(and(eq(bookingImages.id, imageId), eq(bookingImages.bookingId, bookingId)))
+      .limit(1);
+    return row?.url ?? null;
+  },
+
   async getByBookingId(bookingId: string) {
     const images = await db
       .select()

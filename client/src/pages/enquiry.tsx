@@ -366,41 +366,6 @@ function SpecRow({ testId, label, value }: { testId: string; label: string; valu
   );
 }
 
-const TASK_PRESETS_BY_ENTITY: Record<string, string[]> = {
-  general: [
-    "Follow up",
-    "Phone call",
-    "Send email",
-    "Research",
-    "Admin",
-  ],
-  enquiry: [
-    "New Enquiry",
-    "Start Quote",
-  ],
-  quote: [
-    "Quote Call",
-    "Start Quote",
-    "Call Supplier",
-    "Quote In Progress",
-    "Re-Quote",
-    "Quote Follow-Up",
-    "Book or Ditch!!!",
-  ],
-  booking: [
-    "Booking confirmation call",
-    "Send booking confirmation",
-    "Request passport details",
-    "Online Visa",
-    "Final payment",
-    "Send travel documents",
-    "Online check-in",
-    "Holiday change",
-    "Amend booking",
-    "Cancellation",
-  ],
-};
-
 const TASK_CATEGORIES = [
   { value: "general", label: "General Task" },
   { value: "enquiry", label: "Enquiry" },
@@ -435,8 +400,6 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
   const [newDueDate, setNewDueDate] = useState("");
   const [newDueTime, setNewDueTime] = useState("09:00");
   const [assignedToId, setAssignedToId] = useState("");
-
-  const presets = TASK_PRESETS_BY_ENTITY[taskCategory] || TASK_PRESETS_BY_ENTITY.enquiry;
 
   const handleAdd = () => {
     const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
@@ -575,7 +538,7 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
           <div className="mt-3 grid gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Category</Label>
-              <Select value={taskCategory} onValueChange={(v) => { setTaskCategory(v); setNewTitle(""); }}>
+              <Select value={taskCategory} onValueChange={setTaskCategory}>
                 <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-task-category">
                   <SelectValue placeholder="Choose a category…" />
                 </SelectTrigger>
@@ -589,16 +552,13 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
 
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-black/60">Task</Label>
-              <Select value={newTitle} onValueChange={setNewTitle}>
-                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-task-title">
-                  <SelectValue placeholder="Choose a task…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {presets.map((preset) => (
-                    <SelectItem key={preset} value={preset}>{preset}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Enter a task…"
+                className="h-9 rounded-xl border-black/10 bg-white/70"
+                data-testid="input-task-title"
+              />
             </div>
 
             <div className="space-y-1.5">

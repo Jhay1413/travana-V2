@@ -31,6 +31,18 @@ export const quoteImageRepository = {
   },
 
   /**
+   * Get the stored URL for a single quote image (used to clean up S3 on delete).
+   */
+  async getImageUrl(quoteId: string, imageId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ url: quoteImages.url })
+      .from(quoteImages)
+      .where(and(eq(quoteImages.id, imageId), eq(quoteImages.quoteId, quoteId)))
+      .limit(1);
+    return row?.url ?? null;
+  },
+
+  /**
    * Get all images for a quote
    */
   async getByQuoteId(quoteId: string) {
