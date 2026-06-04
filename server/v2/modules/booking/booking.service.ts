@@ -56,15 +56,16 @@ async function assertAccommodationInScope(accommodationId: string, scope: ScopeO
   if (!ok) throw new AppError("Accommodation not found", 404);
 }
 
-function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0, walletCredit: unknown = 0): string {
+// Price per person is the Total Price (sales price + service charge) split across passengers.
+// Discount comes off the commission and wallet credit is a payment method, so neither affects
+// this figure. The discount/walletCredit params are retained for call-site compatibility.
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, _discount: unknown = 0, serviceCharge: unknown = 0, _walletCredit: unknown = 0): string {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
-  const disc = parseFloat(String(discount ?? 0)) || 0;
   const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
-  const wc = parseFloat(String(walletCredit ?? 0)) || 0;
   const adults = parseInt(String(adult ?? 0), 10) || 0;
   const children = parseInt(String(child ?? 0), 10) || 0;
   const total = adults + children;
-  const netPrice = price - disc + sc - wc;
+  const netPrice = price + sc;
   return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 

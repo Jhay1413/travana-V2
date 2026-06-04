@@ -119,11 +119,14 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     },
     commissions: {
       tourOperator: apiData.main_tour_operator_name || "",
-      price: salesPrice,
+      // Total price the customer pays = base price + service charge (discount comes off commission).
+      price: salesPrice + serviceCharge,
       discount: discount,
       serviceCharge: serviceCharge,
-      commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
-      commissionValue: packageCommission + serviceCharge - discount,
+      commissionPercent: salesPrice > 0 ? ((packageCommission + discount - serviceCharge) / salesPrice) * 100 : 0,
+      // Raw operator commission (before the discount / service charge adjustments);
+      // package_commission already has the discount removed and the service charge added.
+      commissionValue: packageCommission + discount - serviceCharge,
       agentSplitPercent: 0,
       agentSplitValue: 0,
       netToAgency: packageCommission,

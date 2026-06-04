@@ -27,7 +27,10 @@ export function QuotePricingSection() {
   const currentServiceCharge = Number(serviceCharge) || 0;
   const currentCommission = Number(commission) || 0;
   const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0;
-  const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
+  const finalTotal = currentPrice + currentServiceCharge;
+  // The commission field already holds the total (operator % − discount + service charge);
+  // recover the raw operator portion for the breakdown line.
+  const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
 
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
@@ -53,12 +56,13 @@ export function QuotePricingSection() {
                         const nextDiscount = name === "discount" ? parseFloat(e.target.value) || 0 : Number(getValues("discount")) || 0;
                         const nextServiceCharge = name === "serviceCharge" ? parseFloat(e.target.value) || 0 : Number(getValues("serviceCharge")) || 0;
 
+                        // Commission = price × operator % − discount + service charge.
                         const currentOperatorId = getValues("tourOperatorId");
                         if (currentOperatorId) {
                           const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
                           if (op?.commission_percentage != null) {
-                            const baseCommission = ((nextPrice - nextDiscount) * parseFloat(op.commission_percentage)) / 100;
-                            const adjustedCommission = baseCommission + nextServiceCharge;
+                            const operatorCommission = (nextPrice * parseFloat(op.commission_percentage)) / 100;
+                            const adjustedCommission = operatorCommission - nextDiscount + nextServiceCharge;
                             setValue("commission", parseFloat(adjustedCommission.toFixed(2)), { shouldValidate: true, shouldDirty: true });
                           }
                         }
@@ -66,7 +70,7 @@ export function QuotePricingSection() {
                         const adults = Number(getValues("passengersAdults")) || 0;
                         const children = Number(getValues("passengersChildren")) || 0;
                         const total = adults + children;
-                        const netPrice = nextPrice - nextDiscount + nextServiceCharge;
+                        const netPrice = nextPrice + nextServiceCharge;
                         setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
                       }
                     }}
@@ -88,8 +92,9 @@ export function QuotePricingSection() {
       )}
       {hasAdjustments && currentPrice > 0 && (
         <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
-          <div className="text-xs font-medium text-blue-900">Commission Adjusted: £{currentCommission.toFixed(2)}</div>
+          <div className="text-xs font-medium text-blue-900">Total Commission: £{currentCommission.toFixed(2)}</div>
           <div className="mt-1 text-[10px] text-blue-700/70">
+            Commission: £{operatorCommission.toFixed(2)}{" "}
             {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
             {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)}`}
           </div>

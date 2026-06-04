@@ -29,6 +29,17 @@ export function WhatsOnTab({
 }) {
   const [, navigate] = useLocation();
 
+  const fmtDate = (d?: string | Date | null) => {
+    if (!d) return null;
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return null;
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
   const dateRange = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -262,6 +273,22 @@ export function WhatsOnTab({
                         )}
                       </div>
                     )}
+                    <div
+                      className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-4 text-[11px] text-black/45 dark:text-white/45"
+                      data-testid={`text-whats-on-task-dates-${task.id}`}
+                    >
+                      <span data-testid={`text-whats-on-task-created-${task.id}`}>
+                        Created {fmtDate(task.createdAt) ?? "—"}
+                      </span>
+                      {task.entityTravelDate && (
+                        <span
+                          className="font-medium text-sky-600 dark:text-sky-400"
+                          data-testid={`text-whats-on-task-travel-${task.id}`}
+                        >
+                          Travel {fmtDate(task.entityTravelDate)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span
@@ -361,6 +388,19 @@ export function WhatsOnTab({
                     >
                       {ticket.status}
                     </span>
+                  </div>
+                  <div
+                    className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-black/45 dark:text-white/45"
+                    data-testid={`text-whats-on-ticket-dates-${ticket.id}`}
+                  >
+                    <span data-testid={`text-whats-on-ticket-created-${ticket.id}`}>
+                      Created {fmtDate(ticket.createdAt) ?? "—"}
+                    </span>
+                    {ticket.dueDate && (
+                      <span data-testid={`text-whats-on-ticket-due-${ticket.id}`}>
+                        Due {fmtDate(ticket.dueDate)}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />

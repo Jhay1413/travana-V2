@@ -38,6 +38,7 @@ export type TaskWithClient = TaskNew & {
   entityTitle: string | null;
   entityPrice: string | null;
   entityCommission: string | null;
+  entityTravelDate: string | null;
 };
 
 async function resolveTaskClients(
@@ -56,25 +57,25 @@ async function resolveTaskClients(
   const navIdMap = new Map<string, string>();
   // Maps each task key to the linked entity's title / price / commission so task
   // rows can show context (quote title, total price, commission).
-  type EntityMeta = { title: string | null; price: string | null; commission: string | null };
+  type EntityMeta = { title: string | null; price: string | null; commission: string | null; travelDate: string | null };
   const entityMetaMap = new Map<string, EntityMeta>();
 
   if (quoteEntityIds.length > 0) {
     const quoteRows = await db
-      .select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, price: quote.sales_price, commission: quote.package_commission })
+      .select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, price: quote.sales_price, commission: quote.package_commission, travelDate: quote.travel_date })
       .from(quote)
       .where(inArray(quote.id, quoteEntityIds));
     for (const q of quoteRows) {
       transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
       navIdMap.set(`quote:${q.id}`, q.id);
-      entityMetaMap.set(`quote:${q.id}`, { title: q.title, price: q.price, commission: q.commission });
+      entityMetaMap.set(`quote:${q.id}`, { title: q.title, price: q.price, commission: q.commission, travelDate: q.travelDate });
     }
     // entityIds that aren't quote PKs may be transaction ids — resolve each to
     // its main (non-copy, non-free) quote so navigation lands on a real quote.
     const unresolvedIds = quoteEntityIds.filter(id => !quoteRows.some(q => q.id === id));
     if (unresolvedIds.length > 0) {
       const quotesByTx = await db
-        .select({ id: quote.id, transaction_id: quote.transaction_id, isQuoteCopy: quote.isQuoteCopy, isFreeQuote: quote.isFreeQuote, title: quote.title, price: quote.sales_price, commission: quote.package_commission })
+        .select({ id: quote.id, transaction_id: quote.transaction_id, isQuoteCopy: quote.isQuoteCopy, isFreeQuote: quote.isFreeQuote, title: quote.title, price: quote.sales_price, commission: quote.package_commission, travelDate: quote.travel_date })
         .from(quote)
         .where(inArray(quote.transaction_id, unresolvedIds));
       const mainByTx = new Map<string, { id: string; isQuoteCopy: boolean | null; meta: EntityMeta }>();
@@ -82,7 +83,7 @@ async function resolveTaskClients(
         if (q.isFreeQuote) continue;
         const existing = mainByTx.get(q.transaction_id);
         if (!existing || (existing.isQuoteCopy && !q.isQuoteCopy)) {
-          mainByTx.set(q.transaction_id, { id: q.id, isQuoteCopy: q.isQuoteCopy, meta: { title: q.title, price: q.price, commission: q.commission } });
+          mainByTx.set(q.transaction_id, { id: q.id, isQuoteCopy: q.isQuoteCopy, meta: { title: q.title, price: q.price, commission: q.commission, travelDate: q.travelDate } });
         }
       }
       for (const [txId, main] of Array.from(mainByTx.entries())) {
@@ -106,25 +107,25 @@ async function resolveTaskClients(
 
   if (bookingEntityIds.length > 0) {
     const bookingRows = await db
-      .select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, price: booking.sales_price, commission: booking.package_commission })
+      .select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, price: booking.sales_price, commission: booking.package_commission, travelDate: booking.travel_date })
       .from(booking)
       .where(inArray(booking.id, bookingEntityIds));
     for (const b of bookingRows) {
       transactionIdMap.set(`booking:${b.id}`, b.transaction_id);
       navIdMap.set(`booking:${b.id}`, b.id);
-      entityMetaMap.set(`booking:${b.id}`, { title: b.title, price: b.price, commission: b.commission });
+      entityMetaMap.set(`booking:${b.id}`, { title: b.title, price: b.price, commission: b.commission, travelDate: b.travelDate });
     }
     const unresolvedIds = bookingEntityIds.filter(id => !bookingRows.some(b => b.id === id));
     if (unresolvedIds.length > 0) {
       const bookingsByTx = await db
-        .select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, price: booking.sales_price, commission: booking.package_commission })
+        .select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, price: booking.sales_price, commission: booking.package_commission, travelDate: booking.travel_date })
         .from(booking)
         .where(inArray(booking.transaction_id, unresolvedIds));
       for (const b of bookingsByTx) {
         if (!b.transaction_id) continue;
         transactionIdMap.set(`booking:${b.transaction_id}`, b.transaction_id);
         navIdMap.set(`booking:${b.transaction_id}`, b.id);
-        entityMetaMap.set(`booking:${b.transaction_id}`, { title: b.title, price: b.price, commission: b.commission });
+        entityMetaMap.set(`booking:${b.transaction_id}`, { title: b.title, price: b.price, commission: b.commission, travelDate: b.travelDate });
       }
       const stillUnresolved = unresolvedIds.filter(id => !bookingsByTx.some(b => b.transaction_id === id));
       if (stillUnresolved.length > 0) {
@@ -141,24 +142,24 @@ async function resolveTaskClients(
 
   if (enquiryEntityIds.length > 0) {
     const enquiryRows = await db
-      .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, price: enquiry_table.budget })
+      .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, price: enquiry_table.budget, travelDate: enquiry_table.travel_date })
       .from(enquiry_table)
       .where(inArray(enquiry_table.id, enquiryEntityIds));
     for (const e of enquiryRows) {
       transactionIdMap.set(`enquiry:${e.id}`, e.transaction_id);
       navIdMap.set(`enquiry:${e.id}`, e.id);
-      entityMetaMap.set(`enquiry:${e.id}`, { title: e.title, price: e.price, commission: null });
+      entityMetaMap.set(`enquiry:${e.id}`, { title: e.title, price: e.price, commission: null, travelDate: e.travelDate });
     }
     const unresolvedIds = enquiryEntityIds.filter(id => !enquiryRows.some(e => e.id === id));
     if (unresolvedIds.length > 0) {
       const enquiriesByTx = await db
-        .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, price: enquiry_table.budget })
+        .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, price: enquiry_table.budget, travelDate: enquiry_table.travel_date })
         .from(enquiry_table)
         .where(inArray(enquiry_table.transaction_id, unresolvedIds));
       for (const e of enquiriesByTx) {
         transactionIdMap.set(`enquiry:${e.transaction_id}`, e.transaction_id);
         navIdMap.set(`enquiry:${e.transaction_id}`, e.id);
-        entityMetaMap.set(`enquiry:${e.transaction_id}`, { title: e.title, price: e.price, commission: null });
+        entityMetaMap.set(`enquiry:${e.transaction_id}`, { title: e.title, price: e.price, commission: null, travelDate: e.travelDate });
       }
       const stillUnresolved = unresolvedIds.filter(id => !enquiriesByTx.some(e => e.transaction_id === id));
       if (stillUnresolved.length > 0) {
@@ -257,6 +258,7 @@ export const taskRepository = {
         entityTitle: meta?.title ?? null,
         entityPrice: meta?.price ?? null,
         entityCommission: meta?.commission ?? null,
+        entityTravelDate: meta?.travelDate ?? null,
       };
     });
   },
@@ -392,6 +394,7 @@ export const taskRepository = {
         entityTitle: meta?.title ?? null,
         entityPrice: meta?.price ?? null,
         entityCommission: meta?.commission ?? null,
+        entityTravelDate: meta?.travelDate ?? null,
       };
     });
   },

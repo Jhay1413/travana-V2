@@ -8,6 +8,7 @@ export type TaskWithClient = TaskNew & {
   entityTitle: string | null;
   entityPrice: string | null;
   entityCommission: string | null;
+  entityTravelDate: string | null;
 };
 
 export const taskApi = {

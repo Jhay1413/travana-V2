@@ -54,8 +54,9 @@ export default function SocialQuotePage() {
 
   const discounts = parseFloat(rawData?.discounts || "0");
   const serviceCharge = parseFloat(rawData?.service_charge || "0");
+  // package_commission already stores the total commission (operator % − discount + service charge).
   const packageCommission = parseFloat(rawData?.package_commission || "0");
-  const totalCommission = packageCommission - discounts + serviceCharge;
+  const totalCommission = packageCommission;
 
   const queryClient = useQueryClient();
   const { toast } = useToast();

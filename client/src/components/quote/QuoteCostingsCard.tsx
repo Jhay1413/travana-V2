@@ -53,13 +53,13 @@ export function QuoteCostingsCard({ quote, pageLabel }: QuoteCostingsCardProps) 
           <div className="mt-3 grid gap-2" data-testid="list-quote-summary-lines">
             <div
               className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
-              data-testid="row-quote-summary-total-price"
+              data-testid="row-quote-summary-deal-price"
             >
-              <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">
-                Total price
+              <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-deal-price-label">
+                Deal price
               </div>
-              <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-price-value">
-                {currency.format(quote.commissions.price)}
+              <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-deal-price-value">
+                {currency.format(quote.commissions.price - quote.commissions.serviceCharge)}
               </div>
             </div>
 
@@ -100,6 +100,18 @@ export function QuoteCostingsCard({ quote, pageLabel }: QuoteCostingsCardProps) 
             </div>
 
             <div className="my-1 h-px w-full bg-black/10" data-testid="separator-quote-summary" />
+
+            <div
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2"
+              data-testid="row-quote-summary-total-price"
+            >
+              <div className="text-xs font-semibold text-black/65" data-testid="text-quote-summary-total-price-label">
+                Total price
+              </div>
+              <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-total-price-value">
+                {currency.format(quote.commissions.price)}
+              </div>
+            </div>
 
             <div
               className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2"

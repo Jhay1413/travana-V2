@@ -390,16 +390,18 @@ export function BookingRHFForm({
   // ── Price per person calculation ──────────────────────────────────────────
   useEffect(() => {
     const price = Number(form.getValues("price")) || 0;
-    const currentDiscount = Number(form.getValues("discount")) || 0;
     const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
     const adults = Number(passengersAdults) || 0;
     const children = Number(passengersChildren) || 0;
     const total = adults + children;
-    const netPrice = price - currentDiscount + currentServiceCharge;
+    // Discount does not reduce the customer price; only the service charge is added.
+    const netPrice = price + currentServiceCharge;
     setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [passengersAdults, passengersChildren, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Commission auto-calculation ───────────────────────────────────────────
+  // Commission = price × operator % − discount + service charge. The discount is
+  // taken off the commission (not the price) and the service charge is added to it.
   useEffect(() => {
     if (tourOperatorId && tourOperatorsData) {
       const currentPrice = Number(price) || 0;
@@ -408,8 +410,8 @@ export function BookingRHFForm({
       const op = tourOperatorsData.find((o: { id: string }) => o.id === tourOperatorId);
 
       if (op?.commission_percentage != null && currentPrice > 0) {
-        const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
-        const calculatedCommission = parseFloat((baseCommission + currentServiceCharge).toFixed(2));
+        const operatorCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
+        const calculatedCommission = parseFloat((operatorCommission - currentDiscount + currentServiceCharge).toFixed(2));
 
         const currentCommission = form.getValues("commission");
         if (currentCommission !== calculatedCommission) {
@@ -599,11 +601,12 @@ export function BookingRHFForm({
                         field.onChange(value);
                         const op = tourOperatorsData?.find((o: { id: string }) => o.id === value);
                         if (op?.commission_percentage != null) {
-                          const currentPrice = form.getValues("price");
+                          const currentPrice = Number(form.getValues("price")) || 0;
                           const currentDiscount = Number(form.getValues("discount")) || 0;
                           const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-                          const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
-                          setValue("commission", parseFloat((baseCommission + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
+                          // Commission = price × operator % − discount + service charge.
+                          const operatorCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
+                          setValue("commission", parseFloat((operatorCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
                         }
                       }}
                       placeholder="Select operator..."
@@ -1789,22 +1792,23 @@ export function BookingRHFForm({
                             const currentPrice = name === "price" ? parseFloat(e.target.value) || 0 : Number(form.getValues("price")) || 0;
                             const currentDiscount = name === "discount" ? parseFloat(e.target.value) || 0 : Number(form.getValues("discount")) || 0;
                             const currentServiceCharge = name === "serviceCharge" ? parseFloat(e.target.value) || 0 : Number(form.getValues("serviceCharge")) || 0;
-                            
+
+                            // Commission = price × operator % − discount + service charge.
                             const currentOperatorId = form.getValues("tourOperatorId");
                             if (currentOperatorId) {
                               const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
                               if (op?.commission_percentage != null) {
-                                const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
-                                const adjustedCommission = baseCommission + currentServiceCharge;
+                                const operatorCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
+                                const adjustedCommission = operatorCommission - currentDiscount + currentServiceCharge;
                                 setValue("commission", parseFloat(adjustedCommission.toFixed(2)), { shouldValidate: true, shouldDirty: true });
                               }
                             }
-                            
-                            // Price per person = (salesPrice - discount + serviceCharge) / (adults + children)
+
+                            // Price per person = (salesPrice + serviceCharge) / (adults + children)
                             const adults = Number(form.getValues("passengersAdults")) || 0;
                             const children = Number(form.getValues("passengersChildren")) || 0;
                             const total = adults + children;
-                            const netPrice = currentPrice - currentDiscount + currentServiceCharge;
+                            const netPrice = currentPrice + currentServiceCharge;
                             setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
                           }
                         }}
@@ -1825,7 +1829,10 @@ export function BookingRHFForm({
             const currentCommission = Number(commission) || 0;
             const currentWalletCredit = Number(walletCreditAmount) || 0;
             const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0 || currentWalletCredit > 0;
-            const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
+            const finalTotal = currentPrice + currentServiceCharge;
+            // The commission field already holds the total (operator % − discount + service charge);
+            // recover the raw operator portion for the breakdown line.
+            const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
 
             return (
               <>
@@ -1838,16 +1845,17 @@ export function BookingRHFForm({
                 {hasAdjustments && (
                   <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
                     <div className="text-xs font-medium text-blue-900">
-                      Commission Adjusted: £{currentCommission.toFixed(2)}
+                      Total Commission: £{currentCommission.toFixed(2)}
                     </div>
                     <div className="mt-1 text-[10px] text-blue-700/70">
+                      Commission: £{operatorCommission.toFixed(2)}{" "}
                       {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
                       {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)} `}
                       {currentWalletCredit > 0 && <span className="text-emerald-700">Wallet Credit: -£{currentWalletCredit.toFixed(2)}</span>}
                     </div>
                     {currentWalletCredit > 0 && (
                       <div className="mt-1.5 text-[10px] text-blue-700/60">
-                        Net payable: £{(currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit).toFixed(2)}
+                        Net payable: £{(currentPrice + currentServiceCharge - currentWalletCredit).toFixed(2)}
                       </div>
                     )}
                   </div>

@@ -112,16 +112,18 @@ export function QuoteRHFForm({
   // ── Price per person calculation ──────────────────────────────────────────
   useEffect(() => {
     const price = Number(form.getValues("price")) || 0;
-    const currentDiscount = Number(form.getValues("discount")) || 0;
     const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
     const adults = Number(passengersAdults) || 0;
     const children = Number(passengersChildren) || 0;
     const total = adults + children;
-    const netPrice = price - currentDiscount + currentServiceCharge;
+    // Discount does not reduce the customer price; only the service charge is added.
+    const netPrice = price + currentServiceCharge;
     setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [passengersAdults, passengersChildren, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Commission auto-calculation ───────────────────────────────────────────
+  // Commission = price × operator % − discount + service charge. The discount is
+  // taken off the commission (not the price) and the service charge is added to it.
   useEffect(() => {
     if (tourOperatorId && tourOperatorsData) {
       const currentPrice = Number(price) || 0;
@@ -130,8 +132,8 @@ export function QuoteRHFForm({
       const op = tourOperatorsData.find((o: { id: string }) => o.id === tourOperatorId);
 
       if (op?.commission_percentage != null && currentPrice > 0) {
-        const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
-        const calculatedCommission = parseFloat((baseCommission + currentServiceCharge).toFixed(2));
+        const operatorCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
+        const calculatedCommission = parseFloat((operatorCommission - currentDiscount + currentServiceCharge).toFixed(2));
 
         const currentCommission = form.getValues("commission");
         if (currentCommission !== calculatedCommission) {

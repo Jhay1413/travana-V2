@@ -38,6 +38,20 @@ const CRUISE_FLEXIBILITY_OPTIONS = [
 
 const STAR_RATINGS = ["2 Star", "3 Star", "4 Star", "5 Star"];
 
+// Board basis options shown in the enquiry wizard, in display order. Matched by
+// name (case-insensitive, trimmed) so it stays portable across environments.
+// The near-duplicate lookup rows in the table (e.g. " All-Inclusive",
+// "Self-Catering", "Bed & Breakfast") differ once normalized and are excluded.
+const ALLOWED_BOARD_BASIS = [
+  "All Inclusive",
+  "Bed and Breakfast",
+  "Self Catering",
+  "Half Board",
+  "Full Board",
+  "Room Only",
+  "Lodge",
+];
+
 
 const BUDGET_TYPES = ["Per Person", "Package"];
 
@@ -1194,7 +1208,14 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                     <MultiSearchableSelect
                       value={form.boardBases}
                       onValueChange={(v) => set("boardBases", v)}
-                      options={(boardBasisData || []).map((b: any) => ({ value: b.id, label: b.type }))}
+                      options={ALLOWED_BOARD_BASIS
+                        .map((name) =>
+                          (boardBasisData || []).find(
+                            (b: any) => (b.type || "").trim().toLowerCase() === name.toLowerCase(),
+                          ),
+                        )
+                        .filter(Boolean)
+                        .map((b: any) => ({ value: b.id, label: (b.type || "").trim() }))}
                       placeholder="Select board basis..."
                       searchPlaceholder="Search board basis..."
                       emptyMessage="No board basis found."

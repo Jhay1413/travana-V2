@@ -104,14 +104,15 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   childAges?: any[];
 };
 
-function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0): string {
+// Discount is deducted from commission, not from the customer price, so it is not
+// part of the per-person figure. The discount param is retained for call-site compatibility.
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, _discount: unknown = 0, serviceCharge: unknown = 0): string {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
-  const disc = parseFloat(String(discount ?? 0)) || 0;
   const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
   const adults = parseInt(String(adult ?? 0), 10) || 0;
   const children = parseInt(String(child ?? 0), 10) || 0;
   const total = adults + children;
-  const netPrice = price - disc + sc;
+  const netPrice = price + sc;
   return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 

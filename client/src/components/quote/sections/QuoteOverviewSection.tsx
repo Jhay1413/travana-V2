@@ -71,11 +71,12 @@ export function QuoteOverviewSection() {
                     field.onChange(value);
                     const op = tourOperatorsData?.find((o: { id: string }) => o.id === value);
                     if (op?.commission_percentage != null) {
-                      const currentPrice = getValues("price");
+                      const currentPrice = Number(getValues("price")) || 0;
                       const currentDiscount = Number(getValues("discount")) || 0;
                       const currentServiceCharge = Number(getValues("serviceCharge")) || 0;
-                      const baseCommission = ((currentPrice - currentDiscount) * parseFloat(op.commission_percentage)) / 100;
-                      setValue("commission", parseFloat((baseCommission + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
+                      // Commission = price × operator % − discount + service charge.
+                      const operatorCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
+                      setValue("commission", parseFloat((operatorCommission - currentDiscount + currentServiceCharge).toFixed(2)), { shouldValidate: true, shouldDirty: true });
                     }
                   }}
                   placeholder="Select operator..."

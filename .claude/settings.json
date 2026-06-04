@@ -27,7 +27,9 @@
       "Bash(awk '/async createTransaction/{print NR\": \"$0}' server/v2/modules/transaction/transaction.service.ts)",
       "Bash(grep -E \"\\\\.\\(ts|sql\\)$\")",
       "Read(//home/router/workspace/client/src/components/boards/**)",
-      "Bash(awk '/export const booking = pgTable/,/^}\\\\\\);/' shared/schema.ts)"
+      "Bash(awk '/export const booking = pgTable/,/^}\\\\\\);/' shared/schema.ts)",
+      "Bash(awk -F: '{print $1\": \"$0}')",
+      "Bash(awk -F: '$1+0 >= 750 && $1+0 <= 1600 {print}')"
     ],
     "additionalDirectories": [
       "/home/runner/workspace/migrations"

@@ -290,13 +290,16 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
       role: "Agent" as const,
     },
     pricePerPerson: parseFloat(String(apiData.price_per_person || "0")) || 0,
+    // package_commission stores the TOTAL commission: raw operator commission (price × %)
+    // with the discount taken off and the service charge added. The raw operator portion is
+    // recovered for display as packageCommission + discount − serviceCharge.
     commissions: {
       tourOperator: apiData.main_tour_operator_name || "",
-      // Overall total the customer pays = base price − discount + service charge.
-      price: salesPrice - discounts + serviceCharge,
-      commissionPercent: salesPrice > 0 ? (packageCommission / salesPrice) * 100 : 0,
-      // Operator commission portion (on the discounted base, excludes the flat service charge).
-      commissionValue: packageCommission - serviceCharge,
+      // Total price the customer pays = base price + service charge (discount comes off commission).
+      price: salesPrice + serviceCharge,
+      commissionPercent: salesPrice > 0 ? ((packageCommission + discounts - serviceCharge) / salesPrice) * 100 : 0,
+      // Raw operator commission portion (before the discount / service charge adjustments).
+      commissionValue: packageCommission + discounts - serviceCharge,
       discounts: discounts,
       serviceCharge: serviceCharge,
       totalCommission: packageCommission,

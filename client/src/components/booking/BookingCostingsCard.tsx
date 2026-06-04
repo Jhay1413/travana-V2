@@ -53,13 +53,13 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
           <div className="mt-3 grid gap-2" data-testid="list-booking-summary-lines">
             <div
               className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
-              data-testid="row-booking-summary-total-price"
+              data-testid="row-booking-summary-deal-price"
             >
-              <div className="text-xs font-semibold text-black/65" data-testid="text-booking-summary-total-price-label">
-                Total price
+              <div className="text-xs font-semibold text-black/65" data-testid="text-booking-summary-deal-price-label">
+                Deal price
               </div>
-              <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-total-price-value">
-                {currency.format(booking.commissions.price)}
+              <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-deal-price-value">
+                {currency.format(booking.commissions.price - booking.commissions.serviceCharge)}
               </div>
             </div>
 
@@ -149,18 +149,33 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 </div>
               </>
             )}
+
+            <div className="my-1 h-px w-full bg-black/10" data-testid="separator-booking-summary-totals" />
+
             <div
               className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2"
-              data-testid="row-booking-summary-net-commission"
+              data-testid="row-booking-summary-total-price"
+            >
+              <div className="text-xs font-semibold text-black/65" data-testid="text-booking-summary-total-price-label">
+                Total price
+              </div>
+              <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-total-price-value">
+                {currency.format(booking.commissions.price)}
+              </div>
+            </div>
+
+            <div
+              className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2"
+              data-testid="row-booking-summary-total-commission"
             >
               <div
                 className="text-xs font-semibold text-black/70"
-                data-testid="text-booking-summary-net-commission-label"
+                data-testid="text-booking-summary-total-commission-label"
               >
-                Net commission
+                Total commission
               </div>
-              <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-net-commission-value">
-                {currency.format(booking.commissions.netCommission)}
+              <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-total-commission-value">
+                {currency.format(booking.commissions.totalCommission)}
               </div>
             </div>
           </div>
