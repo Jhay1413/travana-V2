@@ -227,6 +227,8 @@ export const quotePublicRepository = {
       infants: q.quote.infant || 0,
       pets: q.quote.pets || 0,
       salesPrice: q.quote.sales_price || "0",
+      discounts: q.quote.discounts || "0",
+      serviceCharge: q.quote.service_charge || "0",
       pricePerPerson: q.quote.price_per_person || "0",
       transferType: q.quote.transfer_type || "none",
       flightMeals: q.quote.flight_meals ?? false,

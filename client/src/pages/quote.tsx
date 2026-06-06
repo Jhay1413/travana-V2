@@ -175,41 +175,6 @@ export default function QuotePage() {
               Quotes
             </Button>
           </div>
-
-          <div className="flex items-center gap-2">
-            <UserReassignSelect
-              value={(quoteData as any)?.user_id || currentUser?.id || ""}
-              onValueChange={(userId) => {
-                updateTransactionMutation.mutate(
-                  { id: quote.transaction_id, data: { user_id: userId } },
-                  {
-                    onSuccess: () => {
-                      toast({ title: "Transaction reassigned successfully" });
-                      queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
-                      queryClient.invalidateQueries({ queryKey: bookingKeys.detail(quoteId) });
-                    },
-                    onError: () => {
-                      toast({ title: "Failed to reassign transaction", variant: "destructive" });
-                    },
-                  }
-                );
-              }}
-              data-testid="select-itinerary-owner"
-            />
-
-            <QuoteActionsRow
-              pageLabel={pageLabel}
-              canConvert={quote.status !== "accepted"}
-              isAdmin={role === "Admin"}
-              onEdit={() => setShowEditDialog(true)}
-              onConvert={() => setShowConvertDialog(true)}
-              onDuplicate={() => setShowCopyDialog(true)}
-              onExport={() => { }}
-              onTicket={() => ticketCreate.setShowTicketDialog(true)}
-              onAddTask={() => setShowAddTaskDialog(true)}
-              onDelete={openDeleteDialog}
-            />
-          </div>
         </div>
 
         <div className="mt-4" data-testid="layout-quote-body">
@@ -247,7 +212,7 @@ export default function QuotePage() {
                 <div className="min-w-0" data-testid="section-itinerary-summary">
                   <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between" data-testid="row-itinerary-top">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3" data-testid="row-itinerary-title">
+                      <div className="flex items-start justify-between gap-3" data-testid="row-itinerary-title">
                         <div className="min-w-0" data-testid="col-itinerary-title-left">
                           {/* <div className="flex items-center gap-2" data-testid="text-itinerary-quote-title">
                             <span className="truncate text-sm font-semibold md:text-base">{quote.quoteTitle},</span>
@@ -301,19 +266,53 @@ export default function QuotePage() {
                               <span className="text-black/25">•</span>
                               <span data-testid="text-quote-meta-created">Created {formatUKDate(quote.createdAt)}</span>
                             </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="row-itinerary-status">
+                              <StatusPill status={quote.status} onStatusChange={onStatusChange} />
+                              <QuoteExpiryPill
+                                dateExpiry={(quoteData as any)?.date_expiry}
+                                dateCreated={(quoteData as any)?.date_created}
+                                onUpdateExpiry={openExpiryDialog}
+                              />
+                            </div>
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center justify-end gap-2" data-testid="col-itinerary-status">
-                          <StatusPill status={quote.status} onStatusChange={onStatusChange} />
-                          <QuoteExpiryPill
-                            dateExpiry={(quoteData as any)?.date_expiry}
-                            dateCreated={(quoteData as any)?.date_created}
-                            onUpdateExpiry={openExpiryDialog}
+                        <div className="flex shrink-0 flex-col items-end gap-2" data-testid="col-itinerary-status">
+                          <div className="flex flex-nowrap items-center gap-2">
+                            <UserReassignSelect
+                            value={(quoteData as any)?.user_id || currentUser?.id || ""}
+                            onValueChange={(userId) => {
+                              updateTransactionMutation.mutate(
+                                { id: quote.transaction_id, data: { user_id: userId } },
+                                {
+                                  onSuccess: () => {
+                                    toast({ title: "Transaction reassigned successfully" });
+                                    queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+                                    queryClient.invalidateQueries({ queryKey: bookingKeys.detail(quoteId) });
+                                  },
+                                  onError: () => {
+                                    toast({ title: "Failed to reassign transaction", variant: "destructive" });
+                                  },
+                                }
+                              );
+                            }}
+                            data-testid="select-itinerary-owner"
                           />
-                        </div>
-                      </div>
-                      <TooltipProvider>
-                        <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="row-itinerary-actions">
+
+                          <QuoteActionsRow
+                            pageLabel={pageLabel}
+                            canConvert={quote.status !== "accepted"}
+                            isAdmin={role === "Admin"}
+                            onEdit={() => setShowEditDialog(true)}
+                            onConvert={() => setShowConvertDialog(true)}
+                            onDuplicate={() => setShowCopyDialog(true)}
+                            onExport={() => { }}
+                            onTicket={() => ticketCreate.setShowTicketDialog(true)}
+                            onAddTask={() => setShowAddTaskDialog(true)}
+                            onDelete={openDeleteDialog}
+                          />
+                          </div>
+                          <TooltipProvider>
+                          <div className="flex flex-wrap items-center justify-start gap-2 self-start" data-testid="row-itinerary-actions">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
@@ -382,6 +381,8 @@ export default function QuotePage() {
                           </Tooltip>
                         </div>
                       </TooltipProvider>
+                        </div>
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2" data-testid="row-itinerary-destination-tags">
                         {quote.tags.length > 0 && (
                           <div className="flex flex-wrap items-center gap-2" data-testid="list-itinerary-tags-inline">

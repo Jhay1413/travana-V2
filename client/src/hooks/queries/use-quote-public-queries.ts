@@ -11,6 +11,8 @@ export interface PublicQuoteData {
   infants: number;
   pets: number;
   salesPrice: string;
+  // Calculated customer total = sales price − discount + service charge (computed by the API).
+  totalPrice: string;
   pricePerPerson: string;
   transferType: string;
   flightMeals: boolean;

@@ -29,7 +29,10 @@
       "Read(//home/router/workspace/client/src/components/boards/**)",
       "Bash(awk '/export const booking = pgTable/,/^}\\\\\\);/' shared/schema.ts)",
       "Bash(awk -F: '{print $1\": \"$0}')",
-      "Bash(awk -F: '$1+0 >= 750 && $1+0 <= 1600 {print}')"
+      "Bash(awk -F: '$1+0 >= 750 && $1+0 <= 1600 {print}')",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
+      "Bash(grep -E \"\\\\.\\(prisma|ts\\)$\")",
+      "Bash(grep -E \"\\\\.\\(ts\\)$\")"
     ],
     "additionalDirectories": [
       "/home/runner/workspace/migrations"

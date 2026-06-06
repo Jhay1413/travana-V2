@@ -27,7 +27,8 @@ export function QuotePricingSection() {
   const currentServiceCharge = Number(serviceCharge) || 0;
   const currentCommission = Number(commission) || 0;
   const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0;
-  const finalTotal = currentPrice + currentServiceCharge;
+  // Total price = price − discount + service charge.
+  const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
   // The commission field already holds the total (operator % − discount + service charge);
   // recover the raw operator portion for the breakdown line.
   const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
@@ -70,7 +71,8 @@ export function QuotePricingSection() {
                         const adults = Number(getValues("passengersAdults")) || 0;
                         const children = Number(getValues("passengersChildren")) || 0;
                         const total = adults + children;
-                        const netPrice = nextPrice + nextServiceCharge;
+                        // Total price = price − discount + service charge, split across passengers.
+                        const netPrice = nextPrice - nextDiscount + nextServiceCharge;
                         setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
                       }
                     }}

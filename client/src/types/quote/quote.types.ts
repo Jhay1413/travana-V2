@@ -437,6 +437,8 @@ export interface EnrichedQuoteCruise extends QuoteCruise {
 }
 
 export interface EnrichedQuote extends Quote {
+  // Backend-computed customer total = sales_price − discounts + service_charge.
+  total_price?: string | null;
   holiday_type_name?: string;
   main_tour_operator_name?: string;
   lead_source?: string;
@@ -470,6 +472,8 @@ export interface EnrichedQuote extends Quote {
 }
 
 export interface EnrichedBooking extends Booking {
+  // Backend-computed customer total = sales_price − discounts + service_charge.
+  total_price?: string | null;
   holiday_type_name?: string;
   main_tour_operator_name?: string;
   lead_source?: string;

@@ -501,6 +501,10 @@ portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
         quoteId: quote.id,
         title: quote.title,
         salesPrice: quote.sales_price,
+        discounts: quote.discounts,
+        serviceCharge: quote.service_charge,
+        adult: quote.adult,
+        child: quote.child,
         travelDate: quote.travel_date,
         numNights: quote.num_of_nights,
         dateExpiry: quote.date_expiry,
@@ -550,12 +554,19 @@ portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
         token = await quotePublicRepository.setToken(r.quoteId);
       }
 
+      // Customer-facing total = sales price − discount + service charge; per person splits that total.
+      const totalPrice = (parseFloat(r.salesPrice || "0") || 0)
+        - (parseFloat(r.discounts || "0") || 0)
+        + (parseFloat(r.serviceCharge || "0") || 0);
+      const pax = (r.adult || 0) + (r.child || 0);
+
       return {
         id: r.quoteId,
         title: r.title || `${dest} Getaway`,
         destination: dest,
         hotel: r.accommodationName || "",
-        price: parseFloat(r.salesPrice || "0"),
+        price: totalPrice,
+        price_per_person: pax > 0 ? parseFloat((totalPrice / pax).toFixed(2)) : 0,
         travel_date: travelDate,
         return_date: returnDate,
         expiry_date: r.dateExpiry ? new Date(r.dateExpiry).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString(),

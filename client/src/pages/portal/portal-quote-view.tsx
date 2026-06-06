@@ -4,22 +4,34 @@ import { Home, ChevronRight, Loader2, X } from "lucide-react";
 import PortalLayout from "./portal-layout";
 import { usePublicQuote } from "@/hooks/queries/use-quote-public-queries";
 import { PublicQuoteContent } from "@/pages/public-quote";
-import { useLogPortalQuoteView } from "@/hooks/use-portal-api";
+import { useLogPortalQuoteView, getPortalToken } from "@/hooks/use-portal-api";
 
 export default function PortalQuoteViewPage() {
   const [, params] = useRoute("/portal/quote/:token");
   const token = params?.token || "";
   const [, setLocation] = useLocation();
-  const { data: quote, isLoading, error } = usePublicQuote(token);
+  const isAuthed = getPortalToken() !== null;
+  const { data: quote, isLoading, error } = usePublicQuote(isAuthed ? token : "");
   const logView = useLogPortalQuoteView();
   const viewLogged = useRef(false);
 
+  // This route is portal-only — unauthenticated visitors are sent to login.
   useEffect(() => {
-    if (token && !viewLogged.current) {
+    if (!isAuthed) {
+      setLocation("/portal/login");
+    }
+  }, [isAuthed, setLocation]);
+
+  useEffect(() => {
+    if (isAuthed && token && !viewLogged.current) {
       viewLogged.current = true;
       logView.mutate(token);
     }
-  }, [token]);
+  }, [isAuthed, token]);
+
+  if (!isAuthed) {
+    return null;
+  }
 
   return (
     <PortalLayout>
@@ -55,7 +67,7 @@ export default function PortalQuoteViewPage() {
           </div>
         </div>
       ) : (
-        <PublicQuoteContent quote={quote} token={token} />
+        <PublicQuoteContent quote={quote} token={token} isPortal />
       )}
     </PortalLayout>
   );

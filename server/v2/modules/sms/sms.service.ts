@@ -142,11 +142,11 @@ export async function sendSms({ to, body }: { to: string; body: string }): Promi
       Accept: 'application/json',
     },                                                                                    
     body: JSON.stringify({
-      sender_id: getSenderId(),
+      sender_id: "Quotehub by",
       message: body,
       contact_number: toConnexaPhone(to),
     }),
-  });
+  });     
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = data?.error || data?.response?.message || data?.message || `HTTP ${res.status}`;

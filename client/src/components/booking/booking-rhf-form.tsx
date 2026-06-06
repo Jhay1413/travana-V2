@@ -390,14 +390,15 @@ export function BookingRHFForm({
   // ── Price per person calculation ──────────────────────────────────────────
   useEffect(() => {
     const price = Number(form.getValues("price")) || 0;
+    const currentDiscount = Number(form.getValues("discount")) || 0;
     const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
     const adults = Number(passengersAdults) || 0;
     const children = Number(passengersChildren) || 0;
     const total = adults + children;
-    // Discount does not reduce the customer price; only the service charge is added.
-    const netPrice = price + currentServiceCharge;
+    // Total price = price − discount + service charge, split across all passengers.
+    const netPrice = price - currentDiscount + currentServiceCharge;
     setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is
@@ -1804,11 +1805,11 @@ export function BookingRHFForm({
                               }
                             }
 
-                            // Price per person = (salesPrice + serviceCharge) / (adults + children)
+                            // Price per person = (salesPrice − discount + serviceCharge) / (adults + children)
                             const adults = Number(form.getValues("passengersAdults")) || 0;
                             const children = Number(form.getValues("passengersChildren")) || 0;
                             const total = adults + children;
-                            const netPrice = currentPrice + currentServiceCharge;
+                            const netPrice = currentPrice - currentDiscount + currentServiceCharge;
                             setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
                           }
                         }}
@@ -1829,7 +1830,8 @@ export function BookingRHFForm({
             const currentCommission = Number(commission) || 0;
             const currentWalletCredit = Number(walletCreditAmount) || 0;
             const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0 || currentWalletCredit > 0;
-            const finalTotal = currentPrice + currentServiceCharge;
+            // Total price = price − discount + service charge.
+            const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
             // The commission field already holds the total (operator % − discount + service charge);
             // recover the raw operator portion for the breakdown line.
             const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
@@ -1855,7 +1857,7 @@ export function BookingRHFForm({
                     </div>
                     {currentWalletCredit > 0 && (
                       <div className="mt-1.5 text-[10px] text-blue-700/60">
-                        Net payable: £{(currentPrice + currentServiceCharge - currentWalletCredit).toFixed(2)}
+                        Net payable: £{(currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit).toFixed(2)}
                       </div>
                     )}
                   </div>

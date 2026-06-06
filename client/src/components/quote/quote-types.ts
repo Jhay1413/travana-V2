@@ -139,6 +139,7 @@ export type QuoteDisplay = {
   commissions: {
     tourOperator: string;
     price: number;
+    salesPrice: number;
     commissionPercent: number;
     commissionValue: number;
     discounts: number;
@@ -217,6 +218,11 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
   const discounts = parseFloat(apiData.discounts || "0");
   const serviceCharge = parseFloat(apiData.service_charge || "0");
   const walletCredit = parseFloat((apiData as any).wallet_credit || "0");
+  // Total price the customer pays = sales price − discount + service charge. Prefer the
+  // backend-computed value and fall back to computing it locally for older API responses.
+  const totalPrice = (apiData as any).total_price != null
+    ? parseFloat(String((apiData as any).total_price)) || 0
+    : salesPrice - discounts + serviceCharge;
 
   const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");
   console.log(apiData)
@@ -295,8 +301,10 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     // recovered for display as packageCommission + discount − serviceCharge.
     commissions: {
       tourOperator: apiData.main_tour_operator_name || "",
-      // Total price the customer pays = base price + service charge (discount comes off commission).
-      price: salesPrice + serviceCharge,
+      // Total price the customer pays = sales price − discount + service charge.
+      price: totalPrice,
+      // Raw deal/sales price before discount and service charge adjustments.
+      salesPrice,
       commissionPercent: salesPrice > 0 ? ((packageCommission + discounts - serviceCharge) / salesPrice) * 100 : 0,
       // Raw operator commission portion (before the discount / service charge adjustments).
       commissionValue: packageCommission + discounts - serviceCharge,

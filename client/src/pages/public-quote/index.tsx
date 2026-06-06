@@ -45,6 +45,7 @@ import {
   useShareQuote,
   type PublicQuoteData,
 } from "@/hooks/queries/use-quote-public-queries";
+import { getPortalToken } from "@/hooks/use-portal-api";
 import defaultHeroBg from "@assets/Maldives_1773092726855.png";
 import tinasLogo from "@assets/Tinas-Travel-Logo-Red-Orange-Final-2_1773285329238.png";
 
@@ -898,7 +899,8 @@ function CruiseSection({ cruises }: { cruises: PublicQuoteData["cruises"] }) {
 }
 
 function PricingSection({ quote }: { quote: PublicQuoteData }) {
-  const total = formatCurrency(quote.salesPrice);
+  // Show the calculated customer total (sales − discount + service charge), not the raw sales price.
+  const total = formatCurrency(quote.totalPrice ?? quote.salesPrice);
   const pp = formatCurrency(quote.pricePerPerson);
 
   if (!total) return null;
@@ -1232,7 +1234,10 @@ export default function PublicQuotePage() {
   return <PublicQuoteContent quote={quote} token={token} />;
 }
 
-export function PublicQuoteContent({ quote, token }: { quote: PublicQuoteData; token: string }) {
+export function PublicQuoteContent({ quote, token, isPortal = false }: { quote: PublicQuoteData; token: string; isPortal?: boolean }) {
+  // The booking decision section is only available to clients viewing through
+  // the authenticated portal — public link viewers cannot accept/request changes.
+  const canTakeAction = isPortal && getPortalToken() !== null;
   return (
     <div className="min-h-screen bg-[#0a0a0f]" data-testid="page-public-quote">
       <HeroSection quote={quote} images={quote.images} />
@@ -1254,7 +1259,7 @@ export function PublicQuoteContent({ quote, token }: { quote: PublicQuoteData; t
         <PricingSection quote={quote} />
         <AgentSection agent={quote.agent} />
         <ShareSection token={token} quote={quote} />
-        <CustomerActionSection token={token} />
+        {canTakeAction && <CustomerActionSection token={token} />}
       </div>
 
       <footer className="border-t border-white/5 py-6 mt-8">

@@ -104,15 +104,20 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   childAges?: any[];
 };
 
-// Discount is deducted from commission, not from the customer price, so it is not
-// part of the per-person figure. The discount param is retained for call-site compatibility.
-function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, _discount: unknown = 0, serviceCharge: unknown = 0): string {
+// Total price the customer pays = sales price − discount + service charge.
+function calcTotalPrice(salesPrice: unknown, discount: unknown = 0, serviceCharge: unknown = 0): number {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
+  const disc = parseFloat(String(discount ?? 0)) || 0;
   const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
+  return price - disc + sc;
+}
+
+// Price per person splits the total price (sales − discount + service charge) across all passengers.
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0): string {
   const adults = parseInt(String(adult ?? 0), 10) || 0;
   const children = parseInt(String(child ?? 0), 10) || 0;
   const total = adults + children;
-  const netPrice = price + sc;
+  const netPrice = calcTotalPrice(salesPrice, discount, serviceCharge);
   return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 
@@ -161,7 +166,14 @@ export const newQuoteService = {
     await assertQuoteInScope(id, scope);
     const q = await newQuoteRepository.findWithDetails(id);
     if (!q) throw new AppError("Quote not found", 404);
-    return q;
+    // Surface the customer-facing total (sales − discount + service charge) and a per-person
+    // figure derived from it, so the detail page displays consistent values regardless of any
+    // previously-stored price_per_person.
+    return {
+      ...q,
+      total_price: calcTotalPrice(q.sales_price, q.discounts, q.service_charge).toFixed(2),
+      price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child, q.discounts, q.service_charge),
+    };
   },
 
   async createQuote(data: CreateQuotePayload, scope: ScopeOrTrusted) {

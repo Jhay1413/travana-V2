@@ -112,14 +112,15 @@ export function QuoteRHFForm({
   // ── Price per person calculation ──────────────────────────────────────────
   useEffect(() => {
     const price = Number(form.getValues("price")) || 0;
+    const currentDiscount = Number(form.getValues("discount")) || 0;
     const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
     const adults = Number(passengersAdults) || 0;
     const children = Number(passengersChildren) || 0;
     const total = adults + children;
-    // Discount does not reduce the customer price; only the service charge is added.
-    const netPrice = price + currentServiceCharge;
+    // Total price = price − discount + service charge, split across all passengers.
+    const netPrice = price - currentDiscount + currentServiceCharge;
     setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is

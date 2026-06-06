@@ -47,6 +47,10 @@ export interface PortalQuoteRow {
   quoteId: string;
   title: string | null;
   salesPrice: string | null;
+  discounts: string | null;
+  serviceCharge: string | null;
+  adult: number | null;
+  child: number | null;
   pricePerPerson: string | null;
   travelDate: string | Date;
   numNights: number | null;
@@ -470,6 +474,10 @@ export const portalRepository = {
         quoteId: quote.id,
         title: quote.title,
         salesPrice: quote.sales_price,
+        discounts: quote.discounts,
+        serviceCharge: quote.service_charge,
+        adult: quote.adult,
+        child: quote.child,
         pricePerPerson: quote.price_per_person,
         travelDate: quote.travel_date,
         numNights: quote.num_of_nights,

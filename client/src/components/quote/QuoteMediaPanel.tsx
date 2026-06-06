@@ -1,5 +1,11 @@
+import { useMemo, useState } from "react";
 import { ImagePlus, Loader2, Star, Trash2 } from "lucide-react";
 import type { QuoteImage } from "@/components/quote/hooks";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
+
+// Number of thumbnails shown in the gallery grid before collapsing the rest
+// behind a "+N" tile. The full set is always available in the lightbox.
+const MAX_GALLERY_THUMBS = 6;
 
 interface QuoteMediaPanelProps {
   primaryImage: QuoteImage | undefined;
@@ -22,6 +28,16 @@ export function QuoteMediaPanel({
   uploadFiles,
   openFilePicker,
 }: QuoteMediaPanelProps) {
+  // Lightbox scrolls through ALL images, ordered with the primary first.
+  const allImages = useMemo(
+    () => (primaryImage ? [primaryImage, ...galleryImages] : galleryImages),
+    [primaryImage, galleryImages],
+  );
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const shownThumbs = galleryImages.slice(0, MAX_GALLERY_THUMBS);
+  const extraCount = galleryImages.length - shownThumbs.length;
+
   return (
     <>
       <div
@@ -33,8 +49,9 @@ export function QuoteMediaPanel({
             <img
               src={primaryImage.url}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full cursor-pointer object-cover"
               data-testid="img-itinerary-hero-photo"
+              onClick={() => setLightboxIndex(0)}
             />
             <div
               className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0"
@@ -59,46 +76,65 @@ export function QuoteMediaPanel({
 
       {galleryImages.length > 0 && (
         <div className="grid grid-cols-3 gap-1.5" data-testid="grid-itinerary-gallery">
-          {galleryImages.map((img, idx: number) => (
-            <div
-              key={img.id}
-              className="group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)]"
-              data-testid={`button-gallery-image-${idx}`}
-            >
-              <img
-                src={img.url}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-                data-testid={`img-gallery-${idx}`}
-              />
+          {shownThumbs.map((img, idx: number) => {
+            const isLast = idx === shownThumbs.length - 1;
+            const showMoreOverlay = isLast && extraCount > 0;
+            return (
               <div
-                className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100"
-                aria-hidden
-              />
-              {img.ownerType === "quote" && (
-                <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 bg-black/50 py-0.5 opacity-0 transition group-hover:opacity-100">
-                  <button
-                    type="button"
-                    className="flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-semibold text-white hover:text-amber-300 transition-colors"
-                    data-testid={`button-set-main-${idx}`}
-                    onClick={() => setPrimary(img.id)}
-                    title="Set as main image"
+                key={img.id}
+                className="group relative aspect-square cursor-pointer overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)]"
+                data-testid={`button-gallery-image-${idx}`}
+                onClick={() => setLightboxIndex(primaryImage ? idx + 1 : idx)}
+              >
+                <img
+                  src={img.url}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                  data-testid={`img-gallery-${idx}`}
+                />
+                <div
+                  className="absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-black/0 opacity-0 transition group-hover:opacity-100"
+                  aria-hidden
+                />
+                {showMoreOverlay && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-semibold text-white"
+                    data-testid="overlay-more-images"
                   >
-                    <Star className="h-2.5 w-2.5" /> Main
-                  </button>
-                  <button
-                    type="button"
-                    className="flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-semibold text-white hover:text-red-300 transition-colors"
-                    data-testid={`button-delete-image-${idx}`}
-                    onClick={() => deleteImage(img.id)}
-                    title="Remove image"
-                  >
-                    <Trash2 className="h-2.5 w-2.5" /> Del
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+                    +{extraCount}
+                  </div>
+                )}
+                {!showMoreOverlay && img.ownerType === "quote" && (
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 bg-black/50 py-0.5 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      type="button"
+                      className="flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-semibold text-white hover:text-amber-300 transition-colors"
+                      data-testid={`button-set-main-${idx}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPrimary(img.id);
+                      }}
+                      title="Set as main image"
+                    >
+                      <Star className="h-2.5 w-2.5" /> Main
+                    </button>
+                    <button
+                      type="button"
+                      className="flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-semibold text-white hover:text-red-300 transition-colors"
+                      data-testid={`button-delete-image-${idx}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteImage(img.id);
+                      }}
+                      title="Remove image"
+                    >
+                      <Trash2 className="h-2.5 w-2.5" /> Del
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -128,6 +164,15 @@ export function QuoteMediaPanel({
           </>
         )}
       </button>
+
+      <ImageLightbox
+        images={allImages}
+        open={lightboxIndex !== null}
+        startIndex={lightboxIndex ?? 0}
+        onOpenChange={(open) => {
+          if (!open) setLightboxIndex(null);
+        }}
+      />
     </>
   );
 }

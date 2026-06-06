@@ -59,7 +59,7 @@ export function QuoteCostingsCard({ quote, pageLabel }: QuoteCostingsCardProps) 
                 Deal price
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-deal-price-value">
-                {currency.format(quote.commissions.price - quote.commissions.serviceCharge)}
+                {currency.format(quote.commissions.salesPrice)}
               </div>
             </div>
 
@@ -83,7 +83,7 @@ export function QuoteCostingsCard({ quote, pageLabel }: QuoteCostingsCardProps) 
                 Discount
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-discount-value">
-                {currency.format(quote.commissions.discounts)}
+                {quote.commissions.discounts > 0 ? `-${currency.format(quote.commissions.discounts)}` : currency.format(0)}
               </div>
             </div>
 
@@ -95,7 +95,7 @@ export function QuoteCostingsCard({ quote, pageLabel }: QuoteCostingsCardProps) 
                 Service charge
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-quote-summary-service-charge-value">
-                {currency.format(quote.commissions.serviceCharge)}
+                {quote.commissions.serviceCharge > 0 ? `+${currency.format(quote.commissions.serviceCharge)}` : currency.format(0)}
               </div>
             </div>
 

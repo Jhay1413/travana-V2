@@ -56,16 +56,22 @@ async function assertAccommodationInScope(accommodationId: string, scope: ScopeO
   if (!ok) throw new AppError("Accommodation not found", 404);
 }
 
-// Price per person is the Total Price (sales price + service charge) split across passengers.
-// Discount comes off the commission and wallet credit is a payment method, so neither affects
-// this figure. The discount/walletCredit params are retained for call-site compatibility.
-function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, _discount: unknown = 0, serviceCharge: unknown = 0, _walletCredit: unknown = 0): string {
+// Total price the customer pays = sales price − discount + service charge.
+function calcTotalPrice(salesPrice: unknown, discount: unknown = 0, serviceCharge: unknown = 0): number {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
+  const disc = parseFloat(String(discount ?? 0)) || 0;
   const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
+  return price - disc + sc;
+}
+
+// Price per person splits the total price (sales − discount + service charge) across passengers.
+// Wallet credit is a payment method, so it does not affect this figure; the param is retained
+// for call-site compatibility.
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0, _walletCredit: unknown = 0): string {
   const adults = parseInt(String(adult ?? 0), 10) || 0;
   const children = parseInt(String(child ?? 0), 10) || 0;
   const total = adults + children;
-  const netPrice = price + sc;
+  const netPrice = calcTotalPrice(salesPrice, discount, serviceCharge);
   return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 
@@ -107,7 +113,14 @@ export const bookingService = {
     await assertBookingInScope(id, scope);
     const b = await bookingRepository.findWithDetails(id);
     if (!b) throw new AppError("Booking not found", 404);
-    return b;
+    // Surface the customer-facing total (sales − discount + service charge) and a per-person
+    // figure derived from it, so the detail page displays consistent values regardless of any
+    // previously-stored price_per_person.
+    return {
+      ...b,
+      total_price: calcTotalPrice(b.sales_price, b.discounts, b.service_charge).toFixed(2),
+      price_per_person: calcPricePerPerson(b.sales_price, b.adult, b.child, b.discounts, b.service_charge),
+    };
   },
 
   async convertQuoteToBooking(quoteId: string, haysRef: string, supplierRef: string, scope: ScopeOrTrusted) {

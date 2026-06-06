@@ -59,7 +59,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 Deal price
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-deal-price-value">
-                {currency.format(booking.commissions.price - booking.commissions.serviceCharge)}
+                {currency.format(booking.commissions.salesPrice)}
               </div>
             </div>
 
@@ -83,7 +83,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 Discount
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-discount-value">
-                {currency.format(booking.commissions.discounts)}
+                {booking.commissions.discounts > 0 ? `-${currency.format(booking.commissions.discounts)}` : currency.format(0)}
               </div>
             </div>
 
@@ -101,7 +101,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 className="text-xs font-semibold text-black"
                 data-testid="text-booking-summary-service-charge-value"
               >
-                {currency.format(booking.commissions.serviceCharge)}
+                {booking.commissions.serviceCharge > 0 ? `+${currency.format(booking.commissions.serviceCharge)}` : currency.format(0)}
               </div>
             </div>
 

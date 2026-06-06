@@ -22,12 +22,12 @@ export const revenueService = {
   async getRevenueDashboard(scope: Scope): Promise<RevenueDashboardData> {
     const orgId = effectiveOrgId(scope);
     const now = new Date();
+    const year = now.getFullYear();
     const monthlyData: MonthForwards[] = [];
 
-    for (let i = 0; i < 12; i++) {
-      const targetDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      const year = targetDate.getFullYear();
-      const month = targetDate.getMonth() + 1;
+    // Calendar year: January (1) through December (12) of the current year.
+    for (let month = 1; month <= 12; month++) {
+      const targetDate = new Date(year, month - 1, 1);
 
       const { totalCommission, dealCount } = await revenueRepository.getForwardsForMonth(year, month, orgId);
 
@@ -52,7 +52,10 @@ export const revenueService = {
       avgProfit: agent.dealCount > 0 ? agent.totalCommission / agent.dealCount : 0,
     }));
 
-    const nextMonthData = monthlyData[1] || monthlyData[0];
+    // KPIs target the upcoming month within the calendar year; fall back to the
+    // first month (e.g. when the current month is December).
+    const nextMonthData =
+      monthlyData.find((m) => m.monthNumber === now.getMonth() + 2) || monthlyData[0];
 
     const nextMonthForwards = nextMonthData?.forwards || 0;
     const total12MonthForwards = monthlyData.reduce((sum, m) => sum + m.forwards, 0);
@@ -70,19 +73,19 @@ export const revenueService = {
   },
 
   // Regenerate the persisted forwards_report table from live bookings for the
-  // rolling 12-month forward window. Commission is recorded entirely as company
-  // commission (agent_commission = 0). Manual `adjustment` / `historical_ids` on
-  // existing rows are preserved. Feeds the Admin → Data → Forwards Reports table.
+  // current calendar year (January–December). Commission is recorded entirely as
+  // company commission (agent_commission = 0). Manual `adjustment` / `historical_ids`
+  // on existing rows are preserved. Feeds the Admin → Data → Forwards Reports table.
   async regenerateForwardsReport(scope: Scope): Promise<{ monthsWritten: number; inserted: number; updated: number }> {
     const orgId = effectiveOrgId(scope);
     const now = new Date();
+    const year = now.getFullYear();
     let inserted = 0;
     let updated = 0;
 
-    for (let i = 0; i < 12; i++) {
-      const targetDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      const year = targetDate.getFullYear();
-      const month = targetDate.getMonth() + 1;
+    // Calendar year: January (1) through December (12) of the current year.
+    for (let month = 1; month <= 12; month++) {
+      const targetDate = new Date(year, month - 1, 1);
       const monthName = targetDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
       const { totalCommission, dealIds } = await revenueRepository.getForwardsWithIdsForMonth(year, month, orgId);

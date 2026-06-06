@@ -52,7 +52,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { revenueApi } from "@/api/endpoints/revenue.api";
 import type { BookingDetail } from "@/types/revenue/revenue.types";
-import { useRevenueDashboard, useMonthBookings } from "@/hooks/queries/use-revenue-queries";
+import { useRevenueDashboard, useMonthBookings, revenueKeys } from "@/hooks/queries/use-revenue-queries";
 
 function fmt(v: number) {
   return "£" + v.toLocaleString("en-GB");
@@ -115,7 +115,10 @@ export default function AdminFinancials() {
         title: "Forwards report regenerated",
         description: `${res.monthsWritten} months written (${res.inserted} new, ${res.updated} updated)`,
       });
-      queryClient.invalidateQueries({ queryKey: ["admin", "tables"] });
+      // Refresh the revenue dashboard (and the per-month drill-downs) so the
+      // regenerated forwards show immediately. The old ["admin","tables"] key
+      // didn't match the dashboard query, so the UI never updated.
+      queryClient.invalidateQueries({ queryKey: revenueKeys.all });
     },
     onError: (err: any) => {
       toast({ title: "Regenerate failed", description: err?.message, variant: "destructive" });

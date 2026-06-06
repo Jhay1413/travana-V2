@@ -56,14 +56,19 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   extraAccommodations?: Record<string, unknown>[];
 };
 
-function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0): string {
+// Total price the customer pays = sales price − discount + service charge.
+function calcTotalPrice(salesPrice: unknown, discount: unknown = 0, serviceCharge: unknown = 0): number {
   const price = parseFloat(String(salesPrice ?? 0)) || 0;
   const disc = parseFloat(String(discount ?? 0)) || 0;
   const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
+  return price - disc + sc;
+}
+
+function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown, discount: unknown = 0, serviceCharge: unknown = 0): string {
   const adults = parseInt(String(adult ?? 0), 10) || 0;
   const children = parseInt(String(child ?? 0), 10) || 0;
   const total = adults + children;
-  const netPrice = price - disc + sc;
+  const netPrice = calcTotalPrice(salesPrice, discount, serviceCharge);
   return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 
@@ -121,7 +126,11 @@ export const newQuoteService = {
   async getQuoteWithDetails(id: string) {
     const q = await newQuoteRepository.findWithDetails(id);
     if (!q) throw new AppError("Quote not found", 404);
-    return q;
+    return {
+      ...q,
+      total_price: calcTotalPrice(q.sales_price, q.discounts, q.service_charge).toFixed(2),
+      price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child, q.discounts, q.service_charge),
+    };
   },
 
   async createQuote(data: CreateQuotePayload) {
