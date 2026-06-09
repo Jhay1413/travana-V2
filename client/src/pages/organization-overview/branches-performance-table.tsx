@@ -89,7 +89,7 @@ export function BranchesPerformanceTable() {
   const [socialDateFrom, setSocialDateFrom] = useState<string>(today);
   const [socialDateTo, setSocialDateTo] = useState<string>(today);
 
-  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("all");
+  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("today");
   const [whatsOnDate, setWhatsOnDate] = useState<string>(today);
 
   const { data, isLoading, isError } = useOrganizationBranchesPerformance({

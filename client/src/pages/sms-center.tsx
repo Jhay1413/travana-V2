@@ -235,6 +235,9 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
       .replace(/\{\{?\s*hays_ref\s*\}?\}/gi, "HT-12345")
       .replace(/\{\{?\s*supplier_ref\s*\}?\}/gi, "SUP-987")
       .replace(/\{\{?\s*portal_link\s*\}?\}/gi, "https://app/portal/login")
+      .replace(/\{\{?\s*portal_credentials\s*\}?\}/gi, "your email john@example.com and PIN 1234")
+      .replace(/\{\{?\s*portal_email\s*\}?\}/gi, "john@example.com")
+      .replace(/\{\{?\s*portal_pin\s*\}?\}/gi, "1234")
       .replace(/\{\{?\s*agent_name\s*\}?\}/gi, "Tina")
       .replace(/\{\{?\s*company_name\s*\}?\}/gi, "Tina's Travel");
   }, [bodyOverride]);

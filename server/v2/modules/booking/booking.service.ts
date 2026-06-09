@@ -6,6 +6,7 @@ import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { referralService } from "../referral/referral.service";
 import { tagService } from "../tag/tag.service";
+import { taskService } from "../task/task.service";
 import { walletService } from "../wallet/wallet.service";
 import { fireAutoTriggerForClient } from "../sms/sms.service";
 import { AppError } from "../../utils/error-handler";
@@ -319,6 +320,14 @@ export const bookingService = {
 
     await newQuoteRepository.update(quoteId, { quote_status: 'WON' });
     await transactionRepository.update(q.transaction_id, { status: 'on_booking' });
+
+    // Converting a quote into a booking: close out the quote's open tasks.
+    // Best-effort — must never block the conversion.
+    try {
+      await taskService.completeByEntity("quote", quoteId);
+    } catch (err) {
+      console.error('COMPLETE QUOTE TASKS (booking.service) - error:', err);
+    }
 
     if (txn.client_id) {
       const bookingCount = await bookingRepository.countByClientId(txn.client_id);

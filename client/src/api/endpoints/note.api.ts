@@ -2,7 +2,8 @@ import axiosClient from "../client/axios-client";
 import type { TransactionNote } from "@/types/quote";
 
 export type CreateNoteData = {
-  transaction_id: string;
+  transaction_id?: string;
+  client_id?: string;
   content: string;
   description?: string;
 };
@@ -10,6 +11,11 @@ export type CreateNoteData = {
 export const noteApi = {
   getByTransaction: async (transactionId: string): Promise<TransactionNote[]> => {
     const { data } = await axiosClient.get<TransactionNote[]>(`/api/v2/notes/transaction/${transactionId}`);
+    return data;
+  },
+
+  getByClient: async (clientId: string): Promise<TransactionNote[]> => {
+    const { data } = await axiosClient.get<TransactionNote[]>(`/api/v2/notes/client/${clientId}`);
     return data;
   },
 

@@ -56,7 +56,7 @@ export function QuotesPage() {
                     {item.adults}A {item.children > 0 ? `${item.children}C` : ""}
                   </div>
                   <div className="text-xs tabular-nums font-medium">
-                    {item.salesPrice && item.salesPrice > 0 ? currency.format(item.salesPrice) : "—"}
+                    {item.totalPrice && item.totalPrice > 0 ? currency.format(item.totalPrice) : "—"}
                   </div>
                   <div className="text-xs tabular-nums text-emerald-600">
                     {item.commission && item.commission > 0 ? currency.format(item.commission) : "—"}

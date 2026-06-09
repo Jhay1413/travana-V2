@@ -84,6 +84,9 @@ export interface MergeContext {
   hays_ref?: string | null;
   supplier_ref?: string | null;
   portal_link?: string | null;
+  portal_email?: string | null;
+  portal_pin?: string | null;
+  portal_credentials?: string | null;
   agent_name?: string | null;
   company_name?: string | null;
   [key: string]: string | number | null | undefined;
@@ -180,7 +183,8 @@ function buildPortalLink(): string {
 }
 
 function buildQuoteUrl(token: string): string {
-  return `${getPublicBaseUrl()}/view-quote/${token}`;
+  // Portal quote view (requires portal login), not the public /view-quote page.
+  return `${getPublicBaseUrl()}/portal/quote/${token}`;
 }
 
 /**
@@ -188,10 +192,16 @@ function buildQuoteUrl(token: string): string {
  * data leaves placeholders blank rather than throwing.
  */
 export async function buildContextForClient(client: any): Promise<MergeContext> {
+  const email = (client.email ?? '').trim();
   const ctx: MergeContext = {
     first_name: client.firstName ?? '',
     last_name: client.surename ?? '',
     portal_link: buildPortalLink(),
+    portal_email: email,
+    portal_pin: '',
+    // Auto-trigger sends never have a plaintext PIN (it's hashed and we don't
+    // mint here). Manual quote-share minting lives in the controller path.
+    portal_credentials: email ? `your email ${email} and the PIN we shared` : '',
     company_name: '',
     destination: '',
     departure_date: '',

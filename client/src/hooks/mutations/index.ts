@@ -7,7 +7,7 @@ export { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage, useSet
 export { useConvertToBooking, useUpdateBooking, useDeleteBooking, useAdminDeleteBooking } from "./use-booking-mutations";
 export { useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage, useSetPrimaryBookingImage } from "./use-booking-image-mutations";
 export { useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "./use-enquiry-mutations";
-export { useCreateNote, useUpdateNote, useDeleteNote } from "./use-note-mutations";
+export { useCreateNote, useUpdateNote, useDeleteNote, useCreateClientNote, useUpdateClientNote, useDeleteClientNote } from "./use-note-mutations";
 export { useCreateTicket, useUpdateTicket, useDeleteTicket } from "./use-ticket-mutations";
 export { useUploadAttachment, useDeleteAttachment } from "./use-attachment-mutations";
 export { useCreateReply, useUpdateReply, useDeleteReply } from "./use-reply-mutations";
@@ -15,7 +15,7 @@ export { useMarkNotificationRead, useMarkAllNotificationsRead, useDeleteNotifica
 export { useCreateUser, useUpdateUser, useDeleteUser } from "./use-user-mutations";
 export { useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator } from "./use-tour-operator-mutations";
 export { useCreateAirport, useDeleteAirport } from "./use-airport-mutations";
-export { useCreateTask, useToggleTask, useDeleteTask } from "./use-task-mutations";
+export { useCreateTask, useUpdateTask, useToggleTask, useDeleteTask } from "./use-task-mutations";
 export { useSendMessage, useSendMessageWithFile, useStartDirectChat, useCreateGroupChat, useMarkChatRead } from "./use-chat-mutations";
 export { useCreateEmailAccount, useDeleteEmailAccount, useSendEmail } from "./use-email-mutations";
 export { useDisconnectFacebookPage, useSendFacebookMessage } from "./use-facebook-mutations";

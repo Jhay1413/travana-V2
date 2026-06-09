@@ -4,33 +4,77 @@ import { Home, ChevronRight, Loader2, X } from "lucide-react";
 import PortalLayout from "./portal-layout";
 import { usePublicQuote } from "@/hooks/queries/use-quote-public-queries";
 import { PublicQuoteContent } from "@/pages/public-quote";
-import { useLogPortalQuoteView, getPortalToken } from "@/hooks/use-portal-api";
+import { useLogPortalQuoteView, usePortalQuoteOwnership, getPortalToken } from "@/hooks/use-portal-api";
 
 export default function PortalQuoteViewPage() {
   const [, params] = useRoute("/portal/quote/:token");
   const token = params?.token || "";
   const [, setLocation] = useLocation();
   const isAuthed = getPortalToken() !== null;
-  const { data: quote, isLoading, error } = usePublicQuote(isAuthed ? token : "");
+
+  // Ownership guard — a logged-in client may only view their own quote.
+  const ownershipQ = usePortalQuoteOwnership(isAuthed ? token : "");
+  const ownsQuote = isAuthed && ownershipQ.data?.found === true && ownershipQ.data.owns === true;
+  const notOwned = isAuthed && ownershipQ.data?.found === true && ownershipQ.data.owns === false;
+  const notFound = isAuthed && ownershipQ.data?.found === false;
+
+  // The quote payload is only fetched once ownership is confirmed.
+  const { data: quote, isLoading, error } = usePublicQuote(ownsQuote ? token : "");
   const logView = useLogPortalQuoteView();
   const viewLogged = useRef(false);
 
-  // This route is portal-only — unauthenticated visitors are sent to login.
+  // This route is portal-only — unauthenticated visitors are sent to login,
+  // carrying this quote as the post-login destination so they land back here.
   useEffect(() => {
     if (!isAuthed) {
-      setLocation("/portal/login");
+      const next = encodeURIComponent(`/portal/quote/${token}`);
+      setLocation(`/portal/login?next=${next}`);
     }
-  }, [isAuthed, setLocation]);
+  }, [isAuthed, setLocation, token]);
+
+  // Logged in, but this quote belongs to someone else — bounce them to their
+  // own quotes list rather than showing it.
+  useEffect(() => {
+    if (notOwned) {
+      setLocation("/portal/quotes");
+    }
+  }, [notOwned, setLocation]);
 
   useEffect(() => {
-    if (isAuthed && token && !viewLogged.current) {
+    if (ownsQuote && token && !viewLogged.current) {
       viewLogged.current = true;
       logView.mutate(token);
     }
-  }, [isAuthed, token]);
+  }, [ownsQuote, token]);
 
-  if (!isAuthed) {
+  if (!isAuthed || notOwned) {
     return null;
+  }
+
+  // Verifying ownership (or quote not found / inaccessible to this client).
+  if (!ownsQuote) {
+    return (
+      <PortalLayout>
+        {notFound || ownershipQ.isError ? (
+          <div className="flex items-center justify-center py-20 px-4" data-testid="error-portal-quote">
+            <div className="text-center max-w-md">
+              <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+                <X className="w-8 h-8 text-red-400" />
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-2">Quote Not Found</h1>
+              <p className="text-white/50">This quote link may have expired or is no longer available.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-20" data-testid="loading-portal-quote-access">
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 text-white/40 animate-spin mx-auto mb-4" />
+              <p className="text-white/30 text-sm">Checking access...</p>
+            </div>
+          </div>
+        )}
+      </PortalLayout>
+    );
   }
 
   return (

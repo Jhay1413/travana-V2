@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CheckSquare, Circle, Plus, X } from "lucide-react";
+import { CheckSquare, Circle, Pencil, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { useTasks, useCurrentUser } from "@/hooks/queries";
 import { useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import { EditTaskDialog, type EditableTask } from "@/components/tasks/EditTaskDialog";
 import { cn } from "@/lib/utils";
 
 const TASK_CATEGORIES = [
@@ -57,6 +58,7 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
   const [newDueDate, setNewDueDate] = useState("");
   const [newDueTime, setNewDueTime] = useState("09:00");
   const [assignedToId, setAssignedToId] = useState("");
+  const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
 
   const handleAdd = () => {
     const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
@@ -133,6 +135,14 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
                     <span className={`shrink-0 text-[10px] font-semibold ${isOverdue ? "text-rose-500" : "text-black/40"}`} data-testid={`text-task-due-${task.id}`}>
                       {task.dueDate ? formatTaskDue(task.dueDate) : ""}
                     </span>
+                    <button
+                      type="button"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full text-black/25 opacity-0 transition hover:bg-black/[0.06] hover:text-black/60 group-hover:opacity-100"
+                      data-testid={`button-edit-task-${task.id}`}
+                      onClick={() => setEditingTask(task)}
+                    >
+                      <Pencil className="h-3 w-3" aria-hidden />
+                    </button>
                     <button
                       type="button"
                       className="inline-flex h-4 w-4 items-center justify-center rounded-full text-black/25 opacity-0 transition hover:bg-black/[0.06] hover:text-black/60 group-hover:opacity-100"
@@ -262,6 +272,14 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
           </div>
         </DialogContent>
       </Dialog>
+
+      <EditTaskDialog
+        open={!!editingTask}
+        onOpenChange={(open) => !open && setEditingTask(null)}
+        task={editingTask}
+        entityType={taskEntityType}
+        entityId={quoteId}
+      />
     </>
   );
 }

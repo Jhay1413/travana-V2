@@ -189,6 +189,16 @@ export function useLogPortalQuoteView() {
   });
 }
 
+/** Whether the logged-in client owns the quote behind this share token. */
+export function usePortalQuoteOwnership(token: string) {
+  return useQuery<{ found: boolean; owns: boolean }>({
+    queryKey: ["portal", "quote-owns", token],
+    queryFn: () => portalFetch(`/api/portal/quote/${token}/owns`),
+    retry: false,
+    enabled: !!token && !!getPortalToken(),
+  });
+}
+
 export function usePortalQuotes() {
   return useQuery<PortalQuote[]>({
     queryKey: portalKeys.quotes,

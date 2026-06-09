@@ -56,6 +56,22 @@ export const taskController = {
     return successResponse(res, task, "Task created", 201);
   }),
 
+  update: asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    // Only allow editing a task's own fields — never let the request move it to
+    // another entity/org/branch or overwrite system columns.
+    const body = { ...req.body };
+    if (typeof body.dueDate === "string") {
+      body.dueDate = new Date(body.dueDate);
+    }
+    const parsed = insertTasksSchema
+      .pick({ title: true, dueDate: true, userId: true, completed: true })
+      .partial()
+      .parse(body);
+    const task = await taskService.update(id, parsed, getScope(req));
+    return successResponse(res, task, "Task updated");
+  }),
+
   toggleComplete: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const task = await taskService.toggleComplete(id, getScope(req));

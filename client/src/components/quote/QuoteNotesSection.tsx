@@ -56,7 +56,7 @@ export function QuoteNotesSection({ transactionId }: { transactionId: string }) 
         </span>
       </div>
 
-      <div className="mt-2 space-y-1.5" data-testid="list-notes">
+      <div className="mt-2 max-h-80 space-y-1.5 overflow-y-auto pr-1" data-testid="list-notes">
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
             <Spinner className="h-5 w-5" />

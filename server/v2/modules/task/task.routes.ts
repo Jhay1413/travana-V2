@@ -9,6 +9,7 @@ router.get("/", taskController.listByEntity);
 router.get("/user", taskController.listByUser);
 router.post("/", taskController.create);
 router.put("/:id/toggle", taskController.toggleComplete);
+router.put("/:id", taskController.update);
 router.delete("/:id", taskController.remove);
 
 export default router;

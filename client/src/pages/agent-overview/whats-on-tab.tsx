@@ -1,8 +1,10 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { ChevronRight, LifeBuoy, ListChecks } from "lucide-react";
+import { ChevronRight, LifeBuoy, ListChecks, Pencil, Plus } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
+import { EditTaskDialog } from "@/components/tasks/EditTaskDialog";
+import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Separator } from "@/components/ui/separator";
 import { useAllTasksExtended, useUserTasks } from "@/hooks/queries";
 import { useTickets, useTicketsByUser } from "@/hooks/queries/use-ticket-queries";
@@ -28,6 +30,8 @@ export function WhatsOnTab({
   extraControls?: ReactNode;
 }) {
   const [, navigate] = useLocation();
+  const [editingTask, setEditingTask] = useState<any | null>(null);
+  const [creatingTask, setCreatingTask] = useState(false);
 
   const fmtDate = (d?: string | Date | null) => {
     if (!d) return null;
@@ -171,6 +175,15 @@ export function WhatsOnTab({
           <div className="text-sm font-semibold" data-testid="text-whats-on-tasks-title">
             Tasks ({filteredTasks.length})
           </div>
+          <button
+            type="button"
+            onClick={() => setCreatingTask(true)}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/5 px-2.5 py-1 text-xs font-semibold text-black/70 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+            data-testid="button-add-whats-on-task"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            Add Task
+          </button>
         </div>
         {filteredTasks.length === 0 ? (
           <div
@@ -208,12 +221,12 @@ export function WhatsOnTab({
               <motion.button
                 key={task.id}
                 type="button"
-                className={`group w-full rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"} ${taskHref ? "cursor-pointer" : "cursor-default"}`}
+                className={`group w-full cursor-pointer rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
                 data-testid={`card-whats-on-task-${task.id}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
-                onClick={() => taskHref && navigate(taskHref)}
+                onClick={() => (taskHref ? navigate(taskHref) : setEditingTask(task))}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -276,6 +289,25 @@ export function WhatsOnTab({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-black/35 opacity-0 transition hover:bg-black/[0.06] hover:text-black/70 group-hover:opacity-100 dark:text-white/40 dark:hover:bg-white/10"
+                      data-testid={`button-edit-whats-on-task-${task.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTask(task);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setEditingTask(task);
+                        }
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden />
+                    </span>
                     <span
                       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}
                     >
@@ -394,6 +426,20 @@ export function WhatsOnTab({
           ))
         )}
       </div>
+
+      <EditTaskDialog
+        open={!!editingTask}
+        onOpenChange={(open) => !open && setEditingTask(null)}
+        task={editingTask}
+        entityType={editingTask?.entityType ?? ""}
+        entityId={editingTask?.entityId ?? ""}
+      />
+
+      <CreateTaskDialog
+        open={creatingTask}
+        onOpenChange={setCreatingTask}
+        defaultAssignedToId={allUsers ? undefined : userId}
+      />
     </div>
   );
 }

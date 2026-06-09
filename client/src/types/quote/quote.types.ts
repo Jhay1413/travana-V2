@@ -510,6 +510,7 @@ export interface TransactionNote {
   createdAt: string;
   parent_id: string | null;
   transaction_id: string | null;
+  client_id?: string | null;
 }
 
 export interface EnquiryRelations {

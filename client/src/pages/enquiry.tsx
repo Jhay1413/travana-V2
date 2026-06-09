@@ -33,6 +33,7 @@ import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes, e
 import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations/use-note-mutations";
 import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import { EditTaskDialog, type EditableTask } from "@/components/tasks/EditTaskDialog";
 import { useCurrentUser } from "@/hooks/queries";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -313,7 +314,7 @@ function EnquiryNotesSection({ transactionId }: { transactionId: string }) {
         </div>
         <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold text-black/50">{topLevelNotes.length}</span>
       </div>
-      <div className="mt-3 space-y-2" data-testid="list-enquiry-notes">
+      <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1" data-testid="list-enquiry-notes">
         {isLoading ? (
           <div className="flex items-center justify-center py-6"><Spinner className="h-5 w-5" /></div>
         ) : topLevelNotes.length === 0 ? (
@@ -400,6 +401,7 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
   const [newDueDate, setNewDueDate] = useState("");
   const [newDueTime, setNewDueTime] = useState("09:00");
   const [assignedToId, setAssignedToId] = useState("");
+  const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
 
   const handleAdd = () => {
     const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
@@ -476,6 +478,14 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
                     <span className={`shrink-0 text-[10px] font-semibold ${isOverdue ? "text-rose-500" : "text-black/40"}`} data-testid={`text-task-due-${task.id}`}>
                       {task.dueDate ? formatTaskDue(task.dueDate) : "—"}
                     </span>
+                    <button
+                      type="button"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full text-black/25 opacity-0 transition hover:bg-black/[0.06] hover:text-black/60 group-hover:opacity-100"
+                      data-testid={`button-edit-task-${task.id}`}
+                      onClick={() => setEditingTask(task)}
+                    >
+                      <Pencil className="h-3 w-3" aria-hidden />
+                    </button>
                     <button
                       type="button"
                       className="inline-flex h-4 w-4 items-center justify-center rounded-full text-black/25 opacity-0 transition hover:bg-black/[0.06] hover:text-black/60 group-hover:opacity-100"
@@ -603,6 +613,14 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
           </div>
         </DialogContent>
       </Dialog>
+
+      <EditTaskDialog
+        open={!!editingTask}
+        onOpenChange={(open) => !open && setEditingTask(null)}
+        task={editingTask}
+        entityType="enquiry"
+        entityId={enquiryId}
+      />
     </>
   );
 }

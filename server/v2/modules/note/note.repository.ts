@@ -26,6 +26,29 @@ export const noteRepository = {
     return rows;
   },
 
+  async findByClientId(clientId: string): Promise<NoteWithAuthor[]> {
+    // Client-level notes only: attached directly to the client and not to a
+    // transaction (transaction notes carry their own client context elsewhere).
+    const rows = await db
+      .select({
+        id: notes.id,
+        description: notes.description,
+        content: notes.content,
+        agent_id: notes.agent_id,
+        user_id: notes.user_id,
+        createdAt: notes.createdAt,
+        parent_id: notes.parent_id,
+        transaction_id: notes.transaction_id,
+        client_id: notes.client_id,
+        author_name: user.name,
+      })
+      .from(notes)
+      .leftJoin(user, eq(notes.agent_id, user.id))
+      .where(and(eq(notes.client_id, clientId), sql`${notes.transaction_id} IS NULL`))
+      .orderBy(desc(notes.createdAt));
+    return rows;
+  },
+
   async findById(id: string): Promise<Note | undefined> {
     const [result] = await db.select().from(notes).where(eq(notes.id, id));
     return result;

@@ -54,9 +54,16 @@ export default function PortalLoginPage() {
   const loginMutation = usePortalLogin();
   const biometricLogin = usePortalBiometricLogin();
 
+  // Post-login destination. Only same-origin portal paths are honoured (no
+  // open-redirect); anything else falls back to the portal home.
+  const getRedirectTarget = () => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    return next && next.startsWith("/portal") && !next.startsWith("//") ? next : "/portal";
+  };
+
   useEffect(() => {
     if (getPortalToken()) {
-      setLocation("/portal");
+      setLocation(getRedirectTarget());
       return;
     }
 
@@ -64,7 +71,7 @@ export default function PortalLoginPage() {
     const urlToken = params.get("token");
     if (urlToken) {
       setPortalToken(urlToken);
-      setLocation("/portal");
+      setLocation(getRedirectTarget());
     }
 
     const savedClientId = localStorage.getItem("portal_client_id");
@@ -106,7 +113,7 @@ export default function PortalLoginPage() {
           } catch {}
         }
 
-        setLocation("/portal");
+        setLocation(getRedirectTarget());
       }
     } catch (err: any) {
       setError(err?.message?.includes("401")
@@ -187,7 +194,7 @@ export default function PortalLoginPage() {
         credentialId: savedCredentialId,
       });
       if (result?.token) {
-        setLocation("/portal");
+        setLocation(getRedirectTarget());
       }
     } catch {
       setError("Biometric login failed. Please use your PIN.");

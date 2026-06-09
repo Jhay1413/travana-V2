@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useSmsTemplates } from "@/hooks/queries/use-sms-queries";
 import { useSendSms } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,18 +30,16 @@ export function QuoteShareDialog({
   clientId,
 }: QuoteShareDialogProps) {
   const { toast } = useToast();
-  const templatesQ = useSmsTemplates();
   const sendSms = useSendSms();
-  const quoteLinkTemplate = (templatesQ.data ?? []).find(
-    (t) => t.category === "quote_link" && t.active,
-  );
-  const canSend = !!clientId && !!shareToken && !!quoteLinkTemplate && !sendSms.isPending;
+  const canSend = !!clientId && !!shareToken && !sendSms.isPending;
 
   const handleSendSms = () => {
-    if (!clientId || !quoteLinkTemplate) return;
+    if (!clientId) return;
     sendSms.mutate(
       {
-        templateId: quoteLinkTemplate.id,
+        // Server resolves the org's own "Quote Link" template if it has one,
+        // otherwise falls back to the built-in default body.
+        category: "quote_link",
         recipients: { mode: "client", clientId },
         triggerSource: "manual.quote_share",
       },
@@ -99,7 +96,7 @@ export function QuoteShareDialog({
               <div className="flex items-center gap-2">
                 <input
                   readOnly
-                  value={`${window.location.origin}/view-quote/${shareToken}`}
+                  value={`${window.location.origin}/portal/quote/${shareToken}`}
                   className="flex-1 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-xs text-black/70 outline-none"
                   data-testid="input-share-link"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
@@ -117,9 +114,7 @@ export function QuoteShareDialog({
               {clientId && (
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
                   <div className="min-w-0 text-xs text-black/65">
-                    {quoteLinkTemplate
-                      ? "Text this link to the client using the Quote Link SMS template."
-                      : "Add an active “Quote Link” SMS template in SMS Center to enable texting."}
+                    Text this link to the client using your Quote Link SMS template (or the default if you haven’t set one up).
                   </div>
                   <Button
                     size="sm"

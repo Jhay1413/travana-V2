@@ -151,7 +151,14 @@ export function ClientBookedTab({
 
                       <div className="shrink-0 text-right">
                         <div className="text-xs font-semibold text-black/85" data-testid={`text-booking-total-${b.id}`}>
-                          {b.sales_price && parseFloat(b.sales_price) > 0 ? currency.format(parseFloat(b.sales_price)) : "—"}
+                          {(() => {
+                            // Final price the customer pays: sales − discount + service charge (matches booking detail).
+                            const net =
+                              (parseFloat(b.sales_price || "0") || 0) -
+                              (parseFloat(b.discounts || "0") || 0) +
+                              (parseFloat(b.service_charge || "0") || 0);
+                            return net > 0 ? currency.format(net) : "—";
+                          })()}
                         </div>
                       </div>
                     </div>

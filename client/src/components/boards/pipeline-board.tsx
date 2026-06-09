@@ -1015,11 +1015,12 @@ export default function PipelineBoard() {
   const [selectedDeal, setSelectedDeal] = useState<{ transaction: Transaction; stage: PipelineStage } | null>(null);
 
   useEffect(() => {
+    // Always default to the current agent's own pipeline, even for admins/managers.
+    // They can still switch to another agent (or "all") via the selector.
     if (currentUser?.id && !selectedAgentId) {
-      const restricted = currentUser.role !== "Admin" && currentUser.role !== "Manager";
-      setSelectedAgentId(restricted ? currentUser.id : "all");
+      setSelectedAgentId(currentUser.id);
     }
-  }, [currentUser?.id, currentUser?.role, selectedAgentId]);
+  }, [currentUser?.id, selectedAgentId]);
 
   const agentFilter = selectedAgentId && selectedAgentId !== "all" ? selectedAgentId : undefined;
   const quoteStatusParam = quoteStatusFilter !== "all" ? quoteStatusFilter : undefined;

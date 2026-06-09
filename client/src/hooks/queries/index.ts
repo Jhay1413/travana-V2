@@ -5,7 +5,7 @@ export { useTransactions, usePipelineTransactions, usePipelineColumn, useTransac
 export { useQuotes, useQuote, useRecentQuoteEngagement, quoteKeys } from "./use-quote-queries";
 export { useBookings, useBooking, useBookingByTransaction, bookingKeys } from "./use-booking-queries";
 export { useEnquiries, useEnquiry, useEnquiryByTransaction, enquiryKeys } from "./use-enquiry-queries";
-export { useNotes, noteKeys } from "./use-note-queries";
+export { useNotes, useClientNotes, noteKeys } from "./use-note-queries";
 export { useUsers, userKeys } from "./use-user-queries";
 export { useTickets, useTicket, useTicketsByClient, useTicketsByUser, ticketKeys } from "./use-ticket-queries";
 export { useAttachments, attachmentKeys, getAttachmentDownloadUrl } from "./use-attachment-queries";

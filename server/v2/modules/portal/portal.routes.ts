@@ -646,6 +646,21 @@ portalRouter.post('/wallet/withdraw', portalAuth, async (req: Request, res: Resp
 
 // ── Quote View Tracking ──────────────────────────────────────────────────────
 
+// Ownership guard: tells the portal whether the logged-in client owns the
+// quote behind this share token, so the UI can show it or bounce them away.
+portalRouter.get('/quote/:token/owns', portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { token } = req.params;
+    const ownership = await quotePublicRepository.findTokenOwnership(String(token));
+    if (!ownership) return res.json({ found: false, owns: false });
+    return res.json({ found: true, owns: ownership.clientId === clientId });
+  } catch (err: any) {
+    console.error('Portal quote ownership check error:', err);
+    res.status(500).json({ error: 'Failed to check quote access' });
+  }
+});
+
 portalRouter.post('/quote/:token/view', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
@@ -655,8 +670,11 @@ portalRouter.post('/quote/:token/view', portalAuth, async (req: Request, res: Re
     const client = await portalRepository.findClientNameById(clientId);
     const viewerName = [client?.firstName, client?.lastName].filter(Boolean).join(' ') || null;
 
-    const quoteId = await quotePublicRepository.findQuoteIdByToken(String(token));
-    if (!quoteId) return res.status(404).json({ error: 'Quote not found' });
+    // Only the owning client may log a view — defence in depth behind the UI guard.
+    const ownership = await quotePublicRepository.findTokenOwnership(String(token));
+    if (!ownership) return res.status(404).json({ error: 'Quote not found' });
+    if (ownership.clientId !== clientId) return res.status(403).json({ error: 'This quote is not associated with your account' });
+    const quoteId = ownership.quoteId;
 
     let deviceType = 'desktop';
     if (/mobile|android|iphone|ipad/i.test(ua)) {

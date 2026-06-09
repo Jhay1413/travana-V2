@@ -157,5 +157,6 @@ export function useClientEnquiryActions(
     onWizardOpenChange,
     createEnquiryMutation,
     updateEnquiryMutation,
+    createTransactionMutation,
   };
 }

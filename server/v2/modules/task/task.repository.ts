@@ -434,6 +434,18 @@ export const taskRepository = {
     return result;
   },
 
+  async update(id: string, data: Partial<InsertTaskNew>, scope?: Scope): Promise<TaskNew | undefined> {
+    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const [existing] = await db.select().from(tasks).where(and(...conds)).limit(1);
+    if (!existing) return undefined;
+    const [result] = await db
+      .update(tasks)
+      .set(data)
+      .where(and(...conds))
+      .returning();
+    return result;
+  },
+
   async toggleComplete(id: string, scope?: Scope): Promise<TaskNew | undefined> {
     const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
     const [existing] = await db.select().from(tasks).where(and(...conds)).limit(1);
@@ -453,6 +465,19 @@ export const taskRepository = {
     const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
     const result = await db.delete(tasks).where(and(...conds)).returning({ id: tasks.id });
     return result.length > 0;
+  },
+
+  async completeByEntity(entityType: string, entityId: string): Promise<void> {
+    await db
+      .update(tasks)
+      .set({ completed: true, completedAt: new Date() })
+      .where(
+        and(
+          eq(tasks.entityType, entityType),
+          eq(tasks.entityId, entityId),
+          eq(tasks.completed, false)
+        )
+      );
   },
 
   async reassignByEntity(entityType: string, entityId: string, newUserId: string): Promise<void> {

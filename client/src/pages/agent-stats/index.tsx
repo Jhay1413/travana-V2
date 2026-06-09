@@ -72,7 +72,7 @@ export default function AgentStatsPage() {
 
   const [range, setRange] = useState<AgentPerformanceRange>("month");
   const [tab, setTab] = useState<"whats-on" | "pipeline">("whats-on");
-  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("all");
+  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("today");
   const [whatsOnDate, setWhatsOnDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
   const perfParams = useMemo(() => ({ range }), [range]);

@@ -27,7 +27,7 @@ export default function AgentOverviewPage() {
   const [tab, setTab] = useState<
     "whats-on" | "pipeline" | "calendar" | "news" | "daily-goals"
   >("whats-on");
-  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("all");
+  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("today");
   const [whatsOnDate, setWhatsOnDate] = useState<string>(
     new Date().toISOString().slice(0, 10),
   );

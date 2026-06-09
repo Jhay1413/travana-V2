@@ -33,6 +33,18 @@ export const taskService = {
     return await taskRepository.create(data, scope);
   },
 
+  async update(id: string, data: Partial<InsertTaskNew>, scope?: Scope): Promise<TaskNew> {
+    // Keep completedAt in step with the completed flag so it matches what the
+    // toggle endpoint stamps — the controller never accepts completedAt directly.
+    const patch: Partial<InsertTaskNew> =
+      data.completed === undefined
+        ? data
+        : { ...data, completedAt: data.completed ? new Date() : null };
+    const result = await taskRepository.update(id, patch, scope);
+    if (!result) throw new AppError("Task not found", 404);
+    return result;
+  },
+
   async toggleComplete(id: string, scope?: Scope): Promise<TaskNew> {
     const result = await taskRepository.toggleComplete(id, scope);
     if (!result) throw new AppError("Task not found", 404);
@@ -46,5 +58,9 @@ export const taskService = {
 
   async reassignByEntity(entityType: string, entityId: string, newUserId: string): Promise<void> {
     await taskRepository.reassignByEntity(entityType, entityId, newUserId);
+  },
+
+  async completeByEntity(entityType: string, entityId: string): Promise<void> {
+    await taskRepository.completeByEntity(entityType, entityId);
   },
 };

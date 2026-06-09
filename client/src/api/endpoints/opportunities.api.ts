@@ -25,6 +25,8 @@ export interface OpportunityItem {
   children: number;
   budget?: number;
   salesPrice?: number;
+  /** Final price the customer pays: sales price − discount + service charge. */
+  totalPrice?: number;
   commission?: number;
   nights: number;
   haysRef?: string;

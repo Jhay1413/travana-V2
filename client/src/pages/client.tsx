@@ -505,7 +505,7 @@ export default function ClientPage() {
         onOpenChange={enquiryActions.onWizardOpenChange}
         enquiry={enquiryActions.editingEnquiry}
         onSubmit={enquiryActions.handleEnquirySubmit}
-        isSaving={enquiryActions.createEnquiryMutation.isPending || enquiryActions.updateEnquiryMutation.isPending}
+        isSaving={enquiryActions.createTransactionMutation.isPending || enquiryActions.updateEnquiryMutation.isPending}
       />
     </>
   );

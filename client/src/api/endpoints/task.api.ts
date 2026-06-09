@@ -44,6 +44,11 @@ export const taskApi = {
     return data;
   },
 
+  update: async (id: string, taskData: Partial<InsertTaskNew>): Promise<TaskNew> => {
+    const { data } = await axiosClient.put<TaskNew>(`/api/v2/tasks/${id}`, taskData);
+    return data;
+  },
+
   toggleComplete: async (id: string): Promise<TaskNew> => {
     const { data } = await axiosClient.put<TaskNew>(`/api/v2/tasks/${id}/toggle`);
     return data;

@@ -103,7 +103,7 @@ export function AgentsPerformanceCard({
   const [socialDateFrom, setSocialDateFrom] = useState<string>(today);
   const [socialDateTo, setSocialDateTo] = useState<string>(today);
 
-  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("all");
+  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("today");
   const [whatsOnDate, setWhatsOnDate] = useState<string>(today);
   const { data: currentUser } = useCurrentUser();
   const [whatsOnAgentId, setWhatsOnAgentId] = useState<string>("");

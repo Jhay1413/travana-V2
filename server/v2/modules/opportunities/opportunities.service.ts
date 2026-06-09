@@ -5,6 +5,15 @@ function formatClientName(title: string | null, firstName: string | null, surnam
   return [title !== 'NULL' ? title : '', firstName, surname].filter(Boolean).join(' ') || 'Unknown';
 }
 
+// Price the customer actually pays: sales price − discount + service charge.
+// Mirrors the quote/booking detail page so list and detail totals agree.
+function netTotalPrice(salesPrice: unknown, discounts: unknown, serviceCharge: unknown): number {
+  const sales = parseFloat(salesPrice as string) || 0;
+  const disc = parseFloat(discounts as string) || 0;
+  const svc = parseFloat(serviceCharge as string) || 0;
+  return sales - disc + svc;
+}
+
 export const opportunitiesService = {
   async getEnquiries(filters: OpportunityFilters) {
     const { rows, total } = await opportunitiesRepository.findEnquiries(filters);
@@ -27,7 +36,9 @@ export const opportunitiesService = {
       clientPhone: r.clientPhone || '', agentName: r.agentFirstName || r.agentName || '',
       title: r.title || 'Untitled', status: r.status || 'DRAFT',
       travelDate: r.travelDate, dateCreated: r.dateCreated,
-      salesPrice: parseFloat(r.salesPrice as string) || 0, commission: parseFloat(r.commission as string) || 0,
+      salesPrice: parseFloat(r.salesPrice as string) || 0,
+      totalPrice: netTotalPrice(r.salesPrice, r.discounts, r.serviceCharge),
+      commission: parseFloat(r.commission as string) || 0,
       nights: r.nights || 0, adults: r.adults || 0, children: r.children || 0,
     }));
     return { items, total, page: filters.page, limit: filters.limit, totalPages: Math.ceil(total / filters.limit) };
@@ -41,7 +52,9 @@ export const opportunitiesService = {
       clientPhone: r.clientPhone || '', agentName: r.agentFirstName || r.agentName || '',
       title: r.title || 'Untitled', status: r.status || 'BOOKED',
       travelDate: r.travelDate, dateCreated: r.dateCreated,
-      salesPrice: parseFloat(r.salesPrice as string) || 0, commission: parseFloat(r.commission as string) || 0,
+      salesPrice: parseFloat(r.salesPrice as string) || 0,
+      totalPrice: netTotalPrice(r.salesPrice, r.discounts, r.serviceCharge),
+      commission: parseFloat(r.commission as string) || 0,
       nights: r.nights || 0, adults: r.adults || 0, children: r.children || 0,
       haysRef: r.haysRef || '', supplierRef: r.supplierRef || '',
     }));

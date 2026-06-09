@@ -382,6 +382,22 @@ export const quotePublicRepository = {
     return result?.id || null;
   },
 
+  /**
+   * Resolve a share token to the quote id and its owning client id (via the
+   * quote's transaction). Returns null when no quote matches the token; the
+   * `clientId` may be null if the transaction has no client attached. Used to
+   * enforce portal ownership — a logged-in client may only view their own quote.
+   */
+  async findTokenOwnership(token: string): Promise<{ quoteId: string; clientId: string | null } | null> {
+    const [row] = await db
+      .select({ quoteId: quote.id, clientId: transaction.client_id })
+      .from(quote)
+      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(eq(quote.quote_token, token))
+      .limit(1);
+    return row ?? null;
+  },
+
   async getAgentUserIdByQuoteId(quoteId: string): Promise<string | null> {
     const [result] = await db
       .select({ userId: transaction.user_id })

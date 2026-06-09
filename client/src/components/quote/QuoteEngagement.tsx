@@ -199,40 +199,40 @@ export function QuoteEngagement({ quoteId, className }: QuoteEngagementProps) {
 
               {publicViews.length > 0 && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => setShowPublicHistory(!showPublicHistory)}
-                    className="inline-flex items-center gap-1 text-[10px] font-medium text-black/50 hover:text-black/70 transition"
-                    data-testid="btn-toggle-public-history"
-                  >
-                    {showPublicHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    {showPublicHistory ? "Hide" : "Show"} view history
-                  </button>
+                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto" data-testid="public-history-list">
+                    {(showPublicHistory ? publicViews : publicViews.slice(0, 2)).map((v) => {
+                      const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
+                      return (
+                        <div
+                          key={v.id}
+                          className="flex items-center gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5"
+                          data-testid={`public-view-${v.id}`}
+                        >
+                          <IconComp className="h-3 w-3 shrink-0 text-black/30" />
+                          <span className="text-[10px] text-black/60 flex-1">
+                            {v.browser || "Unknown browser"}
+                            {v.deviceType && v.deviceType !== "desktop" && (
+                              <span className="text-black/40"> · {v.deviceType}</span>
+                            )}
+                          </span>
+                          <span className="text-[10px] text-black/40 shrink-0">
+                            {formatTimeAgo(v.viewedAt)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                  {showPublicHistory && (
-                    <div className="mt-2 space-y-1 max-h-40 overflow-y-auto" data-testid="public-history-list">
-                      {publicViews.map((v) => {
-                        const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
-                        return (
-                          <div
-                            key={v.id}
-                            className="flex items-center gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5"
-                            data-testid={`public-view-${v.id}`}
-                          >
-                            <IconComp className="h-3 w-3 shrink-0 text-black/30" />
-                            <span className="text-[10px] text-black/60 flex-1">
-                              {v.browser || "Unknown browser"}
-                              {v.deviceType && v.deviceType !== "desktop" && (
-                                <span className="text-black/40"> · {v.deviceType}</span>
-                              )}
-                            </span>
-                            <span className="text-[10px] text-black/40 shrink-0">
-                              {formatTimeAgo(v.viewedAt)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  {publicViews.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPublicHistory(!showPublicHistory)}
+                      className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-black/50 hover:text-black/70 transition"
+                      data-testid="btn-toggle-public-history"
+                    >
+                      {showPublicHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      {showPublicHistory ? "Show less" : `Show all ${publicViews.length}`}
+                    </button>
                   )}
                 </>
               )}

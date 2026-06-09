@@ -21,6 +21,8 @@ import {
 import type { Client } from "../client-types";
 import type { TaskNew } from "@shared/schema";
 
+import { ClientNotesSection } from "../sections/ClientNotesSection";
+
 // Re-exports for backward compatibility — sections live in their own files now.
 export { ReferralStatsSection } from "../sections/ReferralStatsSection";
 export { PortalPinSection } from "../sections/PortalPinSection";
@@ -203,6 +205,8 @@ export function ClientOverviewTab({
           );
         })()}
       </div>
+
+      <ClientNotesSection clientId={clientId} />
 
       <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="overview-client-overview">
         <div className="mb-3 flex items-center gap-2">

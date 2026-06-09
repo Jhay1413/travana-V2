@@ -201,7 +201,10 @@ export const portalRepository = {
         portalPin: clientTable.portalPin,
       })
       .from(clientTable)
-      .where(eq(clientTable.email, email.toLowerCase().trim()))
+      // Case-insensitive match: stored emails may be mixed-case, so compare both
+      // sides lower-cased rather than relying on the stored value already being
+      // normalised. Otherwise a real account returns "email does not exist".
+      .where(sql`lower(${clientTable.email}) = ${email.toLowerCase().trim()}`)
       .limit(1);
     return row;
   },

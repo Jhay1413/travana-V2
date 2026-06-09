@@ -13,6 +13,13 @@ export const noteController = {
     return successResponse(res, notes, "Notes retrieved successfully");
   }),
 
+  listByClientId: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const clientId = req.params.clientId as string;
+    const notes = await noteService.listByClientId(clientId, scope);
+    return successResponse(res, notes, "Notes retrieved successfully");
+  }),
+
   createNote: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const agentId = getUserId(req);

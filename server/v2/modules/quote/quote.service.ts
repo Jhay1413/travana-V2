@@ -2,6 +2,8 @@ import { newQuoteRepository } from "./quote.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { quoteImageRepository } from "./quote-image.repository";
 import { tagService } from "../tag/tag.service";
+import { taskService } from "../task/task.service";
+import { enquiryTableRepository } from "../enquiry/enquiry.repository";
 import { destinationGuruService } from "../destination-guru/destination-guru.service";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
@@ -203,6 +205,17 @@ export const newQuoteService = {
 
     if (txn.status !== 'on_quote' && txn.status !== 'on_booking') {
       await transactionRepository.update(txn.id, { status: 'on_quote' });
+
+      // Converting an enquiry into a quote: close out the enquiry's open tasks.
+      // Best-effort — must never block quote creation.
+      try {
+        const enquiry = await enquiryTableRepository.findByTransactionId(txn.id);
+        if (enquiry) {
+          await taskService.completeByEntity("enquiry", enquiry.id);
+        }
+      } catch (err) {
+        console.error('COMPLETE ENQUIRY TASKS (quote.service) - error:', err);
+      }
     }
 
     if (outboundFlight) await newQuoteRepository.upsertFlightByType(q.id, "outbound", outboundFlight, 0);

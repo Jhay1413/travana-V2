@@ -17,6 +17,8 @@ import {
   startOfMonthUtc,
 } from '../platform-admin/platform-admin-credits.repository';
 import { getPublicBaseUrl } from '../../utils/public-url';
+import bcrypt from 'bcryptjs';
+import { neonClientRepository } from '../neon-client/neon-client.repository';
 import { userRepository } from '../user/user.repository';
 import { getUserId } from '../../utils/get-user-id';
 import { getScope, hasAnyRole, type OrgRole, type Scope } from '../../utils/scope';
@@ -59,7 +61,7 @@ const DEFAULT_TEMPLATES = [
   { name: 'Booking Confirmation', category: 'booking_confirmation' as const, body: 'Hi {{first_name}}, your booking to {{destination}} is confirmed! Reference: {{hays_ref}}. We\'ll be in touch with next steps. - Tina\'s Travel', autoTrigger: 'on_booking_create' as const },
   { name: 'Tickets Ready', category: 'tickets_ready' as const, body: 'Hi {{first_name}}, great news - your tickets for {{destination}} are ready! Log in to your portal to view: {{portal_link}} - Tina\'s Travel', autoTrigger: 'manual' as const },
   { name: 'Portal Login', category: 'portal_login' as const, body: 'Hi {{first_name}}, your client portal is ready. Log in here: {{portal_link}} (use your email and the PIN we shared). - Tina\'s Travel', autoTrigger: 'on_pin_set' as const },
-  { name: 'Quote Link', category: 'quote_link' as const, body: "Hi {{first_name}}, here's the link for your quote: {{quote_url}} - Tina's Travel", autoTrigger: 'manual' as const },
+  { name: 'Quote Link', category: 'quote_link' as const, body: "Hi {{first_name}}, your quote is ready. View it here: {{quote_url}} (you'll be asked to log in to your portal). - Tina's Travel", autoTrigger: 'manual' as const },
 ];
 
 /** Seed the default template set for a single org if any are missing. */
@@ -118,14 +120,44 @@ function buildPortalLink() {
 }
 
 function buildQuoteUrl(token: string): string {
-  return `${getPublicBaseUrl()}/view-quote/${token}`;
+  // Portal quote view (requires the client to log into the portal), not the
+  // public /view-quote page. Pairs with the portal_email/portal_pin merge
+  // fields so the SMS gives the client both the link and how to sign in.
+  return `${getPublicBaseUrl()}/portal/quote/${token}`;
 }
 
-async function buildContextForClient(client: any) {
+/** Random 4-digit portal PIN, zero-padded (matches the /^\d{4}$/ login rule). */
+function generatePin(): string {
+  return String(crypto.randomInt(0, 10000)).padStart(4, '0');
+}
+
+async function buildContextForClient(client: any, opts?: { ensurePin?: boolean }) {
   const ctx: any = {
     first_name: client.firstName, last_name: client.surename, portal_link: buildPortalLink(),
     company_name: "Tina's Travel", destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
+    portal_email: '', portal_pin: '', portal_credentials: '',
   };
+
+  // Portal login credentials. The email is plaintext and always available; the
+  // PIN is bcrypt-hashed in the DB and unrecoverable, so the only PIN we can
+  // ever put in a message is one we mint right here. Per product decision we
+  // only mint when the client has none yet (first-time setup) — clients who
+  // already have a PIN keep it and are pointed at "the PIN we shared".
+  const email = (client.email ?? '').trim();
+  ctx.portal_email = email;
+  if (opts?.ensurePin && email && !client.portalPin) {
+    try {
+      const pin = generatePin();
+      const hash = await bcrypt.hash(pin, 10);
+      await neonClientRepository.setPortalPin(client.id, hash);
+      ctx.portal_pin = pin;
+    } catch { /* best-effort: fall back to the "PIN we shared" wording below */ }
+  }
+  if (email) {
+    ctx.portal_credentials = ctx.portal_pin
+      ? `your email ${email} and PIN ${ctx.portal_pin}`
+      : `your email ${email} and the PIN we shared`;
+  }
   try {
     const bookingRow = await smsRepository.findLatestActiveBookingForClient(client.id);
     if (bookingRow) {
@@ -207,19 +239,34 @@ export const smsController = {
     const { user, userId } = await requireSenderAccess(req);
     const scope = getScope(req);
     const orgId = effectiveOrgId(scope);
-    const { templateId, bodyOverride, recipients, triggerSource, confirmBulk } = req.body as any;
+    const { templateId, bodyOverride, recipients, triggerSource, confirmBulk, category } = req.body as any;
 
     let template: { id?: string; name?: string; body: string } | null = null;
     if (templateId) {
       const t = await smsRepository.findTemplate(templateId, orgId);
       if (!t) throw new AppError('Template not found', 404);
       template = { id: t.id, name: t.name, body: t.body };
+    } else if (category && !bodyOverride) {
+      // Resolve by category: use the org's own template if it has one, else
+      // fall back to the built-in default body so the send still works for
+      // orgs that never customised (or deleted) that template.
+      const own = orgId ? await smsRepository.findTemplateByCategory(orgId, category) : null;
+      if (own) {
+        template = { id: own.id, name: own.name, body: own.body };
+      } else {
+        const def = DEFAULT_TEMPLATES.find((d) => d.category === category);
+        if (def) template = { name: def.name, body: def.body };
+      }
     }
     const baseBody = bodyOverride ?? template?.body;
-    if (!baseBody) throw new AppError('templateId or bodyOverride is required', 400);
+    if (!baseBody) throw new AppError('templateId, category, or bodyOverride is required', 400);
+
+    // Only mint a first-time PIN when the message actually asks for one, so a
+    // generic send (e.g. Weekly Deals) never sets PINs as a side effect.
+    const wantsPin = /\{\{?\s*portal_(?:pin|credentials)\s*\}?\}/.test(baseBody);
 
     pruneIdempotencyCache();
-    const idemKey = buildIdempotencyKey({ templateId: templateId ?? null, bodyOverride: bodyOverride ?? null, recipients }, userId);
+    const idemKey = buildIdempotencyKey({ templateId: templateId ?? null, category: category ?? null, bodyOverride: bodyOverride ?? null, recipients }, userId);
     const lastFired = recentSendKeys.get(idemKey);
     if (lastFired && Date.now() - lastFired < IDEMPOTENCY_WINDOW_MS) {
       throw new AppError('Duplicate send blocked. Wait 60 seconds before re-sending the same payload.', 429);
@@ -236,7 +283,7 @@ export const smsController = {
     const results: any[] = [];
 
     for (const c of clients) {
-      const ctx = await buildContextForClient(c);
+      const ctx = await buildContextForClient(c, { ensurePin: wantsPin });
       const body = mergeTemplate(baseBody, ctx);
       const phone = normalisePhone(c.phoneNumber);
       const clientName = `${c.firstName ?? ''} ${c.surename ?? ''}`.trim();

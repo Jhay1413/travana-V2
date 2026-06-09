@@ -29,7 +29,7 @@ export function useQuoteShare(quoteId: string) {
 
   async function copyShareLink() {
     if (!shareToken) return;
-    await navigator.clipboard.writeText(`${window.location.origin}/view-quote/${shareToken}`);
+    await navigator.clipboard.writeText(`${window.location.origin}/portal/quote/${shareToken}`);
     setShareCopied(true);
     toast({ title: "Link copied to clipboard!" });
     setTimeout(() => setShareCopied(false), 2000);

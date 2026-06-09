@@ -51,6 +51,8 @@ export type SmsRecipientFilter =
 
 export interface SendSmsInput {
   templateId?: string;
+  /** Resolve the template by category server-side (org's own, else default). */
+  category?: SmsTemplateCategory;
   bodyOverride?: string;
   recipients: SmsRecipientFilter;
   triggerSource?: string;
