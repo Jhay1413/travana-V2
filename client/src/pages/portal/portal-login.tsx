@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, Sparkles, Fingerprint, Eye, EyeOff } from "lucide-react";
-import { usePortalLogin, setPortalToken, getPortalToken, usePortalBiometricLogin } from "@/hooks/use-portal-api";
+import { usePortalLogin, setPortalToken, getPortalToken, usePortalBiometricLogin, portalMagicLogin } from "@/hooks/use-portal-api";
 import { useLocation } from "wouter";
 
 function GlassCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -68,10 +68,27 @@ export default function PortalLoginPage() {
     }
 
     const params = new URLSearchParams(window.location.search);
+
+    // Short single-use code from an SMS quote link → exchange for a session.
+    const mt = params.get("mt");
+    if (mt) {
+      portalMagicLogin(mt)
+        .then((data) => {
+          localStorage.setItem("portal_client_id", data.clientId);
+          setLocation(getRedirectTarget());
+        })
+        .catch((e) =>
+          setError(e?.message || "This link has expired. Please ask your agent to resend."),
+        );
+      return;
+    }
+
+    // Legacy: a full token in the URL (kept for any links already sent out).
     const urlToken = params.get("token");
     if (urlToken) {
       setPortalToken(urlToken);
       setLocation(getRedirectTarget());
+      return;
     }
 
     const savedClientId = localStorage.getItem("portal_client_id");

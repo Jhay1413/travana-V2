@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { Check, Loader2, Lock, Shield, X } from "lucide-react";
+import { Check, Loader2, Lock, Send, Shield, X } from "lucide-react";
+import { useSendSms } from "@/hooks/mutations/use-sms-mutations";
+import { useToast } from "@/hooks/use-toast";
 
 export function PortalPinSection({ clientId }: { clientId: string }) {
+  const { toast } = useToast();
+  const sendSms = useSendSms();
   const [hasPin, setHasPin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pin, setPin] = useState("");
@@ -35,6 +39,46 @@ export function PortalPinSection({ clientId }: { clientId: string }) {
       }
     } catch {}
     setSaving(false);
+  };
+
+  const handleSendLink = () => {
+    sendSms.mutate(
+      {
+        // Server resolves the org's own "Portal Login" template if it has one,
+        // otherwise falls back to the built-in default body.
+        category: "portal_login",
+        recipients: { mode: "client", clientId },
+        triggerSource: "manual.portal_link",
+      },
+      {
+        onSuccess: (data) => {
+          if (data.sent > 0) {
+            toast({ title: "Portal link sent via SMS" });
+          } else if (data.skipped > 0) {
+            const reason = data.results[0]?.status ?? "skipped";
+            toast({
+              title: "Not sent",
+              description:
+                reason === "skipped_optout"
+                  ? "Client has opted out of SMS."
+                  : reason === "skipped_no_phone"
+                    ? "Client has no phone number on file."
+                    : "Client skipped.",
+              variant: "destructive",
+            });
+          } else {
+            const err = data.results[0]?.error ?? "Send failed";
+            toast({ title: "Send failed", description: err, variant: "destructive" });
+          }
+        },
+        onError: (e: any) =>
+          toast({
+            title: "Send failed",
+            description: e?.response?.data?.message ?? e.message,
+            variant: "destructive",
+          }),
+      },
+    );
   };
 
   const handleRemovePin = async () => {
@@ -145,6 +189,19 @@ export function PortalPinSection({ clientId }: { clientId: string }) {
             <p className="text-xs text-black/40 mt-1">Client can log in with their email + this PIN</p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleSendLink}
+              disabled={sendSms.isPending}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-40 transition-colors"
+              data-testid="button-send-portal-link"
+            >
+              {sendSms.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Send className="h-3 w-3" />
+              )}
+              Send link
+            </button>
             <button
               onClick={() => setEditing(true)}
               className="px-3 py-1.5 text-xs font-medium rounded-lg bg-black/10 text-black/70 hover:bg-black/20 transition-colors"

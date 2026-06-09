@@ -1,0 +1,1 @@
+ALTER TABLE "client_table" ADD COLUMN "must_change_pin" boolean DEFAULT false NOT NULL;

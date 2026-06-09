@@ -83,10 +83,12 @@ export const neonClientRepository = {
     return row;
   },
 
-  async setPortalPin(id: string, hash: string | null): Promise<void> {
+  async setPortalPin(id: string, hash: string | null, opts?: { mustChange?: boolean }): Promise<void> {
+    // Default the flag to false: staff-set / client-chosen PINs are final, only
+    // a system-seeded default (mustChange: true) requires a forced change.
     await db
       .update(clientTable)
-      .set({ portalPin: hash })
+      .set({ portalPin: hash, mustChangePin: opts?.mustChange ?? false })
       .where(eq(clientTable.id, id));
   },
 

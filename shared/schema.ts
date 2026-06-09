@@ -181,6 +181,9 @@ export const clientTable = pgTable("client_table", {
   avatarUrl: varchar(),
   badge: varchar(),
   portalPin: varchar("portal_pin"),
+  // True when portalPin is a system-seeded default (e.g. from a quote SMS) that
+  // the client must replace on first portal entry.
+  mustChangePin: boolean("must_change_pin").notNull().default(false),
   createdAt: timestamp().notNull().defaultNow(),
   referrerId: text("referrerId").references(() => user.id, { onDelete: "set null" }),
   orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
@@ -1912,6 +1915,19 @@ export const webauthnCredentials = pgTable("webauthn_credentials", {
   deviceName: varchar("device_name", { length: 255 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+// Short, single-use codes that ride in an SMS link (e.g. a quote share) and are
+// exchanged once for a real portal session — keeps the URL short and avoids a
+// long-lived JWT sitting in the message.
+export const portalLoginTokens = pgTable("portal_login_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: varchar("code", { length: 16 }).notNull().unique(),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  used: boolean("used").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+export type PortalLoginTokenRow = typeof portalLoginTokens.$inferSelect;
 
 // =====================================================================
 // SMS Notifications

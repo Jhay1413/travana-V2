@@ -16,6 +16,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { getUserId } from "../utils/get-user-id";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
+import { portalLoginTokenRepository } from "../v2/modules/portal/portal-login-token.repository";
 import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
 import { pushNotificationService } from "../services/push-notification.service";
 import { tagService } from "../services/tag.service";
@@ -26,6 +27,10 @@ const JWT_SECRET = (() => {
   const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || "";
   return crypto.createHash("sha256").update("portal-jwt-" + dbUrl).digest("hex").slice(0, 64);
 })();
+
+// Keep in sync with DEFAULT_PORTAL_PIN in server/v2/modules/portal/portal-auth.ts,
+// where the quote-SMS flow seeds this default and flags must_change_pin.
+const DEFAULT_PORTAL_PIN = "1234";
 
 interface PortalTokenPayload {
   clientId: string;
@@ -65,7 +70,7 @@ portalRouter.post("/login", async (req: Request, res: Response) => {
     }
 
     const [client] = await db
-      .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, portalPin: clientTable.portalPin })
+      .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, portalPin: clientTable.portalPin, mustChangePin: clientTable.mustChangePin })
       .from(clientTable)
       .where(eq(clientTable.email, email.toLowerCase().trim()))
       .limit(1);
@@ -82,6 +87,14 @@ portalRouter.post("/login", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Incorrect PIN" });
     }
 
+    // Hardening: a freshly seeded default PIN is meant to be used once, via the
+    // signed magic link in the client's SMS — not typed on this form. Blocking
+    // it here closes the window where anyone knowing the email could log in with
+    // the default before the real client sets their own PIN.
+    if (client.mustChangePin && pin === DEFAULT_PORTAL_PIN) {
+      return res.status(403).json({ error: "Please open your portal using the link we texted you, then choose your own PIN." });
+    }
+
     const token = signPortalToken({ clientId: client.id, email: client.email || "" });
 
     const creds = await db
@@ -95,10 +108,64 @@ portalRouter.post("/login", async (req: Request, res: Response) => {
       clientId: client.id,
       firstName: client.firstName,
       hasBiometric: creds.length > 0,
+      mustChangePin: client.mustChangePin,
     });
   } catch (err: any) {
     console.error("Portal login error:", err);
     res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// Exchange a short single-use code (from an SMS quote link) for a portal
+// session. Keeps the SMS URL short and the long-lived token out of the message.
+portalRouter.post("/magic-login", async (req: Request, res: Response) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: "Code required" });
+
+    const redeemed = await portalLoginTokenRepository.redeem(String(code));
+    if (!redeemed) {
+      return res.status(401).json({ error: "This link has expired or was already used. Please ask your agent to resend." });
+    }
+
+    const [client] = await db
+      .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, mustChangePin: clientTable.mustChangePin })
+      .from(clientTable)
+      .where(eq(clientTable.id, redeemed.clientId))
+      .limit(1);
+    if (!client) return res.status(401).json({ error: "Account not found" });
+
+    const token = signPortalToken({ clientId: client.id, email: client.email || "" });
+    res.json({
+      token,
+      clientId: client.id,
+      firstName: client.firstName,
+      mustChangePin: client.mustChangePin,
+    });
+  } catch (err: any) {
+    console.error("Portal magic-login error:", err);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// Change the logged-in client's PIN and clear the must-change flag. Used by the
+// forced "set your PIN" gate after a magic-link auto-login.
+portalRouter.post("/change-pin", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { newPin } = req.body;
+    if (!newPin || !/^\d{4}$/.test(newPin)) {
+      return res.status(400).json({ error: "Valid 4-digit PIN required" });
+    }
+    if (newPin === DEFAULT_PORTAL_PIN) {
+      return res.status(400).json({ error: "Please choose a PIN other than the default." });
+    }
+    const hash = await bcrypt.hash(newPin, 10);
+    await db.update(clientTable).set({ portalPin: hash, mustChangePin: false }).where(eq(clientTable.id, clientId));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Portal change-pin error:", err);
+    res.status(500).json({ error: "Failed to change PIN" });
   }
 });
 
@@ -479,6 +546,7 @@ portalRouter.get("/user", portalAuth, async (req: Request, res: Response) => {
         email: clientTable.email,
         phone: clientTable.phoneNumber,
         avatarUrl: clientTable.avatarUrl,
+        mustChangePin: clientTable.mustChangePin,
       })
       .from(clientTable)
       .where(eq(clientTable.id, clientId))
@@ -968,7 +1036,8 @@ portalStaffRouter.post("/set-pin", requireStaffAuth, async (req: Request, res: R
     }
 
     const hash = await bcrypt.hash(pin, 10);
-    await db.update(clientTable).set({ portalPin: hash }).where(eq(clientTable.id, clientId));
+    // A staff-chosen PIN is final, so clear any pending forced-change flag.
+    await db.update(clientTable).set({ portalPin: hash, mustChangePin: false }).where(eq(clientTable.id, clientId));
     res.json({ success: true });
   } catch (err: any) {
     console.error("Set PIN error:", err);
@@ -980,11 +1049,31 @@ portalStaffRouter.post("/remove-pin", requireStaffAuth, async (req: Request, res
   try {
     const { clientId } = req.body;
     if (!clientId) return res.status(400).json({ error: "clientId required" });
-    await db.update(clientTable).set({ portalPin: null }).where(eq(clientTable.id, clientId));
+    await db.update(clientTable).set({ portalPin: null, mustChangePin: false }).where(eq(clientTable.id, clientId));
     res.json({ success: true });
   } catch (err: any) {
     console.error("Remove PIN error:", err);
     res.status(500).json({ error: "Failed to remove PIN" });
+  }
+});
+
+// Ownership guard: tells the portal whether the logged-in client owns the quote
+// behind this share token, so the UI can show it or bounce them away.
+portalRouter.get("/quote/:token/owns", portalAuth, async (req: Request, res: Response) => {
+  try {
+    const { clientId } = (req as any).portalClient;
+    const { token } = req.params;
+    const [row] = await db
+      .select({ ownerId: transaction.client_id })
+      .from(quote)
+      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(eq(quote.quote_token, String(token)))
+      .limit(1);
+    if (!row) return res.json({ found: false, owns: false });
+    return res.json({ found: true, owns: row.ownerId === clientId });
+  } catch (err: any) {
+    console.error("Portal quote ownership check error:", err);
+    res.status(500).json({ error: "Failed to check quote access" });
   }
 });
 

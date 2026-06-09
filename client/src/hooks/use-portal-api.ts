@@ -45,6 +45,8 @@ export interface PortalUser {
   email: string;
   phone?: string;
   avatarUrl?: string;
+  /** True when the client is still on a system-seeded default PIN. */
+  mustChangePin?: boolean;
 }
 
 export interface PortalQuote {
@@ -287,9 +289,38 @@ export function useSendMessage() {
   });
 }
 
+/** Exchange a short single-use code (from an SMS quote link) for a session. */
+export async function portalMagicLogin(
+  code: string,
+): Promise<{ token: string; clientId: string; firstName: string; mustChangePin?: boolean }> {
+  const res = await fetch("/api/portal/magic-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Login error: ${res.status}`);
+  }
+  const data = await res.json();
+  if (data?.token) setPortalToken(data.token);
+  return data;
+}
+
+export function useChangePortalPin() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean }, Error, { newPin: string }>({
+    mutationFn: ({ newPin }) =>
+      portalFetch("/api/portal/change-pin", { method: "POST", body: JSON.stringify({ newPin }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: portalKeys.user });
+    },
+  });
+}
+
 export function usePortalLogin() {
   return useMutation<
-    { token: string; clientId: string; firstName: string; hasBiometric: boolean },
+    { token: string; clientId: string; firstName: string; hasBiometric: boolean; mustChangePin?: boolean },
     Error,
     { email: string; pin: string }
   >({

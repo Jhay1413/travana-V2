@@ -17,6 +17,8 @@ import {
   startOfMonthUtc,
 } from '../platform-admin/platform-admin-credits.repository';
 import { getPublicBaseUrl } from '../../utils/public-url';
+import { DEFAULT_PORTAL_PIN, MAGIC_LINK_TTL_MS } from '../portal/portal-auth';
+import { portalLoginTokenRepository } from '../portal/portal-login-token.repository';
 import bcrypt from 'bcryptjs';
 import { neonClientRepository } from '../neon-client/neon-client.repository';
 import { userRepository } from '../user/user.repository';
@@ -61,7 +63,7 @@ const DEFAULT_TEMPLATES = [
   { name: 'Booking Confirmation', category: 'booking_confirmation' as const, body: 'Hi {{first_name}}, your booking to {{destination}} is confirmed! Reference: {{hays_ref}}. We\'ll be in touch with next steps. - Tina\'s Travel', autoTrigger: 'on_booking_create' as const },
   { name: 'Tickets Ready', category: 'tickets_ready' as const, body: 'Hi {{first_name}}, great news - your tickets for {{destination}} are ready! Log in to your portal to view: {{portal_link}} - Tina\'s Travel', autoTrigger: 'manual' as const },
   { name: 'Portal Login', category: 'portal_login' as const, body: 'Hi {{first_name}}, your client portal is ready. Log in here: {{portal_link}} (use your email and the PIN we shared). - Tina\'s Travel', autoTrigger: 'on_pin_set' as const },
-  { name: 'Quote Link', category: 'quote_link' as const, body: "Hi {{first_name}}, your quote is ready. View it here: {{quote_url}} (you'll be asked to log in to your portal). - Tina's Travel", autoTrigger: 'manual' as const },
+  { name: 'Quote Link', category: 'quote_link' as const, body: "Hi {{first_name}}, your quote is ready. Tap to view it instantly: {{quote_url}} (you'll set a secure PIN on first visit). - Tina's Travel", autoTrigger: 'manual' as const },
 ];
 
 /** Seed the default template set for a single org if any are missing. */
@@ -126,12 +128,24 @@ function buildQuoteUrl(token: string): string {
   return `${getPublicBaseUrl()}/portal/quote/${token}`;
 }
 
+/**
+ * Magic-login quote link: a short single-use code rides in the URL so tapping it
+ * logs the client straight into the portal and lands on their quote — no typing
+ * a PIN, and no long-lived token sitting in the SMS. The portal login page
+ * exchanges `?mt=` for a real session.
+ */
+async function buildAutoLoginQuoteUrl(clientId: string, token: string): Promise<string> {
+  const code = await portalLoginTokenRepository.create(clientId, MAGIC_LINK_TTL_MS);
+  const next = encodeURIComponent(`/portal/quote/${token}`);
+  return `${getPublicBaseUrl()}/portal/login?mt=${code}&next=${next}`;
+}
+
 /** Random 4-digit portal PIN, zero-padded (matches the /^\d{4}$/ login rule). */
 function generatePin(): string {
   return String(crypto.randomInt(0, 10000)).padStart(4, '0');
 }
 
-async function buildContextForClient(client: any, opts?: { ensurePin?: boolean }) {
+async function buildContextForClient(client: any, opts?: { ensurePin?: boolean; autoLoginQuote?: boolean }) {
   const ctx: any = {
     first_name: client.firstName, last_name: client.surename, portal_link: buildPortalLink(),
     company_name: "Tina's Travel", destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
@@ -140,12 +154,21 @@ async function buildContextForClient(client: any, opts?: { ensurePin?: boolean }
 
   // Portal login credentials. The email is plaintext and always available; the
   // PIN is bcrypt-hashed in the DB and unrecoverable, so the only PIN we can
-  // ever put in a message is one we mint right here. Per product decision we
-  // only mint when the client has none yet (first-time setup) — clients who
-  // already have a PIN keep it and are pointed at "the PIN we shared".
+  // ever put in a message is one we mint right here. We only ever seed when the
+  // client has none yet (first-time setup); clients who already have a PIN keep
+  // it and are pointed at "the PIN we shared".
   const email = (client.email ?? '').trim();
   ctx.portal_email = email;
-  if (opts?.ensurePin && email && !client.portalPin) {
+  if (opts?.autoLoginQuote && !client.portalPin) {
+    // Quote auto-login flow: seed a known default PIN and flag it for a forced
+    // change on first entry. The SMS link itself carries a signed token, so the
+    // client never needs to type this; it's only a cross-device fallback.
+    try {
+      const hash = await bcrypt.hash(DEFAULT_PORTAL_PIN, 10);
+      await neonClientRepository.setPortalPin(client.id, hash, { mustChange: true });
+      ctx.portal_pin = DEFAULT_PORTAL_PIN;
+    } catch { /* best-effort */ }
+  } else if (opts?.ensurePin && email && !client.portalPin) {
     try {
       const pin = generatePin();
       const hash = await bcrypt.hash(pin, 10);
@@ -177,7 +200,11 @@ async function buildContextForClient(client: any, opts?: { ensurePin?: boolean }
   } catch { /* best-effort */ }
   try {
     const quoteRow = await smsRepository.findLatestTokenedQuoteForClient(client.id);
-    if (quoteRow?.token) ctx.quote_url = buildQuoteUrl(quoteRow.token);
+    if (quoteRow?.token) {
+      ctx.quote_url = opts?.autoLoginQuote
+        ? await buildAutoLoginQuoteUrl(client.id, quoteRow.token)
+        : buildQuoteUrl(quoteRow.token);
+    }
   } catch { /* best-effort */ }
   return ctx;
 }
@@ -264,6 +291,9 @@ export const smsController = {
     // Only mint a first-time PIN when the message actually asks for one, so a
     // generic send (e.g. Weekly Deals) never sets PINs as a side effect.
     const wantsPin = /\{\{?\s*portal_(?:pin|credentials)\s*\}?\}/.test(baseBody);
+    // A message carrying the quote link gets the magic-login treatment: seed a
+    // default PIN (forced-change) and embed a signed token so the tap logs in.
+    const wantsQuoteUrl = /\{\{?\s*quote_url\s*\}?\}/.test(baseBody);
 
     pruneIdempotencyCache();
     const idemKey = buildIdempotencyKey({ templateId: templateId ?? null, category: category ?? null, bodyOverride: bodyOverride ?? null, recipients }, userId);
@@ -283,7 +313,7 @@ export const smsController = {
     const results: any[] = [];
 
     for (const c of clients) {
-      const ctx = await buildContextForClient(c, { ensurePin: wantsPin });
+      const ctx = await buildContextForClient(c, { ensurePin: wantsPin, autoLoginQuote: wantsQuoteUrl });
       const body = mergeTemplate(baseBody, ctx);
       const phone = normalisePhone(c.phoneNumber);
       const clientName = `${c.firstName ?? ''} ${c.surename ?? ''}`.trim();

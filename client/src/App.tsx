@@ -81,6 +81,7 @@ import PortalMessagesPage from "@/pages/portal/portal-messages";
 import PortalQuoteViewPage from "@/pages/portal/portal-quote-view";
 import PortalTagsPage from "@/pages/portal/portal-tags";
 import PortalReferralsPage from "@/pages/portal/portal-referrals";
+import { PortalPinGate } from "@/pages/portal/portal-pin-gate";
 import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
@@ -176,18 +177,20 @@ function AppRouter() {
 
   if (location === "/portal" || location.startsWith("/portal/")) {
     return (
-      <Switch>
-        <Route path="/portal/login" component={PortalLoginPage} />
-        <Route path="/portal/tags" component={PortalTagsPage} />
-        <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
-        <Route path="/portal/quotes" component={PortalQuotesPage} />
-        <Route path="/portal/bookings" component={PortalBookingsPage} />
-        <Route path="/portal/deals" component={PortalDealsPage} />
-        <Route path="/portal/messages" component={PortalMessagesPage} />
-        <Route path="/portal/referrals" component={PortalReferralsPage} />
-        <Route path="/portal" component={PortalHomePage} />
-        <Route path="/portal/:rest*" component={PortalHomePage} />
-      </Switch>
+      <PortalPinGate>
+        <Switch>
+          <Route path="/portal/login" component={PortalLoginPage} />
+          <Route path="/portal/tags" component={PortalTagsPage} />
+          <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
+          <Route path="/portal/quotes" component={PortalQuotesPage} />
+          <Route path="/portal/bookings" component={PortalBookingsPage} />
+          <Route path="/portal/deals" component={PortalDealsPage} />
+          <Route path="/portal/messages" component={PortalMessagesPage} />
+          <Route path="/portal/referrals" component={PortalReferralsPage} />
+          <Route path="/portal" component={PortalHomePage} />
+          <Route path="/portal/:rest*" component={PortalHomePage} />
+        </Switch>
+      </PortalPinGate>
     );
   }
 

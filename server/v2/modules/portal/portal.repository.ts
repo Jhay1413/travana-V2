@@ -192,6 +192,7 @@ export const portalRepository = {
     email: string | null;
     firstName: string | null;
     portalPin: string | null;
+    mustChangePin: boolean;
   } | undefined> {
     const [row] = await db
       .select({
@@ -199,6 +200,7 @@ export const portalRepository = {
         email: clientTable.email,
         firstName: clientTable.firstName,
         portalPin: clientTable.portalPin,
+        mustChangePin: clientTable.mustChangePin,
       })
       .from(clientTable)
       // Case-insensitive match: stored emails may be mixed-case, so compare both
@@ -237,6 +239,7 @@ export const portalRepository = {
     email: string | null;
     phone: string | null;
     avatarUrl: string | null;
+    mustChangePin: boolean;
   } | undefined> {
     const [row] = await db
       .select({
@@ -245,6 +248,7 @@ export const portalRepository = {
         email: clientTable.email,
         phone: clientTable.phoneNumber,
         avatarUrl: clientTable.avatarUrl,
+        mustChangePin: clientTable.mustChangePin,
       })
       .from(clientTable)
       .where(eq(clientTable.id, clientId))
