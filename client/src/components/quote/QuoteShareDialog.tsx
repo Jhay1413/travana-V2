@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Check, Copy, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,7 @@ interface QuoteShareDialogProps {
   shareToken: string | null;
   shareCopied: boolean;
   shareLoading: boolean;
-  onCopy: () => void;
+  onCopy: (opts?: { silent?: boolean }) => void;
   clientId?: string;
 }
 
@@ -31,10 +32,67 @@ export function QuoteShareDialog({
 }: QuoteShareDialogProps) {
   const { toast } = useToast();
   const sendSms = useSendSms();
+  // Both buttons drive the same mutation, so track which one fired to show the
+  // spinner only on the button the user actually pressed.
+  const [sendingAction, setSendingAction] = useState<"public" | "sms" | null>(null);
   const canSend = !!clientId && !!shareToken && !sendSms.isPending;
+
+  const smsResultToast = (data: { sent: number; skipped: number; results: any[] }, sentTitle: string) => {
+    if (data.sent > 0) {
+      toast({ title: sentTitle });
+    } else if (data.skipped > 0) {
+      const reason = data.results[0]?.status ?? "skipped";
+      toast({
+        title: "Not sent",
+        description:
+          reason === "skipped_optout"
+            ? "Client has opted out of SMS."
+            : reason === "skipped_no_phone"
+            ? "Client has no phone number on file."
+            : "Client skipped.",
+        variant: "destructive",
+      });
+    } else {
+      const err = data.results[0]?.error ?? "Send failed";
+      toast({ title: "Send failed", description: err, variant: "destructive" });
+    }
+  };
+
+  const smsErrorToast = (e: any) =>
+    toast({
+      title: "Send failed",
+      description: e?.response?.data?.message ?? e.message,
+      variant: "destructive",
+    });
+
+  // The primary "Send" button: copy the public link, and - when a client is
+  // attached - also text them that PUBLIC /view-quote link (no login/PIN).
+  // When an SMS is going out we copy silently so the only toast is the send
+  // result; with no client attached it's a plain copy-to-clipboard.
+  const handleSend = () => {
+    onCopy({ silent: !!clientId });
+    if (!clientId || sendSms.isPending) return;
+    setSendingAction("public");
+    sendSms.mutate(
+      {
+        // ASCII only - the SMS provider rejects non-GSM characters (e.g. em dash).
+        bodyOverride:
+          "Hi {{first_name}}, your quote is ready - tap to view it: {{quote_url}} - {{company_name}}",
+        publicQuoteLink: true,
+        recipients: { mode: "client", clientId },
+        triggerSource: "manual.quote_share_public",
+      },
+      {
+        onSuccess: (data) => smsResultToast(data, "Quote link sent via SMS"),
+        onError: smsErrorToast,
+        onSettled: () => setSendingAction(null),
+      },
+    );
+  };
 
   const handleSendSms = () => {
     if (!clientId) return;
+    setSendingAction("sms");
     sendSms.mutate(
       {
         // Server resolves the org's own "Quote Link" template if it has one,
@@ -44,32 +102,9 @@ export function QuoteShareDialog({
         triggerSource: "manual.quote_share",
       },
       {
-        onSuccess: (data) => {
-          if (data.sent > 0) {
-            toast({ title: "Quote link sent via SMS" });
-          } else if (data.skipped > 0) {
-            const reason = data.results[0]?.status ?? "skipped";
-            toast({
-              title: "Not sent",
-              description:
-                reason === "skipped_optout"
-                  ? "Client has opted out of SMS."
-                  : reason === "skipped_no_phone"
-                  ? "Client has no phone number on file."
-                  : "Client skipped.",
-              variant: "destructive",
-            });
-          } else {
-            const err = data.results[0]?.error ?? "Send failed";
-            toast({ title: "Send failed", description: err, variant: "destructive" });
-          }
-        },
-        onError: (e: any) =>
-          toast({
-            title: "Send failed",
-            description: e?.response?.data?.message ?? e.message,
-            variant: "destructive",
-          }),
+        onSuccess: (data) => smsResultToast(data, "Quote link sent via SMS"),
+        onError: smsErrorToast,
+        onSettled: () => setSendingAction(null),
       },
     );
   };
@@ -96,7 +131,7 @@ export function QuoteShareDialog({
               <div className="flex items-center gap-2">
                 <input
                   readOnly
-                  value={`${window.location.origin}/portal/quote/${shareToken}`}
+                  value={`${window.location.origin}/view-quote/${shareToken}`}
                   className="flex-1 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-xs text-black/70 outline-none"
                   data-testid="input-share-link"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
@@ -105,10 +140,17 @@ export function QuoteShareDialog({
                   size="sm"
                   className="h-9 rounded-xl px-4"
                   data-testid="button-copy-share-link"
-                  onClick={onCopy}
+                  onClick={handleSend}
+                  disabled={sendingAction !== null}
                 >
-                  {shareCopied ? <Check className="mr-1.5 h-3.5 w-3.5" /> : <Copy className="mr-1.5 h-3.5 w-3.5" />}
-                  {shareCopied ? "Copied" : "Copy"}
+                  {sendingAction === "public" ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : shareCopied ? (
+                    <Check className="mr-1.5 h-3.5 w-3.5" />
+                  ) : (
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {sendingAction === "public" ? "Sending…" : shareCopied ? "Sent" : "Send"}
                 </Button>
               </div>
               {clientId && (
@@ -124,12 +166,12 @@ export function QuoteShareDialog({
                     disabled={!canSend}
                     data-testid="button-send-quote-sms"
                   >
-                    {sendSms.isPending ? (
+                    {sendingAction === "sms" ? (
                       <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                     ) : (
                       <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
                     )}
-                    {sendSms.isPending ? "Sending…" : "Send via SMS"}
+                    {sendingAction === "sms" ? "Sending…" : "Send via SMS"}
                   </Button>
                 </div>
               )}

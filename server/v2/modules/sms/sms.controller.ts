@@ -128,6 +128,13 @@ function buildQuoteUrl(token: string): string {
   return `${getPublicBaseUrl()}/portal/quote/${token}`;
 }
 
+function buildPublicQuoteUrl(token: string): string {
+  // Public quote view — no login/PIN required; anyone with the link can view
+  // the quote. Used when the sender explicitly shares the public link instead
+  // of the portal one, so we never seed a PIN or magic-login token for it.
+  return `${getPublicBaseUrl()}/view-quote/${token}`;
+}
+
 /**
  * Magic-login quote link: a short single-use code rides in the URL so tapping it
  * logs the client straight into the portal and lands on their quote — no typing
@@ -145,7 +152,7 @@ function generatePin(): string {
   return String(crypto.randomInt(0, 10000)).padStart(4, '0');
 }
 
-async function buildContextForClient(client: any, opts?: { ensurePin?: boolean; autoLoginQuote?: boolean }) {
+async function buildContextForClient(client: any, opts?: { ensurePin?: boolean; autoLoginQuote?: boolean; publicQuoteLink?: boolean }) {
   const ctx: any = {
     first_name: client.firstName, last_name: client.surename, portal_link: buildPortalLink(),
     company_name: "Tina's Travel", destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
@@ -201,7 +208,9 @@ async function buildContextForClient(client: any, opts?: { ensurePin?: boolean; 
   try {
     const quoteRow = await smsRepository.findLatestTokenedQuoteForClient(client.id);
     if (quoteRow?.token) {
-      ctx.quote_url = opts?.autoLoginQuote
+      ctx.quote_url = opts?.publicQuoteLink
+        ? buildPublicQuoteUrl(quoteRow.token)
+        : opts?.autoLoginQuote
         ? await buildAutoLoginQuoteUrl(client.id, quoteRow.token)
         : buildQuoteUrl(quoteRow.token);
     }
@@ -266,7 +275,8 @@ export const smsController = {
     const { user, userId } = await requireSenderAccess(req);
     const scope = getScope(req);
     const orgId = effectiveOrgId(scope);
-    const { templateId, bodyOverride, recipients, triggerSource, confirmBulk, category } = req.body as any;
+    const { templateId, bodyOverride, recipients, triggerSource, confirmBulk, category, publicQuoteLink } = req.body as any;
+    const usePublicQuoteLink = publicQuoteLink === true;
 
     let template: { id?: string; name?: string; body: string } | null = null;
     if (templateId) {
@@ -293,7 +303,8 @@ export const smsController = {
     const wantsPin = /\{\{?\s*portal_(?:pin|credentials)\s*\}?\}/.test(baseBody);
     // A message carrying the quote link gets the magic-login treatment: seed a
     // default PIN (forced-change) and embed a signed token so the tap logs in.
-    const wantsQuoteUrl = /\{\{?\s*quote_url\s*\}?\}/.test(baseBody);
+    // Skipped when the caller asked for the PUBLIC link, which needs no auth.
+    const wantsQuoteUrl = !usePublicQuoteLink && /\{\{?\s*quote_url\s*\}?\}/.test(baseBody);
 
     pruneIdempotencyCache();
     const idemKey = buildIdempotencyKey({ templateId: templateId ?? null, category: category ?? null, bodyOverride: bodyOverride ?? null, recipients }, userId);
@@ -313,7 +324,7 @@ export const smsController = {
     const results: any[] = [];
 
     for (const c of clients) {
-      const ctx = await buildContextForClient(c, { ensurePin: wantsPin, autoLoginQuote: wantsQuoteUrl });
+      const ctx = await buildContextForClient(c, { ensurePin: wantsPin, autoLoginQuote: wantsQuoteUrl, publicQuoteLink: usePublicQuoteLink });
       const body = mergeTemplate(baseBody, ctx);
       const phone = normalisePhone(c.phoneNumber);
       const clientName = `${c.firstName ?? ''} ${c.surename ?? ''}`.trim();

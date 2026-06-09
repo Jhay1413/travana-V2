@@ -27,11 +27,13 @@ export function useQuoteShare(quoteId: string) {
     }
   }
 
-  async function copyShareLink() {
+  async function copyShareLink(opts?: { silent?: boolean }) {
     if (!shareToken) return;
-    await navigator.clipboard.writeText(`${window.location.origin}/portal/quote/${shareToken}`);
+    await navigator.clipboard.writeText(`${window.location.origin}/view-quote/${shareToken}`);
     setShareCopied(true);
-    toast({ title: "Link copied to clipboard!" });
+    // Silent when the caller is also sending an SMS, so the only toast the user
+    // sees is the send result rather than a confusing "copied to clipboard".
+    if (!opts?.silent) toast({ title: "Link copied to clipboard!" });
     setTimeout(() => setShareCopied(false), 2000);
   }
 

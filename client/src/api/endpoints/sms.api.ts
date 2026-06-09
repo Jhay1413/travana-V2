@@ -57,6 +57,8 @@ export interface SendSmsInput {
   recipients: SmsRecipientFilter;
   triggerSource?: string;
   confirmBulk?: boolean;
+  /** Send the PUBLIC /view-quote link instead of the portal one (no login/PIN). */
+  publicQuoteLink?: boolean;
 }
 
 export interface SendSmsResult {
