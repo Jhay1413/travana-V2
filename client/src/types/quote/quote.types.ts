@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { UpsellRecord } from "@/types/booking/booking-upsell.types";
 
 // Enriched extras — include all base type fields plus joined tour_operator_name / airport_name
 // so that EnrichedTransfer is structurally assignable to QuoteTransfer, etc.
@@ -102,6 +103,8 @@ export interface Transaction {
   created_at: string;
   enquiry?: EnquiryTable | null;
   quotes?: Quote[];
+  /** All active quotes under the transaction (primary + copies), for the pipeline card duplicate badge/dropdown. */
+  quote_variants?: Array<{ id: string; title: string | null; isQuoteCopy?: boolean | null; quote_status?: string | null }>;
   booking?: Booking | null;
   client?: { id: string; name?: string } | null;
   agent?: { id: string; name?: string } | null;
@@ -498,6 +501,7 @@ export interface EnrichedBooking extends Booking {
   passengers?: Passenger[];
   images?: DealImage[];
   hasReferral?: boolean;
+  upsells?: UpsellRecord[];
 }
 
 export interface TransactionNote {

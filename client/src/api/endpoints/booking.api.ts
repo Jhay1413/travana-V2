@@ -1,5 +1,6 @@
 import axiosClient from "../client/axios-client";
 import type { Booking } from "@/types/quote";
+import type { UpsellPayload, UpsellRecord } from "@/types/booking";
 
 export const bookingApi = {
   getAll: async (): Promise<Booking[]> => {
@@ -75,5 +76,29 @@ export const bookingApi = {
   setPrimaryImage: async (bookingId: string, imageId: string): Promise<any> => {
     const { data } = await axiosClient.patch(`/api/v2/bookings/${bookingId}/images/${imageId}/primary`);
     return data;
+  },
+
+  // ─── Upsells ────────────────────────────────────────────────────────────────
+  // Extra line items added to a booking after creation. Commission is recognised
+  // in the month the upsell was added (`added_at`), so they have their own
+  // endpoints (keeping `added_at` immutable) rather than re-stamping on a booking
+  // PATCH. Backend lands in Phase 3.
+  listUpsells: async (bookingId: string): Promise<UpsellRecord[]> => {
+    const { data } = await axiosClient.get<UpsellRecord[]>(`/api/v2/bookings/${bookingId}/upsells`);
+    return data;
+  },
+
+  createUpsell: async (bookingId: string, body: UpsellPayload): Promise<UpsellRecord> => {
+    const { data } = await axiosClient.post<UpsellRecord>(`/api/v2/bookings/${bookingId}/upsells`, body);
+    return data;
+  },
+
+  updateUpsell: async (upsellId: string, body: Partial<UpsellPayload>): Promise<UpsellRecord> => {
+    const { data } = await axiosClient.patch<UpsellRecord>(`/api/v2/upsells/${upsellId}`, body);
+    return data;
+  },
+
+  removeUpsell: async (upsellId: string): Promise<void> => {
+    await axiosClient.delete(`/api/v2/upsells/${upsellId}`);
   },
 };

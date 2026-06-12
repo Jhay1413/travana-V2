@@ -10,7 +10,7 @@ import { useAllTasksExtended, useUserTasks } from "@/hooks/queries";
 import { useTickets, useTicketsByUser } from "@/hooks/queries/use-ticket-queries";
 import { currency } from "./helpers";
 
-export type WhatsOnFilter = "all" | "today" | "tomorrow" | "this-week" | "custom";
+export type WhatsOnFilter = "all" | "today" | "tomorrow" | "this-week" | "custom" | "overdue";
 
 export function WhatsOnTab({
   userId,
@@ -59,6 +59,9 @@ export function WhatsOnTab({
 
     switch (whatsOnFilter) {
       case "all":
+      case "overdue":
+        // Overdue list is derived separately from a dedicated query; this range
+        // is unused for it, so fall back to the widest window.
         return { start: new Date(0), end: new Date(2100, 0, 1) };
       case "today":
         return { start: today, end: tomorrow };
@@ -79,9 +82,28 @@ export function WhatsOnTab({
   const dueFrom = dateRange?.start.toISOString();
   const dueTo = dateRange?.end.toISOString();
 
+  // Stable "now" so the overdue query key doesn't change on every render.
+  // Rounded down to the minute keeps it fresh without causing refetch storms.
+  const nowIso = useMemo(() => {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    return d.toISOString();
+  }, []);
+  const nowMs = useMemo(() => new Date(nowIso).getTime(), [nowIso]);
+
+  const isTaskOverdue = (task: any) =>
+    !task.completed && !!task.dueDate && new Date(task.dueDate).getTime() < nowMs;
+
   const { data: userTasksData } = useUserTasks(allUsers ? "" : userId, {
     dueFrom,
     dueTo,
+    incomplete: true,
+  });
+  // Dedicated query for overdue tasks: everything due before now and incomplete.
+  // Drives both the "Overdue" filter list and the count badge, regardless of the
+  // currently active filter.
+  const { data: overdueTasksData } = useUserTasks(allUsers ? "" : userId, {
+    dueTo: nowIso,
     incomplete: true,
   });
   const { data: userTicketsData } = useTicketsByUser(allUsers ? "" : userId, {
@@ -90,7 +112,21 @@ export function WhatsOnTab({
   const { data: allTasksRaw } = useAllTasksExtended();
   const { data: allTicketsRaw } = useTickets();
 
+  const overdueTasks = useMemo(() => {
+    const source = allUsers ? allTasksRaw : overdueTasksData;
+    if (!source || !Array.isArray(source)) return [];
+    return source
+      .filter(isTaskOverdue)
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime(),
+      );
+  }, [allUsers, allTasksRaw, overdueTasksData, nowMs]);
+
+  const overdueCount = overdueTasks.length;
+
   const filteredTasks = useMemo(() => {
+    if (whatsOnFilter === "overdue") return overdueTasks;
     if (allUsers) {
       if (!allTasksRaw || !Array.isArray(allTasksRaw)) return [];
       const startMs = dateRange?.start.getTime() ?? 0;
@@ -111,7 +147,7 @@ export function WhatsOnTab({
     return [...userTasksData].sort(
       (a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime(),
     );
-  }, [allUsers, userTasksData, allTasksRaw, dateRange]);
+  }, [allUsers, userTasksData, allTasksRaw, dateRange, whatsOnFilter, overdueTasks]);
 
   const filteredTickets = useMemo(() => {
     if (allUsers) {
@@ -158,6 +194,26 @@ export function WhatsOnTab({
                     : "Select Date"}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setWhatsOnFilter("overdue")}
+          className={`relative rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+            whatsOnFilter === "overdue"
+              ? "bg-red-600 text-white"
+              : "border border-red-500/30 bg-red-500/5 text-red-700 hover:bg-red-500/10 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+          }`}
+          data-testid="button-whats-on-overdue"
+        >
+          Overdue
+          {overdueCount > 0 && (
+            <span
+              className="absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-black"
+              data-testid="badge-whats-on-overdue-count"
+            >
+              {overdueCount}
+            </span>
+          )}
+        </button>
         {whatsOnFilter === "custom" && (
           <DatePicker
             value={whatsOnDate}
@@ -190,17 +246,23 @@ export function WhatsOnTab({
             className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-black/45 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/45"
             data-testid="empty-whats-on-tasks"
           >
-            No tasks due{" "}
-            {whatsOnFilter === "today"
-              ? "today"
-              : whatsOnFilter === "tomorrow"
-                ? "tomorrow"
-                : whatsOnFilter === "this-week"
-                  ? "this week"
-                  : `on ${whatsOnDate}`}
+            {whatsOnFilter === "overdue"
+              ? "No overdue tasks"
+              : `No tasks due ${
+                  whatsOnFilter === "today"
+                    ? "today"
+                    : whatsOnFilter === "tomorrow"
+                      ? "tomorrow"
+                      : whatsOnFilter === "this-week"
+                        ? "this week"
+                        : `on ${whatsOnDate}`
+                }`}
           </div>
         ) : (
           filteredTasks.map((task, idx) => {
+            const overdue = isTaskOverdue(task);
+            // Pulse the border for any overdue task, regardless of the active filter.
+            const showOverduePulse = overdue;
             let taskHref: string | null = null;
             if (task.entityType === "quote" && task.entityId) {
               taskHref = task.clientId
@@ -221,13 +283,20 @@ export function WhatsOnTab({
               <motion.button
                 key={task.id}
                 type="button"
-                className={`group w-full cursor-pointer rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
+                className={`group relative w-full cursor-pointer rounded-2xl border p-3 text-left transition ${task.completed ? "border-emerald-500/20 bg-emerald-500/5" : showOverduePulse ? "border-red-500/40 bg-red-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
                 data-testid={`card-whats-on-task-${task.id}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.15) }}
                 onClick={() => (taskHref ? navigate(taskHref) : setEditingTask(task))}
               >
+                {showOverduePulse && (
+                  <span
+                    className="pointer-events-none absolute inset-0 animate-pulse rounded-2xl border-2 border-red-500"
+                    data-testid={`overdue-pulse-${task.id}`}
+                    aria-hidden
+                  />
+                )}
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -260,6 +329,25 @@ export function WhatsOnTab({
                           {tag}
                         </span>
                       ))}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-black/35 opacity-0 transition hover:bg-black/[0.06] hover:text-black/70 group-hover:opacity-100 dark:text-white/40 dark:hover:bg-white/10"
+                        data-testid={`button-edit-whats-on-task-${task.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTask(task);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setEditingTask(task);
+                          }
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden />
+                      </span>
                     </div>
                     <div
                       className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-4 text-[11px] text-black/55 dark:text-white/55"
@@ -290,28 +378,10 @@ export function WhatsOnTab({
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span
-                      role="button"
-                      tabIndex={0}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-black/35 opacity-0 transition hover:bg-black/[0.06] hover:text-black/70 group-hover:opacity-100 dark:text-white/40 dark:hover:bg-white/10"
-                      data-testid={`button-edit-whats-on-task-${task.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingTask(task);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          setEditingTask(task);
-                        }
-                      }}
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : overdue ? "border-red-500/25 bg-red-500/10 text-red-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}
+                      data-testid={`pill-whats-on-task-status-${task.id}`}
                     >
-                      <Pencil className="h-3.5 w-3.5" aria-hidden />
-                    </span>
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${task.completed ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700" : "border-amber-500/25 bg-amber-500/10 text-amber-700"}`}
-                    >
-                      {task.completed ? "Done" : "Pending"}
+                      {task.completed ? "Done" : overdue ? "Overdue" : "Pending"}
                     </span>
                     {taskHref && (
                       <ChevronRight className="h-4 w-4 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />
@@ -338,14 +408,17 @@ export function WhatsOnTab({
             className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-6 text-center text-xs text-black/45 dark:border-white/10 dark:bg-white/[0.02] dark:text-white/45"
             data-testid="empty-whats-on-tickets"
           >
-            No tickets{" "}
-            {whatsOnFilter === "today"
-              ? "today"
-              : whatsOnFilter === "tomorrow"
-                ? "tomorrow"
-                : whatsOnFilter === "this-week"
-                  ? "this week"
-                  : `on ${whatsOnDate}`}
+            {whatsOnFilter === "overdue"
+              ? "No open tickets"
+              : `No tickets ${
+                  whatsOnFilter === "today"
+                    ? "today"
+                    : whatsOnFilter === "tomorrow"
+                      ? "tomorrow"
+                      : whatsOnFilter === "this-week"
+                        ? "this week"
+                        : `on ${whatsOnDate}`
+                }`}
           </div>
         ) : (
           filteredTickets.map((ticket, idx) => (

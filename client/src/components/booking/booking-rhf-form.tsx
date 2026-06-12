@@ -8,8 +8,9 @@ import { walletApi } from "@/api/endpoints/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
-import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues } from "@/types/booking";
+import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/types/booking";
 import { QuoteExtrasSection as BookingExtrasSection } from "@/components/quote/quote-extras-section";
+import { BookingUpsellsSection } from "@/components/booking/BookingUpsellsSection";
 
 export { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
 export type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/types/booking";
@@ -1762,6 +1763,9 @@ export function BookingRHFForm({
 
         {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
         <BookingExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} />
+
+        {/* ── UPSELLS ───────────────────────────────────────────────────────── */}
+        <BookingUpsellsSection control={control as unknown as Control<UpsellsFormValues>} />
 
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
           <SectionHeader icon={DollarSign} title="Pricing" />

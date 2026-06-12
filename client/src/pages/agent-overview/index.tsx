@@ -10,7 +10,6 @@ import {
   useShopTargets,
   useAgentTargetsByUserId,
 } from "@/hooks/queries/use-targets-queries";
-import { useRole } from "@/hooks/use-role";
 import { ProfitStatBoxes, type ProfitStats } from "./profit-stat-boxes";
 import { WhatsOnTab, type WhatsOnFilter } from "./whats-on-tab";
 import { PipelineTab } from "./pipeline-tab";
@@ -22,8 +21,6 @@ import { EngagementSection } from "./engagement-section";
 import { ExpiringQuotesSection } from "./expiring-quotes-section";
 
 export default function AgentOverviewPage() {
-  const { role } = useRole();
-
   const [tab, setTab] = useState<
     "whats-on" | "pipeline" | "calendar" | "news" | "daily-goals"
   >("whats-on");
@@ -71,7 +68,10 @@ export default function AgentOverviewPage() {
     };
   }, [agentStats, shopTargetsData, agentTargetsData]);
 
-  const isAgentView = role === "Agent" || role === "Homeworker";
+  // The agent dashboard is a personal view, so the sales target always reflects
+  // the current user's own target — even for org admins and branch managers, who
+  // would otherwise see the branch/agency target here.
+  const isAgentView = true;
   const userId = currentUser?.id || "";
 
   return (

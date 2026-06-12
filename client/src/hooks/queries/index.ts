@@ -4,6 +4,7 @@ export { useNeonClients, useNeonClient, neonClientKeys } from "./use-neon-client
 export { useTransactions, usePipelineTransactions, usePipelineColumn, useTransaction, useTransactionStats, useExpiringQuotes, transactionKeys } from "./use-transaction-queries";
 export { useQuotes, useQuote, useRecentQuoteEngagement, quoteKeys } from "./use-quote-queries";
 export { useBookings, useBooking, useBookingByTransaction, bookingKeys } from "./use-booking-queries";
+export { useBookingUpsells, bookingUpsellKeys } from "./use-booking-upsell-queries";
 export { useEnquiries, useEnquiry, useEnquiryByTransaction, enquiryKeys } from "./use-enquiry-queries";
 export { useNotes, useClientNotes, noteKeys } from "./use-note-queries";
 export { useUsers, userKeys } from "./use-user-queries";

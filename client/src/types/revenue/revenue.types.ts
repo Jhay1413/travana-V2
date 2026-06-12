@@ -18,6 +18,7 @@ export interface AgentPerformance {
 }
 
 export interface BookingDetail {
+  id: string;
   bookingId: string;
   clientId: string;
   clientName: string;
@@ -26,6 +27,8 @@ export interface BookingDetail {
   commission: number;
   agentId: string;
   agentName: string;
+  isUpsell?: boolean;
+  upsellLabel?: string;
 }
 
 export interface RevenueDashboardData {

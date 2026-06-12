@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { clientTable, transaction, quote, booking, user as userTable } from "@shared/schema";
+import { clientTable, transaction, quote, booking, booking_upsell, user as userTable } from "@shared/schema";
 import { sql, eq, and, gte, lte, ne, isNull } from "drizzle-orm";
 
 export const dashboardRepository = {
@@ -207,7 +207,26 @@ export const dashboardRepository = {
           )
         );
 
-      return { profitThisMonth: Number(result?.profit || 0) };
+      // Upsells are recognised in the month they were ADDED (`added_at`),
+      // independent of the parent booking's creation date — so an upsell added
+      // this month to an older booking still lands in this month's profit.
+      const [upsellResult] = await db
+        .select({
+          profit: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+        })
+        .from(booking_upsell)
+        .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .where(
+          and(
+            eq(transaction.user_id, userId),
+            eq(booking_upsell.is_active, true),
+            gte(booking_upsell.added_at, startOfMonth),
+            lte(booking_upsell.added_at, endOfMonth)
+          )
+        );
+
+      return { profitThisMonth: Number(result?.profit || 0) + Number(upsellResult?.profit || 0) };
     } catch (err) {
       console.error("[dashboard] getMyProfit error:", err);
       return { profitThisMonth: 0 };

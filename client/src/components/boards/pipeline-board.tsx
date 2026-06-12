@@ -83,6 +83,12 @@ function formatDate(dateString: string | null | undefined): string {
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function formatDateTime(dateString: string | null | undefined): string {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  return date.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 }
@@ -225,12 +231,15 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
   const [isDragging, setIsDragging] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [showQuotes, setShowQuotes] = useState(false);
+  const quotesRef = useRef<HTMLDivElement>(null);
   const profit = getTransactionProfit(t);
   const value = getTransactionValue(t);
   const { dest, country } = getDest(t);
   const nearExpiry = isCardNearExpiry(t, stage);
   const tourOp = getTourOp(t);
-  const quoteCount = t.quotes?.length || 0;
+  const quoteVariants = t.quote_variants || [];
+  const duplicateCount = quoteVariants.filter(q => q.isQuoteCopy).length;
   const quoteStatus = (t.quotes?.[0] as any)?.quote_status || null;
   const hex = STAGE_HEX[stage];
   const { toast } = useToast();
@@ -246,6 +255,16 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
     if (showMenu) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showMenu]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (quotesRef.current && !quotesRef.current.contains(e.target as Node)) {
+        setShowQuotes(false);
+      }
+    };
+    if (showQuotes) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showQuotes]);
 
   const navUrl = () => {
     if (!t.client_id) return "/pipeline";
@@ -370,14 +389,38 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
                 <span className="text-[11px] text-gray-500 truncate max-w-[100px]">{tourOp}</span>
               </>
             )}
-            {quoteCount > 0 && (stage === "Quoted" || stage === "In Play") && (
-              <>
-                <span className="text-gray-300">·</span>
-                <span className="text-[11px] text-gray-500">{quoteCount} quote{quoteCount > 1 ? "s" : ""}</span>
-              </>
-            )}
           </div>
-          <ChevronRight className="w-3.5 h-3.5 text-red-400 flex-shrink-0 ml-1" />
+          {duplicateCount > 0 && (stage === "Quoted" || stage === "In Play") ? (
+            <div className="relative flex-shrink-0 ml-1" ref={quotesRef}>
+              <button
+                className="flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-bold shadow-sm hover:bg-blue-700 transition-colors"
+                onClick={(e) => { e.stopPropagation(); setShowQuotes(v => !v); }}
+                title={`${duplicateCount} duplicate quote${duplicateCount > 1 ? "s" : ""}`}
+              >
+                +{duplicateCount}
+              </button>
+              {showQuotes && (
+                <div className="absolute right-0 bottom-full z-50 mb-1 w-52 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
+                  {quoteVariants.map((q) => (
+                    <button
+                      key={q.id}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowQuotes(false);
+                        if (t.client_id) setLocation(`/clients/${t.client_id}/quotes/${q.id}`);
+                      }}
+                    >
+                      <span className="truncate">{q.title || "Untitled quote"}</span>
+                      {!q.isQuoteCopy && <span className="ml-auto flex-shrink-0 text-[9px] font-medium text-emerald-600">primary</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 text-red-400 flex-shrink-0 ml-1" />
+          )}
         </div>
       </div>
     </div>
@@ -639,9 +682,9 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
                 <div key={n.id} className="bg-amber-50/40 rounded-xl p-3">
                   <p className="text-[13px] text-gray-700 whitespace-pre-wrap line-clamp-3">{(n.content || "").replace(/<[^>]*>/g, "")}</p>
                   <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
-                    <span>{(n as any).created_by_name || (n as any).description || "Agent"}</span>
+                    <span className="font-medium text-gray-500">{n.author_name || n.description || "Agent"}</span>
                     <span>·</span>
-                    <span>{getTimeAgo(n.created_at)}</span>
+                    <span>{formatDateTime(n.createdAt)}</span>
                   </div>
                 </div>
               ))}

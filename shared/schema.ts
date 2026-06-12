@@ -405,6 +405,11 @@ export const forwardsReport = pgTable('forwards_report', {
   deal_ids: text().array()
     .notNull()
     .default(sql`ARRAY[]::text[]`),
+  // Upsells (by `added_at` calendar month) contributing to this month's total,
+  // mirroring deal_ids for auditability/idempotency of the precomputed row.
+  upsell_ids: text().array()
+    .notNull()
+    .default(sql`ARRAY[]::text[]`),
   historical_ids: text().array()
     .notNull()
     .default(sql`ARRAY[]::text[]`),
@@ -1119,6 +1124,29 @@ export const booking_cruise_itinerary = pgTable('booking_cruise_itinerary', {
 });
 export type BookingCruiseItinerary = typeof booking_cruise_itinerary.$inferSelect;
 export type InsertBookingCruiseItinerary = typeof booking_cruise_itinerary.$inferInsert;
+
+// Upsells: extra line items added to a booking AFTER it was created (e.g. extra
+// hotel nights bought a month later). Deliberately separate from the booking_*
+// line-item tables so `totalBookingCommissionExpr()` does NOT sweep them into
+// the booking's creation/travel-month profit — their commission is recognised
+// independently by `added_at` (see server/v2/utils/commission-sql.ts).
+export const booking_upsell = pgTable('booking_upsell', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  booking_id: uuid().notNull().references(() => booking.id, { onDelete: "cascade" }),
+  upsell_type: varchar().notNull(), // EXTRA_NIGHTS | TRANSFER | LOUNGE | PARKING | FEE | OTHER
+  description: varchar(),
+  quantity: integer().notNull().default(1),
+  cost: numeric({ precision: 10, scale: 2 }),
+  commission: numeric({ precision: 10, scale: 2 }), // manual; the profit recognised
+  sales_price: numeric({ precision: 10, scale: 2 }),
+  added_at: timestamp({ withTimezone: true }).defaultNow(), // recognition date (the month it lands in)
+  added_by: text().references(() => user.id),
+  is_active: boolean().default(true), // soft delete
+  created_at: timestamp({ withTimezone: true }).defaultNow(),
+  updated_at: timestamp({ withTimezone: true }).defaultNow(),
+});
+export type BookingUpsell = typeof booking_upsell.$inferSelect;
+export type InsertBookingUpsell = typeof booking_upsell.$inferInsert;
 
 export const notes = pgTable('notes', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),

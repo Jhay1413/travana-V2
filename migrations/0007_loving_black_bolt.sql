@@ -1,0 +1,1 @@
+ALTER TABLE "forwards_report" ADD COLUMN "upsell_ids" text[] DEFAULT ARRAY[]::text[] NOT NULL;

@@ -164,6 +164,19 @@ export const bookingFormSchema = z.object({
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
   })).default([]),
+  // Upsells: extra line items added to a booking AFTER it was created. Profit is
+  // recognised in the month added (`addedAt`), not the booking's creation month.
+  upsells: z.array(z.object({
+    // Present only for already-persisted rows; absent rows are treated as new
+    // creates. Lets the Manage Upsells dialog reconcile edits/deletes by id.
+    id: z.string().optional(),
+    upsellType: z.enum(["EXTRA_NIGHTS", "TRANSFER", "LOUNGE", "PARKING", "FEE", "OTHER"]).default("EXTRA_NIGHTS"),
+    description: z.string().default(""),
+    quantity: z.coerce.number().int().min(1).default(1),
+    cost: z.coerce.number().min(0).default(0),
+    commission: z.coerce.number().min(0).default(0),
+    addedAt: z.string().default(""),
+  })).default([]),
   tags: z.array(z.string()).default([]),
   is_test: z.boolean().default(false),
 });
@@ -171,6 +184,8 @@ export const bookingFormSchema = z.object({
 export type FlightLegValue = z.infer<typeof flightLegSchema>;
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
 export type ExtrasFormValues = Pick<BookingFormValues, "transfers" | "carHires" | "attractionTickets" | "loungePasses" | "airportParkings" | "extraAccommodations">;
+export type UpsellsFormValues = Pick<BookingFormValues, "upsells">;
+export type UpsellItemValue = BookingFormValues["upsells"][number];
 
 export const defaultBookingFormValues: BookingFormValues = {
   haysRef: "",
@@ -237,6 +252,7 @@ export const defaultBookingFormValues: BookingFormValues = {
   loungePasses: [],
   airportParkings: [],
   extraAccommodations: [],
+  upsells: [],
   tags: [],
   is_test: false,
 };

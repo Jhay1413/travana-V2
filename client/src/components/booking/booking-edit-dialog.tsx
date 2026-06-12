@@ -8,11 +8,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
-import { useUpdateBooking, useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage } from "@/hooks/mutations";
+import { useUpdateBooking, useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage, useReconcileUpsells } from "@/hooks/mutations";
 import { useBooking, usePackageTypes } from "@/hooks/queries";
 import { BookingRHFForm } from "./booking-rhf-form";
-import { defaultBookingFormValues } from "@/types/booking";
-import type { BookingFormValues, BookingUpdateDialogProps } from "@/types/booking";
+import { defaultBookingFormValues, upsellsToFormValues } from "@/types/booking";
+import type { BookingFormValues, BookingUpdateDialogProps, UpsellRecord } from "@/types/booking";
 
 function splitDateTime(iso: string | null | undefined): { date: string; time: string } {
   if (!iso) return { date: "", time: "" };
@@ -218,6 +218,9 @@ function buildDefaultValues(bookingData: any): BookingFormValues {
         commission: parseFloat(String(a.commission || 0)) || 0,
         isIncludedInPackage: a.is_included_in_package ?? true,
       })),
+    // Hydrate any upsells already attached to this booking so the in-form
+    // Upsells section is populated when editing.
+    upsells: upsellsToFormValues(bookingData.upsells),
   };
 }
 
@@ -360,6 +363,8 @@ function buildUpdatePayload(
     commission: String(a.commission || 0),
     is_included_in_package: a.isIncludedInPackage,
   }));
+  // Upsells are NOT sent through the booking PATCH (it ignores the key); they're
+  // persisted separately via the dedicated endpoints in handleSubmit.
 
   return payload;
 }
@@ -373,6 +378,7 @@ export function BookingEditDialog({
 }: BookingUpdateDialogProps) {
   const { toast } = useToast();
   const updateBooking = useUpdateBooking();
+  const { reconcile: reconcileUpsells } = useReconcileUpsells();
   const uploadImages = useUploadBookingImages();
   const addImageUrls = useAddBookingImageUrls();
   const deleteImage = useDeleteBookingImage();
@@ -398,6 +404,16 @@ export function BookingEditDialog({
       {
         onSuccess: async () => {
           let imageUploadFailed = false;
+          let upsellsFailed = false;
+
+          // Persist upsells via their dedicated endpoints (the booking PATCH
+          // ignores them), diffing the form rows against what was loaded.
+          try {
+            const existingUpsells: UpsellRecord[] = ((bookingData as any)?.upsells ?? []) as UpsellRecord[];
+            await reconcileUpsells(bookingId, values.upsells, existingUpsells);
+          } catch {
+            upsellsFailed = true;
+          }
 
           if (deletedImageIds.length > 0) {
             await Promise.allSettled(
@@ -421,12 +437,13 @@ export function BookingEditDialog({
             }
           }
 
+          const partialFailure = imageUploadFailed || upsellsFailed;
           toast({
             title: "Booking updated",
-            description: imageUploadFailed
-              ? "Changes saved, but some images failed to upload."
+            description: partialFailure
+              ? `Changes saved, but some ${upsellsFailed ? "upsells" : "images"} failed to save.`
               : "Changes saved successfully.",
-            variant: imageUploadFailed ? "destructive" : "default",
+            variant: partialFailure ? "destructive" : "default",
           });
           onOpenChange(false);
           onSuccess?.();

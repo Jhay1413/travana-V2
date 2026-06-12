@@ -1,15 +1,27 @@
 import { FileText } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { currency } from "@/components/quote/quote-types";
+import { currency, type QuoteDisplay } from "@/components/quote/quote-types";
 import { QuoteSummaryTimeline } from "@/components/quote/QuoteSummaryTimeline";
+import { sumUpsells, type UpsellRecord } from "@/types/booking";
 
 interface BookingCostingsCardProps {
-  booking: any;
+  booking: QuoteDisplay;
   hasReferral: boolean;
+  upsells?: UpsellRecord[];
 }
 
-export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCardProps) {
+const num = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
+
+export function BookingCostingsCard({ booking, hasReferral, upsells }: BookingCostingsCardProps) {
+  // Aggregate active upsells (extras added after the booking was made), then fold
+  // them into the booking's own price and commission for the bottom totals.
+  const hasUpsells = Array.isArray(upsells) && upsells.length > 0;
+  const { price: upsellPrice, commission: upsellCommission } = sumUpsells(upsells);
+
+  const totalPrice = num(booking.commissions.price) + upsellPrice;
+  const totalCommission = num(booking.commissions.totalCommission) + upsellCommission;
+
   return (
     <Card
       className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4"
@@ -63,6 +75,20 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
               </div>
             </div>
 
+            {hasUpsells && (
+              <div
+                className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
+                data-testid="row-booking-summary-upsell-price"
+              >
+                <div className="text-xs font-semibold text-black/65" data-testid="text-booking-summary-upsell-price-label">
+                  Upsell price
+                </div>
+                <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-upsell-price-value">
+                  {upsellPrice > 0 ? `+${currency.format(upsellPrice)}` : currency.format(0)}
+                </div>
+              </div>
+            )}
+
             <div
               className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
               data-testid="row-booking-summary-commission"
@@ -74,6 +100,20 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 {currency.format(booking.commissions.commissionValue)}
               </div>
             </div>
+
+            {hasUpsells && (
+              <div
+                className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
+                data-testid="row-booking-summary-upsell-commission"
+              >
+                <div className="text-xs font-semibold text-black/65" data-testid="text-booking-summary-upsell-commission-label">
+                  Upsell comm
+                </div>
+                <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-upsell-commission-value">
+                  {upsellCommission > 0 ? `+${currency.format(upsellCommission)}` : currency.format(0)}
+                </div>
+              </div>
+            )}
 
             <div
               className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2"
@@ -160,7 +200,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 Total price
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-total-price-value">
-                {currency.format(booking.commissions.price)}
+                {currency.format(totalPrice)}
               </div>
             </div>
 
@@ -175,7 +215,7 @@ export function BookingCostingsCard({ booking, hasReferral }: BookingCostingsCar
                 Total commission
               </div>
               <div className="text-xs font-semibold text-black" data-testid="text-booking-summary-total-commission-value">
-                {currency.format(booking.commissions.totalCommission)}
+                {currency.format(totalCommission)}
               </div>
             </div>
           </div>

@@ -9,6 +9,7 @@ import {
   booking_attraction_ticket,
   booking_lounge_pass,
   booking_airport_parking,
+  booking_upsell,
   quote_flights,
   quote_accomodation,
   quote_transfers,
@@ -41,6 +42,33 @@ export function totalBookingCommissionExpr(
     + COALESCE((SELECT SUM(CAST(${booking_lounge_pass.commission} AS DECIMAL))       FROM ${booking_lounge_pass}       WHERE ${booking_lounge_pass.booking_id}       = ${bookingIdRef}), 0)
     + COALESCE((SELECT SUM(CAST(${booking_airport_parking.commission} AS DECIMAL))   FROM ${booking_airport_parking}   WHERE ${booking_airport_parking.booking_id}   = ${bookingIdRef}), 0)
   )`;
+}
+
+/**
+ * Total ACTIVE upsell commission for a single booking, recognised by `added_at`.
+ *
+ * Deliberately kept OUT of `totalBookingCommissionExpr()` — upsell commission is
+ * attributed to the month it was added, not the booking's creation/travel month.
+ * Pass `range` to restrict to upsells added within a half-open `[start, end)`
+ * window (e.g. a report month); omit it to sum every active upsell on the booking.
+ *
+ * @param bookingIdRef defaults to `booking.id`; pass a different reference when
+ *   the query aliases the booking table or compares against a subquery.
+ */
+export function totalUpsellCommissionExpr(
+  bookingIdRef: SQL | unknown = booking.id,
+  range?: { start: Date | string; end: Date | string },
+): SQL<number> {
+  const rangeCond = range
+    ? sql`AND ${booking_upsell.added_at} >= ${range.start} AND ${booking_upsell.added_at} < ${range.end}`
+    : sql``;
+  return sql<number>`COALESCE((
+    SELECT SUM(CAST(${booking_upsell.commission} AS DECIMAL))
+    FROM ${booking_upsell}
+    WHERE ${booking_upsell.booking_id} = ${bookingIdRef}
+      AND ${booking_upsell.is_active} = true
+      ${rangeCond}
+  ), 0)`;
 }
 
 /**

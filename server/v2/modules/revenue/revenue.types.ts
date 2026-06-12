@@ -18,6 +18,9 @@ export interface AgentPerformance {
 }
 
 export interface BookingDetail {
+  /** Unique per row — bookingId for bookings, upsellId for upsells (a booking and
+   *  its upsell can both appear in the same month, so bookingId isn't unique). */
+  id: string;
   bookingId: string;
   clientId: string;
   clientName: string;
@@ -26,6 +29,10 @@ export interface BookingDetail {
   commission: number;
   agentId: string;
   agentName: string;
+  /** True when this row is an upsell (commission recognised by `added_at`). */
+  isUpsell?: boolean;
+  /** Human label for the upsell type, e.g. "Extra Nights" (upsell rows only). */
+  upsellLabel?: string;
 }
 
 export interface RevenueDashboardData {

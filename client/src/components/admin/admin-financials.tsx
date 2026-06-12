@@ -516,17 +516,30 @@ export default function AdminFinancials() {
             <div className="space-y-2">
               {sortedBookings.map((b, i) => (
                 <div
-                  key={b.bookingId}
+                  key={b.id}
                   onClick={() => navigate(`/clients/${b.clientId}/bookings/${b.bookingId}`)}
                   className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-black/5 bg-white p-3 transition-colors hover:border-blue-500/20 hover:bg-blue-500/5 dark:border-white/5 dark:bg-white/5 dark:hover:border-blue-500/20 dark:hover:bg-blue-500/10"
                   data-testid={`booking-detail-${i}`}
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{b.clientName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{b.clientName}</p>
+                      {b.isUpsell && (
+                        <span
+                          className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300"
+                          data-testid={`pill-upsell-${i}`}
+                        >
+                          Upsell{b.upsellLabel ? ` · ${b.upsellLabel}` : ""}
+                        </span>
+                      )}
+                    </div>
                     <div className="mt-0.5 flex items-center gap-2 text-[11px] text-black/45">
                       <span>{b.destination}</span>
                       <span>·</span>
-                      <span>{new Date(b.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                      <span>
+                        {b.isUpsell ? "Added " : ""}
+                        {new Date(b.travelDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
                     </div>
                   </div>
                   <div className="shrink-0 text-right">

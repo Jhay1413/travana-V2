@@ -3,7 +3,7 @@ import {
   booking, booking_flights, booking_accomodation, booking_transfers,
   booking_car_hire, booking_attraction_ticket, booking_lounge_pass,
   booking_airport_parking, booking_cruise, booking_cruise_item_extra,
-  booking_cruise_itinerary, passengers, deal_images, bookingImages, accommodation_images, lodge_images,
+  booking_cruise_itinerary, booking_upsell, passengers, deal_images, bookingImages, accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type, referral, clientTable,
 } from "@shared/schema";
@@ -274,7 +274,7 @@ export const bookingRepository = {
     const bookingTransactionId = b.booking.transaction_id;
     const bookingLodgeId = b.booking.lodge_id;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, bookingImgs, referralRows, accommodationImgs, lodgeImgs] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, bookingImgs, referralRows, accommodationImgs, lodgeImgs, upsellRows] = await Promise.all([
       db.select({
         flight: booking_flights,
         departing_airport_name: sql<string>`concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')')`,
@@ -394,6 +394,12 @@ export const bookingRepository = {
             isPrimary: lodge_images.isPrimary,
           }).from(lodge_images).where(eq(lodge_images.lodge_id, bookingLodgeId))
         : Promise.resolve([]),
+
+      // Active upsells (extra line items added post-creation), newest first.
+      db.select()
+        .from(booking_upsell)
+        .where(and(eq(booking_upsell.booking_id, id), eq(booking_upsell.is_active, true)))
+        .orderBy(desc(booking_upsell.added_at)),
     ]);
 
     return {
@@ -426,6 +432,7 @@ export const bookingRepository = {
       loungePasses: loungePasses.map(p => ({ ...p.loungePass, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
       airportParkings: airportParkings.map(p => ({ ...p.airportParking, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
       cruises: cruises.map(c => ({ ...c.cruise, tour_operator_name: c.tour_operator_name })),
+      upsells: upsellRows,
       passengers: passengerList,
       hasReferral: referralRows.length > 0,
       images: (() => {

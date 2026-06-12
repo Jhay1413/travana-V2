@@ -183,7 +183,15 @@ export function AddAccommodationModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              // Stop the submit from bubbling up the React tree to a parent
+              // form (the quote/booking form this modal is rendered inside).
+              e.stopPropagation();
+              form.handleSubmit(handleSubmit)(e);
+            }}
+            className="space-y-4"
+          >
             {/* Country */}
             <FormField
               control={form.control}

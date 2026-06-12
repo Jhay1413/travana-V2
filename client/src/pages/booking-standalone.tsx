@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, LinkIcon, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { ChevronLeft, LinkIcon, MoreHorizontal, PackagePlus, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,9 +12,11 @@ import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { transformQuoteData, currency, formatUKDate } from "@/components/quote/quote-types";
+import { sumUpsells } from "@/types/booking";
 import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
 import { BookingEditDialog } from "@/components/booking/booking-edit-dialog";
+import { BookingUpsellsDialog } from "@/components/booking/BookingUpsellsDialog";
 
 import { useQuoteImages } from "@/components/quote/hooks";
 import { QuoteBookingReferences } from "@/components/quote/QuoteBookingReferences";
@@ -47,6 +49,7 @@ export default function BookingPage() {
   const { data: currentUser } = useCurrentUser();
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showUpsellsDialog, setShowUpsellsDialog] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
   const updateTransactionMutation = useUpdateTransaction();
 
@@ -74,6 +77,13 @@ export default function BookingPage() {
     if (!bookingData) return null;
     return transformQuoteData(bookingData);
   }, [bookingData]);
+
+  // Customer-facing total including any post-booking upsells, mirroring the
+  // costings card so the header price stays in sync.
+  const totalPrice = useMemo(
+    () => (booking ? booking.commissions.price + sumUpsells(bookingData?.upsells).price : 0),
+    [booking, bookingData],
+  );
 
   const {
     newTag, setNewTag,
@@ -192,6 +202,18 @@ export default function BookingPage() {
                     <Pencil className="h-3.5 w-3.5" />
                     Edit Booking
                   </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                    data-testid="button-booking-upsells"
+                    onClick={() => {
+                      setShowEllipsisMenu(false);
+                      setShowUpsellsDialog(true);
+                    }}
+                  >
+                    <PackagePlus className="h-3.5 w-3.5" />
+                    Manage Upsells
+                  </button>
                   {role === "Admin" && (
                     <button
                       type="button"
@@ -252,7 +274,8 @@ export default function BookingPage() {
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <div className="text-base font-semibold" data-testid="text-booking-title">
-                                {booking.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(booking.pricePerPerson)}pp</span>
+                                {booking.quoteTitle}, <span className="text-sm font-semibold text-[#000000]">{currency.format(totalPrice)}</span>
+                                <span className="text-xs font-medium text-black/55"> ({currency.format(booking.pricePerPerson)}pp)</span>
                               </div>
                               <span
                                 className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
@@ -314,7 +337,7 @@ export default function BookingPage() {
             </Card>
 
             <div className="grid gap-3 text-sm xl:text-base" data-testid="col-booking-right">
-              <BookingCostingsCard booking={booking} hasReferral={!!(bookingData as any)?.hasReferral} />
+              <BookingCostingsCard booking={booking} hasReferral={!!bookingData?.hasReferral} upsells={bookingData?.upsells} />
 
               <QuoteTasksSection quoteId={bookingId} entityType="booking" assignedUserId={(bookingData as any)?.user_id} />
 
@@ -326,6 +349,12 @@ export default function BookingPage() {
         bookingId={bookingId}
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
+        onSuccess={() => bookingQuery.refetch()}
+      />
+      <BookingUpsellsDialog
+        bookingId={bookingId}
+        open={showUpsellsDialog}
+        onOpenChange={setShowUpsellsDialog}
         onSuccess={() => bookingQuery.refetch()}
       />
       <QuoteDeleteDialog

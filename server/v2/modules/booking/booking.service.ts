@@ -467,7 +467,9 @@ export const bookingService = {
       }
     }
 
-    const b = await bookingRepository.update(id, bookingData);
+    const b = Object.keys(bookingData).length > 0
+      ? await bookingRepository.update(id, bookingData)
+      : await bookingRepository.findById(id);
     if (!b) throw new AppError("Booking not found", 404);
 
     if (outboundFlight) {

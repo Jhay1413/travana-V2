@@ -18,6 +18,17 @@ const DEFAULT_MONTHLY_TARGETS: Record<number, number> = {
   9: 10000, 10: 12000, 11: 15000, 12: 12000,
 };
 
+// Human labels for upsell types in the Forwards drill-down (mirrors the client
+// UPSELL_TYPE_OPTIONS). Kept here so the server response is self-describing.
+const UPSELL_TYPE_LABELS: Record<string, string> = {
+  EXTRA_NIGHTS: "Extra Nights",
+  TRANSFER: "Transfer",
+  LOUNGE: "Lounge Pass",
+  PARKING: "Airport Parking",
+  FEE: "Fee / Amendment",
+  OTHER: "Other",
+};
+
 export const revenueService = {
   async getRevenueDashboard(scope: Scope): Promise<RevenueDashboardData> {
     const orgId = effectiveOrgId(scope);
@@ -88,11 +99,11 @@ export const revenueService = {
       const targetDate = new Date(year, month - 1, 1);
       const monthName = targetDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
-      const { totalCommission, dealIds } = await revenueRepository.getForwardsWithIdsForMonth(year, month, orgId);
+      const { totalCommission, dealIds, upsellIds } = await revenueRepository.getForwardsWithIdsForMonth(year, month, orgId);
       const target = DEFAULT_MONTHLY_TARGETS[month] || 10000;
 
       const result = await revenueRepository.upsertForwardsReportMonth({
-        year, month, monthName, target, companyCommission: totalCommission, dealIds,
+        year, month, monthName, target, companyCommission: totalCommission, dealIds, upsellIds,
       });
       if (result === "inserted") inserted++;
       else updated++;
@@ -102,12 +113,17 @@ export const revenueService = {
   },
 
   async getMonthBookings(year: number, month: number, scope: Scope): Promise<MonthBookingsData> {
-    const bookingsData = await revenueRepository.getBookingsForMonth(year, month, effectiveOrgId(scope));
+    const orgId = effectiveOrgId(scope);
+    const [bookingsData, upsellsData] = await Promise.all([
+      revenueRepository.getBookingsForMonth(year, month, orgId),
+      revenueRepository.getUpsellDetailsForCalendarMonth(year, month, orgId),
+    ]);
 
     const targetDate = new Date(year, month - 1, 1);
     const monthName = targetDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
     const bookings: BookingDetail[] = bookingsData.map((b) => ({
+      id: b.bookingId,
       bookingId: b.bookingId,
       clientId: b.clientId,
       clientName: `${b.clientFirstName} ${b.clientSurename}`,
@@ -116,9 +132,30 @@ export const revenueService = {
       commission: b.commission,
       agentId: b.agentId,
       agentName: `${b.agentFirstName} ${b.agentLastName}`,
+      isUpsell: false,
     }));
 
-    return { month: monthName, bookings };
+    // Upsells recognised in this calendar month (by `added_at`) — shown in the
+    // same drill-down, tagged so the UI can label them. `travelDate` carries the
+    // added date so the existing sort keeps working.
+    const upsells: BookingDetail[] = upsellsData.map((u) => {
+      const label = UPSELL_TYPE_LABELS[u.upsellType] || "Upsell";
+      return {
+        id: u.upsellId,
+        bookingId: u.bookingId,
+        clientId: u.clientId,
+        clientName: `${u.clientFirstName} ${u.clientSurename}`,
+        destination: u.description || label,
+        travelDate: u.addedAt,
+        commission: u.commission,
+        agentId: u.agentId,
+        agentName: `${u.agentFirstName} ${u.agentLastName}`,
+        isUpsell: true,
+        upsellLabel: label,
+      };
+    });
+
+    return { month: monthName, bookings: [...bookings, ...upsells] };
   },
 
   async getMonthForwards(year: number, month: number, scope: Scope): Promise<MonthForwards> {

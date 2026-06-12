@@ -2,8 +2,10 @@ import { Router } from "express";
 import multer from "multer";
 import { bookingController } from "./booking.controller";
 import { bookingImageController } from "./booking-image.controller";
+import { bookingUpsellController } from "./booking-upsell.controller";
 import { validate } from "../../middlewares/validation.middleware";
 import { addImagesValidator } from "./booking.validator";
+import { createUpsellValidator, listUpsellsValidator } from "./booking-upsell.validator";
 
 const router = Router();
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -37,6 +39,9 @@ router.post("/:bookingId/images", validate(addImagesValidator), bookingImageCont
 router.get("/:bookingId/images", bookingImageController.getImages);
 router.delete("/:bookingId/images/:imageId", bookingImageController.deleteImage);
 router.patch("/:bookingId/images/:imageId/primary", bookingImageController.setPrimaryImage);
+
+router.get("/:bookingId/upsells", validate(listUpsellsValidator), bookingUpsellController.list);
+router.post("/:bookingId/upsells", validate(createUpsellValidator), bookingUpsellController.create);
 
 router.put("/:id/tags", bookingController.updateBookingTags);
 router.get("/:id/tags", bookingController.getBookingTags);

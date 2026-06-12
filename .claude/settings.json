@@ -32,7 +32,10 @@
       "Bash(awk -F: '$1+0 >= 750 && $1+0 <= 1600 {print}')",
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
       "Bash(grep -E \"\\\\.\\(prisma|ts\\)$\")",
-      "Bash(grep -E \"\\\\.\\(ts\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts\\)$\")",
+      "Bash(sed -n '58,75p' server/v2/modules/booking/booking.repository.ts)",
+      "Bash(sed -n '1,20p' server/v2/modules/booking/booking.repository.ts)",
+      "Bash(echo \"=== total errors: $\\(npx tsc --noEmit 2>&1)"
     ],
     "additionalDirectories": [
       "/home/runner/workspace/migrations"
