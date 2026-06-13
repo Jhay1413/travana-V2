@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpdateNote, useDeleteNote } from "@/hooks/mutations";
 import type { TransactionNote } from "@/types/quote";
 import { formatRelativeTime } from "./quote-types";
+import { formatFullDateTime } from "@/lib/note-time";
 import { NoteEditor } from "./NoteEditor";
 
 export function ReplyCard({ reply, quoteId }: { reply: TransactionNote; quoteId: string }) {
@@ -30,8 +31,8 @@ export function ReplyCard({ reply, quoteId }: { reply: TransactionNote; quoteId:
             {(reply.author_name || "A").charAt(0).toUpperCase()}
           </div>
           <span className="text-[10px] font-semibold text-black/70">{reply.author_name || "Agent"}</span>
-          <span className="text-[9px] text-black/35">
-            {formatRelativeTime(reply.createdAt)}
+          <span className="text-[9px] text-black/35" title={formatFullDateTime(reply.createdAt)}>
+            {formatRelativeTime(reply.createdAt)} · {formatFullDateTime(reply.createdAt)}
           </span>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 transition group-hover/reply:opacity-100">

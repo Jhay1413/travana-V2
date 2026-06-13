@@ -52,6 +52,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TiptapLink from "@tiptap/extension-link";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { formatFullDateTime } from "@/lib/note-time";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
 import { QuoteRHFForm } from "@/components/quote/quote-rhf-form";
 import { buildQuotePayload } from "@/components/quote/quote-create-dialog";
@@ -204,7 +205,7 @@ function EnquiryNoteCard({ note, replies, transactionId, currentUserName }: { no
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3b82f6]/10 text-[8px] font-bold text-[#3b82f6]">{(note.author_name || "A").charAt(0).toUpperCase()}</div>
             <div>
               <span className="text-[11px] font-semibold text-black/80">{note.author_name || "Agent"}</span>
-              <span className="ml-1.5 text-[9px] text-black/40">{formatRelativeTime(note.createdAt)}</span>
+              <span className="ml-1.5 text-[9px] text-black/40" title={formatFullDateTime(note.createdAt)}>{formatRelativeTime(note.createdAt)} · {formatFullDateTime(note.createdAt)}</span>
             </div>
           </div>
           <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
@@ -259,7 +260,7 @@ function EnquiryReplyCard({ reply, transactionId }: { reply: TransactionNote; tr
         <div className="flex items-center gap-1.5">
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-[8px] font-bold text-emerald-600">{(reply.author_name || "A").charAt(0).toUpperCase()}</div>
           <span className="text-[10px] font-semibold text-black/70">{reply.author_name || "Agent"}</span>
-          <span className="text-[9px] text-black/35">{formatRelativeTime(reply.createdAt)}</span>
+          <span className="text-[9px] text-black/35" title={formatFullDateTime(reply.createdAt)}>{formatRelativeTime(reply.createdAt)} · {formatFullDateTime(reply.createdAt)}</span>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 transition group-hover/reply:opacity-100">
           <button type="button" onClick={() => setIsEditing(!isEditing)} className="inline-flex h-5 w-5 items-center justify-center rounded text-black/35 hover:bg-black/5 hover:text-black/60"><Pencil className="h-2.5 w-2.5" /></button>

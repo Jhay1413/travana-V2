@@ -58,6 +58,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { QuoteCreateDialog } from "@/components/quote/quote-create-dialog";
 import type { Transaction } from "@/types/quote";
+import { formatRelativeTime, formatFullDateTime } from "@/lib/note-time";
 
 type PipelineStage = "Enquiry" | "Quoted" | "In Play" | "Booked";
 
@@ -684,7 +685,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
                   <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
                     <span className="font-medium text-gray-500">{n.author_name || n.description || "Agent"}</span>
                     <span>·</span>
-                    <span>{formatDateTime(n.createdAt)}</span>
+                    <span title={formatFullDateTime(n.createdAt)}>{formatRelativeTime(n.createdAt)} · {formatFullDateTime(n.createdAt)}</span>
                   </div>
                 </div>
               ))}

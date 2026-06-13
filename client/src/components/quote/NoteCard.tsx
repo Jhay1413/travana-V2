@@ -8,6 +8,7 @@ import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { Favorite } from "@/api/endpoints/favorite.api";
 import type { TransactionNote } from "@/types/quote";
 import { formatRelativeTime } from "./quote-types";
+import { formatFullDateTime } from "@/lib/note-time";
 import { NoteEditor } from "./NoteEditor";
 import { ReplyCard } from "./ReplyCard";
 
@@ -92,8 +93,8 @@ export function NoteCard({
               ) : (
                 <span className="text-[11px] font-semibold text-black/80" data-testid={`note-author-${note.id}`}>{note.author_name || "Agent"}</span>
               )}
-              <span className="ml-1.5 text-[9px] text-black/40" data-testid={`note-time-${note.id}`}>
-                {formatRelativeTime(note.createdAt)}
+              <span className="ml-1.5 text-[9px] text-black/40" data-testid={`note-time-${note.id}`} title={formatFullDateTime(note.createdAt)}>
+                {formatRelativeTime(note.createdAt)} · {formatFullDateTime(note.createdAt)}
               </span>
             </div>
           </div>
