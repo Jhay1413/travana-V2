@@ -55,6 +55,7 @@ import ResetPasswordPage from "@/pages/reset-password";
 import VerifyEmailPendingPage from "@/pages/verify-email-pending";
 import AcceptInvitePage from "@/pages/accept-invite";
 import TravanaRouter from "@/pages/travana";
+import CruiseQuotePreviewPage from "@/pages/cruise-quote-preview";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RoleRoute } from "@/components/role-route";
 import type { OrgRole } from "@/types/auth/auth.types";
@@ -196,6 +197,10 @@ function AppRouter() {
 
   if (location === "/travana" || location.startsWith("/travana/")) {
     return <TravanaRouter />;
+  }
+
+  if (location === "/cruise-quote-preview") {
+    return <CruiseQuotePreviewPage />;
   }
 
   if (location.startsWith("/view-quote/")) {
