@@ -42,6 +42,7 @@ import EmailInbox from "@/components/email-inbox";
 import HubPage from "@/pages/hub";
 import SocialPostsPage from "@/pages/social-posts";
 import SocialQuotePage from "@/pages/social-quote";
+import SocialWallPage from "@/pages/social-wall";
 import DestinationGuruPage from "@/pages/destination-guru";
 import SmsCenterPage from "@/pages/sms-center";
 import HrPage from "@/pages/hr";
@@ -160,6 +161,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/sms-center" allow={STAFF_ROLES} component={SmsCenterPage} />
         <RoleRoute path="/social-posts" allow={STAFF_ROLES} component={SocialPostsPage} />
         <RoleRoute path="/social-posts/quotes/:quoteId" allow={STAFF_ROLES} component={SocialQuotePage} />
+        <RoleRoute path="/social-wall" allow={STAFF_ROLES} component={SocialWallPage} />
         <RoleRoute path="/tickets" allow={STAFF_ROLES} component={TicketsPage} />
         <RoleRoute path="/tickets/:ticketId" allow={STAFF_ROLES} component={TicketsPage} />
         <RoleRoute path="/hub/:rest*" allow={STAFF_ROLES} component={HubPage} />

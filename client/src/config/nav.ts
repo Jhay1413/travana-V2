@@ -20,6 +20,7 @@ import {
   MapPin,
   MessageCircle,
   MessageSquare,
+  Newspaper,
   Package,
   Plane,
   Settings2,
@@ -67,6 +68,7 @@ const AGENT_NAV: NavConfig = [
       { path: "/agent-overview", label: "Agent Dashboard", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
+      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
       { path: "/tickets", label: "Tickets", icon: LifeBuoy },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
@@ -85,6 +87,7 @@ const BRANCH_MANAGER_NAV: NavConfig = [
       { path: "/tickets", label: "Tickets", icon: LifeBuoy },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/sms-center", label: "Text", icon: MessageCircle },
+      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/branch/targets", label: "Targets", icon: Target },
@@ -166,6 +169,7 @@ const ORG_ADMIN_NAV: NavConfig = [
     id: "overview",
     items: [
       { path: "/agency/overview", label: "Admin Dashboard", icon: LayoutGrid },
+      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
     ],
   },
   {
@@ -215,6 +219,7 @@ const PLATFORM_ADMIN_NAV: NavConfig = [
     id: "main",
     items: [
       { path: "/platform-admin", label: "Dashboard", icon: LayoutGrid },
+      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/platform-admin/organizations", label: "All Agencies", icon: Building2 },
       { path: "/platform-admin/users", label: "All Users", icon: Users },
       { path: "/platform-admin/audit-log", label: "Audit Log", icon: Activity },
@@ -238,6 +243,7 @@ const SOCIAL_MEDIA_NAV: NavConfig = [
     items: [
       { path: "/agent-overview", label: "Dashboard", icon: LayoutGrid },
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
+      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/my-profile", label: "My Profile", icon: UserCircle },
     ],
