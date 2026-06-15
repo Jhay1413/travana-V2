@@ -929,6 +929,7 @@ export const newQuoteRepository = {
       ship: (data.shipName as string) || null,
       cruise_date: (data.cruiseDate as string) || null,
       cabin_type: (data.cabinType as string) || null,
+      cabin_number: (data.cabinNumber as string) || null,
       cruise_name: (data.cruiseTitle as string) || null,
       tour_operator_id: (data.tourOperatorId as string) || null,
     };
