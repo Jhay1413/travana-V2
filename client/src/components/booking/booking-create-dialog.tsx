@@ -192,6 +192,20 @@ function buildCreatePayload(
       outboundConnectingLegs,
       inboundConnectingLegs,
       primaryAccommodation,
+      ...(isCruise
+        ? {
+            cruiseTitle: values.cruiseTitle || undefined,
+            cruiseLine: values.cruiseLine || undefined,
+            shipName: values.shipName || undefined,
+            cruiseDate: values.cruiseDate || undefined,
+            cabinType: values.cabinType || undefined,
+            embarkation: values.embarkation || undefined,
+            debarkation: values.debarkation || undefined,
+            cruiseExtras: values.cruiseExtras || undefined,
+            cruiseOnly: values.cruiseOnly,
+            cruiseItinerary: values.cruiseItinerary ?? [],
+          }
+        : {}),
       ...buildExtrasPayload(values),
     },
   };

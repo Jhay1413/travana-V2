@@ -67,7 +67,20 @@ async function assertPassengerInScope(passengerId: string, scope: ScopeOrTrusted
   if (!ok) throw new AppError("Passenger not found", 404);
 }
 
-interface QuoteRelationData {
+interface CruisePayloadData {
+  cruiseTitle?: string;
+  cruiseLine?: string;
+  shipName?: string;
+  cruiseDate?: string;
+  cabinType?: string;
+  embarkation?: string;
+  debarkation?: string;
+  cruiseExtras?: string;
+  cruiseOnly?: boolean;
+  cruiseItinerary?: Array<Record<string, unknown>>;
+}
+
+interface QuoteRelationData extends CruisePayloadData {
   outboundFlight?: Partial<InsertQuoteFlight>;
   inboundFlight?: Partial<InsertQuoteFlight>;
   outboundConnectingLegs?: Partial<InsertQuoteFlight>[];
@@ -83,18 +96,18 @@ interface QuoteRelationData {
   extraAccommodations?: Record<string, unknown>[];
 }
 
+// Build the cruise persistence payload from a form payload, or null when no
+// cruise data is present (so non-cruise quotes never touch quote_cruise).
+function buildCruiseData(src: CruisePayloadData & { main_tour_operator_id?: unknown }): Record<string, unknown> | null {
+  const { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cruiseItinerary } = src;
+  const hasCruise = !!(cruiseLine || shipName || cruiseTitle || cruiseDate || cabinType || (Array.isArray(cruiseItinerary) && cruiseItinerary.length));
+  if (!hasCruise) return null;
+  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cruiseItinerary, tourOperatorId: src.main_tour_operator_id ?? null };
+}
+
 type CreateQuotePayload = InsertQuote & QuoteRelationData;
 
 type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
-  cruiseTitle?: string;
-  cruiseLine?: string;
-  shipName?: string;
-  cruiseDate?: string;
-  cabinType?: string;
-  embarkation?: string;
-  debarkation?: string;
-  cruiseExtras?: string;
-  cruiseOnly?: boolean;
   lead_source?: string;
   images?: string[];
   transfers?: Record<string, unknown>[];
@@ -182,8 +195,11 @@ export const newQuoteService = {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+      cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, embarkation, debarkation, cruiseExtras, cruiseOnly, cruiseItinerary,
       ...quoteFields
     } = data;
+
+    const cruiseData = buildCruiseData(data);
 
     await assertTransactionInScope(quoteFields.transaction_id, scope);
 
@@ -229,6 +245,7 @@ export const newQuoteService = {
     if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(q.id, loungePasses);
     if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(q.id, airportParkings);
     if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(q.id, extraAccommodations);
+    if (cruiseData) await newQuoteRepository.upsertCruise(q.id, cruiseData);
 
     const normalizedImages = normalizeUniqueImageUrls(images);
     if (normalizedImages.length > 0) {
@@ -256,6 +273,7 @@ export const newQuoteService = {
         if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(freeQ.id, loungePasses);
         if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(freeQ.id, airportParkings);
         if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(freeQ.id, extraAccommodations);
+        if (cruiseData) await newQuoteRepository.upsertCruise(freeQ.id, cruiseData);
         if (normalizedImages.length > 0) await quoteImageRepository.addImages(freeQ.id, normalizedImages);
         if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) await tagService.addQuoteTags(freeQ.id, data.tags);
       } catch (err) {
@@ -337,10 +355,12 @@ export const newQuoteService = {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType,
-      embarkation, debarkation, cruiseExtras, cruiseOnly, lead_source, images, tags, childAges,
+      embarkation, debarkation, cruiseExtras, cruiseOnly, cruiseItinerary, lead_source, images, tags, childAges,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...quoteFields
     } = data;
+
+    const cruiseData = buildCruiseData(data);
 
     const quoteData: Partial<InsertQuote> = {};
     const directFields: (keyof InsertQuote)[] = ['holiday_type_id', 'sales_price', 'package_commission', 'travel_date', 'discounts', 'service_charge', 'num_of_nights', 'pets', 'cottage_id', 'lodge_id', 'quote_type', 'deal_type', 'pre_booked_seats', 'flight_meals', 'infant', 'child', 'adult', 'title', 'price_per_person', 'lodge_type', 'transfer_type', 'quote_status', 'main_tour_operator_id', 'quote_ref', 'date_expiry', 'not_for_social'];
@@ -388,6 +408,7 @@ export const newQuoteService = {
     if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(id, loungePasses);
     if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(id, airportParkings);
     if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(id, extraAccommodations);
+    if (cruiseData) await newQuoteRepository.upsertCruise(id, cruiseData);
     if (childAges !== undefined) await newQuoteRepository.replaceChildPassengers(id, "quote", childAges);
     if (tags !== undefined) await tagService.updateQuoteTags(id, tags);
 

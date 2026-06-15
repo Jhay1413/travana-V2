@@ -289,6 +289,19 @@ function buildUpdatePayload(
     payload.pets = values.pets ?? 0;
   }
 
+  if (isCruise) {
+    payload.cruiseTitle = values.cruiseTitle || undefined;
+    payload.cruiseLine = values.cruiseLine || undefined;
+    payload.shipName = values.shipName || undefined;
+    payload.cruiseDate = values.cruiseDate || undefined;
+    payload.cabinType = values.cabinType || undefined;
+    payload.embarkation = values.embarkation || undefined;
+    payload.debarkation = values.debarkation || undefined;
+    payload.cruiseExtras = values.cruiseExtras || undefined;
+    payload.cruiseOnly = values.cruiseOnly;
+    payload.cruiseItinerary = values.cruiseItinerary ?? [];
+  }
+
   // Extras — all sent in single PATCH call
   payload.transfers = values.transfers.map(t => ({
     booking_ref: t.bookingRef || null,

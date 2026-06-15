@@ -1,6 +1,6 @@
 import { db } from '../../../config/database';
-import { cruise_line, cruise_ship, cruise_itenary } from '@shared/schema';
-import { sql, ilike, or, eq, asc } from 'drizzle-orm';
+import { cruise_line, cruise_ship, cruise_itenary, cruise_voyage } from '@shared/schema';
+import { sql, ilike, and, or, eq, asc } from 'drizzle-orm';
 
 function parsePagination(query: Record<string, any>) {
   const page = Math.max(1, parseInt(query.page as string) || 1);
@@ -140,5 +140,54 @@ export const cruiseSettingsRepository = {
 
   async removeItinerary(id: string) {
     await db.delete(cruise_itenary).where(eq(cruise_itenary.id, id));
+  },
+
+  // ─── Find-or-create helpers (exact, case-insensitive) ─────────────────────
+  // Used by the JSON importer to resolve cruise text values to catalog rows,
+  // creating them when they don't already exist. `ilike` with no wildcards is
+  // an exact match that ignores case.
+
+  async findLineByName(name: string) {
+    if (!name?.trim()) return null;
+    const [row] = await db.select().from(cruise_line).where(ilike(cruise_line.name, name.trim())).limit(1);
+    return row || null;
+  },
+
+  async findShipByName(name: string, cruiseLineId: string) {
+    if (!name?.trim() || !cruiseLineId) return null;
+    const [row] = await db
+      .select()
+      .from(cruise_ship)
+      .where(and(ilike(cruise_ship.name, name.trim()), eq(cruise_ship.cruise_line_id, cruiseLineId)))
+      .limit(1);
+    return row || null;
+  },
+
+  async findItineraryByShipAndDate(shipId: string, date: string) {
+    if (!shipId || !date) return null;
+    const [row] = await db
+      .select()
+      .from(cruise_itenary)
+      .where(and(eq(cruise_itenary.ship_id, shipId), eq(cruise_itenary.date, date)))
+      .limit(1);
+    return row || null;
+  },
+
+  async findVoyageByDay(itineraryId: string, dayNumber: number) {
+    if (!itineraryId) return null;
+    const [row] = await db
+      .select()
+      .from(cruise_voyage)
+      .where(and(eq(cruise_voyage.itinerary_id, itineraryId), eq(cruise_voyage.day_number, String(dayNumber))))
+      .limit(1);
+    return row || null;
+  },
+
+  async createVoyage(itineraryId: string, dayNumber: number, description: string) {
+    const [row] = await db
+      .insert(cruise_voyage)
+      .values({ itinerary_id: itineraryId, day_number: String(dayNumber), description })
+      .returning();
+    return row;
   },
 };

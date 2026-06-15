@@ -1,4 +1,10 @@
 import { jsonMapperRepository } from './json-mapper.repository';
+import { cruiseSettingsRepository } from '../../settings/cruise/cruise.repository';
+
+interface CruiseItineraryDayInput {
+  day?: number | string;
+  description?: string;
+}
 
 interface JsonMappingInput {
   country?: string;
@@ -17,6 +23,13 @@ interface JsonMappingInput {
   parkName?: string;
   parkCode?: string | null;
   isLodgeQuote?: boolean;
+  // Cruise catalog (find-or-create)
+  cruiseLine?: string;
+  shipName?: string;
+  cruiseDate?: string;
+  embarkation?: string;
+  cruiseTitle?: string;
+  cruiseItinerary?: CruiseItineraryDayInput[];
 }
 
 export const jsonMapperService = {
@@ -147,6 +160,49 @@ export const jsonMapperService = {
       warnings.push(`Created new lodge: "${input.lodgeName || input.lodgeCode}"`);
     }
 
-    return { countryId, destinationId, resortId, accommodationId, boardBasisId, tourOperatorId, outboundDepartAirportId, outboundArriveAirportId, inboundDepartAirportId, inboundArriveAirportId, roomTypeId, isLodge, lodgeId, parkId, warnings };
+    // ─── Cruise catalog: line → ship → voyage (find-or-create) ───────────────
+    // Each level is scoped by its parent's id, matched exactly (case-insensitive).
+    let cruiseLineId = '';
+    let shipId = '';
+    let cruiseItineraryId = '';
+
+    if (input.cruiseLine) {
+      let line = await cruiseSettingsRepository.findLineByName(input.cruiseLine);
+      if (!line) { line = await cruiseSettingsRepository.createLine({ name: input.cruiseLine.trim() }); warnings.push(`Created new cruise line: "${input.cruiseLine}"`); }
+      cruiseLineId = line.id;
+
+      if (input.shipName && cruiseLineId) {
+        let ship = await cruiseSettingsRepository.findShipByName(input.shipName, cruiseLineId);
+        if (!ship) { ship = await cruiseSettingsRepository.createShip({ name: input.shipName.trim(), cruise_line_id: cruiseLineId }); warnings.push(`Created new ship: "${input.shipName}"`); }
+        shipId = ship.id;
+
+        if (input.cruiseDate && shipId) {
+          // A voyage is uniquely a ship sailing on a given date.
+          let itin = await cruiseSettingsRepository.findItineraryByShipAndDate(shipId, input.cruiseDate);
+          if (!itin) {
+            itin = await cruiseSettingsRepository.createItinerary({
+              ship_id: shipId,
+              date: input.cruiseDate,
+              departure_port: input.embarkation?.trim() || 'Unknown',
+              itenary: input.cruiseTitle?.trim() || null,
+            });
+            warnings.push(`Created new cruise voyage: "${input.shipName} – ${input.cruiseDate}"`);
+          }
+          cruiseItineraryId = itin.id;
+
+          // Day-by-day plan (catalog cruise_voyage) — create any missing days.
+          if (Array.isArray(input.cruiseItinerary) && cruiseItineraryId) {
+            for (const day of input.cruiseItinerary) {
+              const dayNo = Number(day?.day);
+              if (!Number.isFinite(dayNo)) continue;
+              const existingDay = await cruiseSettingsRepository.findVoyageByDay(cruiseItineraryId, dayNo);
+              if (!existingDay) await cruiseSettingsRepository.createVoyage(cruiseItineraryId, dayNo, day?.description || '');
+            }
+          }
+        }
+      }
+    }
+
+    return { countryId, destinationId, resortId, accommodationId, boardBasisId, tourOperatorId, outboundDepartAirportId, outboundArriveAirportId, inboundDepartAirportId, inboundArriveAirportId, roomTypeId, isLodge, lodgeId, parkId, cruiseLineId, shipId, cruiseItineraryId, warnings };
   },
 };

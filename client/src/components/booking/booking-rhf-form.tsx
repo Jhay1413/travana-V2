@@ -1114,6 +1114,7 @@ export function BookingRHFForm({
                       <SearchableSelect
                         options={(cruiseLinesData || []).map((l) => ({ value: l.name ?? "", label: l.name ?? "" }))}
                         value={field.value ?? ""}
+                        selectedLabel={field.value || undefined}
                         onValueChange={(val) => {
                           field.onChange(val);
                           setValue("shipName", "");
@@ -1137,6 +1138,7 @@ export function BookingRHFForm({
                       <SearchableSelect
                         options={(shipsData || []).map((s) => ({ value: s.name ?? "", label: s.name ?? "" }))}
                         value={field.value ?? ""}
+                        selectedLabel={field.value || undefined}
                         onValueChange={(val) => {
                           field.onChange(val);
                           setValue("cruiseDate", "");
@@ -1157,7 +1159,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Cruise Date</FormLabel>
                     <FormControl>
                       <Select
-                        disabled={!cruiseItineraries?.length}
+                        disabled={!cruiseItineraries?.length && !field.value}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                       >
@@ -1175,6 +1177,10 @@ export function BookingRHFForm({
                           />
                         </SelectTrigger>
                         <SelectContent>
+                          {/* Keep an imported value visible even if the itinerary list hasn't loaded it yet. */}
+                          {field.value && !(cruiseItineraries || []).some((it) => it.date === field.value) && (
+                            <SelectItem value={field.value}>{field.value}</SelectItem>
+                          )}
                           {(cruiseItineraries || []).map((it) => (
                             <SelectItem key={it.id} value={it.date}>
                               {it.date}{it.departure_port ? ` — ${it.departure_port}` : ""}

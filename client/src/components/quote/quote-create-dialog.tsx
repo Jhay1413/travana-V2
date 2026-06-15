@@ -196,6 +196,7 @@ export function buildQuotePayload(
     payload.debarkation = values.debarkation || undefined;
     payload.cruiseExtras = values.cruiseExtras || undefined;
     payload.cruiseOnly = values.cruiseOnly;
+    payload.cruiseItinerary = values.cruiseItinerary ?? [];
   }
 
   Object.assign(payload, buildExtrasPayload(values));

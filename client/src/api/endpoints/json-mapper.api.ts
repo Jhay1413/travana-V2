@@ -16,6 +16,13 @@ export interface JsonMappingInput {
   lodgeName?: string;
   parkName?: string;
   parkCode?: string | null;
+  // Cruise catalog (find-or-create)
+  cruiseLine?: string;
+  shipName?: string;
+  cruiseDate?: string;
+  embarkation?: string;
+  cruiseTitle?: string;
+  cruiseItinerary?: { day?: number | string; description?: string }[];
 }
 
 export interface JsonMappingResult {
@@ -32,6 +39,9 @@ export interface JsonMappingResult {
   roomTypeId: string;
   lodgeId: string;
   parkId: string;
+  cruiseLineId: string;
+  shipId: string;
+  cruiseItineraryId: string;
   warnings: string[];
 }
 
@@ -40,10 +50,12 @@ export const jsonMapperApi = {
    * Map JSON text values to database IDs
    */
   mapToIds: async (input: JsonMappingInput): Promise<JsonMappingResult> => {
-    const { data } = await axiosClient.post<JsonMappingResult>(
+    const { data } = await axiosClient.post<{ success?: boolean; data?: JsonMappingResult } | JsonMappingResult>(
       "/api/v2/json-mapper/map-to-ids",
       input
     );
-    return data as unknown as JsonMappingResult;
+    // The controller wraps the result as { success, data }, but tolerate a bare result too.
+    const payload = (data as { data?: JsonMappingResult })?.data ?? data;
+    return payload as JsonMappingResult;
   },
 };

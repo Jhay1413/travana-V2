@@ -76,7 +76,20 @@ function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown,
   return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 
-interface BookingRelationData {
+interface CruisePayloadData {
+  cruiseTitle?: string;
+  cruiseLine?: string;
+  shipName?: string;
+  cruiseDate?: string;
+  cabinType?: string;
+  embarkation?: string;
+  debarkation?: string;
+  cruiseExtras?: string;
+  cruiseOnly?: boolean;
+  cruiseItinerary?: Array<Record<string, unknown>>;
+}
+
+interface BookingRelationData extends CruisePayloadData {
   outboundFlight?: Partial<InsertBookingFlight>;
   inboundFlight?: Partial<InsertBookingFlight>;
   primaryAccommodation?: Partial<InsertBookingAccomodation>;
@@ -90,6 +103,15 @@ interface BookingRelationData {
 }
 
 type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
+
+// Build the cruise persistence payload from a form payload, or null when no
+// cruise data is present (so non-cruise bookings never touch booking_cruise).
+function buildCruiseData(src: CruisePayloadData & { main_tour_operator_id?: unknown }): Record<string, unknown> | null {
+  const { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cruiseItinerary } = src;
+  const hasCruise = !!(cruiseLine || shipName || cruiseTitle || cruiseDate || cabinType || (Array.isArray(cruiseItinerary) && cruiseItinerary.length));
+  if (!hasCruise) return null;
+  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cruiseItinerary, tourOperatorId: src.main_tour_operator_id ?? null };
+}
 
 export const bookingService = {
   async listBookings(scope: ScopeOrTrusted) {
@@ -433,8 +455,11 @@ export const bookingService = {
       outboundFlight, inboundFlight, primaryAccommodation,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       childAges,
+      cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, embarkation, debarkation, cruiseExtras, cruiseOnly, cruiseItinerary,
       ...bookingFields
     } = data;
+
+    const cruiseData = buildCruiseData(data);
 
     const bookingData: Partial<InsertBooking> = {};
     const directFields: (keyof InsertBooking)[] = [
@@ -498,6 +523,9 @@ export const bookingService = {
     }
     if (extraAccommodations !== undefined) {
       await bookingRepository.replaceExtraAccommodations(id, extraAccommodations);
+    }
+    if (cruiseData) {
+      await bookingRepository.upsertCruise(id, cruiseData);
     }
 
     if (childAges !== undefined) {

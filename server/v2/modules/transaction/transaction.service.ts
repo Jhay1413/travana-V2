@@ -106,6 +106,15 @@ function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
     .filter((url, index, arr) => arr.indexOf(url) === index);
 }
 
+// Build the cruise persistence payload from a relation payload, or null when no
+// cruise data is present (so non-cruise quotes/bookings never touch *_cruise).
+function buildCruiseData(src: Record<string, unknown>): Record<string, unknown> | null {
+  const { cruiseLine, shipName, cruiseTitle, cruiseDate, cabinType, cruiseItinerary } = src;
+  const hasCruise = !!(cruiseLine || shipName || cruiseTitle || cruiseDate || cabinType || (Array.isArray(cruiseItinerary) && cruiseItinerary.length));
+  if (!hasCruise) return null;
+  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cruiseItinerary, tourOperatorId: src.main_tour_operator_id ?? null };
+}
+
 function normalizeFlightInput(input: unknown): Partial<InsertQuoteFlight> {
   if (!input || typeof input !== "object") return {};
   const leg = input as Record<string, unknown>;
@@ -277,6 +286,8 @@ export const transactionService = {
     if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(mainQuoteId, loungePasses);
     if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(mainQuoteId, airportParkings);
     if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(mainQuoteId, extraAccommodations);
+    const cruiseDataQ = buildCruiseData(quoteDataRecord);
+    if (cruiseDataQ) await newQuoteRepository.upsertCruise(mainQuoteId, cruiseDataQ);
 
     const { transaction: mainTxn } = result;
     if (!(quoteFields as any).not_for_social && !transactionData.is_test) {
@@ -443,6 +454,9 @@ export const transactionService = {
         } as import("@shared/schema").InsertBookingAccomodation);
       }
     }
+
+    const cruiseDataB = buildCruiseData(bookingDataRecord);
+    if (cruiseDataB) await bookingRepository.upsertCruise(bookingId, cruiseDataB);
 
     const walletCreditAmount = parseFloat(String(bookingFields.wallet_credit ?? 0)) || 0;
     if (walletCreditAmount > 0 && result.transaction.client_id) {

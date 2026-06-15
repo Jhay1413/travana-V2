@@ -524,6 +524,41 @@ export const bookingRepository = {
     return result;
   },
 
+  async upsertCruise(bookingId: string, data: Record<string, unknown>): Promise<void> {
+    const values = {
+      cruise_line: (data.cruiseLine as string) || null,
+      ship: (data.shipName as string) || null,
+      cruise_date: (data.cruiseDate as string) || null,
+      cabin_type: (data.cabinType as string) || null,
+      cruise_name: (data.cruiseTitle as string) || null,
+      tour_operator_id: (data.tourOperatorId as string) || null,
+    };
+
+    const [existing] = await db.select().from(booking_cruise).where(eq(booking_cruise.booking_id, bookingId)).limit(1);
+    let cruiseRow;
+    if (existing) {
+      [cruiseRow] = await db.update(booking_cruise).set(values).where(eq(booking_cruise.id, existing.id)).returning();
+    } else {
+      [cruiseRow] = await db.insert(booking_cruise)
+        .values({ ...values, booking_id: bookingId, pre_cruise_stay: 0, post_cruise_stay: 0 })
+        .returning();
+    }
+
+    const itinerary = Array.isArray(data.cruiseItinerary) ? (data.cruiseItinerary as Array<Record<string, unknown>>) : undefined;
+    if (itinerary !== undefined) {
+      await db.delete(booking_cruise_itinerary).where(eq(booking_cruise_itinerary.booking_cruise_id, cruiseRow.id));
+      for (const d of itinerary) {
+        const dayNo = Number(d.day ?? d.day_number);
+        if (!Number.isFinite(dayNo)) continue;
+        await db.insert(booking_cruise_itinerary).values({
+          booking_cruise_id: cruiseRow.id,
+          day_number: dayNo,
+          description: (d.description as string) || null,
+        });
+      }
+    }
+  },
+
   async replaceTransfers(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
     await db.delete(booking_transfers).where(eq(booking_transfers.booking_id, bookingId));
     for (const item of items) {

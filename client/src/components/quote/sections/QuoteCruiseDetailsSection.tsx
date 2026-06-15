@@ -61,6 +61,7 @@ export function QuoteCruiseDetailsSection() {
                 <SearchableSelect
                   options={(cruiseLinesData || []).map((l) => ({ value: l.name ?? l.id, label: l.name ?? l.id }))}
                   value={field.value ?? ""}
+                  selectedLabel={field.value || undefined}
                   onValueChange={(name) => {
                     field.onChange(name);
                     setValue("shipName", "");
@@ -84,6 +85,7 @@ export function QuoteCruiseDetailsSection() {
                 <SearchableSelect
                   options={(shipsData || []).map((s) => ({ value: s.name ?? s.id, label: s.name ?? s.id }))}
                   value={field.value ?? ""}
+                  selectedLabel={field.value || undefined}
                   onValueChange={(name) => {
                     field.onChange(name);
                     setValue("cruiseDate", "");
@@ -111,11 +113,15 @@ export function QuoteCruiseDetailsSection() {
               <FormItem>
                 <FormLabel className="text-xs font-medium text-black/60">Cruise Date</FormLabel>
                 <FormControl>
-                  <Select value={field.value ?? ""} onValueChange={field.onChange} disabled={!cruiseItineraries?.length}>
+                  <Select value={field.value ?? ""} onValueChange={field.onChange} disabled={!cruiseItineraries?.length && !field.value}>
                     <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
                       <SelectValue placeholder={cruiseDatePlaceholder} />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* Keep an imported value visible even if the itinerary list hasn't loaded it yet. */}
+                      {field.value && !(cruiseItineraries || []).some((it) => it.date === field.value) && (
+                        <SelectItem value={field.value}>{field.value}</SelectItem>
+                      )}
                       {(cruiseItineraries || []).map((it) => (
                         <SelectItem key={it.id} value={it.date}>
                           {it.date}
