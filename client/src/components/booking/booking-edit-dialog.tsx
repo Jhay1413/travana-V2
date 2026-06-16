@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -131,6 +132,23 @@ function buildDefaultValues(bookingData: any): BookingFormValues {
 
     lodgeId: bookingData.lodge_id || "",
     pets: bookingData.pets ?? 0,
+
+    cruiseTitle: bookingData.cruises?.[0]?.cruise_name || "",
+    cruiseLine: bookingData.cruises?.[0]?.cruise_line || "",
+    shipName: bookingData.cruises?.[0]?.ship || "",
+    cruiseDate: bookingData.cruises?.[0]?.cruise_date || "",
+    cabinType: bookingData.cruises?.[0]?.cabin_type || "",
+    cabinNumber: bookingData.cruises?.[0]?.cabin_number || "",
+    embarkation: bookingData.cruises?.[0]?.embarkation || "",
+    debarkation: bookingData.cruises?.[0]?.debarkation || "",
+    cruiseExtras: (bookingData.cruises?.[0]?.extras || [])
+      .map((e: any) => e.name)
+      .filter(Boolean)
+      .join(", "),
+    cruiseItinerary: (bookingData.cruises?.[0]?.itinerary || []).map((d: any) => ({
+      day: Number(d.day_number) || 0,
+      description: d.description || "",
+    })),
 
     price: parseFloat(String(bookingData.sales_price || 0)) || 0,
     commission: parseFloat(String(bookingData.package_commission || 0)) || 0,
@@ -295,6 +313,7 @@ function buildUpdatePayload(
     payload.shipName = values.shipName || undefined;
     payload.cruiseDate = values.cruiseDate || undefined;
     payload.cabinType = values.cabinType || undefined;
+    payload.cabinNumber = values.cabinNumber || undefined;
     payload.embarkation = values.embarkation || undefined;
     payload.debarkation = values.debarkation || undefined;
     payload.cruiseExtras = values.cruiseExtras || undefined;
@@ -397,11 +416,28 @@ export function BookingEditDialog({
   const deleteImage = useDeleteBookingImage();
   const { data: packageTypesData } = usePackageTypes();
   const { data: bookingData, isLoading, isError } = useBooking(bookingId);
-  const defaultValues = bookingData ? buildDefaultValues(bookingData) : undefined;
-  const initialExtraAccomLabels = (bookingData?.accommodations || [])
-    .filter((a: any) => !a.is_primary)
-    .map((a: any) => a.accomodation_name || "");
-  const existingImages = ((bookingData as any)?.images || []).map((img: any) => ({ id: img.id, url: img.image_url }));
+
+  const defaultValues = useMemo(
+    () => (bookingData ? buildDefaultValues(bookingData) : undefined),
+    [bookingData],
+  );
+
+  const initialExtraAccomLabels = useMemo(
+    () =>
+      (bookingData?.accommodations || [])
+        .filter((a: any) => !a.is_primary)
+        .map((a: any) => a.accomodation_name || ""),
+    [bookingData],
+  );
+
+  const existingImages = useMemo(
+    () =>
+      ((bookingData as any)?.images || []).map((img: any) => ({
+        id: img.id,
+        url: img.image_url,
+      })),
+    [bookingData],
+  );
 
   const handleSubmit = async (
     values: BookingFormValues,

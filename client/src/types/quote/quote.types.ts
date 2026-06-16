@@ -365,6 +365,9 @@ export interface QuoteCruise {
   ship: string | null;
   cruise_date: string | null;
   cabin_type: string | null;
+  cabin_number: string | null;
+  embarkation: string | null;
+  debarkation: string | null;
   cruise_name: string | null;
   pre_cruise_stay: number;
   post_cruise_stay: number;
@@ -437,6 +440,8 @@ export interface EnrichedQuoteAccommodation extends QuoteAccommodation {
 
 export interface EnrichedQuoteCruise extends QuoteCruise {
   tour_operator_name?: string;
+  itinerary?: { id: string; day_number: number | null; description: string | null; sub_description: string | null }[];
+  extras?: { id: string; cruise_extra_id: string | null; name: string | null }[];
 }
 
 export interface EnrichedQuote extends Quote {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRoute } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -118,7 +118,7 @@ function getResponsiveImageUrl(
 }
 
 function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<{ id: string; image_url: string | null; isPrimary: boolean | null }> }) {
-  const validImages = images.filter(i => i.image_url);
+  const validImages = useMemo(() => images.filter(i => i.image_url), [images]);
   const primaryImage = validImages.find(i => i.isPrimary) || validImages[0];
   const heroUrl = primaryImage?.image_url || null;
 
@@ -221,7 +221,7 @@ function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<
 
 function ImageGallery({ images }: { images: PublicQuoteData["images"] }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  const validImages = images.filter(i => i.image_url);
+  const validImages = useMemo(() => images.filter(i => i.image_url), [images]);
 
   if (validImages.length <= 1) return null;
 
@@ -353,22 +353,41 @@ function DestinationGuruSection({ guru }: { guru: NonNullable<PublicQuoteData["d
   const [guruExpanded, setGuruExpanded] = useState(false);
   const [openActivities, setOpenActivities] = useState<Set<number>>(new Set());
 
-  const data = (typeof guru.data === "string" ? tryParseJson(guru.data) : guru.data) as any;
-  if (!data) return null;
+  // Parse once, keyed on the raw data value.
+  const data = useMemo(
+    () => (typeof guru.data === "string" ? tryParseJson(guru.data) : guru.data) as any,
+    [guru.data]
+  );
 
-  const toggleActivity = (rank: number) => {
+  const temps: GuruMonthTemp[] = useMemo(
+    () => (data && Array.isArray(data.temperatures) ? data.temperatures : []),
+    [data]
+  );
+  const maxHigh = useMemo(
+    () => (temps.length > 0 ? Math.max(...temps.map((t: GuruMonthTemp) => t.avgHigh)) : 0),
+    [temps]
+  );
+  const mustDo: GuruMustDoItem[] = useMemo(
+    () => (data && Array.isArray(data.mustDo) ? data.mustDo : []),
+    [data]
+  );
+  const hasMeaningfulData = useMemo(
+    () =>
+      data &&
+      (data.travelInfo || mustDo.length > 0 || data.bestTimeToVisit || data.tagline || data.flightTimesFromUK || temps.length > 0),
+    [data, mustDo, temps]
+  );
+
+  // Functional updater only — no external deps needed.
+  const toggleActivity = useCallback((rank: number) => {
     setOpenActivities(prev => {
       const next = new Set(prev);
       if (next.has(rank)) next.delete(rank); else next.add(rank);
       return next;
     });
-  };
+  }, []);
 
-  const temps: GuruMonthTemp[] = Array.isArray(data.temperatures) ? data.temperatures : [];
-  const maxHigh = temps.length > 0 ? Math.max(...temps.map((t: GuruMonthTemp) => t.avgHigh)) : 0;
-  const mustDo: GuruMustDoItem[] = Array.isArray(data.mustDo) ? data.mustDo : [];
-
-  const hasMeaningfulData = data.travelInfo || mustDo.length > 0 || data.bestTimeToVisit || data.tagline || data.flightTimesFromUK || temps.length > 0;
+  if (!data) return null;
   if (!hasMeaningfulData) return null;
 
   return (
@@ -884,7 +903,10 @@ function CruiseSection({ cruises }: { cruises: PublicQuoteData["cruises"] }) {
                     {c.itinerary.map((it, i) => (
                       <div key={i} className="flex gap-3 text-sm">
                         <span className="text-white/30 w-12 shrink-0">Day {it.day}</span>
-                        <span className="text-white/70">{it.description}</span>
+                        <span className="flex flex-col">
+                          <span className="text-white/70">{it.description}</span>
+                          {it.subDescription && <span className="text-white/40 text-xs">{it.subDescription}</span>}
+                        </span>
                       </div>
                     ))}
                   </div>

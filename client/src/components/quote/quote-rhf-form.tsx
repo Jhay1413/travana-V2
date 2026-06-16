@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { parseISO, isValid, addDays, format } from "date-fns";
-import { useForm, type Control } from "react-hook-form";
+import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
@@ -51,25 +51,25 @@ export function QuoteRHFForm({
   const [existingImagesState, setExistingImagesState] = useState<{ id: string; url: string }[]>(existingImages);
   const skipLodgeResetRef = useRef(false);
 
-  const { watch, setValue, control } = form;
+  const { setValue, control } = form;
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const packageType = watch("packageType");
-  const country = watch("country");
-  const destination = watch("destination");
-  const resort = watch("resort");
-  const parkId = watch("parkId");
-  const passengersAdults = watch("passengersAdults");
-  const passengersChildren = watch("passengersChildren");
-  const cruiseOnly = watch("cruiseOnly");
-  const tourOperatorId = watch("tourOperatorId");
-  const price = watch("price");
-  const discount = watch("discount");
-  const serviceCharge = watch("serviceCharge");
-  const commission = watch("commission");
-  const checkInDate = watch("checkInDate");
-  const nights = watch("nights");
+  const packageType = useWatch({ control, name: "packageType" });
+  const country = useWatch({ control, name: "country" });
+  const destination = useWatch({ control, name: "destination" });
+  const resort = useWatch({ control, name: "resort" });
+  const parkId = useWatch({ control, name: "parkId" });
+  const passengersAdults = useWatch({ control, name: "passengersAdults" });
+  const passengersChildren = useWatch({ control, name: "passengersChildren" });
+  const cruiseOnly = useWatch({ control, name: "cruiseOnly" });
+  const tourOperatorId = useWatch({ control, name: "tourOperatorId" });
+  const price = useWatch({ control, name: "price" });
+  const discount = useWatch({ control, name: "discount" });
+  const serviceCharge = useWatch({ control, name: "serviceCharge" });
+  const commission = useWatch({ control, name: "commission" });
+  const checkInDate = useWatch({ control, name: "checkInDate" });
+  const nights = useWatch({ control, name: "nights" });
 
   // ── Lookup data ──────────────────────────────────────────────────────────
   const { data: packageTypesData } = usePackageTypes();

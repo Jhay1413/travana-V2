@@ -2,7 +2,7 @@ import { db } from "../../config/database";
 import {
   quote, quote_flights, quote_accomodation, quote_transfers, quote_car_hire,
   quote_attraction_ticket, quote_lounge_pass, quote_airport_parking,
-  quote_cruise, quote_cruise_item_extra, quote_cruise_itinerary,
+  quote_cruise, quote_cruise_item_extra, quote_cruise_itinerary, cruise_extra_item,
   passengers, deal_images, quoteImages, quoteViewsTable, tags, quoteTags,
   accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
@@ -17,7 +17,7 @@ import type {
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte } from "drizzle-orm";
+import { eq, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
@@ -42,6 +42,15 @@ function convertAccommodationDates(data: Record<string, unknown>): Record<string
   const result = { ...data };
   if ('check_in_date_time' in result) result.check_in_date_time = toDateOrNull(result.check_in_date_time);
   return result;
+}
+
+// Resolve a cruise-extra name to its catalog id, creating the row if it's new.
+// Exact match, case-insensitive (ilike with no wildcards).
+async function findOrCreateCruiseExtra(name: string): Promise<string> {
+  const [existing] = await db.select().from(cruise_extra_item).where(ilike(cruise_extra_item.name, name)).limit(1);
+  if (existing) return existing.id;
+  const [created] = await db.insert(cruise_extra_item).values({ name }).returning();
+  return created.id;
 }
 
 const departAirport = alias(airport, "depart_airport");
@@ -705,11 +714,19 @@ export const newQuoteRepository = {
 
     // Fetch cruise extras and itineraries (depend on cruise IDs from above)
     const cruiseIds = cruises.map(c => c.cruise.id);
-    let cruiseItemExtras: { id: string; cruise_extra_id: string | null; quote_cruise_id: string | null }[] = [];
-    let cruiseItineraries: { id: string; quote_cruise_id: string | null; day_number: number | null; description: string | null }[] = [];
+    let cruiseItemExtras: { id: string; cruise_extra_id: string | null; quote_cruise_id: string | null; name: string | null }[] = [];
+    let cruiseItineraries: { id: string; quote_cruise_id: string | null; day_number: number | null; description: string | null; sub_description: string | null }[] = [];
     if (cruiseIds.length > 0) {
       [cruiseItemExtras, cruiseItineraries] = await Promise.all([
-        db.select().from(quote_cruise_item_extra).where(inArray(quote_cruise_item_extra.quote_cruise_id, cruiseIds)),
+        db.select({
+          id: quote_cruise_item_extra.id,
+          cruise_extra_id: quote_cruise_item_extra.cruise_extra_id,
+          quote_cruise_id: quote_cruise_item_extra.quote_cruise_id,
+          name: cruise_extra_item.name,
+        })
+          .from(quote_cruise_item_extra)
+          .leftJoin(cruise_extra_item, eq(quote_cruise_item_extra.cruise_extra_id, cruise_extra_item.id))
+          .where(inArray(quote_cruise_item_extra.quote_cruise_id, cruiseIds)),
         db.select().from(quote_cruise_itinerary).where(inArray(quote_cruise_itinerary.quote_cruise_id, cruiseIds)),
       ]);
     }
@@ -930,6 +947,8 @@ export const newQuoteRepository = {
       cruise_date: (data.cruiseDate as string) || null,
       cabin_type: (data.cabinType as string) || null,
       cabin_number: (data.cabinNumber as string) || null,
+      embarkation: (data.embarkation as string) || null,
+      debarkation: (data.debarkation as string) || null,
       cruise_name: (data.cruiseTitle as string) || null,
       tour_operator_id: (data.tourOperatorId as string) || null,
     };
@@ -955,7 +974,21 @@ export const newQuoteRepository = {
           quote_cruise_id: cruiseRow.id,
           day_number: dayNo,
           description: (d.description as string) || null,
+          sub_description: (d.subDescription as string) || (d.sub_description as string) || null,
         });
+      }
+    }
+
+    // Cruise extras: comma-separated free text → find-or-create catalog items, then re-link.
+    if (data.cruiseExtras !== undefined) {
+      await db.delete(quote_cruise_item_extra).where(eq(quote_cruise_item_extra.quote_cruise_id, cruiseRow.id));
+      const names = String(data.cruiseExtras || "")
+        .split(",")
+        .map((n) => n.trim())
+        .filter((n) => n.length > 0);
+      for (const name of names) {
+        const extraId = await findOrCreateCruiseExtra(name);
+        await db.insert(quote_cruise_item_extra).values({ quote_cruise_id: cruiseRow.id, cruise_extra_id: extraId });
       }
     }
   },

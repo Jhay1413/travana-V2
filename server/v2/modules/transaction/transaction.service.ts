@@ -109,10 +109,10 @@ function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
 // Build the cruise persistence payload from a relation payload, or null when no
 // cruise data is present (so non-cruise quotes/bookings never touch *_cruise).
 function buildCruiseData(src: Record<string, unknown>): Record<string, unknown> | null {
-  const { cruiseLine, shipName, cruiseTitle, cruiseDate, cabinType, cruiseItinerary } = src;
-  const hasCruise = !!(cruiseLine || shipName || cruiseTitle || cruiseDate || cabinType || (Array.isArray(cruiseItinerary) && cruiseItinerary.length));
+  const { cruiseLine, shipName, cruiseTitle, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary } = src;
+  const hasCruise = !!(cruiseLine || shipName || cruiseTitle || cruiseDate || cabinType || cabinNumber || embarkation || debarkation || cruiseExtras || (Array.isArray(cruiseItinerary) && cruiseItinerary.length));
   if (!hasCruise) return null;
-  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cruiseItinerary, tourOperatorId: src.main_tour_operator_id ?? null };
+  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary, tourOperatorId: src.main_tour_operator_id ?? null };
 }
 
 function normalizeFlightInput(input: unknown): Partial<InsertQuoteFlight> {

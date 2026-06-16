@@ -24,7 +24,6 @@ export interface NeonClient {
 }
 
 export interface NeonClientImportRow {
-  id: string;
   title?: string;
   firstName: string;
   surename: string;

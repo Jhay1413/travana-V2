@@ -112,10 +112,19 @@ export function useQuoteToFormValues(quoteData: any) {
       shipName: quoteData.cruises?.[0]?.ship || "",
       cruiseDate: quoteData.cruises?.[0]?.cruise_date || "",
       cabinType: quoteData.cruises?.[0]?.cabin_type || "",
-      embarkation: "",
-      debarkation: "",
-      cruiseExtras: "",
+      cabinNumber: quoteData.cruises?.[0]?.cabin_number || "",
+      embarkation: quoteData.cruises?.[0]?.embarkation || "",
+      debarkation: quoteData.cruises?.[0]?.debarkation || "",
+      cruiseExtras: (quoteData.cruises?.[0]?.extras || [])
+        .map((e: any) => e.name)
+        .filter(Boolean)
+        .join(", "),
       cruiseOnly: false,
+      cruiseItinerary: (quoteData.cruises?.[0]?.itinerary || []).map((d: any) => ({
+        day: Number(d.day_number) || 0,
+        description: d.description || "",
+        subDescription: d.sub_description || "",
+      })),
       price: parseFloat(quoteData.sales_price || "0"),
       commission: parseFloat(quoteData.package_commission || "0"),
       discount: parseFloat(quoteData.discounts || "0"),

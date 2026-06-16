@@ -158,7 +158,7 @@ export type QuoteDisplay = {
   notes: string[];
   lodge?: { name: string; type: string; code: string };
   cottage?: { name: string; code: string };
-  cruise?: { cruiseLine: string; ship: string; cabinType: string; cruiseName: string; cruiseDate: string; preCruiseStay: number; postCruiseStay: number };
+  cruise?: { cruiseLine: string; ship: string; cabinType: string; cabinNumber: string; embarkation: string; debarkation: string; cruiseName: string; cruiseDate: string; preCruiseStay: number; postCruiseStay: number; itinerary: { day: number; description: string; subDescription: string }[] };
   pets: number;
   haysRef?: string;
   supplierRef?: string;
@@ -322,7 +322,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     notes: [],
     pets: apiData.pets || 0,
     lodge: ("lodge_type" in apiData && apiData.lodge_type) ? { name: ("lodge_name" in apiData ? (apiData as any).lodge_name : "") || "", type: apiData.lodge_type || "", code: ("lodge_code" in apiData ? (apiData as any).lodge_code : "") || "" } : undefined,
-    cruise: cruises.length > 0 ? { cruiseLine: cruises[0].cruise_line || "", ship: cruises[0].ship || "", cabinType: cruises[0].cabin_type || "", cruiseName: cruises[0].cruise_name || "", cruiseDate: cruises[0].cruise_date || "", preCruiseStay: cruises[0].pre_cruise_stay || 0, postCruiseStay: cruises[0].post_cruise_stay || 0 } : undefined,
+    cruise: cruises.length > 0 ? { cruiseLine: cruises[0].cruise_line || "", ship: cruises[0].ship || "", cabinType: cruises[0].cabin_type || "", cabinNumber: cruises[0].cabin_number || "", embarkation: cruises[0].embarkation || "", debarkation: cruises[0].debarkation || "", cruiseName: cruises[0].cruise_name || "", cruiseDate: cruises[0].cruise_date || "", preCruiseStay: cruises[0].pre_cruise_stay || 0, postCruiseStay: cruises[0].post_cruise_stay || 0, itinerary: (cruises[0].itinerary || []).map((d: any) => ({ day: Number(d.day_number) || 0, description: d.description || "", subDescription: d.sub_description || "" })) } : undefined,
     haysRef: ("hays_ref" in apiData ? apiData.hays_ref : undefined) || undefined,
     supplierRef: ("supplier_ref" in apiData ? apiData.supplier_ref : undefined) || undefined,
     transfers: (apiData.transfers || []).map((t: EnrichedTransfer) => ({

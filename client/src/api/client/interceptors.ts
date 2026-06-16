@@ -23,7 +23,7 @@ axiosClient.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       const url = error.config?.url || "";
-      const skipRedirectPaths = ["/api/auth/", "/api/user-profiles/", "/api/public/", "/api/quote-share/"];
+      const skipRedirectPaths = ["/api/auth/", "/api/v2/users/profiles/", "/api/public/", "/api/v2/quote-share/"];
       if (!skipRedirectPaths.some((p) => url.includes(p))) {
         window.location.href = "/";
       }

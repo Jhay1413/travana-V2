@@ -4,7 +4,7 @@ import { Tag, X } from "lucide-react";
 import { FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useTags } from "@/hooks/queries/use-tags";
+import { useTags } from "@/hooks/queries/use-tag-queries";
 import { SectionHeader } from "@/components/quote/sections/SectionHeader";
 import type { QuoteFormValues } from "@/types/quote";
 

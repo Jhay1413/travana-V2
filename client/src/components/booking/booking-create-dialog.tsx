@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -199,6 +200,7 @@ function buildCreatePayload(
             shipName: values.shipName || undefined,
             cruiseDate: values.cruiseDate || undefined,
             cabinType: values.cabinType || undefined,
+            cabinNumber: values.cabinNumber || undefined,
             embarkation: values.embarkation || undefined,
             debarkation: values.debarkation || undefined,
             cruiseExtras: values.cruiseExtras || undefined,
@@ -223,10 +225,11 @@ export function BookingCreateDialog({
   const { data: packageTypesData } = usePackageTypes();
   const { data: currentUser } = useCurrentUser();
 
-  const defaultValues: Partial<BookingFormValues> = {
-    ...defaultBookingFormValues,
-    ...initialValues,
-  };
+  const defaultValues = useMemo<Partial<BookingFormValues>>(
+    () => ({ ...defaultBookingFormValues, ...initialValues }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [initialValues],
+  );
 
   const handleSubmit = async (values: BookingFormValues) => {
     if (!currentUser?.id) {

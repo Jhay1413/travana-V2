@@ -75,7 +75,7 @@ export interface PublicQuoteData {
     cabinType: string;
     cruiseName: string;
     cruiseDate: string | null;
-    itinerary: Array<{ day: number; description: string }>;
+    itinerary: Array<{ day: number; description: string; subDescription: string }>;
   }>;
   passengers: Array<{
     title: string | null;

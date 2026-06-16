@@ -15,7 +15,7 @@ import { transformQuoteData, currency, formatUKDate } from "@/components/quote/q
 import { sumUpsells } from "@/types/booking";
 import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
 import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
-import { BookingEditDialog } from "@/components/booking/booking-edit-dialog";
+import { BookingEditDialog } from "@/components/booking/BookingEditDialog";
 import { BookingUpsellsDialog } from "@/components/booking/BookingUpsellsDialog";
 
 import { useQuoteImages } from "@/components/quote/hooks";

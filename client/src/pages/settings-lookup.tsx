@@ -71,7 +71,7 @@ interface TableDef {
 const TABLE_DEFS: Record<string, TableDef> = {
   "tour-operators": {
     label: "Tour Operators",
-    apiPath: "/api/settings/tour-operators",
+    apiPath: "/api/v2/settings/tour-operators",
     navKey: "tour-operators",
     displayColumns: [
       { key: "name", label: "Name" },
@@ -113,7 +113,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "destinations": {
     label: "Destinations",
-    apiPath: "/api/settings/destinations",
+    apiPath: "/api/v2/settings/destinations",
     navKey: "destinations",
     displayColumns: [
       { key: "name", label: "Name" },
@@ -129,7 +129,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "resorts": {
     label: "Resorts",
-    apiPath: "/api/settings/resorts",
+    apiPath: "/api/v2/settings/resorts",
     navKey: "resorts-admin",
     displayColumns: [
       { key: "name", label: "Name" },
@@ -137,13 +137,13 @@ const TABLE_DEFS: Record<string, TableDef> = {
     ],
     formFields: [
       { key: "name", label: "Resort Name", type: "text", required: true, placeholder: "e.g. Palm Beach Resort" },
-      { key: "destination_id", label: "Destination", type: "relation", lookupApi: "/api/settings/destinations", lookupLabelKey: "name" },
+      { key: "destination_id", label: "Destination", type: "relation", lookupApi: "/api/v2/settings/destinations", lookupLabelKey: "name" },
     ],
     primaryLabel: (r) => r.name ?? "–",
   },
   "accommodation-types": {
     label: "Accommodation Types",
-    apiPath: "/api/settings/accommodation-types",
+    apiPath: "/api/v2/settings/accommodation-types",
     navKey: "accommodation-types",
     displayColumns: [{ key: "type", label: "Type" }],
     formFields: [
@@ -153,7 +153,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "accommodation-list": {
     label: "Accommodation List",
-    apiPath: "/api/settings/accommodation-list",
+    apiPath: "/api/v2/settings/accommodations",
     navKey: "accommodation-list",
     displayColumns: [
       { key: "name", label: "Name" },
@@ -166,14 +166,14 @@ const TABLE_DEFS: Record<string, TableDef> = {
     formFields: [
       { key: "name", label: "Name", type: "text", required: true, placeholder: "Accommodation name" },
       { key: "description", label: "Description", type: "text", placeholder: "Brief description" },
-      { key: "resorts_id", label: "Resort", type: "relation", lookupApi: "/api/settings/resorts", lookupLabelKey: "name" },
-      { key: "type_id", label: "Accommodation Type", type: "relation", lookupApi: "/api/settings/accommodation-types", lookupLabelKey: "type" },
+      { key: "resorts_id", label: "Resort", type: "relation", lookupApi: "/api/v2/settings/resorts", lookupLabelKey: "name" },
+      { key: "type_id", label: "Accommodation Type", type: "relation", lookupApi: "/api/v2/settings/accommodation-types", lookupLabelKey: "type" },
     ],
     primaryLabel: (r) => r.name ?? "–",
   },
   "board-basis": {
     label: "Board Basis",
-    apiPath: "/api/settings/board-basis",
+    apiPath: "/api/v2/settings/board-basis",
     navKey: "board-basis",
     displayColumns: [{ key: "type", label: "Type" }],
     formFields: [
@@ -193,7 +193,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "parks": {
     label: "Parks",
-    apiPath: "/api/settings/parks",
+    apiPath: "/api/v2/settings/parks",
     navKey: "parks",
     displayColumns: [
       { key: "name", label: "Name" },
@@ -213,7 +213,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "cottages": {
     label: "Cottages",
-    apiPath: "/api/settings/cottages",
+    apiPath: "/api/v2/settings/cottages",
     navKey: "cottages-admin",
     displayColumns: [
       { key: "cottage_name", label: "Name" },
@@ -235,7 +235,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "lodges": {
     label: "Lodges",
-    apiPath: "/api/settings/lodges",
+    apiPath: "/api/v2/settings/lodges",
     navKey: "lodges-admin",
     displayColumns: [
       { key: "lodge_name", label: "Name" },
@@ -247,7 +247,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
     formFields: [
       { key: "lodge_name", label: "Lodge Name", type: "text", required: true, placeholder: "e.g. Lakeside Lodge" },
       { key: "lodge_code", label: "Lodge Code", type: "text", placeholder: "e.g. LL001" },
-      { key: "park_id", label: "Park", type: "relation", lookupApi: "/api/settings/parks", lookupLabelKey: "name" },
+      { key: "park_id", label: "Park", type: "relation", lookupApi: "/api/v2/settings/parks", lookupLabelKey: "name" },
       { key: "adults", label: "Adults", type: "number", placeholder: "2" },
       { key: "children", label: "Children", type: "number", placeholder: "0" },
       { key: "infants", label: "Infants", type: "number", placeholder: "0" },
@@ -270,7 +270,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "cruise-lines": {
     label: "Cruise Lines",
-    apiPath: "/api/settings/cruise-lines",
+    apiPath: "/api/v2/settings/cruise/lines",
     navKey: "cruise-lines",
     displayColumns: [{ key: "name", label: "Name" }],
     formFields: [
@@ -280,7 +280,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "cruise-ships": {
     label: "Cruise Ships",
-    apiPath: "/api/settings/cruise-ships",
+    apiPath: "/api/v2/settings/cruise/ships",
     navKey: "cruise-ships",
     displayColumns: [
       { key: "name", label: "Ship Name" },
@@ -288,13 +288,13 @@ const TABLE_DEFS: Record<string, TableDef> = {
     ],
     formFields: [
       { key: "name", label: "Ship Name", type: "text", required: true, placeholder: "e.g. Symphony of the Seas" },
-      { key: "cruise_line_id", label: "Cruise Line", type: "relation", lookupApi: "/api/settings/cruise-lines", lookupLabelKey: "name" },
+      { key: "cruise_line_id", label: "Cruise Line", type: "relation", lookupApi: "/api/v2/settings/cruise/lines", lookupLabelKey: "name" },
     ],
     primaryLabel: (r) => r.name ?? "–",
   },
   "cruise-itineraries": {
     label: "Cruise Itineraries",
-    apiPath: "/api/settings/cruise-itineraries",
+    apiPath: "/api/v2/settings/cruise/itineraries",
     navKey: "cruise-itineraries",
     displayColumns: [
       { key: "itenary", label: "Itinerary Name" },
@@ -306,7 +306,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
       { key: "itenary", label: "Itinerary Name", type: "text", placeholder: "e.g. Mediterranean Explorer" },
       { key: "departure_port", label: "Departure Port", type: "text", required: true, placeholder: "e.g. Southampton" },
       { key: "date", label: "Departure Date", type: "text", placeholder: "YYYY-MM-DD" },
-      { key: "ship_id", label: "Ship", type: "relation", lookupApi: "/api/settings/cruise-ships", lookupLabelKey: "name" },
+      { key: "ship_id", label: "Ship", type: "relation", lookupApi: "/api/v2/settings/cruise/ships", lookupLabelKey: "name" },
     ],
     primaryLabel: (r) => r.itenary ?? r.departure_port ?? "–",
   },
@@ -322,13 +322,13 @@ const TABLE_DEFS: Record<string, TableDef> = {
     formFields: [
       { key: "day_number", label: "Day Number", type: "number", required: true, placeholder: "e.g. 1" },
       { key: "description", label: "Description", type: "text", placeholder: "e.g. At sea, Arrive Naples" },
-      { key: "itinerary_id", label: "Itinerary", type: "relation", lookupApi: "/api/settings/cruise-itineraries", lookupLabelKey: "itenary" },
+      { key: "itinerary_id", label: "Itinerary", type: "relation", lookupApi: "/api/v2/settings/cruise/itineraries", lookupLabelKey: "itenary" },
     ],
     primaryLabel: (r) => `Day ${r.day_number ?? "?"}${r.description ? ` – ${r.description}` : ""}`,
   },
   "room-types": {
     label: "Room Types",
-    apiPath: "/api/settings/room-types",
+    apiPath: "/api/v2/settings/room-types",
     navKey: "room-types",
     displayColumns: [{ key: "name", label: "Name" }],
     formFields: [

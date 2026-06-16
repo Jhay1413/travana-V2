@@ -294,7 +294,7 @@ export const quotePublicRepository = {
         itinerary: cruiseItineraries
           .filter(i => i.quote_cruise_id === c.cruise.id)
           .sort((a: any, b: any) => (a.day_number || 0) - (b.day_number || 0))
-          .map((i: any) => ({ day: i.day_number, description: i.description })),
+          .map((i: any) => ({ day: i.day_number, description: i.description, subDescription: i.sub_description || "" })),
       })),
       passengers: passengerList.map(p => ({
         title: p.title,

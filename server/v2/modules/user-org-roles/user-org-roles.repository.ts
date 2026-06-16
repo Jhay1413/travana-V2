@@ -1,5 +1,5 @@
 import { db } from '../../config/database';
-import { userOrgRoles, branchMembers, type UserOrgRole, type InsertUserOrgRole } from '@shared/schema';
+import { userOrgRoles, branchMembers, user, type UserOrgRole, type InsertUserOrgRole } from '@shared/schema';
 import { and, eq } from 'drizzle-orm';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -129,5 +129,23 @@ export const userOrgRolesRepository = {
           eq(userOrgRoles.role, role),
         ),
       );
+  },
+
+  /** Fetch the global `role` column from the `user` table (e.g. to check for `platform_admin`). */
+  async findUserRole(userId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ role: user.role })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    return row?.role ?? null;
+  },
+
+  /** Update the legacy `orgRole` column on the `user` table. */
+  async updateUserOrgRole(userId: string, orgRole: string): Promise<void> {
+    await db
+      .update(user)
+      .set({ orgRole, updatedAt: new Date() })
+      .where(eq(user.id, userId));
   },
 };

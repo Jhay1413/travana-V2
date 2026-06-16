@@ -3,7 +3,7 @@ import {
   booking, booking_flights, booking_accomodation, booking_transfers,
   booking_car_hire, booking_attraction_ticket, booking_lounge_pass,
   booking_airport_parking, booking_cruise, booking_cruise_item_extra,
-  booking_cruise_itinerary, booking_upsell, passengers, deal_images, bookingImages, accommodation_images, lodge_images,
+  booking_cruise_itinerary, booking_upsell, cruise_extra_item, passengers, deal_images, bookingImages, accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type, referral, clientTable,
 } from "@shared/schema";
@@ -14,7 +14,7 @@ import type {
   InsertBookingAirportParking, InsertBookingCruise, InsertBookingCruiseItemExtra,
   InsertBookingCruiseItinerary,
 } from "@shared/schema";
-import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
@@ -402,6 +402,25 @@ export const bookingRepository = {
         .orderBy(desc(booking_upsell.added_at)),
     ]);
 
+    // Fetch the per-booking day-by-day cruise itinerary + extras (depend on cruise IDs above).
+    const bookingCruiseIds = cruises.map(c => c.cruise.id);
+    let bookingCruiseItineraries: { id: string; booking_cruise_id: string | null; day_number: number | null; description: string | null; sub_description: string | null }[] = [];
+    let bookingCruiseItemExtras: { id: string; cruise_extra_id: string | null; booking_cruise_id: string | null; name: string | null }[] = [];
+    if (bookingCruiseIds.length > 0) {
+      [bookingCruiseItineraries, bookingCruiseItemExtras] = await Promise.all([
+        db.select().from(booking_cruise_itinerary).where(inArray(booking_cruise_itinerary.booking_cruise_id, bookingCruiseIds)),
+        db.select({
+          id: booking_cruise_item_extra.id,
+          cruise_extra_id: booking_cruise_item_extra.cruise_extra_id,
+          booking_cruise_id: booking_cruise_item_extra.booking_cruise_id,
+          name: cruise_extra_item.name,
+        })
+          .from(booking_cruise_item_extra)
+          .leftJoin(cruise_extra_item, eq(booking_cruise_item_extra.cruise_extra_id, cruise_extra_item.id))
+          .where(inArray(booking_cruise_item_extra.booking_cruise_id, bookingCruiseIds)),
+      ]);
+    }
+
     return {
       ...b.booking,
       holiday_type_name: b.holiday_type_name,
@@ -431,7 +450,14 @@ export const bookingRepository = {
       attractionTickets: attractionTickets.map(t => ({ ...t.attractionTicket, tour_operator_name: t.tour_operator_name })),
       loungePasses: loungePasses.map(p => ({ ...p.loungePass, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
       airportParkings: airportParkings.map(p => ({ ...p.airportParking, airport_name: p.airport_name, tour_operator_name: p.tour_operator_name })),
-      cruises: cruises.map(c => ({ ...c.cruise, tour_operator_name: c.tour_operator_name })),
+      cruises: cruises.map(c => ({
+        ...c.cruise,
+        tour_operator_name: c.tour_operator_name,
+        extras: bookingCruiseItemExtras.filter(e => e.booking_cruise_id === c.cruise.id),
+        itinerary: bookingCruiseItineraries
+          .filter(i => i.booking_cruise_id === c.cruise.id)
+          .sort((a, b) => (a.day_number || 0) - (b.day_number || 0)),
+      })),
       upsells: upsellRows,
       passengers: passengerList,
       hasReferral: referralRows.length > 0,
@@ -531,6 +557,8 @@ export const bookingRepository = {
       cruise_date: (data.cruiseDate as string) || null,
       cabin_type: (data.cabinType as string) || null,
       cabin_number: (data.cabinNumber as string) || null,
+      embarkation: (data.embarkation as string) || null,
+      debarkation: (data.debarkation as string) || null,
       cruise_name: (data.cruiseTitle as string) || null,
       tour_operator_id: (data.tourOperatorId as string) || null,
     };
@@ -555,7 +583,22 @@ export const bookingRepository = {
           booking_cruise_id: cruiseRow.id,
           day_number: dayNo,
           description: (d.description as string) || null,
+          sub_description: (d.subDescription as string) || (d.sub_description as string) || null,
         });
+      }
+    }
+
+    // Cruise extras: comma-separated free text → find-or-create catalog items, then re-link.
+    if (data.cruiseExtras !== undefined) {
+      await db.delete(booking_cruise_item_extra).where(eq(booking_cruise_item_extra.booking_cruise_id, cruiseRow.id));
+      const names = String(data.cruiseExtras || "")
+        .split(",")
+        .map((n) => n.trim())
+        .filter((n) => n.length > 0);
+      for (const name of names) {
+        const [existingExtra] = await db.select().from(cruise_extra_item).where(ilike(cruise_extra_item.name, name)).limit(1);
+        const extraId = existingExtra?.id ?? (await db.insert(cruise_extra_item).values({ name }).returning())[0].id;
+        await db.insert(booking_cruise_item_extra).values({ booking_cruise_id: cruiseRow.id, cruise_extra_id: extraId });
       }
     }
   },

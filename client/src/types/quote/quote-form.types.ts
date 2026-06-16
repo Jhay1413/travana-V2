@@ -75,12 +75,13 @@ export const quoteFormSchema = z.object({
   shipName: z.string().default(""),
   cruiseDate: z.string().default(""),
   cabinType: z.string().default(""),
+  cabinNumber: z.string().default(""),
   embarkation: z.string().default(""),
   debarkation: z.string().default(""),
   cruiseExtras: z.string().default(""),
   cruiseOnly: z.boolean().default(false),
   // Day-by-day itinerary — no direct UI; populated from JSON import, persisted on save.
-  cruiseItinerary: z.array(z.object({ day: z.number(), description: z.string() })).default([]),
+  cruiseItinerary: z.array(z.object({ day: z.number(), description: z.string(), subDescription: z.string().default("") })).default([]),
 
   // Pricing
   price: z.coerce.number().min(0).default(0),
@@ -233,6 +234,7 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   shipName: "",
   cruiseDate: "",
   cabinType: "",
+  cabinNumber: "",
   embarkation: "",
   debarkation: "",
   cruiseExtras: "",

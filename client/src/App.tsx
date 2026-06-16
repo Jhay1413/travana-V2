@@ -1,65 +1,83 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
-import NotFound from "@/pages/not-found";
-import ForbiddenPage from "@/pages/forbidden";
-import LandingPage from "@/pages/landing";
-import SignupAgencyPage from "@/pages/signup-agency";
-import WelcomeTeamPage from "@/pages/welcome-team";
-import AgencyPage from "@/pages/agency";
-import PlatformAdminDashboard from "@/pages/platform-admin-dashboard";
-import PlatformAdminPage from "@/pages/platform-admin";
-import PlatformAdminOrgPage from "@/pages/platform-admin-org";
-import PlatformAdminUsersPage from "@/pages/platform-admin-users";
-import PlatformAdminAuditPage from "@/pages/platform-admin-audit";
-import ReferralAgentDashboard from "@/pages/referral-agent";
 import { useRole } from "@/hooks/use-role";
 import { BrandingApplier } from "@/components/branding-applier";
-import PublicQuotePage from "@/pages/public-quote";
-import AgentOverviewPage from "@/pages/agent-overview";
-import AgentStatsPage from "@/pages/agent-stats";
-import BranchOverviewPage from "@/pages/branch-overview";
-import OrganizationOverviewPage from "@/pages/organization-overview";
-import ClientsPage from "@/pages/clients";
-import ClientsListPage from "@/pages/clients-list";
-import ClientPage from "@/pages/client";
-import QuotePage from "@/pages/quote";
-import EnquiryPage from "@/pages/enquiry";
-import TicketsPage from "@/pages/tickets";
-import AdminImportPage from "@/pages/admin-import";
-import AdminLookupPage from "@/pages/admin-lookup";
-import SettingsLookupPage from "@/pages/settings-lookup";
-import BookingPage from "@/pages/booking-standalone";
-import BookingsPage from "@/pages/bookings";
-import TasksPage from "@/pages/tasks";
-import ReportsPage from "@/pages/reports";
-import PipelinePage from "@/pages/pipeline";
-import ChatPage from "@/pages/chat";
-import EmailInbox from "@/components/email-inbox";
-import HubPage from "@/pages/hub";
-import SocialPostsPage from "@/pages/social-posts";
-import SocialQuotePage from "@/pages/social-quote";
-import SocialWallPage from "@/pages/social-wall";
-import DestinationGuruPage from "@/pages/destination-guru";
-import SmsCenterPage from "@/pages/sms-center";
-import HrPage from "@/pages/hr";
-import HrV2Page from "@/pages/hr-v2";
-import BranchTargetsPage from "@/pages/branch-targets";
-import OpportunitiesPage from "@/pages/opportunities";
-import MyProfilePage from "@/pages/my-profile";
-import FeedbackPage from "@/pages/feedback";
-import ForgotPasswordPage from "@/pages/forgot-password";
-import ResetPasswordPage from "@/pages/reset-password";
-import VerifyEmailPendingPage from "@/pages/verify-email-pending";
-import AcceptInvitePage from "@/pages/accept-invite";
-import TravanaRouter from "@/pages/travana";
-import CruiseQuotePreviewPage from "@/pages/cruise-quote-preview";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RoleRoute } from "@/components/role-route";
+// EmailInbox lives in components/ (not pages/) — kept as a static import.
+import EmailInbox from "@/components/email-inbox";
+// PortalPinGate is a named export used as a layout wrapper — kept static.
+import { PortalPinGate } from "@/pages/portal/portal-pin-gate";
+import { Loader2 } from "lucide-react";
 import type { OrgRole } from "@/types/auth/auth.types";
+
+// ── Lazy page imports ──────────────────────────────────────────────────────────
+const NotFound = lazy(() => import("@/pages/not-found"));
+const ForbiddenPage = lazy(() => import("@/pages/forbidden"));
+const LandingPage = lazy(() => import("@/pages/landing"));
+const SignupAgencyPage = lazy(() => import("@/pages/signup-agency"));
+const WelcomeTeamPage = lazy(() => import("@/pages/welcome-team"));
+const AgencyPage = lazy(() => import("@/pages/agency"));
+const PlatformAdminDashboard = lazy(() => import("@/pages/platform-admin/dashboard"));
+const PlatformAdminPage = lazy(() => import("@/pages/platform-admin/index"));
+const PlatformAdminOrgPage = lazy(() => import("@/pages/platform-admin/org"));
+const PlatformAdminUsersPage = lazy(() => import("@/pages/platform-admin/users"));
+const PlatformAdminAuditPage = lazy(() => import("@/pages/platform-admin/audit"));
+const ReferralAgentDashboard = lazy(() => import("@/pages/referral-agent"));
+const PublicQuotePage = lazy(() => import("@/pages/public-quote"));
+const AgentOverviewPage = lazy(() => import("@/pages/agent-overview"));
+const AgentStatsPage = lazy(() => import("@/pages/agent-stats"));
+const BranchOverviewPage = lazy(() => import("@/pages/branch-overview"));
+const OrganizationOverviewPage = lazy(() => import("@/pages/organization-overview"));
+const ClientsPage = lazy(() => import("@/pages/clients"));
+const ClientsListPage = lazy(() => import("@/pages/clients-list"));
+const ClientPage = lazy(() => import("@/pages/client"));
+const QuotePage = lazy(() => import("@/pages/quote"));
+const EnquiryPage = lazy(() => import("@/pages/enquiry"));
+const TicketsPage = lazy(() => import("@/pages/tickets"));
+const AdminImportPage = lazy(() => import("@/pages/admin-import"));
+const AdminLookupPage = lazy(() => import("@/pages/admin-lookup"));
+const SettingsLookupPage = lazy(() => import("@/pages/settings-lookup"));
+const BookingPage = lazy(() => import("@/pages/booking-standalone"));
+const BookingsPage = lazy(() => import("@/pages/bookings"));
+const TasksPage = lazy(() => import("@/pages/tasks"));
+const ReportsPage = lazy(() => import("@/pages/reports"));
+const PipelinePage = lazy(() => import("@/pages/pipeline"));
+const ChatPage = lazy(() => import("@/pages/chat"));
+const HubPage = lazy(() => import("@/pages/hub"));
+const SocialPostsPage = lazy(() => import("@/pages/social-posts"));
+const SocialQuotePage = lazy(() => import("@/pages/social-quote"));
+const SocialWallPage = lazy(() => import("@/pages/social-wall"));
+const DestinationGuruPage = lazy(() => import("@/pages/destination-guru"));
+const SmsCenterPage = lazy(() => import("@/pages/sms-center"));
+const HrPage = lazy(() => import("@/pages/hr"));
+const HrV2Page = lazy(() => import("@/pages/hr-v2"));
+const BranchTargetsPage = lazy(() => import("@/pages/branch-targets"));
+const OpportunitiesPage = lazy(() => import("@/pages/opportunities"));
+const MyProfilePage = lazy(() => import("@/pages/my-profile"));
+const FeedbackPage = lazy(() => import("@/pages/feedback"));
+const ForgotPasswordPage = lazy(() => import("@/pages/forgot-password"));
+const ResetPasswordPage = lazy(() => import("@/pages/reset-password"));
+const VerifyEmailPendingPage = lazy(() => import("@/pages/verify-email-pending"));
+const AcceptInvitePage = lazy(() => import("@/pages/accept-invite"));
+const TravanaRouter = lazy(() => import("@/pages/travana"));
+const CruiseQuotePreviewPage = lazy(() => import("@/pages/cruise-quote-preview"));
+// Portal pages
+const PortalLoginPage = lazy(() => import("@/pages/portal/portal-login"));
+const PortalHomePage = lazy(() => import("@/pages/portal/portal-home"));
+const PortalQuotesPage = lazy(() => import("@/pages/portal/portal-quotes"));
+const PortalBookingsPage = lazy(() => import("@/pages/portal/portal-bookings"));
+const PortalDealsPage = lazy(() => import("@/pages/portal/portal-deals"));
+const PortalMessagesPage = lazy(() => import("@/pages/portal/portal-messages"));
+const PortalQuoteViewPage = lazy(() => import("@/pages/portal/portal-quote-view"));
+const PortalTagsPage = lazy(() => import("@/pages/portal/portal-tags"));
+const PortalReferralsPage = lazy(() => import("@/pages/portal/portal-referrals"));
+// ──────────────────────────────────────────────────────────────────────────────
 
 const ALL_ROLES: OrgRole[] = [
   "platform_admin",
@@ -74,17 +92,6 @@ const MANAGER_ROLES: OrgRole[] = ["platform_admin", "org_admin", "branch_manager
 const ADMIN_ROLES: OrgRole[] = ["platform_admin", "org_admin"];
 const PLATFORM_ROLES: OrgRole[] = ["platform_admin"];
 const REFERRAL_ROLES: OrgRole[] = ["referral_agent", "platform_admin"];
-import PortalLoginPage from "@/pages/portal/portal-login";
-import PortalHomePage from "@/pages/portal/portal-home";
-import PortalQuotesPage from "@/pages/portal/portal-quotes";
-import PortalBookingsPage from "@/pages/portal/portal-bookings";
-import PortalDealsPage from "@/pages/portal/portal-deals";
-import PortalMessagesPage from "@/pages/portal/portal-messages";
-import PortalQuoteViewPage from "@/pages/portal/portal-quote-view";
-import PortalTagsPage from "@/pages/portal/portal-tags";
-import PortalReferralsPage from "@/pages/portal/portal-referrals";
-import { PortalPinGate } from "@/pages/portal/portal-pin-gate";
-import { Loader2 } from "lucide-react";
 
 function LoadingScreen() {
   return (
@@ -262,7 +269,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <AppRouter />
+        <Suspense fallback={<LoadingScreen />}>
+          <AppRouter />
+        </Suspense>
       </TooltipProvider>
     </QueryClientProvider>
   );

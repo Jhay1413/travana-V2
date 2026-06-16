@@ -1,8 +1,17 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 import { NotificationToast } from "@/components/notification-toast";
 import { AppHeader } from "./app-header";
 import { AppSidenav } from "./app-sidenav";
 import { ImpersonationBanner } from "@/components/platform-admin/impersonation-banner";
+
+function PageLoader() {
+  return (
+    <div className="flex min-h-[60vh] w-full items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -12,7 +21,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col gap-3" data-testid="app-content">
           <AppHeader />
           <ImpersonationBanner />
-          <main className="min-w-0 flex-1">{children}</main>
+          <main className="min-w-0 flex-1">
+            <Suspense fallback={<PageLoader />}>{children}</Suspense>
+          </main>
         </div>
       </div>
       <NotificationToast />

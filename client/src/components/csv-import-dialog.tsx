@@ -7,13 +7,13 @@ import { useImportNeonClients } from "@/hooks/mutations";
 import type { NeonClientImportRow } from "@/types/neon-client";
 
 const EXPECTED_HEADERS = [
-  "id", "title", "firstName", "surename", "DOB", "phoneNumber",
+  "title", "firstName", "surename", "DOB", "phoneNumber",
   "email", "emailIsAllowed", "VMB", "VMBfirstAccess",
   "whatsAppVerified", "mailAllowed", "houseNumber", "city",
   "street", "country", "post_code", "avatarUrl", "badge", "referrerId",
 ];
 
-const REQUIRED_FIELDS = ["id", "firstName", "surename", "phoneNumber"];
+const REQUIRED_FIELDS = ["firstName", "surename", "phoneNumber"];
 
 type ValidationError = {
   row: number;
@@ -54,7 +54,6 @@ function validateRows(rows: Record<string, string>[]): { valid: NeonClientImport
     if (hasError) return;
 
     const client: NeonClientImportRow = {
-      id: row.id!.trim(),
       firstName: row.firstName!.trim(),
       surename: row.surename!.trim(),
       phoneNumber: row.phoneNumber!.trim(),
@@ -190,7 +189,6 @@ export default function CsvImportDialog({ open, onClose }: CsvImportDialogProps)
       fields: EXPECTED_HEADERS,
       data: [
         {
-          id: "550e8400-e29b-41d4-a716-446655440000",
           title: "Mr",
           firstName: "John",
           surename: "Smith",

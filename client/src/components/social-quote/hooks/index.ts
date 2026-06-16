@@ -2,4 +2,4 @@
  * Hooks exports - barrel file for easy imports
  */
 
-export * from "./useQuoteData";
+export * from "./use-quote-data";

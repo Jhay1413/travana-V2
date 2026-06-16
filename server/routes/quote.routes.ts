@@ -4,9 +4,7 @@ import { quoteController } from "../controllers/quote.controller";
 import { quoteImageController } from "../controllers/quote-image.controller";
 import { validate } from "../middlewares/validation.middleware";
 import { addImagesValidator } from "../validators/quote-image.validator";
-import { db } from "../config/database";
-import { quote } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { quotePublicRepository } from "../repositories/quote-public.repository";
 import { pushNotificationService } from "../services/push-notification.service";
 
 const router = Router();
@@ -60,21 +58,9 @@ router.patch("/:id/portal-visibility", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { show_on_portal } = req.body;
-    const updates: Record<string, any> = { show_on_portal: !!show_on_portal };
-
-    if (show_on_portal) {
-      const [existing] = await db.select({ token: quote.quote_token }).from(quote).where(eq(quote.id, id)).limit(1);
-      if (!existing?.token) {
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        let token = "";
-        for (let i = 0; i < 8; i++) token += chars[Math.floor(Math.random() * chars.length)];
-        updates.quote_token = token;
-      }
-    }
-
-    await db.update(quote).set(updates).where(eq(quote.id, id));
+    await quotePublicRepository.setPortalVisibility(id, !!show_on_portal);
     res.json({ success: true, show_on_portal: !!show_on_portal });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Portal visibility toggle error:", err);
     res.status(500).json({ error: "Failed to update portal visibility" });
   }
@@ -84,9 +70,9 @@ router.patch("/:id/featured", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { is_featured } = req.body;
-    await db.update(quote).set({ is_featured: !!is_featured }).where(eq(quote.id, id));
+    await quotePublicRepository.setFeatured(id, !!is_featured);
     res.json({ success: true, is_featured: !!is_featured });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Featured toggle error:", err);
     res.status(500).json({ error: "Failed to update featured status" });
   }
@@ -95,7 +81,7 @@ router.patch("/:id/featured", async (req: Request, res: Response) => {
 router.post("/:id/portal-push", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const [q] = await db.select({ title: quote.title, show_on_portal: quote.show_on_portal }).from(quote).where(eq(quote.id, id)).limit(1);
+    const q = await quotePublicRepository.findTitleForPush(id);
     if (!q) return res.status(404).json({ error: "Quote not found" });
 
     const sent = await pushNotificationService.sendToAll({
@@ -105,7 +91,7 @@ router.post("/:id/portal-push", async (req: Request, res: Response) => {
     });
 
     res.json({ success: true, sent });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Portal push broadcast error:", err);
     res.status(500).json({ error: "Failed to send push notifications" });
   }

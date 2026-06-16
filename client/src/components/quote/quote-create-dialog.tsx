@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -192,6 +193,7 @@ export function buildQuotePayload(
     payload.shipName = values.shipName || undefined;
     payload.cruiseDate = values.cruiseDate || undefined;
     payload.cabinType = values.cabinType || undefined;
+    payload.cabinNumber = values.cabinNumber || undefined;
     payload.embarkation = values.embarkation || undefined;
     payload.debarkation = values.debarkation || undefined;
     payload.cruiseExtras = values.cruiseExtras || undefined;
@@ -226,10 +228,11 @@ export function QuoteCreateDialog({
   const createSocialQuote = useCreateSocialQuote();
   const { data: packageTypesData } = usePackageTypes();
 
-  const defaultValues: Partial<QuoteFormValues> = {
-    ...defaultQuoteFormValues,
-    ...initialValues,
-  };
+  const defaultValues = useMemo<Partial<QuoteFormValues>>(
+    () => ({ ...defaultQuoteFormValues, ...initialValues }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [initialValues],
+  );
 
   const isSubmitting = createQuote.isPending || createTransaction.isPending || createSocialQuote.isPending;
 

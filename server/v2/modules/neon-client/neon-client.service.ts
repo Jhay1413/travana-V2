@@ -1,4 +1,4 @@
-import { neonClientRepository, type NeonClientWithId } from './neon-client.repository';
+import { neonClientRepository, type NeonClientImport } from './neon-client.repository';
 import { AppError } from '../../utils/error-handler';
 import type { NeonClient, InsertClientTable } from '@shared/schema';
 import type { Scope } from '../../utils/scope';
@@ -40,8 +40,8 @@ export const neonClientService = {
     if (!removed) throw new AppError('Neon client not found', 404);
   },
 
-  async bulkImportClients(clients: NeonClientWithId[], scope: Scope) {
+  async bulkImportClients(clients: NeonClientImport[], scope: Scope) {
     if (!clients.length) throw new AppError('No clients to import', 400);
-    return neonClientRepository.bulkUpsert(clients, scope);
+    return neonClientRepository.bulkInsert(clients, scope);
   },
 };

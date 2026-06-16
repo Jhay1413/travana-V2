@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Anchor, Plus, Ship, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,7 @@ interface ItineraryRow {
   id: string;
   day: string;
   port: string;
+  subDescription: string;
 }
 
 function makeId() {
@@ -87,32 +88,32 @@ export default function CruiseQuotePreviewPage() {
   const [cabinType, setCabinType] = useState("Balcony");
   const [cabinLocation, setCabinLocation] = useState("Deck 10, Cabin 10248");
   const [itinerary, setItinerary] = useState<ItineraryRow[]>([
-    { id: makeId(), day: "Day 1", port: "Barcelona, Spain" },
-    { id: makeId(), day: "Day 2", port: "Palma de Mallorca, Spain" },
-    { id: makeId(), day: "Day 3", port: "At Sea" },
-    { id: makeId(), day: "Day 4", port: "Naples, Italy" },
-    { id: makeId(), day: "Day 5", port: "Rome (Civitavecchia), Italy" },
-    { id: makeId(), day: "Day 6", port: "Florence (La Spezia), Italy" },
-    { id: makeId(), day: "Day 7", port: "Provence (Marseille), France" },
-    { id: makeId(), day: "Day 8", port: "Barcelona, Spain" },
+    { id: makeId(), day: "Day 1", port: "Barcelona, Spain", subDescription: "Embarkation • Departs 6:00 PM" },
+    { id: makeId(), day: "Day 2", port: "Palma de Mallorca, Spain", subDescription: "" },
+    { id: makeId(), day: "Day 3", port: "At Sea", subDescription: "" },
+    { id: makeId(), day: "Day 4", port: "Naples, Italy", subDescription: "" },
+    { id: makeId(), day: "Day 5", port: "Rome (Civitavecchia), Italy", subDescription: "" },
+    { id: makeId(), day: "Day 6", port: "Florence (La Spezia), Italy", subDescription: "" },
+    { id: makeId(), day: "Day 7", port: "Provence (Marseille), France", subDescription: "" },
+    { id: makeId(), day: "Day 8", port: "Barcelona, Spain", subDescription: "Disembarkation • Arrives 7:00 AM" },
   ]);
 
-  const addItineraryRow = () => {
+  const addItineraryRow = useCallback(() => {
     setItinerary((rows) => [
       ...rows,
-      { id: makeId(), day: `Day ${rows.length + 1}`, port: "" },
+      { id: makeId(), day: `Day ${rows.length + 1}`, port: "", subDescription: "" },
     ]);
-  };
+  }, []);
 
-  const removeItineraryRow = (id: string) => {
+  const removeItineraryRow = useCallback((id: string) => {
     setItinerary((rows) => rows.filter((r) => r.id !== id));
-  };
+  }, []);
 
-  const updateItineraryRow = (id: string, key: "day" | "port", value: string) => {
+  const updateItineraryRow = useCallback((id: string, key: "day" | "port" | "subDescription", value: string) => {
     setItinerary((rows) =>
       rows.map((r) => (r.id === id ? { ...r, [key]: value } : r))
     );
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-neutral-100 px-4 py-6 md:px-6" data-testid="page-cruise-quote-preview">
@@ -268,7 +269,7 @@ export default function CruiseQuotePreviewPage() {
                 {itinerary.map((row, i) => (
                   <div
                     key={row.id}
-                    className="flex items-center gap-2"
+                    className="flex items-start gap-2"
                     data-testid={`row-itinerary-form-${i}`}
                   >
                     <Input
@@ -278,13 +279,22 @@ export default function CruiseQuotePreviewPage() {
                       placeholder="Day"
                       data-testid={`input-itinerary-day-${i}`}
                     />
-                    <Input
-                      value={row.port}
-                      onChange={(e) => updateItineraryRow(row.id, "port", e.target.value)}
-                      className="h-9 flex-1 rounded-xl border-black/10 bg-white/70"
-                      placeholder="Port"
-                      data-testid={`input-itinerary-port-${i}`}
-                    />
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Input
+                        value={row.port}
+                        onChange={(e) => updateItineraryRow(row.id, "port", e.target.value)}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        placeholder="Port"
+                        data-testid={`input-itinerary-port-${i}`}
+                      />
+                      <Input
+                        value={row.subDescription}
+                        onChange={(e) => updateItineraryRow(row.id, "subDescription", e.target.value)}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        placeholder="Sub-description (optional)"
+                        data-testid={`input-itinerary-subdescription-${i}`}
+                      />
+                    </div>
                     <Button
                       type="button"
                       size="icon"
@@ -364,11 +374,21 @@ export default function CruiseQuotePreviewPage() {
                     >
                       {row.day || `Day ${i + 1}`}
                     </div>
-                    <div
-                      className="min-w-0 flex-1 truncate text-right text-xs font-semibold text-black"
-                      data-testid={`text-itinerary-port-${i}`}
-                    >
-                      {row.port || "—"}
+                    <div className="flex min-w-0 flex-1 flex-col items-end">
+                      <div
+                        className="min-w-0 max-w-full truncate text-right text-xs font-semibold text-black"
+                        data-testid={`text-itinerary-port-${i}`}
+                      >
+                        {row.port || "—"}
+                      </div>
+                      {row.subDescription ? (
+                        <div
+                          className="min-w-0 max-w-full truncate text-right text-xs font-normal text-black/55"
+                          data-testid={`text-itinerary-subdescription-${i}`}
+                        >
+                          {row.subDescription}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}

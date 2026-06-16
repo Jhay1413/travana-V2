@@ -1,6 +1,3 @@
-import { db } from '../../config/database';
-import { user } from '@shared/schema';
-import { eq } from 'drizzle-orm';
 import { AppError } from '../../utils/error-handler';
 import { userOrgRolesRepository } from './user-org-roles.repository';
 import { branchMemberRepository } from '../branch-member/branch-member.repository';
@@ -109,10 +106,7 @@ export const userOrgRolesService = {
     // call sites stay correct.
     const newPrimary = primaryRole([...existing, newRole]);
     if (newPrimary) {
-      await db
-        .update(user)
-        .set({ orgRole: newPrimary, updatedAt: new Date() })
-        .where(eq(user.id, userId));
+      await userOrgRolesRepository.updateUserOrgRole(userId, newPrimary);
     }
 
     await recordAudit({
@@ -144,12 +138,12 @@ export const userOrgRolesService = {
     // `agent` in user_org_roles but still holds branch_manager via
     // branch_members.orgRole — removing agent does not leave them roleless.
     if (remaining.length === 0) {
-      const [membership, userRow] = await Promise.all([
+      const [membership, userRole] = await Promise.all([
         branchMemberRepository.findActiveByUserId(userId),
-        db.select({ role: user.role }).from(user).where(eq(user.id, userId)).limit(1),
+        userOrgRolesRepository.findUserRole(userId),
       ]);
       const hasMembershipRole = membership?.orgId === orgId && !!membership.orgRole;
-      const isPlatformAdmin = userRow[0]?.role === 'platform_admin';
+      const isPlatformAdmin = userRole === 'platform_admin';
       if (!hasMembershipRole && !isPlatformAdmin) {
         throw new AppError('Cannot remove the user\'s last role', 400);
       }
@@ -158,10 +152,7 @@ export const userOrgRolesService = {
     await userOrgRolesRepository.removeRole(userId, orgId, roleToRemove);
     const newPrimary = primaryRole(remaining);
     if (newPrimary) {
-      await db
-        .update(user)
-        .set({ orgRole: newPrimary, updatedAt: new Date() })
-        .where(eq(user.id, userId));
+      await userOrgRolesRepository.updateUserOrgRole(userId, newPrimary);
     }
 
     await recordAudit({

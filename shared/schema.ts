@@ -508,6 +508,7 @@ export const cruise_voyage = pgTable('cruise_voyage_table', {
   itinerary_id: uuid().references(() => cruise_itenary.id, { onDelete: "cascade" }),
   day_number: numeric(),
   description: varchar(),
+  sub_description: varchar(),
 });
 export type CruiseVoyage = typeof cruise_voyage.$inferSelect;
 export type InsertCruiseVoyage = typeof cruise_voyage.$inferInsert;
@@ -874,6 +875,8 @@ export const quote_cruise = pgTable('quote_cruise', {
   cruise_date: date(),
   cabin_type: varchar(),
   cabin_number: varchar(),
+  embarkation: varchar(),
+  debarkation: varchar(),
   cruise_name: varchar(),
   pre_cruise_stay: integer().notNull(),
   post_cruise_stay: integer().notNull(),
@@ -895,6 +898,7 @@ export const quote_cruise_itinerary = pgTable('quote_cruise_itinerary', {
   quote_cruise_id: uuid().references(() => quote_cruise.id, { onDelete: "cascade" }),
   day_number: integer(),
   description: varchar(),
+  sub_description: varchar(),
 });
 export type QuoteCruiseItinerary = typeof quote_cruise_itinerary.$inferSelect;
 export type InsertQuoteCruiseItinerary = typeof quote_cruise_itinerary.$inferInsert;
@@ -1103,6 +1107,8 @@ export const booking_cruise = pgTable('booking_cruise', {
   cruise_date: date(),
   cabin_type: varchar(),
   cabin_number: varchar(),
+  embarkation: varchar(),
+  debarkation: varchar(),
   cruise_name: varchar(),
   pre_cruise_stay: integer(),
   post_cruise_stay: integer(),
@@ -1123,6 +1129,7 @@ export const booking_cruise_itinerary = pgTable('booking_cruise_itinerary', {
   booking_cruise_id: uuid().references(() => booking_cruise.id, { onDelete: "cascade" }),
   day_number: integer(),
   description: varchar(),
+  sub_description: varchar(),
 });
 export type BookingCruiseItinerary = typeof booking_cruise_itinerary.$inferSelect;
 export type InsertBookingCruiseItinerary = typeof booking_cruise_itinerary.$inferInsert;

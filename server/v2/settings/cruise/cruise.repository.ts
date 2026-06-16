@@ -183,10 +183,10 @@ export const cruiseSettingsRepository = {
     return row || null;
   },
 
-  async createVoyage(itineraryId: string, dayNumber: number, description: string) {
+  async createVoyage(itineraryId: string, dayNumber: number, description: string, subDescription = '') {
     const [row] = await db
       .insert(cruise_voyage)
-      .values({ itinerary_id: itineraryId, day_number: String(dayNumber), description })
+      .values({ itinerary_id: itineraryId, day_number: String(dayNumber), description, sub_description: subDescription || null })
       .returning();
     return row;
   },

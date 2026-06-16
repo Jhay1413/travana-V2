@@ -22,7 +22,43 @@ export interface JsonMappingInput {
   cruiseDate?: string;
   embarkation?: string;
   cruiseTitle?: string;
-  cruiseItinerary?: { day?: number | string; description?: string }[];
+  cruiseItinerary?: { day?: number | string; description?: string; subDescription?: string }[];
+  // Line-item arrays — resolved in the same call (works for any package type).
+  extraAccommodations?: AccommodationLineInput[];
+  transfers?: TourOpLineInput[];
+  carHires?: TourOpLineInput[];
+  attractionTickets?: TourOpLineInput[];
+  loungePasses?: AirportLineInput[];
+  airportParkings?: AirportLineInput[];
+}
+
+export interface AccommodationLineInput {
+  country?: string;
+  destination?: string;
+  resort?: string;
+  accommodation?: string;
+  boardBasis?: string;
+  roomType?: string;
+  tourOperator?: string;
+}
+
+export interface TourOpLineInput {
+  tourOperator?: string;
+}
+
+export interface AirportLineInput {
+  tourOperator?: string;
+  airport?: string;
+}
+
+export interface AccommodationLineResult {
+  accommodationId: string;
+  countryId: string;
+  destinationId: string;
+  resortId: string;
+  boardBasisId: string;
+  roomTypeId: string;
+  tourOperatorId: string;
 }
 
 export interface JsonMappingResult {
@@ -37,11 +73,19 @@ export interface JsonMappingResult {
   inboundDepartAirportId: string;
   inboundArriveAirportId: string;
   roomTypeId: string;
+  isLodge: boolean;
   lodgeId: string;
   parkId: string;
   cruiseLineId: string;
   shipId: string;
   cruiseItineraryId: string;
+  // Resolved line items, parallel (same order) to the input arrays.
+  extraAccommodations: AccommodationLineResult[];
+  transfers: { tourOperatorId: string }[];
+  carHires: { tourOperatorId: string }[];
+  attractionTickets: { tourOperatorId: string }[];
+  loungePasses: { tourOperatorId: string; airportId: string }[];
+  airportParkings: { tourOperatorId: string; airportId: string }[];
   warnings: string[];
 }
 

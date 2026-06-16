@@ -12,17 +12,17 @@ export interface UserProfilePayload {
 
 export const userProfileApi = {
   getMyProfile: async (): Promise<UserProfile | null> => {
-    const { data } = await axiosClient.get<UserProfile | null>("/api/user-profiles/me");
+    const { data } = await axiosClient.get<UserProfile | null>("/api/v2/users/profiles/me");
     return data;
   },
 
   getByUserId: async (userId: string): Promise<UserProfile | null> => {
-    const { data } = await axiosClient.get<UserProfile | null>(`/api/user-profiles/${userId}`);
+    const { data } = await axiosClient.get<UserProfile | null>(`/api/v2/users/profiles/${userId}`);
     return data;
   },
 
   saveMyProfile: async (payload: UserProfilePayload): Promise<UserProfile> => {
-    const { data } = await axiosClient.put<UserProfile>("/api/user-profiles/me", payload);
+    const { data } = await axiosClient.put<UserProfile>("/api/v2/users/profiles/me", payload);
     return data;
   },
 };

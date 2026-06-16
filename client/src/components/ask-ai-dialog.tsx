@@ -158,7 +158,7 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
 
   const askMutation = useMutation({
     mutationFn: async (q: string) => {
-      const { data } = await axiosClient.post<{ answer: string }>("/api/ai/ask", { question: q });
+      const { data } = await axiosClient.post<{ answer: string }>("/api/v2/ai/ask", { question: q });
       return { question: q, answer: data.answer };
     },
     onSuccess: ({ question, answer }) => {
@@ -176,7 +176,7 @@ export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
   const saveMutation = useMutation({
     mutationFn: async (clientId: string) => {
       if (!savingFor) return;
-      await axiosClient.post("/api/ai/ask/save", {
+      await axiosClient.post("/api/v2/ai/ask/save", {
         clientId,
         question: savingFor.question,
         answer: savingFor.answer,

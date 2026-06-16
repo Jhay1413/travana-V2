@@ -27,7 +27,7 @@ export { useTargetsOverview, useShopTargets, useUpsertShopTargets, useAgentTarge
 export { useTourOperators, tourOperatorKeys } from "./use-tour-operator-queries";
 export { useAirports, useAirportsByCountries, airportKeys } from "./use-airport-queries";
 export { useAllTasks, useAllTasksExtended, useTasks, useUserTasks, taskKeys } from "./use-task-queries";
-export { useTags, useSearchTags, tagKeys } from "./use-tags";
+export { useTags, useSearchTags, tagKeys } from "./use-tag-queries";
 export { usePackageTypes, useCountries, useDestinations, useDestinationSearch, useResorts, useResortSearch, useAccommodations, useAccommodationSearch, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, useAccommodationImages, useLodgeImages, useCruiseLines, useShips, useCruiseItineraries, lookupKeys } from "./use-lookup-queries";
 export { useChatConversations, useChatMessages, chatKeys } from "./use-chat-queries";
 export { useSharedEmailAccount, useEmailAccounts, useEmailMessages, useEmailMessage, emailKeys } from "./use-email-queries";

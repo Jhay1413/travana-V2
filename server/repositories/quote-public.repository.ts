@@ -414,4 +414,55 @@ export const quotePublicRepository = {
       link: link || null,
     });
   },
+
+  /**
+   * Toggle the portal-visibility flag on a quote. When enabling, a short
+   * token is generated and stored if one does not already exist.
+   * Returns the updated `show_on_portal` value and the token (may be null).
+   */
+  async setPortalVisibility(
+    quoteId: string,
+    showOnPortal: boolean,
+  ): Promise<{ show_on_portal: boolean; quote_token: string | null }> {
+    const updates: Record<string, unknown> = { show_on_portal: showOnPortal };
+
+    if (showOnPortal) {
+      const [existing] = await db
+        .select({ token: quote.quote_token })
+        .from(quote)
+        .where(eq(quote.id, quoteId))
+        .limit(1);
+
+      if (!existing?.token) {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        let token = "";
+        for (let i = 0; i < 8; i++) token += chars[Math.floor(Math.random() * chars.length)];
+        updates.quote_token = token;
+      }
+    }
+
+    await db.update(quote).set(updates).where(eq(quote.id, quoteId));
+
+    return {
+      show_on_portal: showOnPortal,
+      quote_token: (updates.quote_token as string | undefined) ?? null,
+    };
+  },
+
+  /** Toggle the `is_featured` flag on a quote. */
+  async setFeatured(quoteId: string, isFeatured: boolean): Promise<void> {
+    await db.update(quote).set({ is_featured: isFeatured }).where(eq(quote.id, quoteId));
+  },
+
+  /** Fetch just the title and portal-visible flag for a quote (used for push notification broadcast). */
+  async findTitleForPush(
+    quoteId: string,
+  ): Promise<{ title: string | null; show_on_portal: boolean | null } | null> {
+    const [row] = await db
+      .select({ title: quote.title, show_on_portal: quote.show_on_portal })
+      .from(quote)
+      .where(eq(quote.id, quoteId))
+      .limit(1);
+    return row ?? null;
+  },
 };

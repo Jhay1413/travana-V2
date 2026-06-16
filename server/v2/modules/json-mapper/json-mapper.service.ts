@@ -4,6 +4,29 @@ import { cruiseSettingsRepository } from '../../settings/cruise/cruise.repositor
 interface CruiseItineraryDayInput {
   day?: number | string;
   description?: string;
+  subDescription?: string;
+}
+
+// A line item that maps to an accommodation row (primary or extra/pre-post stay).
+interface AccommodationLineInput {
+  country?: string;
+  destination?: string;
+  resort?: string;
+  accommodation?: string;
+  boardBasis?: string;
+  roomType?: string;
+  tourOperator?: string;
+}
+
+// Line items that only need a tour operator resolved (transfers, car hire, attractions).
+interface TourOpLineInput {
+  tourOperator?: string;
+}
+
+// Line items that need a tour operator + an airport resolved (lounge passes, parking).
+interface AirportLineInput {
+  tourOperator?: string;
+  airport?: string;
 }
 
 interface JsonMappingInput {
@@ -30,6 +53,14 @@ interface JsonMappingInput {
   embarkation?: string;
   cruiseTitle?: string;
   cruiseItinerary?: CruiseItineraryDayInput[];
+  // Line-item arrays — resolved in this same call so the client only round-trips once.
+  // Works for any package type (package holiday, hot tub / lodge, cruise).
+  extraAccommodations?: AccommodationLineInput[];
+  transfers?: TourOpLineInput[];
+  carHires?: TourOpLineInput[];
+  attractionTickets?: TourOpLineInput[];
+  loungePasses?: AirportLineInput[];
+  airportParkings?: AirportLineInput[];
 }
 
 export const jsonMapperService = {
@@ -45,6 +76,129 @@ export const jsonMapperService = {
     let lodgeId = '';
     let parkId = '';
 
+    // ─── Cached, concurrency-safe resolvers ──────────────────────────────────
+    // Each distinct name is resolved (find-or-create) exactly once per request,
+    // even when many line items reference it. Caching Promises (not values) means
+    // concurrent lookups for the same name share one DB round-trip / create.
+    const norm = (s?: string | null) => (s || '').trim().toLowerCase();
+
+    const tourOpCache = new Map<string, Promise<string>>();
+    const resolveTourOperator = (name?: string | null): Promise<string> => {
+      const key = norm(name);
+      if (!key) return Promise.resolve('');
+      let p = tourOpCache.get(key);
+      if (!p) {
+        p = (async () => {
+          let to = await jsonMapperRepository.findTourOperatorByName(name!);
+          if (!to) { to = await jsonMapperRepository.createTourOperator(name!.trim()); warnings.push(`Created new tour operator: "${name}"`); }
+          return to.id;
+        })();
+        tourOpCache.set(key, p);
+      }
+      return p;
+    };
+
+    const boardCache = new Map<string, Promise<string>>();
+    const resolveBoardBasis = (name?: string | null): Promise<string> => {
+      const key = norm(name);
+      if (!key) return Promise.resolve('');
+      let p = boardCache.get(key);
+      if (!p) {
+        p = (async () => {
+          let b = await jsonMapperRepository.findBoardBasisByType(name!);
+          if (!b) { b = await jsonMapperRepository.createBoardBasis(name!.trim()); warnings.push(`Created new board basis: "${name}"`); }
+          return b.id;
+        })();
+        boardCache.set(key, p);
+      }
+      return p;
+    };
+
+    const roomCache = new Map<string, Promise<string>>();
+    const resolveRoomType = (name?: string | null): Promise<string> => {
+      const key = norm(name);
+      if (!key) return Promise.resolve('');
+      let p = roomCache.get(key);
+      if (!p) {
+        p = (async () => {
+          let r = await jsonMapperRepository.findRoomTypeByName(name!);
+          if (!r) { r = await jsonMapperRepository.createRoomType(name!.trim()); warnings.push(`Created new room type: "${name}"`); }
+          return r.id;
+        })();
+        roomCache.set(key, p);
+      }
+      return p;
+    };
+
+    const airportCache = new Map<string, Promise<string>>();
+    const resolveAirport = (codeOrName?: string | null): Promise<string> => {
+      const key = norm(codeOrName);
+      if (!key) return Promise.resolve('');
+      let p = airportCache.get(key);
+      if (!p) {
+        p = (async () => {
+          const rec = await jsonMapperRepository.findAirportByCodeOrName(codeOrName!);
+          if (!rec) { warnings.push(`Airport "${codeOrName}" not found in database`); return ''; }
+          return rec.id;
+        })();
+        airportCache.set(key, p);
+      }
+      return p;
+    };
+
+    // Find-or-create the full country → destination → resort → accommodation chain.
+    type Hierarchy = { accommodationId: string; countryId: string; destinationId: string; resortId: string };
+    const accomCache = new Map<string, Promise<Hierarchy>>();
+    const resolveAccommodation = (a: AccommodationLineInput): Promise<Hierarchy> => {
+      const accName = (a.accommodation || '').trim();
+      if (!accName) return Promise.resolve({ accommodationId: '', countryId: '', destinationId: '', resortId: '' });
+      const key = accName.toLowerCase();
+      let p = accomCache.get(key);
+      if (!p) {
+        p = (async (): Promise<Hierarchy> => {
+          const existing = await jsonMapperRepository.findAccommodationByName(accName);
+          if (existing) {
+            const h = await jsonMapperRepository.getHierarchyFromAccommodation(existing.id);
+            return {
+              accommodationId: existing.id,
+              resortId: h?.resort?.id || '',
+              destinationId: h?.destination?.id || '',
+              countryId: h?.country?.id || '',
+            };
+          }
+          let cId = '', dId = '', rId = '', aId = '';
+          if (a.country) {
+            let c = await jsonMapperRepository.findCountryByName(a.country);
+            if (!c) { c = await jsonMapperRepository.createCountry(a.country); warnings.push(`Created new country: "${a.country}"`); }
+            cId = c.id;
+          } else { warnings.push('Cannot create accommodation without country'); }
+
+          if (a.destination && cId) {
+            let d = await jsonMapperRepository.findDestinationByName(a.destination, cId);
+            if (!d) { d = await jsonMapperRepository.createDestination(a.destination, cId); warnings.push(`Created new destination: "${a.destination}"`); }
+            dId = d.id;
+          } else if (a.destination) { warnings.push('Cannot create destination without country'); }
+
+          if (a.resort && dId) {
+            let r = await jsonMapperRepository.findResortByName(a.resort, dId);
+            if (!r) { r = await jsonMapperRepository.createResort(a.resort, dId); warnings.push(`Created new resort: "${a.resort}"`); }
+            rId = r.id;
+          } else if (a.resort) { warnings.push('Cannot create resort without destination'); }
+
+          if (rId) {
+            const na = await jsonMapperRepository.createAccommodation(accName, rId);
+            aId = na.id;
+            warnings.push(`Created new accommodation: "${accName}"`);
+          } else { warnings.push('Cannot create accommodation without resort'); }
+
+          return { accommodationId: aId, countryId: cId, destinationId: dId, resortId: rId };
+        })();
+        accomCache.set(key, p);
+      }
+      return p;
+    };
+
+    // ─── Primary stay / lodge ────────────────────────────────────────────────
     const knownLodgeOperators = ['hoseasons', 'haven', 'parkdean', 'park dean', 'butlins', 'center parcs', 'centre parcs', 'away resorts', 'park holidays'];
     const tourOpLower = (input.tourOperator || '').toLowerCase().trim();
     const isLodgeTourOperator = knownLodgeOperators.some((op) => tourOpLower.includes(op));
@@ -56,40 +210,16 @@ export const jsonMapperService = {
     }
 
     if (input.accommodation && !isLodge) {
-      const existingAccom = await jsonMapperRepository.findAccommodationByName(input.accommodation);
-      if (existingAccom) {
-        accommodationId = existingAccom.id;
-        const hierarchy = await jsonMapperRepository.getHierarchyFromAccommodation(existingAccom.id);
-        if (hierarchy) {
-          resortId = hierarchy.resort?.id || '';
-          destinationId = hierarchy.destination?.id || '';
-          countryId = hierarchy.country?.id || '';
-        }
-      } else {
-        if (input.country) {
-          let countryRecord = await jsonMapperRepository.findCountryByName(input.country);
-          if (!countryRecord) { countryRecord = await jsonMapperRepository.createCountry(input.country); warnings.push(`Created new country: "${input.country}"`); }
-          countryId = countryRecord.id;
-        } else { warnings.push('Cannot create accommodation without country'); }
-
-        if (input.destination && countryId) {
-          let destRecord = await jsonMapperRepository.findDestinationByName(input.destination, countryId);
-          if (!destRecord) { destRecord = await jsonMapperRepository.createDestination(input.destination, countryId); warnings.push(`Created new destination: "${input.destination}"`); }
-          destinationId = destRecord.id;
-        } else if (input.destination) { warnings.push('Cannot create destination without country'); }
-
-        if (input.resort && destinationId) {
-          let resortRecord = await jsonMapperRepository.findResortByName(input.resort, destinationId);
-          if (!resortRecord) { resortRecord = await jsonMapperRepository.createResort(input.resort, destinationId); warnings.push(`Created new resort: "${input.resort}"`); }
-          resortId = resortRecord.id;
-        } else if (input.resort) { warnings.push('Cannot create resort without destination'); }
-
-        if (resortId) {
-          const newAccom = await jsonMapperRepository.createAccommodation(input.accommodation, resortId);
-          accommodationId = newAccom.id;
-          warnings.push(`Created new accommodation: "${input.accommodation}"`);
-        } else { warnings.push('Cannot create accommodation without resort'); }
-      }
+      const h = await resolveAccommodation({
+        country: input.country,
+        destination: input.destination,
+        resort: input.resort,
+        accommodation: input.accommodation,
+      });
+      accommodationId = h.accommodationId;
+      resortId = h.resortId;
+      destinationId = h.destinationId;
+      countryId = h.countryId;
     } else {
       if (input.country) {
         const countryRecord = await jsonMapperRepository.findCountryByName(input.country);
@@ -108,36 +238,15 @@ export const jsonMapperService = {
       }
     }
 
-    if (input.boardBasis) {
-      let board = await jsonMapperRepository.findBoardBasisByType(input.boardBasis);
-      if (!board) { board = await jsonMapperRepository.createBoardBasis(input.boardBasis); warnings.push(`Created new board basis: "${input.boardBasis}"`); }
-      boardBasisId = board.id;
-    }
+    boardBasisId = await resolveBoardBasis(input.boardBasis);
+    tourOperatorId = await resolveTourOperator(input.tourOperator);
 
-    if (input.tourOperator) {
-      let tourOp = await jsonMapperRepository.findTourOperatorByName(input.tourOperator);
-      if (!tourOp) { tourOp = await jsonMapperRepository.createTourOperator(input.tourOperator); warnings.push(`Created new tour operator: "${input.tourOperator}"`); }
-      tourOperatorId = tourOp.id;
-    }
+    const outboundDepartAirportId = await resolveAirport(input.outboundDepartAirport);
+    const outboundArriveAirportId = await resolveAirport(input.outboundArriveAirport);
+    const inboundDepartAirportId = await resolveAirport(input.inboundDepartAirport);
+    const inboundArriveAirportId = await resolveAirport(input.inboundArriveAirport);
 
-    const mapAirport = async (codeOrName: string): Promise<string> => {
-      if (!codeOrName) return '';
-      const rec = await jsonMapperRepository.findAirportByCodeOrName(codeOrName);
-      if (rec) return rec.id;
-      warnings.push(`Airport "${codeOrName}" not found in database`);
-      return '';
-    };
-
-    const outboundDepartAirportId = await mapAirport(input.outboundDepartAirport || '');
-    const outboundArriveAirportId = await mapAirport(input.outboundArriveAirport || '');
-    const inboundDepartAirportId = await mapAirport(input.inboundDepartAirport || '');
-    const inboundArriveAirportId = await mapAirport(input.inboundArriveAirport || '');
-
-    if (input.roomType) {
-      let room = await jsonMapperRepository.findRoomTypeByName(input.roomType);
-      if (!room) { room = await jsonMapperRepository.createRoomType(input.roomType); warnings.push(`Created new room type: "${input.roomType}"`); }
-      roomTypeId = room.id;
-    }
+    roomTypeId = await resolveRoomType(input.roomType);
 
     if (input.parkName) {
       let parkRecord = await jsonMapperRepository.findParkByName(input.parkName);
@@ -196,13 +305,49 @@ export const jsonMapperService = {
               const dayNo = Number(day?.day);
               if (!Number.isFinite(dayNo)) continue;
               const existingDay = await cruiseSettingsRepository.findVoyageByDay(cruiseItineraryId, dayNo);
-              if (!existingDay) await cruiseSettingsRepository.createVoyage(cruiseItineraryId, dayNo, day?.description || '');
+              if (!existingDay) await cruiseSettingsRepository.createVoyage(cruiseItineraryId, dayNo, day?.description || '', day?.subDescription || '');
             }
           }
         }
       }
     }
 
-    return { countryId, destinationId, resortId, accommodationId, boardBasisId, tourOperatorId, outboundDepartAirportId, outboundArriveAirportId, inboundDepartAirportId, inboundArriveAirportId, roomTypeId, isLodge, lodgeId, parkId, cruiseLineId, shipId, cruiseItineraryId, warnings };
+    // ─── Line items (resolved in this same call) ─────────────────────────────
+    const extraAccommodations = await Promise.all(
+      (input.extraAccommodations || []).map(async (a) => {
+        const [h, bbId, rtId, toId] = await Promise.all([
+          resolveAccommodation(a),
+          resolveBoardBasis(a.boardBasis),
+          resolveRoomType(a.roomType),
+          resolveTourOperator(a.tourOperator),
+        ]);
+        return { ...h, boardBasisId: bbId, roomTypeId: rtId, tourOperatorId: toId };
+      })
+    );
+
+    const resolveTourOpList = (items?: TourOpLineInput[]) =>
+      Promise.all((items || []).map(async (i) => ({ tourOperatorId: await resolveTourOperator(i.tourOperator) })));
+
+    const resolveAirportList = (items?: AirportLineInput[]) =>
+      Promise.all((items || []).map(async (i) => {
+        const [toId, apId] = await Promise.all([resolveTourOperator(i.tourOperator), resolveAirport(i.airport)]);
+        return { tourOperatorId: toId, airportId: apId };
+      }));
+
+    const [transfers, carHires, attractionTickets, loungePasses, airportParkings] = await Promise.all([
+      resolveTourOpList(input.transfers),
+      resolveTourOpList(input.carHires),
+      resolveTourOpList(input.attractionTickets),
+      resolveAirportList(input.loungePasses),
+      resolveAirportList(input.airportParkings),
+    ]);
+
+    return {
+      countryId, destinationId, resortId, accommodationId, boardBasisId, tourOperatorId,
+      outboundDepartAirportId, outboundArriveAirportId, inboundDepartAirportId, inboundArriveAirportId,
+      roomTypeId, isLodge, lodgeId, parkId, cruiseLineId, shipId, cruiseItineraryId,
+      extraAccommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings,
+      warnings,
+    };
   },
 };

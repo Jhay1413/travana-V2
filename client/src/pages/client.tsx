@@ -23,8 +23,8 @@ import { EnquiryWizard } from "@/components/enquiry-wizard";
 import { transformNeonClientData, transformTicket, filesFor } from "@/components/client/client-types";
 import { EditClientDialog } from "@/components/client/modals/EditClientDialog";
 import { UploadFileDialog } from "@/components/client/modals/UploadFileDialog";
-import { QuoteCreateDialog } from "@/components/quote/quote-create-dialog";
-import { BookingCreateDialog } from "@/components/booking/booking-create-dialog";
+import { QuoteCreateDialog } from "@/components/quote/QuoteCreateDialog";
+import { BookingCreateDialog } from "@/components/booking/BookingCreateDialog";
 import {
   ClientOverviewTab,
   PortalPinSection,

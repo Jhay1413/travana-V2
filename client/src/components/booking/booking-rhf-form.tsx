@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useFieldArray, useWatch} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2 } from "lucide-react";
 import { walletApi } from "@/api/endpoints/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
@@ -45,7 +45,7 @@ import {
   useCruiseItineraries,
   lookupKeys,
 } from "@/hooks/queries";
-import { useTags } from "@/hooks/queries/use-tags";
+import { useTags } from "@/hooks/queries/use-tag-queries";
 import { useToast } from "@/hooks/use-toast";
 import { AddAccommodationModal } from "@/components/lookups/add-accommodation-modal";
 import { AddBoardBasisModal } from "@/components/lookups/add-board-basis-modal";
@@ -314,26 +314,26 @@ export function BookingRHFForm({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const skipLodgeResetRef = useRef(false);
   
-  const { watch, setValue, control } = form;
+  const { setValue, control, register } = form;
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const packageType = watch("packageType");
-  const country = watch("country");
-  const destination = watch("destination");
-  const resort = watch("resort");
-  const parkId = watch("parkId");
-  const passengersAdults = watch("passengersAdults");
-  const passengersChildren = watch("passengersChildren");
-  const cruiseOnly = watch("cruiseOnly");
-  const tourOperatorId = watch("tourOperatorId");
-  const price = watch("price");
-  const discount = watch("discount");
-  const serviceCharge = watch("serviceCharge");
-  const commission = watch("commission");
-  const walletCreditAmount = watch("walletCreditAmount");
-  const checkInDate = watch("checkInDate");
-  const nights = watch("nights");
+  const packageType = useWatch({ control, name: "packageType" });
+  const country = useWatch({ control, name: "country" });
+  const destination = useWatch({ control, name: "destination" });
+  const resort = useWatch({ control, name: "resort" });
+  const parkId = useWatch({ control, name: "parkId" });
+  const passengersAdults = useWatch({ control, name: "passengersAdults" });
+  const passengersChildren = useWatch({ control, name: "passengersChildren" });
+  const cruiseOnly = useWatch({ control, name: "cruiseOnly" });
+  const tourOperatorId = useWatch({ control, name: "tourOperatorId" });
+  const price = useWatch({ control, name: "price" });
+  const discount = useWatch({ control, name: "discount" });
+  const serviceCharge = useWatch({ control, name: "serviceCharge" });
+  const commission = useWatch({ control, name: "commission" });
+  const walletCreditAmount = useWatch({ control, name: "walletCreditAmount" });
+  const checkInDate = useWatch({ control, name: "checkInDate" });
+  const nights = useWatch({ control, name: "nights" });
 
   // ── Lookup data ──────────────────────────────────────────────────────────
   const { data: packageTypesData } = usePackageTypes();
@@ -359,9 +359,11 @@ export function BookingRHFForm({
 
   // ── Cruise cascade ────────────────────────────────────────────────────────
   const { data: cruiseLinesData } = useCruiseLines();
-  const selectedCruiseLineId = cruiseLinesData?.find(l => l.name === watch('cruiseLine'))?.id;
+  const cruiseLine = useWatch({ control, name: "cruiseLine" });
+  const shipName = useWatch({ control, name: "shipName" });
+  const selectedCruiseLineId = cruiseLinesData?.find(l => l.name === cruiseLine)?.id;
   const { data: shipsData } = useShips(selectedCruiseLineId);
-  const selectedShipId = shipsData?.find(s => s.name === watch('shipName'))?.id;
+  const selectedShipId = shipsData?.find(s => s.name === shipName)?.id;
   const { data: cruiseItineraries, isFetching: isFetchingCruiseDates } = useCruiseItineraries(selectedShipId);
 
   // ── Lodge park reset ─────────────────────────────────────────────────────
@@ -435,14 +437,159 @@ export function BookingRHFForm({
     }
   }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Pricing breakdown (memoized to avoid recompute on every render) ────────
+  const pricingBreakdown = useMemo(() => {
+    const currentPrice = Number(price) || 0;
+    const currentDiscount = Number(discount) || 0;
+    const currentServiceCharge = Number(serviceCharge) || 0;
+    const currentCommission = Number(commission) || 0;
+    const currentWalletCredit = Number(walletCreditAmount) || 0;
+    const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0 || currentWalletCredit > 0;
+    // Total price = price − discount + service charge.
+    const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
+    // The commission field already holds the total (operator % − discount + service charge);
+    // recover the raw operator portion for the breakdown line.
+    const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
+
+    return (
+      <>
+        {currentPrice > 0 && (
+          <div className="mt-3 flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2">
+            <span className="text-xs font-semibold text-black/65">Final Total</span>
+            <span className="text-sm font-semibold text-black">£{finalTotal.toFixed(2)}</span>
+          </div>
+        )}
+        {hasAdjustments && (
+          <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
+            <div className="text-xs font-medium text-blue-900">
+              Total Commission: £{currentCommission.toFixed(2)}
+            </div>
+            <div className="mt-1 text-[10px] text-blue-700/70">
+              Commission: £{operatorCommission.toFixed(2)}{" "}
+              {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
+              {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)} `}
+              {currentWalletCredit > 0 && <span className="text-emerald-700">Wallet Credit: -£{currentWalletCredit.toFixed(2)}</span>}
+            </div>
+            {currentWalletCredit > 0 && (
+              <div className="mt-1.5 text-[10px] text-blue-700/60">
+                Net payable: £{(currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit).toFixed(2)}
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+  }, [price, discount, serviceCharge, commission, walletCreditAmount]);
+
   // ── Options ───────────────────────────────────────────────────────────────
-  const airportOptions = (airportsData || []).map(
-    (a: { id: string; airport_name: string; airport_code?: string | null }) => ({
-      value: a.id,
-      label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
-    })
+  const airportOptions = useMemo(
+    () =>
+      (airportsData || []).map(
+        (a: { id: string; airport_name: string; airport_code?: string | null }) => ({
+          value: a.id,
+          label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
+        })
+      ),
+    [airportsData]
   );
-  const departureAirportOptions = getDepartureAirportOptions(airportsData);
+  const departureAirportOptions = useMemo(
+    () => getDepartureAirportOptions(airportsData),
+    [airportsData]
+  );
+
+  const tourOperatorOptions = useMemo(
+    () =>
+      (tourOperatorsData || []).map((op: { id: string; name: string | null }) => ({
+        value: op.id,
+        label: op.name || op.id,
+      })),
+    [tourOperatorsData]
+  );
+
+  const countryOptions = useMemo(
+    () =>
+      (countriesData || []).map((c: { id: string; country_name: string }) => ({
+        value: c.id,
+        label: c.country_name,
+      })),
+    [countriesData]
+  );
+
+  const destinationOptions = useMemo(
+    () =>
+      (destinationsData || []).map((d: { id: string; name: string }) => ({
+        value: d.id,
+        label: d.name,
+      })),
+    [destinationsData]
+  );
+
+  const resortOptions = useMemo(
+    () =>
+      (resortsData || []).map((r: { id: string; name: string }) => ({
+        value: r.id,
+        label: r.name,
+      })),
+    [resortsData]
+  );
+
+  const accommodationOptions = useMemo(
+    () =>
+      (accommodationsData || []).map((a: { id: string; name: string }) => ({
+        value: a.id,
+        label: a.name,
+      })),
+    [accommodationsData]
+  );
+
+  const boardBasisOptions = useMemo(
+    () =>
+      (boardBasisData || []).map((b: { id: string; type: string }) => ({
+        value: b.id,
+        label: b.type,
+      })),
+    [boardBasisData]
+  );
+
+  const roomTypeOptions = useMemo(
+    () =>
+      (roomTypeData || []).map((r: { id: string; name: string | null }) => ({
+        value: r.id,
+        label: r.name || r.id,
+      })),
+    [roomTypeData]
+  );
+
+  const parkOptions = useMemo(
+    () =>
+      (parksData ?? []).map((p: { id: string; name: string | null }) => ({
+        value: p.id,
+        label: p.name || p.id,
+      })),
+    [parksData]
+  );
+
+  const lodgeOptions = useMemo(
+    () =>
+      (lodgesData ?? []).map(
+        (l: { id: string; lodge_name: string | null; lodge_code: string | null }) => ({
+          value: l.id,
+          label: l.lodge_name || l.lodge_code || l.id,
+        })
+      ),
+    [lodgesData]
+  );
+
+  const cruiseLineOptions = useMemo(
+    () => (cruiseLinesData || []).map((l) => ({ value: l.name ?? "", label: l.name ?? "" })),
+    [cruiseLinesData]
+  );
+
+  const shipOptions = useMemo(
+    () => (shipsData || []).map((s) => ({ value: s.name ?? "", label: s.name ?? "" })),
+    [shipsData]
+  );
+
   const handleJsonUpload = (file: File) => {
     handleJsonUploadUtil(file, {
       form,
@@ -470,6 +617,12 @@ export function BookingRHFForm({
     append: appendInbound,
     remove: removeInbound,
   } = useFieldArray({ control, name: "inboundConnectingLegs" });
+
+  const {
+    fields: itineraryFields,
+    append: appendItineraryDay,
+    remove: removeItineraryDay,
+  } = useFieldArray({ control, name: "cruiseItinerary" });
 
   return (
     <Form {...form}>
@@ -594,16 +747,13 @@ export function BookingRHFForm({
                   <FormLabel className="text-xs font-medium text-black/60">Tour Operator</FormLabel>
                   <FormControl>
                     <SearchableSelect
-                      options={(tourOperatorsData || []).map((op: { id: string; name: string | null }) => ({
-                        value: op.id,
-                        label: op.name || op.id,
-                      }))}
+                      options={tourOperatorOptions}
                       value={field.value ?? ""}
                       onValueChange={(value) => {
                         field.onChange(value);
                         const op = tourOperatorsData?.find((o: { id: string }) => o.id === value);
-                        if (op?.commission_percentage != null) {
-                          const currentPrice = Number(form.getValues("price")) || 0;
+                        const currentPrice = Number(form.getValues("price")) || 0;
+                        if (op?.commission_percentage != null && currentPrice > 0) {
                           const currentDiscount = Number(form.getValues("discount")) || 0;
                           const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
                           // Commission = price × operator % − discount + service charge.
@@ -959,12 +1109,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Park</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(parksData ?? []).map(
-                          (p: { id: string; name: string | null }) => ({
-                            value: p.id,
-                            label: p.name || p.id,
-                          })
-                        )}
+                        options={parkOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         placeholder="Select park..."
@@ -983,12 +1128,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Lodge</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(lodgesData ?? []).map(
-                          (l: { id: string; lodge_name: string | null; lodge_code: string | null }) => ({
-                            value: l.id,
-                            label: l.lodge_name || l.lodge_code || l.id,
-                          })
-                        )}
+                        options={lodgeOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         placeholder={parkId ? "Select lodge..." : "Select a park first"}
@@ -1081,6 +1221,7 @@ export function BookingRHFForm({
               {[
                 { name: "cruiseTitle" as const, label: "Cruise Title" },
                 { name: "cabinType" as const, label: "Cabin Type" },
+                { name: "cabinNumber" as const, label: "Cabin Number" },
                 { name: "embarkation" as const, label: "Embarkation Port" },
                 { name: "debarkation" as const, label: "Debarkation Port" },
               ].map(({ name, label }) => (
@@ -1112,7 +1253,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Cruise Line</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(cruiseLinesData || []).map((l) => ({ value: l.name ?? "", label: l.name ?? "" }))}
+                        options={cruiseLineOptions}
                         value={field.value ?? ""}
                         selectedLabel={field.value || undefined}
                         onValueChange={(val) => {
@@ -1136,7 +1277,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Ship Name</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(shipsData || []).map((s) => ({ value: s.name ?? "", label: s.name ?? "" }))}
+                        options={shipOptions}
                         value={field.value ?? ""}
                         selectedLabel={field.value || undefined}
                         onValueChange={(val) => {
@@ -1158,36 +1299,42 @@ export function BookingRHFForm({
                   <FormItem>
                     <FormLabel className="text-xs font-medium text-black/60">Cruise Date</FormLabel>
                     <FormControl>
-                      <Select
-                        disabled={!cruiseItineraries?.length && !field.value}
-                        value={field.value ?? ""}
-                        onValueChange={field.onChange}
-                      >
-                        <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                          <SelectValue
-                            placeholder={
-                              !selectedCruiseLineId
-                                ? "Select a cruise line first"
-                                : !selectedShipId
-                                  ? "Select a ship first"
-                                  : isFetchingCruiseDates
-                                    ? "Loading..."
-                                    : "No voyages available for this ship"
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {/* Keep an imported value visible even if the itinerary list hasn't loaded it yet. */}
-                          {field.value && !(cruiseItineraries || []).some((it) => it.date === field.value) && (
-                            <SelectItem value={field.value}>{field.value}</SelectItem>
-                          )}
-                          {(cruiseItineraries || []).map((it) => (
-                            <SelectItem key={it.id} value={it.date}>
-                              {it.date}{it.departure_port ? ` — ${it.departure_port}` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {cruiseItineraries?.length || isFetchingCruiseDates ? (
+                        // Catalog has voyages for this ship → pick a real sailing.
+                        <Select
+                          disabled={!cruiseItineraries?.length && !field.value}
+                          value={field.value ?? ""}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
+                            <SelectValue
+                              placeholder={
+                                !selectedCruiseLineId
+                                  ? "Select a cruise line first"
+                                  : !selectedShipId
+                                    ? "Select a ship first"
+                                    : isFetchingCruiseDates
+                                      ? "Loading..."
+                                      : "No voyages available for this ship"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {/* Keep an imported value visible even if the itinerary list hasn't loaded it yet. */}
+                            {field.value && !(cruiseItineraries || []).some((it) => it.date === field.value) && (
+                              <SelectItem value={field.value}>{field.value}</SelectItem>
+                            )}
+                            {(cruiseItineraries || []).map((it) => (
+                              <SelectItem key={it.id} value={it.date}>
+                                {it.date}{it.departure_port ? ` — ${it.departure_port}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        // No catalog voyages for this ship → free date entry.
+                        <DatePicker value={field.value ?? ""} onChange={field.onChange} />
+                      )}
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1213,6 +1360,62 @@ export function BookingRHFForm({
                 )}
               />
             </div>
+
+            {/* ── Itinerary (day-by-day) ──────────────────────────────────── */}
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <SectionHeader icon={Ship} title="Itinerary" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-xl border-black/10 bg-white/70"
+                  onClick={() => appendItineraryDay({ day: itineraryFields.length + 1, description: "", subDescription: "" })}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Day
+                </Button>
+              </div>
+
+              <div className="grid gap-2">
+                {itineraryFields.map((row, i) => (
+                  <div key={row.id} className="flex items-start gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      {...register(`cruiseItinerary.${i}.day` as const, { valueAsNumber: true })}
+                      className="h-9 w-20 rounded-xl border-black/10 bg-white/70"
+                      placeholder="Day"
+                    />
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Input
+                        {...register(`cruiseItinerary.${i}.description` as const)}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        placeholder="Port / description"
+                      />
+                      <Input
+                        {...register(`cruiseItinerary.${i}.subDescription` as const)}
+                        className="h-9 rounded-xl border-black/10 bg-white/70"
+                        placeholder="Sub-description (optional)"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 shrink-0 rounded-xl text-black/50 hover:text-red-600"
+                      onClick={() => removeItineraryDay(i)}
+                      aria-label="Remove day"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                {itineraryFields.length === 0 && (
+                  <p className="text-xs text-black/45">No itinerary days. Use "Add Day" to start.</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1228,12 +1431,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Country</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(countriesData || []).map(
-                          (c: { id: string; country_name: string }) => ({
-                            value: c.id,
-                            label: c.country_name,
-                          })
-                        )}
+                        options={countryOptions}
                         value={field.value ?? ""}
                         onValueChange={(value) => {
                           field.onChange(value);
@@ -1260,12 +1458,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Destination</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(destinationsData || []).map(
-                          (d: { id: string; name: string }) => ({
-                            value: d.id,
-                            label: d.name,
-                          })
-                        )}
+                        options={destinationOptions}
                         value={field.value ?? ""}
                         onValueChange={(value) => {
                           const label = (destinationsData || []).find((d) => d.id === value)?.name || "";
@@ -1295,12 +1488,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Resort</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(resortsData || []).map(
-                          (r: { id: string; name: string }) => ({
-                            value: r.id,
-                            label: r.name,
-                          })
-                        )}
+                        options={resortOptions}
                         value={field.value ?? ""}
                         selectedLabel={resortLabel}
                         onValueChange={(value) => {
@@ -1333,12 +1521,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Accommodation</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(accommodationsData || []).map(
-                          (a: { id: string; name: string }) => ({
-                            value: a.id,
-                            label: a.name,
-                          })
-                        )}
+                        options={accommodationOptions}
                         value={field.value ?? ""}
                         selectedLabel={accomLabel}
                         onSearch={setAccomSearch}
@@ -1425,12 +1608,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Board Basis</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(boardBasisData || []).map(
-                          (b: { id: string; type: string }) => ({
-                            value: b.id,
-                            label: b.type,
-                          })
-                        )}
+                        options={boardBasisOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         onSearchCapture={setBoardBasisSearch}
@@ -1452,12 +1630,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Room Type</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={(roomTypeData || []).map(
-                          (r: { id: string; name: string | null }) => ({
-                            value: r.id,
-                            label: r.name || r.id,
-                          })
-                        )}
+                        options={roomTypeOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         onSearchCapture={setRoomTypeSearch}
@@ -1808,7 +1981,7 @@ export function BookingRHFForm({
                             const currentOperatorId = form.getValues("tourOperatorId");
                             if (currentOperatorId) {
                               const op = tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId);
-                              if (op?.commission_percentage != null) {
+                              if (op?.commission_percentage != null && currentPrice > 0) {
                                 const operatorCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
                                 const adjustedCommission = operatorCommission - currentDiscount + currentServiceCharge;
                                 setValue("commission", parseFloat(adjustedCommission.toFixed(2)), { shouldValidate: true, shouldDirty: true });
@@ -1833,48 +2006,7 @@ export function BookingRHFForm({
               />
             ))}
           </div>
-          {(() => {
-            const currentPrice = Number(price) || 0;
-            const currentDiscount = Number(discount) || 0;
-            const currentServiceCharge = Number(serviceCharge) || 0;
-            const currentCommission = Number(commission) || 0;
-            const currentWalletCredit = Number(walletCreditAmount) || 0;
-            const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0 || currentWalletCredit > 0;
-            // Total price = price − discount + service charge.
-            const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
-            // The commission field already holds the total (operator % − discount + service charge);
-            // recover the raw operator portion for the breakdown line.
-            const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
-
-            return (
-              <>
-                {currentPrice > 0 && (
-                  <div className="mt-3 flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2">
-                    <span className="text-xs font-semibold text-black/65">Final Total</span>
-                    <span className="text-sm font-semibold text-black">£{finalTotal.toFixed(2)}</span>
-                  </div>
-                )}
-                {hasAdjustments && (
-                  <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
-                    <div className="text-xs font-medium text-blue-900">
-                      Total Commission: £{currentCommission.toFixed(2)}
-                    </div>
-                    <div className="mt-1 text-[10px] text-blue-700/70">
-                      Commission: £{operatorCommission.toFixed(2)}{" "}
-                      {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
-                      {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)} `}
-                      {currentWalletCredit > 0 && <span className="text-emerald-700">Wallet Credit: -£{currentWalletCredit.toFixed(2)}</span>}
-                    </div>
-                    {currentWalletCredit > 0 && (
-                      <div className="mt-1.5 text-[10px] text-blue-700/60">
-                        Net payable: £{(currentPrice - currentDiscount + currentServiceCharge - currentWalletCredit).toFixed(2)}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            );
-          })()}
+          {pricingBreakdown}
         </div>
 
         {/* ── WALLET CREDIT ─────────────────────────────────────────────────── */}
