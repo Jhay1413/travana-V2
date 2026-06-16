@@ -47,7 +47,7 @@ export function useAdminDeleteBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      axiosClient.post(`/api/audit/delete-booking/${id}`, { reason }),
+      axiosClient.post(`/api/v2/audit/delete-booking/${id}`, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });

@@ -31,7 +31,26 @@
       "Bash(grep -A1 -E \"router\\\\.\\(get|post|put|patch|delete\\)\\\\\\($\" routes/settings.routes.ts)",
       "Bash(grep -oE \"[\\\\\"'\\\\`]/[a-zA-Z0-9_:/-]*\")",
       "Bash(grep -oE \"router\\\\.\\(get|post|put|patch|delete\\)\\\\\\([\\\\\"'\\\\`][^\\\\\"'\\\\`]+\" routes/settings.routes.ts)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(sort -t: -k1,1 -u)",
+      "Bash(awk -F: '{print $NF, \"\\\\t\", $1}')",
+      "Bash(grep -rnoE \"[\\\\\"'\\\\`]/api/[a-z0-9-]+\" client/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -vE \"/api/\\(v2|auth|logout|portal|public\\)\\([\\\\\"'\\\\`/]|$\\)\")",
+      "Bash(cat server/v2/settings/index.ts)",
+      "Bash(ls server/v2/settings)",
+      "Bash(cat server/v2/modules/admin-import/admin-import.routes.ts)",
+      "Bash(grep -noE '\"/api/settings[a-zA-Z0-9/$_{}.-]*' client/src/pages/settings-lookup.tsx)",
+      "Bash(grep -rnoE '/api/settings[a-zA-Z0-9/$_{}.`-]*' client/src/components/lookups/)",
+      "Bash(grep -noE '/api/admin[a-zA-Z0-9/$_{}.`-]*' client/src/pages/admin-lookup.tsx)",
+      "Bash(grep -noE '/api/admin[a-zA-Z0-9/$_{}.`-]*' client/src/pages/admin-import.tsx)",
+      "Bash(rg -rn \"quote-share|generate-token|/views|customer-actions\" server/v2 server/index.ts server/routes)",
+      "Bash(rg -rn \"users/profiles|user-profiles|profiles\" server/v2 server/index.ts)",
+      "Bash(node_modules\\\\.bin\\\\tsc --noEmit)",
+      "Bash(\"./node_modules/.bin/tsc\" --noEmit)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(cmd /c \"node_modules\\\\.bin\\\\tsc --noEmit 2>&1\")",
+      "Bash(cmd *)",
+      "Bash(grep -vE \"/api/\\(endpoints|client\\)\\([\\\\\"'\\\\`/]|$\\)\")"
     ],
     "additionalDirectories": [
       "/tmp"

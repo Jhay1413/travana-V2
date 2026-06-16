@@ -113,7 +113,7 @@ export function AddResortModal({
       const payload: Record<string, string> = { name: values.name };
       if (values.destination_id) payload.destination_id = values.destination_id;
 
-      const { data } = await axios.post<{ id: string; name: string; destination_id: string | null }>("/api/settings/resorts", payload);
+      const { data } = await axios.post<{ id: string; name: string; destination_id: string | null }>("/api/v2/settings/resorts", payload);
 
       const selectedDestination = (destinations || []).find((d) => d.id === (values.destination_id || destinationId));
 

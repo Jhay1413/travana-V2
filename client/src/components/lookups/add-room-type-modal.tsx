@@ -64,7 +64,7 @@ export function AddRoomTypeModal({
   const handleSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
-      const { data } = await axios.post<AddedRoomType>("/api/settings/room-types", { name: values.name });
+      const { data } = await axios.post<AddedRoomType>("/api/v2/settings/room-types", { name: values.name });
 
       queryClient.invalidateQueries({ queryKey: lookupKeys.roomTypes });
 

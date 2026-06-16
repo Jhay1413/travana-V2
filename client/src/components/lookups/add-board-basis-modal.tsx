@@ -64,7 +64,7 @@ export function AddBoardBasisModal({
   const handleSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
-      const { data } = await axios.post<AddedBoardBasis>("/api/settings/board-basis", { type: values.type });
+      const { data } = await axios.post<AddedBoardBasis>("/api/v2/settings/board-basis", { type: values.type });
 
       queryClient.invalidateQueries({ queryKey: lookupKeys.boardBasis });
 

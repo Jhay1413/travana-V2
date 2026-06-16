@@ -31,7 +31,7 @@ function useAdminTables() {
   return useQuery({
     queryKey: ["admin", "tables"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/tables");
+      const res = await axios.get("/api/v2/admin/tables");
       return res.data as { tables: TableInfo[]; counts: Record<string, number> };
     },
   });
@@ -103,7 +103,7 @@ function ImportCard({ table, count, onRefresh }: { table: TableInfo; count: numb
 
   const importMutation = useMutation({
     mutationFn: async (rows: Record<string, any>[]) => {
-      const res = await axios.post(`/api/admin/import/${table.key}`, { rows });
+      const res = await axios.post(`/api/v2/admin/import/${table.key}`, { rows });
       return res.data as { imported: number; errors: Array<{ row: number; error: string }>; total: number };
     },
     onSuccess: (data) => {
@@ -123,7 +123,7 @@ function ImportCard({ table, count, onRefresh }: { table: TableInfo; count: numb
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await axios.delete(`/api/admin/clear/${table.key}`);
+      await axios.delete(`/api/v2/admin/clear/${table.key}`);
     },
     onSuccess: () => {
       toast({ title: `${table.label} cleared` });

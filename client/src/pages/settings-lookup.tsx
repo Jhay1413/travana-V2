@@ -85,7 +85,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "airports": {
     label: "Airports",
-    apiPath: "/api/settings/airports",
+    apiPath: "/api/v2/settings/airports",
     navKey: "airports",
     displayColumns: [
       { key: "airport_name", label: "Airport Name" },
@@ -99,7 +99,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "countries": {
     label: "Countries",
-    apiPath: "/api/settings/countries",
+    apiPath: "/api/v2/settings/countries",
     navKey: "countries",
     displayColumns: [
       { key: "country_name", label: "Country Name" },
@@ -123,7 +123,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
     formFields: [
       { key: "name", label: "Name", type: "text", required: true, placeholder: "e.g. Maldives" },
       { key: "type", label: "Type", type: "text", placeholder: "e.g. Beach, City" },
-      { key: "country_id", label: "Country", type: "relation", lookupApi: "/api/settings/countries", lookupLabelKey: "country_name" },
+      { key: "country_id", label: "Country", type: "relation", lookupApi: "/api/v2/settings/countries", lookupLabelKey: "country_name" },
     ],
     primaryLabel: (r) => r.name ?? "–",
   },
@@ -183,7 +183,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "package-types": {
     label: "Package Types",
-    apiPath: "/api/settings/package-types",
+    apiPath: "/api/v2/settings/package-types",
     navKey: "package-types",
     displayColumns: [{ key: "name", label: "Name" }],
     formFields: [
@@ -260,7 +260,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "cruise-extras": {
     label: "Cruise Extras",
-    apiPath: "/api/settings/cruise-extras",
+    apiPath: "/api/v2/settings/cruise-extras",
     navKey: "cruise-extras",
     displayColumns: [{ key: "name", label: "Name" }],
     formFields: [
@@ -312,7 +312,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "cruise-voyages": {
     label: "Cruise Voyage Days",
-    apiPath: "/api/settings/cruise-voyages",
+    apiPath: "/api/v2/settings/cruise-voyages",
     navKey: "cruise-voyages",
     displayColumns: [
       { key: "day_number", label: "Day" },
@@ -338,7 +338,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "deletion-codes": {
     label: "Deletion Codes",
-    apiPath: "/api/settings/deletion-codes",
+    apiPath: "/api/v2/settings/deletion-codes",
     navKey: "deletion-codes",
     displayColumns: [
       { key: "code", label: "Code" },
@@ -360,7 +360,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
   },
   "tags": {
     label: "Tags",
-    apiPath: "/api/settings/tags",
+    apiPath: "/api/v2/settings/tags",
     navKey: "tags",
     displayColumns: [
       { key: "name", label: "Name" },

@@ -251,6 +251,25 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     lodgeId: quoteData.lodge_id || "",
     pets: quoteData.pets ?? 0,
 
+    // Cruise
+    cruiseTitle: quoteData.cruises?.[0]?.cruise_name || "",
+    cruiseLine: quoteData.cruises?.[0]?.cruise_line || "",
+    shipName: quoteData.cruises?.[0]?.ship || "",
+    cruiseDate: quoteData.cruises?.[0]?.cruise_date || "",
+    cabinType: quoteData.cruises?.[0]?.cabin_type || "",
+    cabinNumber: quoteData.cruises?.[0]?.cabin_number || "",
+    embarkation: quoteData.cruises?.[0]?.embarkation || "",
+    debarkation: quoteData.cruises?.[0]?.debarkation || "",
+    cruiseExtras: (quoteData.cruises?.[0]?.extras || [])
+      .map((e: { name: string | null }) => e.name)
+      .filter(Boolean)
+      .join(", "),
+    cruiseItinerary: (quoteData.cruises?.[0]?.itinerary || []).map((d: { day_number: number | null; description: string | null; sub_description: string | null }) => ({
+      day: Number(d.day_number) || 0,
+      description: d.description || "",
+      subDescription: d.sub_description || "",
+    })),
+
     // Pricing
     price: salesPrice,
     commission: commission,
@@ -440,10 +459,12 @@ function buildUpdatePayload(
     payload.shipName = values.shipName || null;
     payload.cruiseDate = values.cruiseDate || null;
     payload.cabinType = values.cabinType || null;
+    payload.cabinNumber = values.cabinNumber || null;
     payload.embarkation = values.embarkation || null;
     payload.debarkation = values.debarkation || null;
     payload.cruiseExtras = values.cruiseExtras || null;
     payload.cruiseOnly = values.cruiseOnly;
+    payload.cruiseItinerary = values.cruiseItinerary ?? [];
   }
 
   Object.assign(payload, buildExtrasPayload(values));

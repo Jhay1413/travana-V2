@@ -214,7 +214,7 @@ export default function AdminLookupPage() {
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (debouncedSearch) params.set("search", debouncedSearch);
-      const res = await axios.get(`/api/admin/data/${def!.apiKey}?${params}`);
+      const res = await axios.get(`/api/v2/admin/data/${def!.apiKey}?${params}`);
       return res.data as { rows: Record<string, any>[]; total: number; page: number; limit: number; totalPages: number };
     },
     enabled: !!def,
@@ -230,7 +230,7 @@ export default function AdminLookupPage() {
   const { data: countriesLookup } = useQuery({
     queryKey: ["admin", "lookup", "country"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/country?limit=200");
+      const res = await axios.get("/api/v2/admin/data/country?limit=200");
       return res.data as { rows: Array<{ id: string; country_name: string }> };
     },
     enabled: !!hasCountryRef,
@@ -238,7 +238,7 @@ export default function AdminLookupPage() {
   const { data: destLookup } = useQuery({
     queryKey: ["admin", "lookup", "destination"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/destination?limit=200");
+      const res = await axios.get("/api/v2/admin/data/destination?limit=200");
       return res.data as { rows: Array<{ id: string; name: string }> };
     },
     enabled: !!hasDestRef,
@@ -246,7 +246,7 @@ export default function AdminLookupPage() {
   const { data: resortLookup } = useQuery({
     queryKey: ["admin", "lookup", "resorts"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/resorts?limit=200");
+      const res = await axios.get("/api/v2/admin/data/resorts?limit=200");
       return res.data as { rows: Array<{ id: string; name: string }> };
     },
     enabled: !!hasResortRef,
@@ -254,7 +254,7 @@ export default function AdminLookupPage() {
   const { data: accomTypeLookup } = useQuery({
     queryKey: ["admin", "lookup", "accomodation_type"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/accomodation_type?limit=200");
+      const res = await axios.get("/api/v2/admin/data/accomodation_type?limit=200");
       return res.data as { rows: Array<{ id: string; type: string }> };
     },
     enabled: !!hasTypeRef,
@@ -262,7 +262,7 @@ export default function AdminLookupPage() {
   const { data: parkLookup } = useQuery({
     queryKey: ["admin", "lookup", "park"],
     queryFn: async () => {
-      const res = await axios.get("/api/admin/data/park?limit=200");
+      const res = await axios.get("/api/v2/admin/data/park?limit=200");
       return res.data as { rows: Array<{ id: string; name: string }> };
     },
     enabled: !!hasParkRef,
@@ -292,7 +292,7 @@ export default function AdminLookupPage() {
 
   const createMutation = useMutation({
     mutationFn: async (row: Record<string, any>) => {
-      await axios.post(`/api/admin/data/${def!.apiKey}`, row);
+      await axios.post(`/api/v2/admin/data/${def!.apiKey}`, row);
     },
     onSuccess: () => {
       toast({ title: "Row added" });
@@ -303,7 +303,7 @@ export default function AdminLookupPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await axios.delete(`/api/admin/data/${def!.apiKey}/${id}`);
+      await axios.delete(`/api/v2/admin/data/${def!.apiKey}/${id}`);
     },
     onSuccess: () => {
       toast({ title: "Row deleted" });
@@ -314,7 +314,7 @@ export default function AdminLookupPage() {
 
   const importMutation = useMutation({
     mutationFn: async (rows: Record<string, any>[]) => {
-      const res = await axios.post(`/api/admin/import/${def!.apiKey}`, { rows });
+      const res = await axios.post(`/api/v2/admin/import/${def!.apiKey}`, { rows });
       return res.data as { imported: number; errors: Array<{ row: number; error: string }>; total: number };
     },
     onSuccess: (data) => {
@@ -328,7 +328,7 @@ export default function AdminLookupPage() {
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await axios.delete(`/api/admin/clear/${def!.apiKey}`);
+      await axios.delete(`/api/v2/admin/clear/${def!.apiKey}`);
     },
     onSuccess: () => {
       toast({ title: `${def!.label} cleared` });

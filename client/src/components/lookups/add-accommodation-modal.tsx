@@ -146,7 +146,7 @@ export function AddAccommodationModal({
       const payload: Record<string, string> = { name: values.name };
       if (values.resorts_id) payload.resorts_id = values.resorts_id;
 
-      const { data } = await axios.post<AddedAccommodation>("/api/settings/accommodation-list", payload);
+      const { data } = await axios.post<AddedAccommodation>("/api/v2/settings/accommodations", payload);
 
       // Determine display labels from the selected options
       const selectedResort = (resorts || []).find((r) => r.id === values.resorts_id);

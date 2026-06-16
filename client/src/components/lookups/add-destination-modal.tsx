@@ -94,7 +94,7 @@ export function AddDestinationModal({
       if (values.country_id) payload.country_id = values.country_id;
       if (values.type) payload.type = values.type;
 
-      const { data } = await axios.post<AddedDestination>("/api/settings/destinations", payload);
+      const { data } = await axios.post<AddedDestination>("/api/v2/settings/destinations", payload);
 
       queryClient.invalidateQueries({ queryKey: lookupKeys.allDestinations });
       queryClient.invalidateQueries({ queryKey: ["lookup", "destinations"] });

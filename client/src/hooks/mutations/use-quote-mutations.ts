@@ -67,7 +67,7 @@ export function useAdminDeleteQuote() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      axiosClient.post(`/api/audit/delete-quote/${id}`, { reason }),
+      axiosClient.post(`/api/v2/audit/delete-quote/${id}`, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
