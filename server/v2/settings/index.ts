@@ -10,6 +10,7 @@ import cottageRoutes from './cottage/cottage.routes';
 import cruiseRoutes from './cruise/cruise.routes';
 import accommodationTypeRoutes from './accommodation-type/accommodation-type.routes';
 import tourOperatorSettingsRoutes from './tour-operator/tour-operator-settings.routes';
+import tagSettingsRoutes from './tag/tag.routes';
 
 const router = Router();
 router.use('/destinations',       destinationRoutes);
@@ -23,4 +24,5 @@ router.use('/cottages',           cottageRoutes);
 router.use('/cruise',             cruiseRoutes);
 router.use('/accommodation-types',accommodationTypeRoutes);
 router.use('/tour-operators',     tourOperatorSettingsRoutes);
+router.use('/tags',               tagSettingsRoutes);
 export default router;

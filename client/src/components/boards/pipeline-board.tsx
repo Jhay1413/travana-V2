@@ -56,7 +56,7 @@ import type { NeonClient } from "@/types/neon-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
-import { QuoteCreateDialog } from "@/components/quote/QuoteCreateDialog";
+import { QuoteCreateDialog } from "@/components/quote/quote-create-dialog";
 import type { Transaction } from "@/types/quote";
 import { formatRelativeTime, formatFullDateTime } from "@/lib/note-time";
 

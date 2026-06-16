@@ -17,7 +17,21 @@
       "Bash(sed -n '1,30p' server/v2/modules/organization-overview/organization-overview.repository.ts)",
       "Bash(sed -n '1,30p' server/v2/modules/branch-overview/branch-overview.repository.ts)",
       "Bash(echo \"=== server error count: $\\(npx tsc --noEmit 2>&1)",
-      "Bash(echo \"exit-grep: $?\")"
+      "Bash(echo \"exit-grep: $?\")",
+      "Bash(grep -v \"^ui$\")",
+      "Bash(grep -v \"^layout$\")",
+      "Bash(grep -rhoE \"[\\\\\"'\\\\`]/api/\\(v2/\\)?[a-zA-Z0-9_-]+\" client/src)",
+      "Bash(sed -E \"s/[\\\\\"'\\\\`]//\")",
+      "Bash(grep -rnoE \"[\\\\\"'\\\\`]/api/\\(portal|settings|admin|audit|wallet|auth|public|logout|users|clients|quotes|tickets|notifications|dashboard|airports|tour-operators|attachments|replies|facebook|quote-share|user-profiles|ai\\)[a-zA-Z0-9_/:.\\\\${}-]*\" .)",
+      "Bash(sort -t: -k1)",
+      "Bash(grep -oE \"router\\\\.\\(get|post|put|patch|delete\\)\\\\\\(\\\\s*[\\\\\"'\\\\`][^\\\\\"'\\\\`]*\" modules/audit/audit.routes.ts)",
+      "Bash(grep -oE \"router\\\\.\\(get|post|put|patch|delete\\)\\\\\\(\\\\s*[\\\\\"'\\\\`][^\\\\\"'\\\\`]*\" modules/wallet/wallet.routes.ts)",
+      "Bash(grep -oE \"router\\\\.\\(get|post|put|patch|delete\\)\\\\\\(\\\\s*[\\\\\"'\\\\`][^\\\\\"'\\\\`]*\" modules/admin-import/admin-import.routes.ts)",
+      "Bash(grep -oE \"router\\\\.\\(get|post|put|patch|delete\\)\\\\\\(\\\\s*[\\\\\"'\\\\`][^\\\\\"'\\\\`]*\" routes/settings.routes.ts)",
+      "Bash(grep -A1 -E \"router\\\\.\\(get|post|put|patch|delete\\)\\\\\\($\" routes/settings.routes.ts)",
+      "Bash(grep -oE \"[\\\\\"'\\\\`]/[a-zA-Z0-9_:/-]*\")",
+      "Bash(grep -oE \"router\\\\.\\(get|post|put|patch|delete\\)\\\\\\([\\\\\"'\\\\`][^\\\\\"'\\\\`]+\" routes/settings.routes.ts)",
+      "Bash(python3 *)"
     ],
     "additionalDirectories": [
       "/tmp"
