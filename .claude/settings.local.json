@@ -50,7 +50,9 @@
       "Bash(./node_modules/.bin/tsc --noEmit)",
       "Bash(cmd /c \"node_modules\\\\.bin\\\\tsc --noEmit 2>&1\")",
       "Bash(cmd *)",
-      "Bash(grep -vE \"/api/\\(endpoints|client\\)\\([\\\\\"'\\\\`/]|$\\)\")"
+      "Bash(grep -vE \"/api/\\(endpoints|client\\)\\([\\\\\"'\\\\`/]|$\\)\")",
+      "Bash(xargs wc -l)",
+      "Bash(awk '$1>=300 && $1<497')"
     ],
     "additionalDirectories": [
       "/tmp"
