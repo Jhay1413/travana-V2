@@ -1,17 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
-import { bookingApi } from "@/api";
-import type { UpsellRecord } from "@/types/booking";
-
-export const bookingUpsellKeys = {
-  all: ["booking-upsells"] as const,
-  lists: () => [...bookingUpsellKeys.all, "list"] as const,
-  list: (bookingId: string) => [...bookingUpsellKeys.lists(), bookingId] as const,
-};
-
-export function useBookingUpsells(bookingId: string) {
-  return useQuery<UpsellRecord[]>({
-    queryKey: bookingUpsellKeys.list(bookingId),
-    queryFn: () => bookingApi.listUpsells(bookingId),
-    enabled: !!bookingId,
-  });
-}
+// Re-export shim — moved to features/booking/api as part of the feature-based
+// structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/booking/api/use-booking-upsell-queries";

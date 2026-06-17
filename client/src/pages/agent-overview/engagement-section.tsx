@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Eye, Monitor, Smartphone, Tablet } from "luc
 import { Link, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { useRecentQuoteEngagement } from "@/hooks/queries";
-import type { QuoteEngagementView } from "@/api/endpoints/quote.api";
+import type { QuoteEngagementView } from "@/features/quote/api/quote.api";
 
 function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();

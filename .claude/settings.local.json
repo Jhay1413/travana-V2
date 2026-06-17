@@ -69,7 +69,14 @@
       "Bash(npm -v)",
       "Bash(npx -y npm@10 install --package-lock-only)",
       "Bash(npx -y npm@10 ci --dry-run)",
-      "Bash(corepack --version)"
+      "Bash(corepack --version)",
+      "Bash(grep -rn \"from ['\\\\\"]\\\\.\\\\./\\\\.\\\\./\" components/quote)",
+      "Bash(grep -v \"from ['\\\\\"]\\\\.\\\\./\\\\.\\\\./\\\\.\\\\./\")",
+      "Bash(mkdir -p features/quote/api)",
+      "Bash(git mv *)",
+      "Bash(sed -i 's#import type { QuoteEngagementRow } from \"@/api/endpoints/quote.api\";#import type { QuoteEngagementRow } from \"./quote.api\";#' features/quote/api/use-quote-queries.ts)",
+      "Bash(sed -i 's#import type { QuoteEngagementView } from \"@/api/endpoints/quote.api\";#import type { QuoteEngagementView } from \"@/features/quote/api/quote.api\";#' pages/agent-overview/engagement-section.tsx)",
+      "Bash(timeout 420 npx vite build)"
     ],
     "additionalDirectories": [
       "/tmp"

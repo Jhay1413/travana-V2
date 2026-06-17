@@ -11,22 +11,22 @@ import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { transformQuoteData, currency, formatUKDate } from "@/components/quote/quote-types";
+import { transformQuoteData, currency, formatUKDate } from "@/features/quote/components/quote-types";
 import { sumUpsells } from "@/types/booking";
-import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
-import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
-import { BookingEditDialog } from "@/components/booking/booking-edit-dialog";
-import { BookingUpsellsDialog } from "@/components/booking/BookingUpsellsDialog";
+import { QuoteNotesSection } from "@/features/quote/components/QuoteNotesSection";
+import { QuoteTasksSection } from "@/features/quote/components/QuoteTasksSection";
+import { BookingEditDialog } from "@/features/booking/components/booking-edit-dialog";
+import { BookingUpsellsDialog } from "@/features/booking/components/BookingUpsellsDialog";
 
-import { useQuoteImages } from "@/components/quote/hooks";
-import { QuoteBookingReferences } from "@/components/quote/QuoteBookingReferences";
-import { QuoteDeleteDialog } from "@/components/quote/QuoteDeleteDialog";
-import { QuoteTagsCard } from "@/components/quote/QuoteTagsCard";
+import { useQuoteImages } from "@/features/quote/components/hooks";
+import { QuoteBookingReferences } from "@/features/quote/components/QuoteBookingReferences";
+import { QuoteDeleteDialog } from "@/features/quote/components/QuoteDeleteDialog";
+import { QuoteTagsCard } from "@/features/quote/components/QuoteTagsCard";
 
-import { useBookingPin, useBookingDelete, useBookingTagEditor, useBookingImageActions } from "@/components/booking/hooks";
-import { BookingMediaPanel } from "@/components/booking/BookingMediaPanel";
-import { BookingItinerarySpecs } from "@/components/booking/BookingItinerarySpecs";
-import { BookingCostingsCard } from "@/components/booking/BookingCostingsCard";
+import { useBookingPin, useBookingDelete, useBookingTagEditor, useBookingImageActions } from "@/features/booking/components/hooks";
+import { BookingMediaPanel } from "@/features/booking/components/BookingMediaPanel";
+import { BookingItinerarySpecs } from "@/features/booking/components/BookingItinerarySpecs";
+import { BookingCostingsCard } from "@/features/booking/components/BookingCostingsCard";
 
 export default function BookingPage() {
   const [, setLocation] = useLocation();

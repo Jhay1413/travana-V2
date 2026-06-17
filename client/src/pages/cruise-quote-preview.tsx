@@ -11,8 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
-import { SectionHeader } from "@/components/quote/sections/SectionHeader";
-import { formatUKDate } from "@/components/quote/quote-types";
+import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
+import { formatUKDate } from "@/features/quote/components/quote-types";
 
 const CRUISE_LINES = [
   "Royal Caribbean",

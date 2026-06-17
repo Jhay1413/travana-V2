@@ -7,7 +7,7 @@ import { useGeneratePost } from "@/hooks/mutations/use-social-post-mutations";
 import axiosClient from "@/api/client/axios-client";
 import { useToast } from "@/hooks/use-toast";
 import { SocialPostPreviewDialog } from "@/components/social-post-preview-dialog";
-import { QuoteCreateDialog } from "@/components/quote/quote-create-dialog";
+import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

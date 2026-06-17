@@ -20,34 +20,34 @@ import type { Transaction, EnquiryTable } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/components/enquiry-wizard";
 
-import { transformNeonClientData, transformTicket, filesFor } from "@/components/client/client-types";
-import { EditClientDialog } from "@/components/client/modals/EditClientDialog";
-import { UploadFileDialog } from "@/components/client/modals/UploadFileDialog";
-import { QuoteCreateDialog } from "@/components/quote/quote-create-dialog";
-import { BookingCreateDialog } from "@/components/booking/booking-create-dialog";
+import { transformNeonClientData, transformTicket, filesFor } from "@/features/client/components/client-types";
+import { EditClientDialog } from "@/features/client/components/modals/EditClientDialog";
+import { UploadFileDialog } from "@/features/client/components/modals/UploadFileDialog";
+import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
+import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
 import {
   ClientOverviewTab,
   PortalPinSection,
   ReferralStatsSection,
-} from "@/components/client/tabs/ClientOverviewTab";
-import { ClientEnquiriesTab } from "@/components/client/tabs/ClientEnquiriesTab";
-import { ClientQuotesTab } from "@/components/client/tabs/ClientQuotesTab";
-import { ClientBookedTab } from "@/components/client/tabs/ClientBookedTab";
-import { ClientFilesTab } from "@/components/client/tabs/ClientFilesTab";
-import { ClientTicketsTab } from "@/components/client/tabs/ClientTicketsTab";
-import { ClientVipClubTab } from "@/components/client/tabs/ClientVipClubTab";
-import { ReferrerSelector } from "@/components/client/sections/ReferrerSelector";
-import { ClientProfileHeader } from "@/components/client/sections/ClientProfileHeader";
-import { ClientContactDetails } from "@/components/client/sections/ClientContactDetails";
-import { CreateTaskDialog } from "@/components/client/modals/CreateTaskDialog";
-import { CreateTicketDialog } from "@/components/client/modals/CreateTicketDialog";
+} from "@/features/client/components/tabs/ClientOverviewTab";
+import { ClientEnquiriesTab } from "@/features/client/components/tabs/ClientEnquiriesTab";
+import { ClientQuotesTab } from "@/features/client/components/tabs/ClientQuotesTab";
+import { ClientBookedTab } from "@/features/client/components/tabs/ClientBookedTab";
+import { ClientFilesTab } from "@/features/client/components/tabs/ClientFilesTab";
+import { ClientTicketsTab } from "@/features/client/components/tabs/ClientTicketsTab";
+import { ClientVipClubTab } from "@/features/client/components/tabs/ClientVipClubTab";
+import { ReferrerSelector } from "@/features/client/components/sections/ReferrerSelector";
+import { ClientProfileHeader } from "@/features/client/components/sections/ClientProfileHeader";
+import { ClientContactDetails } from "@/features/client/components/sections/ClientContactDetails";
+import { CreateTaskDialog } from "@/features/client/components/modals/CreateTaskDialog";
+import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import {
   useClientEditForm,
   useClientFiles,
   useClientTaskCreate,
   useClientTicketCreate,
   useClientEnquiryActions,
-} from "@/components/client/hooks";
+} from "@/features/client/components/hooks";
 
 export default function ClientPage() {
   const [, navigate] = useLocation();

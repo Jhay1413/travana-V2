@@ -8,31 +8,31 @@ import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useQuote, useClient, useUsers, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction } from "@/hooks/mutations";
-import { CreateTicketDialog } from "@/components/client/modals/CreateTicketDialog";
-import { useClientTicketCreate } from "@/components/client/hooks";
+import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
+import { useClientTicketCreate } from "@/features/client/components/hooks";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { QuoteEditDialog } from "@/components/quote/quote-edit-dialog";
-import { QuoteCreateDialog } from "@/components/quote/quote-create-dialog";
-import { transformQuoteData, currency, formatUKDate } from "@/components/quote/quote-types";
-import { QuoteNotesSection } from "@/components/quote/QuoteNotesSection";
-import { QuoteTasksSection } from "@/components/quote/QuoteTasksSection";
-import { StatusPill } from "@/components/quote/StatusPill";
-import { QuoteEngagement } from "@/components/quote/QuoteEngagement";
-import { QuoteBookingReferences } from "@/components/quote/QuoteBookingReferences";
-import { QuoteCostingsCard } from "@/components/quote/QuoteCostingsCard";
-import { QuoteShareDialog } from "@/components/quote/QuoteShareDialog";
-import { QuoteConvertDialog } from "@/components/quote/QuoteConvertDialog";
-import { QuoteDeleteDialog } from "@/components/quote/QuoteDeleteDialog";
-import { QuoteExpiryDialog } from "@/components/quote/QuoteExpiryDialog";
-import { QuoteGuruSheet } from "@/components/quote/QuoteGuruSheet";
-import { QuoteTagsCard } from "@/components/quote/QuoteTagsCard";
-import { QuoteMediaPanel } from "@/components/quote/QuoteMediaPanel";
-import { QuoteExpiryPill } from "@/components/quote/QuoteExpiryPill";
-import { QuoteActionsRow } from "@/components/quote/QuoteActionsRow";
-import { QuoteItinerarySpecs } from "@/components/quote/QuoteItinerarySpecs";
+import { QuoteEditDialog } from "@/features/quote/components/quote-edit-dialog";
+import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
+import { transformQuoteData, currency, formatUKDate } from "@/features/quote/components/quote-types";
+import { QuoteNotesSection } from "@/features/quote/components/QuoteNotesSection";
+import { QuoteTasksSection } from "@/features/quote/components/QuoteTasksSection";
+import { StatusPill } from "@/features/quote/components/StatusPill";
+import { QuoteEngagement } from "@/features/quote/components/QuoteEngagement";
+import { QuoteBookingReferences } from "@/features/quote/components/QuoteBookingReferences";
+import { QuoteCostingsCard } from "@/features/quote/components/QuoteCostingsCard";
+import { QuoteShareDialog } from "@/features/quote/components/QuoteShareDialog";
+import { QuoteConvertDialog } from "@/features/quote/components/QuoteConvertDialog";
+import { QuoteDeleteDialog } from "@/features/quote/components/QuoteDeleteDialog";
+import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog";
+import { QuoteGuruSheet } from "@/features/quote/components/QuoteGuruSheet";
+import { QuoteTagsCard } from "@/features/quote/components/QuoteTagsCard";
+import { QuoteMediaPanel } from "@/features/quote/components/QuoteMediaPanel";
+import { QuoteExpiryPill } from "@/features/quote/components/QuoteExpiryPill";
+import { QuoteActionsRow } from "@/features/quote/components/QuoteActionsRow";
+import { QuoteItinerarySpecs } from "@/features/quote/components/QuoteItinerarySpecs";
 import {
   useQuoteImages,
   useQuoteToFormValues,
@@ -45,7 +45,7 @@ import {
   useQuoteConvert,
   useQuoteStatusUpdate,
   useQuotePin,
-} from "@/components/quote/hooks";
+} from "@/features/quote/components/hooks";
 
 export default function QuotePage() {
   const [, setLocation] = useLocation();

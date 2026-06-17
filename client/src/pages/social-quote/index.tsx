@@ -32,8 +32,8 @@ import type { Favorite } from "@/api/endpoints/favorite.api";
 import { useQuoteData } from "@/components/social-quote/hooks";
 import { currency, formatUKDate, formatLeadSource } from "@/components/social-quote/utils";
 import { StatusPill, QuoteSummaryTimeline } from "@/components/social-quote";
-import { QuoteCreateDialog } from "@/components/quote/quote-create-dialog";
-import { QuoteEditDialog } from "@/components/quote/quote-edit-dialog";
+import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
+import { QuoteEditDialog } from "@/features/quote/components/quote-edit-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DestinationGuru } from "@/components/destination-guru";
 import type { DestinationGuruData } from "@/components/destination-guru";
@@ -41,7 +41,7 @@ import { useDestinationGuruSearch } from "@/hooks/queries/use-destination-guru-q
 import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-guru-mutations";
 import { useNeonClients } from "@/hooks/queries/use-neon-client-queries";
 import { useCurrentUser } from "@/hooks/queries";
-import type { NeonClient } from "@/types/neon-client/neon-client.types";
+import type { NeonClient } from "@/features/client/types/neon-client/neon-client.types";
 import type { EnrichedQuote } from "@/types/quote";
 
 export default function SocialQuotePage() {

@@ -1,26 +1,3 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { clientApi } from "@/api";
-import { clientKeys } from "@/hooks/queries";
-import type { Client, CreateClientData } from "@/types/client";
-
-export function useCreateClient() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateClientData) => clientApi.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: clientKeys.lists() });
-    },
-  });
-}
-
-export function useUpdateClient() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Client> }) =>
-      clientApi.update(id, data),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: clientKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: clientKeys.detail(variables.id) });
-    },
-  });
-}
+// Re-export shim — moved to features/client/api as part of the feature-based
+// structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/client/api/use-client-mutations";
