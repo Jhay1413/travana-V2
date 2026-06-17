@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import type { BranchOpeningHour } from "@/api/endpoints/branch.api";
+import type { BranchOpeningHour } from "@/features/organization/api/branch.api";
 
 export function OpeningHoursEditor({
   hours,

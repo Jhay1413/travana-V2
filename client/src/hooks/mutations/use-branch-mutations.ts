@@ -1,30 +1,3 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { branchApi, type BranchInput } from "@/api/endpoints/branch.api";
-import { branchKeys } from "@/hooks/queries/use-branch-queries";
-
-export function useCreateBranch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: BranchInput) => branchApi.create(input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: branchKeys.list() }),
-  });
-}
-
-export function useUpdateBranch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: BranchInput }) => branchApi.update(id, input),
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: branchKeys.list() });
-      qc.invalidateQueries({ queryKey: branchKeys.detail(vars.id) });
-    },
-  });
-}
-
-export function useDeleteBranch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => branchApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: branchKeys.list() }),
-  });
-}
+// Re-export shim — moved to features/organization/api as part of the feature-based
+// structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/organization/api/use-branch-mutations";

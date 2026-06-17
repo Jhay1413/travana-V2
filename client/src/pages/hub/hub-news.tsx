@@ -33,7 +33,7 @@ import {
   useSharePost,
 } from "@/hooks/queries/use-announcement-queries";
 import { useRole } from "@/hooks/use-role";
-import { announcementApi } from "@/api/endpoints/announcement.api";
+import { announcementApi } from "@/features/announcement/api/announcement.api";
 import type { HubAnnouncement } from "@shared/schema";
 import type { HubRole } from "@/data/hub-mock";
 

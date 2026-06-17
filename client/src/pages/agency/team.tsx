@@ -16,8 +16,8 @@ import { InvitePanel } from "./components/InvitePanel";
 import { MemberRow } from "./components/MemberRow";
 import { PendingInvitesList } from "./components/PendingInvitesList";
 import { isMemberSuspended, roleLabel } from "./utils/role-helpers";
-import type { OrgMember } from "@/api/endpoints/organization.api";
-import type { InviteOrgRole } from "@/api/endpoints/invite.api";
+import type { OrgMember } from "@/features/organization/api/organization.api";
+import type { InviteOrgRole } from "@/features/invite/api/invite.api";
 
 export default function AgencyTeamPage() {
   const { orgRole, can } = useRole();

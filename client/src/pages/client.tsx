@@ -18,7 +18,7 @@ import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
 import type { Transaction, EnquiryTable } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
-import { EnquiryWizard } from "@/components/enquiry-wizard";
+import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 
 import { transformNeonClientData, transformTicket, filesFor } from "@/features/client/components/client-types";
 import { EditClientDialog } from "@/features/client/components/modals/EditClientDialog";

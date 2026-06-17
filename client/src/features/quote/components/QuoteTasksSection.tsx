@@ -12,7 +12,7 @@ import { useTasks, useCurrentUser } from "@/hooks/queries";
 import { useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
-import { EditTaskDialog, type EditableTask } from "@/components/tasks/EditTaskDialog";
+import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { cn } from "@/lib/utils";
 
 const TASK_CATEGORIES = [

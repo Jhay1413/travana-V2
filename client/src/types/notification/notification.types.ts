@@ -1,10 +1,3 @@
-export interface Notification {
-  id: string;
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-  link: string | null;
-  read: boolean;
-  createdAt: string;
-}
+// Re-export shim — moved to features/notifications/types as part of the feature-based
+// structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/notifications/types/notification.types";

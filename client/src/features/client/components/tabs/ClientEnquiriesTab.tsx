@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { EnquiryTable } from "@/types/quote";
-import type { Favorite } from "@/api/endpoints/favorite.api";
+import type { Favorite } from "@/features/favorite/api/favorite.api";
 import type { Client } from "../client-types";
 
 interface ClientEnquiriesTabProps {

@@ -1,6 +1,3 @@
-export type { EnquiryTable } from "@/features/quote/types/quote.types";
-export type { EnquiryTable as Enquiry } from "@/features/quote/types/quote.types";
-
-export interface EnquiryFilters {
-  transactionId?: string;
-}
+// Re-export shim — enquiry types moved to features/enquiry/types as part of the
+// feature-based structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/enquiry/types";

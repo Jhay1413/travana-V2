@@ -50,7 +50,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useSharedEmailAccount, useEmailMessages, useEmailMessage } from "@/hooks/queries";
 import { useCreateEmailAccount, useSendEmail } from "@/hooks/mutations";
-import type { EmailAttachment, ImapMessage } from "@/api/endpoints/email.api";
+import type { EmailAttachment, ImapMessage } from "@/features/email/api/email.api";
 
 type EmailFolder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash";
 

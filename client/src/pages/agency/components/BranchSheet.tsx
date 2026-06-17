@@ -10,7 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import type { Branch, BranchOpeningHour, BranchOpeningPattern } from "@/api/endpoints/branch.api";
+import type { Branch, BranchOpeningHour, BranchOpeningPattern } from "@/features/organization/api/branch.api";
 import {
   applyOpeningPattern,
   branchToForm,

@@ -9,7 +9,7 @@ import type {
   EmploymentType as ApiEmploymentType,
   ContractType as ApiContractType,
   InvitableRole,
-} from "@/api/endpoints/hr.api";
+} from "@/features/hr/api/hr.api";
 import type { Employee, EmployeeStatus, DocStatus, Reminder } from "./_data";
 
 const AVATAR_TONES = [

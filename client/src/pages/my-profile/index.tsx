@@ -18,8 +18,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { hrApi } from "@/api/endpoints/hr.api";
-import type { EmployeeDetail, LeaveEntry } from "@/api/endpoints/hr.api";
+import { hrApi } from "@/features/hr/api/hr.api";
+import type { EmployeeDetail, LeaveEntry } from "@/features/hr/api/hr.api";
 import { useMyHrRecord } from "@/hooks/queries";
 import { RequestLeaveDialog } from "./components/request-leave-dialog";
 

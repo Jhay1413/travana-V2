@@ -7,7 +7,7 @@ import {
   Hourglass,
   TrendingUp,
 } from "lucide-react";
-import type { VipTransactionRow } from "@/api/endpoints/referral.api";
+import type { VipTransactionRow } from "@/features/referral/api/referral.api";
 import { fmt, formatVipDate } from "./vip-utils";
 
 interface VipPendingCommissionsProps {

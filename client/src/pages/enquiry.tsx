@@ -33,7 +33,7 @@ import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes, e
 import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations/use-note-mutations";
 import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
-import { EditTaskDialog, type EditableTask } from "@/components/tasks/EditTaskDialog";
+import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { useCurrentUser } from "@/hooks/queries";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -53,7 +53,7 @@ import TiptapLink from "@tiptap/extension-link";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { formatFullDateTime } from "@/lib/note-time";
-import { EnquiryWizard } from "@/components/enquiry-wizard";
+import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
 import { buildQuotePayload } from "@/features/quote/components/quote-create-dialog";
 import type { QuoteFormValues } from "@/types/quote";
@@ -61,7 +61,7 @@ import { defaultQuoteFormValues } from "@/types/quote";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Enquiry } from "@/types/enquiry";
 import type { TransactionNote } from "@/types/quote";
-import type { CreateNoteData } from "@/api/endpoints/note.api";
+import type { CreateNoteData } from "@/features/note/api/note.api";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",

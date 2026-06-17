@@ -44,8 +44,8 @@ import {
   Hotel,
   PackagePlus,
 } from "lucide-react";
-import type { TravelDeal, QuoteImageSource } from "@/api/endpoints/social-post.api";
-import { socialPostApi } from "@/api/endpoints/social-post.api";
+import type { TravelDeal, QuoteImageSource } from "@/features/social/api/social-post.api";
+import { socialPostApi } from "@/features/social/api/social-post.api";
 import { useQuote } from "@/hooks/queries";
 
 interface LocalImage {

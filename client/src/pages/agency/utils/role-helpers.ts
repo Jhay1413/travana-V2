@@ -1,4 +1,4 @@
-import type { OrgMember } from "@/api/endpoints/organization.api";
+import type { OrgMember } from "@/features/organization/api/organization.api";
 
 export const ASSIGNABLE_ROLES = [
   { value: "org_admin",            label: "Owner / Admin" },

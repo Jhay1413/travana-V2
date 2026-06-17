@@ -1,6 +1,6 @@
 import { useFavorites } from "@/hooks/queries/use-favorite-queries";
 import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
-import type { Favorite } from "@/api/endpoints/favorite.api";
+import type { Favorite } from "@/features/favorite/api/favorite.api";
 import { useToast } from "@/hooks/use-toast";
 
 interface PinContext {

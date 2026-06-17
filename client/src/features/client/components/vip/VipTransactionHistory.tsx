@@ -1,5 +1,5 @@
 import { ArrowDownToLine, ArrowUpFromLine, Briefcase, Receipt } from "lucide-react";
-import type { VipWalletLedgerEntry } from "@/api/endpoints/referral.api";
+import type { VipWalletLedgerEntry } from "@/features/referral/api/referral.api";
 import { fmt, formatVipDate } from "./vip-utils";
 
 interface VipTransactionHistoryProps {

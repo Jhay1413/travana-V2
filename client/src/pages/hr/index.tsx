@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import type { EmployeeRow as ApiEmployeeRow } from "@/api/endpoints/hr.api";
+import type { EmployeeRow as ApiEmployeeRow } from "@/features/hr/api/hr.api";
 import {
   useHrEmployees,
   useHrEmployee,

@@ -4,7 +4,7 @@ import { useForm, useFieldArray, useWatch} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2 } from "lucide-react";
-import { walletApi } from "@/api/endpoints/wallet.api";
+import { walletApi } from "@/features/wallet/api/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
@@ -47,9 +47,9 @@ import {
 } from "@/hooks/queries";
 import { useTags } from "@/hooks/queries/use-tag-queries";
 import { useToast } from "@/hooks/use-toast";
-import { AddAccommodationModal } from "@/components/lookups/add-accommodation-modal";
-import { AddBoardBasisModal } from "@/components/lookups/add-board-basis-modal";
-import { AddRoomTypeModal } from "@/components/lookups/add-room-type-modal";
+import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
+import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
+import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
 
 const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",

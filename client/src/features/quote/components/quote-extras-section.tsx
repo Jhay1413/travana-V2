@@ -17,8 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { AddBoardBasisModal } from "@/components/lookups/add-board-basis-modal";
-import { AddRoomTypeModal } from "@/components/lookups/add-room-type-modal";
+import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
+import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
 import {
   FormField,
   FormItem,

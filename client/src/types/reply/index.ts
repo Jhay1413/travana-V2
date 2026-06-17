@@ -1,1 +1,3 @@
-export * from "./reply.types";
+// Re-export shim — moved to features/reply/types as part of the feature-based
+// structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/reply/types";

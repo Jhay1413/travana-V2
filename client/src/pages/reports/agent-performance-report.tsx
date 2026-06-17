@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Download, Loader2, ArrowUpDown } from "lucide-react";
 import { useAgentPerformanceReport } from "@/hooks/queries";
-import type { ReportFilters, AgentPerformanceRow } from "@/api/endpoints/reports.api";
+import type { ReportFilters, AgentPerformanceRow } from "@/features/reports/api/reports.api";
 import { currency } from "./helpers";
 import { exportCsv } from "./csv";
 

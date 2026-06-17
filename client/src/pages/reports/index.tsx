@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { FileText } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ReportFilters } from "@/api/endpoints/reports.api";
+import type { ReportFilters } from "@/features/reports/api/reports.api";
 import { FilterStrip } from "./filter-strip";
 import { SalesReportTab } from "./sales-report";
 import { AgentPerformanceTab } from "./agent-performance-report";

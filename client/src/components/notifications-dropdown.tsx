@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Spinner } from "@/components/ui/spinner";
 import { useNotifications } from "@/hooks/queries";
 import { useMarkNotificationRead, useMarkAllNotificationsRead, useDeleteNotification } from "@/hooks/mutations";
-import type { Notification } from "@/types/notification";
+import type { Notification } from "@/features/notifications/types";
 import { useLocation } from "wouter";
 
 interface NotificationsDropdownProps {

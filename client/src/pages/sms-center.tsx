@@ -17,9 +17,9 @@ import { MessageSquare, Send, Inbox, Cog, AlertTriangle } from "lucide-react";
 import {
   SmsTemplatesManager,
   SMS_CATEGORY_LABELS,
-} from "@/components/sms/templates-manager";
+} from "@/features/sms/components/sms/templates-manager";
 import { useSmsTemplates } from "@/hooks/queries/use-sms-queries";
-import type { SmsTemplate } from "@/api/endpoints/sms.api";
+import type { SmsTemplate } from "@/features/sms/api/sms.api";
 
 type SmsMessage = {
   id: string;

@@ -1,16 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
-import { tourOperatorApi } from "@/api";
-import type { TourOperator } from "@/types/tour-operator";
-
-export const tourOperatorKeys = {
-  all: ["tourOperators"] as const,
-  lists: () => [...tourOperatorKeys.all, "list"] as const,
-  list: () => [...tourOperatorKeys.lists()] as const,
-};
-
-export function useTourOperators() {
-  return useQuery<TourOperator[]>({
-    queryKey: tourOperatorKeys.list(),
-    queryFn: tourOperatorApi.getAll,
-  });
-}
+// Re-export shim — moved to features/tour-operator/api as part of the feature-based
+// structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/tour-operator/api/use-tour-operator-queries";

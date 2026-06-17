@@ -1,14 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
-import { planApi, type Plan } from "@/api/endpoints/plan.api";
-
-export const planKeys = {
-  all: ["plans"] as const,
-  list: () => [...planKeys.all, "list"] as const,
-};
-
-export function usePlans() {
-  return useQuery<Plan[]>({
-    queryKey: planKeys.list(),
-    queryFn: planApi.list,
-  });
-}
+// Re-export shim — moved to features/organization/api as part of the feature-based
+// structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/organization/api/use-plan-queries";

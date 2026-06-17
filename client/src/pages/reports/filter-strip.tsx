@@ -11,7 +11,7 @@ import { X } from "lucide-react";
 import { useBranches } from "@/hooks/queries";
 import { useUsers } from "@/hooks/queries/use-user-queries";
 import { useRole } from "@/hooks/use-role";
-import type { ReportFilters } from "@/api/endpoints/reports.api";
+import type { ReportFilters } from "@/features/reports/api/reports.api";
 import { DateRangePicker } from "./date-range-picker";
 
 const LEAD_SOURCES = [

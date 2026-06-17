@@ -1,5 +1,5 @@
 import { ChevronRight, ImagePlus, Pin } from "lucide-react";
-import type { Favorite } from "@/api/endpoints/favorite.api";
+import type { Favorite } from "@/features/favorite/api/favorite.api";
 import { currency, formatUKDate, type Client } from "../client-types";
 
 export interface QuoteRowCardData {

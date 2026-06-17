@@ -41,7 +41,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { type LeaveType, type LeaveEntry } from "@/api/endpoints/hr.api";
+import { type LeaveType, type LeaveEntry } from "@/features/hr/api/hr.api";
 import { useMyHrRecord } from "@/hooks/queries";
 import { useRequestMyLeave } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";

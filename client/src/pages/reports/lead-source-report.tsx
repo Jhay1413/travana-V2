@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Download, Loader2 } from "lucide-react";
 import { useLeadSourceReport } from "@/hooks/queries";
-import type { ReportFilters } from "@/api/endpoints/reports.api";
+import type { ReportFilters } from "@/features/reports/api/reports.api";
 import { currency } from "./helpers";
 import { exportCsv } from "./csv";
 

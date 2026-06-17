@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/hooks/use-role";
 import { useBranches } from "@/hooks/queries";
 import { useInviteEmployee } from "@/hooks/mutations";
-import { type InvitableRole } from "@/api/endpoints/hr.api";
+import { type InvitableRole } from "@/features/hr/api/hr.api";
 import { INVITE_ROLES } from "./helpers";
 
 export function InviteEmployeeDialog({

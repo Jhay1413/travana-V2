@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/queries/use-branch-queries";
 import { useSendInvite } from "@/hooks/mutations/use-invite-mutations";
 import { ASSIGNABLE_ROLES } from "../utils/role-helpers";
-import type { InviteOrgRole } from "@/api/endpoints/invite.api";
+import type { InviteOrgRole } from "@/features/invite/api/invite.api";
 
 const ALL_INVITABLE_ROLES: InviteOrgRole[] = ["branch_manager", "agent", "homeworker", "social_media_manager", "referral_agent"];
 

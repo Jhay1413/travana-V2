@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Bug, Lightbulb, MessageCircle, Trash2, ChevronDown, Clock, CheckCircle2, Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { FeedbackRecord } from "@/api/endpoints/feedback.api";
+import type { FeedbackRecord } from "@/features/feedback/api/feedback.api";
 
 const TYPE_CONFIG = {
   suggestion: { icon: Lightbulb, label: "Suggestion", color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/25" },

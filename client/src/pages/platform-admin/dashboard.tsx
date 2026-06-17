@@ -17,7 +17,7 @@ import { useAdminOrgs, useAdminAuditLog } from "@/hooks/queries";
 import { useStartImpersonation } from "@/hooks/mutations";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { OrgSummary, AdminAuditEntry } from "@/api/endpoints/platform-admin.api";
+import type { OrgSummary, AdminAuditEntry } from "@/features/platform-admin/api/platform-admin.api";
 
 const formatDateTime = (iso: string | null | undefined) => {
   if (!iso) return "";

@@ -10,7 +10,7 @@ import type {
   ContractType as ApiContractType,
   DocumentCategory as ApiDocumentCategory,
   InvitableRole,
-} from "@/api/endpoints/hr.api";
+} from "@/features/hr/api/hr.api";
 import type { Employee, EmployeeStatus, DocStatus, DocumentItem, Reminder } from "./_data";
 
 const EXPIRY_WARNING_DAYS = 30;

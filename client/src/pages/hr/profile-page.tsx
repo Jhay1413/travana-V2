@@ -4,7 +4,7 @@ import {
   Plus, ShieldCheck, StickyNote, Trash2, Upload, UserCheck,
 } from "lucide-react";
 import type { Employee } from "./_data";
-import { hrApi, type EmployeeRow as ApiEmployeeRow } from "@/api/endpoints/hr.api";
+import { hrApi, type EmployeeRow as ApiEmployeeRow } from "@/features/hr/api/hr.api";
 import { useUploadHrDocumentFile, useDeleteHrDocument } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import type { ProfileTab } from "./sidebar";

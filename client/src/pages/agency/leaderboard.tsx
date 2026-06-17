@@ -12,7 +12,7 @@ import type {
   AgentPerformanceRange,
   AgentPerformanceRow,
   BranchPerformanceRow,
-} from "@/api/endpoints/organization-overview.api";
+} from "@/features/organization/api/organization-overview.api";
 import { currency } from "../organization-overview/helpers";
 import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
 

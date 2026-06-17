@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { AddAirportModal } from "@/components/lookups/add-airport-modal";
+import { AddAirportModal } from "@/features/lookups/components/lookups/add-airport-modal";
 import { useAirports } from "@/hooks/queries";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";

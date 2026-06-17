@@ -1,21 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
-import { feedbackApi } from "@/api/endpoints/feedback.api";
-
-export const feedbackKeys = {
-  all: ["feedback"] as const,
-  mine: ["feedback", "mine"] as const,
-};
-
-export function useFeedbackList() {
-  return useQuery({
-    queryKey: feedbackKeys.all,
-    queryFn: feedbackApi.getAll,
-  });
-}
-
-export function useMyFeedback() {
-  return useQuery({
-    queryKey: feedbackKeys.mine,
-    queryFn: feedbackApi.getMine,
-  });
-}
+// Re-export shim — moved to features/feedback/api as part of the feature-based
+// structure migration (see docs/client-structure-migration-plan.md).
+export * from "@/features/feedback/api/use-feedback-queries";

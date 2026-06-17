@@ -30,8 +30,8 @@ import { isMemberSuspended } from "./utils/role-helpers";
 import type {
   OrganizationBillingContact,
   OrganizationSettings,
-} from "@/api/endpoints/organization.api";
-import type { Plan, PlanCode } from "@/api/endpoints/plan.api";
+} from "@/features/organization/api/organization.api";
+import type { Plan, PlanCode } from "@/features/organization/api/plan.api";
 
 function formatPrice(cents: number): string {
   return `£${(cents / 100).toFixed(0)}`;

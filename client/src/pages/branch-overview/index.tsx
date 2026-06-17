@@ -5,7 +5,7 @@ import { BranchProfileStrip } from "./branch-profile-strip";
 import { KpiCards } from "./kpi-cards";
 import { ConversionFunnelCard } from "./conversion-funnel-card";
 import { AgentsPerformanceCard } from "./agents-performance-card";
-import { SalesModeToggle } from "@/components/agency/sales-mode-toggle";
+import { SalesModeToggle } from "@/features/organization/components/agency/sales-mode-toggle";
 
 export default function BranchOverviewPage({
   branchId,

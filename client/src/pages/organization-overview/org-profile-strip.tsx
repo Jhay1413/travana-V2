@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Building2, Users, Briefcase, UserCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { OrganizationSummary } from "@/api/endpoints/organization-overview.api";
+import type { OrganizationSummary } from "@/features/organization/api/organization-overview.api";
 
 export function OrgProfileStrip({ organization }: { organization: OrganizationSummary }) {
   const createdLabel = organization.createdAt

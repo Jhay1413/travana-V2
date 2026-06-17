@@ -12,7 +12,7 @@ import {
   type HrStatus as ApiHrStatus,
   type EmploymentType as ApiEmploymentType,
   type ContractType as ApiContractType,
-} from "@/api/endpoints/hr.api";
+} from "@/features/hr/api/hr.api";
 import { toIsoDate, STATUS_OPTIONS, EMPLOYMENT_OPTIONS, CONTRACT_OPTIONS } from "./helpers";
 
 export function EmployeeEditDialog({

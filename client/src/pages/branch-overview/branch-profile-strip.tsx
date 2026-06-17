@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Building2, MapPin, Phone, Mail, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { BranchSummary } from "@/api/endpoints/branch-overview.api";
+import type { BranchSummary } from "@/features/organization/api/branch-overview.api";
 
 export function BranchProfileStrip({ branch }: { branch: BranchSummary }) {
   return (

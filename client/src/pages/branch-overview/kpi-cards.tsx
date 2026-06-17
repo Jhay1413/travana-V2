@@ -12,7 +12,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { currency } from "./helpers";
-import type { BranchOverviewKpis } from "@/api/endpoints/branch-overview.api";
+import type { BranchOverviewKpis } from "@/features/organization/api/branch-overview.api";
 
 function StatBox({
   label,

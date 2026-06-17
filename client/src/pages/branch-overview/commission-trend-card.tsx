@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { Card } from "@/components/ui/card";
 import { currency } from "./helpers";
-import type { BranchOverviewTrendPoint } from "@/api/endpoints/branch-overview.api";
+import type { BranchOverviewTrendPoint } from "@/features/organization/api/branch-overview.api";
 
 function shortMonth(yyyyDashMm: string): string {
   const [, m] = yyyyDashMm.split("-").map((n) => parseInt(n, 10));

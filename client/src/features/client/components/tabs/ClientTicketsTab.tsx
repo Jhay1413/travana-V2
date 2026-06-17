@@ -2,8 +2,8 @@ import { useState } from "react";
 import { LifeBuoy, MessageCircle, Plus, Tag, User, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { TicketDetailPanel } from "@/components/boards/tickets-board";
-import type { Ticket } from "@/types/ticket";
+import { TicketDetailPanel } from "@/features/social/components/boards/tickets-board";
+import type { Ticket } from "@/features/tickets/types";
 import type { User as ApiUser } from "@/types/user";
 
 // ── helpers ───────────────────────────────────────────────────────────────────

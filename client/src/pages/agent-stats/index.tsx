@@ -15,7 +15,7 @@ import { useAgentTargetsByUserId } from "@/hooks/queries/use-targets-queries";
 import { branchOverviewApi, organizationOverviewApi } from "@/api";
 import { branchOverviewKeys } from "@/hooks/queries/use-branch-overview-queries";
 import { organizationOverviewKeys } from "@/hooks/queries/use-organization-overview-queries";
-import type { AgentPerformanceRange } from "@/api/endpoints/branch-overview.api";
+import type { AgentPerformanceRange } from "@/features/organization/api/branch-overview.api";
 import { ProfitStatBoxes, type ProfitStats } from "@/pages/agent-overview/profit-stat-boxes";
 import { WhatsOnTab, type WhatsOnFilter } from "@/pages/agent-overview/whats-on-tab";
 import { PipelineTab } from "@/pages/agent-overview/pipeline-tab";

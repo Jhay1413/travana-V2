@@ -13,8 +13,8 @@ import { LogoPicker } from "./components/LogoPicker";
 import { LiveBrandPreview } from "./components/LiveBrandPreview";
 import { SettingsField } from "./components/SettingsField";
 import { COMMON_TIMEZONES, CURRENCIES } from "./utils/branding-options";
-import { SalesModeToggle } from "@/components/agency/sales-mode-toggle";
-import type { OrganizationSettings } from "@/api/endpoints/organization.api";
+import { SalesModeToggle } from "@/features/organization/components/agency/sales-mode-toggle";
+import type { OrganizationSettings } from "@/features/organization/api/organization.api";
 
 export default function AgencyProfilePage() {
   const { can } = useRole();

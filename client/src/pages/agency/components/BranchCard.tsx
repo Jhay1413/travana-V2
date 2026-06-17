@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { MapPin, Mail, Pencil, Phone, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Branch } from "@/api/endpoints/branch.api";
+import type { Branch } from "@/features/organization/api/branch.api";
 
 export function BranchCard({
   branch,

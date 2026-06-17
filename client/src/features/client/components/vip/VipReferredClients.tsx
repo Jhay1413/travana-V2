@@ -1,5 +1,5 @@
 import { Calendar, Mail, Phone, UserPlus, Users } from "lucide-react";
-import type { VipReferredClient } from "@/api/endpoints/referral.api";
+import type { VipReferredClient } from "@/features/referral/api/referral.api";
 import { formatVipDate } from "./vip-utils";
 
 interface VipReferredClientsProps {

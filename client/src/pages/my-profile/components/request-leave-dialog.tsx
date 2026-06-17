@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useRequestMyLeave } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
-import type { LeaveType } from "@/api/endpoints/hr.api";
+import type { LeaveType } from "@/features/hr/api/hr.api";
 
 const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
   { value: "Annual", label: "Annual leave" },

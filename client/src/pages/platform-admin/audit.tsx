@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useRole } from "@/hooks/use-role";
 import { useAdminAuditLog, useAdminOrgs } from "@/hooks/queries";
-import type { AdminAuditEntry } from "@/api/endpoints/platform-admin.api";
+import type { AdminAuditEntry } from "@/features/platform-admin/api/platform-admin.api";
 import { AlertCircle, Activity, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {

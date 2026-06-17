@@ -28,11 +28,11 @@ import {
 } from "@/hooks/mutations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { SuspendOrgDialog } from "@/components/platform-admin/suspend-org-dialog";
-import { ChangePlanDialog } from "@/components/platform-admin/change-plan-dialog";
-import { CreditsTab } from "@/components/platform-admin/credits-tab";
-import { RoleChipEditor } from "@/components/platform-admin/role-chip-editor";
-import type { AdminUserRow } from "@/api/endpoints/platform-admin.api";
+import { SuspendOrgDialog } from "@/features/platform-admin/components/platform-admin/suspend-org-dialog";
+import { ChangePlanDialog } from "@/features/platform-admin/components/platform-admin/change-plan-dialog";
+import { CreditsTab } from "@/features/platform-admin/components/platform-admin/credits-tab";
+import { RoleChipEditor } from "@/features/platform-admin/components/platform-admin/role-chip-editor";
+import type { AdminUserRow } from "@/features/platform-admin/api/platform-admin.api";
 
 const formatDate = (iso: string | null | undefined) => (iso ? new Date(iso).toISOString().slice(0, 10) : "");
 const formatDateTime = (iso: string | null | undefined) => {

@@ -23,7 +23,7 @@ import { StatCard } from "./components/StatCard";
 import { BranchCard } from "./components/BranchCard";
 import { BranchSheet } from "./components/BranchSheet";
 import { formToPayload } from "./utils/branch-helpers";
-import type { Branch } from "@/api/endpoints/branch.api";
+import type { Branch } from "@/features/organization/api/branch.api";
 
 export default function AgencyBranchesPage() {
   const { can } = useRole();

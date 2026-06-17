@@ -1,6 +1,6 @@
 import type { Client as ApiClient } from "@/types/client";
 import type { NeonClient } from "@/types/neon-client";
-import type { Ticket as ApiTicket } from "@/types/ticket";
+import type { Ticket as ApiTicket } from "@/features/tickets/types";
 import type { Quote as ApiQuote, Booking, DealImage } from "@/types/quote";
 
 export type QuoteWithJoins = ApiQuote & { holiday_type_name?: string };

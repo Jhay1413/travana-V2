@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { NotificationToast } from "@/components/notification-toast";
 import { AppHeader } from "./app-header";
 import { AppSidenav } from "./app-sidenav";
-import { ImpersonationBanner } from "@/components/platform-admin/impersonation-banner";
+import { ImpersonationBanner } from "@/features/platform-admin/components/platform-admin/impersonation-banner";
 
 function PageLoader() {
   return (

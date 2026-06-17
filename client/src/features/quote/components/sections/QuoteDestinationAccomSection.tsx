@@ -13,11 +13,11 @@ import {
   useBoardBasis,
   useRoomTypes,
 } from "@/hooks/queries";
-import { AddAccommodationModal } from "@/components/lookups/add-accommodation-modal";
-import { AddDestinationModal } from "@/components/lookups/add-destination-modal";
-import { AddResortModal } from "@/components/lookups/add-resort-modal";
-import { AddBoardBasisModal } from "@/components/lookups/add-board-basis-modal";
-import { AddRoomTypeModal } from "@/components/lookups/add-room-type-modal";
+import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
+import { AddDestinationModal } from "@/features/lookups/components/lookups/add-destination-modal";
+import { AddResortModal } from "@/features/lookups/components/lookups/add-resort-modal";
+import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
+import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import type { QuoteFormValues } from "@/types/quote";
 

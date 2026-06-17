@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useDestinationGuruList } from "@/hooks/queries/use-destination-guru-queries";
 import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-guru-mutations";
 import { useToast } from "@/hooks/use-toast";
-import type { DestinationGuruRecord } from "@/api/endpoints/destination-guru.api";
+import type { DestinationGuruRecord } from "@/features/destination-guru/api/destination-guru.api";
 import type { DestinationGuruData } from "@/components/destination-guru";
 
 export default function DestinationGuruPage() {
