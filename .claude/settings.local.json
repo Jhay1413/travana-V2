@@ -53,7 +53,9 @@
       "Bash(grep -vE \"/api/\\(endpoints|client\\)\\([\\\\\"'\\\\`/]|$\\)\")",
       "Bash(xargs wc -l)",
       "Bash(awk '$1>=300 && $1<497')",
-      "Bash(grep -E \"quote-create-dialog|pages/quote.tsx|pages\\\\\\\\\\\\\\\\quote.tsx\")"
+      "Bash(grep -E \"quote-create-dialog|pages/quote.tsx|pages\\\\\\\\\\\\\\\\quote.tsx\")",
+      "Bash(npm install *)",
+      "Bash(npm test *)"
     ],
     "additionalDirectories": [
       "/tmp"
