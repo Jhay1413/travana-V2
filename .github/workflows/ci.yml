@@ -48,7 +48,9 @@ jobs:
         run: npm ci
 
       - name: Type-check
-        run: npm run check
+        # Scoped to the maintained code (client, shared, server/v2). The v1 legacy
+        # flat layer under server/ is excluded per CLAUDE.md — see tsconfig.ci.json.
+        run: npm run check:ci
 
       - name: Unit tests
         run: npm test

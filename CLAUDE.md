@@ -242,3 +242,128 @@ DO NOT:
 Controller = HTTP translator
 Service = business brain
 Repository = database access
+
+---
+
+# Client / Frontend Structure (AI Context)
+
+## Stack
+- React + TypeScript
+- Vite
+- TanStack Query (server state)
+- Axios (HTTP)
+- better-auth (auth client)
+
+---
+
+## Reference Folder Structure
+
+> **NOTE — this is the TARGET structure, not the current layout.** New frontend work should follow it, but existing code differs and is migrating toward it. Today the client still uses `src/api/endpoints/`, `src/api/client/axios-client.ts`, `src/hooks/mutations/`, `src/hooks/queries/`, flat `src/components/` and `src/pages/`, and `src/types/` — there is no `features/` or `auth/` folder yet. The `auth/` (better-auth) section reflects the planned auth migration (see `docs/better-auth-migration-plan.md`), which is not yet implemented; auth is currently cookie/axios-based. When working in an existing area, match what's already there; apply this structure for net-new features unless told otherwise.
+
+The client lives in `client/`. New frontend work follows this structure:
+
+```
+client/
+├── public/
+├── src/
+│   ├── api/                      # Axios setup + API layer
+│   │   ├── client.ts             # Axios instance (baseURL, interceptors)
+│   │   ├── endpoints.ts          # Centralized endpoint constants
+│   │   └── queryClient.ts        # TanStack QueryClient config
+│   │
+│   ├── auth/                     # better-auth integration
+│   │   ├── auth-client.ts        # createAuthClient() instance
+│   │   ├── AuthProvider.tsx      # Session context provider
+│   │   ├── useSession.ts         # Hook wrapping auth client session
+│   │   └── guards.tsx            # ProtectedRoute / RequireAuth
+│   │
+│   ├── components/               # Shared, reusable UI
+│   │   ├── ui/                   # Primitives (Button, Input, Modal…)
+│   │   └── layout/               # Header, Sidebar, PageShell
+│   │
+│   ├── features/                 # Feature-based modules (the core)
+│   │   ├── users/
+│   │   │   ├── api/              # queries + mutations for this feature
+│   │   │   │   ├── useUsers.ts
+│   │   │   │   └── useUpdateUser.ts
+│   │   │   ├── components/
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   └── dashboard/
+│   │       ├── api/
+│   │       ├── components/
+│   │       └── index.ts
+│   │
+│   ├── hooks/                    # Generic shared hooks
+│   ├── lib/                      # Pure utilities/helpers
+│   ├── pages/ (or routes/)       # Route-level components
+│   ├── types/                    # Global/shared TS types
+│   ├── config/                   # env, constants
+│   │   └── env.ts
+│   ├── styles/
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── router.tsx
+│
+├── .env
+├── tsconfig.json
+├── vite.config.ts
+└── package.json
+```
+
+---
+
+## Layer Responsibilities (Client)
+
+### api/
+Purpose: shared HTTP plumbing.
+- `client.ts`: single configured Axios instance (`baseURL`, `withCredentials`, interceptors).
+- `endpoints.ts`: centralized endpoint path constants — no hardcoded URL strings in features.
+- `queryClient.ts`: the TanStack `QueryClient` config (defaults, retries, stale times).
+
+### auth/
+Purpose: authentication via better-auth.
+- `auth-client.ts`: the `createAuthClient()` instance.
+- `AuthProvider.tsx`: session context provider mounted near the app root.
+- `useSession.ts`: hook wrapping the auth client's session.
+- `guards.tsx`: route guards (`ProtectedRoute` / `RequireAuth`).
+
+### features/
+Purpose: feature-based modules — the core of the app.
+- One folder per feature (e.g. `users/`, `dashboard/`).
+- `api/`: feature-scoped TanStack Query hooks (`useUsers.ts`, `useUpdateUser.ts`) — these call the shared Axios `client` using `endpoints` constants.
+- `components/`: components owned by that feature.
+- `types.ts`: feature-local types.
+- `index.ts`: the feature's public surface (re-exports) — import features through their `index.ts`, not deep paths.
+
+### components/
+Purpose: shared, reusable UI only.
+- `ui/`: design-system primitives (Button, Input, Modal…).
+- `layout/`: app shell (Header, Sidebar, PageShell).
+- No feature-specific business logic here — that belongs in `features/<feature>/components/`.
+
+### hooks/ / lib/ / types/ / config/
+- `hooks/`: generic cross-feature hooks (not tied to one feature).
+- `lib/`: pure utilities/helpers (no React, no side effects).
+- `types/`: global/shared TypeScript types.
+- `config/env.ts`: environment + constants access.
+
+### pages/ (or routes/)
+Purpose: route-level components that compose features. Wiring only — push logic down into `features/`.
+
+---
+
+## Critical Constraints (Client)
+
+DO:
+- put feature work under `features/<feature>/`
+- keep data fetching in TanStack Query hooks inside `features/<feature>/api/`
+- call HTTP only through the shared Axios `client` + `endpoints` constants
+- import a feature via its `index.ts`
+- TypeScript strict mode, named exports
+
+DO NOT:
+- hardcode URLs or call `axios` directly inside components
+- put feature business logic in `components/ui` or `components/layout`
+- reach into another feature's internals (import its `index.ts` instead)
+- use `any`

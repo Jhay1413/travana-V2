@@ -3,7 +3,7 @@ import FormData from "form-data";
 import fs from "fs";
 import path from "path";
 import axios from "axios";
-import type { OnlySocialsPost, OnlySocialsMediaUploadResponse } from "../types/social-post/social-post.types";
+import type { OnlySocialsPost, OnlySocialsMediaUploadResponse } from "../modules/social-post/social-post.types";
 
 const ACCOUNT_ID = 44362;
 
@@ -241,7 +241,7 @@ export const uploadMediaFromUrl = async (
     });
 
     const buffer = Buffer.from(response.data);
-    const contentType = response.headers["content-type"] || "image/jpeg";
+    const contentType = String(response.headers["content-type"] || "image/jpeg");
     console.log(
       `[OnlySocials][timing] download from URL (${Math.round(buffer.length / 1024)}KB): ${Date.now() - tDownload}ms — ${imageUrl}`,
     );

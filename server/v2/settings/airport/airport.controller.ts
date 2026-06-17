@@ -10,7 +10,7 @@ export const airportSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await airportSettingsService.findById(req.params.id);
+    const row = await airportSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Airport retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const airportSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await airportSettingsService.update(req.params.id, req.body);
+    const row = await airportSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Airport updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await airportSettingsService.remove(req.params.id);
+    await airportSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

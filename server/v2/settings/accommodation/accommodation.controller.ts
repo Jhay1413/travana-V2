@@ -10,7 +10,7 @@ export const accommodationSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await accommodationSettingsService.findById(req.params.id);
+    const row = await accommodationSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Accommodation retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const accommodationSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await accommodationSettingsService.update(req.params.id, req.body);
+    const row = await accommodationSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Accommodation updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await accommodationSettingsService.remove(req.params.id);
+    await accommodationSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

@@ -388,8 +388,8 @@ export const smsController = {
   listMessages: asyncHandler(async (req: Request, res: Response) => {
     await requireSenderAccess(req);
     const scope = getScope(req);
-    const limit = Math.min(parseInt(String(req.query.limit ?? '200'), 10) || 200, 1000);
-    const clientId = req.query.clientId ? String(req.query.clientId) : undefined;
+    const limit = Math.min(parseInt(String((req.query.limit as string) ?? '200'), 10) || 200, 1000);
+    const clientId = (req.query.clientId as string) ? String((req.query.clientId as string)) : undefined;
     const rows = await smsRepository.listMessages({ limit, clientId, orgId: effectiveOrgId(scope) });
     return successResponse(res, rows, 'Messages retrieved');
   }),
@@ -398,7 +398,7 @@ export const smsController = {
     await requireAdminOrManager(req);
     const scope = getScope(req);
     const orgId = effectiveOrgId(scope);
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const { smsOptIn } = req.body;
 
     if (orgId) {

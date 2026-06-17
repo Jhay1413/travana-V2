@@ -54,7 +54,7 @@ export const opportunitiesRepository = {
     const { page, limit, status, search, dateRange, agentId, sortBy = 'newest', scope } = filters;
     const offset = (page - 1) * limit;
     const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false), ...buildOpportunityScopeConds(scope)];
-    if (status && status !== 'all') conditions.push(eq(enquiry_table.status, status));
+    if (status && status !== 'all') conditions.push(sql`${enquiry_table.status} = ${status}`);
     if (agentId && agentId !== 'all') conditions.push(eq(transaction.user_id, agentId));
     if (dateRange && dateRange !== 'all-time') conditions.push(...buildDateConditions(enquiry_table.date_created, dateRange));
     if (search?.trim()) { const q = `%${search.trim()}%`; conditions.push(or(ilike(enquiry_table.title, q), ilike(clientTable.firstName, q), ilike(clientTable.surename, q))); }
@@ -69,7 +69,7 @@ export const opportunitiesRepository = {
     const { page, limit, status, search, dateRange, agentId, sortBy = 'newest', scope } = filters;
     const offset = (page - 1) * limit;
     const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false), eq(quote.isFreeQuote, false), isNull(quote.deleted_at), ...buildOpportunityScopeConds(scope)];
-    if (status && status !== 'all') conditions.push(eq(quote.quote_status, status));
+    if (status && status !== 'all') conditions.push(sql`${quote.quote_status} = ${status}`);
     if (agentId && agentId !== 'all') conditions.push(eq(transaction.user_id, agentId));
     if (dateRange && dateRange !== 'all-time') conditions.push(...buildDateConditions(quote.date_created, dateRange));
     if (search?.trim()) { const q = `%${search.trim()}%`; conditions.push(or(ilike(quote.title, q), ilike(clientTable.firstName, q), ilike(clientTable.surename, q))); }
@@ -84,7 +84,7 @@ export const opportunitiesRepository = {
     const { page, limit, status, search, dateRange, agentId, sortBy = 'newest', scope } = filters;
     const offset = (page - 1) * limit;
     const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false), ...buildOpportunityScopeConds(scope)];
-    if (status && status !== 'all') conditions.push(eq(booking.booking_status, status));
+    if (status && status !== 'all') conditions.push(sql`${booking.booking_status} = ${status}`);
     if (agentId && agentId !== 'all') conditions.push(eq(transaction.user_id, agentId));
     if (dateRange && dateRange !== 'all-time') conditions.push(...buildDateConditions(booking.date_created, dateRange));
     if (search?.trim()) { const q = `%${search.trim()}%`; conditions.push(or(ilike(booking.title, q), ilike(clientTable.firstName, q), ilike(clientTable.surename, q), ilike(booking.hays_ref, q))); }

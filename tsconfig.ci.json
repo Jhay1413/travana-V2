@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "comment": "CI type-check scope: the maintained code only (client, shared, server/v2). The v1 legacy flat layer under server/ is excluded per CLAUDE.md (do not modify v1).",
+  "include": ["client/src/**/*", "shared/**/*", "server/v2/**/*"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "**/*.integration.test.ts"]
+}

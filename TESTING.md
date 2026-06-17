@@ -250,6 +250,28 @@ gaps below are what the *design* says still matters, prioritized.
 2. Controller-layer pattern on booking/quote/transaction — closes the one fully-untested layer.
 3. `onboarding.service`, then `organization.service` / `client.service` — highest-value untested services.
 
+## Tech debt — `is_expired` removal (staged)
+
+`is_expired` (boolean, on `quote` + `enquiry_table`) is redundant: v2 derives expiry from
+`date_expiry` (fallback `date_created + 7d`). The flag is written by a cron keyed on
+`date_created + 7d`, so it goes stale when `date_expiry` is extended.
+
+**Done (v2-safe, this round):**
+- [x] Single source of truth: `server/v2/utils/expiry.ts` (`effectiveExpiry` / `isExpired`) +
+      unit tests; `transaction.service.getExpiringQuotes` now uses it.
+- [x] **Bug fix:** removed `eq(quote.is_expired, false)` from `findExpiringQuotes` — the stale flag
+      was hiding legitimately-expiring quotes. Locked by a new integration test.
+
+**Deferred — DO NOT drop the column yet: the v1 legacy layer still reads/writes it**
+(`server/services/newQuote.service.ts:464-466`, `server/services/expiry.service.ts`,
+`server/repositories/transaction.repository.ts:655`). Dropping it from `shared/schema.ts` breaks
+v1's build. When v1 is retired, do in one PR:
+- [ ] Delete v2 dead writer: `markStaleAsExpired` in `quote.repository.ts` + `enquiry.repository.ts`,
+      and its call in `enquiry/expiry.service.ts` (keep `activateDueFutureDeals` + the cron).
+- [ ] Remove `is_expired` from `shared/schema.ts` (quote + enquiry_table) and `quote.types.ts`;
+      drop the two writes in `quote.service.ts` (`:377`, `:413`); generate a Drizzle drop-column migration.
+- [ ] Remove the v1 references above.
+
 ## Explicitly out of scope (for now)
 
 - Third-party integrations driven by network calls (`facebook`, `email` IMAP/SMTP,

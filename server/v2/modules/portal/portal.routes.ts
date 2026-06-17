@@ -687,7 +687,7 @@ portalRouter.post('/wallet/withdraw', portalAuth, async (req: Request, res: Resp
 portalRouter.get('/quote/:token/owns', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const { token } = req.params;
+    const { token } = req.params as Record<string, string>;
     const ownership = await quotePublicRepository.findTokenOwnership(String(token));
     if (!ownership) return res.json({ found: false, owns: false });
     return res.json({ found: true, owns: ownership.clientId === clientId });
@@ -700,7 +700,7 @@ portalRouter.get('/quote/:token/owns', portalAuth, async (req: Request, res: Res
 portalRouter.post('/quote/:token/view', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
-    const { token } = req.params;
+    const { token } = req.params as Record<string, string>;
     const ua = req.headers['user-agent'] || '';
 
     const client = await portalRepository.findClientNameById(clientId);
@@ -750,7 +750,7 @@ portalRouter.post('/quote/:token/view', portalAuth, async (req: Request, res: Re
 
 portalRouter.get('/staff/has-pin/:clientId', requireStaffAuth, async (req: Request, res: Response) => {
   try {
-    const client = await neonClientRepository.findPortalPin(String(req.params.clientId));
+    const client = await neonClientRepository.findPortalPin(String((req.params.clientId as string)));
     res.json({ hasPin: !!client?.portalPin });
   } catch {
     res.status(500).json({ error: 'Failed to check PIN' });
@@ -795,7 +795,7 @@ export const portalStaffRouter = Router();
 
 portalStaffRouter.get('/has-pin/:clientId', requireStaffAuth, async (req: Request, res: Response) => {
   try {
-    const client = await neonClientRepository.findPortalPin(String(req.params.clientId));
+    const client = await neonClientRepository.findPortalPin(String((req.params.clientId as string)));
     res.json({ hasPin: !!client?.portalPin });
   } catch {
     res.status(500).json({ error: 'Failed to check PIN' });

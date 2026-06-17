@@ -10,7 +10,7 @@ export const destinationSettingsController = {
   }),
 
   getById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await destinationSettingsService.getById(req.params.id);
+    const row = await destinationSettingsService.getById((req.params.id as string));
     return successResponse(res, row, 'Destination retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const destinationSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await destinationSettingsService.update(req.params.id, req.body);
+    const row = await destinationSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Destination updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await destinationSettingsService.remove(req.params.id);
+    await destinationSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

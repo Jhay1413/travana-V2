@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { motion, useInView, type Variants } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import {
   ArrowRight,
@@ -38,12 +38,12 @@ export const COLORS = {
   border: "#E2E8F0",
 };
 
-export const fadeUp = {
+export const fadeUp: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } },
 };
 
-export const stagger = {
+export const stagger: Variants = {
   visible: { transition: { staggerChildren: 0.12 } },
 };
 

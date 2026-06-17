@@ -10,7 +10,7 @@ export const parkSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await parkSettingsService.findById(req.params.id);
+    const row = await parkSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Park retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const parkSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await parkSettingsService.update(req.params.id, req.body);
+    const row = await parkSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Park updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await parkSettingsService.remove(req.params.id);
+    await parkSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

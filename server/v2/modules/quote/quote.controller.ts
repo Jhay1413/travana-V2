@@ -52,7 +52,10 @@ export const quoteController = {
     if (transactionId && typeof transactionId === "string") {
       quotes = await newQuoteService.listQuotesByTransaction(transactionId, scope);
     } else if (status && typeof status === "string") {
-      quotes = await newQuoteService.listQuotesByStatus(status, scope);
+      quotes = await newQuoteService.listQuotesByStatus(
+        status as Parameters<typeof newQuoteService.listQuotesByStatus>[0],
+        scope,
+      );
     } else {
       quotes = await newQuoteService.listQuotes(scope);
     }
@@ -64,7 +67,7 @@ export const quoteController = {
     const scope = getScope(req);
     const page = parseInt(req.query.page as string) || 0;
     const pageSize = parseInt(req.query.pageSize as string) || 12;
-    const scheduledOnly = req.query.scheduledOnly === "true";
+    const scheduledOnly = (req.query.scheduledOnly as string) === "true";
     const scheduleFilter = (req.query.scheduleFilter as string) || "none";
     const rangeStart = (req.query.rangeStart as string) || "";
     const rangeEnd = (req.query.rangeEnd as string) || "";

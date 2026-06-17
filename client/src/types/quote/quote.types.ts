@@ -452,7 +452,8 @@ export interface EnrichedQuote extends Quote {
   lead_source?: string;
   user_id?: string;
   is_test?: boolean;
-  not_for_social?: boolean;
+  // not_for_social is inherited from Quote (boolean | null); redeclaring it as an
+  // optional boolean conflicts with the base type.
   country_id?: string | null;
   country_name?: string | null;
   destination_id?: string | null;
@@ -528,6 +529,7 @@ export interface EnquiryRelations {
   accommodations?: string[];
   boardBases?: string[];
   departureAirports?: string[];
+  notes?: string;
 }
 
 export interface FlightRelationData {

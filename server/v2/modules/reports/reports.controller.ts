@@ -12,41 +12,41 @@ function readString(value: unknown): string | undefined {
 export const reportsController = {
   getSales: asyncHandler(async (req: Request, res: Response) => {
     const data = await reportsService.getSales(getScope(req), {
-      from: readString(req.query.from),
-      to: readString(req.query.to),
-      branchId: readString(req.query.branchId),
-      agentId: readString(req.query.agentId),
-      leadSource: readString(req.query.leadSource),
+      from: readString((req.query.from as string)),
+      to: readString((req.query.to as string)),
+      branchId: readString((req.query.branchId as string)),
+      agentId: readString((req.query.agentId as string)),
+      leadSource: readString((req.query.leadSource as string)),
     });
     return successResponse(res, data, "Sales report retrieved");
   }),
 
   getAgents: asyncHandler(async (req: Request, res: Response) => {
     const data = await reportsService.getAgentPerformance(getScope(req), {
-      from: readString(req.query.from),
-      to: readString(req.query.to),
-      branchId: readString(req.query.branchId),
-      leadSource: readString(req.query.leadSource),
+      from: readString((req.query.from as string)),
+      to: readString((req.query.to as string)),
+      branchId: readString((req.query.branchId as string)),
+      leadSource: readString((req.query.leadSource as string)),
     });
     return successResponse(res, data, "Agent performance report retrieved");
   }),
 
   getLeadSource: asyncHandler(async (req: Request, res: Response) => {
     const data = await reportsService.getLeadSource(getScope(req), {
-      from: readString(req.query.from),
-      to: readString(req.query.to),
-      branchId: readString(req.query.branchId),
+      from: readString((req.query.from as string)),
+      to: readString((req.query.to as string)),
+      branchId: readString((req.query.branchId as string)),
     });
     return successResponse(res, data, "Lead source report retrieved");
   }),
 
   getTargetsVsActuals: asyncHandler(async (req: Request, res: Response) => {
-    const yearStr = readString(req.query.year);
+    const yearStr = readString((req.query.year as string));
     const year = yearStr ? parseInt(yearStr, 10) : new Date().getFullYear();
     const data = await reportsService.getTargetsVsActuals(
       getScope(req),
       year,
-      readString(req.query.branchId),
+      readString((req.query.branchId as string)),
     );
     return successResponse(res, data, "Targets vs actuals report retrieved");
   }),

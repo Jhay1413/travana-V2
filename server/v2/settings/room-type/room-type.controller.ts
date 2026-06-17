@@ -10,7 +10,7 @@ export const roomTypeSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await roomTypeSettingsService.findById(req.params.id);
+    const row = await roomTypeSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Room type retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const roomTypeSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await roomTypeSettingsService.update(req.params.id, req.body);
+    const row = await roomTypeSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Room type updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await roomTypeSettingsService.remove(req.params.id);
+    await roomTypeSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

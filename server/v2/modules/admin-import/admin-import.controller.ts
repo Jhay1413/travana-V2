@@ -46,6 +46,6 @@ export const adminImportController = {
 
   clearTable: asyncHandler(async (req: Request, res: Response) => {
     await adminImportService.clearTable(req.params.tableName as string);
-    return successResponse(res, null, `Table ${req.params.tableName} cleared`);
+    return successResponse(res, null, `Table ${(req.params.tableName as string)} cleared`);
   }),
 };

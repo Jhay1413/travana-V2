@@ -159,7 +159,9 @@ export function can(
   if (lvl === "none") return false;
   if (lvl === "admin") return true;
 
-  if (action === "admin") return lvl === "admin";
+  // An "admin" level was already handled above (returned true); reaching here
+  // means the level is not admin, so an admin-action check is false.
+  if (action === "admin") return false;
 
   if (action === "view") {
     if (lvl === "read_own" || lvl === "write_own") return scope === "own";

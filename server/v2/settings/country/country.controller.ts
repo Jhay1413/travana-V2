@@ -10,7 +10,7 @@ export const countrySettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await countrySettingsService.findById(req.params.id);
+    const row = await countrySettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Country retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const countrySettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await countrySettingsService.update(req.params.id, req.body);
+    const row = await countrySettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Country updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await countrySettingsService.remove(req.params.id);
+    await countrySettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

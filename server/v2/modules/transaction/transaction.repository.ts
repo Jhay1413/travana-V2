@@ -513,7 +513,10 @@ export const transactionRepository = {
       eq(transaction.is_test, false),
       eq(transaction.status, 'on_quote'),
       eq(quote.is_active, true),
-      eq(quote.is_expired, false),
+      // NB: expiry is decided by the date window below, NOT by the stored
+      // is_expired flag — that flag is set by a cron keyed on date_created+7d and
+      // goes stale when date_expiry is extended, which previously hid legitimately
+      // expiring quotes from this list.
       eq(quote.isFreeQuote, false),
       eq(quote.isQuoteCopy, false),
       sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,

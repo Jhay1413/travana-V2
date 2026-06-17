@@ -18,7 +18,7 @@ export const updateNeonClientValidator = z.object({
 // Drop identity/tenant columns from import rows — these are assigned
 // server-side from the caller's scope, never trusted from the payload.
 const importClientRowSchema = insertClientTableSchema
-  .omit({ id: true, orgId: true, branchId: true, createdBy: true })
+  .omit({ orgId: true, branchId: true, createdBy: true })
   .extend({ badge: badgeEnum });
 
 export const importNeonClientsValidator = z.object({

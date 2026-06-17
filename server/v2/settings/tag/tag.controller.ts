@@ -10,7 +10,7 @@ export const tagSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await tagSettingsService.findById(req.params.id);
+    const row = await tagSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Tag retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const tagSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await tagSettingsService.update(req.params.id, req.body);
+    const row = await tagSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Tag updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await tagSettingsService.remove(req.params.id);
+    await tagSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

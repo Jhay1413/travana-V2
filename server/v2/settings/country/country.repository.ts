@@ -28,7 +28,7 @@ export const countrySettingsRepository = {
 
   async create(data: unknown) {
     const { id: _id, ...rest } = data as Record<string, unknown>;
-    const [row] = await db.insert(country).values(rest).returning();
+    const [row] = await db.insert(country).values(rest as typeof country.$inferInsert).returning();
     return row;
   },
 

@@ -5,7 +5,7 @@ import { successResponse } from '../../utils/response';
 
 export const airportController = {
   listAirports: asyncHandler(async (req: Request, res: Response) => {
-    const raw = req.query.countryIds;
+    const raw = (req.query.countryIds as string);
     const countryIds = typeof raw === 'string' && raw.length
       ? raw.split(',').map((s) => s.trim()).filter(Boolean)
       : undefined;
@@ -19,7 +19,7 @@ export const airportController = {
   }),
 
   deleteAirport: asyncHandler(async (req: Request, res: Response) => {
-    await airportService.deleteAirport(req.params.id);
+    await airportService.deleteAirport((req.params.id as string));
     res.status(204).send();
   }),
 };

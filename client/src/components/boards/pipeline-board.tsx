@@ -634,7 +634,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
             const booking = tx.booking;
             const enquiry = tx.enquiry;
             const title = quote?.title || booking?.title || enquiry?.title || null;
-            const accom = quote?.accommodations?.[0] || booking?.accommodations?.[0];
+            const accom = quote?.accommodations?.[0] || (booking as any)?.accommodations?.[0];
             const accomDest = (accom as any)?.destination_name || null;
             const accomResort = (accom as any)?.resort_name || null;
             const resort = accomDest || accomResort || (dest !== "TBC" ? dest : null);

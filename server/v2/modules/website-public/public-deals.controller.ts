@@ -9,13 +9,13 @@ export const publicDealsController = {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
     const sortBy = (req.query.sort as string) || "newest";
     const category = (req.query.category as string || "").trim();
-    const countryParam = req.query.countries ?? req.query.country;
+    const countryParam = (req.query.countries as string) ?? (req.query.country as string);
     const countries = Array.isArray(countryParam)
       ? (countryParam as string[]).map((c) => c.trim()).filter(Boolean)
       : countryParam ? (countryParam as string).split(",").map((c) => c.trim()).filter(Boolean)
       : undefined;
 
-    const tagsParam = req.query.tags;
+    const tagsParam = (req.query.tags as string);
     const tags = Array.isArray(tagsParam)
       ? (tagsParam as string[]).map((t) => t.trim()).filter(Boolean)
       : tagsParam ? (tagsParam as string).split(",").map((t) => t.trim()).filter(Boolean)
@@ -55,7 +55,7 @@ export const publicDealsController = {
   }),
 
   getDealById: asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
-    const deal = await publicDealsService.getDealById(req.params.id);
+    const deal = await publicDealsService.getDealById((req.params.id as string));
     if (!deal) return errorResponse(res, "Deal not found", 404);
     return successResponse(res, deal);
   }),
@@ -66,7 +66,7 @@ export const publicDealsController = {
   }),
 
   getDestinationByName: asyncHandler(async (req: Request<{ name: string }>, res: Response) => {
-    const name = decodeURIComponent(req.params.name);
+    const name = decodeURIComponent((req.params.name as string));
     const guru = await publicDealsService.getDestinationByName(name);
     if (!guru) return errorResponse(res, "Destination not found", 404);
 
