@@ -55,37 +55,75 @@ is where a silent bug costs real money. Test happy path **and** every thrown `Ap
 The CRM is multi-tenant; a scope bug leaks one org's data to another. These deserve
 tests that assert the **negative** case (wrong org → 404/forbidden), not just success.
 
-- [ ] `utils/scope.ts` — `getScope`, `hasAnyRole`, primary-vs-union role rules
-- [ ] `booking.service` `effectiveOrgId` / `assert*InScope` — platform_admin bypass, org mismatch → 404
-- [ ] `modules/organization/organization.service.ts` + `organization-member.service.ts`
-- [ ] `modules/user/user.service.ts` + `user-org-roles/user-org-roles.service.ts`
-- [ ] `modules/invite/invite.service.ts` — token validity, expiry, role assignment
-- [ ] `modules/platform-admin/*` — platform-admin-only guards, credits service
-- [ ] `middlewares/auth/*` and `middlewares/validation.middleware.ts`
+- [x] `utils/scope.ts` (8 tests) — `hasAnyRole`, `getScope` role defaulting + userId resolution.
+      Caught the orgRole='agent' default vs orgRoles=[] asymmetry.
+- [x] `booking.service` scope (3 tests, in booking suite) — org mismatch → 404, in-scope read,
+      platform_admin bypass
+- [x] `modules/organization/organization-member.service.ts` (7 tests) — invalid role, self-demote/
+      self-suspend guards, cross-org 404, duplicate-branch 409
+- [~] `modules/organization/organization.service.ts` — not yet covered (member service done)
+- [x] `modules/user/user.service.ts` (6 tests) — tenant isolation on get/delete, platform_admin
+      bypass, orgId pinning on update
+- [x] `modules/user-org-roles/user-org-roles.service.ts` (9 tests) — `primaryRole` ranking,
+      addRole validation/idempotency/incompatibility, removeRole last-role guard
+- [x] `modules/invite/invite.service.ts` (11 tests) — branch-manager invite guards, token
+      validity/expiry, accept-payload validation, revoke guards
+- [x] `modules/platform-admin/platform-admin-credits.service.ts` (8 tests) — summary allowance/
+      overage math, limit/top-up validation, write-off charge-state guards
+- [x] `middlewares/auth/*` (6 tests) — requireOrgRole 403/allow, requirePlatformAdmin 401/403/allow
+- [x] `middlewares/validation.middleware.ts` (2 tests) — valid → next, invalid → 400 AppError
 
 ## Tier 3 — Input validation (cheap, high value)
 
 Zod validators are pure functions — fast to test and they catch a lot of bad input.
 For each: assert one valid payload passes and the key invalid cases are rejected.
 
-- [ ] `booking.validator.ts`, `booking-upsell.validator.ts`
-- [ ] `quote.validator.ts`, `quote-public.validator.ts`
-- [ ] `client.validator.ts`, `neon-client.validator.ts`
-- [ ] `referral.validator.ts`, `referral-payout.validator.ts`, `referral-withdrawal.validator.ts`
-- [ ] `organization.validator.ts`, `user.validator.ts`, `user-org-roles.validator.ts`, `invite.validator.ts`
-- [ ] `branch.validator.ts`, `note.validator.ts`, `email.validator.ts`, `hr.validator.ts`,
-      `notification.validator.ts`, `onboarding.validator.ts`, `platform-admin.validator.ts`, `ticket.validator.ts`
+Covered the validators with hand-written rules (refinements, regexes, enums); the rest
+just wrap `insert*Schema` from `shared/schema` (testing those tests drizzle-zod, not our code).
+
+- [x] `onboarding.validator.ts` (8 tests) — hasHomeworkers refine, branch openingHours length(7),
+      slug regex, password length, email
+- [x] `organization.validator.ts` (8 tests) — slug regex, 6-digit hex brand color, currency length(3),
+      plan enum, positive seat limit
+- [x] `invite.validator.ts` (7 tests) — email, UUID branchId, role enum, password length
+- [x] `referral.validator.ts` (6 tests) — UUID, email, required name, status enum
+- [x] `booking.validator.ts` (3 tests) — image URL array (min 1, must be URLs)
+- [ ] Thin schema-wrappers (lower priority — exercise `shared/schema` via Tier 4 instead):
+      `booking-upsell`, `quote`, `quote-public`, `client`, `neon-client`, `referral-payout`,
+      `referral-withdrawal`, `user`, `user-org-roles`, `branch`, `note`, `email`, `hr`,
+      `notification`, `platform-admin`, `ticket`
 
 ## Tier 4 — Repository / integration (DB-backed)
 
 Unit tests mock these away, so the SQL itself is unverified. Stand up a test Postgres
 (testcontainers or a disposable schema) and cover the queries that are easy to get wrong.
 
-- [ ] Test harness: spin up throwaway Postgres + run Drizzle migrations
-- [ ] `booking.repository` — findWithDetails join shape, scope filters, replace* helpers
-- [ ] `quote.repository` — findWithDetails, child-passenger replace
-- [ ] Any repository using raw `sql` fragments, aggregation, or multi-table joins
-      (`revenue`, `reports`, `dashboard`, `search`, `branch-overview`, `organization-overview`)
+- [x] Test harness — `docker-compose.test.yml` (postgres:16 on :55432), `vitest.integration.config.ts`
+      (globalSetup pushes `shared/schema.ts` via drizzle-kit, single-fork, DATABASE_URL injected),
+      `server/v2/test/factories.ts` seed helpers, npm `test:integration` / `db:test:up` / `db:test:down`.
+      Integration tests excluded from the fast `npm test`. **Requires Docker Desktop running.**
+- [~] `booking.repository` (11 integration tests, all passing vs real Postgres):
+      `transactionInScope` role-aware scope SQL (org_admin/agent/homeworker/platform_admin/trusted),
+      `bookingInScope` (booking joined through its transaction), `findByTransactionId`,
+      `findWithDetails` (holiday_type_name + board_basis joins, child accommodation aggregation, empty
+      collections as arrays), `replaceTransfers` (full replace), `replaceExtraAccommodations`
+      (preserves the primary, swaps non-primary), `upsertPrimaryAccommodation` (insert→update in place),
+      `upsertFlightByType` (update same type, insert different). TODO: findAllWithImages
+- [x] `quote.repository` (10 integration tests): `findById` soft-delete filter, `quoteInScope`,
+      `findByTransactionId` (scope-filtered + excludes soft-deleted), `findByStatus`,
+      `replaceChildPassengers` (replaces children, preserves adults, clears on empty), `findWithDetails`.
+      Integration caught a real enum mismatch (`quote_status` has no 'PENDING').
+- [x] `revenue.repository` (6 integration tests): `getForwardsForMonth` 56-day forward window
+      (counts in the right month, excludes adjacent months, ignores null-commission bookings),
+      org scoping via client.org_id, upsell-in-calendar-month commission addition,
+      `getAgentPerformance` GROUP BY agent + ORDER BY total DESC.
+- [x] `dashboard.repository` (2 integration tests): `getStats` — status-FILTER funnel counts
+      (enquiry/quoted/booked), is_test exclusion, quote/revenue SUM+AVG, quoteStatsConds
+      (client_id required), unscoped vs org-scoped.
+- [x] `reports.repository` (4 integration tests): `getSales` — totals (SUM commission, COUNT,
+      COUNT DISTINCT clients), empty prior-period, contiguous month buckets (zero-filling empty
+      months), GROUP BY lead_source ordered by commission. Branch-scoped via buildScopeConditions.
+- [ ] Remaining aggregation repos: `search`, `branch-overview`, `organization-overview`
 
 ## Tier 5 — Supporting business logic
 

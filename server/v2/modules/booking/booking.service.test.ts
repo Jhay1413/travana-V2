@@ -372,6 +372,34 @@ describe("bookingService.updateBooking", () => {
   });
 });
 
+describe("bookingService — scope enforcement", () => {
+  // A real (non-trusted) org-scoped caller.
+  const ORG_SCOPE = { orgId: "o1", orgRole: "agent" } as never;
+
+  it("returns 404 when the booking is outside the caller's org", async () => {
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(false as never);
+
+    await expect(bookingService.getBookingById("b1", ORG_SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(bookingRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it("reads the booking when it is in the caller's org", async () => {
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1" } as never);
+
+    await expect(bookingService.getBookingById("b1", ORG_SCOPE)).resolves.toMatchObject({ id: "b1" });
+  });
+
+  it("bypasses the scope check for a platform_admin", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1" } as never);
+
+    await bookingService.getBookingById("b1", { orgId: "o1", orgRole: "platform_admin" } as never);
+
+    expect(bookingRepository.bookingInScope).not.toHaveBeenCalled();
+    expect(bookingRepository.findById).toHaveBeenCalledWith("b1");
+  });
+});
+
 describe("bookingService.deleteBooking", () => {
   it("voids referrals for the transaction before removing the booking", async () => {
     vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1", transaction_id: "t1" } as never);

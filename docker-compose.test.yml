@@ -1,0 +1,23 @@
+# Disposable Postgres for Tier 4 repository/integration tests.
+# Start once:  npm run db:test:up   (or: docker compose -f docker-compose.test.yml up -d)
+# Stop/wipe:   npm run db:test:down
+#
+# Never points at real data — the integration tests TRUNCATE freely.
+services:
+  postgres:
+    image: postgres:16
+    container_name: travana_test_pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: travana_test
+    ports:
+      - "55432:5432"
+    tmpfs:
+      # Keep the data dir in RAM — faster and guarantees a clean slate on restart.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d travana_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
