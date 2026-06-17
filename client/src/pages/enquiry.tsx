@@ -631,7 +631,7 @@ export default function EnquiryPage() {
   const [, params] = useRoute("/clients/:clientId/enquiries/:enquiryId");
   const [, freeParams] = useRoute("/enquiries/:enquiryId");
   const resolvedParams = params ?? freeParams;
-  const urlClientId = resolvedParams?.clientId || "";
+  const urlClientId = (resolvedParams as { clientId?: string })?.clientId || "";
   const enquiryId = resolvedParams?.enquiryId || "";
   const { role } = useRole();
 

@@ -5,7 +5,8 @@ import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
 
 type TaskNew = typeof tasks.$inferSelect;
-type InsertTaskNew = typeof tasks.$inferInsert;
+// id is generated here (randomUUID), so callers never supply it.
+type InsertTaskNew = Omit<typeof tasks.$inferInsert, "id">;
 
 function buildTaskScopeConds(scope?: Scope, opts?: { entityScoped?: boolean }): SQL[] {
   const conds: SQL[] = [];

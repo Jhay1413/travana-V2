@@ -17,7 +17,7 @@ export function useCreateEnquiry() {
 export function useUpdateEnquiry() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<EnquiryTable> }) => enquiryApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof enquiryApi.update>[1] }) => enquiryApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: enquiryKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });

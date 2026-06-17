@@ -11,7 +11,7 @@ export const destinationGuruController = {
   }),
 
   getByDestination: asyncHandler(async (req: Request, res: Response) => {
-    const destination = await destinationGuruService.getByDestination(req.params.destination);
+    const destination = await destinationGuruService.getByDestination((req.params.destination as string));
     if (!destination) return res.status(404).json({ success: false, message: 'Destination not found' });
     res.json({ success: true, data: destination });
   }),
@@ -27,13 +27,13 @@ export const destinationGuruController = {
   }),
 
   getById: asyncHandler(async (req: Request, res: Response) => {
-    const destination = await destinationGuruService.getById(req.params.id);
+    const destination = await destinationGuruService.getById((req.params.id as string));
     if (!destination) return res.status(404).json({ success: false, message: 'Destination not found' });
     res.json({ success: true, data: destination });
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await destinationGuruService.remove(req.params.id);
+    await destinationGuruService.remove((req.params.id as string));
     res.json({ success: true, message: 'Destination removed' });
   }),
 };

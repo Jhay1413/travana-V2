@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useCreateEnquiry, useCreateTransaction, useDeleteEnquiry, useUpdateEnquiry } from "@/hooks/mutations";
+import { enquiryApi } from "@/api";
 import type { EnquiryTable } from "@/types/quote";
 import { useToast } from "@/hooks/use-toast";
 
@@ -25,7 +26,7 @@ export function useClientEnquiryActions(
   function handleEnquirySubmit(data: Partial<EnquiryTable> & Record<string, unknown>) {
     if (editingEnquiry) {
       updateEnquiryMutation.mutate(
-        { id: editingEnquiry.id, data: data as Partial<EnquiryTable> },
+        { id: editingEnquiry.id, data: data as Parameters<typeof enquiryApi.update>[1] },
         {
           onSuccess: () => {
             setShowEnquiryWizard(false);

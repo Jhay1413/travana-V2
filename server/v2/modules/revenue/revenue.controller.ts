@@ -11,8 +11,8 @@ export const revenueController = {
   }),
 
   getMonthBookings: asyncHandler(async (req: Request, res: Response) => {
-    const yearParam = Array.isArray(req.params.year) ? req.params.year[0] : req.params.year;
-    const monthParam = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
+    const yearParam = Array.isArray((req.params.year as string)) ? (req.params.year as string)[0] : (req.params.year as string);
+    const monthParam = Array.isArray((req.params.month as string)) ? (req.params.month as string)[0] : (req.params.month as string);
 
     const year = parseInt(yearParam, 10);
     const month = parseInt(monthParam, 10);
@@ -26,8 +26,8 @@ export const revenueController = {
   }),
 
   getMonthForwards: asyncHandler(async (req: Request, res: Response) => {
-    const yearParam = Array.isArray(req.params.year) ? req.params.year[0] : req.params.year;
-    const monthParam = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
+    const yearParam = Array.isArray((req.params.year as string)) ? (req.params.year as string)[0] : (req.params.year as string);
+    const monthParam = Array.isArray((req.params.month as string)) ? (req.params.month as string)[0] : (req.params.month as string);
 
     const year = parseInt(yearParam, 10);
     const month = parseInt(monthParam, 10);

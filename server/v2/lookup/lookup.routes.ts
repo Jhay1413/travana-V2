@@ -17,7 +17,7 @@ router.get('/destinations', async (req: Request, res: Response) => {
     const rows = await lookupService.getDestinations({
       countryId: req.query.countryId as string | undefined,
       search: req.query.search as string | undefined,
-      limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+      limit: (req.query.limit as string) ? parseInt(req.query.limit as string) : undefined,
     });
     res.json({ success: true, data: rows });
   } catch (err: any) {
@@ -31,7 +31,7 @@ router.get('/resorts', async (req: Request, res: Response) => {
       destinationId: req.query.destinationId as string | undefined,
       countryId: req.query.countryId as string | undefined,
       search: req.query.search as string | undefined,
-      limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
+      limit: (req.query.limit as string) ? parseInt(req.query.limit as string, 10) : undefined,
     });
     res.json({ success: true, data: rows });
   } catch (err: any) {
@@ -46,7 +46,7 @@ router.get('/accommodations', async (req: Request, res: Response) => {
       destinationId: req.query.destinationId as string | undefined,
       countryId: req.query.countryId as string | undefined,
       search: req.query.search as string | undefined,
-      limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+      limit: (req.query.limit as string) ? parseInt(req.query.limit as string) : undefined,
     });
     res.json({ success: true, data: rows });
   } catch (err: any) {

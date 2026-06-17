@@ -11,7 +11,7 @@ export const tourOperatorSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await tourOperatorSettingsService.findById(req.params.id, getScope(req));
+    const row = await tourOperatorSettingsService.findById((req.params.id as string), getScope(req));
     return successResponse(res, row, 'Tour operator retrieved');
   }),
 
@@ -21,12 +21,12 @@ export const tourOperatorSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await tourOperatorSettingsService.update(req.params.id, req.body, getScope(req));
+    const row = await tourOperatorSettingsService.update((req.params.id as string), req.body, getScope(req));
     return successResponse(res, row, 'Tour operator updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await tourOperatorSettingsService.remove(req.params.id, getScope(req));
+    await tourOperatorSettingsService.remove((req.params.id as string), getScope(req));
     res.status(204).send();
   }),
 };

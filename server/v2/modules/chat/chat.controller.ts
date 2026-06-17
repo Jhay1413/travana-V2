@@ -29,7 +29,7 @@ export const chatController = {
   getMessages: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const { conversationId } = req.params;
+    const { conversationId } = req.params as Record<string, string>;
     const messages = await chatService.getMessages(conversationId, userId);
     return successResponse(res, messages, "Messages retrieved");
   }),
@@ -37,7 +37,7 @@ export const chatController = {
   sendMessage: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const { conversationId } = req.params;
+    const { conversationId } = req.params as Record<string, string>;
     const rawContent = req.body.content || "";
     const content = sanitizeHtml(rawContent, sanitizeOptions);
     const message = await chatService.sendMessage(conversationId, userId, content);
@@ -47,7 +47,7 @@ export const chatController = {
   sendMessageWithFile: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const { conversationId } = req.params;
+    const { conversationId } = req.params as Record<string, string>;
     const rawContent = req.body.content || "";
     const content = sanitizeHtml(rawContent, sanitizeOptions);
     const file = (req as any).file as Express.Multer.File | undefined;
@@ -72,7 +72,7 @@ export const chatController = {
   serveFile: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const { filename } = req.params;
+    const { filename } = req.params as Record<string, string>;
     const safeName = path.basename(filename);
     const filePath = path.join(UPLOADS_DIR, safeName);
     const resolved = path.resolve(filePath);
@@ -105,7 +105,7 @@ export const chatController = {
   markRead: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
-    const { conversationId } = req.params;
+    const { conversationId } = req.params as Record<string, string>;
     await chatService.markRead(conversationId, userId);
     return successResponse(res, null, "Marked as read");
   }),

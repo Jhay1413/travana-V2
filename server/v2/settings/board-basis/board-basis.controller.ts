@@ -10,7 +10,7 @@ export const boardBasisSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await boardBasisSettingsService.findById(req.params.id);
+    const row = await boardBasisSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Board basis retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const boardBasisSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await boardBasisSettingsService.update(req.params.id, req.body);
+    const row = await boardBasisSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Board basis updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await boardBasisSettingsService.remove(req.params.id);
+    await boardBasisSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

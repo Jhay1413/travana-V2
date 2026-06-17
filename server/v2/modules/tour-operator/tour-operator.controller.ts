@@ -11,7 +11,7 @@ export const tourOperatorController = {
   }),
 
   getTourOperatorById: asyncHandler(async (req: Request, res: Response) => {
-    const tourOperator = await tourOperatorService.getTourOperatorById(req.params.id, getScope(req));
+    const tourOperator = await tourOperatorService.getTourOperatorById((req.params.id as string), getScope(req));
     return successResponse(res, tourOperator, 'Tour operator retrieved successfully');
   }),
 
@@ -21,12 +21,12 @@ export const tourOperatorController = {
   }),
 
   updateTourOperator: asyncHandler(async (req: Request, res: Response) => {
-    const tourOperator = await tourOperatorService.updateTourOperator(req.params.id, req.body, getScope(req));
+    const tourOperator = await tourOperatorService.updateTourOperator((req.params.id as string), req.body, getScope(req));
     return successResponse(res, tourOperator, 'Tour operator updated successfully');
   }),
 
   deleteTourOperator: asyncHandler(async (req: Request, res: Response) => {
-    await tourOperatorService.deleteTourOperator(req.params.id, getScope(req));
+    await tourOperatorService.deleteTourOperator((req.params.id as string), getScope(req));
     res.status(204).send();
   }),
 };

@@ -29,7 +29,7 @@ export function useCreateAnnouncement() {
 export function useUpdateAnnouncement() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...input }: { id: string; title?: string; content?: string; category?: string; pinned?: boolean }) =>
+    mutationFn: ({ id, ...input }: { id: string; title?: string; content?: string; category?: string; pinned?: boolean; imageUrl?: string }) =>
       announcementApi.update(id, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: announcementKeys.all }),
   });

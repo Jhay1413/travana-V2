@@ -56,13 +56,13 @@ export const facebookController = {
 
   disconnectPage: asyncHandler(async (req: Request, res: Response) => {
     const userId = requireUserId(req);
-    await facebookService.disconnectPage(req.params.id, userId);
+    await facebookService.disconnectPage((req.params.id as string), userId);
     res.sendStatus(204);
   }),
 
   getConversations: asyncHandler(async (req: Request, res: Response) => {
     const userId = requireUserId(req);
-    const conversations = await facebookService.getConversations(req.params.id, userId);
+    const conversations = await facebookService.getConversations((req.params.id as string), userId);
     return successResponse(res, conversations, 'Conversations retrieved');
   }),
 
@@ -70,14 +70,14 @@ export const facebookController = {
     const userId = requireUserId(req);
     const pageId = req.query.pageId as string;
     if (!pageId) return res.status(400).json({ message: 'pageId required' });
-    const messages = await facebookService.getMessages(req.params.conversationId, pageId, userId);
+    const messages = await facebookService.getMessages((req.params.conversationId as string), pageId, userId);
     return successResponse(res, messages, 'Messages retrieved');
   }),
 
   sendMessage: asyncHandler(async (req: Request, res: Response) => {
     const userId = requireUserId(req);
     const { recipientId, text } = req.body as { recipientId: string; text: string };
-    await facebookService.sendMessage(req.params.id, recipientId, text, userId);
+    await facebookService.sendMessage((req.params.id as string), recipientId, text, userId);
     return successResponse(res, null, 'Message sent');
   }),
 };

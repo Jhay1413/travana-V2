@@ -18,7 +18,9 @@ export interface Ticket {
   replyCount?: number;
 }
 
-export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt" | "dueDate" | "assignedTo"> & {
+export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt" | "dueDate" | "assignedTo" | "clientId"> & {
+  // Build (internal) tickets have no client.
+  clientId: string | null;
   dueDate?: string | null;
   assignedTo?: string | null;
 };

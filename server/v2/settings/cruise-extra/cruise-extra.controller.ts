@@ -10,7 +10,7 @@ export const cruiseExtraSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await cruiseExtraSettingsService.findById(req.params.id);
+    const row = await cruiseExtraSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Cruise extra retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const cruiseExtraSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await cruiseExtraSettingsService.update(req.params.id, req.body);
+    const row = await cruiseExtraSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Cruise extra updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await cruiseExtraSettingsService.remove(req.params.id);
+    await cruiseExtraSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

@@ -5,7 +5,7 @@ import { AppError } from "../../utils/error-handler";
 import type { ShopTargetInput, AgentTargetInput } from "./targets.types";
 
 function branchOverrideFrom(req: Request): string | undefined {
-  const fromQuery = req.query.branchId;
+  const fromQuery = (req.query.branchId as string);
   if (typeof fromQuery === "string" && fromQuery.length > 0) return fromQuery;
   const fromBody = (req.body && typeof req.body === "object") ? (req.body as any).branchId : undefined;
   if (typeof fromBody === "string" && fromBody.length > 0) return fromBody;
@@ -73,7 +73,7 @@ export async function getAgentTargets(req: Request, res: Response) {
 
 export async function getAgentTargetsByUserId(req: Request, res: Response) {
   try {
-    let { userId } = req.params;
+    let { userId } = req.params as Record<string, string>;
     if (Array.isArray(userId)) userId = userId[0];
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });

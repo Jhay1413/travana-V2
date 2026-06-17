@@ -5,7 +5,9 @@ import { db } from "../../config/database";
 import {
   transaction, quote, booking, quote_flights, booking_flights, quoteImages, bookingImages,
 } from "@shared/schema";
-import { truncateAll, makeOrg, makeBranch, makeUser, makePackageType } from "../../test/factories";
+import {
+  truncateAll, makeOrg, makeBranch, makeUser, makePackageType, makeClient, makeTransaction, makeQuote,
+} from "../../test/factories";
 
 let orgA: { id: string };
 let branchA1: { id: string };
@@ -105,5 +107,32 @@ describe("transactionRepository.createWithBookingAndChildren — atomic add book
 
     expect(await db.select().from(transaction)).toHaveLength(0);
     expect(await db.select().from(booking)).toHaveLength(0);
+  });
+});
+
+describe("transactionRepository.findExpiringQuotes — date-driven (no is_expired flag)", () => {
+  // Selects on_quote quotes whose effective expiry is at/before now+7d, regardless
+  // of the legacy is_expired flag. Verifies the flag-filter removal: an already
+  // date-expired quote is still returned (so the UI can badge it "expired").
+  it("returns expired + near-expiry quotes and excludes far-future ones", async () => {
+    const client = await makeClient({ orgId: orgA.id });
+    const now = Date.now();
+    const txnQuote = async () =>
+      makeTransaction({ user_id: agent.id, org_id: orgA.id, branch_id: branchA1.id, client_id: client.id, status: "on_quote" });
+
+    const tPast = await txnQuote();
+    const tNear = await txnQuote();
+    const tFuture = await txnQuote();
+
+    const baseQuote = { holiday_type_id: pkg.id, is_active: true, isFreeQuote: false, isQuoteCopy: false } as never;
+    const qPast = await makeQuote({ ...(baseQuote as object), transaction_id: tPast.id, date_expiry: new Date(now - 2 * 86_400_000) } as never);
+    const qNear = await makeQuote({ ...(baseQuote as object), transaction_id: tNear.id, date_expiry: new Date(now + 2 * 86_400_000) } as never);
+    // 30 days out → outside the [.., now+7d] window
+    await makeQuote({ ...(baseQuote as object), transaction_id: tFuture.id, date_expiry: new Date(now + 30 * 86_400_000) } as never);
+
+    const rows = await transactionRepository.findExpiringQuotes(undefined, undefined);
+    const ids = rows.map((r) => r.quoteId).sort();
+
+    expect(ids).toEqual([qNear.id, qPast.id].sort());
   });
 });

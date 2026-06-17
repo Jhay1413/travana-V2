@@ -297,9 +297,10 @@ export const quotePublicRepository = {
           .map((i: any) => ({ day: i.day_number, description: i.description, subDescription: i.sub_description || "" })),
       })),
       passengers: passengerList.map(p => ({
-        title: p.title,
-        firstName: p.first_name,
-        lastName: p.last_name,
+        // The passengers table only stores type + age; name fields aren't persisted here.
+        title: null,
+        firstName: null,
+        lastName: null,
         type: p.type,
         age: p.age,
       })),

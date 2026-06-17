@@ -28,7 +28,7 @@ export default function WelcomeTeamPage() {
       role: p.role,
       status: "invited" as const,
     }));
-    updateTeam([...team, ...newMembers]);
+    updateTeam([...team, ...newMembers] as typeof team);
     setLocation("/");
   };
 

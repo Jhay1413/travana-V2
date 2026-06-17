@@ -10,7 +10,7 @@ export const lodgeSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await lodgeSettingsService.findById(req.params.id);
+    const row = await lodgeSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Lodge retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const lodgeSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await lodgeSettingsService.update(req.params.id, req.body);
+    const row = await lodgeSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Lodge updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await lodgeSettingsService.remove(req.params.id);
+    await lodgeSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

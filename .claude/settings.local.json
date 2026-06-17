@@ -58,7 +58,18 @@
       "Bash(npm test *)",
       "Bash(docker compose *)",
       "Bash(docker info *)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "WebSearch",
+      "WebFetch(domain:www.better-auth.com)",
+      "Bash(grep -v '\\\\.test\\\\.ts$')",
+      "Bash(grep -vE 'transaction/\\(transaction\\\\.service|transaction\\\\.repository\\)\\\\.ts$')",
+      "Bash(xargs git checkout HEAD --)",
+      "Bash(grep -rnE \"from ['\\\\\"]\\\\.\\\\.?/\\\\.\\\\.?/\\(controllers|services|repositories|routes\\)/\" server/v2 --include=*.ts)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npm -v)",
+      "Bash(npx -y npm@10 install --package-lock-only)",
+      "Bash(npx -y npm@10 ci --dry-run)",
+      "Bash(corepack --version)"
     ],
     "additionalDirectories": [
       "/tmp"

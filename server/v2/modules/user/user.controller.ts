@@ -11,7 +11,7 @@ function stripPassword<T extends { password?: string | null }>(user: T): Omit<T,
 
 export const userController = {
   listUsers: asyncHandler(async (req: Request, res: Response) => {
-    const salesAgentsOnly = req.query.salesAgentsOnly === "true";
+    const salesAgentsOnly = (req.query.salesAgentsOnly as string) === "true";
     const users = await userService.listUsers(getScope(req), { salesAgentsOnly });
     return successResponse(res, users.map(stripPassword), "Users retrieved successfully");
   }),

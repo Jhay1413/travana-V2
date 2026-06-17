@@ -44,11 +44,18 @@ jobs:
           node-version: 20
           cache: npm
 
+      # Use the npm version pinned in package.json#packageManager (keeps the
+      # lockfile resolution identical between local and CI).
+      - name: Enable Corepack
+        run: corepack enable
+
       - name: Install dependencies
         run: npm ci
 
       - name: Type-check
-        run: npm run check
+        # Scoped to the maintained code (client, shared, server/v2). The v1 legacy
+        # flat layer under server/ is excluded per CLAUDE.md — see tsconfig.ci.json.
+        run: npm run check:ci
 
       - name: Unit tests
         run: npm test

@@ -11,6 +11,7 @@ import { walletService } from "../wallet/wallet.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
+import { effectiveExpiry } from "../../utils/expiry";
 import type {
   InsertTransaction,
   InsertEnquiryTable,
@@ -536,9 +537,7 @@ export const transactionService = {
     const now = new Date();
     const rows = await transactionRepository.findExpiringQuotes(scope, agentId);
     return rows.map(r => {
-      const expiryDate = r.dateExpiry
-        ? new Date(r.dateExpiry)
-        : new Date(new Date(r.dateCreated!).getTime() + 7 * 24 * 60 * 60 * 1000);
+      const expiryDate = effectiveExpiry(r.dateExpiry, r.dateCreated);
       const status: "expired" | "near_expiry" = expiryDate < now ? "expired" : "near_expiry";
       const clientName = [
         r.clientTitle && r.clientTitle !== "NULL" ? r.clientTitle : null,

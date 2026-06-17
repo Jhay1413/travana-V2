@@ -73,8 +73,8 @@ export const emailController = {
   fetchMessages: asyncHandler(async (req: Request, res: Response) => {
     const userId = requireUserId(req);
     const folder = (req.query.folder as string) ?? 'INBOX';
-    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-    const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string, 10) : 50;
+    const page = (req.query.page as string) ? parseInt(req.query.page as string, 10) : 1;
+    const pageSize = (req.query.pageSize as string) ? parseInt(req.query.pageSize as string, 10) : 50;
     const result = await emailService.fetchMessages(req.params.id as string, userId, folder, page, pageSize);
     return successResponse(res, result, 'Messages retrieved successfully');
   }),

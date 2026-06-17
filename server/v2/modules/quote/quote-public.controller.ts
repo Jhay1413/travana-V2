@@ -5,13 +5,13 @@ import { successResponse } from "../../utils/response";
 
 export const quotePublicController = {
   getQuote: asyncHandler(async (req: Request, res: Response) => {
-    const { token } = req.params;
+    const { token } = req.params as Record<string, string>;
     const data = await quotePublicService.getQuoteByToken(token);
     return successResponse(res, data);
   }),
 
   logView: asyncHandler(async (req: Request, res: Response) => {
-    const { token } = req.params;
+    const { token } = req.params as Record<string, string>;
     const ua = req.headers["user-agent"] || "";
 
     let deviceType = "desktop";
@@ -42,7 +42,7 @@ export const quotePublicController = {
   }),
 
   handleAction: asyncHandler(async (req: Request, res: Response) => {
-    const { token } = req.params;
+    const { token } = req.params as Record<string, string>;
     const { actionType, message, customerName } = req.body;
 
     const trimmedMessage = typeof message === "string" ? message.substring(0, 2000) : null;
@@ -59,7 +59,7 @@ export const quotePublicController = {
   }),
 
   logShare: asyncHandler(async (req: Request, res: Response) => {
-    const { token } = req.params;
+    const { token } = req.params as Record<string, string>;
     const { method } = req.body;
 
     await quotePublicService.logShare(token, method || "unknown");

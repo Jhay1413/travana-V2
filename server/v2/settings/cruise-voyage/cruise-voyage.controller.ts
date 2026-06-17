@@ -10,7 +10,7 @@ export const cruiseVoyageSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await cruiseVoyageSettingsService.findById(req.params.id);
+    const row = await cruiseVoyageSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Cruise voyage retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const cruiseVoyageSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await cruiseVoyageSettingsService.update(req.params.id, req.body);
+    const row = await cruiseVoyageSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Cruise voyage updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await cruiseVoyageSettingsService.remove(req.params.id);
+    await cruiseVoyageSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };

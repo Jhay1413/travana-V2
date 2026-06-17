@@ -356,7 +356,7 @@ export default function SocialPostsBoard() {
   const handlePushNotify = useCallback(async (quoteId: string) => {
     try {
       const res = await axiosClient.post(`/api/v2/quotes/${quoteId}/portal-push`);
-      const sent = res?.data?.sent ?? res?.sent ?? 0;
+      const sent = res?.data?.sent ?? 0;
       toast({ title: `Push notification sent to ${sent} device${sent !== 1 ? "s" : ""}` });
     } catch {
       toast({ title: "Failed to send push notification", variant: "destructive" });

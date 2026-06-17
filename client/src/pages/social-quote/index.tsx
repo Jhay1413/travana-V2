@@ -42,6 +42,7 @@ import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-gu
 import { useNeonClients } from "@/hooks/queries/use-neon-client-queries";
 import { useCurrentUser } from "@/hooks/queries";
 import type { NeonClient } from "@/types/neon-client/neon-client.types";
+import type { EnrichedQuote } from "@/types/quote";
 
 export default function SocialQuotePage() {
   const [, setLocation] = useLocation();
@@ -50,7 +51,10 @@ export default function SocialQuotePage() {
   const { role } = useRole();
   const quoteId = params?.quoteId ?? "";
 
-  const { quote, rawData, isLoading, error, primaryImage, galleryImages } = useQuoteData(quoteId, "", false);
+  // This page only ever renders quotes (isBooking=false), so narrow the
+  // quote|booking union the hook returns to EnrichedQuote.
+  const { quote, rawData: rawDataUnion, isLoading, error, primaryImage, galleryImages } = useQuoteData(quoteId, "", false);
+  const rawData = rawDataUnion as EnrichedQuote | undefined;
 
   const discounts = parseFloat(rawData?.discounts || "0");
   const serviceCharge = parseFloat(rawData?.service_charge || "0");

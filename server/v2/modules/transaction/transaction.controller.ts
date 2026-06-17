@@ -186,7 +186,7 @@ export const transactionController = {
 
   getExpiringQuotes: asyncHandler(async (req: Request, res: Response) => {
     const sessionUserId = getUserId(req as any);
-    let agentId = req.query.agentId && typeof req.query.agentId === "string" ? req.query.agentId : undefined;
+    let agentId = (req.query.agentId as string) && typeof (req.query.agentId as string) === "string" ? (req.query.agentId as string) : undefined;
     if (sessionUserId) {
       const sessionUser = await authStorage.getUser(sessionUserId);
       const isRestricted = sessionUser?.role !== "Admin" && sessionUser?.role !== "Manager";

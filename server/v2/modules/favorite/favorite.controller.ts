@@ -48,11 +48,11 @@ export const favoriteController = {
   remove: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const existing = await favoriteService.getFavoriteById(req.params.id);
+    const existing = await favoriteService.getFavoriteById((req.params.id as string));
     if (!existing || existing.userId !== userId) {
       return res.status(404).json({ success: false, message: 'Favorite not found' });
     }
-    await favoriteService.removeFavorite(req.params.id);
+    await favoriteService.removeFavorite((req.params.id as string));
     res.json({ success: true, message: 'Favorite removed successfully' });
   }),
 };

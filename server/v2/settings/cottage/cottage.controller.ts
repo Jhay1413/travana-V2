@@ -10,7 +10,7 @@ export const cottageSettingsController = {
   }),
 
   findById: asyncHandler(async (req: Request, res: Response) => {
-    const row = await cottageSettingsService.findById(req.params.id);
+    const row = await cottageSettingsService.findById((req.params.id as string));
     return successResponse(res, row, 'Cottage retrieved');
   }),
 
@@ -20,12 +20,12 @@ export const cottageSettingsController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const row = await cottageSettingsService.update(req.params.id, req.body);
+    const row = await cottageSettingsService.update((req.params.id as string), req.body);
     return successResponse(res, row, 'Cottage updated');
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await cottageSettingsService.remove(req.params.id);
+    await cottageSettingsService.remove((req.params.id as string));
     res.status(204).send();
   }),
 };
