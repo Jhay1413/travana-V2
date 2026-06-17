@@ -1,0 +1,37 @@
+name: Migrate
+
+# Runs ONLY when a pull request is actually merged into dev or prod — not on
+# direct pushes, not when a PR is closed without merging. Tests already ran in CI
+# on the PR before the merge, so this workflow only applies DB migrations.
+on:
+  pull_request:
+    types: [closed]
+    branches: [dev, prod]
+
+jobs:
+  migrate:
+    name: Apply DB migrations
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    # The PR's base branch ('dev' or 'prod') selects the GitHub Environment, which
+    # supplies that environment's DATABASE_URL secret (and any protection rules).
+    environment: ${{ github.event.pull_request.base.ref }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Check out the base branch AFTER the merge, so the latest migration files are present.
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Drizzle migrations
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

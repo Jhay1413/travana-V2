@@ -57,7 +57,8 @@
       "Bash(npm install *)",
       "Bash(npm test *)",
       "Bash(docker compose *)",
-      "Bash(docker info *)"
+      "Bash(docker info *)",
+      "Bash(npx vitest *)"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -4,7 +4,7 @@ import { db } from "../config/database";
 import {
   organization, branches, user, transaction,
   package_type, board_basis, booking, booking_accomodation,
-  quote, passengers, clientTable, booking_upsell,
+  quote, passengers, clientTable, booking_upsell, branchMembers, shopTargetTable,
 } from "@shared/schema";
 
 type OrgInsert = typeof organization.$inferInsert;
@@ -19,6 +19,8 @@ type QuoteInsert = typeof quote.$inferInsert;
 type PassengerInsert = typeof passengers.$inferInsert;
 type ClientInsert = typeof clientTable.$inferInsert;
 type UpsellInsert = typeof booking_upsell.$inferInsert;
+type BranchMemberInsert = typeof branchMembers.$inferInsert;
+type ShopTargetInsert = typeof shopTargetTable.$inferInsert;
 
 // Wipe the tenant graph. CASCADE clears everything referencing user/organization
 // (branches, transaction, booking, …) so each test starts from empty.
@@ -132,5 +134,19 @@ export async function makeClient(opts: Partial<ClientInsert> = {}) {
 
 export async function makeBookingUpsell(opts: Partial<UpsellInsert> & { booking_id: string }) {
   const [row] = await db.insert(booking_upsell).values({ upsell_type: "OTHER", ...opts }).returning();
+  return row;
+}
+
+export async function makeBranchMember(
+  opts: Partial<BranchMemberInsert> & { orgId: string; branchId: string; userId: string; orgRole: string },
+) {
+  const [row] = await db.insert(branchMembers).values({ ...opts }).returning();
+  return row;
+}
+
+export async function makeShopTarget(
+  opts: Partial<ShopTargetInsert> & { branchId: string; year: number; month: number; targetAmount: string },
+) {
+  const [row] = await db.insert(shopTargetTable).values({ ...opts }).returning();
   return row;
 }

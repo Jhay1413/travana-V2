@@ -370,6 +370,18 @@ describe("bookingService.updateBooking", () => {
 
     expect(referralService.syncCommissionByTransaction).toHaveBeenCalledWith("t1", "120");
   });
+
+  it("changes booking_status without recomputing price", async () => {
+    vi.mocked(bookingRepository.update).mockResolvedValue({ id: "b1", transaction_id: "t1" } as never);
+    vi.mocked(bookingRepository.findWithDetails).mockResolvedValue({ id: "b1" } as never);
+
+    await bookingService.updateBooking("b1", { booking_status: "CANCELLED" } as never, TRUSTED);
+
+    expect(bookingRepository.findById).not.toHaveBeenCalled(); // no price recompute
+    const updateArg = vi.mocked(bookingRepository.update).mock.calls[0][1];
+    expect(updateArg).toMatchObject({ booking_status: "CANCELLED" });
+    expect(updateArg).not.toHaveProperty("price_per_person");
+  });
 });
 
 describe("bookingService — scope enforcement", () => {
