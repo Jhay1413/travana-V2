@@ -221,7 +221,7 @@ export function QuoteCreateDialog({
   initialValues,
   initialImages,
   socialPost = false,
-  markAsCopy = true,
+  markAsCopy = false,
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
   const createQuote = useCreateQuote();
