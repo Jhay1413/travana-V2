@@ -10,7 +10,7 @@ import {
   TrendingUp,
   Trophy,
 } from "lucide-react";
-import { HubSectionHeader, HubAvatar, HubBadge } from "@/components/hub-components";
+import { HubSectionHeader, HubAvatar, HubBadge } from "@/features/hub/components/hub-components";
 import { dealWins, leaderboard } from "@/data/hub-mock";
 import { Button } from "@/components/ui/button";
 

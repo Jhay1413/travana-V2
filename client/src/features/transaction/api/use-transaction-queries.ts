@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { transactionApi } from "@/api";
-import type { Transaction } from "@/types/quote";
+import type { Transaction } from "@/features/quote/types";
 
 export const transactionKeys = {
   all: ["transactions"] as const,

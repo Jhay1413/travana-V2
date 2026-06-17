@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { bookingApi } from "@/api";
 import { bookingKeys, dashboardKeys, bookingUpsellKeys } from "@/hooks/queries";
-import { upsellToPayload } from "@/types/booking";
-import type { UpsellPayload, UpsellItemValue } from "@/types/booking";
+import { upsellToPayload } from "@/features/booking/types";
+import type { UpsellPayload, UpsellItemValue } from "@/features/booking/types";
 
 // Upsell commission is recognised by `added_at`, so any create/edit/delete can
 // shift a month's profit — invalidate the upsell list, the parent booking

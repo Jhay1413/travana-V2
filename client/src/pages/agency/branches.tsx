@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Building2, Check, Plus, Search, Star } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
-import { useBranches } from "@/hooks/queries/use-branch-queries";
-import { useCurrentOrganization } from "@/hooks/queries/use-organization-queries";
-import { useCreateBranch, useUpdateBranch, useDeleteBranch } from "@/hooks/mutations/use-branch-mutations";
+import { useBranches } from "@/features/organization/api/use-branch-queries";
+import { useCurrentOrganization } from "@/features/organization/api/use-organization-queries";
+import { useCreateBranch, useUpdateBranch, useDeleteBranch } from "@/features/organization/api/use-branch-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

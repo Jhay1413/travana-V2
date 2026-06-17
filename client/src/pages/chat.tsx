@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import ChatRichInput from "@/components/chat-rich-input";
+import ChatRichInput from "@/features/chat/components/chat-rich-input";
 import {
   useChatConversations,
   useChatMessages,

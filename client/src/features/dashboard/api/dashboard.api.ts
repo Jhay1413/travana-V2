@@ -1,5 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
-import type { DashboardStats } from "@/types/dashboard";
+import type { DashboardStats } from "@/features/dashboard/types";
 
 export interface MyProfit {
   profitThisMonth: number;

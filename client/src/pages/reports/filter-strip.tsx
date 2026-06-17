@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { X } from "lucide-react";
 import { useBranches } from "@/hooks/queries";
-import { useUsers } from "@/hooks/queries/use-user-queries";
+import { useUsers } from "@/features/user/api/use-user-queries";
 import { useRole } from "@/hooks/use-role";
 import type { ReportFilters } from "@/features/reports/api/reports.api";
 import { DateRangePicker } from "./date-range-picker";

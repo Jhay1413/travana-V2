@@ -18,7 +18,7 @@ import {
   SmsTemplatesManager,
   SMS_CATEGORY_LABELS,
 } from "@/features/sms/components/sms/templates-manager";
-import { useSmsTemplates } from "@/hooks/queries/use-sms-queries";
+import { useSmsTemplates } from "@/features/sms/api/use-sms-queries";
 import type { SmsTemplate } from "@/features/sms/api/sms.api";
 
 type SmsMessage = {

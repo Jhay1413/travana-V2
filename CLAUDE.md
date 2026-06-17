@@ -279,7 +279,8 @@ client/
 │   │
 │   ├── components/               # Shared, reusable UI
 │   │   ├── ui/                   # Primitives (Button, Input, Modal…)
-│   │   └── layout/               # Header, Sidebar, PageShell
+│   │   ├── layout/               # Header, Sidebar, PageShell
+│   │   └── shared/               # Cross-feature, non-primitive components
 │   │
 │   ├── features/                 # Feature-based modules (the core)
 │   │   ├── users/
@@ -340,6 +341,7 @@ Purpose: feature-based modules — the core of the app.
 Purpose: shared, reusable UI only.
 - `ui/`: design-system primitives (Button, Input, Modal…).
 - `layout/`: app shell (Header, Sidebar, PageShell).
+- `shared/`: cross-feature components that are NOT primitives (e.g. rich-text-editor, mention-editor, ask-ai-dialog) — used by two or more unrelated features. A component used by only one feature belongs in that `features/<feature>/components/`, not here.
 - No feature-specific business logic here — that belongs in `features/<feature>/components/`.
 
 ### hooks/ / lib/ / types/ / config/

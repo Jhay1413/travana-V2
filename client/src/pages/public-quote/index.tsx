@@ -44,7 +44,7 @@ import {
   useSubmitQuoteAction,
   useShareQuote,
   type PublicQuoteData,
-} from "@/hooks/queries/use-quote-public-queries";
+} from "@/features/quote/api/use-quote-public-queries";
 import { getPortalToken } from "@/hooks/use-portal-api";
 import defaultHeroBg from "@assets/Maldives_1773092726855.png";
 import tinasLogo from "@assets/Tinas-Travel-Logo-Red-Orange-Final-2_1773285329238.png";

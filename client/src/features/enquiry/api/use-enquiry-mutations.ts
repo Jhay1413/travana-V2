@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { enquiryApi } from "@/api";
 import { enquiryKeys, transactionKeys } from "@/hooks/queries";
-import type { EnquiryTable } from "@/types/quote";
+import type { EnquiryTable } from "@/features/quote/types";
 
 export function useCreateEnquiry() {
   const queryClient = useQueryClient();

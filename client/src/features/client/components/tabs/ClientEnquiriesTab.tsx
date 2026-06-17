@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { EnquiryTable } from "@/types/quote";
+import type { EnquiryTable } from "@/features/quote/types";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
 import type { Client } from "../client-types";
 

@@ -1,7 +1,7 @@
 import { useFormContext } from "react-hook-form";
 import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
-import type { QuoteFormValues } from "@/types/quote";
+import type { QuoteFormValues } from "@/features/quote/types";
 
 export function QuoteTestToggleSection() {
   const { control } = useFormContext<QuoteFormValues>();

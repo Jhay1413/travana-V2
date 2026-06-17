@@ -52,12 +52,12 @@ import {
 } from "@/components/ui/select";
 import { usePipelineColumn, useNeonClients, useNeonClient, useCurrentUser, useTransaction, useNotes, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction, useConvertToBooking, useUpdateQuote } from "@/hooks/mutations";
-import type { NeonClient } from "@/types/neon-client";
+import type { NeonClient } from "@/features/client/types/neon-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
-import type { Transaction } from "@/types/quote";
+import type { Transaction } from "@/features/quote/types";
 import { formatRelativeTime, formatFullDateTime } from "@/lib/note-time";
 
 type PipelineStage = "Enquiry" | "Quoted" | "In Play" | "Booked";

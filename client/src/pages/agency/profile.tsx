@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
-import { useCurrentOrganization } from "@/hooks/queries/use-organization-queries";
-import { useUpdateOrganization } from "@/hooks/mutations/use-organization-mutations";
+import { useCurrentOrganization } from "@/features/organization/api/use-organization-queries";
+import { useUpdateOrganization } from "@/features/organization/api/use-organization-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

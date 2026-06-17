@@ -1,7 +1,7 @@
 import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DestinationGuru, type DestinationGuruData } from "@/components/destination-guru";
+import { DestinationGuru, type DestinationGuruData } from "@/features/destination-guru/components/destination-guru";
 import { useToast } from "@/hooks/use-toast";
 
 interface GuruRecord {

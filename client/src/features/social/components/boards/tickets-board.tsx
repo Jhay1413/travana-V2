@@ -68,10 +68,10 @@ import {
 } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { attachmentApi } from "@/api";
-import { RichTextEditor, RichTextDisplay } from "@/components/rich-text-editor";
+import { RichTextEditor, RichTextDisplay } from "@/components/shared/rich-text-editor";
 import type { Ticket } from "@/features/tickets/types";
-import type { TicketReply } from "@/types/reply";
-import type { User as ApiUser } from "@/types/user";
+import type { TicketReply } from "@/features/reply/types";
+import type { User as ApiUser } from "@/features/user/types";
 
 const TICKET_TYPES = ["Admin", "Build", "Sales"] as const;
 const TICKET_STATUSES = ["Open", "In Progress", "Resolved", "Closed"] as const;

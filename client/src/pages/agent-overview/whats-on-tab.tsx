@@ -7,7 +7,7 @@ import { EditTaskDialog } from "@/features/tasks/components/tasks/EditTaskDialog
 import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { Separator } from "@/components/ui/separator";
 import { useAllTasksExtended, useUserTasks } from "@/hooks/queries";
-import { useTickets, useTicketsByUser } from "@/hooks/queries/use-ticket-queries";
+import { useTickets, useTicketsByUser } from "@/features/tickets/api/use-ticket-queries";
 import { currency } from "./helpers";
 
 export type WhatsOnFilter = "all" | "today" | "tomorrow" | "this-week" | "custom" | "overdue";

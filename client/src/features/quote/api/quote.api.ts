@@ -1,5 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
-import type { Quote, CreateQuoteData, QuoteFilters } from "@/types/quote";
+import type { Quote, CreateQuoteData, QuoteFilters } from "@/features/quote/types";
 
 interface FreeQuotesResponse {
   quotes: any[];

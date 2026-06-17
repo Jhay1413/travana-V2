@@ -1,5 +1,5 @@
-import { useFavorites } from "@/hooks/queries/use-favorite-queries";
-import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
+import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
+import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
 import { useToast } from "@/hooks/use-toast";
 

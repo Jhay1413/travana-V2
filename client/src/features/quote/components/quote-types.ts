@@ -1,4 +1,4 @@
-import type { EnrichedQuote, EnrichedBooking, Passenger, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "@/types/quote";
+import type { EnrichedQuote, EnrichedBooking, Passenger, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "@/features/quote/types";
 
 const currencyWhole = new Intl.NumberFormat("en-GB", {
   style: "currency",

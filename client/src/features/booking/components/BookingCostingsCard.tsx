@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { currency, type QuoteDisplay } from "@/features/quote/components/quote-types";
 import { QuoteSummaryTimeline } from "@/features/quote/components/QuoteSummaryTimeline";
-import { sumUpsells, type UpsellRecord } from "@/types/booking";
+import { sumUpsells, type UpsellRecord } from "@/features/booking/types";
 
 interface BookingCostingsCardProps {
   booking: QuoteDisplay;

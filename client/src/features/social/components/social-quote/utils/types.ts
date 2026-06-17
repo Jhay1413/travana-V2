@@ -3,7 +3,7 @@
  * Centralized type definitions for quote display and management.
  */
 
-import type { EnrichedQuote, EnrichedBooking, TransactionNote, Passenger, DealImage, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "@/types/quote";
+import type { EnrichedQuote, EnrichedBooking, TransactionNote, Passenger, DealImage, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "@/features/quote/types";
 
 export type QuoteDisplay = {
   id: string;

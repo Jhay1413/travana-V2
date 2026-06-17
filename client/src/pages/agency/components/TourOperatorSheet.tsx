@@ -10,7 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import type { TourOperator } from "@/types/tour-operator";
+import type { TourOperator } from "@/features/tour-operator/types";
 import { SettingsField, SettingsSection } from "./SettingsField";
 
 export interface TourOperatorFormState {

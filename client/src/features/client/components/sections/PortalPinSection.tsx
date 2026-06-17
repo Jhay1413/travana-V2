@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Loader2, Lock, Send, Shield, X } from "lucide-react";
-import { useSendSms } from "@/hooks/mutations/use-sms-mutations";
+import { useSendSms } from "@/features/sms/api/use-sms-mutations";
 import { useToast } from "@/hooks/use-toast";
 
 export function PortalPinSection({ clientId }: { clientId: string }) {

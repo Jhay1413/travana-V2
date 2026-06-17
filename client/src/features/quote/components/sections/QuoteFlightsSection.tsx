@@ -10,7 +10,7 @@ import { AddAirportModal } from "@/features/lookups/components/lookups/add-airpo
 import { useAirports } from "@/hooks/queries";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
-import type { QuoteFormValues, FlightLegValue } from "@/types/quote";
+import type { QuoteFormValues, FlightLegValue } from "@/features/quote/types";
 
 /**
  * Airport picker that also lets the user create an airport inline when the one

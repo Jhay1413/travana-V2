@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { StickyNote, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import { useClientNotes } from "@/hooks/queries/use-note-queries";
+import { useClientNotes } from "@/features/note/api/use-note-queries";
 import {
   useCreateClientNote,
   useUpdateClientNote,
   useDeleteClientNote,
-} from "@/hooks/mutations/use-note-mutations";
+} from "@/features/note/api/use-note-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { formatUKDate } from "../client-types";
-import type { TransactionNote } from "@/types/quote";
+import type { TransactionNote } from "@/features/quote/types";
 
 interface ClientNotesSectionProps {
   clientId: string;

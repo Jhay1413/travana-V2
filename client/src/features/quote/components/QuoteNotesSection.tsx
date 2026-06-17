@@ -5,7 +5,7 @@ import { useNotes } from "@/hooks/queries";
 import { useCreateNote } from "@/hooks/mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
-import type { TransactionNote } from "@/types/quote";
+import type { TransactionNote } from "@/features/quote/types";
 import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "./NoteEditor";
 

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { transactionApi } from "@/api";
 import { transactionKeys, quoteKeys } from "@/hooks/queries";
-import type { CreateTransactionData } from "@/types/quote";
+import type { CreateTransactionData } from "@/features/quote/types";
 
 export function useCreateTransaction() {
   const queryClient = useQueryClient();

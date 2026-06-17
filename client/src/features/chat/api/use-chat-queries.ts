@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { chatApi } from "./chat.api";
-import type { ChatConversation, ChatMessage } from "@/types/chat";
+import type { ChatConversation, ChatMessage } from "@/features/chat/types";
 
 export const chatKeys = {
   all: ["chat"] as const,

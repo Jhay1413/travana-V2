@@ -25,13 +25,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote, useUpdateTransaction } from "@/hooks/mutations";
-import { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage } from "@/hooks/mutations/use-quote-image-mutations";
+import { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage } from "@/features/quote/api/use-quote-image-mutations";
 import { useQuote } from "@/hooks/queries";
 import { usePackageTypes } from "@/hooks/queries";
 import { QuoteRHFForm } from "./quote-rhf-form";
-import { defaultQuoteFormValues } from "@/types/quote";
-import type { QuoteEditDialogProps, QuoteFormValues } from "@/types/quote";
-import type { EnrichedQuote } from "@/types/quote";
+import { defaultQuoteFormValues } from "@/features/quote/types";
+import type { QuoteEditDialogProps, QuoteFormValues } from "@/features/quote/types";
+import type { EnrichedQuote } from "@/features/quote/types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

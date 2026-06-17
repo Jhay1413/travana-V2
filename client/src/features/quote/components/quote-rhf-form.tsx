@@ -17,12 +17,12 @@ import { QuoteFlightsSection } from "@/features/quote/components/sections/QuoteF
 import { QuotePricingSection } from "@/features/quote/components/sections/QuotePricingSection";
 import { QuoteFormActions } from "@/features/quote/components/sections/QuoteFormActions";
 import { QuoteTagsSection } from "@/features/quote/components/sections/QuoteTagsSection";
-import type { ExtrasFormValues } from "@/types/booking";
-import { quoteFormSchema, defaultQuoteFormValues } from "@/types/quote";
-import type { QuoteFormValues, QuoteRHFFormProps } from "@/types/quote";
+import type { ExtrasFormValues } from "@/features/booking/types";
+import { quoteFormSchema, defaultQuoteFormValues } from "@/features/quote/types";
+import type { QuoteFormValues, QuoteRHFFormProps } from "@/features/quote/types";
 
-export { quoteFormSchema, defaultQuoteFormValues } from "@/types/quote";
-export type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/types/quote";
+export { quoteFormSchema, defaultQuoteFormValues } from "@/features/quote/types";
+export type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/features/quote/types";
 import { Form } from "@/components/ui/form";
 import { useAirports, useTourOperators, usePackageTypes, lookupKeys } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";

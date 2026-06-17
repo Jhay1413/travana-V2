@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { PauseCircle, Shield, Users } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
-import { useCurrentOrganization, useOrgMembers } from "@/hooks/queries/use-organization-queries";
+import { useCurrentOrganization, useOrgMembers } from "@/features/organization/api/use-organization-queries";
 import {
   useUpdateMemberRole,
   useSetMemberSuspended,
-} from "@/hooks/mutations/use-organization-mutations";
+} from "@/features/organization/api/use-organization-mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";

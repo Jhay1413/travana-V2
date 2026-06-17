@@ -12,7 +12,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { HubSectionHeader, HubBadge, HubProgressBar } from "@/components/hub-components";
+import { HubSectionHeader, HubBadge, HubProgressBar } from "@/features/hub/components/hub-components";
 import { adminStats, trainingModules } from "@/data/hub-mock";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

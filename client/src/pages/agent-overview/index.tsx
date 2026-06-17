@@ -9,7 +9,7 @@ import {
 import {
   useShopTargets,
   useAgentTargetsByUserId,
-} from "@/hooks/queries/use-targets-queries";
+} from "@/features/reports/api/use-targets-queries";
 import { ProfitStatBoxes, type ProfitStats } from "./profit-stat-boxes";
 import { WhatsOnTab, type WhatsOnFilter } from "./whats-on-tab";
 import { PipelineTab } from "./pipeline-tab";

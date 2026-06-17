@@ -11,9 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useCreateQuote, useCreateTransaction, useCreateSocialQuote } from "@/hooks/mutations";
 import { usePackageTypes } from "@/hooks/queries";
 import { QuoteRHFForm } from "./quote-rhf-form";
-import type { QuoteFormValues, QuoteCreateDialogProps } from "@/types/quote";
-import { defaultQuoteFormValues } from "@/types/quote";
-import type { CreateQuoteData, CreateTransactionData } from "@/types/quote";
+import type { QuoteFormValues, QuoteCreateDialogProps } from "@/features/quote/types";
+import { defaultQuoteFormValues } from "@/features/quote/types";
+import type { CreateQuoteData, CreateTransactionData } from "@/features/quote/types";
 
 function buildDateTime(date: string, time: string): string | null {
   if (!date) return null;

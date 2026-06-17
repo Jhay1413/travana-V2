@@ -13,15 +13,15 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { HubSectionHeader, HubAvatar, HubBadge } from "@/components/hub-components";
+import { HubSectionHeader, HubAvatar, HubBadge } from "@/features/hub/components/hub-components";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RichTextDisplay } from "@/components/rich-text-editor";
-import { MentionEditor } from "@/components/mention-editor";
+import { RichTextDisplay } from "@/components/shared/rich-text-editor";
+import { MentionEditor } from "@/components/shared/mention-editor";
 import {
   useAnnouncements,
   useCreateAnnouncement,
@@ -31,7 +31,7 @@ import {
   useBulkLikes,
   useToggleLike,
   useSharePost,
-} from "@/hooks/queries/use-announcement-queries";
+} from "@/features/announcement/api/use-announcement-queries";
 import { useRole } from "@/hooks/use-role";
 import { announcementApi } from "@/features/announcement/api/announcement.api";
 import type { HubAnnouncement } from "@shared/schema";

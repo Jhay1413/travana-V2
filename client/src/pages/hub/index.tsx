@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Switch, Route, Redirect } from "wouter";
-import { HubShell } from "@/components/hub-shell";
+import { HubShell } from "@/features/hub/components/hub-shell";
 import type { HubRole } from "@/data/hub-mock";
 import HubDashboard from "./hub-dashboard";
 import HubTraining from "./hub-training";

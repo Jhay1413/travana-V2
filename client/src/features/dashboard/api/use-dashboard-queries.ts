@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "@/api";
-import type { DashboardStats } from "@/types/dashboard";
+import type { DashboardStats } from "@/features/dashboard/types";
 import type { MyProfit, AdminOverviewStats, AgentStats } from "./dashboard.api";
 
 export const dashboardKeys = {

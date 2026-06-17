@@ -23,12 +23,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, MessageSquare, Loader2, FileText, Zap } from "lucide-react";
-import { useSmsTemplates } from "@/hooks/queries/use-sms-queries";
+import { useSmsTemplates } from "@/features/sms/api/use-sms-queries";
 import {
   useCreateSmsTemplate,
   useUpdateSmsTemplate,
   useDeleteSmsTemplate,
-} from "@/hooks/mutations/use-sms-mutations";
+} from "@/features/sms/api/use-sms-mutations";
 import type { SmsTemplate, SmsTemplateInput } from "@/features/sms/api/sms.api";
 
 export type { SmsTemplate } from "@/features/sms/api/sms.api";

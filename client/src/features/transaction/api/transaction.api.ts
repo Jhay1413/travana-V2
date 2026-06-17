@@ -1,5 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
-import type { Transaction, CreateTransactionData } from "@/types/quote";
+import type { Transaction, CreateTransactionData } from "@/features/quote/types";
 
 export const transactionApi = {
   getAll: async (filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string; branchId?: string }): Promise<Transaction[]> => {

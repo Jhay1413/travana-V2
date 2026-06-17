@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { useVipOverview } from "@/hooks/queries/use-referral-queries";
+import { useVipOverview } from "@/features/referral/api/use-referral-queries";
 import { VipTierCard } from "../vip/VipTierCard";
 import { VipStatsGrid } from "../vip/VipStatsGrid";
 import { VipPendingCommissions } from "../vip/VipPendingCommissions";

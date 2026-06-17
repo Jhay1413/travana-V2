@@ -10,8 +10,8 @@ import {
   UserRound,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { useFavorites } from "@/hooks/queries/use-favorite-queries";
-import { useRemoveFavorite } from "@/hooks/mutations/use-favorite-mutations";
+import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
+import { useRemoveFavorite } from "@/features/favorite/api/use-favorite-mutations";
 
 export function PinnedSection() {
   const [, navigate] = useLocation();

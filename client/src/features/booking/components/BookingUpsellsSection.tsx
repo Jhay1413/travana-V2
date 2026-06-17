@@ -16,7 +16,7 @@ import {
   upsellTypeMeta,
   emptyUpsellItem,
   type UpsellsFormValues,
-} from "@/types/booking";
+} from "@/features/booking/types";
 
 // ─── Section Header (mirrors quote-extras-section) ────────────────────────────
 

@@ -1,3 +1,0 @@
-// Re-export shim — moved to features/destination-guru/api as part of the feature-based
-// structure migration (see docs/client-structure-migration-plan.md).
-export * from "@/features/destination-guru/api/use-destination-guru-queries";

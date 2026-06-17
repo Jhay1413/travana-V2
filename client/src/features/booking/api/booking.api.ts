@@ -1,6 +1,6 @@
 import axiosClient from "@/api/client/axios-client";
-import type { Booking } from "@/types/quote";
-import type { UpsellPayload, UpsellRecord } from "@/types/booking";
+import type { Booking } from "@/features/quote/types";
+import type { UpsellPayload, UpsellRecord } from "@/features/booking/types";
 
 export const bookingApi = {
   getAll: async (): Promise<Booking[]> => {

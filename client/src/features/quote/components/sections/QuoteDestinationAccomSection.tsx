@@ -19,7 +19,7 @@ import { AddResortModal } from "@/features/lookups/components/lookups/add-resort
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
-import type { QuoteFormValues } from "@/types/quote";
+import type { QuoteFormValues } from "@/features/quote/types";
 
 export function QuoteDestinationAccomSection() {
   const { control, setValue } = useFormContext<QuoteFormValues>();

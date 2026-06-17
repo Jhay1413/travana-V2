@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { neonClientApi } from "@/api";
 import { neonClientKeys } from "@/hooks/queries";
-import type { NeonClient, NeonClientImportRow } from "@/types/neon-client";
+import type { NeonClient, NeonClientImportRow } from "@/features/client/types/neon-client";
 
 export function useCreateNeonClient() {
   const queryClient = useQueryClient();

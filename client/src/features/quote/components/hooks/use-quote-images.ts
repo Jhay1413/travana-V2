@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { DealImage } from "@/types/quote";
+import type { DealImage } from "@/features/quote/types";
 
 export interface QuoteImage {
   id: string;

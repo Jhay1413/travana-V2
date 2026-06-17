@@ -4,9 +4,9 @@ import { Tag, X } from "lucide-react";
 import { FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useTags } from "@/hooks/queries/use-tag-queries";
+import { useTags } from "@/features/tag/api/use-tag-queries";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
-import type { QuoteFormValues } from "@/types/quote";
+import type { QuoteFormValues } from "@/features/quote/types";
 
 export function QuoteTagsSection() {
   const { control } = useFormContext<QuoteFormValues>();

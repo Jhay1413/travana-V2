@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Clock } from "lucide-react";
 import { Link } from "wouter";
-import { HubSectionHeader, HubKpiCard, HubAvatar } from "@/components/hub-components";
+import { HubSectionHeader, HubKpiCard, HubAvatar } from "@/features/hub/components/hub-components";
 import { dashboardKpis, activityFeed } from "@/data/hub-mock";
 import { Button } from "@/components/ui/button";
 

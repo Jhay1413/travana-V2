@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Building2 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
-import { useBranches } from "@/hooks/queries/use-branch-queries";
+import { useBranches } from "@/features/organization/api/use-branch-queries";
 import AdminFinancialsTargets from "@/components/admin/admin-financials-targets";
 import {
   Select,

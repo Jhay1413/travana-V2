@@ -1,5 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
-import type { ChatConversation, ChatMessage } from "@/types/chat";
+import type { ChatConversation, ChatMessage } from "@/features/chat/types";
 
 export const chatApi = {
   getConversations: async (): Promise<ChatConversation[]> => {

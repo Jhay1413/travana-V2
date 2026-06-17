@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { useRevenueDashboard } from "@/hooks/queries/use-revenue-queries";
+import { useRevenueDashboard } from "@/features/reports/api/use-revenue-queries";
 
 function fmt(v: number) {
   return `£${v.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;

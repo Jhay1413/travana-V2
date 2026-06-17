@@ -12,7 +12,7 @@ import { useCurrentUser } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { transformQuoteData, currency, formatUKDate } from "@/features/quote/components/quote-types";
-import { sumUpsells } from "@/types/booking";
+import { sumUpsells } from "@/features/booking/types";
 import { QuoteNotesSection } from "@/features/quote/components/QuoteNotesSection";
 import { QuoteTasksSection } from "@/features/quote/components/QuoteTasksSection";
 import { BookingEditDialog } from "@/features/booking/components/booking-edit-dialog";

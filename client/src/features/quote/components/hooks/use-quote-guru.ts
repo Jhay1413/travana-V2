@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useDestinationGuruSearch } from "@/hooks/queries/use-destination-guru-queries";
-import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-guru-mutations";
+import { useDestinationGuruSearch } from "@/features/destination-guru/api/use-destination-guru-queries";
+import { useGenerateDestinationGuru } from "@/features/destination-guru/api/use-destination-guru-mutations";
 
 /**
  * Owns the Destination Guru sheet state and exposes the queries/mutations

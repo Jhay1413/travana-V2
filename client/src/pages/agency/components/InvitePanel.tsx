@@ -3,8 +3,8 @@ import { Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useBranches } from "@/hooks/queries/use-branch-queries";
-import { useSendInvite } from "@/hooks/mutations/use-invite-mutations";
+import { useBranches } from "@/features/organization/api/use-branch-queries";
+import { useSendInvite } from "@/features/invite/api/use-invite-mutations";
 import { ASSIGNABLE_ROLES } from "../utils/role-helpers";
 import type { InviteOrgRole } from "@/features/invite/api/invite.api";
 

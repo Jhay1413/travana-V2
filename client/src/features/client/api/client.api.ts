@@ -1,5 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
-import type { Client, CreateClientData } from "@/types/client";
+import type { Client, CreateClientData } from "@/features/client/types";
 
 export const clientApi = {
   getAll: async (): Promise<Client[]> => {

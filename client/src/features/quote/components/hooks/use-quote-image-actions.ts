@@ -3,7 +3,7 @@ import {
   useDeleteQuoteImage,
   useSetPrimaryQuoteImage,
   useUploadQuoteImages,
-} from "@/hooks/mutations/use-quote-image-mutations";
+} from "@/features/quote/api/use-quote-image-mutations";
 import { useToast } from "@/hooks/use-toast";
 
 /**

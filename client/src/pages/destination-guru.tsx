@@ -3,13 +3,13 @@ import { ChevronLeft, Sparkles, Search, Plus, Loader2 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DestinationGuru, DestinationGuruCard, SAMPLE_DATA } from "@/components/destination-guru";
+import { DestinationGuru, DestinationGuruCard, SAMPLE_DATA } from "@/features/destination-guru/components/destination-guru";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useDestinationGuruList } from "@/hooks/queries/use-destination-guru-queries";
-import { useGenerateDestinationGuru } from "@/hooks/mutations/use-destination-guru-mutations";
+import { useDestinationGuruList } from "@/features/destination-guru/api/use-destination-guru-queries";
+import { useGenerateDestinationGuru } from "@/features/destination-guru/api/use-destination-guru-mutations";
 import { useToast } from "@/hooks/use-toast";
 import type { DestinationGuruRecord } from "@/features/destination-guru/api/destination-guru.api";
-import type { DestinationGuruData } from "@/components/destination-guru";
+import type { DestinationGuruData } from "@/features/destination-guru/components/destination-guru";
 
 export default function DestinationGuruPage() {
   const { role } = useRole();

@@ -2,7 +2,7 @@ import { ChevronDown, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
-import type { Transaction } from "@/types/quote";
+import type { Transaction } from "@/features/quote/types";
 import { type QuoteWithJoins, type BookingWithJoins, type Client } from "../client-types";
 import { QuoteRowCard } from "./QuoteRowCard";
 import { useClientQuoteGroups } from "../hooks/use-client-quote-groups";

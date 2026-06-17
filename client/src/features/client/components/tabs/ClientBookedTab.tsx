@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import type { DealImage } from "@/types/quote";
+import type { DealImage } from "@/features/quote/types";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
 import { currency, formatUKDate, type BookingWithJoins, type QuoteWithJoins, type Client } from "../client-types";
 import { QuoteRowCard } from "./QuoteRowCard";

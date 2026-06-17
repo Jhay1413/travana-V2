@@ -2,7 +2,7 @@ import { useRoute, useLocation } from "wouter";
 import { useEffect, useRef } from "react";
 import { Home, ChevronRight, Loader2, X } from "lucide-react";
 import PortalLayout from "./portal-layout";
-import { usePublicQuote } from "@/hooks/queries/use-quote-public-queries";
+import { usePublicQuote } from "@/features/quote/api/use-quote-public-queries";
 import { PublicQuoteContent } from "@/pages/public-quote";
 import { useLogPortalQuoteView, usePortalQuoteOwnership, getPortalToken } from "@/hooks/use-portal-api";
 

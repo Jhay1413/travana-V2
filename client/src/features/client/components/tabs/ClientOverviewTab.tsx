@@ -6,8 +6,8 @@ import {
   TrendingUp,
   ChevronRight,
 } from "lucide-react";
-import type { NeonClient } from "@/types/neon-client";
-import type { EnquiryTable } from "@/types/quote";
+import type { NeonClient } from "@/features/client/types/neon-client";
+import type { EnquiryTable } from "@/features/quote/types";
 import {
   currency,
   type QuoteWithJoins,

@@ -11,9 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useCreateTransaction } from "@/hooks/mutations";
 import { usePackageTypes, useCurrentUser } from "@/hooks/queries";
 import { BookingRHFForm } from "./booking-rhf-form";
-import type { BookingFormValues, BookingCreateDialogProps } from "@/types/booking";
-import { defaultBookingFormValues } from "@/types/booking";
-import type { CreateTransactionData } from "@/types/quote";
+import type { BookingFormValues, BookingCreateDialogProps } from "@/features/booking/types";
+import { defaultBookingFormValues } from "@/features/booking/types";
+import type { CreateTransactionData } from "@/features/quote/types";
 
 function buildDateTime(date: string, time: string): string | null {
   if (!date) return null;

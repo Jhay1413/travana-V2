@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useInviteByToken } from "@/hooks/queries/use-invite-queries";
-import { useAcceptInvite } from "@/hooks/mutations/use-invite-mutations";
+import { useInviteByToken } from "@/features/invite/api/use-invite-queries";
+import { useAcceptInvite } from "@/features/invite/api/use-invite-mutations";
 
 export default function AcceptInvitePage() {
   const [, setLocation] = useLocation();

@@ -29,7 +29,7 @@ import {
 import { useCountries } from "@/hooks/queries";
 import { useCreateAirport } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
-import type { Airport } from "@/types/airport";
+import type { Airport } from "@/features/airport/types";
 
 const addAirportSchema = z.object({
   airport_name: z.string().min(1, "Airport name is required"),

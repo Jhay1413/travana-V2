@@ -7,13 +7,13 @@ import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, 
 import { walletApi } from "@/features/wallet/api/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
-import { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
-import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/types/booking";
+import { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
+import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/features/booking/types";
 import { QuoteExtrasSection as BookingExtrasSection } from "@/features/quote/components/quote-extras-section";
 import { BookingUpsellsSection } from "@/features/booking/components/BookingUpsellsSection";
 
-export { bookingFormSchema, defaultBookingFormValues } from "@/types/booking";
-export type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/types/booking";
+export { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
+export type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/features/booking/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -45,7 +45,7 @@ import {
   useCruiseItineraries,
   lookupKeys,
 } from "@/hooks/queries";
-import { useTags } from "@/hooks/queries/use-tag-queries";
+import { useTags } from "@/features/tag/api/use-tag-queries";
 import { useToast } from "@/hooks/use-toast";
 import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";

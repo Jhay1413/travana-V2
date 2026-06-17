@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import type { DealImage } from "@/types/quote";
-import type { Transaction } from "@/types/quote";
+import type { DealImage } from "@/features/quote/types";
+import type { Transaction } from "@/features/quote/types";
 import type { QuoteWithJoins, BookingWithJoins } from "../client-types";
 import type { QuoteRowCardData } from "../tabs/QuoteRowCard";
 

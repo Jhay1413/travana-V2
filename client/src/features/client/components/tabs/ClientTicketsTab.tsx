@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { TicketDetailPanel } from "@/features/social/components/boards/tickets-board";
 import type { Ticket } from "@/features/tickets/types";
-import type { User as ApiUser } from "@/types/user";
+import type { User as ApiUser } from "@/features/user/types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

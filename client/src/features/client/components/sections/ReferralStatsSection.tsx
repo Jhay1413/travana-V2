@@ -1,5 +1,5 @@
 import { CircleDollarSign, TrendingDown, Users, Wallet } from "lucide-react";
-import { useVipOverview } from "@/hooks/queries/use-referral-queries";
+import { useVipOverview } from "@/features/referral/api/use-referral-queries";
 import { currency } from "../client-types";
 
 export function ReferralStatsSection({ clientId }: { clientId: string }) {

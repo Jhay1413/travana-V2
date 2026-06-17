@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useFieldArray, useFormContext, type Control } from "react-hook-form";
-import type { ExtrasFormValues } from "@/types/booking";
+import type { ExtrasFormValues } from "@/features/booking/types";
 import {
   ArrowLeftRight,
   Car,

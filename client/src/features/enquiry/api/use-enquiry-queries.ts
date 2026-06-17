@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { enquiryApi } from "@/api";
-import type { EnquiryTable } from "@/types/quote";
+import type { EnquiryTable } from "@/features/quote/types";
 
 export const enquiryKeys = {
   all: ["enquiries"] as const,

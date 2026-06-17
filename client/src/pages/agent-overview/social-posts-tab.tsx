@@ -13,8 +13,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { useFreeQuotesInfinite } from "@/hooks/queries/use-quote-queries";
-import type { EnrichedQuote } from "@/types/quote";
+import { useFreeQuotesInfinite } from "@/features/quote/api/use-quote-queries";
+import type { EnrichedQuote } from "@/features/quote/types";
 import {
   spFormatDate,
   spFormatPrice,

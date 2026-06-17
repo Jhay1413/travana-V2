@@ -1,5 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
-import type { DestinationGuruData } from "@/components/destination-guru";
+import type { DestinationGuruData } from "@/features/destination-guru/components/destination-guru";
 
 export type DestinationGuruRecord = {
   id: string;

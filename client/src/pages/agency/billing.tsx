@@ -19,7 +19,7 @@ import {
   useBranches,
   usePlans,
 } from "@/hooks/queries";
-import { useUpdateOrganization } from "@/hooks/mutations/use-organization-mutations";
+import { useUpdateOrganization } from "@/features/organization/api/use-organization-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

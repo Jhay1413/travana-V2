@@ -3,7 +3,7 @@ import {
   useDeleteBookingImage,
   useSetPrimaryBookingImage,
   useUploadBookingImages,
-} from "@/hooks/mutations/use-booking-image-mutations";
+} from "@/features/booking/api/use-booking-image-mutations";
 import { useToast } from "@/hooks/use-toast";
 
 /**

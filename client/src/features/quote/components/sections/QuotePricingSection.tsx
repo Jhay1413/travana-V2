@@ -4,7 +4,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/comp
 import { Input } from "@/components/ui/input";
 import { useTourOperators } from "@/hooks/queries";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
-import type { QuoteFormValues } from "@/types/quote";
+import type { QuoteFormValues } from "@/features/quote/types";
 
 const FIELDS = [
   { name: "price", label: "Total Price (£)" },

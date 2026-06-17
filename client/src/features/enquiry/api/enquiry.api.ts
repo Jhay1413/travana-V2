@@ -1,5 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
-import type { EnquiryTable } from "@/types/quote";
+import type { EnquiryTable } from "@/features/quote/types";
 
 export const enquiryApi = {
   getAll: async (): Promise<EnquiryTable[]> => {

@@ -1,4 +1,4 @@
-import type { EnrichedQuote } from "@/types/quote";
+import type { EnrichedQuote } from "@/features/quote/types";
 
 export const currency = new Intl.NumberFormat(undefined, {
   style: "currency",

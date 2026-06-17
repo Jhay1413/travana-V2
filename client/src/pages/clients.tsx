@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useRole } from "@/hooks/use-role";
-import CsvImportDialog from "@/components/csv-import-dialog";
+import CsvImportDialog from "@/features/client/components/csv-import-dialog";
 import {
   ChevronDown,
   ChevronLeft,
@@ -28,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNeonClients } from "@/hooks/queries";
-import { useCreateNeonClient } from "@/hooks/mutations/use-neon-client-mutations";
+import { useCreateNeonClient } from "@/features/client/api/use-neon-client-mutations";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 type ClientTier = "Platinum" | "Gold" | "Standard";

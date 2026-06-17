@@ -7,7 +7,7 @@ import {
   useQuoteCustomerActions,
   type QuoteClientViewEntry,
   type QuotePublicViewEntry,
-} from "@/hooks/queries/use-quote-share-queries";
+} from "@/features/quote/api/use-quote-share-queries";
 import {
   Eye,
   Monitor,

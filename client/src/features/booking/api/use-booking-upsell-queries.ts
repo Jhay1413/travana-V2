@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { bookingApi } from "@/api";
-import type { UpsellRecord } from "@/types/booking";
+import type { UpsellRecord } from "@/features/booking/types";
 
 export const bookingUpsellKeys = {
   all: ["booking-upsells"] as const,

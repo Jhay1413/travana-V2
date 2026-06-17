@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { useFreeQuotesInfinite, quoteKeys } from "@/hooks/queries/use-quote-queries";
+import { useFreeQuotesInfinite, quoteKeys } from "@/features/quote/api/use-quote-queries";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGeneratePost } from "@/hooks/mutations/use-social-post-mutations";
+import { useGeneratePost } from "@/features/social/api/use-social-post-mutations";
 import axiosClient from "@/api/client/axios-client";
 import { useToast } from "@/hooks/use-toast";
-import { SocialPostPreviewDialog } from "@/components/social-post-preview-dialog";
+import { SocialPostPreviewDialog } from "@/features/social/components/social-post-preview-dialog";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,7 @@ import {
   Star,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { EnrichedQuote } from "@/types/quote";
+import type { EnrichedQuote } from "@/features/quote/types";
 import type { TravelDeal } from "@/features/social/api/social-post.api";
 
 type ViewMode = "scheduled" | "all" | "portal";

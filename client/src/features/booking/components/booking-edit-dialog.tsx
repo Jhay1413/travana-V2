@@ -12,8 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpdateBooking, useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage, useReconcileUpsells } from "@/hooks/mutations";
 import { useBooking, usePackageTypes } from "@/hooks/queries";
 import { BookingRHFForm } from "./booking-rhf-form";
-import { defaultBookingFormValues, upsellsToFormValues } from "@/types/booking";
-import type { BookingFormValues, BookingUpdateDialogProps, UpsellRecord } from "@/types/booking";
+import { defaultBookingFormValues, upsellsToFormValues } from "@/features/booking/types";
+import type { BookingFormValues, BookingUpdateDialogProps, UpsellRecord } from "@/features/booking/types";
 
 function splitDateTime(iso: string | null | undefined): { date: string; time: string } {
   if (!iso) return { date: "", time: "" };

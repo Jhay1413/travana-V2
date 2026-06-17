@@ -1,7 +1,7 @@
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
 import type { QuoteEngagementRow } from "./quote.api";
-import type { EnrichedQuote, QuoteFilters } from "@/types/quote";
+import type { EnrichedQuote, QuoteFilters } from "@/features/quote/types";
 
 export const quoteKeys = {
   all: ["quotes"] as const,

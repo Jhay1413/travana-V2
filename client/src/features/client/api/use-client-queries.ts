@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { clientApi } from "@/api";
-import type { Client } from "@/types/client";
+import type { Client } from "@/features/client/types";
 
 export const clientKeys = {
   all: ["clients"] as const,

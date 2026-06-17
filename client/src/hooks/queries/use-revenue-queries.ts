@@ -1,3 +1,0 @@
-// Re-export shim — moved to features/reports/api as part of the feature-based
-// structure migration (see docs/client-structure-migration-plan.md).
-export * from "@/features/reports/api/use-revenue-queries";

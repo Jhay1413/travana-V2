@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import defaultCoverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
-import { useHubPosts, useCreateHubPost, useToggleHubPostLike, useAddHubPostComment } from "@/hooks/queries/use-hub-post-queries";
+import { useHubPosts, useCreateHubPost, useToggleHubPostLike, useAddHubPostComment } from "@/features/social/api/use-hub-post-queries";
 import {
   Award,
   BookOpen,
@@ -45,7 +45,7 @@ import { type LeaveType, type LeaveEntry } from "@/features/hr/api/hr.api";
 import { useMyHrRecord } from "@/hooks/queries";
 import { useRequestMyLeave } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
-import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/components/hub-components";
+import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/features/hub/components/hub-components";
 import { agentProfiles } from "@/data/hub-mock";
 import { userProfileApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";

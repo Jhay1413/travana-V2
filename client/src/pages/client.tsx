@@ -14,9 +14,9 @@ import {
   useCurrentUser,
   useTasks,
 } from "@/hooks/queries";
-import { useFavorites } from "@/hooks/queries/use-favorite-queries";
-import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
-import type { Transaction, EnquiryTable } from "@/types/quote";
+import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
+import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
+import type { Transaction, EnquiryTable } from "@/features/quote/types";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 

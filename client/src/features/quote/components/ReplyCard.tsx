@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateNote, useDeleteNote } from "@/hooks/mutations";
-import type { TransactionNote } from "@/types/quote";
+import type { TransactionNote } from "@/features/quote/types";
 import { formatRelativeTime } from "./quote-types";
 import { formatFullDateTime } from "@/lib/note-time";
 import { NoteEditor } from "./NoteEditor";

@@ -2,7 +2,7 @@ import { useFormContext } from "react-hook-form";
 import { Upload } from "lucide-react";
 import { FormField } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { QuoteFormValues } from "@/types/quote";
+import type { QuoteFormValues } from "@/features/quote/types";
 
 interface QuoteImportRowProps {
   onJsonUpload: (file: File) => void;

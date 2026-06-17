@@ -8,7 +8,7 @@ import {
   Search,
   User,
 } from "lucide-react";
-import { HubSectionHeader, HubBadge, HubAvatar } from "@/components/hub-components";
+import { HubSectionHeader, HubBadge, HubAvatar } from "@/features/hub/components/hub-components";
 import { knowledgeEntries } from "@/data/hub-mock";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

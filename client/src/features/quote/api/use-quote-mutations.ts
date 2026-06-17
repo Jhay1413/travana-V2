@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
 import { quoteKeys, transactionKeys, dashboardKeys } from "@/hooks/queries";
-import type { CreateQuoteData } from "@/types/quote";
+import type { CreateQuoteData } from "@/features/quote/types";
 
 export function useCreateSocialQuote() {
   const queryClient = useQueryClient();

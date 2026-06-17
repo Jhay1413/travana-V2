@@ -1,6 +1,6 @@
 import { Suspense, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
-import { NotificationToast } from "@/components/notification-toast";
+import { NotificationToast } from "@/features/notifications/components/notification-toast";
 import { AppHeader } from "./app-header";
 import { AppSidenav } from "./app-sidenav";
 import { ImpersonationBanner } from "@/features/platform-admin/components/platform-admin/impersonation-banner";

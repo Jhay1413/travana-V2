@@ -6,7 +6,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useParks, useLodges } from "@/hooks/queries";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
-import type { QuoteFormValues } from "@/types/quote";
+import type { QuoteFormValues } from "@/features/quote/types";
 
 export function QuoteLodgeDetailsSection() {
   const { control } = useFormContext<QuoteFormValues>();

@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RichTextEditor } from "@/components/rich-text-editor";
+import { RichTextEditor } from "@/components/shared/rich-text-editor";
 
 const TICKET_TYPES = ["Admin", "Build", "Sales"] as const;
 const TICKET_STATUSES = ["Open", "In Progress", "Resolved", "Closed"] as const;

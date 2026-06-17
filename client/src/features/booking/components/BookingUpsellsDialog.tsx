@@ -19,8 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useReconcileUpsells } from "@/hooks/mutations";
 import { useBooking } from "@/hooks/queries";
 import { BookingUpsellsSection } from "./BookingUpsellsSection";
-import { bookingFormSchema, upsellsToFormValues } from "@/types/booking";
-import type { UpsellsFormValues, UpsellRecord } from "@/types/booking";
+import { bookingFormSchema, upsellsToFormValues } from "@/features/booking/types";
+import type { UpsellsFormValues, UpsellRecord } from "@/features/booking/types";
 
 // Standalone form holding only the `upsells` array — reuses the booking form's
 // upsell schema so validation/shape stays in lockstep with the in-form section.

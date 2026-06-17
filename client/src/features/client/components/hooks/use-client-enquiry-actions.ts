@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useCreateEnquiry, useCreateTransaction, useDeleteEnquiry, useUpdateEnquiry } from "@/hooks/mutations";
 import { enquiryApi } from "@/api";
-import type { EnquiryTable } from "@/types/quote";
+import type { EnquiryTable } from "@/features/quote/types";
 import { useToast } from "@/hooks/use-toast";
 
 /**

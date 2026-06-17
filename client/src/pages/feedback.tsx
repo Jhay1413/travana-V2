@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useFeedbackList } from "@/hooks/queries/use-feedback-queries";
-import { useUpdateFeedbackStatus, useDeleteFeedback } from "@/hooks/mutations/use-feedback-mutations";
+import { useFeedbackList } from "@/features/feedback/api/use-feedback-queries";
+import { useUpdateFeedbackStatus, useDeleteFeedback } from "@/features/feedback/api/use-feedback-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { Bug, Lightbulb, MessageCircle, Trash2, ChevronDown, Clock, CheckCircle2, Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";

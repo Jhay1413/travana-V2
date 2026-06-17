@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { bookingApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
 import { bookingKeys, transactionKeys, quoteKeys, dashboardKeys } from "@/hooks/queries";
-import type { Booking } from "@/types/quote";
+import type { Booking } from "@/features/quote/types";
 
 export function useConvertToBooking() {
   const queryClient = useQueryClient();

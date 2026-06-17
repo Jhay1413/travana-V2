@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes, enquiryKeys } from "@/hooks/queries";
-import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/mutations/use-note-mutations";
+import { useCreateNote, useUpdateNote, useDeleteNote } from "@/features/note/api/use-note-mutations";
 import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
@@ -42,10 +42,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
-import { useFavorites } from "@/hooks/queries/use-favorite-queries";
+import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useQueryClient } from "@tanstack/react-query";
-import { useToggleFavorite } from "@/hooks/mutations/use-favorite-mutations";
-import type { CreateQuoteData } from "@/types/quote";
+import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
+import type { CreateQuoteData } from "@/features/quote/types";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -56,11 +56,11 @@ import { formatFullDateTime } from "@/lib/note-time";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
 import { buildQuotePayload } from "@/features/quote/components/quote-create-dialog";
-import type { QuoteFormValues } from "@/types/quote";
-import { defaultQuoteFormValues } from "@/types/quote";
+import type { QuoteFormValues } from "@/features/quote/types";
+import { defaultQuoteFormValues } from "@/features/quote/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { Enquiry } from "@/types/enquiry";
-import type { TransactionNote } from "@/types/quote";
+import type { Enquiry } from "@/features/enquiry/types";
+import type { TransactionNote } from "@/features/quote/types";
 import type { CreateNoteData } from "@/features/note/api/note.api";
 
 const currency = new Intl.NumberFormat("en-GB", {

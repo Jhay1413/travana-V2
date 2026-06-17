@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { bookingApi } from "@/api";
-import type { EnrichedBooking } from "@/types/quote";
+import type { EnrichedBooking } from "@/features/quote/types";
 
 export const bookingKeys = {
   all: ["bookings"] as const,
