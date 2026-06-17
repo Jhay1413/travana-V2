@@ -95,6 +95,7 @@ interface QuoteRelationData extends CruisePayloadData {
   loungePasses?: Record<string, unknown>[];
   airportParkings?: Record<string, unknown>[];
   extraAccommodations?: Record<string, unknown>[];
+  childAges?: any[];
 }
 
 // Build the cruise persistence payload from a form payload, or null when no
@@ -117,7 +118,6 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   loungePasses?: Record<string, unknown>[];
   airportParkings?: Record<string, unknown>[];
   extraAccommodations?: Record<string, unknown>[];
-  childAges?: any[];
 };
 
 // Total price the customer pays = sales price − discount + service charge.
@@ -196,6 +196,7 @@ export const newQuoteService = {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+      childAges,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseOnly, cruiseItinerary,
       ...quoteFields
     } = data;
@@ -247,6 +248,7 @@ export const newQuoteService = {
     if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(q.id, airportParkings);
     if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(q.id, extraAccommodations);
     if (cruiseData) await newQuoteRepository.upsertCruise(q.id, cruiseData);
+    if (childAges !== undefined) await newQuoteRepository.replaceChildPassengers(q.id, "quote", childAges);
 
     const normalizedImages = normalizeUniqueImageUrls(images);
     if (normalizedImages.length > 0) {
@@ -275,6 +277,7 @@ export const newQuoteService = {
         if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(freeQ.id, airportParkings);
         if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(freeQ.id, extraAccommodations);
         if (cruiseData) await newQuoteRepository.upsertCruise(freeQ.id, cruiseData);
+        if (childAges !== undefined) await newQuoteRepository.replaceChildPassengers(freeQ.id, "quote", childAges);
         if (normalizedImages.length > 0) await quoteImageRepository.addImages(freeQ.id, normalizedImages);
         if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) await tagService.addQuoteTags(freeQ.id, data.tags);
       } catch (err) {
@@ -373,25 +376,46 @@ export const newQuoteService = {
     else if ('date_expiry' in quoteData && !quoteData.date_expiry) quoteData.date_expiry = null;
     if ('date_expiry' in quoteData) quoteData.is_expired = false;
 
-    if ('sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData || 'discounts' in quoteData || 'service_charge' in quoteData) {
-      const current = await newQuoteRepository.findById(id);
-      if (current) {
-        quoteData.price_per_person = calcPricePerPerson(quoteData.sales_price ?? current.sales_price, quoteData.adult ?? current.adult, quoteData.child ?? current.child, quoteData.discounts ?? current.discounts, quoteData.service_charge ?? current.service_charge);
-      }
+    // Fetch the current row when needed for price calculation or to capture the
+    // previous status (used below to detect LOST → active transitions).
+    const needsPrevStatus = 'quote_status' in quoteData && quoteData.quote_status !== 'LOST';
+    const needsPriceCalc = 'sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData || 'discounts' in quoteData || 'service_charge' in quoteData;
+
+    let preUpdateRow: Quote | undefined;
+    if (needsPriceCalc || needsPrevStatus) {
+      preUpdateRow = await newQuoteRepository.findById(id);
     }
+
+    if (needsPriceCalc && preUpdateRow) {
+      quoteData.price_per_person = calcPricePerPerson(quoteData.sales_price ?? preUpdateRow.sales_price, quoteData.adult ?? preUpdateRow.adult, quoteData.child ?? preUpdateRow.child, quoteData.discounts ?? preUpdateRow.discounts, quoteData.service_charge ?? preUpdateRow.service_charge);
+    }
+
+    const prevStatus = preUpdateRow?.quote_status ?? null;
 
     let q;
     if (Object.keys(quoteData).length > 0) {
       q = await newQuoteRepository.update(id, quoteData);
       if (!q) throw new AppError("Quote not found", 404);
     } else {
-      q = await newQuoteRepository.findById(id);
+      q = preUpdateRow ?? await newQuoteRepository.findById(id);
       if (!q) throw new AppError("Quote not found", 404);
     }
 
     if (quoteData.quote_status === 'LOST' && q.transaction_id) {
       await newQuoteRepository.update(id, { is_active: false });
       await transactionRepository.update(q.transaction_id, { is_active: false });
+    } else if (prevStatus === 'LOST' && 'quote_status' in quoteData && quoteData.quote_status !== 'LOST' && q.transaction_id) {
+      // Quote is moving off LOST — reactivate it and give it a fresh expiry so it
+      // satisfies the pipeline date-window filter (date_expiry >= NOW()). Without
+      // this, a quote lost more than 7 days ago would stay hidden after reviving.
+      const revivedExpiry = new Date();
+      revivedExpiry.setDate(revivedExpiry.getDate() + 3);
+      await newQuoteRepository.update(id, { is_active: true, date_expiry: revivedExpiry, is_expired: false });
+      // Reactivate the transaction only when no other sibling quote is still LOST.
+      const lostSiblings = await newQuoteRepository.findLostSiblings(q.transaction_id, id);
+      if (lostSiblings.length === 0) {
+        await transactionRepository.update(q.transaction_id, { is_active: true });
+      }
     }
 
     if (lead_source !== undefined && q.transaction_id) {

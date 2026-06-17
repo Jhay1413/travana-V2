@@ -182,6 +182,7 @@ export function buildQuotePayload(
   }
 
   payload.pets = values.pets ?? 0;
+  payload.childAges = values.childAges ?? [];
 
   if (isHotTubBreak) {
     payload.lodge_id = values.lodgeId || undefined;

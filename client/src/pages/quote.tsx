@@ -451,7 +451,7 @@ export default function QuotePage() {
           userId={currentUser?.id}
           open={showCopyDialog}
           onOpenChange={setShowCopyDialog}
-          initialValues={quoteToFormValues}
+          initialValues={{ ...quoteToFormValues, discount: 0 }}
           initialImages={quoteImageUrls}
           onSuccess={(newQuoteId) => {
             setShowCopyDialog(false);

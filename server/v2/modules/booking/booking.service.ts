@@ -329,6 +329,13 @@ export const bookingService = {
           } as InsertBookingCruiseItinerary);
         }
       }
+
+      const childAges = (quoteDetails.passengers || [])
+        .filter((p: any) => p.type === "child")
+        .map((p: any) => Number(p.age) || 0);
+      if (childAges.length > 0) {
+        await newQuoteRepository.replaceChildPassengers(b.id, "booking", childAges);
+      }
     }
 
     const quoteImgs = await quoteImageRepository.getByQuoteId(quoteId);
@@ -391,7 +398,7 @@ export const bookingService = {
     return { ...b, client_id: txn.client_id ?? null };
   },
 
-  async createBooking(data: InsertBooking, scope: ScopeOrTrusted) {
+  async createBooking(data: InsertBooking & { childAges?: any[] }, scope: ScopeOrTrusted) {
     await assertTransactionInScope(data.transaction_id, scope);
 
     const txn = await transactionRepository.findById(data.transaction_id);
@@ -403,11 +410,16 @@ export const bookingService = {
     const existingBooking = await bookingRepository.findByTransactionId(data.transaction_id);
     if (existingBooking) throw new AppError("Transaction already has a booking", 400);
 
+    const { childAges, ...bookingFields } = data;
     const b = await bookingRepository.create({
-      ...data,
+      ...bookingFields,
       price_per_person: calcPricePerPerson(data.sales_price, data.adult, data.child, data.discounts, data.service_charge, data.wallet_credit),
     });
     await transactionRepository.update(data.transaction_id, { status: 'on_booking' });
+
+    if (childAges !== undefined) {
+      await newQuoteRepository.replaceChildPassengers(b.id, "booking", childAges);
+    }
 
     const walletCreditAmount = parseFloat(String(data.wallet_credit ?? 0)) || 0;
     if (walletCreditAmount > 0 && txn.client_id) {

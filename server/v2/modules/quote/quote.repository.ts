@@ -17,7 +17,7 @@ import type {
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike } from "drizzle-orm";
+import { eq, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
@@ -181,6 +181,24 @@ export const newQuoteRepository = {
       .where(and(eq(quote.transaction_id, transactionId), isNull(quote.deleted_at), ...buildTransactionScopeConds(scope)))
       .orderBy(desc(quote.date_created));
     return rows.map((r) => r.quote);
+  },
+
+  /** Return non-deleted sibling quotes on the same transaction that are still LOST,
+   *  excluding the quote identified by excludeQuoteId. Used to decide whether the
+   *  transaction itself can be reactivated when a quote moves off LOST status. */
+  async findLostSiblings(transactionId: string, excludeQuoteId: string): Promise<Quote[]> {
+    const rows = await db
+      .select()
+      .from(quote)
+      .where(
+        and(
+          eq(quote.transaction_id, transactionId),
+          ne(quote.id, excludeQuoteId),
+          isNull(quote.deleted_at),
+          sql`${quote.quote_status}::text = 'LOST'`,
+        ),
+      );
+    return rows;
   },
 
   async findAll(scope: ScopeOrTrusted): Promise<Quote[]> {
