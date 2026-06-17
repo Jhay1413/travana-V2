@@ -213,14 +213,12 @@ export const bookingRepository = {
       const seen = new Set<string>();
       const images: { id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; s3Key: string | null }[] = [];
 
-      for (const img of bookingImgsByBookingId.get(b.id) ?? []) {
-        const url = img.url || '';
-        if (url && !seen.has(url)) {
-          seen.add(url);
-          images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: b.id, s3Key: null });
-        }
-      }
-      for (const img of dealImgsByBookingId.get(b.id) ?? []) {
+      // Prefer the booking's own images; fall back to legacy deal_images only when none exist.
+      const ownBookingImgs = (bookingImgsByBookingId.get(b.id) ?? []).map(img => ({
+        id: img.id, image_url: img.url, isPrimary: img.isPrimary, owner_id: b.id, s3Key: null,
+      }));
+      const ownImgs = ownBookingImgs.length > 0 ? ownBookingImgs : (dealImgsByBookingId.get(b.id) ?? []);
+      for (const img of ownImgs) {
         const url = img.image_url || '';
         if (url && !seen.has(url)) { seen.add(url); images.push(img); }
       }
@@ -464,14 +462,11 @@ export const bookingRepository = {
       images: (() => {
         const seen = new Set<string>();
         const result: any[] = [];
-        for (const img of bookingImgs) {
-          const url = img.url || '';
-          if (url && !seen.has(url)) {
-            seen.add(url);
-            result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: id, s3Key: null });
-          }
-        }
-        for (const img of images) {
+        // Prefer the booking's own images; fall back to legacy deal_images only when none exist.
+        const ownImgs = bookingImgs.length > 0
+          ? bookingImgs.map(img => ({ id: img.id, image_url: img.url, isPrimary: img.isPrimary, owner_id: id, s3Key: null }))
+          : images;
+        for (const img of ownImgs) {
           const url = img.image_url || '';
           if (url && !seen.has(url)) { seen.add(url); result.push(img); }
         }

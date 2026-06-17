@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
 import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -187,6 +187,7 @@ async function enrichTransactions(txns: Transaction[]) {
   const ownerIds = [...quoteIds, ...bookingIds];
   let allDealImages: any[] = [];
   let allQuoteImages: any[] = [];
+  let allBookingImages: any[] = [];
   let allAccomImages: any[] = [];
   let allLodgeImages: any[] = [];
   const fetchPromises: Promise<any>[] = [];
@@ -195,6 +196,9 @@ async function enrichTransactions(txns: Transaction[]) {
   }
   if (quoteIds.length > 0) {
     fetchPromises.push(db.select().from(quoteImages).where(inArray(quoteImages.quoteId, quoteIds)).then(r => { allQuoteImages = r; }));
+  }
+  if (bookingIds.length > 0) {
+    fetchPromises.push(db.select().from(bookingImages).where(inArray(bookingImages.bookingId, bookingIds)).then(r => { allBookingImages = r; }));
   }
   if (bookingIds.length > 0) {
     fetchPromises.push(
@@ -220,9 +224,11 @@ async function enrichTransactions(txns: Transaction[]) {
 
   const quotesMap = new Map<string, any[]>();
   for (const q of allQuotes) {
-    const dealImgs = allDealImages.filter(img => img.owner_id === q.id);
     const quoteImgs = allQuoteImages.filter(qi => qi.quoteId === q.id).map((qi: any) => ({ id: qi.id, owner_id: qi.quoteId, image_url: qi.url, isPrimary: qi.isPrimary }));
-    const images = [...dealImgs, ...quoteImgs];
+    // Prefer the quote's own images; fall back to legacy deal_images only when none exist.
+    const images = quoteImgs.length > 0
+      ? quoteImgs
+      : allDealImages.filter(img => img.owner_id === q.id);
     const entry = {
       ...q,
       holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
@@ -237,7 +243,14 @@ async function enrichTransactions(txns: Transaction[]) {
   for (const b of allBookings) {
     const seen = new Set<string>();
     const images: any[] = [];
-    for (const img of allDealImages.filter(img => img.owner_id === b.id)) {
+    const bookingImgs = allBookingImages
+      .filter(bi => bi.bookingId === b.id)
+      .map((bi: any) => ({ id: bi.id, owner_id: bi.bookingId, image_url: bi.url, isPrimary: bi.isPrimary, s3Key: null }));
+    // Prefer the booking's own images; fall back to legacy deal_images only when none exist.
+    const ownImgs = bookingImgs.length > 0
+      ? bookingImgs
+      : allDealImages.filter(img => img.owner_id === b.id);
+    for (const img of ownImgs) {
       const url = img.image_url || '';
       if (url && !seen.has(url)) { seen.add(url); images.push(img); }
     }
@@ -627,7 +640,7 @@ export const transactionRepository = {
 
       const images = input.images ?? [];
       if (images.length > 0) {
-        await tx.insert(deal_images).values(images.map((imageUrl, index) => ({ id: randomUUID(), owner_id: b.id, image_url: imageUrl, isPrimary: index === 0 })));
+        await tx.insert(bookingImages).values(images.map((url, index) => ({ id: randomUUID(), bookingId: b.id, url, isPrimary: index === 0 })));
         if (input.primaryAccommodation?.accomodation_id) {
           for (const imageUrl of images) {
             await tx.insert(accommodation_images).values({ accommodation_id: input.primaryAccommodation.accomodation_id, image_url: imageUrl }).onConflictDoNothing();

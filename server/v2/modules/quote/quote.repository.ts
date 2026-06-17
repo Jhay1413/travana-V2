@@ -603,7 +603,7 @@ export const newQuoteRepository = {
 
     if (!q) return undefined;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list, accommodationImgs, lodgeImgs] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list, accommodationImgs, lodgeImgs, dealImgs] = await Promise.all([
       db.select({
         flight: quote_flights,
         departing_airport_name: sql<string>`CASE WHEN ${departAirport.airport_code} IS NOT NULL AND ${departAirport.airport_code} <> '' THEN concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')') ELSE ${departAirport.airport_name} END`,
@@ -728,6 +728,9 @@ export const newQuoteRepository = {
             isPrimary: lodge_images.isPrimary,
           }).from(lodge_images).where(eq(lodge_images.lodge_id, q.quote.lodge_id))
         : Promise.resolve([]),
+
+      // Legacy fallback: deal_images owned by this quote (used only when no quote_images exist)
+      db.select().from(deal_images).where(eq(deal_images.owner_id, id)),
     ]);
 
     // Fetch cruise extras and itineraries (depend on cruise IDs from above)
@@ -797,9 +800,13 @@ export const newQuoteRepository = {
       images: (() => {
         const seen = new Set<string>();
         const result: Array<{ id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; owner_type: string; s3Key: null }> = [];
-        for (const img of images) {
-          const url = img.url || '';
-          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: id, owner_type: 'quote', s3Key: null }); }
+        // Prefer the quote's own images; fall back to legacy deal_images only when none exist.
+        const ownImgs = images.length > 0
+          ? images.map(img => ({ id: img.id, image_url: img.url, isPrimary: img.isPrimary, owner_id: id, owner_type: 'quote', s3Key: null as null }))
+          : dealImgs.map(img => ({ id: img.id, image_url: img.image_url, isPrimary: img.isPrimary, owner_id: id, owner_type: 'quote', s3Key: null as null }));
+        for (const img of ownImgs) {
+          const url = img.image_url || '';
+          if (url && !seen.has(url)) { seen.add(url); result.push(img); }
         }
         for (const img of accommodationImgs) {
           const url = img.image_url || '';
