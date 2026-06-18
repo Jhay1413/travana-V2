@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
+import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import {
   FormField,
   FormItem,
@@ -507,6 +508,7 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
   const accommodationOptions = (accommodationsData || []).map((a: any) => ({ value: a.id, label: a.name || a.id }));
   const [showAddBoardBasis, setShowAddBoardBasis] = useState(false);
   const [showAddRoomType, setShowAddRoomType] = useState(false);
+  const [showAddAccomModal, setShowAddAccomModal] = useState(false);
   const [boardBasisSearch, setBoardBasisSearch] = useState("");
   const [roomTypeSearch, setRoomTypeSearch] = useState("");
 
@@ -525,6 +527,16 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
         initialName={roomTypeSearch}
         onSuccess={(rt) => { setValue(`${p}.roomType`, rt.id); setRoomTypeSearch(""); }}
       />
+      <AddAccommodationModal
+        open={showAddAccomModal}
+        onOpenChange={setShowAddAccomModal}
+        initialName={accomSearch}
+        onSuccess={(acc) => {
+          setValue(`${p}.accommodationId`, acc.id);
+          setAccomLabel(acc.name);
+          setAccomSearch("");
+        }}
+      />
       <FieldGrid>
         <FormField control={control} name={`${p}.accommodationId` as any} render={({ field }) => (
           <FormItem className="sm:col-span-2">
@@ -542,6 +554,12 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
                 isLoading={isAccomFetching}
                 selectedLabel={accomLabel}
                 emptyMessage={!accomSearch ? "Type to search accommodations..." : "No accommodations found."}
+                onAddNew={
+                  accomSearch && !isAccomFetching && (!accommodationsData || accommodationsData.length === 0)
+                    ? () => setShowAddAccomModal(true)
+                    : undefined
+                }
+                addNewLabel="Add Accommodation"
                 placeholder="Search accommodation"
               />
             </FormControl>

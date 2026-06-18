@@ -453,6 +453,13 @@ export const newQuoteService = {
     const existing = await newQuoteRepository.findById(id);
     if (!existing) throw new AppError("Quote not found", 404);
     await newQuoteRepository.remove(id);
+    // Deleting a quote: close out its open tasks so they don't linger pointing
+    // at a deleted quote. Best-effort — must never block the delete.
+    try {
+      await taskService.completeByEntity("quote", id);
+    } catch (err) {
+      console.error('COMPLETE QUOTE TASKS (quote.service delete) - error:', err);
+    }
   },
 
   async addFlight(quoteId: string, data: Omit<InsertQuoteFlight, 'quote_id'>, scope: ScopeOrTrusted) {
