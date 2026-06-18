@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { Pencil, Plane, Plus, Search, Trash2 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
-import { useTourOperators } from "@/hooks/queries/use-tour-operator-queries";
+import { useTourOperators } from "@/features/tour-operator/api/use-tour-operator-queries";
 import {
   useCreateTourOperator,
   useDeleteTourOperator,
   useUpdateTourOperator,
-} from "@/hooks/mutations/use-tour-operator-mutations";
+} from "@/features/tour-operator/api/use-tour-operator-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,11 +20,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { TourOperator } from "@/types/tour-operator";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
-import { StatCard } from "./components/StatCard";
-import { TourOperatorSheet, type TourOperatorFormState } from "./components/TourOperatorSheet";
+import type { TourOperator } from "@/features/tour-operator/types";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
+import { StatCard } from "@/features/organization/components/agency/StatCard";
+import { TourOperatorSheet, type TourOperatorFormState } from "@/features/organization/components/agency/TourOperatorSheet";
 
 function formToPayload(form: TourOperatorFormState): {
   name: string | null;

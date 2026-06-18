@@ -50,9 +50,9 @@ import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { revenueApi } from "@/api/endpoints/revenue.api";
-import type { BookingDetail } from "@/types/revenue/revenue.types";
-import { useRevenueDashboard, useMonthBookings, revenueKeys } from "@/hooks/queries/use-revenue-queries";
+import { revenueApi } from "@/features/reports/api/revenue.api";
+import type { BookingDetail } from "@/features/reports/types/revenue/revenue.types";
+import { useRevenueDashboard, useMonthBookings, revenueKeys } from "@/features/reports/api/use-revenue-queries";
 
 function fmt(v: number) {
   return "£" + v.toLocaleString("en-GB");

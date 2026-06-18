@@ -1,23 +1,23 @@
 import { useMemo, useState } from "react";
 import { PauseCircle, Shield, Users } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
-import { useCurrentOrganization, useOrgMembers } from "@/hooks/queries/use-organization-queries";
+import { useCurrentOrganization, useOrgMembers } from "@/features/organization/api/use-organization-queries";
 import {
   useUpdateMemberRole,
   useSetMemberSuspended,
-} from "@/hooks/mutations/use-organization-mutations";
+} from "@/features/organization/api/use-organization-mutations";
 import { useCurrentUser } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
-import { StatCard } from "./components/StatCard";
-import { InvitePanel } from "./components/InvitePanel";
-import { MemberRow } from "./components/MemberRow";
-import { PendingInvitesList } from "./components/PendingInvitesList";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
+import { StatCard } from "@/features/organization/components/agency/StatCard";
+import { InvitePanel } from "@/features/organization/components/agency/InvitePanel";
+import { MemberRow } from "@/features/organization/components/agency/MemberRow";
+import { PendingInvitesList } from "@/features/organization/components/agency/PendingInvitesList";
 import { isMemberSuspended, roleLabel } from "./utils/role-helpers";
-import type { OrgMember } from "@/api/endpoints/organization.api";
-import type { InviteOrgRole } from "@/api/endpoints/invite.api";
+import type { OrgMember } from "@/features/organization/api/organization.api";
+import type { InviteOrgRole } from "@/features/invite/api/invite.api";
 
 export default function AgencyTeamPage() {
   const { orgRole, can } = useRole();

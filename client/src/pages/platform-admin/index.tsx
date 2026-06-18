@@ -3,12 +3,12 @@ import { useLocation } from "wouter";
 import { useRole } from "@/hooks/use-role";
 import { useAdminOrgs } from "@/hooks/queries";
 import { useActivateOrg, useStartImpersonation } from "@/hooks/mutations";
-import type { OrgSummary } from "@/api/endpoints/platform-admin.api";
+import type { OrgSummary } from "@/features/platform-admin/api/platform-admin.api";
 import { AlertCircle, Building2, Search, Download, Loader2, ShieldOff, ShieldCheck, Pencil, Eye, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SuspendOrgDialog } from "@/components/platform-admin/suspend-org-dialog";
-import { ChangePlanDialog } from "@/components/platform-admin/change-plan-dialog";
+import { SuspendOrgDialog } from "@/features/platform-admin/components/platform-admin/suspend-org-dialog";
+import { ChangePlanDialog } from "@/features/platform-admin/components/platform-admin/change-plan-dialog";
 import { cn } from "@/lib/utils";
 
 const formatDate = (iso: string | null | undefined) => {

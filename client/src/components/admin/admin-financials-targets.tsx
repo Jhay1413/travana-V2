@@ -32,7 +32,7 @@ import {
   useUpsertAgentTargets,
   useMonthBookings,
 } from "@/hooks/queries";
-import type { ShopTargetInput, AgentTargetInput } from "@/types/targets/targets.types";
+import type { ShopTargetInput, AgentTargetInput } from "@/features/reports/types/targets/targets.types";
 
 function generateMonths(count: number) {
   const now = new Date();

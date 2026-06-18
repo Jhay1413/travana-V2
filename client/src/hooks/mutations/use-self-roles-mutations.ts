@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { userOrgRolesApi } from "@/api/endpoints/user-org-roles.api";
+import { userOrgRolesApi } from "@/features/organization/api/user-org-roles.api";
 import { authKeys } from "@/hooks/queries/use-auth-queries";
 import type { OrgRole } from "@/types/auth/auth.types";
 

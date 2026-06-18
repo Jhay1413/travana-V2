@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AskAiDialog } from "@/components/ask-ai-dialog";
+import { AskAiDialog } from "@/components/shared/ask-ai-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,11 +19,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NotificationsDropdown } from "@/components/notifications-dropdown";
-import { HeaderCreateMenu } from "@/components/header-create-menu";
+import { NotificationsDropdown } from "@/features/notifications/components/notifications-dropdown";
+import { HeaderCreateMenu } from "@/components/layout/header-create-menu";
 import { MobileSidenav } from "./app-sidenav";
 import { useAuth } from "@/hooks/use-auth";
-import { useGlobalSearch } from "@/hooks/queries/use-search-queries";
+import { useGlobalSearch } from "@/features/search/api/use-search-queries";
 
 export function AppHeader() {
   const { user, logout } = useAuth();

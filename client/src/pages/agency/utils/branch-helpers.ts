@@ -3,7 +3,7 @@ import type {
   BranchInput,
   BranchOpeningHour,
   BranchOpeningPattern,
-} from "@/api/endpoints/branch.api";
+} from "@/features/organization/api/branch.api";
 
 export const DAYS: Array<{ key: string; label: string; isWeekend: boolean }> = [
   { key: "Mon", label: "Monday",    isWeekend: false },

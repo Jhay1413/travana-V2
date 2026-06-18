@@ -136,7 +136,7 @@ Smaller/leaf APIs (`airport`, `tag`, `note`, `reply`, `attachment`, `favorite`, 
 - Add an ESLint config (none exists) with `import/no-restricted-paths` or `eslint-plugin-boundaries`, initially **warn-only**.
 - Verify: `npm run check` green; lint runs.
 
-### Phase 1 — Non-breaking `api/` + `config/` scaffolding [enhancer]
+### Phase 1 — Non-breaking `api/` + `config/` scaffolding [enhancer] — ✅ DONE
 - `git mv client/src/lib/queryClient.ts client/src/api/queryClient.ts`; update `App.tsx:3` import only.
 - Introduce `api/client.ts` re-exporting the existing axios instance (keep `axios-client.ts` re-exporting temporarily, or `git mv` + fix the ~10 relative importers — prefer keeping the `@/api` boundary).
 - Keep `interceptors.ts` as a side-effect; `main.tsx:2` keeps working.
@@ -146,7 +146,7 @@ Smaller/leaf APIs (`airport`, `tag`, `note`, `reply`, `attachment`, `favorite`, 
 ### Phase 2 — Confirm `components/ui` + `components/layout` are clean [code-reviewer]
 - Already match target. Audit only: ensure no feature logic leaked (the 8 raw-axios offenders are NOT in ui/layout). No moves. Document as "compliant."
 
-### Phase 3 — PILOT: migrate `quote` feature [coder + manual test + code-reviewer]
+### Phase 3 — PILOT: migrate `quote` feature [coder + manual test + code-reviewer] — ✅ DONE
 **Why quote first:** richest, most self-contained domain (already has `components/quote/sections/` + `hooks/`), core to the Enquiry→Quote→Booking lifecycle, exercises every pattern (queries, mutations, image uploads, a raw-axios offender in `use-quote-share.ts`). Proving it here de-risks the rest.
 - Create `features/quote/{api,components,hooks}/`, `types.ts`, `index.ts`.
 - `git mv` `components/quote/**` → `features/quote/components/**`.
@@ -158,15 +158,31 @@ Smaller/leaf APIs (`airport`, `tag`, `note`, `reply`, `attachment`, `favorite`, 
 - Leave the 26 cross-feature `@/components/quote/...` importers on shims for now; convert opportunistically. App.tsx `QuotePage` lazy import stays (it's a page).
 - Verify gate + manually exercise `/quotes/:quoteId`.
 
-### Phase 4 — Fan out core lifecycle features [coder, one PR each]
+### Phase 4 — Fan out core lifecycle features [coder, one PR each] — ✅ DONE
 Order: `booking` → `client` → `enquiry` → `transaction` → `dashboard`. Same recipe. Fix raw-axios offenders as encountered (`boards/social-posts-board.tsx`, `lookups/add-*`, `ask-ai-dialog.tsx`).
 
-### Phase 5 — Supporting features [coder/enhancer]
-`organization`, `platform-admin`, `invite`/onboarding, `reports`, `hr`, `tasks`, `tickets`, `chat`, `social`, `sms`, `lookups`, `notifications`, `destination-guru`, plus leaf APIs folded into owners.
+### Phase 5 — Supporting features [coder/enhancer] — ✅ DONE
+`organization`, `platform-admin`, `invite`/onboarding, `reports`, `hr`, `tasks`, `tickets`, `chat`, `social`, `sms`, `lookups`, `notifications`, `destination-guru`, plus leaf APIs (`airport`, `announcement`, `attachment`, `email`, `favorite`, `feedback`, `json-mapper`, `note`, `opportunities`, `referral`, `reply`, `search`, `tag`, `tour-operator`, `user`, `user-profile`) and `wallet` — all moved to `features/`, with shims at old locations. After this, `api/endpoints/` holds only `auth.api.ts` (deferred). 36 feature folders.
 
-### Phase 6 — Convert consumers off shims + delete shims [enhancer + code-reviewer]
+### Phase 6 — Convert consumers off shims + delete shims + relocate loose components [enhancer + code-reviewer] — ✅ DONE
+**Outcome:** all 95 per-file shims deleted; ~160 importer files codemoded to feature paths; loose components relocated (new `components/shared/` for rich-text-editor/mention-editor/ask-ai-dialog, new `features/hub/`, plus chat/email/destination-guru/social/notifications/client component folders); `header-create-menu` → `components/layout`; `types/chat` folded into `features/chat/types`. `types/` now holds only `auth/`; `hooks/queries` + `hooks/mutations` hold only their `index.ts` barrel + auth files. `tsc` clean, `vite build` green. **Kept as facades** (feature-sourced): the `@/api`, `@/hooks/queries`, `@/hooks/mutations` aggregator barrels — fully retiring them (so consumers import only from `@/features/<x>`) is optional later cleanup. **Deferred (Phase 7):** `branding-applier`, `role-route`, all `auth.*` files/hooks/types. `components/admin` left as-is (not part of a feature).
 - Codemod imports: `@/components/quote/...` → `@/features/quote`; `@/hooks/queries` → feature `api/`.
 - Delete all re-export shim files. Trim `@/api` barrel.
+- **Relocate the loose root components** left in `components/` to their decided homes (verified by importer analysis; resolves open question #6). Same `git mv` + path-rewrite recipe:
+
+  | Loose component | Home |
+  |---|---|
+  | `chat-rich-input` | `features/chat/components` |
+  | `email-inbox` | `features/email/components` |
+  | `destination-guru` | `features/destination-guru/components` |
+  | `social-post-preview-dialog` | `features/social/components` |
+  | `notification-toast`, `notifications-dropdown` | `features/notifications/components` |
+  | `hub-components`, `hub-shell` | new `features/hub/components` (with `pages/hub/**` as route shells) |
+  | `csv-import-dialog` | `features/client/components` (sole consumer is the clients page) |
+  | `header-create-menu` | `components/layout` (part of the header) |
+  | `rich-text-editor`, `mention-editor`, `ask-ai-dialog` | new **`components/shared/`** (cross-feature, non-primitive — see spec note) |
+  | `branding-applier`, `role-route` | **defer to Phase 7** (auth/org bootstrapping) |
+
 - Flip ESLint boundary rules **warn → error**.
 - Verify gate; full manual smoke across roles.
 
@@ -202,8 +218,13 @@ Order: `booking` → `client` → `enquiry` → `transaction` → `dashboard`. S
 2. **`pages/` vs `routes/`.** CLAUDE.md allows either. Recommend **keep `pages/`** (174 files, no upside to renaming).
 3. **Boundary lint now or later?** No ESLint config today. Recommend warn-only in Phase 0, error in Phase 6. Human must approve adding ESLint to toolchain/CI.
 4. **`endpoints.ts` scope.** Full extraction of all hardcoded URLs (e.g. `/api/v2/quotes`, `quote.api.ts:17`) is significant. **Decide:** extract incrementally per-feature, or only centralize the `/api/v2` prefix.
-5. **Page-level mini-features.** `pages/agency/` (31), `pages/hr-v2/` (15), `pages/portal/` (12) contain their own components — `features/` or page-local? Recommend: extract data/components into `features/`, keep route shells in `pages/`.
-6. **Shared cross-feature components.** Loose root components (`mention-editor`, `rich-text-editor`, `csv-import-dialog`, `header-create-menu`) used by multiple features. **Decide:** `components/ui/` vs a new `components/shared/` bucket (not in the target spec).
+5. **Page-level mini-features.** ✅ **RESOLVED — components extracted; routes stay.** Decision: a page folder holds ONLY its route entry (`index.tsx`); sub-components live in the feature. Also: every flat page file was converted to `pages/<name>/index.tsx` (folder-with-index). Executed:
+   - **Flat pages → folder/index:** all 30 top-level `pages/*.tsx` → `pages/<name>/index.tsx` (App.tsx lazy imports resolve to the folder index unchanged).
+   - **Single-route dirs → sub-components moved to features, `index.tsx` kept:** `hub`→`features/hub/components`; `agent-overview`→ new `features/agent-overview/components` (its components were reused by agent-stats/branch/org overviews — repointed); `reports`→`features/reports/components`; `organization-overview`/`branch-overview`→`features/organization/components/{organization-overview,branch-overview}/` (subfoldered to avoid same-name clashes); `opportunities`→`features/opportunities/components`; `hr`→`features/hr/components`; `hr-v2`→ new `features/hr-v2/components` (kept separate from hr — identical filenames); `my-profile`→ new `features/my-profile/components`.
+   - **Multi-route clusters: only `components/` moved, route screens stay:** `agency/components/*`→`features/organization/components/agency/`; agency sub-route `.tsx` files + `utils/` + `data.tsx` stay in `pages/agency/`. `platform-admin/components` was empty (skipped).
+   - **Left entirely as page clusters:** `portal/**` (9 routes), `travana/**` (marketing sub-site).
+   - Verified: `tsc` clean, `vite build` green. (Supersedes the earlier "keep as-is" call.)
+6. **Shared cross-feature components.** ✅ **RESOLVED.** Genuinely cross-feature, non-primitive components (`rich-text-editor`, `mention-editor`, `ask-ai-dialog`) go in a new **`components/shared/`** bucket (added to the CLAUDE.md client spec). Feature-owned loose components move to their feature; `header-create-menu` → `components/layout`; `branding-applier`/`role-route` defer to Phase 7. Full disposition table is in Phase 6. Moves are deferred to Phase 6 (executed with the shim-removal codemod, so all import rewrites happen in one pass).
 7. **`router.tsx` extraction** — optional; recommend deferring (Phase 8) to avoid `App.tsx` conflicts.
 8. **No client tests** — verification is typecheck + build + manual smoke only. Risk of silent runtime regressions (e.g. a missed lazy import). Mitigate with per-feature smoke checklists; consider a minimal smoke test before fan-out.
 

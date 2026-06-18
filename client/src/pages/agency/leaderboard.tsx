@@ -12,9 +12,9 @@ import type {
   AgentPerformanceRange,
   AgentPerformanceRow,
   BranchPerformanceRow,
-} from "@/api/endpoints/organization-overview.api";
-import { currency } from "../organization-overview/helpers";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
+} from "@/features/organization/api/organization-overview.api";
+import { currency } from "@/features/organization/components/organization-overview/helpers";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
 
 type ScopeKey = "agents" | "branches";
 

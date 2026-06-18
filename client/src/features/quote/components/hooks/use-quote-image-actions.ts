@@ -1,0 +1,72 @@
+import { useRef } from "react";
+import {
+  useDeleteQuoteImage,
+  useSetPrimaryQuoteImage,
+  useUploadQuoteImages,
+} from "@/features/quote/api/use-quote-image-mutations";
+import { useToast } from "@/hooks/use-toast";
+
+/**
+ * Bundles the three quote-image mutations (set primary, upload, delete) plus
+ * the hidden file-input ref used by the upload button.
+ */
+export function useQuoteImageActions(quoteId: string) {
+  const { toast } = useToast();
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const setPrimaryImageMutation = useSetPrimaryQuoteImage();
+  const uploadImagesMutation = useUploadQuoteImages();
+  const deleteImageMutation = useDeleteQuoteImage();
+
+  function setPrimary(imageId: string) {
+    setPrimaryImageMutation.mutate(
+      { quoteId, imageId },
+      {
+        onSuccess: () => toast({ title: "Main image updated" }),
+        onError: () => toast({ title: "Failed to set main image", variant: "destructive" }),
+      },
+    );
+  }
+
+  function removeImage(imageId: string) {
+    deleteImageMutation.mutate(
+      { quoteId, imageId },
+      {
+        onSuccess: () => toast({ title: "Image removed" }),
+        onError: () => toast({ title: "Failed to remove image", variant: "destructive" }),
+      },
+    );
+  }
+
+  function uploadFiles(files: File[]) {
+    if (files.length === 0) return;
+    uploadImagesMutation.mutate(
+      { quoteId, files },
+      {
+        onSuccess: () => {
+          toast({ title: `${files.length} image${files.length > 1 ? "s" : ""} uploaded` });
+          if (imageInputRef.current) imageInputRef.current.value = "";
+        },
+        onError: () => {
+          toast({ title: "Failed to upload images", variant: "destructive" });
+          if (imageInputRef.current) imageInputRef.current.value = "";
+        },
+      },
+    );
+  }
+
+  function openFilePicker() {
+    imageInputRef.current?.click();
+  }
+
+  return {
+    imageInputRef,
+    setPrimaryImageMutation,
+    uploadImagesMutation,
+    deleteImageMutation,
+    setPrimary,
+    removeImage,
+    uploadFiles,
+    openFilePicker,
+  };
+}

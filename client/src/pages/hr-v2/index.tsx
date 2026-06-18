@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import type { EmployeeRow as ApiEmployeeRow } from "@/api/endpoints/hr.api";
+import type { EmployeeRow as ApiEmployeeRow } from "@/features/hr/api/hr.api";
 import {
   useHrEmployees,
   useHrEmployee,
@@ -14,17 +14,17 @@ import {
   useAddHrNote,
   useAddHrDocument,
 } from "@/hooks/mutations";
-import type { Employee, Reminder } from "./_data";
-import { mapApiEmployee, mapApiReminder } from "./helpers";
-import { HRContext, type HRContextValue } from "./hr-context";
-import { TabStrip, type View, type ProfileTab } from "./sidebar";
-import { DashboardPage } from "./dashboard-page";
-import { DirectoryPage } from "./directory-page";
-import { ProfilePage } from "./profile-page";
-import { HolidayPage } from "./holiday-page";
-import { DocumentsPage } from "./documents-page";
-import { OnboardingPage } from "./onboarding-page";
-import { TrainingPage } from "./training-page";
+import type { Employee, Reminder } from "@/features/hr-v2/components/_data";
+import { mapApiEmployee, mapApiReminder } from "@/features/hr-v2/components/helpers";
+import { HRContext, type HRContextValue } from "@/features/hr-v2/components/hr-context";
+import { TabStrip, type View, type ProfileTab } from "@/features/hr-v2/components/sidebar";
+import { DashboardPage } from "@/features/hr-v2/components/dashboard-page";
+import { DirectoryPage } from "@/features/hr-v2/components/directory-page";
+import { ProfilePage } from "@/features/hr-v2/components/profile-page";
+import { HolidayPage } from "@/features/hr-v2/components/holiday-page";
+import { DocumentsPage } from "@/features/hr-v2/components/documents-page";
+import { OnboardingPage } from "@/features/hr-v2/components/onboarding-page";
+import { TrainingPage } from "@/features/hr-v2/components/training-page";
 
 export default function HrV2Page() {
   const [view, setView] = useState<View>({ name: "dashboard" });

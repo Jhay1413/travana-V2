@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { queryClient } from "@/api/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,7 +10,7 @@ import { BrandingApplier } from "@/components/branding-applier";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RoleRoute } from "@/components/role-route";
 // EmailInbox lives in components/ (not pages/) — kept as a static import.
-import EmailInbox from "@/components/email-inbox";
+import EmailInbox from "@/features/email/components/email-inbox";
 // PortalPinGate is a named export used as a layout wrapper — kept static.
 import { PortalPinGate } from "@/pages/portal/portal-pin-gate";
 import { Loader2 } from "lucide-react";

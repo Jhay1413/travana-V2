@@ -69,7 +69,24 @@
       "Bash(npm -v)",
       "Bash(npx -y npm@10 install --package-lock-only)",
       "Bash(npx -y npm@10 ci --dry-run)",
-      "Bash(corepack --version)"
+      "Bash(corepack --version)",
+      "Bash(grep -rn \"from ['\\\\\"]\\\\.\\\\./\\\\.\\\\./\" components/quote)",
+      "Bash(grep -v \"from ['\\\\\"]\\\\.\\\\./\\\\.\\\\./\\\\.\\\\./\")",
+      "Bash(mkdir -p features/quote/api)",
+      "Bash(git mv *)",
+      "Bash(sed -i 's#import type { QuoteEngagementRow } from \"@/api/endpoints/quote.api\";#import type { QuoteEngagementRow } from \"./quote.api\";#' features/quote/api/use-quote-queries.ts)",
+      "Bash(sed -i 's#import type { QuoteEngagementView } from \"@/api/endpoints/quote.api\";#import type { QuoteEngagementView } from \"@/features/quote/api/quote.api\";#' pages/agent-overview/engagement-section.tsx)",
+      "Bash(timeout 420 npx vite build)",
+      "Bash(grep -n \"from ['\\\\\"]\\\\./\\\\|from ['\\\\\"]\\\\.\\\\./\" components/enquiry-wizard.tsx)",
+      "Bash(grep -v \"\\\\.tsx$\")",
+      "Bash(sed -i 's|from \"@/api/endpoints/social-post.api\"|from \"@/features/social/api/social-post.api\"|g' features/social/components/boards/social-posts-board.tsx)",
+      "Bash(sed -i 's|import\\(\"@/api/endpoints/social-post.api\"\\)|import\\(\"@/features/social/api/social-post.api\"\\)|g' features/social/components/boards/social-posts-board.tsx)",
+      "Bash(mkdir -p features/wallet/api)",
+      "Bash(sed -i 's#from \"../client/axios-client\"#from \"@/api/client/axios-client\"#' features/wallet/api/wallet.api.ts)",
+      "Bash(sed -i 's#@/api/endpoints/wallet.api#@/features/wallet/api/wallet.api#g' features/booking/components/booking-rhf-form.tsx)",
+      "Bash(npx vite *)",
+      "Bash(sed -i 's|from \"\\\\.\\\\./\\\\_data\"|from \"./_data\"|g' bookings-page.tsx enquiries-page.tsx filter-bar.tsx opportunities-context.tsx quotes-page.tsx sidebar.tsx)",
+      "Bash(sed -i 's|from \"\\\\.\\\\./helpers\"|from \"./helpers\"|g' bookings-page.tsx enquiries-page.tsx filter-bar.tsx quotes-page.tsx status-badge.tsx)"
     ],
     "additionalDirectories": [
       "/tmp"

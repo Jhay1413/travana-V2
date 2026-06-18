@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCurrentOrganization, useOrgMembers, organizationKeys } from "./queries/use-organization-queries";
-import { useUpdateOrganization } from "./mutations/use-organization-mutations";
-import type { Organization, OrgMember, OrganizationUpdate } from "@/api/endpoints/organization.api";
+import { useCurrentOrganization, useOrgMembers, organizationKeys } from "@/features/organization/api/use-organization-queries";
+import { useUpdateOrganization } from "@/features/organization/api/use-organization-mutations";
+import type { Organization, OrgMember, OrganizationUpdate } from "@/features/organization/api/organization.api";
 
 export type AgencyPlan = "starter" | "growth" | "scale";
 

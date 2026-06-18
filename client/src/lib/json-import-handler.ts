@@ -1,6 +1,6 @@
 import type { UseFormReturn } from "react-hook-form";
 import type { QueryClient } from "@tanstack/react-query";
-import type { JsonMappingResult } from "@/api/endpoints/json-mapper.api";
+import type { JsonMappingResult } from "@/features/json-mapper/api/json-mapper.api";
 
 type AirportRecord = { id: string; airport_name: string; airport_code?: string | null };
 type PackageTypeRecord = { id: string; name: string };
@@ -325,7 +325,7 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   const { setValue } = form;
 
   const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
-  const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
+  const { jsonMapperApi } = await import("@/features/json-mapper/api/json-mapper.api");
 
   const result = mapScraperJsonToFormFields(data);
 
@@ -574,7 +574,7 @@ function handleFallbackJson(data: Record<string, any>, deps: JsonImportDeps): vo
 async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps): Promise<void> {
   const { form, packageTypesData, queryClient, toast, setImageUrls } = deps;
   const { setValue } = form;
-  const { jsonMapperApi } = await import("@/api/endpoints/json-mapper.api");
+  const { jsonMapperApi } = await import("@/features/json-mapper/api/json-mapper.api");
 
   // Cruise details may be nested under `cruise` or sit at the top level.
   const cruise = data.cruise && typeof data.cruise === "object" ? data.cruise : data;

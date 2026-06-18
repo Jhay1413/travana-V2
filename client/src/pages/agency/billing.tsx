@@ -19,19 +19,19 @@ import {
   useBranches,
   usePlans,
 } from "@/hooks/queries";
-import { useUpdateOrganization } from "@/hooks/mutations/use-organization-mutations";
+import { useUpdateOrganization } from "@/features/organization/api/use-organization-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
 import { isMemberSuspended } from "./utils/role-helpers";
 import type {
   OrganizationBillingContact,
   OrganizationSettings,
-} from "@/api/endpoints/organization.api";
-import type { Plan, PlanCode } from "@/api/endpoints/plan.api";
+} from "@/features/organization/api/organization.api";
+import type { Plan, PlanCode } from "@/features/organization/api/plan.api";
 
 function formatPrice(cents: number): string {
   return `£${(cents / 100).toFixed(0)}`;

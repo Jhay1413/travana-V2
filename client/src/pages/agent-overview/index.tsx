@@ -9,16 +9,16 @@ import {
 import {
   useShopTargets,
   useAgentTargetsByUserId,
-} from "@/hooks/queries/use-targets-queries";
-import { ProfitStatBoxes, type ProfitStats } from "./profit-stat-boxes";
-import { WhatsOnTab, type WhatsOnFilter } from "./whats-on-tab";
-import { PipelineTab } from "./pipeline-tab";
-import { SocialPostsTab, type SocialFilter } from "./social-posts-tab";
-import { NewsTab } from "./news-tab";
-import { NotesTab } from "./notes-tab";
-import { PinnedSection } from "./pinned-section";
-import { EngagementSection } from "./engagement-section";
-import { ExpiringQuotesSection } from "./expiring-quotes-section";
+} from "@/features/reports/api/use-targets-queries";
+import { ProfitStatBoxes, type ProfitStats } from "@/features/agent-overview/components/profit-stat-boxes";
+import { WhatsOnTab, type WhatsOnFilter } from "@/features/agent-overview/components/whats-on-tab";
+import { PipelineTab } from "@/features/agent-overview/components/pipeline-tab";
+import { SocialPostsTab, type SocialFilter } from "@/features/agent-overview/components/social-posts-tab";
+import { NewsTab } from "@/features/agent-overview/components/news-tab";
+import { NotesTab } from "@/features/agent-overview/components/notes-tab";
+import { PinnedSection } from "@/features/agent-overview/components/pinned-section";
+import { EngagementSection } from "@/features/agent-overview/components/engagement-section";
+import { ExpiringQuotesSection } from "@/features/agent-overview/components/expiring-quotes-section";
 
 export default function AgentOverviewPage() {
   const [tab, setTab] = useState<

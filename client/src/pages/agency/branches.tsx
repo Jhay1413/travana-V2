@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Building2, Check, Plus, Search, Star } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
-import { useBranches } from "@/hooks/queries/use-branch-queries";
-import { useCurrentOrganization } from "@/hooks/queries/use-organization-queries";
-import { useCreateBranch, useUpdateBranch, useDeleteBranch } from "@/hooks/mutations/use-branch-mutations";
+import { useBranches } from "@/features/organization/api/use-branch-queries";
+import { useCurrentOrganization } from "@/features/organization/api/use-organization-queries";
+import { useCreateBranch, useUpdateBranch, useDeleteBranch } from "@/features/organization/api/use-branch-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,13 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
-import { StatCard } from "./components/StatCard";
-import { BranchCard } from "./components/BranchCard";
-import { BranchSheet } from "./components/BranchSheet";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
+import { StatCard } from "@/features/organization/components/agency/StatCard";
+import { BranchCard } from "@/features/organization/components/agency/BranchCard";
+import { BranchSheet } from "@/features/organization/components/agency/BranchSheet";
 import { formToPayload } from "./utils/branch-helpers";
-import type { Branch } from "@/api/endpoints/branch.api";
+import type { Branch } from "@/features/organization/api/branch.api";
 
 export default function AgencyBranchesPage() {
   const { can } = useRole();

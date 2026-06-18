@@ -11,16 +11,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
 import { useUsers } from "@/hooks/queries";
-import { useAgentTargetsByUserId } from "@/hooks/queries/use-targets-queries";
+import { useAgentTargetsByUserId } from "@/features/reports/api/use-targets-queries";
 import { branchOverviewApi, organizationOverviewApi } from "@/api";
-import { branchOverviewKeys } from "@/hooks/queries/use-branch-overview-queries";
-import { organizationOverviewKeys } from "@/hooks/queries/use-organization-overview-queries";
-import type { AgentPerformanceRange } from "@/api/endpoints/branch-overview.api";
-import { ProfitStatBoxes, type ProfitStats } from "@/pages/agent-overview/profit-stat-boxes";
-import { WhatsOnTab, type WhatsOnFilter } from "@/pages/agent-overview/whats-on-tab";
-import { PipelineTab } from "@/pages/agent-overview/pipeline-tab";
-import { ExpiringQuotesSection } from "@/pages/agent-overview/expiring-quotes-section";
-import { currency } from "@/pages/agent-overview/helpers";
+import { branchOverviewKeys } from "@/features/organization/api/use-branch-overview-queries";
+import { organizationOverviewKeys } from "@/features/organization/api/use-organization-overview-queries";
+import type { AgentPerformanceRange } from "@/features/organization/api/branch-overview.api";
+import { ProfitStatBoxes, type ProfitStats } from "@/features/agent-overview/components/profit-stat-boxes";
+import { WhatsOnTab, type WhatsOnFilter } from "@/features/agent-overview/components/whats-on-tab";
+import { PipelineTab } from "@/features/agent-overview/components/pipeline-tab";
+import { ExpiringQuotesSection } from "@/features/agent-overview/components/expiring-quotes-section";
+import { currency } from "@/features/agent-overview/components/helpers";
 
 const RANGE_OPTIONS: { value: AgentPerformanceRange; label: string }[] = [
   { value: "day", label: "Today" },

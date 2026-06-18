@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { FileText } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ReportFilters } from "@/api/endpoints/reports.api";
-import { FilterStrip } from "./filter-strip";
-import { SalesReportTab } from "./sales-report";
-import { AgentPerformanceTab } from "./agent-performance-report";
-import { LeadSourceTab } from "./lead-source-report";
-import { TargetsVsActualsTab } from "./targets-vs-actuals-report";
-import { firstOfMonthIso, todayIso } from "./helpers";
+import type { ReportFilters } from "@/features/reports/api/reports.api";
+import { FilterStrip } from "@/features/reports/components/filter-strip";
+import { SalesReportTab } from "@/features/reports/components/sales-report";
+import { AgentPerformanceTab } from "@/features/reports/components/agent-performance-report";
+import { LeadSourceTab } from "@/features/reports/components/lead-source-report";
+import { TargetsVsActualsTab } from "@/features/reports/components/targets-vs-actuals-report";
+import { firstOfMonthIso, todayIso } from "@/features/reports/components/helpers";
 
 type TabKey = "sales" | "agents" | "lead-source" | "targets";
 
