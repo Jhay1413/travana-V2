@@ -1,10 +1,10 @@
 import { AlertCircle, BarChart3, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useBranchOverviewStats } from "@/hooks/queries";
-import { BranchProfileStrip } from "./branch-profile-strip";
-import { KpiCards } from "./kpi-cards";
-import { ConversionFunnelCard } from "./conversion-funnel-card";
-import { AgentsPerformanceCard } from "./agents-performance-card";
+import { BranchProfileStrip } from "@/features/organization/components/branch-overview/branch-profile-strip";
+import { KpiCards } from "@/features/organization/components/branch-overview/kpi-cards";
+import { ConversionFunnelCard } from "@/features/organization/components/branch-overview/conversion-funnel-card";
+import { AgentsPerformanceCard } from "@/features/organization/components/branch-overview/agents-performance-card";
 import { SalesModeToggle } from "@/features/organization/components/agency/sales-mode-toggle";
 
 export default function BranchOverviewPage({

@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { TabStrip } from "./components/sidebar";
-import { SearchBox } from "./components/filter-bar";
-import { OpportunitiesProvider, useOpportunities } from "./components/opportunities-context";
-import { EnquiriesPage } from "./components/enquiries-page";
-import { QuotesPage } from "./components/quotes-page";
-import { BookingsPage } from "./components/bookings-page";
-import type { TabId } from "./_data";
+import { TabStrip } from "@/features/opportunities/components/sidebar";
+import { SearchBox } from "@/features/opportunities/components/filter-bar";
+import { OpportunitiesProvider, useOpportunities } from "@/features/opportunities/components/opportunities-context";
+import { EnquiriesPage } from "@/features/opportunities/components/enquiries-page";
+import { QuotesPage } from "@/features/opportunities/components/quotes-page";
+import { BookingsPage } from "@/features/opportunities/components/bookings-page";
+import type { TabId } from "@/features/opportunities/components/_data";
 
 export default function OpportunitiesPage() {
   return (

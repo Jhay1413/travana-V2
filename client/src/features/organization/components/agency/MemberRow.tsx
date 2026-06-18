@@ -1,7 +1,7 @@
 import { PauseCircle, PlayCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrgMember } from "@/features/organization/api/organization.api";
-import { ASSIGNABLE_ROLES, isMemberSuspended } from "../utils/role-helpers";
+import { ASSIGNABLE_ROLES, isMemberSuspended } from "@/pages/agency/utils/role-helpers";
 
 export function MemberRow({
   member,

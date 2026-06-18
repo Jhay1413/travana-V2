@@ -84,7 +84,9 @@
       "Bash(mkdir -p features/wallet/api)",
       "Bash(sed -i 's#from \"../client/axios-client\"#from \"@/api/client/axios-client\"#' features/wallet/api/wallet.api.ts)",
       "Bash(sed -i 's#@/api/endpoints/wallet.api#@/features/wallet/api/wallet.api#g' features/booking/components/booking-rhf-form.tsx)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(sed -i 's|from \"\\\\.\\\\./\\\\_data\"|from \"./_data\"|g' bookings-page.tsx enquiries-page.tsx filter-bar.tsx opportunities-context.tsx quotes-page.tsx sidebar.tsx)",
+      "Bash(sed -i 's|from \"\\\\.\\\\./helpers\"|from \"./helpers\"|g' bookings-page.tsx enquiries-page.tsx filter-bar.tsx quotes-page.tsx status-badge.tsx)"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -17,7 +17,7 @@ import {
   emptyBranchForm,
   OPENING_PATTERNS,
   type BranchFormState,
-} from "../utils/branch-helpers";
+} from "@/pages/agency/utils/branch-helpers";
 import { OpeningHoursEditor } from "./OpeningHoursEditor";
 import { SettingsField, SettingsSection, SettingsToggleRow } from "./SettingsField";
 

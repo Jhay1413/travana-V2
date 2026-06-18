@@ -1,6 +1,6 @@
 import { Activity } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
 
 export default function AgencyAuditPage() {
   const { can } = useRole();

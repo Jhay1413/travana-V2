@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/features/organization/api/use-branch-queries";
 import { useSendInvite } from "@/features/invite/api/use-invite-mutations";
-import { ASSIGNABLE_ROLES } from "../utils/role-helpers";
+import { ASSIGNABLE_ROLES } from "@/pages/agency/utils/role-helpers";
 import type { InviteOrgRole } from "@/features/invite/api/invite.api";
 
 const ALL_INVITABLE_ROLES: InviteOrgRole[] = ["branch_manager", "agent", "homeworker", "social_media_manager", "referral_agent"];

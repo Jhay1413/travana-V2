@@ -1,6 +1,6 @@
 import { ClipboardList, Sparkles, Ticket, type LucideIcon } from "lucide-react";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { TabId } from "../_data";
+import type { TabId } from "./_data";
 
 const tabs: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "enquiries", label: "Enquiries", icon: ClipboardList },

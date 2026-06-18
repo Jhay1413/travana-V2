@@ -5,8 +5,8 @@ import {
   sortByOptions,
   type DateRange,
   type SortBy,
-} from "../_data";
-import { formatStatus } from "../helpers";
+} from "./_data";
+import { formatStatus } from "./helpers";
 import { useOpportunities } from "./opportunities-context";
 
 export function SearchBox() {

@@ -24,8 +24,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
 import { isMemberSuspended } from "./utils/role-helpers";
 import type {
   OrganizationBillingContact,

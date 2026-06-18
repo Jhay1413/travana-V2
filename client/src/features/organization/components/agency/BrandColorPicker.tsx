@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { SUGGESTED_BRAND_COLORS } from "../utils/branding-options";
+import { SUGGESTED_BRAND_COLORS } from "@/pages/agency/utils/branding-options";
 
 export function BrandColorPicker({
   value,

@@ -13,8 +13,8 @@ import type {
   AgentPerformanceRow,
   BranchPerformanceRow,
 } from "@/features/organization/api/organization-overview.api";
-import { currency } from "../organization-overview/helpers";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
+import { currency } from "@/features/organization/components/organization-overview/helpers";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
 
 type ScopeKey = "agents" | "branches";
 

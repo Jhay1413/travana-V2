@@ -6,12 +6,12 @@ import { useUpdateOrganization } from "@/features/organization/api/use-organizat
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
-import { BrandColorPicker } from "./components/BrandColorPicker";
-import { LogoPicker } from "./components/LogoPicker";
-import { LiveBrandPreview } from "./components/LiveBrandPreview";
-import { SettingsField } from "./components/SettingsField";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
+import { BrandColorPicker } from "@/features/organization/components/agency/BrandColorPicker";
+import { LogoPicker } from "@/features/organization/components/agency/LogoPicker";
+import { LiveBrandPreview } from "@/features/organization/components/agency/LiveBrandPreview";
+import { SettingsField } from "@/features/organization/components/agency/SettingsField";
 import { COMMON_TIMEZONES, CURRENCIES } from "./utils/branding-options";
 import { SalesModeToggle } from "@/features/organization/components/agency/sales-mode-toggle";
 import type { OrganizationSettings } from "@/features/organization/api/organization.api";

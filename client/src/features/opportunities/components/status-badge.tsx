@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { formatStatus, statusBadgeClass } from "../helpers";
+import { formatStatus, statusBadgeClass } from "./helpers";
 
 export function StatusBadge({ status }: { status: string }) {
   return (

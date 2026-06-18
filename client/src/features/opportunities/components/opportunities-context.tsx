@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useOpportunityAgents } from "@/hooks/queries";
-import type { DateRange, SortBy } from "../_data";
+import type { DateRange, SortBy } from "./_data";
 
 export const PAGE_SIZE = 20;
 

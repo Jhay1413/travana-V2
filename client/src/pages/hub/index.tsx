@@ -2,14 +2,14 @@ import { useState } from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { HubShell } from "@/features/hub/components/hub-shell";
 import type { HubRole } from "@/data/hub-mock";
-import HubDashboard from "./hub-dashboard";
-import HubTraining from "./hub-training";
-import HubAiIntel from "./hub-ai-intel";
-import HubKnowledge from "./hub-knowledge";
-import HubDeals from "./hub-deals";
-import HubNews from "./hub-news";
-import HubProfiles from "./hub-profiles";
-import HubAdmin from "./hub-admin";
+import HubDashboard from "@/features/hub/components/hub-dashboard";
+import HubTraining from "@/features/hub/components/hub-training";
+import HubAiIntel from "@/features/hub/components/hub-ai-intel";
+import HubKnowledge from "@/features/hub/components/hub-knowledge";
+import HubDeals from "@/features/hub/components/hub-deals";
+import HubNews from "@/features/hub/components/hub-news";
+import HubProfiles from "@/features/hub/components/hub-profiles";
+import HubAdmin from "@/features/hub/components/hub-admin";
 
 export default function HubPage() {
   const [role, setRole] = useState<HubRole>("Senior Agent");

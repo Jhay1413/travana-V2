@@ -3,10 +3,10 @@ import { AlertCircle, BarChart3, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBranches, useOrganizationOverviewStats } from "@/hooks/queries";
-import { OrgProfileStrip } from "./org-profile-strip";
-import { KpiCards } from "./kpi-cards";
-import { BranchesPerformanceTable } from "./branches-performance-table";
-import { ForwardsSynopsisCard } from "./forwards-synopsis-card";
+import { OrgProfileStrip } from "@/features/organization/components/organization-overview/org-profile-strip";
+import { KpiCards } from "@/features/organization/components/organization-overview/kpi-cards";
+import { BranchesPerformanceTable } from "@/features/organization/components/organization-overview/branches-performance-table";
+import { ForwardsSynopsisCard } from "@/features/organization/components/organization-overview/forwards-synopsis-card";
 import BranchOverviewPage from "@/pages/branch-overview";
 
 type DemoView = "single-branch" | "multi-branch";

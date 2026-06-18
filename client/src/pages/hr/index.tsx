@@ -14,15 +14,15 @@ import {
   useAddHrNote,
   useAddHrDocument,
 } from "@/hooks/mutations";
-import type { Employee, Reminder } from "./_data";
-import { mapApiEmployee, mapApiReminder } from "./helpers";
-import { HRContext, type HRContextValue } from "./hr-context";
-import { Sidebar, MobileNav, Header, type View, type ProfileTab } from "./sidebar";
-import { DashboardPage } from "./dashboard-page";
-import { DirectoryPage } from "./directory-page";
-import { ProfilePage } from "./profile-page";
-import { HolidayPage } from "./holiday-page";
-import { DocumentsPage } from "./documents-page";
+import type { Employee, Reminder } from "@/features/hr/components/_data";
+import { mapApiEmployee, mapApiReminder } from "@/features/hr/components/helpers";
+import { HRContext, type HRContextValue } from "@/features/hr/components/hr-context";
+import { Sidebar, MobileNav, Header, type View, type ProfileTab } from "@/features/hr/components/sidebar";
+import { DashboardPage } from "@/features/hr/components/dashboard-page";
+import { DirectoryPage } from "@/features/hr/components/directory-page";
+import { ProfilePage } from "@/features/hr/components/profile-page";
+import { HolidayPage } from "@/features/hr/components/holiday-page";
+import { DocumentsPage } from "@/features/hr/components/documents-page";
 
 export default function HrPage() {
   const [view, setView] = useState<View>({ name: "dashboard" });

@@ -9,12 +9,12 @@ import {
 import { useCurrentUser } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
-import { StatCard } from "./components/StatCard";
-import { InvitePanel } from "./components/InvitePanel";
-import { MemberRow } from "./components/MemberRow";
-import { PendingInvitesList } from "./components/PendingInvitesList";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
+import { StatCard } from "@/features/organization/components/agency/StatCard";
+import { InvitePanel } from "@/features/organization/components/agency/InvitePanel";
+import { MemberRow } from "@/features/organization/components/agency/MemberRow";
+import { PendingInvitesList } from "@/features/organization/components/agency/PendingInvitesList";
 import { isMemberSuspended, roleLabel } from "./utils/role-helpers";
 import type { OrgMember } from "@/features/organization/api/organization.api";
 import type { InviteOrgRole } from "@/features/invite/api/invite.api";

@@ -21,10 +21,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { TourOperator } from "@/features/tour-operator/types";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
-import { StatCard } from "./components/StatCard";
-import { TourOperatorSheet, type TourOperatorFormState } from "./components/TourOperatorSheet";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
+import { StatCard } from "@/features/organization/components/agency/StatCard";
+import { TourOperatorSheet, type TourOperatorFormState } from "@/features/organization/components/agency/TourOperatorSheet";
 
 function formToPayload(form: TourOperatorFormState): {
   name: string | null;

@@ -17,11 +17,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
-import { StatCard } from "./components/StatCard";
-import { BranchCard } from "./components/BranchCard";
-import { BranchSheet } from "./components/BranchSheet";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
+import { StatCard } from "@/features/organization/components/agency/StatCard";
+import { BranchCard } from "@/features/organization/components/agency/BranchCard";
+import { BranchSheet } from "@/features/organization/components/agency/BranchSheet";
 import { formToPayload } from "./utils/branch-helpers";
 import type { Branch } from "@/features/organization/api/branch.api";
 

@@ -8,9 +8,9 @@ import { useUpdateBranch } from "@/features/organization/api/use-branch-mutation
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import BranchOverviewPage from "@/pages/branch-overview";
-import { OwnerOnlyGate } from "./components/OwnerOnlyGate";
-import { PageLoading } from "./components/PageLoading";
-import { BranchSheet } from "./components/BranchSheet";
+import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
+import { PageLoading } from "@/features/organization/components/agency/PageLoading";
+import { BranchSheet } from "@/features/organization/components/agency/BranchSheet";
 import { formToPayload } from "./utils/branch-helpers";
 
 export default function AgencyBranchDetailPage() {

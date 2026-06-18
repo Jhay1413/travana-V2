@@ -1,15 +1,16 @@
 import { useLocation } from "wouter";
-import { useOpportunityQuotes } from "@/hooks/queries";
+import { Phone } from "lucide-react";
+import { useOpportunityEnquiries } from "@/hooks/queries";
 import { FilterBar } from "./filter-bar";
 import { Pagination } from "./pagination";
 import { StatusBadge } from "./status-badge";
 import { useOpportunities } from "./opportunities-context";
-import { quoteStatuses } from "../_data";
-import { currency, formatDate } from "../helpers";
+import { enquiryStatuses } from "./_data";
+import { currency, formatDate } from "./helpers";
 
-export function QuotesPage() {
+export function EnquiriesPage() {
   const { apiFilters } = useOpportunities();
-  const query = useOpportunityQuotes(apiFilters);
+  const query = useOpportunityEnquiries(apiFilters);
   const items = query.data?.items ?? [];
   const total = query.data?.total ?? 0;
   const totalPages = query.data?.totalPages ?? 0;
@@ -18,18 +19,17 @@ export function QuotesPage() {
 
   return (
     <>
-      <FilterBar statusOptions={quoteStatuses} total={total} loading={query.isLoading} />
+      <FilterBar statusOptions={enquiryStatuses} total={total} loading={query.isLoading} />
 
       <div className="rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden overflow-x-auto">
-        <div className="min-w-[700px]">
-          <div className="grid grid-cols-[1.3fr_1fr_.8fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] text-[10px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">
+        <div className="min-w-[600px]">
+          <div className="grid grid-cols-[1.5fr_1fr_.8fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] text-[10px] font-semibold text-black/50 dark:text-white/50 uppercase tracking-wider">
             <div>Client</div>
             <div>Title</div>
             <div>Status</div>
             <div>Travel Date</div>
             <div>Guests</div>
-            <div>Price</div>
-            <div>Commission</div>
+            <div>Budget</div>
             <div>Created</div>
           </div>
           {items.length > 0 ? (
@@ -37,15 +37,16 @@ export function QuotesPage() {
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[1.3fr_1fr_.8fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition cursor-pointer items-center"
-                  onClick={() => navigate(`/clients/${item.clientId || "_"}/quotes/${item.id}`)}
-                  data-testid={`row-opportunity-quote-${item.id}`}
+                  className="grid grid-cols-[1.5fr_1fr_.8fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition cursor-pointer items-center"
+                  onClick={() => item.clientId && navigate(`/clients/${item.clientId}`)}
+                  data-testid={`row-opportunity-enquiry-${item.id}`}
                 >
                   <div className="min-w-0">
                     <div className="truncate text-xs font-medium">{item.clientName}</div>
-                    {item.agentName && (
-                      <div className="truncate text-[10px] text-black/40 dark:text-white/40">
-                        {item.agentName}
+                    {item.clientPhone && (
+                      <div className="truncate text-[10px] text-black/40 dark:text-white/40 flex items-center gap-0.5">
+                        <Phone className="h-2.5 w-2.5" />
+                        {item.clientPhone}
                       </div>
                     )}
                   </div>
@@ -56,10 +57,7 @@ export function QuotesPage() {
                     {item.adults}A {item.children > 0 ? `${item.children}C` : ""}
                   </div>
                   <div className="text-xs tabular-nums font-medium">
-                    {item.totalPrice && item.totalPrice > 0 ? currency.format(item.totalPrice) : "—"}
-                  </div>
-                  <div className="text-xs tabular-nums text-emerald-600">
-                    {item.commission && item.commission > 0 ? currency.format(item.commission) : "—"}
+                    {item.budget && item.budget > 0 ? currency.format(item.budget) : "—"}
                   </div>
                   <div className="text-[10px] text-black/40 dark:text-white/40 tabular-nums">
                     {formatDate(item.dateCreated)}
@@ -69,7 +67,7 @@ export function QuotesPage() {
             </div>
           ) : (
             <div className="px-4 py-8 text-center text-xs text-black/40 dark:text-white/40">
-              No quotes found.
+              No enquiries found.
             </div>
           )}
         </div>

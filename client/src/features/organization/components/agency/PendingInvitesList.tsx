@@ -2,7 +2,7 @@ import { Loader2, RotateCw, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePendingInvites } from "@/features/invite/api/use-invite-queries";
 import { useResendInvite, useRevokeInvite } from "@/features/invite/api/use-invite-mutations";
-import { roleLabel } from "../utils/role-helpers";
+import { roleLabel } from "@/pages/agency/utils/role-helpers";
 
 function formatRelative(date: string | null): string {
   if (!date) return "—";
