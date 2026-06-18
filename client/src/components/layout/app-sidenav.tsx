@@ -16,7 +16,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useRoles } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications, useCurrentOrganization } from "@/hooks/queries";
-import { getNavForRoles, isNavItem, type NavItem, type NavSection } from "@/config/nav";
+import { getNavForRoles, isNavItem, type NavBadgeKey, type NavItem, type NavSection } from "@/config/nav";
+import { useTicketsByUser } from "@/features/tickets";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
 
@@ -59,8 +60,10 @@ function isActive(currentPath: string, currentSearch: string, itemPath: string):
   return currentPath === itemPath || currentPath.startsWith(itemPath + "/");
 }
 
-function ItemRow({ item, active, collapsed }: { item: NavItem; active: boolean; collapsed: boolean }) {
+function ItemRow({ item, active, collapsed, count = 0 }: { item: NavItem; active: boolean; collapsed: boolean; count?: number }) {
   const Icon = item.icon;
+  const showBadge = count > 0;
+  const badgeLabel = count > 99 ? "99+" : String(count);
 
   if (collapsed) {
     return (
@@ -69,13 +72,21 @@ function ItemRow({ item, active, collapsed }: { item: NavItem; active: boolean; 
         title={item.label}
         data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
         className={cn(
-          "grid h-10 w-10 place-items-center rounded-xl transition",
+          "relative grid h-10 w-10 place-items-center rounded-xl transition",
           active
             ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
             : "text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
         )}
       >
         <Icon className="h-4 w-4" />
+        {showBadge && (
+          <span
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white"
+            data-testid={`badge-nav-${item.badge}`}
+          >
+            {badgeLabel}
+          </span>
+        )}
       </Link>
     );
   }
@@ -105,12 +116,28 @@ function ItemRow({ item, active, collapsed }: { item: NavItem; active: boolean; 
         </span>
         <span className="text-sm font-medium">{item.label}</span>
       </div>
-      <ChevronRight
-        className={cn(
-          "h-4 w-4",
-          active ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40"
+      <div className="flex items-center gap-2">
+        {showBadge && (
+          <span
+            className={cn(
+              "inline-flex min-w-[28px] items-center justify-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+              active
+                ? "border-black/10 bg-black/10 text-black dark:border-white/15 dark:bg-white/15 dark:text-white"
+                : "border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/10 dark:text-white/80"
+            )}
+            data-testid={`badge-nav-${item.badge}`}
+            aria-label={`${count} ${item.label}`}
+          >
+            {badgeLabel}
+          </span>
         )}
-      />
+        <ChevronRight
+          className={cn(
+            "h-4 w-4",
+            active ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40"
+          )}
+        />
+      </div>
     </Link>
   );
 }
@@ -185,6 +212,10 @@ function ancestorChain(id: string, parentMap: Map<string, string | null>): strin
   return chain;
 }
 
+function badgeCountFor(item: NavItem, badgeCounts: Partial<Record<NavBadgeKey, number>>): number {
+  return item.badge ? badgeCounts[item.badge] ?? 0 : 0;
+}
+
 function SectionBlock({
   section,
   currentPath,
@@ -192,6 +223,7 @@ function SectionBlock({
   collapsed,
   expandedIds,
   onToggle,
+  badgeCounts,
 }: {
   section: NavSection;
   currentPath: string;
@@ -199,6 +231,7 @@ function SectionBlock({
   collapsed: boolean;
   expandedIds: string[];
   onToggle: (id: string) => void;
+  badgeCounts: Partial<Record<NavBadgeKey, number>>;
 }) {
   if (collapsed) {
     return (
@@ -209,6 +242,7 @@ function SectionBlock({
             item={item}
             active={isActive(currentPath, currentSearch, item.path)}
             collapsed
+            count={badgeCountFor(item, badgeCounts)}
           />
         ))}
       </>
@@ -223,6 +257,7 @@ function SectionBlock({
           item={child}
           active={isActive(currentPath, currentSearch, child.path)}
           collapsed={false}
+          count={badgeCountFor(child, badgeCounts)}
         />
       ) : (
         <SectionBlock
@@ -233,6 +268,7 @@ function SectionBlock({
           collapsed={false}
           expandedIds={expandedIds}
           onToggle={onToggle}
+          badgeCounts={badgeCounts}
         />
       )
     );
@@ -317,6 +353,23 @@ function SidenavInner({
       n.type === "hub_post" || n.type === "hub_like" || n.type === "hub_share" || n.type === "hub_mention"
     ).length;
   }, [hubUnreadNotifs]);
+
+  // Count of open tickets allocated to the current agent, shown as a badge on
+  // the "Tickets" nav item. The endpoint also returns tickets the user created,
+  // so filter to ones assigned to them and exclude resolved/closed.
+  const { data: assignedTickets } = useTicketsByUser(currentUser?.id || "");
+  const ticketCount = useMemo(() => {
+    if (!Array.isArray(assignedTickets) || !currentUser?.id) return 0;
+    return assignedTickets.filter((t) => {
+      if (t.assignedTo !== currentUser.id) return false;
+      const s = (t.status || "").toLowerCase();
+      return s !== "resolved" && s !== "closed";
+    }).length;
+  }, [assignedTickets, currentUser?.id]);
+  const badgeCounts = useMemo<Partial<Record<NavBadgeKey, number>>>(
+    () => ({ tickets: ticketCount }),
+    [ticketCount],
+  );
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) => {
@@ -444,6 +497,7 @@ function SidenavInner({
               collapsed={collapsed}
               expandedIds={expandedSections}
               onToggle={toggleSection}
+              badgeCounts={badgeCounts}
             />
           ))}
 

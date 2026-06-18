@@ -357,6 +357,20 @@ export function BookingRHFForm({
   const isCruise = packageTypeName === "Cruise Package";
   const showFlights = !isHotTubBreak && !(isCruise && cruiseOnly);
 
+  // ── Default new records to "Package Holiday" ──────────────────────────────
+  // On create the package type starts empty; default it to the standard
+  // "Package Holiday" once lookups load. Runs once and only when empty, so
+  // edited records (which already carry a type) are left untouched.
+  const didDefaultPackageType = useRef(false);
+  useEffect(() => {
+    if (didDefaultPackageType.current || !packageTypesData) return;
+    didDefaultPackageType.current = true;
+    if (!form.getValues("packageType")) {
+      const pkg = packageTypesData.find((p: { id: string; name: string }) => p.name === "Package Holiday");
+      if (pkg) setValue("packageType", pkg.id);
+    }
+  }, [packageTypesData]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Cruise cascade ────────────────────────────────────────────────────────
   const { data: cruiseLinesData } = useCruiseLines();
   const cruiseLine = useWatch({ control, name: "cruiseLine" });

@@ -164,6 +164,22 @@ describe("newQuoteService.deleteQuote", () => {
 
     expect(newQuoteRepository.remove).toHaveBeenCalledWith("q1");
   });
+
+  it("closes out the quote's open tasks when deleted", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1" } as never);
+
+    await newQuoteService.deleteQuote("q1", TRUSTED);
+
+    expect(taskService.completeByEntity).toHaveBeenCalledWith("quote", "q1");
+  });
+
+  it("still deletes the quote when completing its tasks fails", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1" } as never);
+    vi.mocked(taskService.completeByEntity).mockRejectedValueOnce(new Error("boom") as never);
+
+    await expect(newQuoteService.deleteQuote("q1", TRUSTED)).resolves.not.toThrow();
+    expect(newQuoteRepository.remove).toHaveBeenCalledWith("q1");
+  });
 });
 
 describe("newQuoteService.createQuote — enquiry → quote conversion", () => {

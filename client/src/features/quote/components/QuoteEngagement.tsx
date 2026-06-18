@@ -68,7 +68,7 @@ export function QuoteEngagement({ quoteId, className }: QuoteEngagementProps) {
   const { data: viewStats, isLoading: viewsLoading } = useQuoteViews(quoteId);
   const { data: actions, isLoading: actionsLoading } = useQuoteCustomerActions(quoteId);
   const [showPublicHistory, setShowPublicHistory] = useState(false);
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
 
   const isLoading = viewsLoading || actionsLoading;
   const clientViews: QuoteClientViewEntry[] = viewStats?.clientViews ?? [];

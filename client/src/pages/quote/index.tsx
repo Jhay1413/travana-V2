@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useRoute, Redirect } from "wouter";
 import { ChevronLeft, Link as LinkIcon, Pin, PinOff, Share2, Sparkles } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
@@ -141,22 +141,11 @@ export default function QuotePage() {
     );
   }
 
+  // Quote couldn't be loaded (e.g. deleted or converted) — fall back to the
+  // user's home page instead of showing a dead-end error screen. "/" redirects
+  // to the role-based home path (see App.tsx).
   if (error || !quote) {
-    return (
-      <div className="flex h-[calc(100vh-56px)] items-center justify-center" data-testid="error-quote">
-        <div className="text-center">
-          <p className="text-sm text-black/70">Failed to load {pageLabel.toLowerCase()}</p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-4"
-            onClick={() => setLocation("/clients")}
-          >
-            Back to Clients
-          </Button>
-        </div>
-      </div>
-    );
+    return <Redirect to="/" />;
   }
 
   return (

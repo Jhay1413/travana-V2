@@ -42,10 +42,15 @@ import {
 } from "lucide-react";
 import type { OrgRole } from "@/types/auth/auth.types";
 
+// Keys for dynamic count badges rendered next to a nav item. The sidebar
+// resolves each key to a live count (see app-sidenav.tsx).
+export type NavBadgeKey = "tickets";
+
 export type NavItem = {
   path: string;
   label: string;
   icon: LucideIcon;
+  badge?: NavBadgeKey;
 };
 
 export type NavSection = {
@@ -70,7 +75,7 @@ const AGENT_NAV: NavConfig = [
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
       { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
-      { path: "/tickets", label: "Tickets", icon: LifeBuoy },
+      { path: "/tickets", label: "Tickets", icon: LifeBuoy, badge: "tickets" },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/my-profile", label: "My Profile", icon: UserCircle },
@@ -84,7 +89,7 @@ const BRANCH_MANAGER_NAV: NavConfig = [
     items: [
       { path: "/branch-overview", label: "Dashboard", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
-      { path: "/tickets", label: "Tickets", icon: LifeBuoy },
+      { path: "/tickets", label: "Tickets", icon: LifeBuoy, badge: "tickets" },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/sms-center", label: "Text", icon: MessageCircle },
       { path: "/social-wall", label: "Social Wall", icon: Newspaper },
