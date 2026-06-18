@@ -50,15 +50,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePipelineColumn, useNeonClients, useNeonClient, useCurrentUser, useTransaction, useNotes, transactionKeys } from "@/hooks/queries";
+import { usePipelineColumn, useNeonClients, useNeonClient, useCurrentUser, useTransaction, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction, useConvertToBooking, useUpdateQuote } from "@/hooks/mutations";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
+import { QuoteNotesSection } from "@/features/quote/components/QuoteNotesSection";
+import { QuoteTasksSection } from "@/features/quote/components/QuoteTasksSection";
 import type { Transaction } from "@/features/quote/types";
-import { formatRelativeTime, formatFullDateTime } from "@/lib/note-time";
 
 type PipelineStage = "Enquiry" | "Quoted" | "In Play" | "Booked";
 
@@ -566,7 +567,6 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
   const [, setLocation] = useLocation();
   const { data: client } = useNeonClient(t.client_id || "");
   const { data: fullTx } = useTransaction(t.id);
-  const { data: notes } = useNotes(t.id);
   const tx = fullTx || t;
   const value = getTransactionValue(t);
   const profit = getTransactionProfit(t);
@@ -589,10 +589,21 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
   const quote = t.quotes?.[0];
   const booking = t.booking;
 
+  // Notes are attached to the transaction; tasks are attached to the
+  // stage-specific entity (enquiry / quote / booking), mirroring the
+  // enquiry and quote detail pages.
+  const mainQuote = t.quotes?.find(q => !q.isQuoteCopy) || t.quotes?.[0];
+  const taskEntity: { type: "enquiry" | "quote" | "booking"; id?: string; userId?: string } =
+    stage === "Enquiry"
+      ? { type: "enquiry", id: t.enquiry?.id, userId: (t.enquiry as any)?.user_id }
+      : stage === "Booked"
+        ? { type: "booking", id: t.booking?.id, userId: (t.booking as any)?.user_id }
+        : { type: "quote", id: mainQuote?.id, userId: (mainQuote as any)?.user_id };
+
   return (
     <>
       <div className="fixed inset-0 bg-black/20 z-[500] transition-opacity" onClick={onClose} data-testid="panel-backdrop" />
-      <div className="fixed top-0 right-0 bottom-0 w-[420px] bg-white z-[501] shadow-2xl border-l border-gray-200 flex flex-col animate-in slide-in-from-right duration-300" data-testid="transaction-detail-panel">
+      <div className="fixed top-0 right-0 bottom-0 w-[560px] max-w-[90vw] bg-white z-[501] shadow-2xl border-l border-gray-200 flex flex-col animate-in slide-in-from-right duration-300" data-testid="transaction-detail-panel">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: hex }} />
@@ -676,25 +687,22 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
             );
           })()}
 
-          <SectionHeader title="Notes" />
-          {notes && notes.filter(n => !n.parent_id).length > 0 ? (
-            <div className="space-y-2">
-              {notes.filter(n => !n.parent_id).slice(0, 5).map(n => (
-                <div key={n.id} className="bg-amber-50/40 rounded-xl p-3">
-                  <p className="text-[13px] text-gray-700 whitespace-pre-wrap line-clamp-3">{(n.content || "").replace(/<[^>]*>/g, "")}</p>
-                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
-                    <span className="font-medium text-gray-500">{n.author_name || n.description || "Agent"}</span>
-                    <span>·</span>
-                    <span title={formatFullDateTime(n.createdAt)}>{formatRelativeTime(n.createdAt)} · {formatFullDateTime(n.createdAt)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <SectionHeader title="Tasks" />
+          {taskEntity.id ? (
+            <QuoteTasksSection
+              quoteId={taskEntity.id}
+              entityType={taskEntity.type}
+              assignedUserId={taskEntity.userId}
+              className="!p-3"
+            />
           ) : (
             <div className="bg-gray-50 rounded-xl p-3.5 text-center">
-              <p className="text-[13px] text-gray-400">No notes yet</p>
+              <p className="text-[13px] text-gray-400">No tasks available for this deal</p>
             </div>
           )}
+
+          <SectionHeader title="Notes" />
+          <QuoteNotesSection transactionId={t.id} />
 
           <div className="mt-4 mb-6 flex items-center gap-2 text-[11px] text-gray-400">
             <Clock className="w-3 h-3" />

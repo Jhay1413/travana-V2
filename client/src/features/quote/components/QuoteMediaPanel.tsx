@@ -28,10 +28,21 @@ export function QuoteMediaPanel({
   uploadFiles,
   openFilePicker,
 }: QuoteMediaPanelProps) {
-  // Lightbox scrolls through ALL images, ordered with the primary first.
+  // Lightbox scrolls through ALL images, ordered with the primary first. Only
+  // quote-owned images can be promoted to primary (mirrors the thumbnail logic).
   const allImages = useMemo(
     () => (primaryImage ? [primaryImage, ...galleryImages] : galleryImages),
     [primaryImage, galleryImages],
+  );
+  const lightboxImages = useMemo(
+    () =>
+      allImages.map((img) => ({
+        id: img.id,
+        url: img.url,
+        isPrimary: img.isPrimary,
+        canSetPrimary: img.ownerType === "quote",
+      })),
+    [allImages],
   );
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -166,11 +177,14 @@ export function QuoteMediaPanel({
       </button>
 
       <ImageLightbox
-        images={allImages}
+        images={lightboxImages}
         open={lightboxIndex !== null}
         startIndex={lightboxIndex ?? 0}
         onOpenChange={(open) => {
           if (!open) setLightboxIndex(null);
+        }}
+        onSetPrimary={(img) => {
+          if (img.id) setPrimary(img.id);
         }}
       />
     </>

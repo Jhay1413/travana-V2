@@ -308,6 +308,54 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       });
     }
 
+    // Additional accommodations are part of the trip itinerary — render them
+    // inline in the timeline (sorted by their own check-in date), not in Extras.
+    quote.extraAccommodations.forEach((a, idx) => {
+      if (!a.property && !a.checkInDate) return;
+      const accomCheckIn = a.checkInDate || quote.checkInDate || quote.travelDate;
+      timelineItems.push({
+        type: "hotel-extra",
+        sortKey: buildSortKey(accomCheckIn, "3", "14:00"),
+        content: (
+          <div className="flex gap-2.5" data-testid={`timeline-hotel-extra-${idx}`}>
+            <div className="flex flex-col items-center">
+              <div className="grid h-7 w-7 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
+                <Hotel className="h-3.5 w-3.5" />
+              </div>
+              <div className="mt-1 h-full w-px bg-black/10" />
+            </div>
+            <div className="flex-1 pb-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Hotel Check-in</div>
+              {a.property && <div className="mt-0.5 text-xs font-semibold">{a.property}</div>}
+              <div className="mt-1 grid gap-1">
+                {a.checkInDate && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    <span>{formatTimelineDate(a.checkInDate)}</span>
+                  </div>
+                )}
+                {a.noOfNights != null && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-black/60">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>{a.noOfNights} night{a.noOfNights !== 1 ? "s" : ""}</span>
+                  </div>
+                )}
+                <div className="mt-0.5 flex flex-wrap gap-1.5">
+                  {a.roomType && (
+                    <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{a.roomType}</span>
+                  )}
+                  {a.board && (
+                    <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{a.board}</span>
+                  )}
+                </div>
+                {a.tourOperatorName && <div className="text-[11px] text-black/50">{a.tourOperatorName}</div>}
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    });
+
     const hasInboundPrimary = Boolean(
       quote.flights.inbound.from ||
       quote.flights.inbound.to ||
@@ -443,7 +491,6 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
   const sortedAttractionTickets = sortByKey(quote.attractionTickets, (t) => t.dateOfVisit);
   const sortedLoungePasses = sortByKey(quote.loungePasses, (p) => p.dateOfUsage);
   const sortedAirportParkings = sortByKey(quote.airportParkings, (p) => p.parkingDate);
-  const sortedExtraAccommodations = sortByKey(quote.extraAccommodations, (a) => a.checkInDate);
 
   return (
     <div data-testid="card-quote-summary-timeline">
@@ -467,7 +514,7 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
       )}
 
       {/* Extras */}
-      {(quote.transfers.length > 0 || quote.carHires.length > 0 || quote.attractionTickets.length > 0 || quote.loungePasses.length > 0 || quote.airportParkings.length > 0 || quote.extraAccommodations.length > 0) && (
+      {(quote.transfers.length > 0 || quote.carHires.length > 0 || quote.attractionTickets.length > 0 || quote.loungePasses.length > 0 || quote.airportParkings.length > 0) && (
         <div className="mt-4 pt-4 border-t border-black/8" data-testid="section-extras">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-black/40 mb-3">Extras</div>
           <div className="space-y-2">
@@ -583,36 +630,6 @@ export function QuoteSummaryTimeline({ quote }: { quote: QuoteDisplay }) {
                     )}
                     {p.duration && <div className="text-[11px] text-black/60">{p.duration}</div>}
                     {p.tourOperatorName && <div className="text-[11px] text-black/50">{p.tourOperatorName}</div>}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {sortedExtraAccommodations.map((a, idx) => (
-              <div key={idx} className="flex gap-2.5" data-testid={`extra-accommodation-${idx}`}>
-                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-blue-200 bg-blue-50 text-blue-600">
-                  <Hotel className="h-3.5 w-3.5" />
-                </div>
-                <div className="flex-1 py-0.5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">Extra Accommodation</div>
-                  {a.property && <div className="mt-0.5 text-xs font-semibold">{a.property}</div>}
-                  <div className="mt-0.5 grid gap-0.5">
-                    {a.checkInDate && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                        <Calendar className="h-3 w-3 shrink-0" />
-                        <span>{formatTimelineDate(a.checkInDate)}</span>
-                      </div>
-                    )}
-                    {a.noOfNights != null && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-black/60">
-                        <Clock className="h-3 w-3 shrink-0" />
-                        <span>{a.noOfNights} night{a.noOfNights !== 1 ? "s" : ""}</span>
-                      </div>
-                    )}
-                    <div className="mt-0.5 flex flex-wrap gap-1.5">
-                      {a.roomType && <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{a.roomType}</span>}
-                      {a.board && <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-black/70">{a.board}</span>}
-                    </div>
                   </div>
                 </div>
               </div>
