@@ -26,3 +26,8 @@ export const importNeonClientsValidator = z.object({
     clients: z.array(importClientRowSchema).min(1, 'At least one client is required'),
   }),
 });
+
+export const mergeNeonClientValidator = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({ targetId: z.string().uuid() }),
+});

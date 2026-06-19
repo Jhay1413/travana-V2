@@ -5,10 +5,13 @@ export const queryClient = new QueryClient({
     queries: {
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      // Was Infinity, which meant queries never refetched on remount/navigation
-      // (only after an explicit invalidate). 0 = refetch on mount: cached data
-      // shows instantly, then refreshes in the background when you revisit.
-      staleTime: 0,
+      // Data stays "fresh" for 30s: navigating between pages within that window
+      // serves cache instantly with NO refetch (no loading flash / double render).
+      // After 30s a revisit shows cache immediately, then refreshes in the
+      // background. Mutations still invalidate their queries explicitly, so
+      // user-initiated changes reflect right away regardless of this value.
+      staleTime: 30_000,
+      gcTime: 1000 * 60 * 10,
       retry: false,
     },
     mutations: {

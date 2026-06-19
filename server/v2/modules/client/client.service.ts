@@ -34,4 +34,35 @@ export const clientService = {
       throw new AppError("Client not found", 404);
     }
   },
+
+  /**
+   * Merge a duplicate (source) client into a surviving (target) client: reassign
+   * all of the source's records to the target and soft-archive the source.
+   * Both clients must be within the caller's tenant scope.
+   */
+  async mergeClients(sourceId: string, targetId: string, scope: Scope): Promise<Client> {
+    if (sourceId === targetId) {
+      throw new AppError("Cannot merge a client into itself", 400);
+    }
+
+    // Scope-enforced fetch: an out-of-scope / not-owned client reads as 404.
+    const [source, target] = await Promise.all([
+      clientRepository.findById(sourceId, scope),
+      clientRepository.findById(targetId, scope),
+    ]);
+    if (!source) throw new AppError("Source client not found", 404);
+    if (!target) throw new AppError("Target client not found", 404);
+
+    if (source.status === "merged") {
+      throw new AppError("Source client has already been merged", 400);
+    }
+    if (target.status === "merged") {
+      throw new AppError("Target client has already been merged into another client", 400);
+    }
+    if (source.orgId !== target.orgId) {
+      throw new AppError("Clients must belong to the same organization", 400);
+    }
+
+    return await clientRepository.mergeAtomic(source, target, scope.userId);
+  },
 };

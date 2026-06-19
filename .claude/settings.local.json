@@ -93,7 +93,8 @@
       "Bash(xargs grep -l \"ticket.routes\")",
       "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/**)",
       "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/tickets/**)",
-      "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/tickets/api/**)"
+      "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/tickets/api/**)",
+      "Bash(xargs grep -l \"QueryClient\\\\|queryClient\")"
     ],
     "additionalDirectories": [
       "/tmp"

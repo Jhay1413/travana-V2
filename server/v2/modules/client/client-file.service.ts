@@ -63,9 +63,13 @@ export const clientFileService = {
     }
   },
 
-  async getDownloadTarget(id: string): Promise<DownloadTarget> {
+  async getDownloadTarget(id: string, opts?: { inline?: boolean }): Promise<DownloadTarget> {
     const file = await clientFileRepository.findById(id);
     if (!file) throw Object.assign(new Error("File not found"), { statusCode: 404 });
+
+    // "inline" lets the browser render the file in a preview (e.g. a PDF in an
+    // iframe); "attachment" forces a download.
+    const disposition = opts?.inline ? "inline" : "attachment";
 
     if (isS3Key(file.filename)) {
       const url = await getSignedUrl(
@@ -73,7 +77,8 @@ export const clientFileService = {
         new GetObjectCommand({
           Bucket: S3_BUCKET,
           Key: file.filename,
-          ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
+          ResponseContentDisposition: `${disposition}; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
+          ResponseContentType: file.mimeType,
         }),
         { expiresIn: PRESIGNED_URL_EXPIRES_IN }
       );

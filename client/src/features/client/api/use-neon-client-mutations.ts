@@ -34,3 +34,16 @@ export function useImportNeonClients() {
     },
   });
 }
+
+export function useMergeNeonClients() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceId, targetId }: { sourceId: string; targetId: string }) =>
+      neonClientApi.merge(sourceId, targetId),
+    // A merge reassigns deals/files/notes/tickets across clients, so refetch
+    // everything rather than trying to enumerate every affected query key.
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}

@@ -26,4 +26,11 @@ export const neonClientApi = {
     const { data } = await axiosClient.post<ImportResult>("/api/v2/neon-clients/import", { clients });
     return data;
   },
+
+  // Merge a duplicate (source) client into a surviving (target) client. Returns
+  // the surviving client; the source is soft-archived server-side.
+  merge: async (sourceId: string, targetId: string): Promise<NeonClient> => {
+    const { data } = await axiosClient.post<NeonClient>(`/api/v2/neon-clients/${sourceId}/merge`, { targetId });
+    return data;
+  },
 };

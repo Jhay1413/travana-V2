@@ -5,6 +5,7 @@ import {
   createNeonClientValidator,
   updateNeonClientValidator,
   importNeonClientsValidator,
+  mergeNeonClientValidator,
 } from './neon-client.validator';
 
 const router = Router();
@@ -13,6 +14,7 @@ router.get('/', neonClientController.listNeonClients);
 router.get('/:id', neonClientController.getNeonClientById);
 router.post('/', validate(createNeonClientValidator), neonClientController.createNeonClient);
 router.post('/import', validate(importNeonClientsValidator), neonClientController.importNeonClients);
+router.post('/:id/merge', validate(mergeNeonClientValidator), neonClientController.mergeNeonClient);
 router.patch('/:id', validate(updateNeonClientValidator), neonClientController.updateNeonClient);
 router.delete('/:id', neonClientController.deleteNeonClient);
 

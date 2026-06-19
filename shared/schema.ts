@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -160,6 +160,8 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({ i
 export type InsertUserProfile = z.infer<typeof insertUserProfileSchema>;
 export type UserProfile = typeof userProfiles.$inferSelect;
 
+export const client_status_enum = pgEnum("client_status", ["active", "merged"]);
+
 export const clientTable = pgTable("client_table", {
   id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
   title: varchar(),
@@ -194,11 +196,34 @@ export const clientTable = pgTable("client_table", {
   totalReferrals: integer("totalReferrals").default(0).notNull(),
   referredByClientId: uuid("referredByClientId"),
   smsOptIn: boolean("sms_opt_in").notNull().default(true),
+  // Duplicate-resolution: a "merged" client has had all its records reassigned
+  // to mergedIntoId and is hidden from normal lists. See client_merge_log.
+  status: client_status_enum("status").notNull().default("active"),
+  mergedIntoId: uuid("merged_into_id").references((): AnyPgColumn => clientTable.id, { onDelete: "set null" }),
+  mergedAt: timestamp("merged_at"),
+  mergedBy: text("merged_by").references(() => user.id, { onDelete: "set null" }),
 });
 
 export const insertClientTableSchema = createInsertSchema(clientTable).omit({ id: true, createdAt: true });
 export type InsertClientTable = z.infer<typeof insertClientTableSchema>;
 export type NeonClient = typeof clientTable.$inferSelect;
+
+// Audit trail: one row per client merge. sourceClientId has no FK so the log
+// survives even if the archived source is ever hard-deleted later.
+export const clientMergeLog = pgTable("client_merge_log", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  sourceClientId: uuid("source_client_id").notNull(),
+  targetClientId: uuid("target_client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  mergedBy: text("merged_by").references(() => user.id, { onDelete: "set null" }),
+  orgId: uuid("org_id"),
+  branchId: uuid("branch_id"),
+  counts: jsonb("counts"),
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const insertClientMergeLogSchema = createInsertSchema(clientMergeLog).omit({ id: true, createdAt: true });
+export type InsertClientMergeLog = z.infer<typeof insertClientMergeLogSchema>;
+export type ClientMergeLog = typeof clientMergeLog.$inferSelect;
 
 export const accomodation_type = pgTable('accomodation_type', {
   id: uuid('id')

@@ -25,7 +25,11 @@ axiosClient.interceptors.response.use(
       const url = error.config?.url || "";
       const skipRedirectPaths = ["/api/auth/", "/api/v2/users/profiles/", "/api/public/", "/api/v2/quote-share/"];
       if (!skipRedirectPaths.some((p) => url.includes(p))) {
-        window.location.href = "/";
+        // Soft re-auth instead of `window.location.href = "/"`: a full reload
+        // mid-navigation looks like the page "loading twice". The app listens
+        // for this and re-validates the session via React Query — if it's
+        // genuinely gone the landing/login view renders, with no hard reload.
+        window.dispatchEvent(new Event("auth:unauthorized"));
       }
     }
     const responseData = (error.response?.data ?? {}) as Record<string, unknown>;

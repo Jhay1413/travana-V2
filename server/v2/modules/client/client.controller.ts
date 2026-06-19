@@ -32,4 +32,11 @@ export const clientController = {
     await clientService.deleteClient(id, getScope(req));
     res.status(204).send();
   }),
+
+  mergeClient: asyncHandler(async (req: Request, res: Response) => {
+    const sourceId = req.params.id as string;
+    const { targetId } = req.body as { targetId: string };
+    const client = await clientService.mergeClients(sourceId, targetId, getScope(req));
+    return successResponse(res, client, "Clients merged successfully");
+  }),
 };
