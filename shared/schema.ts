@@ -604,7 +604,12 @@ export const transaction = pgTable('transaction', {
   created_at: timestamp().notNull().defaultNow(),
   org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branch_id: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
-});
+}, (table) => [
+  // Pipeline board filters by status (+created_at sort) for the all-agents view,
+  // and by user_id for the default per-agent view. See findPipelineByStatus.
+  index("idx_transaction_status_created").on(table.status, table.created_at),
+  index("idx_transaction_user_status_created").on(table.user_id, table.status, table.created_at),
+]);
 
 export const insertTransactionSchema = createInsertSchema(transaction).omit({ id: true, created_at: true });
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
@@ -760,9 +765,13 @@ export const quote = pgTable('quote_table', {
   quote_sent_at: timestamp('quote_sent_at', { precision: 0, withTimezone: true }),
   quote_sent_via: varchar('quote_sent_via'),
   show_on_portal: boolean('show_on_portal').default(false),
-  is_featured: boolean('is_featured').default(false),             
+  is_featured: boolean('is_featured').default(false),
   not_for_social: boolean('not_for_social').default(false),
-});
+}, (table) => [
+  // Pipeline subqueries resolve quotes per transaction and filter by status;
+  // leading transaction_id also serves the inArray(transaction_id) enrich lookups.
+  index("idx_quote_transaction_status").on(table.transaction_id, table.quote_status),
+]);
 
 export const insertQuoteSchema = createInsertSchema(quote).omit({ id: true, date_created: true });
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
@@ -783,7 +792,7 @@ export const quote_flights = pgTable('quote_flights', {
   is_included_in_package: boolean(),
   cost: numeric({ precision: 10, scale: 2 }),
   commission: numeric({ precision: 10, scale: 2 }),
-});
+}, (table) => [index("idx_quote_flights_quote_id").on(table.quote_id)]);
 export type QuoteFlight = typeof quote_flights.$inferSelect;
 export type InsertQuoteFlight = typeof quote_flights.$inferInsert;
 
@@ -802,7 +811,7 @@ export const quote_accomodation = pgTable('quote_accomodation', {
   commission: numeric({ precision: 10, scale: 2 }),
   accomodation_id: uuid().references(() => accomodation_list.id),
   quote_id: uuid().references(() => quote.id, { onDelete: "cascade" }),
-});
+}, (table) => [index("idx_quote_accomodation_quote_id").on(table.quote_id)]);
 export type QuoteAccomodation = typeof quote_accomodation.$inferSelect;
 export type InsertQuoteAccomodation = typeof quote_accomodation.$inferInsert;
 
@@ -819,7 +828,7 @@ export const quote_transfers = pgTable('quote_transfers', {
   commission: numeric({ precision: 10, scale: 2 }),
   quote_id: uuid().references(() => quote.id, { onDelete: "cascade" }),
   note: varchar(),
-});
+}, (table) => [index("idx_quote_transfers_quote_id").on(table.quote_id)]);
 export type QuoteTransfer = typeof quote_transfers.$inferSelect;
 export type InsertQuoteTransfer = typeof quote_transfers.$inferInsert;
 
@@ -837,7 +846,7 @@ export const quote_car_hire = pgTable('quote_car_hire', {
   is_included_in_package: boolean(),
   cost: numeric({ precision: 10, scale: 2 }),
   commission: numeric({ precision: 10, scale: 2 }),
-});
+}, (table) => [index("idx_quote_car_hire_quote_id").on(table.quote_id)]);
 export type QuoteCarHire = typeof quote_car_hire.$inferSelect;
 export type InsertQuoteCarHire = typeof quote_car_hire.$inferInsert;
 
@@ -852,7 +861,7 @@ export const quote_attraction_ticket = pgTable('quote_attraction_ticket', {
   commission: numeric({ precision: 10, scale: 2 }),
   number_of_tickets: integer().notNull().default(0),
   is_included_in_package: boolean(),
-});
+}, (table) => [index("idx_quote_attraction_ticket_quote_id").on(table.quote_id)]);
 export type QuoteAttractionTicket = typeof quote_attraction_ticket.$inferSelect;
 export type InsertQuoteAttractionTicket = typeof quote_attraction_ticket.$inferInsert;
 
@@ -868,7 +877,7 @@ export const quote_lounge_pass = pgTable('quote_lounge_pass', {
   commission: numeric({ precision: 10, scale: 2 }),
   is_included_in_package: boolean(),
   note: varchar(),
-});
+}, (table) => [index("idx_quote_lounge_pass_quote_id").on(table.quote_id)]);
 export type QuoteLoungePass = typeof quote_lounge_pass.$inferSelect;
 export type InsertQuoteLoungePass = typeof quote_lounge_pass.$inferInsert;
 
@@ -888,7 +897,7 @@ export const quote_airport_parking = pgTable('quote_airport_parking', {
   is_included_in_package: boolean(),
   cost: numeric({ precision: 10, scale: 2 }),
   commission: numeric({ precision: 10, scale: 2 }),
-});
+}, (table) => [index("idx_quote_airport_parking_quote_id").on(table.quote_id)]);
 export type QuoteAirportParking = typeof quote_airport_parking.$inferSelect;
 export type InsertQuoteAirportParking = typeof quote_airport_parking.$inferInsert;
 
@@ -962,7 +971,11 @@ export const booking = pgTable('booking_table', {
   deleted_by: uuid("deleted_by"),
   deleted_by_user: text("deleted_by_user").references(() => user.id),
   deleted_at: timestamp({ precision: 0, withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  // on_booking pipeline column filters bookings to the current month by date_created.
+  // (transaction_id already carries a unique index from its .unique() constraint.)
+  index("idx_booking_date_created").on(table.date_created),
+]);
 
 export const insertBookingSchema = createInsertSchema(booking).omit({ id: true, date_created: true });
 export type InsertBooking = z.infer<typeof insertBookingSchema>;
@@ -1014,7 +1027,7 @@ export const booking_flights = pgTable('booking_flights', {
   is_included_in_package: boolean(),
   cost: numeric({ precision: 10, scale: 2 }),
   commission: numeric({ precision: 10, scale: 2 }),
-});
+}, (table) => [index("idx_booking_flights_booking_id").on(table.booking_id)]);
 export type BookingFlight = typeof booking_flights.$inferSelect;
 export type InsertBookingFlight = typeof booking_flights.$inferInsert;
 
@@ -1033,7 +1046,7 @@ export const booking_accomodation = pgTable('booking_accomodation', {
   commission: numeric({ precision: 10, scale: 2 }),
   accomodation_id: uuid().references(() => accomodation_list.id),
   booking_id: uuid().references(() => booking.id, { onDelete: "cascade" }),
-});
+}, (table) => [index("idx_booking_accomodation_booking_id").on(table.booking_id)]);
 export type BookingAccomodation = typeof booking_accomodation.$inferSelect;
 export type InsertBookingAccomodation = typeof booking_accomodation.$inferInsert;
 
@@ -1050,7 +1063,7 @@ export const booking_transfers = pgTable('booking_transfers', {
   commission: numeric({ precision: 10, scale: 2 }),
   booking_id: uuid().references(() => booking.id, { onDelete: "cascade" }),
   note: varchar(),
-});
+}, (table) => [index("idx_booking_transfers_booking_id").on(table.booking_id)]);
 export type BookingTransfer = typeof booking_transfers.$inferSelect;
 export type InsertBookingTransfer = typeof booking_transfers.$inferInsert;
 
@@ -1068,7 +1081,7 @@ export const booking_car_hire = pgTable('booking_car_hire', {
   is_included_in_package: boolean(),
   cost: numeric({ precision: 10, scale: 2 }),
   commission: numeric({ precision: 10, scale: 2 }),
-});
+}, (table) => [index("idx_booking_car_hire_booking_id").on(table.booking_id)]);
 export type BookingCarHire = typeof booking_car_hire.$inferSelect;
 export type InsertBookingCarHire = typeof booking_car_hire.$inferInsert;
 
@@ -1083,7 +1096,7 @@ export const booking_attraction_ticket = pgTable('booking_attraction_ticket', {
   commission: numeric({ precision: 10, scale: 2 }),
   number_of_tickets: integer(),
   is_included_in_package: boolean(),
-});
+}, (table) => [index("idx_booking_attraction_ticket_booking_id").on(table.booking_id)]);
 export type BookingAttractionTicket = typeof booking_attraction_ticket.$inferSelect;
 export type InsertBookingAttractionTicket = typeof booking_attraction_ticket.$inferInsert;
 
@@ -1099,7 +1112,7 @@ export const booking_lounge_pass = pgTable('booking_lounge_pass', {
   commission: numeric({ precision: 10, scale: 2 }),
   is_included_in_package: boolean(),
   note: varchar(),
-});
+}, (table) => [index("idx_booking_lounge_pass_booking_id").on(table.booking_id)]);
 export type BookingLoungePass = typeof booking_lounge_pass.$inferSelect;
 export type InsertBookingLoungePass = typeof booking_lounge_pass.$inferInsert;
 
@@ -1119,7 +1132,7 @@ export const booking_airport_parking = pgTable('booking_airport_parking', {
   is_included_in_package: boolean(),
   cost: numeric({ precision: 10, scale: 2 }),
   commission: numeric({ precision: 10, scale: 2 }),
-});
+}, (table) => [index("idx_booking_airport_parking_booking_id").on(table.booking_id)]);
 export type BookingAirportParking = typeof booking_airport_parking.$inferSelect;
 export type InsertBookingAirportParking = typeof booking_airport_parking.$inferInsert;
 

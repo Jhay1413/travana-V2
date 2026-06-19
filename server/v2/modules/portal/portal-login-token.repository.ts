@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { portalLoginTokens } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import crypto from "crypto";
 
 // Unambiguous alphabet (no 0/O/1/l/I) so a code is safe to read off a phone.
@@ -38,7 +38,7 @@ export const portalLoginTokenRepository = {
     const [claimed] = await db
       .update(portalLoginTokens)
       .set({ used: true })
-      .where(eq(portalLoginTokens.id, row.id))
+      .where(and(eq(portalLoginTokens.id, row.id), eq(portalLoginTokens.used, false)))
       .returning({ id: portalLoginTokens.id });
     if (!claimed) return null;
 

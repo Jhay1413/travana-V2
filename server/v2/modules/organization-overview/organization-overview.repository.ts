@@ -206,39 +206,75 @@ export const organizationOverviewRepository = {
           .orderBy(sql`DATE_TRUNC('month', ${booking.date_created}) ASC`);
       })(),
 
-      db
-        .select({
-          name: destination.name,
-          bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
-          commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
-        })
-        .from(booking)
-        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        .innerJoin(enquiry_table, eq(enquiry_table.transaction_id, transaction.id))
-        .innerJoin(enquiry_destination, eq(enquiry_destination.enquiry_id, enquiry_table.id))
-        .innerJoin(destination, eq(destination.id, enquiry_destination.destination_id))
-        .where(and(gte(booking.date_created, yearStart), bookingActiveCond, scopeCond()))
-        .groupBy(destination.id, destination.name)
-        .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
-        .limit(5),
+      (() => {
+        // Deduplicate (booking, destination) pairs before aggregating commission.
+        // Without this, a transaction with N enquiries (or an enquiry with the same
+        // destination listed N times) would fan-out and multiply commission by N.
+        const destDeduped = db
+          .$with("org_dest_deduped")
+          .as(
+            db
+              .selectDistinctOn([booking.id, destination.id], {
+                bookingId: booking.id,
+                destinationId: destination.id,
+                destinationName: destination.name,
+                commission: sql<number>`${totalBookingCommissionExpr(booking.id)}`.as("commission"),
+              })
+              .from(booking)
+              .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+              .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+              .innerJoin(enquiry_table, eq(enquiry_table.transaction_id, transaction.id))
+              .innerJoin(enquiry_destination, eq(enquiry_destination.enquiry_id, enquiry_table.id))
+              .innerJoin(destination, eq(destination.id, enquiry_destination.destination_id))
+              .where(and(gte(booking.date_created, yearStart), bookingActiveCond, scopeCond())),
+          );
+        return db
+          .with(destDeduped)
+          .select({
+            name: destDeduped.destinationName,
+            bookings: sql<number>`COUNT(DISTINCT ${destDeduped.bookingId})`,
+            commission: sql<number>`COALESCE(SUM(${destDeduped.commission}), 0)`,
+          })
+          .from(destDeduped)
+          .groupBy(destDeduped.destinationId, destDeduped.destinationName)
+          .orderBy(desc(sql`COUNT(DISTINCT ${destDeduped.bookingId})`))
+          .limit(5);
+      })(),
 
-      db
-        .select({
-          name: resorts.name,
-          bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
-          commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
-        })
-        .from(booking)
-        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        .innerJoin(booking_accomodation, eq(booking_accomodation.booking_id, booking.id))
-        .innerJoin(accomodation_list, eq(accomodation_list.id, booking_accomodation.accomodation_id))
-        .innerJoin(resorts, eq(resorts.id, accomodation_list.resorts_id))
-        .where(and(gte(booking.date_created, yearStart), bookingActiveCond, scopeCond()))
-        .groupBy(resorts.id, resorts.name)
-        .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
-        .limit(5),
+      (() => {
+        // Deduplicate (booking, resort) pairs before aggregating commission.
+        // A booking with N accommodation rows that all map to the same resort would
+        // otherwise multiply that booking's commission N times in the resort's group.
+        const resortDeduped = db
+          .$with("org_resort_deduped")
+          .as(
+            db
+              .selectDistinctOn([booking.id, resorts.id], {
+                bookingId: booking.id,
+                resortId: resorts.id,
+                resortName: resorts.name,
+                commission: sql<number>`${totalBookingCommissionExpr(booking.id)}`.as("commission"),
+              })
+              .from(booking)
+              .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+              .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+              .innerJoin(booking_accomodation, eq(booking_accomodation.booking_id, booking.id))
+              .innerJoin(accomodation_list, eq(accomodation_list.id, booking_accomodation.accomodation_id))
+              .innerJoin(resorts, eq(resorts.id, accomodation_list.resorts_id))
+              .where(and(gte(booking.date_created, yearStart), bookingActiveCond, scopeCond())),
+          );
+        return db
+          .with(resortDeduped)
+          .select({
+            name: resortDeduped.resortName,
+            bookings: sql<number>`COUNT(DISTINCT ${resortDeduped.bookingId})`,
+            commission: sql<number>`COALESCE(SUM(${resortDeduped.commission}), 0)`,
+          })
+          .from(resortDeduped)
+          .groupBy(resortDeduped.resortId, resortDeduped.resortName)
+          .orderBy(desc(sql`COUNT(DISTINCT ${resortDeduped.bookingId})`))
+          .limit(5);
+      })(),
 
       db
         .select({

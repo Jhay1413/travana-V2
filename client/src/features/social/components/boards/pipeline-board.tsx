@@ -50,7 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePipelineColumn, useNeonClients, useNeonClient, useCurrentUser, useTransaction, transactionKeys } from "@/hooks/queries";
+import { usePipelineColumn, useNeonClient, useCurrentUser, useTransaction, transactionKeys } from "@/hooks/queries";
 import { useUpdateTransaction, useConvertToBooking, useUpdateQuote } from "@/hooks/mutations";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import { useToast } from "@/hooks/use-toast";
@@ -1049,7 +1049,6 @@ const QUOTE_STATUS_OPTIONS = [
 ];
 
 export default function PipelineBoard() {
-  const { data: neonClientsData } = useNeonClients({ page: 1, limit: 200 });
   const { data: currentUser } = useCurrentUser();
   const updateTransactionMutation = useUpdateTransaction();
   const convertToBookingMutation = useConvertToBooking();
@@ -1102,6 +1101,8 @@ export default function PipelineBoard() {
 
   const allTx = useMemo(() => [...eD.items, ...qD.items, ...iD.items, ...bD.items], [eD.items, qD.items, iD.items, bD.items]);
 
+  // Names come from each transaction's own `client_name` (joined server-side by
+  // the pipeline query). No separate clients fetch needed.
   const clientMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const tx of allTx) {
@@ -1109,16 +1110,8 @@ export default function PipelineBoard() {
         m.set(tx.client_id, (tx as any).client_name);
       }
     }
-    if (neonClientsData?.clients) {
-      for (const c of neonClientsData.clients) {
-        if (!m.has(c.id)) {
-          const t = c.title && c.title !== "NULL" ? c.title : "";
-          m.set(c.id, [t, c.firstName, c.surename].filter(Boolean).join(" "));
-        }
-      }
-    }
     return m;
-  }, [allTx, neonClientsData]);
+  }, [allTx]);
 
   const getName = (id: string | null) => id ? (clientMap.get(id) || "Unknown Client") : "Unknown Client";
 

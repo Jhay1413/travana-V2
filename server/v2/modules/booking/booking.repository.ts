@@ -568,115 +568,160 @@ export const bookingRepository = {
         .returning();
     }
 
-    const itinerary = Array.isArray(data.cruiseItinerary) ? (data.cruiseItinerary as Array<Record<string, unknown>>) : undefined;
-    if (itinerary !== undefined) {
-      await db.delete(booking_cruise_itinerary).where(eq(booking_cruise_itinerary.booking_cruise_id, cruiseRow.id));
-      for (const d of itinerary) {
-        const dayNo = Number(d.day ?? d.day_number);
-        if (!Number.isFinite(dayNo)) continue;
-        await db.insert(booking_cruise_itinerary).values({
-          booking_cruise_id: cruiseRow.id,
-          day_number: dayNo,
-          description: (d.description as string) || null,
-          sub_description: (d.subDescription as string) || (d.sub_description as string) || null,
-        });
-      }
-    }
+    const bookingCruiseId = cruiseRow.id;
 
-    // Cruise extras: comma-separated free text → find-or-create catalog items, then re-link.
-    if (data.cruiseExtras !== undefined) {
-      await db.delete(booking_cruise_item_extra).where(eq(booking_cruise_item_extra.booking_cruise_id, cruiseRow.id));
-      const names = String(data.cruiseExtras || "")
-        .split(",")
-        .map((n) => n.trim())
-        .filter((n) => n.length > 0);
-      for (const name of names) {
-        const [existingExtra] = await db.select().from(cruise_extra_item).where(ilike(cruise_extra_item.name, name)).limit(1);
-        const extraId = existingExtra?.id ?? (await db.insert(cruise_extra_item).values({ name }).returning())[0].id;
-        await db.insert(booking_cruise_item_extra).values({ booking_cruise_id: cruiseRow.id, cruise_extra_id: extraId });
+    await db.transaction(async (tx) => {
+      const itinerary = Array.isArray(data.cruiseItinerary) ? (data.cruiseItinerary as Array<Record<string, unknown>>) : undefined;
+      if (itinerary !== undefined) {
+        await tx.delete(booking_cruise_itinerary).where(eq(booking_cruise_itinerary.booking_cruise_id, bookingCruiseId));
+        const itineraryRows = itinerary
+          .map((d) => {
+            const dayNo = Number(d.day ?? d.day_number);
+            if (!Number.isFinite(dayNo)) return null;
+            return {
+              booking_cruise_id: bookingCruiseId,
+              day_number: dayNo,
+              description: (d.description as string) || null,
+              sub_description: (d.subDescription as string) || (d.sub_description as string) || null,
+            };
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+        if (itineraryRows.length > 0) {
+          await tx.insert(booking_cruise_itinerary).values(itineraryRows);
+        }
       }
-    }
+
+      // Cruise extras: comma-separated free text → find-or-create catalog items, then re-link.
+      if (data.cruiseExtras !== undefined) {
+        await tx.delete(booking_cruise_item_extra).where(eq(booking_cruise_item_extra.booking_cruise_id, bookingCruiseId));
+        const names = String(data.cruiseExtras || "")
+          .split(",")
+          .map((n) => n.trim())
+          .filter((n) => n.length > 0);
+
+        if (names.length > 0) {
+          // Resolve all existing catalog items in one query.
+          const existingExtras = await tx
+            .select({ id: cruise_extra_item.id, name: cruise_extra_item.name })
+            .from(cruise_extra_item)
+            .where(inArray(cruise_extra_item.name, names));
+
+          const existingByName = new Map(existingExtras.map((e) => [e.name?.toLowerCase() ?? '', e.id]));
+
+          // Insert any missing catalog items one-by-one (they are rare; names are unique).
+          const extraIds: string[] = [];
+          for (const name of names) {
+            const existingId = existingByName.get(name.toLowerCase());
+            if (existingId) {
+              extraIds.push(existingId);
+            } else {
+              const [created] = await tx.insert(cruise_extra_item).values({ name }).returning();
+              extraIds.push(created.id);
+            }
+          }
+
+          // Bulk-insert the link rows.
+          await tx.insert(booking_cruise_item_extra).values(
+            extraIds.map((extraId) => ({ booking_cruise_id: bookingCruiseId, cruise_extra_id: extraId })),
+          );
+        }
+      }
+    });
   },
 
   async replaceTransfers(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
-    await db.delete(booking_transfers).where(eq(booking_transfers.booking_id, bookingId));
-    for (const item of items) {
-      await db.insert(booking_transfers).values({
-        ...item,
-        booking_id: bookingId,
-        pick_up_time: toDateOrNull(item.pick_up_time),
-        drop_off_time: toDateOrNull(item.drop_off_time),
-      } as InsertBookingTransfer);
-    }
+    await db.transaction(async (tx) => {
+      await tx.delete(booking_transfers).where(eq(booking_transfers.booking_id, bookingId));
+      if (items.length === 0) return;
+      await tx.insert(booking_transfers).values(
+        items.map((item) => ({
+          ...item,
+          booking_id: bookingId,
+          pick_up_time: toDateOrNull(item.pick_up_time),
+          drop_off_time: toDateOrNull(item.drop_off_time),
+        }) as InsertBookingTransfer),
+      );
+    });
   },
 
   async replaceCarHires(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
-    await db.delete(booking_car_hire).where(eq(booking_car_hire.booking_id, bookingId));
-    for (const item of items) {
-      await db.insert(booking_car_hire).values({
-        ...item,
-        booking_id: bookingId,
-        pick_up_time: toDateOrNull(item.pick_up_time),
-        drop_off_time: toDateOrNull(item.drop_off_time),
-      } as InsertBookingCarHire);
-    }
+    await db.transaction(async (tx) => {
+      await tx.delete(booking_car_hire).where(eq(booking_car_hire.booking_id, bookingId));
+      if (items.length === 0) return;
+      await tx.insert(booking_car_hire).values(
+        items.map((item) => ({
+          ...item,
+          booking_id: bookingId,
+          pick_up_time: toDateOrNull(item.pick_up_time),
+          drop_off_time: toDateOrNull(item.drop_off_time),
+        }) as InsertBookingCarHire),
+      );
+    });
   },
 
   async replaceAttractionTickets(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
-    await db.delete(booking_attraction_ticket).where(eq(booking_attraction_ticket.booking_id, bookingId));
-    for (const item of items) {
-      await db.insert(booking_attraction_ticket).values({
-        ...item,
-        booking_id: bookingId,
-        date_of_visit: toDateOrNull(item.date_of_visit),
-      } as InsertBookingAttractionTicket);
-    }
+    await db.transaction(async (tx) => {
+      await tx.delete(booking_attraction_ticket).where(eq(booking_attraction_ticket.booking_id, bookingId));
+      if (items.length === 0) return;
+      await tx.insert(booking_attraction_ticket).values(
+        items.map((item) => ({
+          ...item,
+          booking_id: bookingId,
+          date_of_visit: toDateOrNull(item.date_of_visit),
+        }) as InsertBookingAttractionTicket),
+      );
+    });
   },
 
   async replaceLoungePasses(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
-    await db.delete(booking_lounge_pass).where(eq(booking_lounge_pass.booking_id, bookingId));
-    for (const item of items) {
-      await db.insert(booking_lounge_pass).values({
-        ...item,
-        booking_id: bookingId,
-        date_of_usage: toDateOrNull(item.date_of_usage),
-      } as InsertBookingLoungePass);
-    }
+    await db.transaction(async (tx) => {
+      await tx.delete(booking_lounge_pass).where(eq(booking_lounge_pass.booking_id, bookingId));
+      if (items.length === 0) return;
+      await tx.insert(booking_lounge_pass).values(
+        items.map((item) => ({
+          ...item,
+          booking_id: bookingId,
+          date_of_usage: toDateOrNull(item.date_of_usage),
+        }) as InsertBookingLoungePass),
+      );
+    });
   },
 
   async replaceAirportParkings(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
-    await db.delete(booking_airport_parking).where(eq(booking_airport_parking.booking_id, bookingId));
-    for (const item of items) {
-      await db.insert(booking_airport_parking).values({
-        ...item,
-        booking_id: bookingId,
-        parking_date: toDateOrNull(item.parking_date),
-      } as InsertBookingAirportParking);
-    }
+    await db.transaction(async (tx) => {
+      await tx.delete(booking_airport_parking).where(eq(booking_airport_parking.booking_id, bookingId));
+      if (items.length === 0) return;
+      await tx.insert(booking_airport_parking).values(
+        items.map((item) => ({
+          ...item,
+          booking_id: bookingId,
+          parking_date: toDateOrNull(item.parking_date),
+        }) as InsertBookingAirportParking),
+      );
+    });
   },
 
   async replaceExtraAccommodations(bookingId: string, items: Record<string, unknown>[]): Promise<void> {
-    // Delete non-primary accommodations
-    const existing = await db.select().from(booking_accomodation).where(eq(booking_accomodation.booking_id, bookingId));
-    const nonPrimary = existing.filter(a => !a.is_primary);
-    for (const a of nonPrimary) {
-      await db.delete(booking_accomodation).where(eq(booking_accomodation.id, a.id));
-    }
-    for (const item of items) {
-      await db.insert(booking_accomodation).values({
-        ...item,
-        booking_id: bookingId,
-        is_primary: false,
-        check_in_date_time: toDateOrNull(item.check_in_date_time),
-      } as InsertBookingAccomodation);
-    }
+    await db.transaction(async (tx) => {
+      await tx.delete(booking_accomodation)
+        .where(and(eq(booking_accomodation.booking_id, bookingId), eq(booking_accomodation.is_primary, false)));
+      if (items.length === 0) return;
+      await tx.insert(booking_accomodation).values(
+        items.map((item) => ({
+          ...item,
+          booking_id: bookingId,
+          is_primary: false,
+          check_in_date_time: toDateOrNull(item.check_in_date_time),
+        }) as InsertBookingAccomodation),
+      );
+    });
   },
 
   async upsertFlightByType(bookingId: string, flightType: string, data: Partial<InsertBookingFlight>): Promise<BookingFlight> {
     const converted = convertFlightDates(data as Record<string, unknown>) as Partial<InsertBookingFlight>;
-    const existing = await db.select().from(booking_flights)
-      .where(eq(booking_flights.booking_id, bookingId))
-      .then(rows => rows.find(r => r.flight_type === flightType));
+    const [existing] = await db.select().from(booking_flights)
+      .where(and(eq(booking_flights.booking_id, bookingId), eq(booking_flights.flight_type, flightType)))
+      .limit(1);
 
     if (existing) {
       const [result] = await db.update(booking_flights).set(converted).where(eq(booking_flights.id, existing.id)).returning();
@@ -689,9 +734,9 @@ export const bookingRepository = {
 
   async upsertPrimaryAccommodation(bookingId: string, data: Partial<InsertBookingAccomodation>): Promise<BookingAccomodation> {
     const converted = convertAccommodationDates(data as Record<string, unknown>) as Partial<InsertBookingAccomodation>;
-    const existing = await db.select().from(booking_accomodation)
-      .where(eq(booking_accomodation.booking_id, bookingId))
-      .then(rows => rows.find(r => r.is_primary));
+    const [existing] = await db.select().from(booking_accomodation)
+      .where(and(eq(booking_accomodation.booking_id, bookingId), eq(booking_accomodation.is_primary, true)))
+      .limit(1);
 
     if (existing) {
       const [result] = await db.update(booking_accomodation).set(converted).where(eq(booking_accomodation.id, existing.id)).returning();

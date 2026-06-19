@@ -94,7 +94,8 @@
       "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/**)",
       "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/tickets/**)",
       "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/tickets/api/**)",
-      "Bash(xargs grep -l \"QueryClient\\\\|queryClient\")"
+      "Bash(xargs grep -l \"QueryClient\\\\|queryClient\")",
+      "Bash(DATABASE_URL=\"postgres://x:x@localhost:5432/x\" npx drizzle-kit generate --name pipeline_indexes)"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -58,31 +58,33 @@ async function resolveTaskClients(
   enquiryEntityIds: string[],
   clientEntityIds: string[]
 ) {
-  const transactionIdMap = new Map<string, string>();
-  const directClientMap = new Map<string, string>();
-  // Maps each task key (`${type}:${entityId}`) to the canonical entity PK to
-  // navigate to. entityId is usually the entity's own id, but some tasks store
-  // the transaction id instead — resolve those to the real quote/booking/
-  // enquiry id so the entity page can load it.
-  const navIdMap = new Map<string, string>();
-  // Maps each task key to the linked entity's title / price / commission so task
-  // rows can show context (quote title, total price, commission).
   type EntityMeta = { title: string | null; price: string | null; commission: string | null; travelDate: string | null };
-  const entityMetaMap = new Map<string, EntityMeta>();
 
-  if (quoteEntityIds.length > 0) {
+  // Each resolver returns partial maps keyed with a namespaced prefix so they
+  // can be merged without conflict after parallel resolution.
+  type PartialResolution = {
+    transactionEntries: Array<[string, string]>;
+    navEntries: Array<[string, string]>;
+    metaEntries: Array<[string, EntityMeta]>;
+  };
+
+  async function resolveQuotes(): Promise<PartialResolution> {
+    const result: PartialResolution = { transactionEntries: [], navEntries: [], metaEntries: [] };
+    if (quoteEntityIds.length === 0) return result;
+
     const quoteRows = await db
       .select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, price: quote.sales_price, commission: quote.package_commission, travelDate: quote.travel_date })
       .from(quote)
       .where(inArray(quote.id, quoteEntityIds));
     for (const q of quoteRows) {
-      transactionIdMap.set(`quote:${q.id}`, q.transaction_id);
-      navIdMap.set(`quote:${q.id}`, q.id);
-      entityMetaMap.set(`quote:${q.id}`, { title: q.title, price: q.price, commission: q.commission, travelDate: q.travelDate });
+      result.transactionEntries.push([`quote:${q.id}`, q.transaction_id]);
+      result.navEntries.push([`quote:${q.id}`, q.id]);
+      result.metaEntries.push([`quote:${q.id}`, { title: q.title, price: q.price, commission: q.commission, travelDate: q.travelDate }]);
     }
     // entityIds that aren't quote PKs may be transaction ids — resolve each to
     // its main (non-copy, non-free) quote so navigation lands on a real quote.
-    const unresolvedIds = quoteEntityIds.filter(id => !quoteRows.some(q => q.id === id));
+    const resolvedQuoteIds = new Set(quoteRows.map(q => q.id));
+    const unresolvedIds = quoteEntityIds.filter(id => !resolvedQuoteIds.has(id));
     if (unresolvedIds.length > 0) {
       const quotesByTx = await db
         .select({ id: quote.id, transaction_id: quote.transaction_id, isQuoteCopy: quote.isQuoteCopy, isFreeQuote: quote.isFreeQuote, title: quote.title, price: quote.sales_price, commission: quote.package_commission, travelDate: quote.travel_date })
@@ -97,9 +99,9 @@ async function resolveTaskClients(
         }
       }
       for (const [txId, main] of Array.from(mainByTx.entries())) {
-        transactionIdMap.set(`quote:${txId}`, txId);
-        navIdMap.set(`quote:${txId}`, main.id);
-        entityMetaMap.set(`quote:${txId}`, main.meta);
+        result.transactionEntries.push([`quote:${txId}`, txId]);
+        result.navEntries.push([`quote:${txId}`, main.id]);
+        result.metaEntries.push([`quote:${txId}`, main.meta]);
       }
       // Transaction ids with no quote — still resolve the client link.
       const stillUnresolved = unresolvedIds.filter(id => !mainByTx.has(id));
@@ -109,23 +111,28 @@ async function resolveTaskClients(
           .from(transaction)
           .where(inArray(transaction.id, stillUnresolved));
         for (const tx of txDirect) {
-          transactionIdMap.set(`quote:${tx.id}`, tx.id);
+          result.transactionEntries.push([`quote:${tx.id}`, tx.id]);
         }
       }
     }
+    return result;
   }
 
-  if (bookingEntityIds.length > 0) {
+  async function resolveBookings(): Promise<PartialResolution> {
+    const result: PartialResolution = { transactionEntries: [], navEntries: [], metaEntries: [] };
+    if (bookingEntityIds.length === 0) return result;
+
     const bookingRows = await db
       .select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, price: booking.sales_price, commission: booking.package_commission, travelDate: booking.travel_date })
       .from(booking)
       .where(inArray(booking.id, bookingEntityIds));
     for (const b of bookingRows) {
-      transactionIdMap.set(`booking:${b.id}`, b.transaction_id);
-      navIdMap.set(`booking:${b.id}`, b.id);
-      entityMetaMap.set(`booking:${b.id}`, { title: b.title, price: b.price, commission: b.commission, travelDate: b.travelDate });
+      result.transactionEntries.push([`booking:${b.id}`, b.transaction_id]);
+      result.navEntries.push([`booking:${b.id}`, b.id]);
+      result.metaEntries.push([`booking:${b.id}`, { title: b.title, price: b.price, commission: b.commission, travelDate: b.travelDate }]);
     }
-    const unresolvedIds = bookingEntityIds.filter(id => !bookingRows.some(b => b.id === id));
+    const resolvedBookingIds = new Set(bookingRows.map(b => b.id));
+    const unresolvedIds = bookingEntityIds.filter(id => !resolvedBookingIds.has(id));
     if (unresolvedIds.length > 0) {
       const bookingsByTx = await db
         .select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, price: booking.sales_price, commission: booking.package_commission, travelDate: booking.travel_date })
@@ -133,57 +140,87 @@ async function resolveTaskClients(
         .where(inArray(booking.transaction_id, unresolvedIds));
       for (const b of bookingsByTx) {
         if (!b.transaction_id) continue;
-        transactionIdMap.set(`booking:${b.transaction_id}`, b.transaction_id);
-        navIdMap.set(`booking:${b.transaction_id}`, b.id);
-        entityMetaMap.set(`booking:${b.transaction_id}`, { title: b.title, price: b.price, commission: b.commission, travelDate: b.travelDate });
+        result.transactionEntries.push([`booking:${b.transaction_id}`, b.transaction_id]);
+        result.navEntries.push([`booking:${b.transaction_id}`, b.id]);
+        result.metaEntries.push([`booking:${b.transaction_id}`, { title: b.title, price: b.price, commission: b.commission, travelDate: b.travelDate }]);
       }
-      const stillUnresolved = unresolvedIds.filter(id => !bookingsByTx.some(b => b.transaction_id === id));
+      const resolvedByTxIds = new Set(bookingsByTx.map(b => b.transaction_id).filter((id): id is string => id !== null));
+      const stillUnresolved = unresolvedIds.filter(id => !resolvedByTxIds.has(id));
       if (stillUnresolved.length > 0) {
         const txDirect = await db
           .select({ id: transaction.id })
           .from(transaction)
           .where(inArray(transaction.id, stillUnresolved));
         for (const tx of txDirect) {
-          transactionIdMap.set(`booking:${tx.id}`, tx.id);
+          result.transactionEntries.push([`booking:${tx.id}`, tx.id]);
         }
       }
     }
+    return result;
   }
 
-  if (enquiryEntityIds.length > 0) {
+  async function resolveEnquiries(): Promise<PartialResolution> {
+    const result: PartialResolution = { transactionEntries: [], navEntries: [], metaEntries: [] };
+    if (enquiryEntityIds.length === 0) return result;
+
     const enquiryRows = await db
       .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, price: enquiry_table.budget, travelDate: enquiry_table.travel_date })
       .from(enquiry_table)
       .where(inArray(enquiry_table.id, enquiryEntityIds));
     for (const e of enquiryRows) {
-      transactionIdMap.set(`enquiry:${e.id}`, e.transaction_id);
-      navIdMap.set(`enquiry:${e.id}`, e.id);
-      entityMetaMap.set(`enquiry:${e.id}`, { title: e.title, price: e.price, commission: null, travelDate: e.travelDate });
+      result.transactionEntries.push([`enquiry:${e.id}`, e.transaction_id]);
+      result.navEntries.push([`enquiry:${e.id}`, e.id]);
+      result.metaEntries.push([`enquiry:${e.id}`, { title: e.title, price: e.price, commission: null, travelDate: e.travelDate }]);
     }
-    const unresolvedIds = enquiryEntityIds.filter(id => !enquiryRows.some(e => e.id === id));
+    const resolvedEnquiryIds = new Set(enquiryRows.map(e => e.id));
+    const unresolvedIds = enquiryEntityIds.filter(id => !resolvedEnquiryIds.has(id));
     if (unresolvedIds.length > 0) {
       const enquiriesByTx = await db
         .select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, price: enquiry_table.budget, travelDate: enquiry_table.travel_date })
         .from(enquiry_table)
         .where(inArray(enquiry_table.transaction_id, unresolvedIds));
       for (const e of enquiriesByTx) {
-        transactionIdMap.set(`enquiry:${e.transaction_id}`, e.transaction_id);
-        navIdMap.set(`enquiry:${e.transaction_id}`, e.id);
-        entityMetaMap.set(`enquiry:${e.transaction_id}`, { title: e.title, price: e.price, commission: null, travelDate: e.travelDate });
+        result.transactionEntries.push([`enquiry:${e.transaction_id}`, e.transaction_id]);
+        result.navEntries.push([`enquiry:${e.transaction_id}`, e.id]);
+        result.metaEntries.push([`enquiry:${e.transaction_id}`, { title: e.title, price: e.price, commission: null, travelDate: e.travelDate }]);
       }
-      const stillUnresolved = unresolvedIds.filter(id => !enquiriesByTx.some(e => e.transaction_id === id));
+      const resolvedByEnquiryTxIds = new Set(enquiriesByTx.map(e => e.transaction_id).filter((id): id is string => id !== null));
+      const stillUnresolved = unresolvedIds.filter(id => !resolvedByEnquiryTxIds.has(id));
       if (stillUnresolved.length > 0) {
         const txDirect = await db
           .select({ id: transaction.id })
           .from(transaction)
           .where(inArray(transaction.id, stillUnresolved));
         for (const tx of txDirect) {
-          transactionIdMap.set(`enquiry:${tx.id}`, tx.id);
+          result.transactionEntries.push([`enquiry:${tx.id}`, tx.id]);
         }
       }
     }
+    return result;
   }
 
+  // Resolve all three entity types concurrently — their DB reads are independent.
+  const [quoteResolution, bookingResolution, enquiryResolution] = await Promise.all([
+    resolveQuotes(),
+    resolveBookings(),
+    resolveEnquiries(),
+  ]);
+
+  const transactionIdMap = new Map<string, string>();
+  const navIdMap = new Map<string, string>();
+  const entityMetaMap = new Map<string, EntityMeta>();
+
+  for (const [k, v] of [...quoteResolution.transactionEntries, ...bookingResolution.transactionEntries, ...enquiryResolution.transactionEntries]) {
+    transactionIdMap.set(k, v);
+  }
+  for (const [k, v] of [...quoteResolution.navEntries, ...bookingResolution.navEntries, ...enquiryResolution.navEntries]) {
+    navIdMap.set(k, v);
+  }
+  for (const [k, v] of [...quoteResolution.metaEntries, ...bookingResolution.metaEntries, ...enquiryResolution.metaEntries]) {
+    entityMetaMap.set(k, v);
+  }
+
+  const directClientMap = new Map<string, string>();
   for (const clientId of clientEntityIds) {
     directClientMap.set(`client:${clientId}`, clientId);
   }
@@ -507,17 +544,25 @@ export const taskRepository = {
         )
       );
 
-    for (const t of dueTasks) {
-      if (t.userId) {
-        await db.insert(notifications).values({
-          userId: t.userId,
-          type: "task_due",
-          title: "Task Due",
-          message: `Task "${t.title}" is now due.`,
-          link: entityLink(t.entityType ?? "", t.entityId ?? ""),
-        });
+    if (dueTasks.length === 0) return;
+
+    const notificationRows = dueTasks
+      .filter(t => t.userId !== null && t.userId !== undefined)
+      .map(t => ({
+        userId: t.userId as string,
+        type: "task_due" as const,
+        title: "Task Due",
+        message: `Task "${t.title}" is now due.`,
+        link: entityLink(t.entityType ?? "", t.entityId ?? ""),
+      }));
+
+    const dueIds = dueTasks.map(t => t.id);
+
+    await db.transaction(async (tx) => {
+      if (notificationRows.length > 0) {
+        await tx.insert(notifications).values(notificationRows);
       }
-      await db.update(tasks).set({ notified: true }).where(eq(tasks.id, t.id));
-    }
+      await tx.update(tasks).set({ notified: true }).where(inArray(tasks.id, dueIds));
+    });
   },
 };

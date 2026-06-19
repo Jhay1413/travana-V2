@@ -311,8 +311,7 @@ export const portalRepository = {
     return db
       .select({ id: webauthnCredentials.id })
       .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.clientId, clientId))
-      .limit(1);
+      .where(eq(webauthnCredentials.clientId, clientId));
   },
 
   async findWebauthnDevicesForClient(clientId: string): Promise<Array<{ id: string; deviceName: string | null }>> {

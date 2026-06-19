@@ -32,10 +32,31 @@ interface CreateTransactionWithBookingInput {
   scope: Scope;
 }
 
+// package_type is small, near-static lookup data. The pipeline board enriches
+// four columns per load (each calling enrich), so re-reading the whole table
+// every time is wasted work. Cache it process-wide with a short TTL.
+let packageTypeCache: { at: number; map: Map<string, string> } | null = null;
+const PACKAGE_TYPE_TTL_MS = 5 * 60 * 1000;
+
+async function getPackageTypeMap(): Promise<Map<string, string>> {
+  const now = Date.now();
+  if (packageTypeCache && now - packageTypeCache.at < PACKAGE_TYPE_TTL_MS) {
+    return packageTypeCache.map;
+  }
+  const rows = await db.select().from(package_type);
+  const map = new Map<string, string>(rows.map((pt) => [pt.id, pt.name]));
+  packageTypeCache = { at: now, map };
+  return map;
+}
+
 // Sum line-item commission per quote / per booking. Mirrors the canonical
 // formula in server/v2/utils/commission-sql.ts (totalQuoteCommissionExpr /
 // totalBookingCommissionExpr) — all 7 line-item tables on each side. The
 // caller adds package_commission separately to get the total.
+//
+// Each side is a single round-trip: UNION ALL across the 7 line-item tables,
+// summed per id in SQL. This replaces the previous 7-queries-per-side fan-out
+// (14 round-trips) and is backed by the per-table quote_id / booking_id indexes.
 async function fetchServiceCommissionMaps(
   quoteIds: string[],
   bookingIds: string[],
@@ -46,54 +67,60 @@ async function fetchServiceCommissionMaps(
   const tasks: Promise<unknown>[] = [];
 
   if (quoteIds.length > 0) {
-    const addQuote = (rows: Array<{ quote_id: string | null; commission: string | null }>) => {
-      for (const r of rows) {
-        if (!r.quote_id) continue;
-        const amt = parseFloat(r.commission ?? "0") || 0;
-        quoteMap.set(r.quote_id, (quoteMap.get(r.quote_id) || 0) + amt);
-      }
-    };
+    const ids = sql.join(quoteIds.map((id) => sql`${id}`), sql`, `);
     tasks.push(
-      db.select({ quote_id: quote_flights.quote_id, commission: quote_flights.commission })
-        .from(quote_flights).where(inArray(quote_flights.quote_id, quoteIds)).then(addQuote),
-      db.select({ quote_id: quote_accomodation.quote_id, commission: quote_accomodation.commission })
-        .from(quote_accomodation).where(inArray(quote_accomodation.quote_id, quoteIds)).then(addQuote),
-      db.select({ quote_id: quote_transfers.quote_id, commission: quote_transfers.commission })
-        .from(quote_transfers).where(inArray(quote_transfers.quote_id, quoteIds)).then(addQuote),
-      db.select({ quote_id: quote_car_hire.quote_id, commission: quote_car_hire.commission })
-        .from(quote_car_hire).where(inArray(quote_car_hire.quote_id, quoteIds)).then(addQuote),
-      db.select({ quote_id: quote_attraction_ticket.quote_id, commission: quote_attraction_ticket.commission })
-        .from(quote_attraction_ticket).where(inArray(quote_attraction_ticket.quote_id, quoteIds)).then(addQuote),
-      db.select({ quote_id: quote_lounge_pass.quote_id, commission: quote_lounge_pass.commission })
-        .from(quote_lounge_pass).where(inArray(quote_lounge_pass.quote_id, quoteIds)).then(addQuote),
-      db.select({ quote_id: quote_airport_parking.quote_id, commission: quote_airport_parking.commission })
-        .from(quote_airport_parking).where(inArray(quote_airport_parking.quote_id, quoteIds)).then(addQuote),
+      db.execute(sql`
+        SELECT id, SUM(commission) AS commission FROM (
+          SELECT ${quote_flights.quote_id} AS id, ${quote_flights.commission} AS commission FROM ${quote_flights} WHERE ${quote_flights.quote_id} IN (${ids})
+          UNION ALL
+          SELECT ${quote_accomodation.quote_id}, ${quote_accomodation.commission} FROM ${quote_accomodation} WHERE ${quote_accomodation.quote_id} IN (${ids})
+          UNION ALL
+          SELECT ${quote_transfers.quote_id}, ${quote_transfers.commission} FROM ${quote_transfers} WHERE ${quote_transfers.quote_id} IN (${ids})
+          UNION ALL
+          SELECT ${quote_car_hire.quote_id}, ${quote_car_hire.commission} FROM ${quote_car_hire} WHERE ${quote_car_hire.quote_id} IN (${ids})
+          UNION ALL
+          SELECT ${quote_attraction_ticket.quote_id}, ${quote_attraction_ticket.commission} FROM ${quote_attraction_ticket} WHERE ${quote_attraction_ticket.quote_id} IN (${ids})
+          UNION ALL
+          SELECT ${quote_lounge_pass.quote_id}, ${quote_lounge_pass.commission} FROM ${quote_lounge_pass} WHERE ${quote_lounge_pass.quote_id} IN (${ids})
+          UNION ALL
+          SELECT ${quote_airport_parking.quote_id}, ${quote_airport_parking.commission} FROM ${quote_airport_parking} WHERE ${quote_airport_parking.quote_id} IN (${ids})
+        ) t
+        WHERE id IS NOT NULL
+        GROUP BY id
+      `).then((res) => {
+        for (const r of res.rows as Array<{ id: string; commission: string | null }>) {
+          quoteMap.set(r.id, parseFloat(r.commission ?? "0") || 0);
+        }
+      }),
     );
   }
 
   if (bookingIds.length > 0) {
-    const addBooking = (rows: Array<{ booking_id: string | null; commission: string | null }>) => {
-      for (const r of rows) {
-        if (!r.booking_id) continue;
-        const amt = parseFloat(r.commission ?? "0") || 0;
-        bookingMap.set(r.booking_id, (bookingMap.get(r.booking_id) || 0) + amt);
-      }
-    };
+    const ids = sql.join(bookingIds.map((id) => sql`${id}`), sql`, `);
     tasks.push(
-      db.select({ booking_id: booking_flights.booking_id, commission: booking_flights.commission })
-        .from(booking_flights).where(inArray(booking_flights.booking_id, bookingIds)).then(addBooking),
-      db.select({ booking_id: booking_accomodation.booking_id, commission: booking_accomodation.commission })
-        .from(booking_accomodation).where(inArray(booking_accomodation.booking_id, bookingIds)).then(addBooking),
-      db.select({ booking_id: booking_transfers.booking_id, commission: booking_transfers.commission })
-        .from(booking_transfers).where(inArray(booking_transfers.booking_id, bookingIds)).then(addBooking),
-      db.select({ booking_id: booking_car_hire.booking_id, commission: booking_car_hire.commission })
-        .from(booking_car_hire).where(inArray(booking_car_hire.booking_id, bookingIds)).then(addBooking),
-      db.select({ booking_id: booking_attraction_ticket.booking_id, commission: booking_attraction_ticket.commission })
-        .from(booking_attraction_ticket).where(inArray(booking_attraction_ticket.booking_id, bookingIds)).then(addBooking),
-      db.select({ booking_id: booking_lounge_pass.booking_id, commission: booking_lounge_pass.commission })
-        .from(booking_lounge_pass).where(inArray(booking_lounge_pass.booking_id, bookingIds)).then(addBooking),
-      db.select({ booking_id: booking_airport_parking.booking_id, commission: booking_airport_parking.commission })
-        .from(booking_airport_parking).where(inArray(booking_airport_parking.booking_id, bookingIds)).then(addBooking),
+      db.execute(sql`
+        SELECT id, SUM(commission) AS commission FROM (
+          SELECT ${booking_flights.booking_id} AS id, ${booking_flights.commission} AS commission FROM ${booking_flights} WHERE ${booking_flights.booking_id} IN (${ids})
+          UNION ALL
+          SELECT ${booking_accomodation.booking_id}, ${booking_accomodation.commission} FROM ${booking_accomodation} WHERE ${booking_accomodation.booking_id} IN (${ids})
+          UNION ALL
+          SELECT ${booking_transfers.booking_id}, ${booking_transfers.commission} FROM ${booking_transfers} WHERE ${booking_transfers.booking_id} IN (${ids})
+          UNION ALL
+          SELECT ${booking_car_hire.booking_id}, ${booking_car_hire.commission} FROM ${booking_car_hire} WHERE ${booking_car_hire.booking_id} IN (${ids})
+          UNION ALL
+          SELECT ${booking_attraction_ticket.booking_id}, ${booking_attraction_ticket.commission} FROM ${booking_attraction_ticket} WHERE ${booking_attraction_ticket.booking_id} IN (${ids})
+          UNION ALL
+          SELECT ${booking_lounge_pass.booking_id}, ${booking_lounge_pass.commission} FROM ${booking_lounge_pass} WHERE ${booking_lounge_pass.booking_id} IN (${ids})
+          UNION ALL
+          SELECT ${booking_airport_parking.booking_id}, ${booking_airport_parking.commission} FROM ${booking_airport_parking} WHERE ${booking_airport_parking.booking_id} IN (${ids})
+        ) t
+        WHERE id IS NOT NULL
+        GROUP BY id
+      `).then((res) => {
+        for (const r of res.rows as Array<{ id: string; commission: string | null }>) {
+          bookingMap.set(r.id, parseFloat(r.commission ?? "0") || 0);
+        }
+      }),
     );
   }
 
@@ -147,7 +174,7 @@ async function enrichTransactions(txns: Transaction[]) {
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
     db.select().from(quote).where(and(inArray(quote.transaction_id, txnIds), isNull(quote.deleted_at))),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
-    db.select().from(package_type),
+    getPackageTypeMap(),
     clientIds.length > 0
       ? db.select({
           id: clientTable.id,
@@ -165,7 +192,7 @@ async function enrichTransactions(txns: Transaction[]) {
     clientMap.set(c.id, { ...c, name });
   }
 
-  const packageTypeMap = new Map(allPackageTypes.map(pt => [pt.id, pt.name]));
+  const packageTypeMap = allPackageTypes;
 
   const enquiryIds = allEnquiries.map(e => e.id);
   let allDestinations: any[] = [];
@@ -292,7 +319,7 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
     db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
     db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`, isNull(quote.deleted_at))),
     db.select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, travel_date: booking.travel_date, adult: booking.adult, child: booking.child, infant: booking.infant, sales_price: booking.sales_price, package_commission: booking.package_commission, holiday_type_id: booking.holiday_type_id }).from(booking).where(inArray(booking.transaction_id, txnIds)),
-    db.select().from(package_type),
+    getPackageTypeMap(),
     userIds.length > 0 ? db.select({ id: user.id, firstName: user.firstName, lastName: user.lastName, name: user.name, email: user.email }).from(user).where(inArray(user.id, userIds)) : Promise.resolve([]),
     clientIds.length > 0 ? db.select({ id: clientTable.id, title: clientTable.title, firstName: clientTable.firstName, surename: clientTable.surename }).from(clientTable).where(inArray(clientTable.id, clientIds)) : Promise.resolve([]),
     // All active quotes (primary + copies) for the pipeline card duplicate badge/dropdown. Unlike allQuotes above, this does NOT exclude isQuoteCopy.
@@ -305,7 +332,7 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
     const name = [t, c.firstName, c.surename].filter(Boolean).join(" ").trim();
     return [c.id, name || null];
   }));
-  const packageTypeMap = new Map(allPackageTypes.map(pt => [pt.id, pt.name]));
+  const packageTypeMap = allPackageTypes;
 
   const enquiryMap = new Map<string, any>();
   for (const enq of allEnquiries) {
@@ -665,9 +692,9 @@ export const transactionRepository = {
     const query = db.select({
       total: sql<number>`count(*)`,
       active: sql<number>`count(*) FILTER (WHERE ${transaction.is_active} = true)`,
-      enquiry: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'ENQUIRY')`,
-      quoted: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'QUOTED')`,
-      booked: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'BOOKED')`,
+      enquiry: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'on_enquiry')`,
+      quoted: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'on_quote')`,
+      booked: sql<number>`count(*) FILTER (WHERE ${transaction.status} = 'on_booking')`,
     }).from(transaction);
     const [result] = conds.length > 0 ? await query.where(and(...conds)) : await query;
     return result;

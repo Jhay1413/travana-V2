@@ -232,49 +232,77 @@ export const branchOverviewRepository = {
           .orderBy(sql`DATE_TRUNC('month', ${booking.date_created}) ASC`);
       })(),
 
-      // Top destinations by booking count (via enquiries linked to the same transaction)
+      // Top destinations by booking count (via enquiries linked to the same transaction).
+      // Use a DISTINCT ON CTE to ensure each (booking, destination) pair is counted once.
+      // Without deduplication, a transaction with N enquiries (or an enquiry listing the
+      // same destination N times) fans out and multiplies commission by N.
       (() => {
-        const q = db
-          .select({
-            name: destination.name,
-            bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
-            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
-          })
+        const innerFields = {
+          bookingId: booking.id,
+          destinationId: destination.id,
+          destinationName: destination.name,
+          commission: sql<number>`${totalBookingCommissionExpr(booking.id)}`.as("commission"),
+        };
+        const innerBase = db
+          .selectDistinctOn([booking.id, destination.id], innerFields)
           .from(booking)
           .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
           .innerJoin(enquiry_table, eq(enquiry_table.transaction_id, transaction.id))
           .innerJoin(enquiry_destination, eq(enquiry_destination.enquiry_id, enquiry_table.id))
           .innerJoin(destination, eq(destination.id, enquiry_destination.destination_id));
-        const withClient = joinClient
-          ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-          : q;
-        return withClient
-          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond))
-          .groupBy(destination.id, destination.name)
-          .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
+        const innerWithClient = joinClient
+          ? innerBase.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          : innerBase;
+        const destDeduped = db
+          .$with("br_dest_deduped")
+          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond)));
+        return db
+          .with(destDeduped)
+          .select({
+            name: destDeduped.destinationName,
+            bookings: sql<number>`COUNT(DISTINCT ${destDeduped.bookingId})`,
+            commission: sql<number>`COALESCE(SUM(${destDeduped.commission}), 0)`,
+          })
+          .from(destDeduped)
+          .groupBy(destDeduped.destinationId, destDeduped.destinationName)
+          .orderBy(desc(sql`COUNT(DISTINCT ${destDeduped.bookingId})`))
           .limit(5);
       })(),
 
-      // Top resorts by booking count (via booking_accomodation → accomodation_list → resorts)
+      // Top resorts by booking count (via booking_accomodation → accomodation_list → resorts).
+      // Use a DISTINCT ON CTE to ensure each (booking, resort) pair is counted once.
+      // Without deduplication, a booking with N accommodation rows at the same resort
+      // fans out and multiplies commission by N in that resort's group.
       (() => {
-        const q = db
-          .select({
-            name: resorts.name,
-            bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
-            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
-          })
+        const innerFields = {
+          bookingId: booking.id,
+          resortId: resorts.id,
+          resortName: resorts.name,
+          commission: sql<number>`${totalBookingCommissionExpr(booking.id)}`.as("commission"),
+        };
+        const innerBase = db
+          .selectDistinctOn([booking.id, resorts.id], innerFields)
           .from(booking)
           .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
           .innerJoin(booking_accomodation, eq(booking_accomodation.booking_id, booking.id))
           .innerJoin(accomodation_list, eq(accomodation_list.id, booking_accomodation.accomodation_id))
           .innerJoin(resorts, eq(resorts.id, accomodation_list.resorts_id));
-        const withClient = joinClient
-          ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-          : q;
-        return withClient
-          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond))
-          .groupBy(resorts.id, resorts.name)
-          .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
+        const innerWithClient = joinClient
+          ? innerBase.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          : innerBase;
+        const resortDeduped = db
+          .$with("br_resort_deduped")
+          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond)));
+        return db
+          .with(resortDeduped)
+          .select({
+            name: resortDeduped.resortName,
+            bookings: sql<number>`COUNT(DISTINCT ${resortDeduped.bookingId})`,
+            commission: sql<number>`COALESCE(SUM(${resortDeduped.commission}), 0)`,
+          })
+          .from(resortDeduped)
+          .groupBy(resortDeduped.resortId, resortDeduped.resortName)
+          .orderBy(desc(sql`COUNT(DISTINCT ${resortDeduped.bookingId})`))
           .limit(5);
       })(),
 
