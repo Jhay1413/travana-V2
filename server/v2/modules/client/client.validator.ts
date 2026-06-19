@@ -11,3 +11,12 @@ export const updateClientValidator = z.object({
   }),
   body: insertClientTableSchema.partial(),
 });
+
+export const mergeClientValidator = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  body: z.object({
+    targetId: z.string().uuid(),
+  }),
+});

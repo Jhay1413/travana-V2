@@ -1,10 +1,12 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "@/api/queryClient";
+import { authKeys } from "@/hooks/queries/use-auth-queries";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
+import { useAuthSync } from "@/hooks/use-auth-sync";
 import { useRole } from "@/hooks/use-role";
 import { BrandingApplier } from "@/components/branding-applier";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -185,6 +187,17 @@ function AppRouter() {
   const { isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
 
+  // On a 401, re-validate the session instead of hard-reloading the page. If the
+  // session is gone, useCurrentUser resolves to null and the landing view renders;
+  // if the 401 was resource-specific, the user stays put — no reload either way.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      queryClient.invalidateQueries({ queryKey: authKeys.all });
+    };
+    window.addEventListener("auth:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
+  }, []);
+
   if (location === "/portal" || location.startsWith("/portal/")) {
     return (
       <PortalPinGate>
@@ -264,11 +277,32 @@ function AppRouter() {
   );
 }
 
+// Runs the single backend session validation and mirrors it into the auth store.
+// Rendered once inside QueryClientProvider; renders nothing.
+function AuthSync() {
+  useAuthSync();
+  return null;
+}
+
 function App() {
+  // Warm the hottest route chunks shortly after first paint so navigating to
+  // them doesn't hit a lazy-load (Suspense) spinner. import() is deduped by the
+  // bundler, so this just primes the same chunks the lazy() imports use.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void import("@/pages/agent-overview");
+      void import("@/pages/clients");
+      void import("@/pages/client");
+      void import("@/pages/pipeline");
+    }, 1500);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
+        <AuthSync />
         <Suspense fallback={<LoadingScreen />}>
           <AppRouter />
         </Suspense>

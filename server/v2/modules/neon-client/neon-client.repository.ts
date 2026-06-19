@@ -23,6 +23,9 @@ function buildClientScopeConds(scope?: Scope): SQL[] {
   return conds;
 }
 
+// Merged (soft-archived) duplicates are hidden from list/search views.
+const activeOnly = eq(clientTable.status, "active");
+
 export const neonClientRepository = {
   async findById(id: string, scope?: Scope): Promise<NeonClient | undefined> {
     const conds: SQL[] = [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
@@ -74,11 +77,10 @@ export const neonClientRepository = {
   },
 
   async findAll(scope?: Scope): Promise<NeonClient[]> {
-    const conds = buildClientScopeConds(scope);
-    const query = db.select().from(clientTable);
-    return conds.length > 0
-      ? await query.where(and(...conds)).orderBy(desc(clientTable.createdAt))
-      : await query.orderBy(desc(clientTable.createdAt));
+    const conds = [...buildClientScopeConds(scope), activeOnly];
+    return await db.select().from(clientTable)
+      .where(and(...conds))
+      .orderBy(desc(clientTable.createdAt));
   },
 
   async findPaginated(page: number, limit: number, search?: string, scope?: Scope): Promise<{ clients: NeonClient[]; total: number }> {
@@ -100,9 +102,9 @@ export const neonClientRepository = {
       : undefined;
 
     const scopeConds = buildClientScopeConds(scope);
-    const allConds: SQL[] = [...scopeConds];
+    const allConds: SQL[] = [...scopeConds, activeOnly];
     if (searchClause) allConds.push(searchClause);
-    const whereClause = allConds.length > 0 ? and(...allConds) : undefined;
+    const whereClause = and(...allConds);
 
     const latestTransaction = db
       .select({

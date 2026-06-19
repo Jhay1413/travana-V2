@@ -1,4 +1,5 @@
 import { neonClientRepository, type NeonClientImport } from './neon-client.repository';
+import { clientRepository } from '../client/client.repository';
 import { AppError } from '../../utils/error-handler';
 import type { NeonClient, InsertClientTable } from '@shared/schema';
 import type { Scope } from '../../utils/scope';
@@ -43,5 +44,36 @@ export const neonClientService = {
   async bulkImportClients(clients: NeonClientImport[], scope: Scope) {
     if (!clients.length) throw new AppError('No clients to import', 400);
     return neonClientRepository.bulkInsert(clients, scope);
+  },
+
+  /**
+   * Merge a duplicate (source) client into a surviving (target) client. Reassigns
+   * all of the source's records to the target and soft-archives the source. Both
+   * clients must be within the caller's tenant scope.
+   */
+  async mergeClients(sourceId: string, targetId: string, scope: Scope): Promise<NeonClient> {
+    if (sourceId === targetId) {
+      throw new AppError('Cannot merge a client into itself', 400);
+    }
+
+    // Scope-enforced fetch: an out-of-scope client reads as 404.
+    const [source, target] = await Promise.all([
+      neonClientRepository.findById(sourceId, scope),
+      neonClientRepository.findById(targetId, scope),
+    ]);
+    if (!source) throw new AppError('Source client not found', 404);
+    if (!target) throw new AppError('Target client not found', 404);
+
+    if (source.status === 'merged') {
+      throw new AppError('Source client has already been merged', 400);
+    }
+    if (target.status === 'merged') {
+      throw new AppError('Target client has already been merged into another client', 400);
+    }
+    if (source.orgId !== target.orgId) {
+      throw new AppError('Clients must belong to the same organization', 400);
+    }
+
+    return clientRepository.mergeAtomic(source, target, scope.userId);
   },
 };

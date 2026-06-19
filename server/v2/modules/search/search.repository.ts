@@ -26,9 +26,11 @@ export const searchRepository = {
       ilike(clientTable.city, term),
     );
 
+    // Exclude merged (soft-archived) duplicates from search results.
+    const activeOnly = eq(clientTable.status, "active");
     const whereClause = orgId
-      ? and(matchCondition, eq(clientTable.orgId, orgId))
-      : matchCondition;
+      ? and(matchCondition, eq(clientTable.orgId, orgId), activeOnly)
+      : and(matchCondition, activeOnly);
 
     const rows = await db
       .select({

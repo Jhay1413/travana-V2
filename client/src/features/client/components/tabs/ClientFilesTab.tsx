@@ -62,7 +62,9 @@ export function ClientFilesTab({
 }: ClientFilesTabProps) {
   const [previewFile, setPreviewFile] = useState<ClientFile | null>(null);
 
-  const previewUrl = previewFile ? clientFileApi.getDownloadUrl(previewFile.id) : "";
+  // Inline URL renders in the dialog (image/PDF); download URL forces a save.
+  const previewUrl = previewFile ? clientFileApi.getPreviewUrl(previewFile.id) : "";
+  const downloadUrl = previewFile ? clientFileApi.getDownloadUrl(previewFile.id) : "";
 
   return (
     <>
@@ -135,7 +137,7 @@ export function ClientFilesTab({
       </Card>
 
       <Dialog open={!!previewFile} onOpenChange={(open) => { if (!open) setPreviewFile(null); }}>
-        <DialogContent className="max-w-2xl rounded-3xl p-0 overflow-hidden" data-testid="dialog-file-preview">
+        <DialogContent className="max-w-4xl rounded-3xl p-0 overflow-hidden" data-testid="dialog-file-preview">
           <DialogHeader className="flex flex-row items-center justify-between gap-3 border-b border-black/10 px-5 py-4">
             <div className="min-w-0">
               <DialogTitle className="truncate text-base font-semibold">
@@ -148,7 +150,7 @@ export function ClientFilesTab({
               )}
             </div>
             <a
-              href={previewUrl}
+              href={downloadUrl}
               download
               className="inline-flex h-9 shrink-0 items-center gap-2 rounded-2xl bg-black px-4 text-sm font-medium text-white transition hover:bg-black/90"
               data-testid="button-download-file"
@@ -158,12 +160,12 @@ export function ClientFilesTab({
             </a>
           </DialogHeader>
 
-          <div className="flex min-h-[300px] items-center justify-center bg-black/[0.03] p-4">
+          <div className="flex min-h-[400px] items-center justify-center bg-black/[0.03] p-4">
             {previewFile && isImageMime(previewFile.mimeType) && (
               <img
                 src={previewUrl}
                 alt={previewFile.title || previewFile.originalName}
-                className="max-h-[60vh] max-w-full rounded-xl object-contain"
+                className="max-h-[72vh] max-w-full rounded-xl object-contain"
                 data-testid="img-file-preview"
               />
             )}
@@ -171,7 +173,7 @@ export function ClientFilesTab({
               <iframe
                 src={previewUrl}
                 title={previewFile.title || previewFile.originalName}
-                className="h-[60vh] w-full rounded-xl border-0"
+                className="h-[72vh] w-full rounded-xl border-0"
                 data-testid="iframe-file-preview"
               />
             )}

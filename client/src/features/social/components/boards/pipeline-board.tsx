@@ -60,6 +60,7 @@ import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dial
 import { QuoteNotesSection } from "@/features/quote/components/QuoteNotesSection";
 import { QuoteTasksSection } from "@/features/quote/components/QuoteTasksSection";
 import type { Transaction } from "@/features/quote/types";
+import { useAuthStore } from "@/stores/auth-store";
 
 type PipelineStage = "Enquiry" | "Quoted" | "In Play" | "Booked";
 
@@ -1056,7 +1057,9 @@ export default function PipelineBoard() {
   const queryClient = useQueryClient();
 
   const [viewMode, setViewMode] = useState<ViewMode>("board");
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  // Seed from the persisted auth store so we know the current agent on the very
+  // first render (no empty window) and never fire an all-agents fetch by accident.
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(() => useAuthStore.getState().user?.id ?? "");
   const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "mine">("all");
   const [showFilters, setShowFilters] = useState(false);
@@ -1077,10 +1080,16 @@ export default function PipelineBoard() {
   const agentFilter = selectedAgentId && selectedAgentId !== "all" ? selectedAgentId : undefined;
   const quoteStatusParam = quoteStatusFilter !== "all" ? quoteStatusFilter : undefined;
 
-  const enquiryQ = usePipelineColumn("enquiry", PIPELINE_PAGE_SIZE, agentFilter);
-  const quoteQ = usePipelineColumn("quote", PIPELINE_PAGE_SIZE, agentFilter, quoteStatusParam);
-  const inPlayQ = usePipelineColumn("in_play", PIPELINE_PAGE_SIZE, agentFilter);
-  const bookingQ = usePipelineColumn("booking", PIPELINE_PAGE_SIZE, agentFilter);
+  // Don't fetch until the agent selection is resolved. This prevents the initial
+  // all-agents fetch that fired while `selectedAgentId` was still "" — the cause
+  // of every column loading twice (once unfiltered, then again per current agent).
+  // selectedAgentId === "all" is an explicit choice and enables the all-agents load.
+  const agentResolved = !!selectedAgentId;
+
+  const enquiryQ = usePipelineColumn("enquiry", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
+  const quoteQ = usePipelineColumn("quote", PIPELINE_PAGE_SIZE, agentFilter, quoteStatusParam, { enabled: agentResolved });
+  const inPlayQ = usePipelineColumn("in_play", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
+  const bookingQ = usePipelineColumn("booking", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
 
   const flatten = (q: typeof enquiryQ) => {
     if (!q.data?.pages) return { items: [] as Transaction[], total: 0, totalProfit: 0, totalValue: 0 };
@@ -1141,7 +1150,7 @@ export default function PipelineBoard() {
     );
   }, [allTx, updateTransactionMutation, currentUser, toast, queryClient]);
 
-  const isLoading = enquiryQ.isLoading || quoteQ.isLoading || inPlayQ.isLoading || bookingQ.isLoading;
+  const isLoading = !agentResolved || enquiryQ.isLoading || quoteQ.isLoading || inPlayQ.isLoading || bookingQ.isLoading;
   const totalDeals = eD.total + qD.total + iD.total + bD.total;
   const totalVal = eD.totalValue + qD.totalValue + iD.totalValue + bD.totalValue;
   const totalProf = eD.totalProfit + qD.totalProfit + iD.totalProfit + bD.totalProfit;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useRole } from "@/hooks/use-role";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,6 +22,7 @@ import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 
 import { transformNeonClientData, transformTicket, filesFor } from "@/features/client/components/client-types";
 import { EditClientDialog } from "@/features/client/components/modals/EditClientDialog";
+import { MergeClientDialog } from "@/features/client/components/modals/MergeClientDialog";
 import { UploadFileDialog } from "@/features/client/components/modals/UploadFileDialog";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
@@ -69,6 +70,7 @@ export default function ClientPage() {
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [isContactDetailsOpen, setIsContactDetailsOpen] = useState(true);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
   const clientId = params?.clientId ?? "";
 
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
@@ -240,6 +242,16 @@ export default function ClientPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
                 Back
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMergeDialog(true)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
+                data-testid="button-merge-client"
+                title="Merge this duplicate into another client"
+              >
+                <Merge className="h-4 w-4" />
+                Merge duplicate
               </button>
             </div>
 
@@ -506,6 +518,14 @@ export default function ClientPage() {
         enquiry={enquiryActions.editingEnquiry}
         onSubmit={enquiryActions.handleEnquirySubmit}
         isSaving={enquiryActions.createTransactionMutation.isPending || enquiryActions.updateEnquiryMutation.isPending}
+      />
+
+      <MergeClientDialog
+        open={showMergeDialog}
+        onOpenChange={setShowMergeDialog}
+        sourceClientId={clientId}
+        sourceClientName={client?.name || "this client"}
+        onMerged={(survivingClientId) => navigate(`/clients/${survivingClientId}`)}
       />
     </>
   );

@@ -33,4 +33,10 @@ export const clientFileApi = {
   getDownloadUrl: (id: string): string => {
     return `/api/v2/client-files/${id}/download`;
   },
+
+  // Same endpoint served with an "inline" disposition so the browser renders the
+  // file in a preview (image/PDF) instead of downloading it.
+  getPreviewUrl: (id: string): string => {
+    return `/api/v2/client-files/${id}/download?inline=1`;
+  },
 };
