@@ -15,17 +15,17 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-06-16 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-06-19 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|
 | Backend modules (`server/v2/modules/`) | **51** |
-| Tables defined (`pgTable`) in schema.ts | 128 |
-| Enums (`pgEnum`) in schema.ts | 21 |
-| `orgId`/`org_id` references in schema.ts | 45 |
-| Migrations (`migrations/*.sql`) | 11 (latest: `0010_petite_unus.sql`) |
-| Client pages (`client/src/pages`) | ~16 |
-| Automated test runner | ⚠️ NONE (only `npm run check` / tsc) |
+| Tables defined (`pgTable`) in schema.ts | 129 |
+| Enums (`pgEnum`) in schema.ts | 22 |
+| `orgId`/`org_id` references in schema.ts | 47 |
+| Migrations (`migrations/*.sql`) | 12 (latest: `0011_flawless_raza.sql`) |
+| Client pages (`client/src/pages`) | ~47 |
+| Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |
 
 **Key versions:** React 19.2.0 · TypeScript 5.6.3 · Vite 7.1.9 · Express 5.0.1 · Drizzle ORM 0.39.3 · Zod 3.25.76 · React Query 5.60.5
