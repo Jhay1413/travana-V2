@@ -703,7 +703,7 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
           )}
 
           <SectionHeader title="Notes" />
-          <QuoteNotesSection transactionId={t.id} />
+          <QuoteNotesSection transactionId={t.id} maxNotes={2} />
 
           <div className="mt-4 mb-6 flex items-center gap-2 text-[11px] text-gray-400">
             <Clock className="w-3 h-3" />

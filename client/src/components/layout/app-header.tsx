@@ -65,7 +65,11 @@ export function AppHeader() {
     () => globalSearchData?.pages.flatMap((p) => p.clients) ?? [],
     [globalSearchData],
   );
-  const hasResults = clients.length > 0;
+  const bookings = useMemo(
+    () => globalSearchData?.pages.flatMap((p) => p.bookings ?? []) ?? [],
+    [globalSearchData],
+  );
+  const hasResults = clients.length > 0 || bookings.length > 0;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -122,27 +126,51 @@ export function AppHeader() {
                 ref={scrollContainerRef}
                 className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] max-h-[420px] overflow-y-auto"
               >
-                <SearchGroup label="Clients" count={clients.length}>
-                  {clients.map((c) => (
-                    <SearchRow
-                      key={c.id}
-                      title={c.name}
-                      subtitle={c.subtitle}
-                      onClick={() => {
-                        navigate(`/clients/${c.id}`);
-                        setShowSearchResults(false);
-                        setQuery("");
-                      }}
-                      testId={`search-result-${c.id}`}
-                    />
-                  ))}
-                  <div ref={sentinelRef} className="h-px w-full" aria-hidden />
-                  {isFetchingNextPage && (
-                    <div className="px-4 py-2 text-center text-xs text-black/50 dark:text-white/50">
-                      Loading more…
-                    </div>
-                  )}
-                </SearchGroup>
+                {bookings.length > 0 && (
+                  <SearchGroup label="Bookings" count={bookings.length}>
+                    {bookings.map((b) => (
+                      <SearchRow
+                        key={b.id}
+                        title={b.name}
+                        subtitle={b.subtitle}
+                        onClick={() => {
+                          navigate(
+                            b.clientId
+                              ? `/clients/${b.clientId}/bookings/${b.id}`
+                              : `/bookings/${b.id}`,
+                          );
+                          setShowSearchResults(false);
+                          setQuery("");
+                        }}
+                        testId={`search-result-booking-${b.id}`}
+                      />
+                    ))}
+                  </SearchGroup>
+                )}
+
+                {clients.length > 0 && (
+                  <SearchGroup label="Clients" count={clients.length}>
+                    {clients.map((c) => (
+                      <SearchRow
+                        key={c.id}
+                        title={c.name}
+                        subtitle={c.subtitle}
+                        onClick={() => {
+                          navigate(`/clients/${c.id}`);
+                          setShowSearchResults(false);
+                          setQuery("");
+                        }}
+                        testId={`search-result-${c.id}`}
+                      />
+                    ))}
+                    <div ref={sentinelRef} className="h-px w-full" aria-hidden />
+                    {isFetchingNextPage && (
+                      <div className="px-4 py-2 text-center text-xs text-black/50 dark:text-white/50">
+                        Loading more…
+                      </div>
+                    )}
+                  </SearchGroup>
+                )}
               </div>
             )}
 

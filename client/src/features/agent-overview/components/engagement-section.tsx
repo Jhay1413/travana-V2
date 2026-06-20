@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Eye, Monitor, Smartphone, Tablet } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -50,6 +50,16 @@ export function EngagementSection() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [, navigate] = useLocation();
 
+  // Most-recently-viewed quotes first; re-viewing a quote bumps it to the top.
+  const sortedRows = useMemo(
+    () =>
+      [...rows].sort(
+        (a, b) =>
+          new Date(b.lastViewedAt).getTime() - new Date(a.lastViewedAt).getTime()
+      ),
+    [rows]
+  );
+
   if (!isLoading && rows.length === 0) return null;
 
   return (
@@ -66,8 +76,12 @@ export function EngagementSection() {
         <div className="text-xs text-muted-foreground py-3 text-center">Loading…</div>
       ) : (
         <div className="space-y-1.5">
-          {rows.map((row) => {
+          {sortedRows.map((row) => {
             const isOpen = !!expanded[row.quoteId];
+            const sortedViews = [...row.views].sort(
+              (a, b) =>
+                new Date(b.viewedAt).getTime() - new Date(a.viewedAt).getTime()
+            );
             const quoteHref = row.clientId
               ? `/clients/${row.clientId}/quotes/${row.quoteId}`
               : `/quotes/${row.quoteId}`;
@@ -137,7 +151,7 @@ export function EngagementSection() {
                 {isOpen && (
                   <div className="border-t border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01]">
                     <div className="divide-y divide-black/5 dark:divide-white/5">
-                      {row.views.map((v, i) => (
+                      {sortedViews.map((v, i) => (
                         <ViewItem key={`${row.quoteId}-${i}`} view={v} />
                       ))}
                     </div>

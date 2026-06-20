@@ -9,7 +9,14 @@ import type { TransactionNote } from "@/features/quote/types";
 import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "./NoteEditor";
 
-export function QuoteNotesSection({ transactionId }: { transactionId: string }) {
+export function QuoteNotesSection({
+  transactionId,
+  maxNotes,
+}: {
+  transactionId: string;
+  /** When set, only the N most recent top-level notes are shown (e.g. pipeline drawer). */
+  maxNotes?: number;
+}) {
   const { data: notesData, isLoading } = useNotes(transactionId);
   const { data: currentUser } = useCurrentUser();
   const createMutation = useCreateNote(transactionId);
@@ -21,6 +28,16 @@ export function QuoteNotesSection({ transactionId }: { transactionId: string }) 
     if (!notesData) return [];
     return notesData.filter((n) => !n.parent_id);
   }, [notesData]);
+
+  const displayedNotes = useMemo(() => {
+    if (maxNotes == null) return topLevelNotes;
+    return [...topLevelNotes]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .slice(0, maxNotes);
+  }, [topLevelNotes, maxNotes]);
 
   const repliesByParent = useMemo(() => {
     if (!notesData) return new Map<string, TransactionNote[]>();
@@ -61,13 +78,13 @@ export function QuoteNotesSection({ transactionId }: { transactionId: string }) 
           <div className="flex items-center justify-center py-6">
             <Spinner className="h-5 w-5" />
           </div>
-        ) : topLevelNotes.length === 0 ? (
+        ) : displayedNotes.length === 0 ? (
           <div className="py-6 text-center text-xs text-black/40" data-testid="text-notes-empty">
             No notes yet. Add one below.
           </div>
         ) : (
           <AnimatePresence>
-            {topLevelNotes.map((note) => (
+            {displayedNotes.map((note) => (
               <NoteCard
                 key={note.id}
                 note={note}

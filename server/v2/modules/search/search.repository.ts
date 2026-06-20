@@ -1,5 +1,5 @@
 import { db } from '../../config/database';
-import { clientTable } from '@shared/schema';
+import { clientTable, booking, transaction } from '@shared/schema';
 import { and, asc, eq, or, ilike, sql } from 'drizzle-orm';
 
 interface SearchOpts {
@@ -66,6 +66,10 @@ export const searchRepository = {
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
+    // Bookings are only matched on the first page; client results drive the
+    // infinite-scroll pagination via nextOffset.
+    const bookings = offset === 0 ? await this.searchBookings(searchTerm, { orgId, limit }) : [];
+
     return {
       clients: pageRows.map((c) => ({
         id: c.id,
@@ -75,7 +79,55 @@ export const searchRepository = {
           .trim() || 'Unknown',
         subtitle: [c.phoneNumber, c.email, c.city].filter(Boolean).join(' · '),
       })),
+      bookings,
       nextOffset: hasMore ? offset + limit : null,
     };
+  },
+
+  async searchBookings(searchTerm: string, opts: { orgId: string | null; limit?: number }) {
+    const { orgId, limit = 15 } = opts;
+    const term = `%${searchTerm}%`;
+
+    const matchCondition = or(
+      ilike(booking.hays_ref, term),
+      ilike(booking.supplier_ref, term),
+    );
+    const activeOnly = eq(booking.is_active, true);
+    const whereClause = orgId
+      ? and(matchCondition, eq(transaction.org_id, orgId), activeOnly)
+      : and(matchCondition, activeOnly);
+
+    const rows = await db
+      .select({
+        id: booking.id,
+        haysRef: booking.hays_ref,
+        title: booking.title,
+        travelDate: booking.travel_date,
+        clientId: transaction.client_id,
+        firstName: clientTable.firstName,
+        surename: clientTable.surename,
+      })
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .where(whereClause)
+      .orderBy(
+        sql`CASE WHEN ${booking.hays_ref} ILIKE ${searchTerm + '%'} THEN 1 ELSE 2 END`,
+        asc(booking.hays_ref),
+      )
+      .limit(limit);
+
+    return rows.map((b) => {
+      const clientName = [b.firstName, b.surename]
+        .filter((v) => v && v !== 'NULL')
+        .join(' ')
+        .trim();
+      return {
+        id: b.id,
+        clientId: b.clientId,
+        name: b.haysRef ? `Hays Ref: ${b.haysRef}` : (b.title || 'Booking'),
+        subtitle: [clientName, b.title].filter(Boolean).join(' · '),
+      };
+    });
   },
 };

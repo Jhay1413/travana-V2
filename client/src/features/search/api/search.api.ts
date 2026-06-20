@@ -6,6 +6,12 @@ export type GlobalSearchResponse = {
     name: string;
     subtitle: string;
   }>;
+  bookings: Array<{
+    id: string;
+    clientId: string | null;
+    name: string;
+    subtitle: string;
+  }>;
   nextOffset: number | null;
 };
 
