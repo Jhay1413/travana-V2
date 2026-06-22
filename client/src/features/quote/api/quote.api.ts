@@ -130,6 +130,10 @@ export const quoteApi = {
     return data;
   },
 
+  setPrimary: async (quoteId: string): Promise<void> => {
+    await axiosClient.patch(`/api/v2/quotes/${quoteId}/primary`);
+  },
+
   // Tag management
   updateTags: async (quoteId: string, tags: string[]): Promise<Quote> => {
     const { data } = await axiosClient.put<Quote>(`/api/v2/quotes/${quoteId}/tags`, { tags });

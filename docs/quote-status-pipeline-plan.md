@@ -232,9 +232,13 @@ behaviour on 409 — no auto-reassignment.
    lives on `is_expired` / `date_expiry`). `INACTIVE` folds into `archived`.
 3. **Sole-primary lost** — **allowed.** When the primary is the only quote, allow
    `lost` directly (deal becomes derived-lost) rather than 409.
-4. **Expiry** — **display-only; status unchanged.** Expiry never moves the board on
-   its own. It is read from `is_expired` / `date_expiry` and shown as a badge; a
-   quote keeps its `quote_status` (e.g. `in_play`) while expired.
+4. **Expiry** — **does not change `quote_status`** (there is no `expired` status; a
+   quote keeps `quoted`/`in_play` while expired, shown via a badge). BUT the pipeline
+   board still **hides** stale enquiries and expired quotes as a DISPLAY filter — this
+   is a date filter in the pipeline query, not a status change. Expiry is derived from
+   dates (`date_expiry`, else `date_created + 7 days`) per
+   [`server/v2/utils/expiry.ts`](../server/v2/utils/expiry.ts). So: status is
+   unaffected by expiry, but an expired/stale item drops off the active board.
 5. **Other quotes when one converts** — **leave them untouched.** When a quote is
    booked, the remaining quotes keep their status. The deal is `on_booking`
    regardless, so they already drop off the active board; no rewrite of history.

@@ -182,7 +182,6 @@ export interface EnquiryTable {
   date_expiry: string | null;
   is_future_deal: boolean | null;
   future_deal_date: string | null;
-  is_expired: boolean | null;
   is_active: boolean | null;
   deletion_code: string | null;
   email: string | null;
@@ -231,6 +230,7 @@ export interface Quote {
   is_active: boolean | null;
   quote_ref: string | null;
   isQuoteCopy: boolean | null;
+  parent_quote_id: string | null;
   isFreeQuote: boolean | null;
   show_on_portal: boolean | null;
   is_featured: boolean | null;

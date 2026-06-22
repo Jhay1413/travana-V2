@@ -215,6 +215,11 @@ export const newQuoteService = {
       quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child, quoteFields.discounts, quoteFields.service_charge);
     }
 
+    // A new quote always starts as 'quoted' unless the caller explicitly set a valid status.
+    if (!quoteFields.quote_status) {
+      quoteFields.quote_status = 'quoted';
+    }
+
     const q = await newQuoteRepository.create(quoteFields);
 
     if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) {
@@ -334,6 +339,9 @@ export const newQuoteService = {
       ...sourceExtras,
       transaction_id: sourceQuote.transaction_id,
       isQuoteCopy: true,
+      // A duplicate is never primary and always starts as quoted.
+      parent_quote_id: sourceQuoteId,
+      quote_status: 'quoted',
       images: mergedImages,
       tags: sourceDetails?.tags ?? [],
     };
@@ -374,20 +382,40 @@ export const newQuoteService = {
 
     if ('date_expiry' in quoteData && quoteData.date_expiry) quoteData.date_expiry = new Date(quoteData.date_expiry as unknown as string);
     else if ('date_expiry' in quoteData && !quoteData.date_expiry) quoteData.date_expiry = null;
-    if ('date_expiry' in quoteData) quoteData.is_expired = false;
 
-    // Fetch the current row when needed for price calculation or to capture the
-    // previous status (used below to detect LOST → active transitions).
-    const needsPrevStatus = 'quote_status' in quoteData && quoteData.quote_status !== 'LOST';
+    // Defensively reject out-of-enum quote_status values before hitting the DB.
+    const VALID_QUOTE_STATUSES = ['quoted', 'in_play', 'lost', 'archived'] as const;
+    if ('quote_status' in quoteData && quoteData.quote_status !== undefined) {
+      if (!VALID_QUOTE_STATUSES.includes(quoteData.quote_status as typeof VALID_QUOTE_STATUSES[number])) {
+        throw new AppError(`Invalid quote_status '${quoteData.quote_status}'. Must be one of: ${VALID_QUOTE_STATUSES.join(', ')}`, 400);
+      }
+    }
+
+    // Fetch the current row when needed for price calculation, to capture the
+    // previous status (lost → active transitions), or to run the lost guard
+    // (primary-quote protection) BEFORE writing.
+    const isSettingLost = 'quote_status' in quoteData && quoteData.quote_status === 'lost';
+    const needsPrevStatus = 'quote_status' in quoteData && !isSettingLost;
     const needsPriceCalc = 'sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData || 'discounts' in quoteData || 'service_charge' in quoteData;
 
     let preUpdateRow: Quote | undefined;
-    if (needsPriceCalc || needsPrevStatus) {
+    if (needsPriceCalc || needsPrevStatus || isSettingLost) {
       preUpdateRow = await newQuoteRepository.findById(id);
     }
 
     if (needsPriceCalc && preUpdateRow) {
       quoteData.price_per_person = calcPricePerPerson(quoteData.sales_price ?? preUpdateRow.sales_price, quoteData.adult ?? preUpdateRow.adult, quoteData.child ?? preUpdateRow.child, quoteData.discounts ?? preUpdateRow.discounts, quoteData.service_charge ?? preUpdateRow.service_charge);
+    }
+
+    // Lost guard: must run BEFORE the write so a rejected request never persists
+    // 'lost' on the primary quote.
+    if (isSettingLost && preUpdateRow?.transaction_id) {
+      if (preUpdateRow.isQuoteCopy === false) {
+        const activeSiblingCount = await newQuoteRepository.countActiveSiblings(preUpdateRow.transaction_id, id);
+        if (activeSiblingCount > 0) {
+          throw new AppError("Reassign the primary quote before marking it lost", 409);
+        }
+      }
     }
 
     const prevStatus = preUpdateRow?.quote_status ?? null;
@@ -401,17 +429,15 @@ export const newQuoteService = {
       if (!q) throw new AppError("Quote not found", 404);
     }
 
-    if (quoteData.quote_status === 'LOST' && q.transaction_id) {
+    if (quoteData.quote_status === 'lost' && q.transaction_id) {
+      // NOTE(Phase 3): board visibility will derive from status; is_active toggling is kept for now.
       await newQuoteRepository.update(id, { is_active: false });
       await transactionRepository.update(q.transaction_id, { is_active: false });
-    } else if (prevStatus === 'LOST' && 'quote_status' in quoteData && quoteData.quote_status !== 'LOST' && q.transaction_id) {
-      // Quote is moving off LOST — reactivate it and give it a fresh expiry so it
-      // satisfies the pipeline date-window filter (date_expiry >= NOW()). Without
-      // this, a quote lost more than 7 days ago would stay hidden after reviving.
-      const revivedExpiry = new Date();
-      revivedExpiry.setDate(revivedExpiry.getDate() + 3);
-      await newQuoteRepository.update(id, { is_active: true, date_expiry: revivedExpiry, is_expired: false });
-      // Reactivate the transaction only when no other sibling quote is still LOST.
+    } else if (prevStatus === 'lost' && 'quote_status' in quoteData && quoteData.quote_status !== 'lost' && q.transaction_id) {
+      // Quote is moving off lost — reactivate it.
+      // Note: date_expiry is display-only; no forced bump needed here.
+      await newQuoteRepository.update(id, { is_active: true });
+      // Reactivate the transaction only when no other sibling quote is still lost.
       const lostSiblings = await newQuoteRepository.findLostSiblings(q.transaction_id, id);
       if (lostSiblings.length === 0) {
         await transactionRepository.update(q.transaction_id, { is_active: true });
@@ -460,6 +486,46 @@ export const newQuoteService = {
     } catch (err) {
       console.error('COMPLETE QUOTE TASKS (quote.service delete) - error:', err);
     }
+  },
+
+  /** Reassign the primary quote for a transaction.
+   *
+   * The chosen quote (quoteId) becomes isQuoteCopy=false (primary) and the
+   * previous primary becomes isQuoteCopy=true. The flip is done atomically in a
+   * single DB transaction to preserve the "exactly one false per transaction" invariant.
+   *
+   * Throws AppError(404) if the quote is not found or not in scope.
+   * Throws AppError(400) if the chosen quote is lost or deleted (cannot be primary).
+   */
+  async setPrimaryQuote(quoteId: string, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(quoteId, scope);
+
+    const chosenQuote = await newQuoteRepository.findById(quoteId);
+    if (!chosenQuote) throw new AppError("Quote not found", 404);
+
+    if (chosenQuote.quote_status === 'lost' || chosenQuote.quote_status === 'archived') {
+      throw new AppError("A lost or archived quote cannot be made primary", 400);
+    }
+    if (chosenQuote.deleted_at) {
+      throw new AppError("A deleted quote cannot be made primary", 400);
+    }
+
+    // If this quote is already primary there is nothing to do.
+    if (chosenQuote.isQuoteCopy === false) {
+      return chosenQuote;
+    }
+
+    // Find the current primary to flip.
+    const currentPrimary = await newQuoteRepository.findCurrentPrimary(chosenQuote.transaction_id, quoteId);
+    if (!currentPrimary) {
+      // No existing primary — just set the chosen quote directly.
+      await newQuoteRepository.update(quoteId, { isQuoteCopy: false });
+      return newQuoteRepository.findById(quoteId);
+    }
+
+    // Atomic flip: old primary → isQuoteCopy=true, chosen → isQuoteCopy=false.
+    await newQuoteRepository.flipPrimary(quoteId, currentPrimary.id);
+    return newQuoteRepository.findById(quoteId);
   },
 
   async addFlight(quoteId: string, data: Omit<InsertQuoteFlight, 'quote_id'>, scope: ScopeOrTrusted) {

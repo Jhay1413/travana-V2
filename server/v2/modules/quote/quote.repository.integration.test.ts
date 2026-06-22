@@ -76,12 +76,12 @@ describe("newQuoteRepository.findByTransactionId — scope filtered", () => {
 
 describe("newQuoteRepository.findByStatus", () => {
   it("returns only quotes matching the requested status", async () => {
-    await makeQuote({ transaction_id: txnA1.id, quote_status: "QUOTE_IN_PROGRESS" });
-    await makeQuote({ transaction_id: txnA1.id, quote_status: "WON" });
+    await makeQuote({ transaction_id: txnA1.id, quote_status: "quoted" });
+    await makeQuote({ transaction_id: txnA1.id, quote_status: "in_play" });
 
-    const inProgress = await newQuoteRepository.findByStatus("QUOTE_IN_PROGRESS", TRUSTED);
-    expect(inProgress).toHaveLength(1);
-    expect(inProgress[0].quote_status).toBe("QUOTE_IN_PROGRESS");
+    const quoted = await newQuoteRepository.findByStatus("quoted", TRUSTED);
+    expect(quoted).toHaveLength(1);
+    expect(quoted[0].quote_status).toBe("quoted");
   });
 });
 

@@ -356,7 +356,7 @@ export const taskRepository = {
 
       for (const q of quoteRows) {
         if (
-          q.quote_status === "LOST" ||
+          q.quote_status === "lost" ||
           (q.transaction_id && txStatusMap.get(q.transaction_id) === "on_booking")
         ) {
           excludedEntityKeys.add(`quote:${q.id}`);

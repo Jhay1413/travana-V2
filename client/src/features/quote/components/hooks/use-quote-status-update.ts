@@ -1,35 +1,50 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { quoteKeys } from "@/hooks/queries";
+import { isAxiosError } from "axios";
+import { quoteKeys, transactionKeys } from "@/hooks/queries";
 import { useUpdateQuote } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 
 /**
- * Encapsulates the StatusPill change handler: opening the convert dialog on
- * "WON", patching the quote status on "LOST" or any other value, and
- * refreshing the cached detail. Returns the handler plus the underlying
- * mutation.
+ * Encapsulates the StatusPill change handler: patching the quote status and
+ * refreshing both the quote detail and pipeline caches on success.
+ *
+ * "Won" is no longer a status pill option — conversion is handled by the
+ * dedicated "Convert to Booking" button. The `onWon` parameter has been
+ * removed; callers that previously passed it should remove the argument.
+ *
+ * 409 handling: when marking a primary quote as "lost" while other active
+ * quotes exist, the backend returns 409. The hook shows a specific toast
+ * prompting the user to reassign the primary first.
  */
-export function useQuoteStatusUpdate(quoteId: string, onWon: () => void) {
+export function useQuoteStatusUpdate(quoteId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const updateQuoteMutation = useUpdateQuote();
 
-  function onStatusChange(value: string) {
-    if (value === "WON") {
-      onWon();
-      return;
-    }
+  function invalidateCaches() {
+    queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+    queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+  }
 
-    if (value === "LOST") {
+  function onStatusChange(value: string) {
+    if (value === "lost") {
       updateQuoteMutation.mutate(
-        { id: quoteId, data: { quote_status: "LOST" } },
+        { id: quoteId, data: { quote_status: "lost" } },
         {
           onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+            invalidateCaches();
             toast({ title: "Quote marked as lost" });
           },
-          onError: () => {
-            toast({ title: "Failed to update status", variant: "destructive" });
+          onError: (error) => {
+            if (isAxiosError(error) && error.response?.status === 409) {
+              toast({
+                title: "Reassign the primary quote first",
+                description:
+                  "This is the primary quote and other active quotes exist. Choose a new primary, then mark this one lost.",
+              });
+            } else {
+              toast({ title: "Failed to update status", variant: "destructive" });
+            }
           },
         },
       );
@@ -40,7 +55,7 @@ export function useQuoteStatusUpdate(quoteId: string, onWon: () => void) {
       { id: quoteId, data: { quote_status: value } },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+          invalidateCaches();
           toast({ title: "Quote status updated" });
         },
         onError: () => {

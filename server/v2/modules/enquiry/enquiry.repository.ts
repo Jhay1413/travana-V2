@@ -73,21 +73,6 @@ export const enquiryTableRepository = {
     await db.delete(enquiry_table).where(eq(enquiry_table.id, id));
   },
 
-  /** Bulk-mark unexpired enquiries (in 'on_enquiry' status, older than 7 days) as expired. */
-  async markStaleAsExpired(): Promise<{ id: string }[]> {
-    return db
-      .update(enquiry_table)
-      .set({ is_expired: true })
-      .where(
-        and(
-          eq(enquiry_table.is_expired, false),
-          sql`${enquiry_table.date_created} < NOW() - INTERVAL '7 days'`,
-          sql`${enquiry_table.transaction_id} IN (SELECT id FROM ${transaction} WHERE ${transaction.status} = 'on_enquiry')`,
-        ),
-      )
-      .returning({ id: enquiry_table.id });
-  },
-
   /** Bulk-clear is_future_deal on enquiries whose future_deal_date has arrived. */
   async activateDueFutureDeals(): Promise<{ id: string }[]> {
     return db

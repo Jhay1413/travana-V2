@@ -9,36 +9,44 @@ import { authStorage } from "../../middlewares/auth";
 import { normalizeEnquiry } from "../../utils/enum-normalizers";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
-  "In Play": "QUOTE_IN_PROGRESS",
-  "in play": "QUOTE_IN_PROGRESS",
-  "New Lead": "NEW_LEAD",
-  "NEW_LEAD": "NEW_LEAD",
-  "Quote In Progress": "QUOTE_IN_PROGRESS",
-  "QUOTE_IN_PROGRESS": "QUOTE_IN_PROGRESS",
-  "Quote Call": "QUOTE_CALL",
-  "QUOTE_CALL": "QUOTE_CALL",
-  "Quote Ready": "QUOTE_READY",
-  "QUOTE_READY": "QUOTE_READY",
-  "Awaiting Decision": "AWAITING_DECISION",
-  "AWAITING_DECISION": "AWAITING_DECISION",
-  "Requote": "REQUOTE",
-  "REQUOTE": "REQUOTE",
-  "Won": "WON",
-  "WON": "WON",
-  "Archived": "ARCHIVED",
-  "ARCHIVED": "ARCHIVED",
-  "Lost": "LOST",
-  "LOST": "LOST",
-  "Inactive": "INACTIVE",
-  "INACTIVE": "INACTIVE",
-  "Expired": "EXPIRED",
-  "EXPIRED": "EXPIRED",
+  // New-enum identity pass-through
+  "quoted": "quoted",
+  "in_play": "in_play",
+  "lost": "lost",
+  "archived": "archived",
+  // Legacy label → new-enum mapping
+  "In Play": "quoted",
+  "in play": "quoted",
+  "New Lead": "quoted",
+  "NEW_LEAD": "quoted",
+  "Quote In Progress": "quoted",
+  "QUOTE_IN_PROGRESS": "quoted",
+  "Quote Call": "quoted",
+  "QUOTE_CALL": "quoted",
+  "Quote Ready": "quoted",
+  "QUOTE_READY": "quoted",
+  "Requote": "quoted",
+  "REQUOTE": "quoted",
+  "Awaiting Decision": "in_play",
+  "AWAITING_DECISION": "in_play",
+  "Won": "quoted",
+  "WON": "quoted",
+  "accepted": "quoted",
+  "draft": "quoted",
+  "Archived": "archived",
+  "ARCHIVED": "archived",
+  "Inactive": "archived",
+  "INACTIVE": "archived",
+  "Expired": "archived",
+  "EXPIRED": "archived",
+  "Lost": "lost",
+  "LOST": "lost",
 };
 
 function normalizeQuote(data: any) {
   const normalized = { ...data };
   if (normalized.quote_status) {
-    normalized.quote_status = QUOTE_STATUS_MAP[normalized.quote_status] || "QUOTE_IN_PROGRESS";
+    normalized.quote_status = QUOTE_STATUS_MAP[normalized.quote_status] ?? normalized.quote_status;
   }
   if (!normalized.transfer_type) {
     normalized.transfer_type = "none";
@@ -98,21 +106,23 @@ export const transactionController = {
 
   listPipelineByStatus: asyncHandler(async (req: Request, res: Response) => {
     const status = req.params.status as string;
+    // Maps the route param to the column key the repository expects.
+    // Phase 3: column keys are the board column identifiers; the repo derives DB conditions.
     const validStatuses: Record<string, string> = {
-      enquiry: "on_enquiry",
-      quote: "on_quote",
+      enquiry: "enquiry",
+      quote: "quoted",
       in_play: "in_play",
-      booking: "on_booking",
+      booking: "booking",
     };
-    const dbStatus = validStatuses[status];
-    if (!dbStatus) {
+    const column = validStatuses[status];
+    if (!column) {
       return res.status(400).json({ success: false, message: "Invalid pipeline status" });
     }
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
     const agentId = req.query.agentId as string | undefined;
     const quoteStatusFilter = req.query.quoteStatus as string | undefined;
-    const result = await transactionService.listPipelineByStatus(getScope(req), dbStatus, page, limit, agentId || undefined, quoteStatusFilter || undefined);
+    const result = await transactionService.listPipelineByStatus(getScope(req), column, page, limit, agentId || undefined, quoteStatusFilter || undefined);
     return successResponse(res, result, "Pipeline data retrieved");
   }),
 

@@ -9,3 +9,4 @@ export * from "./api/use-quote-public-queries";
 export * from "./api/use-quote-share-queries";
 export * from "./api/use-quote-mutations";
 export * from "./api/use-quote-image-mutations";
+export { buildQuoteInitialValuesFromEnquiry } from "./lib/enquiry-to-quote";

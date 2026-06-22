@@ -211,9 +211,9 @@ export const newQuoteRepository = {
     return rows.map((r) => r.quote);
   },
 
-  /** Return non-deleted sibling quotes on the same transaction that are still LOST,
+  /** Return non-deleted sibling quotes on the same transaction that are still lost,
    *  excluding the quote identified by excludeQuoteId. Used to decide whether the
-   *  transaction itself can be reactivated when a quote moves off LOST status. */
+   *  transaction itself can be reactivated when a quote moves off lost status. */
   async findLostSiblings(transactionId: string, excludeQuoteId: string): Promise<Quote[]> {
     const rows = await db
       .select()
@@ -223,10 +223,48 @@ export const newQuoteRepository = {
           eq(quote.transaction_id, transactionId),
           ne(quote.id, excludeQuoteId),
           isNull(quote.deleted_at),
-          sql`${quote.quote_status}::text = 'LOST'`,
+          eq(quote.quote_status, 'lost'),
         ),
       );
     return rows;
+  },
+
+  /** Return non-deleted sibling quotes on the same transaction that are NOT lost/archived
+   *  and NOT deleted, excluding the quote identified by excludeQuoteId. Used to enforce
+   *  the primary-lost guard (must reassign primary before marking it lost when siblings exist). */
+  async countActiveSiblings(transactionId: string, excludeQuoteId: string): Promise<number> {
+    const rows = await db
+      .select({ id: quote.id })
+      .from(quote)
+      .where(
+        and(
+          eq(quote.transaction_id, transactionId),
+          ne(quote.id, excludeQuoteId),
+          isNull(quote.deleted_at),
+          sql`${quote.quote_status} NOT IN ('lost', 'archived')`,
+        ),
+      );
+    return rows.length;
+  },
+
+  /** Find the current primary quote (isQuoteCopy=false) for a transaction, excluding a specific quoteId. */
+  async findCurrentPrimary(transactionId: string, excludeQuoteId?: string): Promise<Quote | undefined> {
+    const conditions = [
+      eq(quote.transaction_id, transactionId),
+      eq(quote.isQuoteCopy, false),
+      isNull(quote.deleted_at),
+    ];
+    if (excludeQuoteId) conditions.push(ne(quote.id, excludeQuoteId));
+    const [row] = await db.select().from(quote).where(and(...conditions)).limit(1);
+    return row;
+  },
+
+  /** Atomically flip primary: set chosenQuoteId to isQuoteCopy=false and oldPrimaryId to isQuoteCopy=true. */
+  async flipPrimary(chosenQuoteId: string, oldPrimaryId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.update(quote).set({ isQuoteCopy: true }).where(eq(quote.id, oldPrimaryId));
+      await tx.update(quote).set({ isQuoteCopy: false }).where(eq(quote.id, chosenQuoteId));
+    });
   },
 
   async findAll(scope: ScopeOrTrusted): Promise<Quote[]> {
@@ -564,22 +602,6 @@ export const newQuoteRepository = {
 
   async setFeatured(id: string, isFeatured: boolean): Promise<void> {
     await db.update(quote).set({ is_featured: isFeatured }).where(eq(quote.id, id));
-  },
-
-  /** Bulk-mark unexpired non-free quotes (older than 7 days, not yet booked) as expired. */
-  async markStaleAsExpired(): Promise<{ id: string }[]> {
-    return db
-      .update(quote)
-      .set({ is_expired: true })
-      .where(
-        and(
-          eq(quote.is_expired, false),
-          eq(quote.isFreeQuote, false),
-          sql`${quote.date_created} < NOW() - INTERVAL '7 days'`,
-          sql`${quote.transaction_id} NOT IN (SELECT id FROM ${transaction} WHERE ${transaction.status} = 'on_booking')`,
-        ),
-      )
-      .returning({ id: quote.id });
   },
 
   /** Resolve the destination name for an accommodation (accommodation → resort → destination). */
