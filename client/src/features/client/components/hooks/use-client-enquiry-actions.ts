@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useCreateEnquiry, useCreateTransaction, useDeleteEnquiry, useUpdateEnquiry } from "@/hooks/mutations";
 import { enquiryApi } from "@/api";
-import type { EnquiryTable } from "@/features/quote/types";
+import type { EnquiryTable, EnquiryPassengerInput } from "@/features/quote/types";
 import { useToast } from "@/hooks/use-toast";
 
 /**
@@ -102,6 +102,9 @@ export function useClientEnquiryActions(
             resorts: Array.isArray(data.resorts) ? (data.resorts as any) : undefined,
             boardBases: Array.isArray(data.boardBases) ? (data.boardBases as any) : undefined,
             departureAirports: Array.isArray(data.departureAirports) ? data.departureAirports : undefined,
+            passengers: Array.isArray(data.passengers)
+              ? (data.passengers as EnquiryPassengerInput[])
+              : undefined,
           },
         },
         {

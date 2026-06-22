@@ -1,8 +1,10 @@
 import { referralRepository } from "./referral.repository";
+import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { walletService } from "../wallet/wallet.service";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
+import type { NeonClient } from "@shared/schema";
 
 type ScopeOrTrusted = Scope | { orgId: null };
 
@@ -36,12 +38,18 @@ async function assertClientInScope(clientId: string, scope: ScopeOrTrusted) {
   if (!ok) throw new AppError("Referral not found", 404);
 }
 
-function calculatePayoutAmount(commission: string | null | undefined): string {
+const DEFAULT_REFERRAL_RATE = 25;
+
+function calculatePayoutAmount(
+  commission: string | null | undefined,
+  ratePercent: number = DEFAULT_REFERRAL_RATE,
+): string {
   if (!commission) return "0.00";
   const gross = parseFloat(commission);
   if (isNaN(gross)) return "0.00";
-  const afterHays = gross - gross * 0.10;
-  return (afterHays * 0.25).toFixed(2);
+  const rate = Number.isFinite(ratePercent) ? ratePercent : DEFAULT_REFERRAL_RATE;
+  const afterHays = gross - gross * 0.10; // 10% Hays deduction (stays)
+  return (afterHays * (rate / 100)).toFixed(2);
 }
 
 function calculatePayoutTriggerDate(travelDate: string): string {
@@ -104,12 +112,14 @@ export const referralService = {
     transactionId?: string;
     travelDate?: string;
     commission?: string;
+    commissionRate?: number;
   }) {
     const payoutTriggerDate = data.travelDate
       ? calculatePayoutTriggerDate(data.travelDate)
       : undefined;
 
-    const payoutAmount = calculatePayoutAmount(data.commission);
+    const rate = data.commissionRate ?? DEFAULT_REFERRAL_RATE;
+    const payoutAmount = calculatePayoutAmount(data.commission, rate);
 
     return referralRepository.create({
       referrerClientId: data.referrerClientId,
@@ -121,8 +131,40 @@ export const referralService = {
       travelDate: data.travelDate,
       payoutTriggerDate,
       commission: data.commission,
+      commissionRate: String(rate),
       payoutAmount,
       referralStatus: "PENDING",
+    });
+  },
+
+  // Single entry point for "a booking committed — record the referral if the
+  // referred client was linked to a referrer BEFORE this booking". Called from the
+  // booking/transaction services. Idempotent: one referral per transaction.
+  async ensureReferralForBooking(params: {
+    client: NeonClient | undefined;
+    booking: { travel_date?: string | null; package_commission?: string | null };
+    transactionId: string;
+  }) {
+    const { client, booking, transactionId } = params;
+    if (!client?.referredByClientId) return; // no referrer link → no commission
+    const existing = await referralRepository.findByTransactionId(transactionId);
+    if (existing) return; // already recorded — don't duplicate
+
+    const referrer = await neonClientRepository.findById(client.referredByClientId);
+    const rate = referrer?.referralCommissionRate
+      ? parseFloat(referrer.referralCommissionRate)
+      : DEFAULT_REFERRAL_RATE;
+
+    await referralService.createReferral({
+      referrerClientId: client.referredByClientId,
+      referredClientId: client.id,
+      referredName: `${client.firstName} ${client.surename}`.trim(),
+      referredEmail: client.email ?? undefined,
+      referredPhone: client.phoneNumber ?? undefined,
+      transactionId,
+      travelDate: booking.travel_date ?? undefined,
+      commission: booking.package_commission ?? undefined,
+      commissionRate: rate,
     });
   },
 

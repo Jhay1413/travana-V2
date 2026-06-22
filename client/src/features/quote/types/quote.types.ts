@@ -193,7 +193,7 @@ export interface EnquiryTable {
   accommodations?: EnquiryAccommodation[];
   boardBases?: EnquiryBoardBasis[];
   airports?: EnquiryAirport[];
-  passengers?: EnquiryPassenger[];
+  passengers?: (EnquiryPassenger | EnquiryPassengerInput)[];
 }
 
 export interface Quote {
@@ -523,6 +523,11 @@ export interface TransactionNote {
   client_id?: string | null;
 }
 
+export interface EnquiryPassengerInput {
+  type: string;
+  age?: number;
+}
+
 export interface EnquiryRelations {
   destinations?: string[];
   resorts?: string[];
@@ -530,6 +535,7 @@ export interface EnquiryRelations {
   boardBases?: string[];
   departureAirports?: string[];
   notes?: string;
+  passengers?: EnquiryPassengerInput[];
 }
 
 export interface FlightRelationData {

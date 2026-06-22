@@ -1,3 +1,26 @@
+# Agent Delegation (AI Context)
+
+Always route work to the subagent best suited to the task instead of doing
+everything inline. Pick the most specific agent that fits; fall back to a
+general agent only when nothing specific applies. Launch independent pieces of
+work as concurrent agents in a single message.
+
+Routing guide:
+- **coder** — implement new features or fix bugs (client React/TS or server Express/Drizzle).
+- **enhancer** — refactor / simplify / speed up working code without changing behavior.
+- **tester** — write or run unit/integration tests, or verify changes pass.
+- **code-reviewer** — review a diff/PR/files for bugs and architecture violations (read-only).
+- **planner** / **Plan** — design an implementation strategy or evaluate architectural fit BEFORE building.
+- **Explore** — broad read-only search across many files when you only need the conclusion.
+- **claude-code-guide** — questions about Claude Code, the Agent SDK, or the Claude API.
+
+Notes:
+- Match the agent to the work even when the user doesn't name one.
+- For multi-step tasks, plan first (planner/Plan), then implement (coder), then review (code-reviewer) / test (tester).
+- Reuse a running/recent agent via its id when continuing related work, rather than starting fresh.
+
+---
+
 # Backend Architecture Rules (AI Context)
 
 ## Stack

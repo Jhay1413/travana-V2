@@ -215,9 +215,14 @@ export const organizationOverviewRepository = {
           .as(
             db
               .selectDistinctOn([booking.id, destination.id], {
-                bookingId: booking.id,
-                destinationId: destination.id,
-                destinationName: destination.name,
+                // Alias each column so the CTE exposes distinct output names.
+                // Without `.as()`, Drizzle emits the raw column name for both
+                // `booking.id` and `destination.id` — two columns literally named
+                // "id" — and the outer query's reference to "id" is ambiguous
+                // (Postgres 42702).
+                bookingId: sql<string>`${booking.id}`.as("booking_id"),
+                destinationId: sql<string>`${destination.id}`.as("destination_id"),
+                destinationName: sql<string>`${destination.name}`.as("destination_name"),
                 commission: sql<number>`${totalBookingCommissionExpr(booking.id)}`.as("commission"),
               })
               .from(booking)
@@ -250,9 +255,12 @@ export const organizationOverviewRepository = {
           .as(
             db
               .selectDistinctOn([booking.id, resorts.id], {
-                bookingId: booking.id,
-                resortId: resorts.id,
-                resortName: resorts.name,
+                // Alias each column so the CTE exposes distinct output names —
+                // otherwise `booking.id` and `resorts.id` both emit a column named
+                // "id" and the outer reference is ambiguous (Postgres 42702).
+                bookingId: sql<string>`${booking.id}`.as("booking_id"),
+                resortId: sql<string>`${resorts.id}`.as("resort_id"),
+                resortName: sql<string>`${resorts.name}`.as("resort_name"),
                 commission: sql<number>`${totalBookingCommissionExpr(booking.id)}`.as("commission"),
               })
               .from(booking)

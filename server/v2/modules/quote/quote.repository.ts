@@ -38,6 +38,34 @@ function convertFlightDates(data: Record<string, unknown>): Record<string, unkno
   return result;
 }
 
+// Engagement counting window: repeat views by the same viewer within this gap
+// are treated as one session (a refresh/continued reading), not a new view.
+const ENGAGEMENT_SESSION_WINDOW_MS = 30 * 60 * 1000;
+
+// Sessionize a quote's raw views: group by viewer, then count a new session
+// whenever the gap from that viewer's previous view exceeds the window.
+function countSessionedViews(views: { viewedAt: Date | string; viewerName: string | null }[]): number {
+  const byViewer = new Map<string, number[]>();
+  for (const v of views) {
+    const key = v.viewerName ?? "__anon__";
+    const ts = (v.viewedAt instanceof Date ? v.viewedAt : new Date(v.viewedAt)).getTime();
+    if (Number.isNaN(ts)) continue;
+    const list = byViewer.get(key) ?? [];
+    list.push(ts);
+    byViewer.set(key, list);
+  }
+  let sessions = 0;
+  for (const times of byViewer.values()) {
+    times.sort((a, b) => a - b);
+    let prev: number | null = null;
+    for (const ts of times) {
+      if (prev === null || ts - prev > ENGAGEMENT_SESSION_WINDOW_MS) sessions++;
+      prev = ts;
+    }
+  }
+  return sessions;
+}
+
 function convertAccommodationDates(data: Record<string, unknown>): Record<string, unknown> {
   const result = { ...data };
   if ('check_in_date_time' in result) result.check_in_date_time = toDateOrNull(result.check_in_date_time);
@@ -1224,7 +1252,6 @@ export const newQuoteRepository = {
     const grouped = await db
       .select({
         quoteId: quoteViewsTable.quoteId,
-        viewCount: sql<number>`count(*)::int`,
         lastViewedAt: sql<Date>`max(${quoteViewsTable.viewedAt})`,
         quoteTitle: quote.title,
         destinationName: destination.name,
@@ -1277,14 +1304,20 @@ export const newQuoteRepository = {
       viewsByQuote.set(v.quoteId, list);
     }
 
-    return grouped.map((g) => ({
-      quoteId: g.quoteId,
-      quoteTitle: g.quoteTitle || g.destinationName || g.countryName || "Quote",
-      clientId: g.clientId,
-      clientName: [g.clientFirstName, g.clientSurename].filter((v) => v && v !== "NULL").join(" ").trim() || "Unknown",
-      clientViewCount: g.viewCount,
-      lastViewedAt: g.lastViewedAt,
-      views: viewsByQuote.get(g.quoteId) ?? [],
-    }));
+    return grouped.map((g) => {
+      const views = viewsByQuote.get(g.quoteId) ?? [];
+      return {
+        quoteId: g.quoteId,
+        quoteTitle: g.quoteTitle || g.destinationName || g.countryName || "Quote",
+        clientId: g.clientId,
+        clientName: [g.clientFirstName, g.clientSurename].filter((v) => v && v !== "NULL").join(" ").trim() || "Unknown",
+        // Count from the join-free views list (not count(*) on the joined query,
+        // which multiplied per accommodation/destination row), and sessionize so
+        // rapid refreshes by the same viewer collapse into one view.
+        clientViewCount: countSessionedViews(views),
+        lastViewedAt: g.lastViewedAt,
+        views,
+      };
+    });
   },
 };

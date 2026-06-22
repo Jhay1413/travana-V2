@@ -95,7 +95,11 @@
       "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/tickets/**)",
       "Read(//c/c/Users/Christian/Desktop/travana-v2/travana-V2/client/src/features/tickets/api/**)",
       "Bash(xargs grep -l \"QueryClient\\\\|queryClient\")",
-      "Bash(DATABASE_URL=\"postgres://x:x@localhost:5432/x\" npx drizzle-kit generate --name pipeline_indexes)"
+      "Bash(DATABASE_URL=\"postgres://x:x@localhost:5432/x\" npx drizzle-kit generate --name pipeline_indexes)",
+      "Bash(npx tsx *)",
+      "Bash(xargs grep -l \"my-profit\\\\|agent-stats\\\\|getAgentStats\\\\|getMyProfit\")",
+      "Bash(xargs grep -l \"referral\" -i)",
+      "Bash(grep -nA12 \"async getReferralsByReferrer\" server/v2/modules/referral/referral.service.ts)"
     ],
     "additionalDirectories": [
       "/tmp"

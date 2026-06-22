@@ -19,12 +19,4 @@ export const vipEnrollmentService = {
     const newTier = computeTier(count);
     await neonClientRepository.setVipTotalsAndTier(referrerClientId, count, newTier);
   },
-
-  async handleReferredClientBooked(newClientId: string, referredByClientId: string): Promise<void> {
-    await vipEnrollmentService.enrollClient(newClientId);
-    const pending = await referralRepository.findOldestPendingUnlinkedByReferrer(referredByClientId);
-    if (pending) {
-      await referralRepository.linkReferredClient(pending.id, newClientId);
-    }
-  },
 };

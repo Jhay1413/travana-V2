@@ -12,6 +12,7 @@ export interface AdminReferral {
   transactionId: string | null;
   travelDate: string | null;
   commission: string | null;
+  commissionRate: string | null;
   payoutAmount: string | null;
   referralStatus: "PENDING" | "IN_WALLET" | "PAID" | "VOIDED";
   payoutTriggerDate: string | null;
@@ -43,6 +44,7 @@ export interface VipTransactionRow {
   referredClientFirstName: string | null;
   referredClientSurname: string | null;
   commission: string | null;
+  commissionRate: string | null;
   payoutAmount: string | null;
   travelDate: string | null;
   payoutTriggerDate: string | null;

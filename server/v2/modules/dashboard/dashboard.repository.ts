@@ -2,6 +2,7 @@ import { db } from "../../config/database";
 import { clientTable, transaction, quote, booking, user as userTable } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNull } from "drizzle-orm";
 import { quoteStatsConds } from "../../utils/quote-conditions";
+import { totalBookingCommissionExpr } from "../../utils/commission-sql";
 
 export const dashboardRepository = {
   async getStats(orgId: string | null) {
@@ -269,18 +270,31 @@ export const dashboardRepository = {
     const weekStart = new Date(todayStart);
     weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    // Mirror the admin dashboard's agent-performance definition exactly so an
+    // agent's own numbers match what admins see (organization-overview
+    // getAgentsPerformance): full commission (package + line items), exclude
+    // test/inactive bookings, and bound the month window with `< monthEnd`.
+    const bookingActiveCond = sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`;
+    const commission = totalBookingCommissionExpr(booking.id);
 
     const [bookingAgg, openQuoteAgg] = await Promise.all([
       db.select({
-        todayProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-        weekProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-        monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-        totalBookingValue: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+        todayProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${commission} ELSE 0 END), 0)`,
+        weekProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${commission} ELSE 0 END), 0)`,
+        monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${commission} ELSE 0 END), 0)`,
+        totalBookingValue: sql<number>`COALESCE(SUM(${commission}), 0)`,
         bookingsCount: sql<number>`COUNT(*)`,
       })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-        .where(eq(transaction.user_id, userId)),
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(and(
+          eq(transaction.user_id, userId),
+          eq(transaction.is_test, false),
+          bookingActiveCond,
+        )),
 
       db.select({
         totalOpenQuotesValue: sql<number>`COALESCE(SUM(CAST(${quote.package_commission} AS DECIMAL)), 0)`,
@@ -320,13 +334,18 @@ export const dashboardRepository = {
 
       const [result] = await db
         .select({
-          profit: sql<number>`COALESCE(SUM(${booking.package_commission}), 0)`,
+          // Match the admin/agent-performance definition: full booking commission
+          // (package + line items), excluding test/inactive bookings.
+          profit: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
         .where(
           and(
             eq(transaction.user_id, userId),
+            eq(transaction.is_test, false),
+            sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
             gte(booking.date_created, startOfMonth),
             lte(booking.date_created, endOfMonth)
           )

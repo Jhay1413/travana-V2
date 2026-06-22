@@ -585,6 +585,12 @@ function ReferralCard({ referral, index }: { referral: PortalReferral; index: nu
                     <span className="text-white/70">{formatDate(referral.travelDate)}</span>
                   </div>
                 )}
+                {referral.commissionRate && (
+                  <div className="flex justify-between">
+                    <span className="text-white/40">Commission rate</span>
+                    <span className="text-white/70">{referral.commissionRate}%</span>
+                  </div>
+                )}
                 {referral.payoutTriggerDate && (
                   <div className="flex justify-between">
                     <span className="text-white/40">Payout due</span>
@@ -878,7 +884,7 @@ const DEFAULT_VIP: PortalVipStatus = {
   vipTier: "not_enrolled",
   vipEnrolledAt: null,
   totalReferrals: 0,
-  totalEarnings: "0.00",
+  walletBalance: "0.00",
 };
 
 type PageTab = "referrals" | "wallet";
@@ -900,6 +906,10 @@ export default function PortalReferralsPage() {
 
   const activeReferrals = referrals.filter((r) => r.referralStatus !== "VOIDED");
   const availableCount = referrals.filter((r) => r.referralStatus === "IN_WALLET").length;
+  const totalPaid = referrals
+    .filter((r) => r.referralStatus === "PAID")
+    .reduce((sum, r) => sum + parseFloat(r.payoutAmount ?? "0"), 0)
+    .toFixed(2);
 
   return (
     <PortalLayout>
@@ -982,7 +992,7 @@ export default function PortalReferralsPage() {
                 </div>
 
                 {/* Balance Cards */}
-                <BalanceCards referrals={referrals} totalEarnings={vipData.totalEarnings} />
+                <BalanceCards referrals={referrals} totalEarnings={totalPaid} />
 
                 {/* How it works */}
                 <GlassCard className="p-4">
@@ -1042,7 +1052,7 @@ export default function PortalReferralsPage() {
                   referrals={referrals}
                   withdrawals={withdrawals}
                   walletTransactions={walletTransactions}
-                  totalEarnings={vipData.totalEarnings}
+                  totalEarnings={totalPaid}
                   trueBalance={trueBalance}
                   onWithdraw={() => setShowWithdraw(true)}
                 />

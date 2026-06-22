@@ -107,6 +107,9 @@ export function VipPendingCommissions({ rows }: VipPendingCommissionsProps) {
 
                 <div className="shrink-0 text-right">
                   <span className="text-sm font-bold text-black/85">{fmt(payout)}</span>
+                  {row.commissionRate && (
+                    <div className="mt-0.5 text-[10px] text-black/40">{row.commissionRate}% rate</div>
+                  )}
                   {row.bookingHaysRef && (
                     <div className="mt-0.5 text-[10px] text-black/35">Ref: {row.bookingHaysRef}</div>
                   )}

@@ -195,6 +195,8 @@ export const clientTable = pgTable("client_table", {
   vipEnrolledAt: timestamp("vipEnrolledAt"),
   totalReferrals: integer("totalReferrals").default(0).notNull(),
   referredByClientId: uuid("referredByClientId"),
+  // Per-referrer share of a referred booking's commission (percent, default 25).
+  referralCommissionRate: numeric("referral_commission_rate").default("25").notNull(),
   smsOptIn: boolean("sms_opt_in").notNull().default(true),
   // Duplicate-resolution: a "merged" client has had all its records reassigned
   // to mergedIntoId and is hidden from normal lists. See client_merge_log.
@@ -1246,6 +1248,9 @@ export const referral = pgTable('referral', {
   referredPhone: varchar("referredPhone"),
   referralStatus: referral_status_enum("referralStatus").default('PENDING').notNull(),
   commission: numeric("commission"),
+  // Snapshot of the referrer's rate (percent) at creation, so historical payouts
+  // stay stable if the referrer's rate later changes.
+  commissionRate: numeric("commissionRate"),
   payoutAmount: numeric("payoutAmount"),
   travelDate: date("travelDate"),
   payoutTriggerDate: date("payoutTriggerDate"),

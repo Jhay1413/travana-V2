@@ -51,7 +51,7 @@ vi.mock("../booking/booking.repository", () => ({
 vi.mock("../note/note.repository", () => ({ noteRepository: { create: vi.fn() } }));
 vi.mock("../task/task.service", () => ({ taskService: { reassignByEntity: vi.fn() } }));
 vi.mock("../quote/quote.service", () => ({ newQuoteService: { createQuote: vi.fn() } }));
-vi.mock("../referral/referral.service", () => ({ referralService: { createReferral: vi.fn() } }));
+vi.mock("../referral/referral.service", () => ({ referralService: { createReferral: vi.fn(), ensureReferralForBooking: vi.fn() } }));
 vi.mock("../../../services/vipEnrollment.service", () => ({ vipEnrollmentService: { enrollClient: vi.fn() } }));
 vi.mock("../wallet/wallet.service", () => ({ walletService: { applyBookingCredit: vi.fn() } }));
 vi.mock("../neon-client/neon-client.repository", () => ({ neonClientRepository: { findById: vi.fn(), update: vi.fn() } }));
@@ -299,7 +299,7 @@ describe("transactionService.createTransactionWithBooking — add booking", () =
     expect(walletService.applyBookingCredit).toHaveBeenCalledWith("c1", "b1", 50, { orgId: null });
   });
 
-  it("creates a referral when the client was referred", async () => {
+  it("delegates referral recording to ensureReferralForBooking when the client was referred", async () => {
     vi.mocked(neonClientRepository.findById).mockResolvedValue({
       id: "c1",
       referredByClientId: "ref1",
@@ -309,8 +309,9 @@ describe("transactionService.createTransactionWithBooking — add booking", () =
 
     await transactionService.createTransactionWithBooking({} as never, {} as never, SCOPE);
 
-    expect(referralService.createReferral).toHaveBeenCalledOnce();
-    expect(vi.mocked(referralService.createReferral).mock.calls[0][0]).toMatchObject({ referrerClientId: "ref1" });
+    expect(referralService.ensureReferralForBooking).toHaveBeenCalledOnce();
+    const arg = vi.mocked(referralService.ensureReferralForBooking).mock.calls[0][0] as any;
+    expect(arg.client).toMatchObject({ id: "c1", referredByClientId: "ref1" });
   });
 
   it("badges the client VIP at the 3-booking threshold", async () => {

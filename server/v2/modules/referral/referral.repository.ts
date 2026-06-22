@@ -25,6 +25,7 @@ export const referralRepository = {
         referrerClientId: referral.referrerClientId,
         referralStatus: referral.referralStatus,
         payoutAmount: referral.payoutAmount,
+        commissionRate: referral.commissionRate,
         referrerOrgId: referrerClient.orgId,
       })
       .from(referral)
@@ -56,6 +57,7 @@ export const referralRepository = {
         travelDate: referral.travelDate,
         payoutTriggerDate: referral.payoutTriggerDate,
         payoutAmount: referral.payoutAmount,
+        commissionRate: referral.commissionRate,
         commission: referral.commission,
         paidAt: referral.paidAt,
         createdAt: referral.createdAt,
@@ -125,32 +127,6 @@ export const referralRepository = {
         updatedAt: new Date(),
         ...(status === "PAID" ? { paidAt: new Date() } : {}),
       })
-      .where(eq(referral.id, id))
-      .returning();
-    return result;
-  },
-
-  /** Find the oldest pending referral for a referrer that hasn't been linked to a referredClient yet. */
-  async findOldestPendingUnlinkedByReferrer(referrerClientId: string): Promise<Referral | undefined> {
-    const [row] = await db
-      .select()
-      .from(referral)
-      .where(
-        and(
-          eq(referral.referrerClientId, referrerClientId),
-          eq(referral.referralStatus, 'PENDING'),
-          sql`${referral.referredClientId} IS NULL`,
-        ),
-      )
-      .orderBy(referral.createdAt)
-      .limit(1);
-    return row;
-  },
-
-  async linkReferredClient(id: string, referredClientId: string): Promise<Referral> {
-    const [result] = await db
-      .update(referral)
-      .set({ referredClientId, updatedAt: new Date() })
       .where(eq(referral.id, id))
       .returning();
     return result;
@@ -329,6 +305,7 @@ export const referralRepository = {
         referredClientFirstName: referredClient.firstName,
         referredClientSurname: referredClient.surename,
         commission: referral.commission,
+        commissionRate: referral.commissionRate,
         payoutAmount: referral.payoutAmount,
         travelDate: referral.travelDate,
         payoutTriggerDate: referral.payoutTriggerDate,

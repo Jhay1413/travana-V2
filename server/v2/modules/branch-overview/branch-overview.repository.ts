@@ -238,9 +238,12 @@ export const branchOverviewRepository = {
       // same destination N times) fans out and multiplies commission by N.
       (() => {
         const innerFields = {
-          bookingId: booking.id,
-          destinationId: destination.id,
-          destinationName: destination.name,
+          // Alias each column so the CTE exposes distinct output names — otherwise
+          // `booking.id` and `destination.id` both emit a column named "id" and the
+          // outer query's reference is ambiguous (Postgres 42702).
+          bookingId: sql<string>`${booking.id}`.as("booking_id"),
+          destinationId: sql<string>`${destination.id}`.as("destination_id"),
+          destinationName: sql<string>`${destination.name}`.as("destination_name"),
           commission: sql<number>`${totalBookingCommissionExpr(booking.id)}`.as("commission"),
         };
         const innerBase = db
@@ -275,9 +278,12 @@ export const branchOverviewRepository = {
       // fans out and multiplies commission by N in that resort's group.
       (() => {
         const innerFields = {
-          bookingId: booking.id,
-          resortId: resorts.id,
-          resortName: resorts.name,
+          // Alias each column so the CTE exposes distinct output names — otherwise
+          // `booking.id` and `resorts.id` both emit a column named "id" and the
+          // outer query's reference is ambiguous (Postgres 42702).
+          bookingId: sql<string>`${booking.id}`.as("booking_id"),
+          resortId: sql<string>`${resorts.id}`.as("resort_id"),
+          resortName: sql<string>`${resorts.name}`.as("resort_name"),
           commission: sql<number>`${totalBookingCommissionExpr(booking.id)}`.as("commission"),
         };
         const innerBase = db

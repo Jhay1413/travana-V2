@@ -470,18 +470,11 @@ export const transactionService = {
         const client = await neonClientRepository.findById(result.transaction.client_id);
         await vipEnrollmentService.enrollClient(result.transaction.client_id);
 
-        if (client?.referredByClientId) {
-          await referralService.createReferral({
-            referrerClientId: client.referredByClientId,
-            referredClientId: result.transaction.client_id,
-            referredName: `${client.firstName} ${client.surename}`.trim(),
-            referredEmail: client.email ?? undefined,
-            referredPhone: client.phoneNumber ?? undefined,
-            transactionId: result.transaction.id,
-            travelDate: result.booking.travel_date ?? undefined,
-            commission: result.booking.package_commission ?? undefined,
-          });
-        }
+        await referralService.ensureReferralForBooking({
+          client,
+          booking: result.booking,
+          transactionId: result.transaction.id,
+        });
 
         const bookingCount = await bookingRepository.countByClientId(result.transaction.client_id);
         if (bookingCount >= 3) {

@@ -174,6 +174,9 @@ export default function ClientPage() {
       passengersAdults: enq.adults || 2,
       passengersChildren: enq.children || 0,
       passengersInfants: enq.infants || 0,
+      childAges: (enq.passengers ?? [])
+        .filter((p) => p.type === "child")
+        .map((p) => p.age ?? 0),
       nights: enq.no_of_nights || 7,
       destination: enq.destinations?.[0]?.destination_id || "",
       resort: enq.resorts?.[0]?.resort_id || "",

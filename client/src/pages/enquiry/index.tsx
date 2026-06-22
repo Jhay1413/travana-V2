@@ -684,6 +684,9 @@ export default function EnquiryPage() {
       passengersAdults: enquiry.adults || 2,
       passengersChildren: enquiry.children || 0,
       passengersInfants: enquiry.infants || 0,
+      childAges: (enquiry.passengers ?? [])
+        .filter((p) => p.type === "child")
+        .map((p) => p.age ?? 0),
       nights: enquiry.no_of_nights || 7,
       country: (firstDestination as any)?.country_id || "",
       destination: firstDestination?.destination_id || "",

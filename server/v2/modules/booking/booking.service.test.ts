@@ -61,6 +61,7 @@ vi.mock("../../../services/vipEnrollment.service", () => ({ vipEnrollmentService
 vi.mock("../referral/referral.service", () => ({
   referralService: {
     createReferral: vi.fn(),
+    ensureReferralForBooking: vi.fn(),
     syncCommissionByTransaction: vi.fn(),
     syncTravelDateByTransaction: vi.fn(),
     voidReferralsByTransaction: vi.fn(),
@@ -286,7 +287,7 @@ describe("bookingService.convertQuoteToBooking", () => {
     expect(neonClientRepository.update).not.toHaveBeenCalled();
   });
 
-  it("creates a referral when the client was referred", async () => {
+  it("delegates referral recording to ensureReferralForBooking on conversion", async () => {
     happyPath();
     vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, client_id: "c1" } as never);
     vi.mocked(bookingRepository.countByClientId).mockResolvedValue(1 as never);
@@ -301,12 +302,10 @@ describe("bookingService.convertQuoteToBooking", () => {
 
     await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
 
-    expect(referralService.createReferral).toHaveBeenCalledOnce();
-    expect(vi.mocked(referralService.createReferral).mock.calls[0][0]).toMatchObject({
-      referrerClientId: "referrer1",
-      referredClientId: "c1",
-      referredName: "Ada Lovelace",
-    });
+    expect(referralService.ensureReferralForBooking).toHaveBeenCalledOnce();
+    const arg = vi.mocked(referralService.ensureReferralForBooking).mock.calls[0][0] as any;
+    expect(arg.client).toMatchObject({ id: "c1", referredByClientId: "referrer1" });
+    expect(arg.transactionId).toBeDefined();
   });
 });
 

@@ -220,9 +220,13 @@ export function AppHeader() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 rounded-xl z-[200]">
-                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-profile">
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => navigate("/my-profile")}
+                  data-testid="menu-item-profile"
+                >
                   <User2 className="mr-2 h-4 w-4" />
-                  Profile
+                  My Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-settings">
                   <Settings2 className="mr-2 h-4 w-4" />

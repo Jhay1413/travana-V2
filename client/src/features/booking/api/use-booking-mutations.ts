@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { bookingApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
 import { bookingKeys, transactionKeys, quoteKeys, dashboardKeys } from "@/hooks/queries";
+import { referralKeys } from "@/features/referral/api/use-referral-queries";
 import type { Booking } from "@/features/quote/types";
 
 export function useConvertToBooking() {
@@ -14,6 +15,7 @@ export function useConvertToBooking() {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+      queryClient.invalidateQueries({ queryKey: referralKeys.all });
     },
   });
 }

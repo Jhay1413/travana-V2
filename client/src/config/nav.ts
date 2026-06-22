@@ -78,7 +78,6 @@ const AGENT_NAV: NavConfig = [
       { path: "/tickets", label: "Tickets", icon: LifeBuoy, badge: "tickets" },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/opportunities", label: "Opportunities", icon: Target },
-      { path: "/my-profile", label: "My Profile", icon: UserCircle },
     ],
   },
 ];

@@ -368,18 +368,7 @@ export const bookingService = {
       const client = await neonClientRepository.findById(txn.client_id);
       await vipEnrollmentService.enrollClient(txn.client_id);
 
-      if (client?.referredByClientId) {
-        await referralService.createReferral({
-          referrerClientId: client.referredByClientId,
-          referredClientId: txn.client_id,
-          referredName: `${client.firstName} ${client.surename}`.trim(),
-          referredEmail: client.email ?? undefined,
-          referredPhone: client.phoneNumber ?? undefined,
-          transactionId: q.transaction_id,
-          travelDate: b.travel_date ?? undefined,
-          commission: b.package_commission ?? undefined,
-        });
-      }
+      await referralService.ensureReferralForBooking({ client, booking: b, transactionId: q.transaction_id });
     }
 
     if (txn.client_id) {
@@ -435,18 +424,7 @@ export const bookingService = {
       const client = await neonClientRepository.findById(txn.client_id);
       await vipEnrollmentService.enrollClient(txn.client_id);
 
-      if (client?.referredByClientId) {
-        await referralService.createReferral({
-          referrerClientId: client.referredByClientId,
-          referredClientId: txn.client_id,
-          referredName: `${client.firstName} ${client.surename}`.trim(),
-          referredEmail: client.email ?? undefined,
-          referredPhone: client.phoneNumber ?? undefined,
-          transactionId: data.transaction_id,
-          travelDate: b.travel_date ?? undefined,
-          commission: b.package_commission ?? undefined,
-        });
-      }
+      await referralService.ensureReferralForBooking({ client, booking: b, transactionId: data.transaction_id });
 
       // Auto-fire SMS for on_booking_create — best-effort.
       const dedupeSince = new Date(Date.now() - 5 * 60 * 1000);

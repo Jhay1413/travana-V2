@@ -22,10 +22,14 @@ vi.mock("../../../services/vipEnrollment.service", () => ({
 vi.mock("../wallet/wallet.service", () => ({
   walletService: { addReferralCredit: vi.fn() },
 }));
+vi.mock("../neon-client/neon-client.repository", () => ({
+  neonClientRepository: { findById: vi.fn() },
+}));
 
 import { referralService } from "./referral.service";
 import { referralRepository } from "./referral.repository";
 import { walletService } from "../wallet/wallet.service";
+import { neonClientRepository } from "../neon-client/neon-client.repository";
 
 const TRUSTED = { orgId: null } as const;
 
@@ -56,6 +60,77 @@ describe("referralService.createReferral — payout math", () => {
     await referralService.createReferral({ referrerClientId: "ref1", referredName: "Ada" });
 
     expect(vi.mocked(referralRepository.create).mock.calls[0][0]).toMatchObject({ payoutAmount: "0.00" });
+  });
+
+  it("applies a custom referrer rate to the payout", async () => {
+    vi.mocked(referralRepository.create).mockResolvedValue({ id: "r1" } as never);
+
+    await referralService.createReferral({
+      referrerClientId: "ref1",
+      referredName: "Ada",
+      commission: "1000",
+      commissionRate: 30,
+    });
+
+    // 1000 − 10% = 900, then 30% = 270.00; rate snapshotted
+    expect(vi.mocked(referralRepository.create).mock.calls[0][0]).toMatchObject({
+      payoutAmount: "270.00",
+      commissionRate: "30",
+    });
+  });
+});
+
+describe("referralService.ensureReferralForBooking", () => {
+  const client = {
+    id: "c1",
+    referredByClientId: "referrer1",
+    firstName: "Ada",
+    surename: "Lovelace",
+    email: "ada@example.com",
+    phoneNumber: "123",
+  } as never;
+
+  it("no-ops when the client has no referrer link", async () => {
+    await referralService.ensureReferralForBooking({
+      client: { id: "c1", referredByClientId: null } as never,
+      booking: { travel_date: "2025-01-01", package_commission: "1000" },
+      transactionId: "t1",
+    });
+    expect(referralRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("no-ops (no duplicate) when a referral already exists for the transaction", async () => {
+    vi.mocked(referralRepository.findByTransactionId).mockResolvedValue({ id: "existing" } as never);
+
+    await referralService.ensureReferralForBooking({
+      client,
+      booking: { travel_date: "2025-01-01", package_commission: "1000" },
+      transactionId: "t1",
+    });
+
+    expect(referralRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("creates a referral using the referrer's own commission rate", async () => {
+    vi.mocked(referralRepository.findByTransactionId).mockResolvedValue(undefined as never);
+    vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "referrer1", referralCommissionRate: "30" } as never);
+    vi.mocked(referralRepository.create).mockResolvedValue({ id: "r1" } as never);
+
+    await referralService.ensureReferralForBooking({
+      client,
+      booking: { travel_date: "2025-06-01", package_commission: "1000" },
+      transactionId: "t1",
+    });
+
+    expect(vi.mocked(referralRepository.create).mock.calls[0][0]).toMatchObject({
+      referrerClientId: "referrer1",
+      referredClientId: "c1",
+      referredName: "Ada Lovelace",
+      transactionId: "t1",
+      commission: "1000",
+      commissionRate: "30",
+      payoutAmount: "270.00", // 1000 − 10% = 900 × 30%
+    });
   });
 
   it("derives a payout trigger date (travel date − 56 days) when a travel date is given", async () => {

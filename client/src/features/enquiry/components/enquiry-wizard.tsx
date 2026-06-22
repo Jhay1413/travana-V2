@@ -13,6 +13,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/features/enquiry/types";
 import type { EnquiryTable } from "@/features/quote/types";
 import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirports, useAccommodationTypes } from "@/hooks/queries";
+import { useEnquiry } from "@/features/enquiry/api/use-enquiry-queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { AddAirportModal } from "@/features/lookups/components/lookups/add-airport-modal";
@@ -105,6 +106,7 @@ interface EnquiryForm {
   passengersAdults: number;
   passengersChildren: number;
   passengersInfants: number;
+  childAges: number[];
   nights: number;
   /** Selected night durations (as strings). First entry is the primary no_of_nights. */
   flexibleNights: string[];
@@ -147,6 +149,7 @@ const defaultForm: EnquiryForm = {
   passengersAdults: 2,
   passengersChildren: 0,
   passengersInfants: 0,
+  childAges: [],
   nights: 7,
   flexibleNights: ["7"],
   starRating: "",
@@ -231,6 +234,9 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     passengersAdults: enquiry.adults || 2,
     passengersChildren: enquiry.children || 0,
     passengersInfants: enquiry.infants || 0,
+    childAges: (enquiry.passengers ?? [])
+      .filter((p) => p.type === "child")
+      .map((p) => p.age ?? 0),
     nights: enquiry.no_of_nights || 7,
     flexibleNights: Array.isArray(enquiry.flexible_nights) && enquiry.flexible_nights.length
       ? enquiry.flexible_nights.map((n) => String(n))
@@ -343,6 +349,18 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
     }
   }, [open, enquiry]);
 
+  // Some callers (e.g. the client page) open the wizard with a list-row enquiry
+  // that omits relations like `passengers` (child ages), `destinations`, etc. —
+  // the list endpoint doesn't load them. Fetch the full enquiry with relations
+  // and re-prefill once it arrives so those fields populate when editing.
+  const editId = enquiry?.id ? String(enquiry.id) : "";
+  const { data: fullEnquiry } = useEnquiry(open && editId ? editId : "");
+  useEffect(() => {
+    if (open && fullEnquiry) {
+      setForm(formFromEnquiry(fullEnquiry));
+    }
+  }, [open, fullEnquiry]);
+
   const set = (key: keyof EnquiryForm, val: any) => setForm((prev) => ({ ...prev, [key]: val }));
 
   // Default the Holiday Type to "Package Holiday" for new enquiries once the
@@ -355,6 +373,20 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
       return pkg ? { ...prev, holidayType: pkg.id } : prev;
     });
   }, [open, enquiry, packageTypesData]);
+
+  // Keep childAges array length in sync with passengersChildren
+  useEffect(() => {
+    const count = form.passengersChildren;
+    setForm((prev) => {
+      const current = prev.childAges;
+      if (current.length === count) return prev;
+      const next =
+        count > current.length
+          ? [...current, ...Array(count - current.length).fill(0)]
+          : current.slice(0, count);
+      return { ...prev, childAges: next };
+    });
+  }, [form.passengersChildren]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ----- Multi-select handlers (Country / Destination / Resort) -----
 
@@ -488,6 +520,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         destinations: form.destinations.length ? form.destinations : undefined,
       });
     } else if (holidayTypeName === "Cruise Package") {
+      const cruiseChildPassengers = form.childAges.map((age) => ({ type: "child", age }));
       Object.assign(base, {
         travel_date: form.travelDate || undefined,
         no_of_nights: primaryNights ?? undefined,
@@ -503,8 +536,10 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         post_cruise_stay: form.postCruiseStayDays ? parseInt(form.postCruiseStayDays) : undefined,
         destinations: form.cruiseDestination ? [form.cruiseDestination] : undefined,
         departureAirports: form.departureAirports.length ? form.departureAirports : undefined,
+        passengers: cruiseChildPassengers.length ? cruiseChildPassengers : undefined,
       });
     } else {
+      const childPassengers = form.childAges.map((age) => ({ type: "child", age }));
       Object.assign(base, {
         travel_date: form.travelDate || undefined,
         adults: form.passengersAdults,
@@ -520,6 +555,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
         resorts: form.resorts.length ? form.resorts : undefined,
         boardBases: form.boardBases.length ? form.boardBases : undefined,
         departureAirports: form.departureAirports.length ? form.departureAirports : undefined,
+        passengers: childPassengers.length ? childPassengers : undefined,
       });
     }
 
@@ -930,6 +966,30 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                       />
                     </div>
                   </div>
+                  {form.passengersChildren > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Child Ages</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from({ length: form.passengersChildren }, (_, i) => (
+                          <Input
+                            key={i}
+                            type="number"
+                            min={0}
+                            max={17}
+                            value={form.childAges[i] ?? 0}
+                            onChange={(e) => {
+                              const next = [...form.childAges];
+                              next[i] = parseInt(e.target.value) || 0;
+                              set("childAges", next);
+                            }}
+                            className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
+                            placeholder={`Child ${i + 1}`}
+                            data-testid={`input-child-age-${i}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Notes</Label>
                     <Textarea
@@ -1036,6 +1096,30 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
                       />
                     </div>
                   </div>
+                  {form.passengersChildren > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-black/60">Child Ages</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from({ length: form.passengersChildren }, (_, i) => (
+                          <Input
+                            key={i}
+                            type="number"
+                            min={0}
+                            max={17}
+                            value={form.childAges[i] ?? 0}
+                            onChange={(e) => {
+                              const next = [...form.childAges];
+                              next[i] = parseInt(e.target.value) || 0;
+                              set("childAges", next);
+                            }}
+                            className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
+                            placeholder={`Child ${i + 1}`}
+                            data-testid={`input-child-age-${i}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-black/60">Notes</Label>
                     <Textarea

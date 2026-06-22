@@ -112,7 +112,7 @@ export interface PortalVipStatus {
   vipTier: "standard" | "gold" | "elite" | "not_enrolled";
   vipEnrolledAt: string | null;
   totalReferrals: number;
-  totalEarnings: string;
+  walletBalance: string;
 }
 
 export interface PortalReferral {
@@ -124,6 +124,7 @@ export interface PortalReferral {
   travelDate?: string | null;
   payoutTriggerDate?: string | null;
   payoutAmount?: string | null;
+  commissionRate?: string | null;
   paidAt?: string | null;
   isDue: boolean;
   createdAt: string;
