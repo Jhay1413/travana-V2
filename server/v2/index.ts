@@ -6,7 +6,6 @@ import { setupAuth, registerAuthRoutes } from "./middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import { taskRepository } from "./modules/task/task.repository";
 import { checkStaleTickets } from "./modules/ticket/ticket-notification.service";
-import { expireStaleEnquiriesAndQuotes } from "./modules/enquiry/expiry.service";
 import { runDaysBeforeDepartureSweep } from "./modules/sms/sms.cron";
 import quotePublicRoutes from "./modules/quote/quote-public.routes";
 import websitePublicRoutes from "./modules/website-public/website-public.routes";
@@ -133,15 +132,6 @@ app.use((req, res, next) => {
           await checkStaleTickets();
         } catch (err) {
           console.error("Ticket notification check failed:", err);
-        }
-      });
-
-      // Run at midnight every day to expire enquiries and quotes older than 7 days
-      cron.schedule("0 0 * * *", async () => {
-        try {
-          await expireStaleEnquiriesAndQuotes();
-        } catch (err) {
-          console.error("Expiry cron job failed:", err);
         }
       });
 

@@ -189,7 +189,7 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       inArray(quote.transaction_id, txnIds),
       sql`(${quote.isFreeQuote} IS NOT TRUE)`,
       sql`(${quote.isQuoteCopy} IS NOT TRUE)`,
-      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`,
       isNull(quote.deleted_at)
     )),
     db.select({
@@ -337,7 +337,8 @@ export const transactionRepository = {
     quoteStatusFilter?: string,
   ): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
     const conditions = [
-      eq(transaction.status, status as "on_enquiry" | "on_quote" | "in_play" | "on_booking"),
+      // in_play removed from transaction status enum
+      eq(transaction.status, status as "on_enquiry" | "on_quote" | "on_booking"),
       sql`${transaction.client_id} IS NOT NULL`,
       eq(transaction.is_test, false),
     ];
@@ -359,7 +360,7 @@ export const transactionRepository = {
       conditions.push(
         sql`${transaction.id} NOT IN (
           SELECT ${quote.transaction_id} FROM ${quote}
-          WHERE ${quote.quote_status}::text = 'LOST'
+          WHERE ${quote.quote_status}::text = 'lost'
           AND ${quote.deleted_at} IS NULL
         )`
       );
@@ -397,7 +398,7 @@ export const transactionRepository = {
           SELECT 1 FROM ${quote} q2
           WHERE q2.transaction_id = ${transaction.id}
           AND q2."isFreeQuote" IS NOT TRUE
-          AND q2.quote_status::text = 'LOST'
+          AND q2.quote_status::text = 'lost'
           AND q2.deleted_at IS NULL
         )`
       );
@@ -419,7 +420,7 @@ export const transactionRepository = {
           WHERE ${quote.isFreeQuote} IS NOT TRUE
           AND ${quote.deleted_at} IS NULL
           AND ${quote.is_active} = TRUE
-          AND ${quote.quote_status}::text != 'LOST'
+          AND ${quote.quote_status}::text != 'lost'
           AND (
             ${quote.date_created} >= NOW() - INTERVAL '7 days'
             OR (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= NOW())
@@ -431,7 +432,7 @@ export const transactionRepository = {
           SELECT 1 FROM ${quote} q2
           WHERE q2.transaction_id = ${transaction.id}
           AND q2."isFreeQuote" IS NOT TRUE
-          AND q2.quote_status::text = 'LOST'
+          AND q2.quote_status::text = 'lost'
           AND q2.deleted_at IS NULL
         )`
       );
@@ -453,7 +454,7 @@ export const transactionRepository = {
           const quoteWhere = and(
             inArray(quote.transaction_id, allTxnIds),
             sql`(${quote.isFreeQuote} IS NOT TRUE)`,
-            sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+            sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`,
             isNull(quote.deleted_at),
           );
 
@@ -652,10 +653,10 @@ export const transactionRepository = {
       eq(transaction.is_test, false),
       eq(transaction.status, 'on_quote'),
       eq(quote.is_active, true),
-      eq(quote.is_expired, false),
+      sql`(${quote.date_expiry} IS NULL OR ${quote.date_expiry} >= NOW())`,
       eq(quote.isFreeQuote, false),
       eq(quote.isQuoteCopy, false),
-      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'LOST')`,
+      sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`,
       sql`(
         (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} <= ${sevenDaysFromNow})
         OR

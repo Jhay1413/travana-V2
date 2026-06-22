@@ -1,9 +1,9 @@
 // Single source of truth for "when does a quote/enquiry expire".
 //
 // Expiry is derived from `date_expiry`, falling back to `date_created + 7 days`
-// when no explicit expiry was set. The stored `is_expired` boolean column is
-// legacy (still read by the v1 layer) and is NOT consulted here — v2 always
-// derives expiry from the dates so the answer can't go stale.
+// when no explicit expiry was set. There is no stored expiry flag — the legacy
+// `is_expired` column was removed — so expiry is always derived from the dates
+// and the answer can't go stale.
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 

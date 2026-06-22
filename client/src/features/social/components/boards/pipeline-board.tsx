@@ -51,7 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePipelineColumn, useNeonClient, useCurrentUser, useTransaction, transactionKeys } from "@/hooks/queries";
-import { useUpdateTransaction, useConvertToBooking, useUpdateQuote } from "@/hooks/mutations";
+import { useUpdateTransaction, useConvertToBooking, useUpdateQuote, useSetPrimaryQuote, useUpdateEnquiry } from "@/hooks/mutations";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -60,16 +60,25 @@ import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dial
 import { QuoteNotesSection } from "@/features/quote/components/QuoteNotesSection";
 import { QuoteTasksSection } from "@/features/quote/components/QuoteTasksSection";
 import type { Transaction } from "@/features/quote/types";
+import type { QuoteFormValues } from "@/features/quote/types/quote-form.types";
+import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
+import { enquiryApi } from "@/api";
+import { enquiryKeys } from "@/features/enquiry/api/use-enquiry-queries";
 import { useAuthStore } from "@/stores/auth-store";
 
 type PipelineStage = "Enquiry" | "Quoted" | "In Play" | "Booked";
 
 const STAGES: PipelineStage[] = ["Enquiry", "Quoted", "In Play", "Booked"];
 
+// "In Play" is no longer a transaction status — it is derived from the
+// primary quote's quote_status === 'in_play' while transaction.status === 'on_quote'.
+// Drag-drop to "In Play" or "Quoted" is handled specially in handleDrop (updates
+// primary quote status) rather than using this map. This map is kept for the
+// Enquiry and Booked stages only, where transaction.status is the source of truth.
 const STAGE_TO_STATUS: Record<PipelineStage, string> = {
   "Enquiry": "on_enquiry",
   "Quoted": "on_quote",
-  "In Play": "in_play",
+  "In Play": "on_quote",
   "Booked": "on_booking",
 };
 
@@ -248,6 +257,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateQuoteMutation = useUpdateQuote();
+  const setPrimaryQuoteMutation = useSetPrimaryQuote();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -281,13 +291,10 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
   };
 
   const statusStyle: Record<string, string> = {
-    AWAITING_DECISION: "bg-amber-50 text-amber-600",
-    QUOTE_READY: "bg-blue-50 text-blue-600",
-    QUOTE_IN_PROGRESS: "bg-gray-100 text-gray-500",
-    QUOTE_CALL: "bg-purple-50 text-purple-600",
-    NEW_LEAD: "bg-sky-50 text-sky-600",
-    REQUOTE: "bg-orange-50 text-orange-600",
-    WON: "bg-emerald-50 text-emerald-600",
+    quoted: "bg-indigo-50 text-indigo-600",
+    in_play: "bg-amber-50 text-amber-600",
+    lost: "bg-rose-50 text-rose-600",
+    archived: "bg-slate-50 text-slate-500",
   };
 
   return (
@@ -327,14 +334,23 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
                         const mainQuote = t.quotes?.find(q => !(q as any).isQuoteCopy) || t.quotes?.[0];
                         if (!mainQuote) return;
                         updateQuoteMutation.mutate(
-                          { id: mainQuote.id, data: { quote_status: "LOST" } },
+                          { id: mainQuote.id, data: { quote_status: "lost" } },
                           {
                             onSuccess: () => {
                               queryClient.invalidateQueries({ queryKey: transactionKeys.all });
                               toast({ title: "Deal marked as lost" });
                             },
-                            onError: () => {
-                              toast({ title: "Failed to mark as lost", variant: "destructive" });
+                            onError: (error: unknown) => {
+                              const axiosErr = error as { response?: { status?: number } } | null;
+                              if (axiosErr?.response?.status === 409) {
+                                toast({
+                                  title: "Reassign the primary quote first",
+                                  description:
+                                    "This is the primary quote and other active quotes exist. Choose a new primary, then mark this one lost.",
+                                });
+                              } else {
+                                toast({ title: "Failed to mark as lost", variant: "destructive" });
+                              }
                             },
                           }
                         );
@@ -403,21 +419,45 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
                 +{duplicateCount}
               </button>
               {showQuotes && (
-                <div className="absolute right-0 bottom-full z-50 mb-1 w-52 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
-                  {quoteVariants.map((q) => (
-                    <button
-                      key={q.id}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowQuotes(false);
-                        if (t.client_id) setLocation(`/clients/${t.client_id}/quotes/${q.id}`);
-                      }}
-                    >
-                      <span className="truncate">{q.title || "Untitled quote"}</span>
-                      {!q.isQuoteCopy && <span className="ml-auto flex-shrink-0 text-[9px] font-medium text-emerald-600">primary</span>}
-                    </button>
-                  ))}
+                <div className="absolute right-0 bottom-full z-50 mb-1 w-60 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
+                  {quoteVariants.map((q) => {
+                    const isPrimary = q.isQuoteCopy === false;
+                    return (
+                      <div key={q.id} className="flex w-full items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors group/qv">
+                        <button
+                          className="flex flex-1 min-w-0 items-center gap-2 text-left"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowQuotes(false);
+                            if (t.client_id) setLocation(`/clients/${t.client_id}/quotes/${q.id}`);
+                          }}
+                        >
+                          <span className="truncate text-xs text-gray-700">{q.title || "Untitled quote"}</span>
+                          {isPrimary && (
+                            <span className="ml-auto flex-shrink-0 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600">
+                              Primary
+                            </span>
+                          )}
+                        </button>
+                        {!isPrimary && (
+                          <button
+                            className="flex-shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors opacity-0 group-hover/qv:opacity-100"
+                            title="Set as primary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowQuotes(false);
+                              setPrimaryQuoteMutation.mutate(q.id, {
+                                onSuccess: () => toast({ title: "Primary quote updated" }),
+                                onError: () => toast({ title: "Failed to set primary", variant: "destructive" }),
+                              });
+                            }}
+                          >
+                            Set primary
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -730,8 +770,16 @@ type SortDir = "asc" | "desc";
 
 function getStageForTransaction(t: Transaction): PipelineStage {
   if (t.status === "on_enquiry") return "Enquiry";
-  if (t.status === "on_quote") return "Quoted";
-  if (t.status === "in_play") return "In Play";
+  if (t.status === "on_quote") {
+    // Derive the column from the primary quote's status.
+    // Primary = isQuoteCopy === false; fall back to the first quote if no
+    // explicit primary is found (e.g. legacy data before the migration).
+    const primary =
+      t.quote_variants?.find((v) => v.isQuoteCopy === false) ??
+      (t.quote_variants?.[0] ?? null);
+    if (primary?.quote_status === "in_play") return "In Play";
+    return "Quoted";
+  }
   if (t.status === "on_booking") return "Booked";
   return "Enquiry";
 }
@@ -1041,17 +1089,18 @@ const PIPELINE_PAGE_SIZE = 10;
 
 const QUOTE_STATUS_OPTIONS = [
   { value: "all", label: "All Statuses" },
-  { value: "QUOTE_IN_PROGRESS", label: "Quote in Progress" },
-  { value: "QUOTE_SENT", label: "Quote Sent" },
-  { value: "QUOTE_ACCEPTED", label: "Quote Accepted" },
-  { value: "QUOTE_REJECTED", label: "Quote Rejected" },
-  { value: "AWAITING_DEPOSIT", label: "Awaiting Deposit" },
+  { value: "quoted", label: "Quoted" },
+  { value: "in_play", label: "In Play" },
+  { value: "lost", label: "Lost" },
+  { value: "archived", label: "Archived" },
 ];
 
 export default function PipelineBoard() {
   const { data: currentUser } = useCurrentUser();
   const updateTransactionMutation = useUpdateTransaction();
+  const updateQuoteMutation = useUpdateQuote();
   const convertToBookingMutation = useConvertToBooking();
+  const updateEnquiryMutation = useUpdateEnquiry();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -1062,7 +1111,13 @@ export default function PipelineBoard() {
   const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "mine">("all");
   const [showFilters, setShowFilters] = useState(false);
-  const [quoteDialog, setQuoteDialog] = useState<{ transactionId: string; clientId: string; userId: string } | null>(null);
+  const [quoteDialog, setQuoteDialog] = useState<{
+    transactionId: string;
+    clientId: string;
+    userId: string;
+    initialValues?: Partial<QuoteFormValues>;
+    enquiryId?: string;
+  } | null>(null);
   const [bookingDialog, setBookingDialog] = useState<{ quoteId: string } | null>(null);
   const [haysRef, setHaysRef] = useState("");
   const [tourRef, setTourRef] = useState("");
@@ -1128,12 +1183,121 @@ export default function PipelineBoard() {
     if (from === to) return;
     const tx = allTx.find(t => t.id === txId);
     if (!tx) return;
-    if (from === "Enquiry" && to === "Quoted") { setQuoteDialog({ transactionId: txId, clientId: tx.client_id || "", userId: tx.user_id || currentUser?.id || "" }); return; }
-    if (from === "Quoted" && to === "Booked") {
-      const aq = (tx.quotes || []).find((q: any) => !q.isFreeQuote);
-      if (!aq) { toast({ title: "No quote found", variant: "destructive" }); return; }
-      setHaysRef(""); setTourRef(""); setBookingDialog({ quoteId: aq.id }); return;
+
+    // Enquiry → Quoted: fetch the full enquiry to seed the dialog, then open it.
+    if (from === "Enquiry" && to === "Quoted") {
+      const baseDialog = { transactionId: txId, clientId: tx.client_id || "", userId: tx.user_id || currentUser?.id || "" };
+      if (tx.enquiry?.id) {
+        const enquiryId = tx.enquiry.id;
+        void (async () => {
+          try {
+            const enq = await queryClient.fetchQuery({
+              queryKey: enquiryKeys.detail(enquiryId),
+              queryFn: () => enquiryApi.getById(enquiryId),
+            });
+            setQuoteDialog({ ...baseDialog, initialValues: buildQuoteInitialValuesFromEnquiry(enq), enquiryId });
+          } catch {
+            toast({ title: "Failed to load enquiry details", variant: "destructive" });
+          }
+        })();
+      } else {
+        setQuoteDialog(baseDialog);
+      }
+      return;
     }
+
+    // Any quoted stage → Booked: open the convert-to-booking dialog.
+    if ((from === "Quoted" || from === "In Play") && to === "Booked") {
+      const aq = tx.quotes?.find((q: any) => !q.isFreeQuote && !q.isQuoteCopy) ?? tx.quotes?.find((q: any) => !q.isFreeQuote);
+      if (!aq) { toast({ title: "No quote found", variant: "destructive" }); return; }
+      setHaysRef(""); setTourRef(""); setBookingDialog({ quoteId: aq.id });
+      return;
+    }
+
+    // Moving between Quoted ↔ In Play: update the primary quote's status.
+    // transaction.status stays 'on_quote' — the column derives from the primary quote.
+    // Optimistically move the card between the two column caches so the drop feels
+    // instant; reconcile (or roll back) once the mutation settles.
+    if ((to === "In Play" || to === "Quoted") && (from === "Quoted" || from === "In Play")) {
+      const primaryQuote =
+        tx.quote_variants?.find((v) => v.isQuoteCopy === false) ??
+        tx.quote_variants?.[0] ??
+        tx.quotes?.find((q) => !q.isQuoteCopy) ??
+        tx.quotes?.[0];
+      if (!primaryQuote) { toast({ title: "No quote found", variant: "destructive" }); return; }
+      const newQuoteStatus = to === "In Play" ? "in_play" : "quoted";
+
+      // Query keys must match the usePipelineColumn() calls exactly: the In Play
+      // column has no quoteStatus param, the Quoted column carries quoteStatusParam.
+      const keyForStage = (s: PipelineStage) =>
+        s === "In Play"
+          ? transactionKeys.pipeline("in_play", agentFilter, undefined)
+          : transactionKeys.pipeline("quote", agentFilter, quoteStatusParam);
+      const sourceKey = keyForStage(from);
+      const targetKey = keyForStage(to);
+
+      // Snapshot both columns for rollback.
+      const prevSource = queryClient.getQueryData<any>(sourceKey);
+      const prevTarget = queryClient.getQueryData<any>(targetKey);
+
+      // The moved card with its primary quote's status flipped, so it derives into
+      // the destination column (and the StatusPill reflects the new value).
+      const movedTx = {
+        ...tx,
+        quote_variants: (tx.quote_variants ?? []).map((v) =>
+          v.isQuoteCopy === false ? { ...v, quote_status: newQuoteStatus } : v,
+        ),
+        quotes: (tx.quotes ?? []).map((q: any) =>
+          !q.isQuoteCopy ? { ...q, quote_status: newQuoteStatus } : q,
+        ),
+      };
+
+      // Remove from the source column.
+      queryClient.setQueryData<any>(sourceKey, (old: any) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((p: any, i: number) => ({
+            ...p,
+            items: p.items.filter((t: Transaction) => t.id !== txId),
+            total: i === 0 ? Math.max(0, (p.total ?? 0) - 1) : p.total,
+          })),
+        };
+      });
+
+      // Prepend to the destination column's first page.
+      queryClient.setQueryData<any>(targetKey, (old: any) => {
+        if (!old?.pages?.length) return old;
+        return {
+          ...old,
+          pages: old.pages.map((p: any, i: number) =>
+            i === 0
+              ? { ...p, items: [movedTx, ...p.items.filter((t: Transaction) => t.id !== txId)], total: (p.total ?? 0) + 1 }
+              : p,
+          ),
+        };
+      });
+
+      updateQuoteMutation.mutate(
+        { id: primaryQuote.id, data: { quote_status: newQuoteStatus } },
+        {
+          onError: () => {
+            // Roll the optimistic move back.
+            queryClient.setQueryData(sourceKey, prevSource);
+            queryClient.setQueryData(targetKey, prevTarget);
+            toast({ title: "Error moving transaction", variant: "destructive" });
+          },
+          onSettled: () => {
+            // Reconcile only the two affected columns (avoid refetching the whole board).
+            queryClient.invalidateQueries({ queryKey: sourceKey });
+            queryClient.invalidateQueries({ queryKey: targetKey });
+          },
+        },
+      );
+      return;
+    }
+
+    // All other moves (e.g. Booked → Enquiry, etc.) update transaction status directly.
     updateTransactionMutation.mutate(
       { id: txId, data: { status: STAGE_TO_STATUS[to] } as any },
       {
@@ -1141,7 +1305,7 @@ export default function PipelineBoard() {
         onError: () => { toast({ title: "Error moving transaction", variant: "destructive" }); },
       }
     );
-  }, [allTx, updateTransactionMutation, currentUser, toast, queryClient]);
+  }, [allTx, updateTransactionMutation, updateQuoteMutation, currentUser, toast, queryClient, agentFilter, quoteStatusParam]);
 
   const isLoading = !agentResolved || enquiryQ.isLoading || quoteQ.isLoading || inPlayQ.isLoading || bookingQ.isLoading;
   const totalDeals = eD.total + qD.total + iD.total + bD.total;
@@ -1290,7 +1454,22 @@ export default function PipelineBoard() {
 
       {/* ─── Dialogs ─── */}
       {quoteDialog && (
-        <QuoteCreateDialog transactionId={quoteDialog.transactionId} clientId={quoteDialog.clientId} userId={quoteDialog.userId} open={!!quoteDialog} onOpenChange={o => { if (!o) setQuoteDialog(null); }} onSuccess={() => { setQuoteDialog(null); queryClient.invalidateQueries({ queryKey: transactionKeys.all }); toast({ title: "Quote created" }); }} />
+        <QuoteCreateDialog
+          transactionId={quoteDialog.transactionId}
+          clientId={quoteDialog.clientId}
+          userId={quoteDialog.userId}
+          initialValues={quoteDialog.initialValues}
+          open={!!quoteDialog}
+          onOpenChange={o => { if (!o) setQuoteDialog(null); }}
+          onSuccess={() => {
+            if (quoteDialog.enquiryId) {
+              updateEnquiryMutation.mutate({ id: quoteDialog.enquiryId, data: { status: "Converted" } });
+            }
+            setQuoteDialog(null);
+            queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+            toast({ title: "Quote created" });
+          }}
+        />
       )}
 
       <Dialog open={!!bookingDialog} onOpenChange={o => { if (!o) { setBookingDialog(null); setHaysRef(""); setTourRef(""); } }}>

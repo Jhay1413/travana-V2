@@ -28,6 +28,7 @@ router.post("/social-post", upload.array("images", 50), quoteController.createSo
 router.post("/", upload.array("images", 50), quoteController.createQuote);
 router.post("/:id/duplicate", quoteController.duplicateQuote);
 router.patch("/:id", quoteController.updateQuote);
+router.patch("/:id/primary", quoteController.setPrimaryQuote);
 router.delete("/:id", quoteController.deleteQuote);
 
 router.post("/:id/flights", quoteController.addFlight);

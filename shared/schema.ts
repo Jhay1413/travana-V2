@@ -3,11 +3,11 @@ import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, b
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const transaction_status_enum = pgEnum('transaction_status_enum', ['on_enquiry', 'on_quote', 'in_play', 'on_booking']);
+export const transaction_status_enum = pgEnum('transaction_status_enum', ['on_enquiry', 'on_quote', 'on_booking']);
 export const lead_source_enum = pgEnum('lead_source_enum', ['SHOP', 'FACEBOOK', 'WHATSAPP', 'INSTAGRAM', 'PHONE_ENQUIRY']);
 export const enquiry_status_enum = pgEnum('enquiry_status_enum', ['NEW_LEAD', 'ACTIVE', 'LOST', 'INACTIVE', 'EXPIRED']);
 export const budget_type_enum = pgEnum('budget_type_enum', ['PER_PERSON', 'PACKAGE']);
-export const quote_status_enum = pgEnum('quote_status_enum', ['NEW_LEAD', 'QUOTE_IN_PROGRESS', 'QUOTE_CALL', 'QUOTE_READY', 'AWAITING_DECISION', 'REQUOTE', 'WON', 'ARCHIVED', 'LOST', 'INACTIVE', 'EXPIRED']);
+export const quote_status_enum = pgEnum('quote_status_enum', ['quoted', 'in_play', 'lost', 'archived']);
 export const booking_status_enum = pgEnum('booking_status_enum', ['BOOKED', 'LOST']);
 export const referral_status_enum = pgEnum('referral_status_enum', ['PENDING', 'IN_WALLET', 'PAID', 'VOIDED']);
 export const referral_request_status_enum = pgEnum('referral_request_status_enum', ['PENDING', 'APPROVED', 'REJECTED']);
@@ -646,7 +646,6 @@ export const enquiry_table = pgTable('enquiry_table', {
   date_expiry: timestamp({ withTimezone: true }),
   is_future_deal: boolean().default(false),
   future_deal_date: date({ mode: "string" }),
-  is_expired: boolean().default(false),
   is_active: boolean().default(true),
   deletion_code: varchar(),
   deleted_by: text().references(() => user.id),
@@ -734,7 +733,6 @@ export const quote = pgTable('quote_table', {
   discounts: numeric('discounts', { precision: 10, scale: 2 }),
   service_charge: numeric('service_charge', { precision: 10, scale: 2 }),
   num_of_nights: integer().default(0).notNull(),
-  is_expired: boolean().default(false),
   pets: integer().default(0).notNull(),
   cottage_id: uuid().references(() => cottages.id),
   lodge_id: uuid().references(() => lodges.id),
@@ -762,6 +760,7 @@ export const quote = pgTable('quote_table', {
   deleted_at: timestamp({ precision: 0, withTimezone: true }),
   quote_ref: varchar(),
   isQuoteCopy: boolean().default(false),
+  parent_quote_id: uuid().references((): AnyPgColumn => quote.id),
   isFreeQuote: boolean().default(false),
   quote_token: varchar('quote_token', { length: 12 }),
   quote_sent_at: timestamp('quote_sent_at', { precision: 0, withTimezone: true }),
@@ -942,6 +941,7 @@ export type InsertQuoteCruiseItinerary = typeof quote_cruise_itinerary.$inferIns
 export const booking = pgTable('booking_table', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   transaction_id: uuid().notNull().references(() => transaction.id, { onDelete: "cascade" }).unique(),
+  quote_id: uuid().references(() => quote.id),
   deal_type: varchar(),
   pre_booked_seats: varchar(),
   flight_meals: boolean().default(false),

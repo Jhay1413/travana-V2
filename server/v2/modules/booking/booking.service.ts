@@ -348,7 +348,9 @@ export const bookingService = {
       );
     }
 
-    await newQuoteRepository.update(quoteId, { quote_status: 'WON' });
+    // Record which quote converted to this booking; there is no WON status on the quote.
+    // The deal is won when transaction.status = 'on_booking' and booking.quote_id points here.
+    await bookingRepository.update(b.id, { quote_id: quoteId });
     await transactionRepository.update(q.transaction_id, { status: 'on_booking' });
 
     // Converting a quote into a booking: close out the quote's open tasks.

@@ -461,11 +461,6 @@ export const newQuoteService = {
       quoteData.date_expiry = null;
     }
 
-    // Whenever date_expiry is updated, reset is_expired to false
-    if ('date_expiry' in quoteData) {
-      quoteData.is_expired = false;
-    }
-
     // Recalculate price_per_person if any of the pricing/passenger fields changed
     if ('sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData || 'discounts' in quoteData || 'service_charge' in quoteData) {
       const current = await newQuoteRepository.findById(id);
@@ -491,8 +486,8 @@ export const newQuoteService = {
       if (!q) throw new AppError("Quote not found", 404);
     }
 
-    // When marked LOST, deactivate the quote and its parent transaction
-    if (quoteData.quote_status === 'LOST' && q.transaction_id) {
+    // When marked lost, deactivate the quote and its parent transaction
+    if (quoteData.quote_status === 'lost' && q.transaction_id) {
       await newQuoteRepository.update(id, { is_active: false });
       await transactionRepository.update(q.transaction_id, { is_active: false });
     }

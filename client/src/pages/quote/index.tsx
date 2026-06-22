@@ -90,7 +90,7 @@ export default function QuotePage() {
     convertTourRef, setConvertTourRef,
     convertToBookingMutation, confirmConvert,
   } = useQuoteConvert(quoteId, clientId);
-  const { onStatusChange } = useQuoteStatusUpdate(quoteId, () => setShowConvertDialog(true));
+  const { onStatusChange } = useQuoteStatusUpdate(quoteId);
   const {
     imageInputRef,
     uploadImagesMutation,

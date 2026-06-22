@@ -6,37 +6,43 @@ import { asyncHandler } from "../utils/async-handler";
 import { getUserId } from "../utils/get-user-id";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
-  "In Play": "QUOTE_IN_PROGRESS",
-  "in play": "QUOTE_IN_PROGRESS",
-  "New Lead": "NEW_LEAD",
-  "NEW_LEAD": "NEW_LEAD",
-  "Quote In Progress": "QUOTE_IN_PROGRESS",
-  "QUOTE_IN_PROGRESS": "QUOTE_IN_PROGRESS",
-  "Quote Call": "QUOTE_CALL",
-  "QUOTE_CALL": "QUOTE_CALL",
-  "Quote Ready": "QUOTE_READY",
-  "QUOTE_READY": "QUOTE_READY",
-  "Awaiting Decision": "AWAITING_DECISION",
-  "AWAITING_DECISION": "AWAITING_DECISION",
-  "Requote": "REQUOTE",
-  "REQUOTE": "REQUOTE",
-  "Won": "WON",
-  "WON": "WON",
-  "Archived": "ARCHIVED",
-  "ARCHIVED": "ARCHIVED",
-  "Lost": "LOST",
-  "LOST": "LOST",
-  "Inactive": "INACTIVE",
-  "INACTIVE": "INACTIVE",
-  "Expired": "EXPIRED",
-  "EXPIRED": "EXPIRED",
-  "accepted": "WON",
-  "draft": "QUOTE_IN_PROGRESS",
+  // New-enum identity pass-through
+  "quoted": "quoted",
+  "in_play": "in_play",
+  "lost": "lost",
+  "archived": "archived",
+  // Legacy label → new-enum mapping
+  "In Play": "quoted",
+  "in play": "quoted",
+  "New Lead": "quoted",
+  "NEW_LEAD": "quoted",
+  "Quote In Progress": "quoted",
+  "QUOTE_IN_PROGRESS": "quoted",
+  "Quote Call": "quoted",
+  "QUOTE_CALL": "quoted",
+  "Quote Ready": "quoted",
+  "QUOTE_READY": "quoted",
+  "Requote": "quoted",
+  "REQUOTE": "quoted",
+  "draft": "quoted",
+  "Awaiting Decision": "in_play",
+  "AWAITING_DECISION": "in_play",
+  "Won": "quoted",
+  "WON": "quoted",
+  "accepted": "quoted",
+  "Archived": "archived",
+  "ARCHIVED": "archived",
+  "Inactive": "archived",
+  "INACTIVE": "archived",
+  "Expired": "archived",
+  "EXPIRED": "archived",
+  "Lost": "lost",
+  "LOST": "lost",
 };
 
 function normalizeQuoteStatus(data: any) {
   if (data.quote_status) {
-    data.quote_status = QUOTE_STATUS_MAP[data.quote_status] || "QUOTE_IN_PROGRESS";
+    data.quote_status = QUOTE_STATUS_MAP[data.quote_status] || "quoted";
   }
   return data;
 }
@@ -49,7 +55,8 @@ export const quoteController = {
     if (transactionId && typeof transactionId === "string") {
       quotes = await newQuoteService.listQuotesByTransaction(transactionId);
     } else if (status && typeof status === "string") {
-      quotes = await newQuoteService.listQuotesByStatus(status);
+      const mappedStatus = (QUOTE_STATUS_MAP[status] || status) as Parameters<typeof newQuoteService.listQuotesByStatus>[0];
+      quotes = await newQuoteService.listQuotesByStatus(mappedStatus);
     } else {
       quotes = await newQuoteService.listQuotes();
     }

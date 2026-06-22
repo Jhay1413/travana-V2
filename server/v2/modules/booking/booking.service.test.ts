@@ -243,7 +243,8 @@ describe("bookingService.convertQuoteToBooking", () => {
       booking_status: "BOOKED",
       price_per_person: "300.00",
     });
-    expect(newQuoteRepository.update).toHaveBeenCalledWith("q1", { quote_status: "WON" });
+    // booking is stamped with the converted quote id (no WON status on quotes)
+    expect(bookingRepository.update).toHaveBeenCalledWith(expect.any(String), { quote_id: "q1" });
     expect(transactionRepository.update).toHaveBeenCalledWith("t1", { status: "on_booking" });
     expect(result).toMatchObject({ id: "b1", client_id: null });
   });

@@ -76,6 +76,17 @@ export function useAdminDeleteQuote() {
   });
 }
 
+export function useSetPrimaryQuote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (quoteId: string) => quoteApi.setPrimary(quoteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    },
+  });
+}
+
 export function useUpdateQuoteTags() {
   const queryClient = useQueryClient();
   return useMutation({

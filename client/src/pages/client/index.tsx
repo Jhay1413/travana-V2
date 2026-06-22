@@ -17,6 +17,7 @@ import {
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import type { Transaction, EnquiryTable } from "@/features/quote/types";
+import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 
@@ -167,22 +168,7 @@ export default function ClientPage() {
     const txn = transactions.find((t: Transaction) => t.id === convertingFromEnquiryTxnId);
     const enq = txn?.enquiry;
     if (!enq) return undefined;
-    return {
-      packageType: enq.holiday_type_id || "",
-      quoteTitle: enq.title || "",
-      travelDate: enq.travel_date || "",
-      passengersAdults: enq.adults || 2,
-      passengersChildren: enq.children || 0,
-      passengersInfants: enq.infants || 0,
-      childAges: (enq.passengers ?? [])
-        .filter((p) => p.type === "child")
-        .map((p) => p.age ?? 0),
-      nights: enq.no_of_nights || 7,
-      destination: enq.destinations?.[0]?.destination_id || "",
-      resort: enq.resorts?.[0]?.resort_id || "",
-      boardBasisId: enq.boardBases?.[0]?.board_basis_id || "",
-      outboundDepartAirportId: enq.airports?.[0]?.airport_id || "",
-    };
+    return buildQuoteInitialValuesFromEnquiry(enq);
   }, [convertingFromEnquiryTxnId, transactions]);
 
   const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);

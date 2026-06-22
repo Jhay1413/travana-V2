@@ -2,7 +2,7 @@ export { useLogin, useLogout } from "./use-auth-mutations";
 export { useCreateClient, useUpdateClient } from "@/features/client/api/use-client-mutations";
 export { useUpdateNeonClient, useImportNeonClients, useMergeNeonClients } from "@/features/client/api/use-neon-client-mutations";
 export { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "@/features/transaction/api/use-transaction-mutations";
-export { useCreateSocialQuote, useCreateQuote, useDuplicateQuote, useUpdateQuote, useDeleteQuote, useUpdateQuoteTags, useAdminDeleteQuote } from "@/features/quote/api/use-quote-mutations";
+export { useCreateSocialQuote, useCreateQuote, useDuplicateQuote, useUpdateQuote, useDeleteQuote, useUpdateQuoteTags, useAdminDeleteQuote, useSetPrimaryQuote } from "@/features/quote/api/use-quote-mutations";
 export { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage, useSetPrimaryQuoteImage } from "@/features/quote/api/use-quote-image-mutations";
 export { useConvertToBooking, useUpdateBooking, useDeleteBooking, useAdminDeleteBooking } from "@/features/booking/api/use-booking-mutations";
 export { useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage, useSetPrimaryBookingImage } from "@/features/booking/api/use-booking-image-mutations";
