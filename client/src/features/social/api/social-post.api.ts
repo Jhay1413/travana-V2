@@ -22,6 +22,7 @@ export interface GeneratePostParams {
   lodgeName?: string;
   parkName?: string;
   parkLocation?: string;
+  tourOperator?: string;
 }
 
 export interface TravelDeal {

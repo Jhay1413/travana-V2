@@ -152,6 +152,7 @@ interface PostDeal {
   boardBasis?: string | null;
   departureAirport?: string | null;
   luggageTransfers?: string | null;
+  tourOperator?: string | null;
   price?: string | null;
 }
 
@@ -175,6 +176,7 @@ ${subtitleEmoji} ${subtitle} ${subtitleEmoji}<br>
 ${deal.boardBasis && deal.boardBasis !== "N/A" ? `🍽️ ${deal.boardBasis}<br>` : ""}
 ${deal.departureAirport && deal.departureAirport !== "N/A" ? `✈️ ${deal.departureAirport}<br>` : ""}
 ${deal.luggageTransfers && deal.luggageTransfers !== "N/A" ? `🧳 ${deal.luggageTransfers} 🚌<br>` : ""}
+${deal.tourOperator && deal.tourOperator !== "N/A" ? `🏢 ${deal.tourOperator}<br>` : ""}
 <br>
 ${priceSection}<br>
 ${resortSummary}<br>
@@ -236,6 +238,7 @@ export interface GeneratePostParams {
   lodgeName?: string;
   parkName?: string;
   parkLocation?: string;
+  tourOperator?: string;
 }
 
 export const socialPostService = {
@@ -261,6 +264,7 @@ export const socialPostService = {
       lodgeName,
       parkName,
       parkLocation,
+      tourOperator,
     } = params;
 
     const safeTitle = title?.trim() || "Holiday Deal";
@@ -341,6 +345,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       boardBasis: boardBasis || null,
       departureAirport: departureAirport || null,
       luggageTransfers: transferType && transferType !== "none" ? transferType : null,
+      tourOperator: tourOperator?.trim() || null,
       price: displayPrice,
     };
 

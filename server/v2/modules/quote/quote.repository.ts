@@ -249,7 +249,7 @@ export const newQuoteRepository = {
     return rows.map((r) => r.quote);
   },
 
-  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted) {
+  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false) {
     const scopeConds = buildTransactionScopeConds(scope);
     const offset = page * pageSize;
     const searchPattern = search.trim() ? `%${search.trim().toLowerCase()}%` : null;
@@ -281,6 +281,9 @@ export const newQuoteRepository = {
       eq(quote.not_for_social, false),
       ...scopeConds,
       ...(searchCondition ? [searchCondition] : []),
+      ...(unscheduledOnly
+        ? [sql`NOT EXISTS (SELECT 1 FROM ${travel_deal} WHERE ${travel_deal.quote_id} = ${quote.id} AND ${travel_deal.onlySocialsId} IS NOT NULL)`]
+        : []),
     ];
 
     let ids: string[];

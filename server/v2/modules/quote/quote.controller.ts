@@ -72,8 +72,9 @@ export const quoteController = {
     const rangeStart = (req.query.rangeStart as string) || "";
     const rangeEnd = (req.query.rangeEnd as string) || "";
     const search = (req.query.search as string) || "";
+    const unscheduledOnly = (req.query.unscheduledOnly as string) === "true";
 
-    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope);
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly);
 
     return successResponse(res, { quotes, page, pageSize, hasMore: quotes.length === pageSize }, "Free quotes retrieved successfully");
   }),

@@ -99,7 +99,8 @@
       "Bash(npx tsx *)",
       "Bash(xargs grep -l \"my-profit\\\\|agent-stats\\\\|getAgentStats\\\\|getMyProfit\")",
       "Bash(xargs grep -l \"referral\" -i)",
-      "Bash(grep -nA12 \"async getReferralsByReferrer\" server/v2/modules/referral/referral.service.ts)"
+      "Bash(grep -nA12 \"async getReferralsByReferrer\" server/v2/modules/referral/referral.service.ts)",
+      "Bash(xargs grep -l \"generatePost\\\\|socialPostApi.generate\")"
     ],
     "additionalDirectories": [
       "/tmp"

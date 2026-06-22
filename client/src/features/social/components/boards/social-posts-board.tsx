@@ -32,7 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { EnrichedQuote } from "@/features/quote/types";
 import type { TravelDeal } from "@/features/social/api/social-post.api";
 
-type ViewMode = "scheduled" | "all" | "portal";
+type ViewMode = "scheduled" | "all" | "portal" | "unscheduled";
 type ScheduleFilter = "none" | "today" | "tomorrow" | "this-week" | "next-week" | "next-month" | "specific-date";
 
 interface SocialPost {
@@ -172,22 +172,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
             <Star className="w-3.5 h-3.5 text-yellow-500" />
             <span className="text-xs text-black/70 dark:text-white/70 font-medium">Featured Deal</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer" data-testid={`checkbox-push-${quote.id}`}>
-            <Checkbox
-              checked={pushSending}
-              onCheckedChange={() => {
-                if (pushSending) return;
-                setPushSending(true);
-                onPushNotify(quote.id);
-                setTimeout(() => setPushSending(false), 3000);
-              }}
-              className="h-4 w-4"
-            />
-            <Bell className="w-3.5 h-3.5 text-amber-500" />
-            <span className="text-xs text-black/70 dark:text-white/70 font-medium">
-              {pushSending ? "Sending..." : "Push Notification to Portal"}
-            </span>
-          </label>
+          {/* Push Notification to Portal temporarily removed */}
         </div>
         <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
           <Link href={`/social-posts/quotes/${quote.id}`}>
@@ -263,7 +248,7 @@ export default function SocialPostsBoard() {
     if (r) { rangeStart = r.rangeStart; rangeEnd = r.rangeEnd; }
   }
 
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd);
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd, viewMode === "unscheduled");
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const filteredPosts = useMemo<SocialPost[]>(() => {
@@ -314,6 +299,7 @@ export default function SocialPostsBoard() {
         lodgeName: quote.lodge_name || undefined,
         parkName: quote.park_name || undefined,
         parkLocation: quote.park_location || undefined,
+        tourOperator: quote.main_tour_operator_name || undefined,
       });
       setPreviewDeal(deal);
     } catch (err: any) {
@@ -419,6 +405,15 @@ export default function SocialPostsBoard() {
             </Button>
             <Button
               size="sm"
+              variant={viewMode === "unscheduled" ? "default" : "outline"}
+              className={`rounded-xl text-xs font-medium ${viewMode === "unscheduled" ? "bg-amber-500 hover:bg-amber-600 text-white" : "border-black/10 dark:border-white/10"}`}
+              onClick={() => { setViewMode("unscheduled"); setScheduleFilter("none"); }}
+              data-testid="button-view-unscheduled"
+            >
+              <CalendarClock className="w-3.5 h-3.5 mr-1" />Not Scheduled
+            </Button>
+            <Button
+              size="sm"
               className="rounded-xl text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white gap-1.5"
               onClick={() => setCreateDialogOpen(true)}
               data-testid="button-create-social-post"
@@ -479,7 +474,7 @@ export default function SocialPostsBoard() {
           <CalendarClock className="w-12 h-12 mx-auto text-black/20 dark:text-white/20 mb-3" />
           <p className="text-sm font-medium text-black/60 dark:text-white/60">No posts found</p>
           <p className="text-xs text-black/40 dark:text-white/40 mt-1">
-            {viewMode === "scheduled" ? "No scheduled posts match your filters" : viewMode === "portal" ? "No posts have been added to the portal yet" : "Try adjusting your search"}
+            {viewMode === "scheduled" ? "No scheduled posts match your filters" : viewMode === "portal" ? "No posts have been added to the portal yet" : viewMode === "unscheduled" ? "No unscheduled posts found" : "Try adjusting your search"}
           </p>
         </div>
       ) : (

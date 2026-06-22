@@ -47,14 +47,21 @@ Status lives on three entities, and the board is derived from all of them at onc
 - **`transaction_status_enum`** → `on_enquiry, on_quote, on_booking`
   - **Remove `in_play`.** "In Play" is no longer a deal stage; it becomes a quote
     state (see below). `on_booking` is the won/booked stage.
-- **`quote_status_enum`** → `quoted, in_play, lost`
+- **`quote_status_enum`** → `quoted, in_play, lost, archived`
   - Replaces the 11 legacy values. A quote progresses `quoted → in_play`, with
-    `lost` as the terminal per-quote outcome.
+    `lost` (deal genuinely gone) and `archived` (parked/dormant, recoverable) as
+    terminal per-quote outcomes. Both drop off the *active* board, into different
+    buckets (a "Lost" view vs an "Archived" view).
   - **No `won` on the quote.** "Won" is the deal being booked
     (`transaction.status = on_booking`). The specific quote that converted is
     recorded on the booking (see `booking.quote_id` below) — **not** derived from
     the primary, because a copy/duplicate quote can be the one that converts, not
     just the primary.
+  - **No `expired` status.** Expiry is tracked independently of `quote_status` via
+    the existing `quote.is_expired` flag (set by the bulk job in
+    [`expiry.service.ts`](../server/v2/modules/enquiry/expiry.service.ts)) and
+    `quote.date_expiry`. A quote can be `in_play` *and* expired at once; expiry is
+    **display-only** (a badge) and never mutates `quote_status`.
 - **`enquiry_status_enum`** → unchanged; keeps `LOST` for losing a deal at the
   enquiry stage.
 
@@ -78,9 +85,10 @@ transaction; the service must preserve this when reassigning primary.
   the booking. May be the primary **or any copy/duplicate**. "Won quote" is read
   from here, independent of which quote is primary.
 
-Open question: do we also need `quote.parent_quote_id` (which primary a duplicate
-came from), or is "same transaction" enough to treat all other quotes as the
-duplicate pool? Leaning **not needed** — see Open Questions.
+- **`quote.parent_quote_id`** — FK → `quote.id` (nullable). Records **which quote
+  a duplicate was copied from**. Set by `duplicateQuote`; null for an original.
+  This is **separate from "primary"**: primary is still `isQuoteCopy = false`,
+  whereas `parent_quote_id` captures lineage. We keep both.
 
 ---
 
@@ -154,9 +162,10 @@ behaviour on 409 — no auto-reassignment.
 
 1. **`shared/schema.ts`**
    - Edit `transaction_status_enum` (remove `in_play`).
-   - Replace `quote_status_enum` with `quoted, in_play, lost`.
+   - Replace `quote_status_enum` with `quoted, in_play, lost, archived`.
    - Add `booking.quote_id` (FK → `quote.id`). No `primary_quote_id` — primary is
      the `isQuoteCopy = false` quote (existing column).
+   - Add `quote.parent_quote_id` (FK → `quote.id`, nullable) for duplicate lineage.
 2. **Migration** (Drizzle) — see Data Migration below.
 3. **`quote.repository.ts`** — simplify
    [`findPipelineByStatus`](../server/v2/modules/transaction/transaction.repository.ts#L416)
@@ -200,7 +209,10 @@ behaviour on 409 — no auto-reassignment.
   - `WON` → drop the status; ensure those transactions are `on_booking` **and**
     backfill `booking.quote_id` with that won quote (it may be a copy, not the
     transaction's chosen primary)
-  - `ARCHIVED, INACTIVE, EXPIRED` → **decision needed** (treat as `lost`?)
+  - `ARCHIVED` → `archived` (now a first-class status)
+  - `EXPIRED` → `archived` — `expired` is no longer a status; expiry is read from
+    `is_expired` / `date_expiry` instead. (Existing `is_expired` data is preserved.)
+  - `INACTIVE` → `archived` (dormant/recoverable bucket)
 - **Primary (`isQuoteCopy`) integrity check**: ensure each transaction has exactly
   one `isQuoteCopy = false` quote. Fix any transaction with zero (promote the most
   recent non-lost quote to `false`) or more than one (keep the most recent, set the
@@ -210,21 +222,46 @@ behaviour on 409 — no auto-reassignment.
 
 ---
 
-## Open questions to confirm before build
+## Resolved decisions (confirmed 2026-06-22)
 
-1. **`quote.parent_quote_id`** — track duplicate lineage explicitly, or treat all
-   other quotes in the transaction as the duplicate pool? (Leaning: not needed.)
-2. **`ARCHIVED / INACTIVE / EXPIRED` quotes** — map to `lost` on migration, or do
-   they need to survive somewhere?
-3. **Sole-primary lost** — confirm: when the primary is the only quote, allow
+1. **`quote.parent_quote_id`** — **ADD IT.** Track duplicate lineage explicitly
+   (FK → `quote.id`, nullable), separate from the primary flag. Kept alongside
+   `isQuoteCopy`.
+2. **`ARCHIVED / INACTIVE / EXPIRED` quotes** — all migrate to **`archived`**,
+   the new first-class status. `EXPIRED` is dropped as a status entirely (expiry
+   lives on `is_expired` / `date_expiry`). `INACTIVE` folds into `archived`.
+3. **Sole-primary lost** — **allowed.** When the primary is the only quote, allow
    `lost` directly (deal becomes derived-lost) rather than 409.
-4. **Expiry** — `quote.date_expiry` currently influences the board. Does an
-   expired quote stay In Play, or auto-move? (Today expiry is part of the active
-   filter; the new model needs an explicit rule.)
-5. **Other quotes when one converts** — when a copy is booked
-   (`booking.quote_id`), what happens to the remaining quotes in that transaction
-   (incl. the old primary)? Auto-mark them `lost`, leave them, or no-op? The deal
-   is `on_booking` regardless, so this only affects historical quote records.
+4. **Expiry** — **display-only; status unchanged.** Expiry never moves the board on
+   its own. It is read from `is_expired` / `date_expiry` and shown as a badge; a
+   quote keeps its `quote_status` (e.g. `in_play`) while expired.
+5. **Other quotes when one converts** — **leave them untouched.** When a quote is
+   booked, the remaining quotes keep their status. The deal is `on_booking`
+   regardless, so they already drop off the active board; no rewrite of history.
+6. **Drop the `is_expired` column** — **as part of this work.** It is a v1-only
+   shim: v2 never reads it (expiry derives from dates via
+   [`expiry.ts`](../server/v2/utils/expiry.ts)); the only decision-read is v1
+   `server/repositories/transaction.repository.ts:655`. Remove it (see Removing
+   `is_expired` below).
+
+## Removing `is_expired`
+
+Decision #6. The flag is written by two near-identical crons but read for a
+decision in only one place. Teardown:
+
+1. **Migrate the one v1 read** — `server/repositories/transaction.repository.ts:655`
+   (`eq(quote.is_expired, false)`) → date-driven predicate (mirror the v2 window in
+   `transaction.repository.ts:550`, or use `effectiveExpiry`).
+2. **Delete the expiry crons** — once nothing reads the flag, both
+   `server/services/expiry.service.ts` (v1) and
+   `server/v2/modules/enquiry/expiry.service.ts` (v2) become no-ops. Remove them and
+   their invocations (`server/index.ts:147`, `server/v2/index.ts:142`).
+3. **Remove the reset-on-update writes** — v1 `server/services/newQuote.service.ts:466`
+   and v2 `server/v2/modules/quote/quote.service.ts:377,413`.
+4. **Drop the column** from `shared/schema.ts` — `quote.is_expired` (line ~737).
+   **Check `enquiry_table.is_expired` (line ~649) separately**: confirm no remaining
+   decision-read before dropping it too (the enquiry cron only *sets* it).
+5. Remove `is_expired` from the client type (`client/src/features/quote/types/quote.types.ts:185`).
 
 ---
 

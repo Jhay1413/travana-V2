@@ -78,6 +78,7 @@ export function SocialPostsTab({
     "",
     rangeStart,
     rangeEnd,
+    false,
     { enabled: tab === "calendar" },
   );
 
