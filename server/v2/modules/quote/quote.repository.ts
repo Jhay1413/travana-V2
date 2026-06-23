@@ -1270,7 +1270,10 @@ export const newQuoteRepository = {
     limit?: number;
   }) {
     const { orgId, userId, limit = 10 } = opts;
-    const whereParts: any[] = [isNotNull(quoteViewsTable.viewerName)];
+    // Include public-link views (viewerName IS NULL) too — anonymous views still
+    // represent client engagement and must bump the quote up the recency list.
+    // The frontend and countSessionedViews already handle null viewerName.
+    const whereParts: any[] = [];
     if (orgId) whereParts.push(eq(transaction.org_id, orgId));
     if (userId) whereParts.push(eq(transaction.user_id, userId));
 
@@ -1319,7 +1322,7 @@ export const newQuoteRepository = {
         browser: quoteViewsTable.browser,
       })
       .from(quoteViewsTable)
-      .where(and(inArray(quoteViewsTable.quoteId, quoteIds), isNotNull(quoteViewsTable.viewerName)))
+      .where(inArray(quoteViewsTable.quoteId, quoteIds))
       .orderBy(desc(quoteViewsTable.viewedAt));
 
     const viewsByQuote = new Map<string, typeof allViews>();

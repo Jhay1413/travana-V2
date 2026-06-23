@@ -176,7 +176,6 @@ ${subtitleEmoji} ${subtitle} ${subtitleEmoji}<br>
 ${deal.boardBasis && deal.boardBasis !== "N/A" ? `🍽️ ${deal.boardBasis}<br>` : ""}
 ${deal.departureAirport && deal.departureAirport !== "N/A" ? `✈️ ${deal.departureAirport}<br>` : ""}
 ${deal.luggageTransfers && deal.luggageTransfers !== "N/A" ? `🧳 ${deal.luggageTransfers} 🚌<br>` : ""}
-${deal.tourOperator && deal.tourOperator !== "N/A" ? `🏢 ${deal.tourOperator}<br>` : ""}
 <br>
 ${priceSection}<br>
 ${resortSummary}<br>
@@ -186,6 +185,7 @@ ${resortSummary}<br>
 📍 Pop in and see us<br>
 🌐 Visit our website: tinastraveldeals.co.uk<br>
 📸 Follow us on Instagram: https://www.instagram.com/tinastravel/<br>
+${deal.tourOperator && deal.tourOperator !== "N/A" ? `🏢 ${deal.tourOperator}<br>` : ""}
 <br>
 ${hashtagLine}`;
 }

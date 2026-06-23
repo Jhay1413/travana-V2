@@ -158,7 +158,12 @@ export default function QuotePage() {
               variant="outline"
               className="h-9 rounded-2xl border-black/10 bg-white/70"
               data-testid="button-back-client"
-              onClick={() => setLocation(clientId ? `/clients/${clientId}?tab=quotes` : "/")}
+              onClick={() => {
+                // On the /quotes/:quoteId route clientId is empty, so fall back to
+                // the loaded quote's client_id to return to the client's quotes.
+                const backClientId = clientId || (quoteData as any)?.client_id || "";
+                setLocation(backClientId ? `/clients/${backClientId}?tab=quotes` : "/");
+              }}
             >
               <ChevronLeft className="mr-2 h-4 w-4" />
               Quotes

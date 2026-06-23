@@ -18,6 +18,10 @@ import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import type { Transaction, EnquiryTable } from "@/features/quote/types";
 import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
+import { enquiryApi } from "@/api";
+import { enquiryKeys } from "@/features/enquiry/api/use-enquiry-queries";
+import { useQueryClient } from "@tanstack/react-query";
+import type { QuoteFormValues } from "@/features/quote/types/quote-form.types";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 
@@ -70,6 +74,7 @@ export default function ClientPage() {
   const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
+  const [convertingEnquiryInitialValues, setConvertingEnquiryInitialValues] = useState<Partial<QuoteFormValues> | undefined>(undefined);
   const [isContactDetailsOpen, setIsContactDetailsOpen] = useState(true);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const clientId = params?.clientId ?? "";
@@ -83,6 +88,7 @@ export default function ClientPage() {
 
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
+  const queryClient = useQueryClient();
 
   const editForm = useClientEditForm(clientId, clientData);
   const fileActions = useClientFiles(clientId);
@@ -104,7 +110,7 @@ export default function ClientPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleConvertEnquiryToQuote(enq: EnquiryTable) {
+  async function handleConvertEnquiryToQuote(enq: EnquiryTable) {
     if (!enq.transaction_id) {
       console.error("❌ Enquiry missing transaction_id:", enq);
       toast({
@@ -114,9 +120,21 @@ export default function ClientPage() {
       });
       return;
     }
-    console.log("✅ Converting enquiry to quote - Transaction ID:", enq.transaction_id);
     setConvertingFromEnquiryTxnId(enq.transaction_id);
     setConvertingEnquiryId(enq.id);
+    // The transactions list query only hydrates `destinations` on each enquiry,
+    // so seed from the fully-hydrated enquiry (resorts/boardBases/airports/
+    // passengers) fetched by id — mirroring the pipeline board's convert flow.
+    try {
+      const full = await queryClient.fetchQuery({
+        queryKey: enquiryKeys.detail(enq.id),
+        queryFn: () => enquiryApi.getById(enq.id),
+      });
+      setConvertingEnquiryInitialValues(buildQuoteInitialValuesFromEnquiry(full));
+    } catch {
+      // Fall back to whatever the list provided rather than blocking the convert.
+      setConvertingEnquiryInitialValues(buildQuoteInitialValuesFromEnquiry(enq));
+    }
     setShowQuoteCreateDialog(true);
   }
 
@@ -162,14 +180,6 @@ export default function ClientPage() {
     () => transactions.flatMap((t: Transaction) => (t.booking ? [{ ...t.booking, user_id: t.user_id }] : [])),
     [transactions],
   );
-
-  const convertingEnquiryInitialValues = useMemo(() => {
-    if (!convertingFromEnquiryTxnId) return undefined;
-    const txn = transactions.find((t: Transaction) => t.id === convertingFromEnquiryTxnId);
-    const enq = txn?.enquiry;
-    if (!enq) return undefined;
-    return buildQuoteInitialValuesFromEnquiry(enq);
-  }, [convertingFromEnquiryTxnId, transactions]);
 
   const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
   const tasks = useMemo(() => tasksData ?? [], [tasksData]);
@@ -435,6 +445,7 @@ export default function ClientPage() {
             setShowQuoteCreateDialog(false);
             setConvertingFromEnquiryTxnId(null);
             setConvertingEnquiryId(null);
+            setConvertingEnquiryInitialValues(undefined);
           }
         }}
         onSuccess={() => {

@@ -18,7 +18,8 @@ export function useRecentQuoteEngagement(limit = 10, options?: { enabled?: boole
     queryKey: quoteKeys.recentEngagement(limit),
     queryFn: () => quoteApi.getRecentClientEngagement(limit),
     enabled: options?.enabled ?? true,
-    staleTime: 30_000,
+    staleTime: 5_000,
+    refetchOnWindowFocus: true,
   });
 }
 

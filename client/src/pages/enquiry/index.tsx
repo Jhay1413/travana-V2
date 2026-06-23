@@ -57,7 +57,7 @@ import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
 import { buildQuotePayload } from "@/features/quote/components/quote-create-dialog";
 import type { QuoteFormValues } from "@/features/quote/types";
-import { defaultQuoteFormValues } from "@/features/quote/types";
+import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Enquiry } from "@/features/enquiry/types";
 import type { TransactionNote } from "@/features/quote/types";
@@ -671,32 +671,7 @@ export default function EnquiryPage() {
 
   const convertDefaultValues = useMemo<Partial<QuoteFormValues>>(() => {
     if (!enquiry) return {};
-    const firstDestination = enquiry.destinations?.[0];
-    const firstResort = enquiry.resorts?.[0];
-    const firstAirport = enquiry.airports?.[0];
-    const firstBoardBasis = enquiry.boardBases?.[0];
-
-    return {
-      ...defaultQuoteFormValues,
-      packageType: enquiry.holiday_type_id || "",
-      quoteTitle: enquiry.title || "",
-      travelDate: enquiry.travel_date || "",
-      passengersAdults: enquiry.adults || 2,
-      passengersChildren: enquiry.children || 0,
-      passengersInfants: enquiry.infants || 0,
-      childAges: (enquiry.passengers ?? [])
-        .filter((p) => p.type === "child")
-        .map((p) => p.age ?? 0),
-      nights: enquiry.no_of_nights || 7,
-      country: (firstDestination as any)?.country_id || "",
-      destination: firstDestination?.destination_id || "",
-      resort: firstResort?.resort_id || (firstResort as unknown as { resorts_id?: string })?.resorts_id || "",
-      boardBasisId: firstBoardBasis?.board_basis_id || "",
-      outboundDepartAirportId: firstAirport?.airport_id || "",
-      cabinType: enquiry.cabin_type || "",
-      pets: enquiry.no_of_pets ?? 0,
-      status: "QUOTE_IN_PROGRESS",
-    };
+    return buildQuoteInitialValuesFromEnquiry(enquiry);
   }, [enquiry]);
 
   const handleConvertToQuote = () => {

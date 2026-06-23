@@ -103,7 +103,8 @@
       "Bash(xargs grep -l \"generatePost\\\\|socialPostApi.generate\")",
       "Bash(grep -v \"findPipelineByStatus\\\\|enquiry.service\\\\|enquiry_table\\\\|enquiry\\\\.status\\\\|data\\\\.status\\\\|//\\\\|UPPER\\\\|dashboard.repository\\\\|branch-overview\\\\|organization-overview\")",
       "Bash(grep -v \"^$\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(grep -iE \"enquiry-to-quote|client\\\\\\\\\\\\\\\\index|enquiry\\\\\\\\\\\\\\\\index|client/index|enquiry/index\")"
     ],
     "additionalDirectories": [
       "/tmp"
