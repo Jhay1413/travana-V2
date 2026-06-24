@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { clientTable, transaction, quote, booking, user as userTable } from "@shared/schema";
+import { clientTable, transaction, quote, booking, booking_upsell, user as userTable } from "@shared/schema";
 import { sql, eq, and, gte, lte, isNull } from "drizzle-orm";
 import { quoteStatsConds } from "../../utils/quote-conditions";
 import { totalBookingCommissionExpr } from "../../utils/commission-sql";
@@ -279,7 +279,7 @@ export const dashboardRepository = {
     const bookingActiveCond = sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`;
     const commission = totalBookingCommissionExpr(booking.id);
 
-    const [bookingAgg, openQuoteAgg] = await Promise.all([
+    const [bookingAgg, openQuoteAgg, upsellAgg] = await Promise.all([
       db.select({
         todayProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${commission} ELSE 0 END), 0)`,
         weekProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${commission} ELSE 0 END), 0)`,
@@ -308,17 +308,35 @@ export const dashboardRepository = {
           sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED'))`,
           ...quoteStatsConds(),
         )),
+
+      // Upsell commission bucketed by added_at so that upsells added today/this-week/
+      // this-month appear in the correct time bucket regardless of booking creation date.
+      db.select({
+        todayUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${todayStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+        weekUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${weekStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+        monthUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${monthStart.toISOString()} AND ${booking_upsell.added_at} < ${monthEnd.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+      })
+        .from(booking_upsell)
+        .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .where(and(
+          eq(transaction.user_id, userId),
+          eq(transaction.is_test, false),
+          bookingActiveCond,
+          sql`${booking_upsell.is_active} = true`,
+        )),
     ]);
 
     const ba = bookingAgg[0];
     const oq = openQuoteAgg[0];
+    const ua = upsellAgg[0];
     const bookingsCount = Number(ba.bookingsCount);
     const totalBookingValue = Number(ba.totalBookingValue);
 
     return {
-      todayProfit: Number(ba.todayProfit),
-      weekProfit: Number(ba.weekProfit),
-      monthProfit: Number(ba.monthProfit),
+      todayProfit: Number(ba.todayProfit) + Number(ua.todayUpsell),
+      weekProfit: Number(ba.weekProfit) + Number(ua.weekUpsell),
+      monthProfit: Number(ba.monthProfit) + Number(ua.monthUpsell),
       bookingsCount,
       avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0,
       totalOpenQuotesValue: Number(oq.totalOpenQuotesValue),
@@ -332,26 +350,52 @@ export const dashboardRepository = {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-      const [result] = await db
-        .select({
-          // Match the admin/agent-performance definition: full booking commission
-          // (package + line items), excluding test/inactive bookings.
-          profit: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
-        })
-        .from(booking)
-        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        .where(
-          and(
-            eq(transaction.user_id, userId),
-            eq(transaction.is_test, false),
-            sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
-            gte(booking.date_created, startOfMonth),
-            lte(booking.date_created, endOfMonth)
-          )
-        );
+      const [[bookingResult], [upsellResult]] = await Promise.all([
+        db
+          .select({
+            // Match the admin/agent-performance definition: full booking commission
+            // (package + line items), excluding test/inactive bookings.
+            profit: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
+          })
+          .from(booking)
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          .where(
+            and(
+              eq(transaction.user_id, userId),
+              eq(transaction.is_test, false),
+              sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
+              gte(booking.date_created, startOfMonth),
+              lte(booking.date_created, endOfMonth)
+            )
+          ),
 
-      return { profitThisMonth: Number(result?.profit || 0) };
+        // Upsell commission recognised in this calendar month by added_at.
+        // A booking created last month with an upsell added this month is captured
+        // here but NOT in the booking query above — this keeps month figures consistent
+        // with getAgentStats and getAgentsPerformance.
+        db
+          .select({
+            profit: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+          })
+          .from(booking_upsell)
+          .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+          .where(
+            and(
+              eq(transaction.user_id, userId),
+              eq(transaction.is_test, false),
+              sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
+              sql`${booking_upsell.is_active} = true`,
+              gte(booking_upsell.added_at, startOfMonth),
+              lte(booking_upsell.added_at, endOfMonth)
+            )
+          ),
+      ]);
+
+      const bookingProfit = Number(bookingResult?.profit || 0);
+      const upsellProfit = Number(upsellResult?.profit || 0);
+      return { profitThisMonth: bookingProfit + upsellProfit };
     } catch (err) {
       console.error("[dashboard] getMyProfit error:", err);
       return { profitThisMonth: 0 };

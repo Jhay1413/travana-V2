@@ -77,6 +77,14 @@ export interface BranchOverviewTopRow {
   commission: number;
 }
 
+export interface TourOperatorBreakdownRow {
+  id: string;
+  name: string;
+  bookings: number;
+  commission: number;
+  revenue: number;
+}
+
 export interface BranchOverviewTeamRow {
   id: string;
   name: string;
@@ -111,6 +119,7 @@ export interface BranchOverviewStats {
   topDestinations: BranchOverviewTopRow[];
   topResorts: BranchOverviewTopRow[];
   topTourOperators: BranchOverviewTopRow[];
+  tourOperatorBreakdown: TourOperatorBreakdownRow[];
   teamLeaderboard: BranchOverviewTeamRow[];
   attention: BranchOverviewAttention;
 }

@@ -1188,6 +1188,7 @@ export const booking_upsell = pgTable('booking_upsell', {
   cost: numeric({ precision: 10, scale: 2 }),
   commission: numeric({ precision: 10, scale: 2 }), // manual; the profit recognised
   sales_price: numeric({ precision: 10, scale: 2 }),
+  tour_operator_id: uuid().references(() => tour_operator.id, { onDelete: "set null" }),
   added_at: timestamp({ withTimezone: true }).defaultNow(), // recognition date (the month it lands in)
   added_by: text().references(() => user.id),
   is_active: boolean().default(true), // soft delete

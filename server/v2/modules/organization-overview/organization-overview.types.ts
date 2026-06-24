@@ -99,6 +99,14 @@ export interface OrganizationOverviewTopRow {
   commission: number;
 }
 
+export interface TourOperatorBreakdownRow {
+  id: string;
+  name: string;
+  bookings: number;
+  commission: number;
+  revenue: number;
+}
+
 export interface OrganizationOverviewBranchRow {
   id: string;
   name: string;
@@ -137,6 +145,7 @@ interface OrganizationOverviewBase {
   topDestinations: OrganizationOverviewTopRow[];
   topResorts: OrganizationOverviewTopRow[];
   topTourOperators: OrganizationOverviewTopRow[];
+  tourOperatorBreakdown: TourOperatorBreakdownRow[];
   attention: OrganizationOverviewAttention;
 }
 

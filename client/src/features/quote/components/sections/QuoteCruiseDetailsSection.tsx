@@ -4,7 +4,6 @@ import { Anchor, Ship, Plus, Trash2 } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -34,6 +33,15 @@ export function QuoteCruiseDetailsSection() {
   const shipOptions = useMemo(
     () => (shipsData || []).map((s) => ({ value: s.name ?? s.id, label: s.name ?? s.id })),
     [shipsData],
+  );
+
+  const cruiseDateOptions = useMemo(
+    () =>
+      (cruiseItineraries || []).map((it) => ({
+        value: it.date,
+        label: `${it.date}${it.departure_port ? ` — ${it.departure_port}` : ""}`,
+      })),
+    [cruiseItineraries],
   );
 
   const handleAddDay = useCallback(() => {
@@ -136,23 +144,16 @@ export function QuoteCruiseDetailsSection() {
                 <FormControl>
                   {cruiseItineraries?.length || isFetchingCruiseDates ? (
                     // Catalog has voyages for this ship → pick a real sailing.
-                    <Select value={field.value ?? ""} onValueChange={field.onChange} disabled={!cruiseItineraries?.length && !field.value}>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                        <SelectValue placeholder={cruiseDatePlaceholder} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {/* Keep an imported value visible even if the itinerary list hasn't loaded it yet. */}
-                        {field.value && !(cruiseItineraries || []).some((it) => it.date === field.value) && (
-                          <SelectItem value={field.value}>{field.value}</SelectItem>
-                        )}
-                        {(cruiseItineraries || []).map((it) => (
-                          <SelectItem key={it.id} value={it.date}>
-                            {it.date}
-                            {it.departure_port ? ` — ${it.departure_port}` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      options={cruiseDateOptions}
+                      value={field.value ?? ""}
+                      selectedLabel={field.value || undefined}
+                      onValueChange={field.onChange}
+                      placeholder={cruiseDatePlaceholder}
+                      searchPlaceholder="Search dates or port…"
+                      emptyMessage="No matching voyages."
+                      isLoading={isFetchingCruiseDates}
+                    />
                   ) : (
                     // No catalog voyages for this ship → free date entry.
                     <DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9" />

@@ -1,8 +1,9 @@
-import { useFieldArray, type Control } from "react-hook-form";
+import { useEffect } from "react";
+import { useFieldArray, useWatch, type Control, type UseFormSetValue } from "react-hook-form";
 import { Plus, X, PackagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   FormField,
@@ -17,6 +18,8 @@ import {
   emptyUpsellItem,
   type UpsellsFormValues,
 } from "@/features/booking/types";
+import { useTourOperators } from "@/features/tour-operator/api/use-tour-operator-queries";
+import type { TourOperator } from "@/features/tour-operator/types";
 
 // ─── Section Header (mirrors quote-extras-section) ────────────────────────────
 
@@ -35,14 +38,47 @@ function FieldGrid({ children }: { children: React.ReactNode }) {
 
 // ─── Single Upsell Row ────────────────────────────────────────────────────────
 
-function UpsellRow({ control, index, currentType, onRemove }: {
+function UpsellRow({
+  control,
+  setValue,
+  index,
+  currentType,
+  onRemove,
+  tourOperators,
+}: {
   control: Control<UpsellsFormValues>;
+  setValue: UseFormSetValue<UpsellsFormValues>;
   index: number;
   currentType: ReturnType<typeof upsellTypeMeta>;
   onRemove: () => void;
+  tourOperators: TourOperator[];
 }) {
   const p = `upsells.${index}` as const;
   const Icon = currentType.icon;
+
+  // Watch cost and tourOperatorId for auto-calc
+  const cost = useWatch({ control, name: `upsells.${index}.cost` as "upsells.0.cost" });
+  const tourOperatorId = useWatch({ control, name: `upsells.${index}.tourOperatorId` as "upsells.0.tourOperatorId" });
+
+  // Auto-calc commission when cost or operator changes — mirrors booking-rhf-form pattern.
+  // Only fires when an operator with a commission_percentage is selected.
+  useEffect(() => {
+    if (!tourOperatorId) return;
+    const op = tourOperators.find((o) => o.id === tourOperatorId);
+    if (op?.commission_percentage == null) return;
+    const costNum = Number(cost) || 0;
+    const calc = parseFloat(((costNum * parseFloat(op.commission_percentage)) / 100).toFixed(2));
+    setValue(`upsells.${index}.commission` as "upsells.0.commission", calc, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  }, [cost, tourOperatorId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tourOperatorOptions = tourOperators.map((op) => ({
+    value: op.id,
+    label: op.name || op.id,
+  }));
+
   return (
     <div
       className="space-y-3 rounded-xl border border-black/8 bg-black/[0.02] p-3"
@@ -99,6 +135,32 @@ function UpsellRow({ control, index, currentType, onRemove }: {
           </FormItem>
         )} />
 
+        <FormField control={control} name={`${p}.tourOperatorId` as any} render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-xs font-medium text-black/60">Tour Operator</FormLabel>
+            <FormControl>
+              <SearchableSelect
+                options={tourOperatorOptions}
+                value={field.value ?? ""}
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  const op = tourOperators.find((o) => o.id === value);
+                  const costNum = Number(cost) || 0;
+                  if (op?.commission_percentage != null && costNum > 0) {
+                    const calc = parseFloat(((costNum * parseFloat(op.commission_percentage)) / 100).toFixed(2));
+                    setValue(`upsells.${index}.commission` as "upsells.0.commission", calc, {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    });
+                  }
+                }}
+                placeholder="Select operator (optional)"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+
         <FormField control={control} name={`${p}.quantity` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Quantity</FormLabel>
@@ -128,22 +190,6 @@ function UpsellRow({ control, index, currentType, onRemove }: {
             <FormMessage />
           </FormItem>
         )} />
-
-        <FormField control={control} name={`${p}.addedAt` as any} render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Date added (recognition month)</FormLabel>
-            <FormControl>
-              <DatePicker
-                value={field.value ?? ""}
-                onChange={field.onChange}
-                placeholder="dd/mm/yyyy"
-                className="text-sm"
-                data-testid={`input-upsell-date-${index}`}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
       </FieldGrid>
     </div>
   );
@@ -151,11 +197,18 @@ function UpsellRow({ control, index, currentType, onRemove }: {
 
 // ─── Main Upsells Section ─────────────────────────────────────────────────────
 
-export function BookingUpsellsSection({ control }: { control: Control<UpsellsFormValues> }) {
+export function BookingUpsellsSection({
+  control,
+  setValue,
+}: {
+  control: Control<UpsellsFormValues>;
+  setValue: UseFormSetValue<UpsellsFormValues>;
+}) {
   // keyName must NOT be the default "id" — each upsell row carries its own
   // persisted `id`, and the default would overwrite it and strip it on submit,
   // making hydrated rows look like new creates.
   const { fields, append, remove } = useFieldArray({ control, name: "upsells", keyName: "_fieldId" });
+  const { data: tourOperatorsData = [] } = useTourOperators();
 
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
@@ -185,9 +238,11 @@ export function BookingUpsellsSection({ control }: { control: Control<UpsellsFor
               <UpsellRow
                 key={field._fieldId}
                 control={control}
+                setValue={setValue}
                 index={index}
                 currentType={upsellTypeMeta(value.upsellType ?? "OTHER")}
                 onRemove={() => remove(index)}
+                tourOperators={tourOperatorsData}
               />
             );
           })}

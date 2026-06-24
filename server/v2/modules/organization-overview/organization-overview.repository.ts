@@ -7,6 +7,7 @@ import {
   clientTable,
   transaction,
   booking,
+  booking_upsell,
   quote,
   enquiry_table,
   enquiry_destination,
@@ -34,6 +35,7 @@ import type {
   AgentsPerformanceResponse,
   BranchPerformanceRow,
   BranchesPerformanceResponse,
+  TourOperatorBreakdownRow,
 } from "./organization-overview.types";
 import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
 import { quoteStatsConds } from "../../utils/quote-conditions";
@@ -99,8 +101,10 @@ export const organizationOverviewRepository = {
       topDestinationsRows,
       topResortsRows,
       topTourOperatorsRows,
+      topTourOperatorsUpsellRows,
       branchRows,
       attentionRow,
+      tourOperatorBreakdownResult,
     ] = await Promise.all([
       this.getOrgProfile(orgId),
 
@@ -286,6 +290,7 @@ export const organizationOverviewRepository = {
 
       db
         .select({
+          operatorId: sql<string>`${tour_operator.id}`.as("operator_id"),
           name: tour_operator.name,
           bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
           commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
@@ -299,9 +304,32 @@ export const organizationOverviewRepository = {
         .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
         .limit(5),
 
+      // Upsell commission aggregated by tour_operator_id for the YTD window.
+      // Used to add upsell commission to the top-5-by-bookings card.
+      db
+        .select({
+          operatorId: booking_upsell.tour_operator_id,
+          upsellCommission: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+        })
+        .from(booking_upsell)
+        .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(
+          and(
+            sql`${booking_upsell.is_active} = true`,
+            gte(booking_upsell.added_at, yearStart),
+            bookingActiveCond,
+            scopeCond(),
+          ),
+        )
+        .groupBy(booking_upsell.tour_operator_id),
+
       this.getBranchLeaderboard(orgId, monthStart, monthEnd, now),
 
       this.getAttention(orgId, todayStart, in7Days, in30Days, fourteenDaysAgo),
+
+      this.getTourOperatorBreakdown(orgId, monthStart, now),
     ]);
 
     // Org-wide monthly target = sum of every branch's shop target for the current month.
@@ -365,11 +393,21 @@ export const organizationOverviewRepository = {
         bookings: Number(r.bookings),
         commission: Number(r.commission),
       })),
-      topTourOperators: topTourOperatorsRows.map((r): OrganizationOverviewTopRow => ({
-        name: r.name ?? "Unknown",
-        bookings: Number(r.bookings),
-        commission: Number(r.commission),
-      })),
+      topTourOperators: (() => {
+        // Merge YTD upsell commission into the top-5 booking operators.
+        // Both queries share the same org scope and YTD window, so the upsell map
+        // covers every operator that could appear in the top-5 list.
+        const upsellMap = new Map<string, number>();
+        for (const u of topTourOperatorsUpsellRows) {
+          if (u.operatorId) upsellMap.set(u.operatorId, Number(u.upsellCommission));
+        }
+        return topTourOperatorsRows.map((r): OrganizationOverviewTopRow => ({
+          name: r.name ?? "Unknown",
+          bookings: Number(r.bookings),
+          commission: Number(r.commission) + (upsellMap.get(r.operatorId) ?? 0),
+        }));
+      })(),
+      tourOperatorBreakdown: tourOperatorBreakdownResult,
       branchLeaderboard: branchRows,
       attention: attentionRow,
     };
@@ -795,35 +833,62 @@ export const organizationOverviewRepository = {
       ? and(testCond, eq(clientTable.orgId, orgId))
       : testCond;
 
-    const aggRows = await db
-      .select({
-        agentId: transaction.user_id,
-        today: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-        week: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-        month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-        rangeBookings: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()})`,
-        rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-        rangeSales: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN COALESCE(${booking.sales_price}, 0) ELSE 0 END), 0)`,
-      })
-      .from(booking)
-      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(bookingActiveCond, scopeCond))
-      .groupBy(transaction.user_id);
+    const [aggRows, quoteAggRows, upsellAggRows] = await Promise.all([
+      db
+        .select({
+          agentId: transaction.user_id,
+          today: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          week: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          rangeBookings: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()})`,
+          rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          rangeSales: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN COALESCE(${booking.sales_price}, 0) ELSE 0 END), 0)`,
+        })
+        .from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(and(bookingActiveCond, scopeCond))
+        .groupBy(transaction.user_id),
 
-    const quoteAggRows = await db
-      .select({
-        agentId: transaction.user_id,
-        rangeQuotes: sql<number>`COUNT(*) FILTER (WHERE ${quote.date_created} >= ${from.toISOString()} AND ${quote.date_created} < ${to.toISOString()})`,
-      })
-      .from(quote)
-      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(scopeCond, sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`))
-      .groupBy(transaction.user_id);
+      db
+        .select({
+          agentId: transaction.user_id,
+          rangeQuotes: sql<number>`COUNT(*) FILTER (WHERE ${quote.date_created} >= ${from.toISOString()} AND ${quote.date_created} < ${to.toISOString()})`,
+        })
+        .from(quote)
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(and(scopeCond, sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`))
+        .groupBy(transaction.user_id),
+
+      // Upsell commission bucketed by added_at so that upsells added to a booking
+      // this month/week/today appear in the correct time bucket regardless of when
+      // the booking itself was created.
+      db
+        .select({
+          agentId: transaction.user_id,
+          todayUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${todayStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+          weekUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${weekStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+          monthUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${monthStart.toISOString()} AND ${booking_upsell.added_at} < ${monthEnd.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+          rangeCommissionUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${from.toISOString()} AND ${booking_upsell.added_at} < ${to.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+          rangeSalesUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${from.toISOString()} AND ${booking_upsell.added_at} < ${to.toISOString()} THEN COALESCE(CAST(${booking_upsell.sales_price} AS DECIMAL), 0) ELSE 0 END), 0)`,
+        })
+        .from(booking_upsell)
+        .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(and(bookingActiveCond, scopeCond, sql`${booking_upsell.is_active} = true`))
+        .groupBy(transaction.user_id),
+    ]);
+
     const quotesByUser = new Map<string, number>();
     for (const q of quoteAggRows) {
       if (q.agentId) quotesByUser.set(q.agentId, Number(q.rangeQuotes ?? 0));
+    }
+
+    const upsellsByUser = new Map<string, typeof upsellAggRows[number]>();
+    for (const u of upsellAggRows) {
+      if (u.agentId) upsellsByUser.set(u.agentId, u);
     }
 
     const userIds = new Set<string>();
@@ -887,12 +952,13 @@ export const organizationOverviewRepository = {
 
     const rows: AgentPerformanceRow[] = teamUsers.filter((u) => agentSet.has(u.id)).map((u) => {
       const a = aggByUser.get(u.id);
-      const today = Number(a?.today ?? 0);
-      const week = Number(a?.week ?? 0);
-      const month = Number(a?.month ?? 0);
+      const us = upsellsByUser.get(u.id);
+      const today = Number(a?.today ?? 0) + Number(us?.todayUpsell ?? 0);
+      const week = Number(a?.week ?? 0) + Number(us?.weekUpsell ?? 0);
+      const month = Number(a?.month ?? 0) + Number(us?.monthUpsell ?? 0);
       const rangeBookings = Number(a?.rangeBookings ?? 0);
-      const rangeCommission = Number(a?.rangeCommission ?? 0);
-      const rangeSales = Number(a?.rangeSales ?? 0);
+      const rangeCommission = Number(a?.rangeCommission ?? 0) + Number(us?.rangeCommissionUpsell ?? 0);
+      const rangeSales = Number(a?.rangeSales ?? 0) + Number(us?.rangeSalesUpsell ?? 0);
       const rangeQuotes = quotesByUser.get(u.id) ?? 0;
       const target = targetByUser.get(u.id) ?? 0;
       const achievedPercent = target > 0 ? (month / target) * 100 : 0;
@@ -1076,6 +1142,99 @@ export const organizationOverviewRepository = {
       to: to.toISOString(),
       rows,
     };
+  },
+
+  async getTourOperatorBreakdown(
+    orgId: string | null,
+    monthStart: Date,
+    now: Date,
+  ): Promise<TourOperatorBreakdownRow[]> {
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    const scopeCond = (extra: ReturnType<typeof eq>[] = []) =>
+      orgId
+        ? and(testCond, eq(clientTable.orgId, orgId), ...extra)
+        : and(testCond, ...extra);
+
+    // Booking-level aggregation: bookings, booking commission, revenue per operator.
+    const [bookingAgg, upsellAgg] = await Promise.all([
+      db
+        .select({
+          operatorId: sql<string>`${tour_operator.id}`.as("operator_id"),
+          name: tour_operator.name,
+          bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
+          bookingCommission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
+          revenue: sql<number>`COALESCE(SUM(COALESCE(${booking.sales_price}, 0)), 0)`,
+        })
+        .from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .innerJoin(tour_operator, eq(tour_operator.id, booking.main_tour_operator_id))
+        .where(
+          and(
+            gte(booking.date_created, monthStart),
+            sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+            bookingActiveCond,
+            scopeCond(),
+          ),
+        )
+        .groupBy(tour_operator.id, tour_operator.name),
+
+      // Upsell commission attributed to upsell's own tour_operator_id, by added_at.
+      // This is independent of the booking's main operator and creation month.
+      db
+        .select({
+          operatorId: booking_upsell.tour_operator_id,
+          operatorName: tour_operator.name,
+          upsellCommission: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+        })
+        .from(booking_upsell)
+        .innerJoin(tour_operator, eq(tour_operator.id, booking_upsell.tour_operator_id))
+        .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(
+          and(
+            sql`${booking_upsell.is_active} = true`,
+            gte(booking_upsell.added_at, monthStart),
+            sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
+            bookingActiveCond,
+            scopeCond(),
+          ),
+        )
+        .groupBy(booking_upsell.tour_operator_id, tour_operator.name),
+    ]);
+
+    // Merge booking aggregation and upsell aggregation by operator id.
+    const map = new Map<string, TourOperatorBreakdownRow>();
+
+    for (const r of bookingAgg) {
+      map.set(r.operatorId, {
+        id: r.operatorId,
+        name: r.name ?? "Unknown",
+        bookings: Number(r.bookings),
+        commission: Number(r.bookingCommission),
+        revenue: Number(r.revenue),
+      });
+    }
+
+    for (const u of upsellAgg) {
+      if (!u.operatorId) continue;
+      const existing = map.get(u.operatorId);
+      if (existing) {
+        existing.commission += Number(u.upsellCommission);
+      } else {
+        map.set(u.operatorId, {
+          id: u.operatorId,
+          name: u.operatorName ?? "Unknown",
+          bookings: 0,
+          commission: Number(u.upsellCommission),
+          revenue: 0,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.commission - a.commission);
   },
 
   buildYearTrend(

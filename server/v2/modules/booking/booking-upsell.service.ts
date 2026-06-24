@@ -46,6 +46,7 @@ export const bookingUpsellService = {
       cost: toNumericString(body.cost) ?? null,
       commission: toNumericString(body.commission) ?? null,
       sales_price: toNumericString(body.sales_price) ?? null,
+      tour_operator_id: body.tour_operator_id ?? null,
       // `added_at` drives the recognition month; default to now when omitted.
       added_at: body.added_at ? new Date(body.added_at) : undefined,
       added_by: scope.userId ?? null,
@@ -70,6 +71,7 @@ export const bookingUpsellService = {
     if (body.cost !== undefined) data.cost = toNumericString(body.cost) ?? null;
     if (body.commission !== undefined) data.commission = toNumericString(body.commission) ?? null;
     if (body.sales_price !== undefined) data.sales_price = toNumericString(body.sales_price) ?? null;
+    if (body.tour_operator_id !== undefined) data.tour_operator_id = body.tour_operator_id ?? null;
     if (body.added_at !== undefined) data.added_at = body.added_at ? new Date(body.added_at) : undefined;
 
     const updated = await bookingUpsellRepository.update(id, data);

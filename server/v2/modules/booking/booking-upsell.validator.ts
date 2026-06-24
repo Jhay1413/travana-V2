@@ -15,6 +15,7 @@ const upsellBody = z.object({
   commission: moneyLike.nullable().optional(),
   sales_price: moneyLike.nullable().optional(),
   added_at: z.string().nullable().optional(),
+  tour_operator_id: z.string().uuid().nullable().optional(),
 });
 
 export const createUpsellValidator = z.object({

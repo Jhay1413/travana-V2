@@ -31,7 +31,6 @@ import {
   useAgentsPerformance,
   useBranchOverviewStats,
   useCurrentUser,
-  useTourOperators,
   useTransactions,
 } from "@/hooks/queries";
 import { currency } from "./helpers";
@@ -121,7 +120,6 @@ export function AgentsPerformanceCard({
     branchId,
   );
   const { data: transactionsAll } = useTransactions();
-  const { data: tourOperators } = useTourOperators();
   const { data: branchStats } = useBranchOverviewStats(branchId);
   const topResorts = branchStats?.topResorts ?? [];
 
@@ -139,79 +137,40 @@ export function AgentsPerformanceCard({
   }, [transactionsAll, branchId]);
 
   // ---------------- Tour Operators tab data ----------------
+  // Commission, bookings, and revenue come from the server breakdown (includes full
+  // booking line items + upsell commission attributed by tour_operator_id / added_at).
+  // Quotes are still computed locally from transactionsData and merged in.
   const tourOperatorAnalytics = useMemo(() => {
-    if (!transactionsData.length) return [] as {
-      id: string;
-      name: string;
-      revenue: number;
-      bookings: number;
-      commission: number;
-      quotes: number;
-    }[];
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const map = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        revenue: number;
-        bookings: number;
-        commission: number;
-        quotes: number;
-      }
-    >();
-    const toName = new Map<string, string>();
-    if (tourOperators) {
-      for (const to of tourOperators as any[]) toName.set(to.id, to.name);
-    }
+    const serverRows = branchStats?.tourOperatorBreakdown ?? [];
 
-    for (const t of transactionsData) {
-      if (t.booking) {
-        const toId = t.booking.main_tour_operator_id;
-        const bDate = new Date(t.booking.date_created || t.created_at);
-        if (toId && bDate >= monthStart) {
-          const name = toName.get(toId) || toId;
-          if (!map.has(toId))
-            map.set(toId, {
-              id: toId,
-              name,
-              revenue: 0,
-              bookings: 0,
-              commission: 0,
-              quotes: 0,
-            });
-          const e = map.get(toId)!;
-          e.revenue += parseFloat(t.booking.sales_price) || 0;
-          e.commission += getProfit(t.booking);
-          e.bookings += 1;
-        }
-      }
-      for (const q of (t.quotes || []).filter(
-        (q: any) => q.is_active !== false,
-      )) {
-        const toId = q.main_tour_operator_id;
-        const qDate = new Date(q.date_created || t.created_at);
-        if (toId && qDate >= monthStart) {
-          const name = toName.get(toId) || toId;
-          if (!map.has(toId))
-            map.set(toId, {
-              id: toId,
-              name,
-              revenue: 0,
-              bookings: 0,
-              commission: 0,
-              quotes: 0,
-            });
-          map.get(toId)!.quotes += 1;
+    // Build local quote count per operator from transactions.
+    const quoteMap = new Map<string, number>();
+    if (transactionsData.length) {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      for (const t of transactionsData as { quotes?: { main_tour_operator_id?: string; date_created?: string; is_active?: boolean }[]; created_at?: string }[]) {
+        for (const q of (t.quotes ?? []).filter((q) => q.is_active !== false)) {
+          const toId = q.main_tour_operator_id;
+          const qDate = new Date(q.date_created ?? t.created_at ?? "");
+          if (toId && qDate >= monthStart) {
+            quoteMap.set(toId, (quoteMap.get(toId) ?? 0) + 1);
+          }
         }
       }
     }
 
-    return Array.from(map.values())
+    return serverRows
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        revenue: r.revenue,
+        bookings: r.bookings,
+        commission: r.commission,
+        quotes: quoteMap.get(r.id) ?? 0,
+      }))
       .sort((a, b) => b.commission - a.commission)
       .slice(0, 10);
-  }, [transactionsData, tourOperators]);
+  }, [branchStats, transactionsData]);
 
   // ---------------- Conversion stats per agent (Revenue tab) ----------------
   const conversionStatsByAgent = useMemo(() => {

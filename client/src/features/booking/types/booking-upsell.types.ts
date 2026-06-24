@@ -38,10 +38,6 @@ export function upsellTypeMeta(type: UpsellType) {
   return UPSELL_TYPE_OPTIONS.find((o) => o.value === type) ?? UPSELL_TYPE_OPTIONS[UPSELL_TYPE_OPTIONS.length - 1];
 }
 
-export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 /** Default values for a freshly-appended upsell row in the booking form. */
 export function emptyUpsellItem(): UpsellItemValue {
   return {
@@ -50,7 +46,7 @@ export function emptyUpsellItem(): UpsellItemValue {
     quantity: 1,
     cost: 0,
     commission: 0,
-    addedAt: todayIso(),
+    tourOperatorId: "",
   };
 }
 
@@ -66,7 +62,7 @@ export const upsellPayloadSchema = z.object({
   quantity: z.coerce.number().int().min(1).default(1),
   cost: z.union([z.string(), z.number()]),
   commission: z.union([z.string(), z.number()]),
-  added_at: z.string().nullable().optional(),
+  tour_operator_id: z.string().uuid().nullable().optional(),
 });
 
 /** Request body for create/update upsell endpoints. */
@@ -101,7 +97,6 @@ function isUpsellType(v: unknown): v is UpsellType {
 /** Map a single raw upsell record (API row) into a form row. */
 export function upsellToFormValue(raw: any): UpsellItemValue {
   const rawType = raw?.upsell_type ?? raw?.upsellType;
-  const rawAdded = raw?.added_at ?? raw?.addedAt;
   return {
     id: raw?.id ?? undefined,
     upsellType: isUpsellType(rawType) ? rawType : "OTHER",
@@ -109,7 +104,7 @@ export function upsellToFormValue(raw: any): UpsellItemValue {
     quantity: Number(raw?.quantity ?? 1) || 1,
     cost: parseFloat(String(raw?.cost ?? 0)) || 0,
     commission: parseFloat(String(raw?.commission ?? 0)) || 0,
-    addedAt: rawAdded ? String(rawAdded).slice(0, 10) : todayIso(),
+    tourOperatorId: raw?.tour_operator_id ?? raw?.tourOperatorId ?? "",
   };
 }
 
@@ -150,7 +145,7 @@ export function upsellToPayload(u: UpsellItemValue): UpsellPayload {
     quantity: u.quantity,
     cost: String(u.cost || 0),
     commission: String(u.commission || 0),
-    added_at: u.addedAt || null,
+    tour_operator_id: u.tourOperatorId || null,
   };
 }
 

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { Control } from "react-hook-form";
+import type { Control, UseFormSetValue } from "react-hook-form";
 import {
   Dialog,
   DialogContent,
@@ -97,7 +97,10 @@ export function BookingUpsellsDialog({
             {!isLoading && !isError && bookingData && (
               <Form {...form}>
                 <form id="upsells-form" onSubmit={form.handleSubmit(handleSubmit)}>
-                  <BookingUpsellsSection control={form.control as unknown as Control<UpsellsFormValues>} />
+                  <BookingUpsellsSection
+                    control={form.control as unknown as Control<UpsellsFormValues>}
+                    setValue={form.setValue as unknown as UseFormSetValue<UpsellsFormValues>}
+                  />
                 </form>
               </Form>
             )}

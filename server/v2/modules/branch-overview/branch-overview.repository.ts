@@ -5,6 +5,7 @@ import {
   clientTable,
   transaction,
   booking,
+  booking_upsell,
   quote,
   enquiry_table,
   enquiry_destination,
@@ -30,6 +31,7 @@ import type {
   AgentPerformanceRange,
   AgentPerformanceRow,
   AgentsPerformanceResponse,
+  TourOperatorBreakdownRow,
 } from "./branch-overview.types";
 import { buildScopeConditions, needsClientJoin, type ScopeFilter } from "../../utils/scope-conditions";
 import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
@@ -91,8 +93,10 @@ export const branchOverviewRepository = {
       topDestinationsRows,
       topResortsRows,
       topTourOperatorsRows,
+      topTourOperatorsUpsellRows,
       teamRows,
       attentionRow,
+      tourOperatorBreakdownResult,
     ] = await Promise.all([
       this.getBranchProfile(scope.branchId),
 
@@ -316,6 +320,7 @@ export const branchOverviewRepository = {
       (() => {
         const q = db
           .select({
+            operatorId: sql<string>`${tour_operator.id}`.as("operator_id"),
             name: tour_operator.name,
             bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
             commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
@@ -333,11 +338,39 @@ export const branchOverviewRepository = {
           .limit(5);
       })(),
 
+      // Upsell commission aggregated by tour_operator_id for the YTD window.
+      // Used to add upsell commission to the top-5-by-bookings card.
+      (() => {
+        const q = db
+          .select({
+            operatorId: booking_upsell.tour_operator_id,
+            upsellCommission: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+          })
+          .from(booking_upsell)
+          .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
+        const withClient = joinClient
+          ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          : q;
+        return withClient
+          .where(
+            and(
+              sql`${booking_upsell.is_active} = true`,
+              gte(booking_upsell.added_at, yearStart),
+              bookingActiveCond,
+              ...baseCond,
+            ),
+          )
+          .groupBy(booking_upsell.tour_operator_id);
+      })(),
+
       // Team leaderboard — per-user bookings/commission + quotes for the month
       this.getTeamLeaderboard(scope, monthStart, monthEnd),
 
       // Attention counts
       this.getAttention(scope, todayStart, in7Days, in30Days, fourteenDaysAgo),
+
+      this.getTourOperatorBreakdown(scope, monthStart, now),
     ]);
 
     // Monthly target for the branch (current month). Falls back to 0 when no shop
@@ -403,11 +436,19 @@ export const branchOverviewRepository = {
         bookings: Number(r.bookings),
         commission: Number(r.commission),
       })),
-      topTourOperators: topTourOperatorsRows.map((r): BranchOverviewTopRow => ({
-        name: r.name ?? "Unknown",
-        bookings: Number(r.bookings),
-        commission: Number(r.commission),
-      })),
+      topTourOperators: (() => {
+        // Merge YTD upsell commission into the top-5 booking operators.
+        const upsellMap = new Map<string, number>();
+        for (const u of topTourOperatorsUpsellRows) {
+          if (u.operatorId) upsellMap.set(u.operatorId, Number(u.upsellCommission));
+        }
+        return topTourOperatorsRows.map((r): BranchOverviewTopRow => ({
+          name: r.name ?? "Unknown",
+          bookings: Number(r.bookings),
+          commission: Number(r.commission) + (upsellMap.get(r.operatorId) ?? 0),
+        }));
+      })(),
+      tourOperatorBreakdown: tourOperatorBreakdownResult,
       teamLeaderboard: teamRows,
       attention: attentionRow,
     };
@@ -915,6 +956,105 @@ export const branchOverviewRepository = {
       .where(and(eq(shopTargetTable.branchId, branchId), eq(shopTargetTable.year, year)));
     for (const r of rows) map.set(Number(r.month), Number(r.amount));
     return map;
+  },
+
+  async getTourOperatorBreakdown(
+    scope: ScopeFilter,
+    monthStart: Date,
+    now: Date,
+  ): Promise<TourOperatorBreakdownRow[]> {
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const joinClient = needsClientJoin(scope);
+    const baseCond = buildScopeConditions(scope);
+
+    // Booking-level aggregation: bookings, booking commission, revenue per operator.
+    const bookingAggQ = (() => {
+      const q = db
+        .select({
+          operatorId: sql<string>`${tour_operator.id}`.as("operator_id"),
+          name: tour_operator.name,
+          bookings: sql<number>`COUNT(DISTINCT ${booking.id})`,
+          bookingCommission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
+          revenue: sql<number>`COALESCE(SUM(COALESCE(${booking.sales_price}, 0)), 0)`,
+        })
+        .from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(tour_operator, eq(tour_operator.id, booking.main_tour_operator_id));
+      const withClient = joinClient
+        ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        : q;
+      return withClient
+        .where(
+          and(
+            gte(booking.date_created, monthStart),
+            sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+            bookingActiveCond,
+            ...baseCond,
+          ),
+        )
+        .groupBy(tour_operator.id, tour_operator.name);
+    })();
+
+    // Upsell commission attributed to upsell's own tour_operator_id, by added_at.
+    const upsellAggQ = (() => {
+      const q = db
+        .select({
+          operatorId: booking_upsell.tour_operator_id,
+          operatorName: tour_operator.name,
+          upsellCommission: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+        })
+        .from(booking_upsell)
+        .innerJoin(tour_operator, eq(tour_operator.id, booking_upsell.tour_operator_id))
+        .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
+      const withClient = joinClient
+        ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        : q;
+      return withClient
+        .where(
+          and(
+            sql`${booking_upsell.is_active} = true`,
+            gte(booking_upsell.added_at, monthStart),
+            sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
+            bookingActiveCond,
+            ...baseCond,
+          ),
+        )
+        .groupBy(booking_upsell.tour_operator_id, tour_operator.name);
+    })();
+
+    const [bookingAgg, upsellAgg] = await Promise.all([bookingAggQ, upsellAggQ]);
+
+    // Merge by operator id.
+    const map = new Map<string, TourOperatorBreakdownRow>();
+
+    for (const r of bookingAgg) {
+      map.set(r.operatorId, {
+        id: r.operatorId,
+        name: r.name ?? "Unknown",
+        bookings: Number(r.bookings),
+        commission: Number(r.bookingCommission),
+        revenue: Number(r.revenue),
+      });
+    }
+
+    for (const u of upsellAgg) {
+      if (!u.operatorId) continue;
+      const existing = map.get(u.operatorId);
+      if (existing) {
+        existing.commission += Number(u.upsellCommission);
+      } else {
+        map.set(u.operatorId, {
+          id: u.operatorId,
+          name: u.operatorName ?? "Unknown",
+          bookings: 0,
+          commission: Number(u.upsellCommission),
+          revenue: 0,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.commission - a.commission);
   },
 
   /** Build Jan–Dec rows for the current calendar year, filling gaps and attaching targets. */

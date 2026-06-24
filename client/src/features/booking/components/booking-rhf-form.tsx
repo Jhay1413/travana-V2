@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseISO, isValid, addDays, format } from "date-fns";
-import { useForm, useFieldArray, useWatch} from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
+import type { UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2 } from "lucide-react";
@@ -602,6 +603,15 @@ export function BookingRHFForm({
   const shipOptions = useMemo(
     () => (shipsData || []).map((s) => ({ value: s.name ?? "", label: s.name ?? "" })),
     [shipsData]
+  );
+
+  const cruiseDateOptions = useMemo(
+    () =>
+      (cruiseItineraries || []).map((it) => ({
+        value: it.date,
+        label: `${it.date}${it.departure_port ? ` — ${it.departure_port}` : ""}`,
+      })),
+    [cruiseItineraries]
   );
 
   const handleJsonUpload = (file: File) => {
@@ -1309,50 +1319,39 @@ export function BookingRHFForm({
               <FormField
                 control={control}
                 name="cruiseDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs font-medium text-black/60">Cruise Date</FormLabel>
-                    <FormControl>
-                      {cruiseItineraries?.length || isFetchingCruiseDates ? (
-                        // Catalog has voyages for this ship → pick a real sailing.
-                        <Select
-                          disabled={!cruiseItineraries?.length && !field.value}
-                          value={field.value ?? ""}
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                            <SelectValue
-                              placeholder={
-                                !selectedCruiseLineId
-                                  ? "Select a cruise line first"
-                                  : !selectedShipId
-                                    ? "Select a ship first"
-                                    : isFetchingCruiseDates
-                                      ? "Loading..."
-                                      : "No voyages available for this ship"
-                              }
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {/* Keep an imported value visible even if the itinerary list hasn't loaded it yet. */}
-                            {field.value && !(cruiseItineraries || []).some((it) => it.date === field.value) && (
-                              <SelectItem value={field.value}>{field.value}</SelectItem>
-                            )}
-                            {(cruiseItineraries || []).map((it) => (
-                              <SelectItem key={it.id} value={it.date}>
-                                {it.date}{it.departure_port ? ` — ${it.departure_port}` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        // No catalog voyages for this ship → free date entry.
-                        <DatePicker value={field.value ?? ""} onChange={field.onChange} />
-                      )}
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const cruiseDatePlaceholder = !selectedCruiseLineId
+                    ? "Select a cruise line first"
+                    : !selectedShipId
+                      ? "Select a ship first"
+                      : isFetchingCruiseDates
+                        ? "Loading..."
+                        : "No voyages available for this ship";
+                  return (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-black/60">Cruise Date</FormLabel>
+                      <FormControl>
+                        {cruiseItineraries?.length || isFetchingCruiseDates ? (
+                          // Catalog has voyages for this ship → pick a real sailing.
+                          <SearchableSelect
+                            options={cruiseDateOptions}
+                            value={field.value ?? ""}
+                            selectedLabel={field.value || undefined}
+                            onValueChange={field.onChange}
+                            placeholder={cruiseDatePlaceholder}
+                            searchPlaceholder="Search dates or port…"
+                            emptyMessage="No matching voyages."
+                            isLoading={isFetchingCruiseDates}
+                          />
+                        ) : (
+                          // No catalog voyages for this ship → free date entry.
+                          <DatePicker value={field.value ?? ""} onChange={field.onChange} />
+                        )}
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
 
               <FormField
@@ -1958,7 +1957,10 @@ export function BookingRHFForm({
         <BookingExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} />
 
         {/* ── UPSELLS ───────────────────────────────────────────────────────── */}
-        <BookingUpsellsSection control={control as unknown as Control<UpsellsFormValues>} />
+        <BookingUpsellsSection
+          control={control as unknown as Control<UpsellsFormValues>}
+          setValue={setValue as unknown as UseFormSetValue<UpsellsFormValues>}
+        />
 
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
           <SectionHeader icon={DollarSign} title="Pricing" />

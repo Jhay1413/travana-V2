@@ -178,7 +178,7 @@ export const bookingFormSchema = z.object({
     quantity: z.coerce.number().int().min(1).default(1),
     cost: z.coerce.number().min(0).default(0),
     commission: z.coerce.number().min(0).default(0),
-    addedAt: z.string().default(""),
+    tourOperatorId: z.string().default(""),
   })).default([]),
   tags: z.array(z.string()).default([]),
   is_test: z.boolean().default(false),

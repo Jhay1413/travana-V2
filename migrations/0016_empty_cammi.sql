@@ -1,0 +1,2 @@
+ALTER TABLE "booking_upsell" ADD COLUMN "tour_operator_id" uuid;--> statement-breakpoint
+ALTER TABLE "booking_upsell" ADD CONSTRAINT "booking_upsell_tour_operator_id_tour_operator_table_id_fk" FOREIGN KEY ("tour_operator_id") REFERENCES "public"."tour_operator_table"("id") ON DELETE set null ON UPDATE no action;
