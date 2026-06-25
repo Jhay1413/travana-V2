@@ -17,7 +17,7 @@ import {
   cruise_ship,
   cruise_itenary,
 } from '@shared/schema';
-import { eq, ilike, and, gte } from 'drizzle-orm';
+import { eq, ilike, and, gte, sql } from 'drizzle-orm';
 
 export const lookupRepository = {
   async getCountries() {
@@ -34,7 +34,7 @@ export const lookupRepository = {
     if (conditions.length === 1) query = query.where(conditions[0]) as any;
     else if (conditions.length > 1) query = query.where(and(...conditions)) as any;
 
-    let ordered = query.orderBy(destination.name) as any;
+    let ordered = query.orderBy(sql`lower(${destination.name})`) as any;
     if (opts.limit) ordered = ordered.limit(opts.limit);
     return ordered;
   },
@@ -60,7 +60,7 @@ export const lookupRepository = {
     if (conditions.length === 1) query = query.where(conditions[0]) as any;
     else if (conditions.length > 1) query = query.where(and(...conditions)) as any;
 
-    let finalQuery = query.orderBy(resorts.name) as any;
+    let finalQuery = query.orderBy(sql`lower(${resorts.name})`) as any;
     if (opts.limit) finalQuery = finalQuery.limit(opts.limit);
     return finalQuery;
   },
@@ -92,7 +92,7 @@ export const lookupRepository = {
     if (conditions.length === 1) query = query.where(conditions[0]) as any;
     else if (conditions.length > 1) query = query.where(and(...conditions)) as any;
 
-    let ordered = query.orderBy(accomodation_list.name) as any;
+    let ordered = query.orderBy(sql`lower(${accomodation_list.name})`) as any;
     if (opts.limit) ordered = ordered.limit(opts.limit);
     return ordered;
   },
