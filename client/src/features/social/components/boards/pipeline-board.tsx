@@ -1095,7 +1095,19 @@ const QUOTE_STATUS_OPTIONS = [
   { value: "archived", label: "Archived" },
 ];
 
-export default function PipelineBoard() {
+export default function PipelineBoard({
+  agentId,
+  embedded = false,
+}: {
+  /** When set, the board is locked to this agent — the agent selector and
+   *  All/Mine toggle are hidden so the view can't escape the scope. Used to
+   *  embed the board inside the agent dashboard's Pipeline tab. */
+  agentId?: string;
+  /** Embedded mode: drop the page-level title and full-bleed margins so the
+   *  board fits inside a card instead of spanning the page. */
+  embedded?: boolean;
+} = {}) {
+  const lockAgent = !!agentId;
   const { data: currentUser } = useCurrentUser();
   const updateTransactionMutation = useUpdateTransaction();
   const updateQuoteMutation = useUpdateQuote();
@@ -1107,7 +1119,7 @@ export default function PipelineBoard() {
   const [viewMode, setViewMode] = useState<ViewMode>("board");
   // Seed from the persisted auth store so we know the current agent on the very
   // first render (no empty window) and never fire an all-agents fetch by accident.
-  const [selectedAgentId, setSelectedAgentId] = useState<string>(() => useAuthStore.getState().user?.id ?? "");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(() => agentId ?? useAuthStore.getState().user?.id ?? "");
   const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "mine">("all");
   const [showFilters, setShowFilters] = useState(false);
@@ -1124,12 +1136,18 @@ export default function PipelineBoard() {
   const [selectedDeal, setSelectedDeal] = useState<{ transaction: Transaction; stage: PipelineStage } | null>(null);
 
   useEffect(() => {
+    // When locked to a specific agent (embedded dashboard view), always track
+    // that agent and never fall through to the current-user / all-agents logic.
+    if (lockAgent) {
+      if (agentId && agentId !== selectedAgentId) setSelectedAgentId(agentId);
+      return;
+    }
     // Always default to the current agent's own pipeline, even for admins/managers.
     // They can still switch to another agent (or "all") via the selector.
     if (currentUser?.id && !selectedAgentId) {
       setSelectedAgentId(currentUser.id);
     }
-  }, [currentUser?.id, selectedAgentId]);
+  }, [lockAgent, agentId, currentUser?.id, selectedAgentId]);
 
   const agentFilter = selectedAgentId && selectedAgentId !== "all" ? selectedAgentId : undefined;
   const quoteStatusParam = quoteStatusFilter !== "all" ? quoteStatusFilter : undefined;
@@ -1315,16 +1333,20 @@ export default function PipelineBoard() {
   const qMap: Record<PipelineStage, typeof enquiryQ> = { Enquiry: enquiryQ, Quoted: quoteQ, "In Play": inPlayQ, Booked: bookingQ };
   const dMap: Record<PipelineStage, ReturnType<typeof flatten>> = { Enquiry: eD, Quoted: qD, "In Play": iD, Booked: bD };
 
+  // Full-bleed negative margins make the board span a padded page; inside an
+  // embedded card we drop them so the board stays within the card's padding.
+  const bleed = embedded ? "" : "-mx-4 sm:-mx-6 px-4 sm:px-6";
+
   return (
     <>
       <div className="min-h-0" style={{ background: "#FAFBFC" }} onDragEnd={() => setDragState({ active: false, fromStage: null })}>
         {/* ─── Header ─── */}
-        <div className="border-b border-gray-200 bg-white -mx-4 sm:-mx-6 px-4 sm:px-6">
+        <div className={`border-b border-gray-200 bg-white ${bleed}`}>
           <div className="py-3">
             {/* Top row */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-3">
-                <h2 className="text-xl font-bold text-gray-900">Pipeline</h2>
+                {!embedded && <h2 className="text-xl font-bold text-gray-900">Pipeline</h2>}
                 <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
                   {(["board", "list", "forecast"] as const).map(v => (
                     <button
@@ -1370,30 +1392,34 @@ export default function PipelineBoard() {
                     {QUOTE_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value} data-testid={`select-quote-status-${o.value}`}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                {selectedAgentId && <UserReassignSelect value={selectedAgentId} onValueChange={setSelectedAgentId} allowAll allLabel="All Agents" className="w-[180px]" data-testid="select-agent-filter" />}
+                {!lockAgent && selectedAgentId && <UserReassignSelect value={selectedAgentId} onValueChange={setSelectedAgentId} allowAll allLabel="All Agents" className="w-[180px]" data-testid="select-agent-filter" />}
               </div>
             )}
 
             {/* Bottom row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  {(["all", "mine"] as const).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => { setActiveFilter(f); if (f === "mine" && currentUser?.id) setSelectedAgentId(currentUser.id); else setSelectedAgentId("all"); }}
-                      className={`px-3 py-1 text-xs rounded-full font-medium transition-all ${activeFilter === f ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"}`}
-                      data-testid={`button-filter-${f}`}
-                    >
-                      {f === "all" ? "All Deals" : "My Deals"}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[11px] text-gray-300">|</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500">Agent:</span>
-                  {selectedAgentId && <UserReassignSelect value={selectedAgentId} onValueChange={setSelectedAgentId} allowAll allLabel="All Agents" className="w-[140px] h-7 text-xs" data-testid="select-agent-inline" />}
-                </div>
+                {!lockAgent && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      {(["all", "mine"] as const).map(f => (
+                        <button
+                          key={f}
+                          onClick={() => { setActiveFilter(f); if (f === "mine" && currentUser?.id) setSelectedAgentId(currentUser.id); else setSelectedAgentId("all"); }}
+                          className={`px-3 py-1 text-xs rounded-full font-medium transition-all ${activeFilter === f ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"}`}
+                          data-testid={`button-filter-${f}`}
+                        >
+                          {f === "all" ? "All Deals" : "My Deals"}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[11px] text-gray-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-gray-500">Agent:</span>
+                      {selectedAgentId && <UserReassignSelect value={selectedAgentId} onValueChange={setSelectedAgentId} allowAll allLabel="All Agents" className="w-[140px] h-7 text-xs" data-testid="select-agent-inline" />}
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-4 text-xs">
                 <div className="flex items-center gap-1.5"><span className="text-gray-400">Deals:</span><span className="font-semibold text-gray-700" data-testid="pipeline-total-deals">{isLoading ? "…" : totalDeals}</span></div>
@@ -1406,7 +1432,7 @@ export default function PipelineBoard() {
 
         {viewMode === "board" && (
           <>
-            <div className="flex gap-4 p-5 overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+            <div className={`flex gap-4 py-5 overflow-x-auto ${embedded ? "px-0" : "p-5 -mx-4 sm:-mx-6 px-4 sm:px-6"}`}>
               {STAGES.map(s => {
                 const q = qMap[s], d = dMap[s];
                 return (

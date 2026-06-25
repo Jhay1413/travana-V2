@@ -24,6 +24,11 @@ export function ReferralStatsSection({ clientId }: { clientId: string }) {
   const wallet = stats?.availableBalance ?? 0;
   const overall = stats?.overallPayout ?? 0;
 
+  // Hide the summary entirely when there's no referral activity.
+  if (total === 0 && pending === 0 && wallet === 0 && overall === 0) {
+    return null;
+  }
+
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-3" data-testid="referral-stats-section">
       <div className="mb-2.5 flex items-center gap-1.5">

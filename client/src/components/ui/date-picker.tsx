@@ -11,6 +11,8 @@ interface DatePickerProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  /** When true, dates before today can't be selected. */
+  disablePast?: boolean;
   "data-testid"?: string;
 }
 
@@ -37,11 +39,20 @@ function DatePicker({
   onChange,
   placeholder = "Pick a date",
   className,
+  disablePast = false,
   "data-testid": testId,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
   const selectedDate = React.useMemo(() => parseDate(value), [value]);
+
+  // Midnight today, so "today" itself stays selectable.
+  const minDate = React.useMemo(() => {
+    if (!disablePast) return undefined;
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [disablePast]);
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={false}>
@@ -68,6 +79,7 @@ function DatePicker({
             setOpen(false);
           }}
           defaultMonth={selectedDate}
+          disabled={minDate ? { before: minDate } : undefined}
         />
       </PopoverContent>
     </Popover>

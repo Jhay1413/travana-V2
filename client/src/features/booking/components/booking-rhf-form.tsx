@@ -1345,7 +1345,7 @@ export function BookingRHFForm({
                           />
                         ) : (
                           // No catalog voyages for this ship → free date entry.
-                          <DatePicker value={field.value ?? ""} onChange={field.onChange} />
+                          <DatePicker value={field.value ?? ""} onChange={field.onChange} disablePast />
                         )}
                       </FormControl>
                       <FormMessage />

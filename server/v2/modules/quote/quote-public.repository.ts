@@ -318,6 +318,24 @@ export const quotePublicRepository = {
   },
 
   async logView(quoteId: string, viewData: Omit<InsertQuoteView, "quoteId">): Promise<QuoteView> {
+    // Dedup repeat views: if the same IP already viewed this quote within the
+    // last 10 minutes, return that existing row instead of inserting a new one.
+    if (viewData.ipAddress) {
+      const [recent] = await db
+        .select()
+        .from(quoteViewsTable)
+        .where(
+          and(
+            eq(quoteViewsTable.quoteId, quoteId),
+            eq(quoteViewsTable.ipAddress, viewData.ipAddress),
+            sql`${quoteViewsTable.viewedAt} > now() - interval '10 minutes'`,
+          ),
+        )
+        .orderBy(desc(quoteViewsTable.viewedAt))
+        .limit(1);
+      if (recent) return recent;
+    }
+
     const [result] = await db.insert(quoteViewsTable).values({ quoteId, ...viewData }).returning();
     return result;
   },

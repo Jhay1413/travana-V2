@@ -81,7 +81,7 @@ function ItemRow({ item, active, collapsed, count = 0 }: { item: NavItem; active
         <Icon className="h-4 w-4" />
         {showBadge && (
           <span
-            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white"
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-black"
             data-testid={`badge-nav-${item.badge}`}
           >
             {badgeLabel}
@@ -119,12 +119,7 @@ function ItemRow({ item, active, collapsed, count = 0 }: { item: NavItem; active
       <div className="flex items-center gap-2">
         {showBadge && (
           <span
-            className={cn(
-              "inline-flex min-w-[28px] items-center justify-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums",
-              active
-                ? "border-black/10 bg-black/10 text-black dark:border-white/15 dark:bg-white/15 dark:text-white"
-                : "border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/10 dark:text-white/80"
-            )}
+            className="inline-flex min-w-[28px] items-center justify-center rounded-full border border-red-700 bg-red-600 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white shadow-sm"
             data-testid={`badge-nav-${item.badge}`}
             aria-label={`${count} ${item.label}`}
           >

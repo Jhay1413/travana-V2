@@ -1,9 +1,49 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Eye, Monitor, Smartphone, Tablet } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useRecentQuoteEngagement } from "@/hooks/queries";
 import type { QuoteEngagementView } from "@/features/quote/api/quote.api";
+
+type EngagementFilter = "all" | "today" | "yesterday" | "week";
+
+// A quote viewed within this window is treated as "just viewed" and its row is
+// highlighted (orange background, white text, pulsing) until the window passes.
+const RECENT_VIEW_WINDOW_MS = 10 * 60_000; // 10 minutes
+
+function isRecentlyViewed(iso: string, now: number): boolean {
+  return now - new Date(iso).getTime() < RECENT_VIEW_WINDOW_MS;
+}
+
+const FILTER_OPTIONS: { value: EngagementFilter; label: string }[] = [
+  { value: "all", label: "All time" },
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "week", label: "This week" },
+];
+
+// Returns true when `iso` falls within the selected time window (based on the
+// viewer's local calendar day).
+function matchesFilter(iso: string, filter: EngagementFilter): boolean {
+  if (filter === "all") return true;
+  const viewed = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dayMs = 86_400_000;
+  const t = viewed.getTime();
+  if (filter === "today") return t >= startOfToday;
+  if (filter === "yesterday") return t >= startOfToday - dayMs && t < startOfToday;
+  // "week": from the start of the current week (Monday) through now.
+  const dow = (now.getDay() + 6) % 7; // 0 = Monday
+  return t >= startOfToday - dow * dayMs;
+}
 
 function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();
@@ -26,20 +66,33 @@ function DeviceIcon({ device }: { device: string | null }) {
   return <Monitor className="h-3 w-3" />;
 }
 
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function ViewItem({ view }: { view: QuoteEngagementView }) {
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
       <div className="flex items-center gap-2 min-w-0">
         <DeviceIcon device={view.deviceType} />
-        <span className="truncate text-black/75 dark:text-white/75">
-          {view.viewerName || "Unknown viewer"}
-        </span>
+        {view.viewerName && (
+          <span className="truncate text-black/75 dark:text-white/75">{view.viewerName}</span>
+        )}
         {view.browser && (
-          <span className="text-black/40 dark:text-white/40 truncate">· {view.browser}</span>
+          <span className="text-black/40 dark:text-white/40 truncate">
+            {view.viewerName ? "· " : ""}
+            {view.browser}
+          </span>
         )}
       </div>
       <span className="shrink-0 text-black/50 dark:text-white/50">
-        {formatRelative(view.viewedAt)}
+        {formatDateTime(view.viewedAt)}
       </span>
     </div>
   );
@@ -48,16 +101,27 @@ function ViewItem({ view }: { view: QuoteEngagementView }) {
 export function EngagementSection() {
   const { data: rows = [], isLoading } = useRecentQuoteEngagement(10);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [filter, setFilter] = useState<EngagementFilter>("all");
   const [, navigate] = useLocation();
+
+  // Re-evaluate "recently viewed" periodically so the highlight fades out on its
+  // own ~10 minutes after the last view, without needing a refetch.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Most-recently-viewed quotes first; re-viewing a quote bumps it to the top.
   const sortedRows = useMemo(
     () =>
-      [...rows].sort(
-        (a, b) =>
-          new Date(b.lastViewedAt).getTime() - new Date(a.lastViewedAt).getTime()
-      ),
-    [rows]
+      [...rows]
+        .filter((r) => matchesFilter(r.lastViewedAt, filter))
+        .sort(
+          (a, b) =>
+            new Date(b.lastViewedAt).getTime() - new Date(a.lastViewedAt).getTime()
+        ),
+    [rows, filter]
   );
 
   if (!isLoading && rows.length === 0) return null;
@@ -69,13 +133,27 @@ export function EngagementSection() {
           <Eye className="h-4 w-4 text-black/60 dark:text-white/60" />
           <div className="text-sm font-semibold">Quote Engagement</div>
         </div>
-        <div className="text-[11px] text-muted-foreground">Client views</div>
+        <Select value={filter} onValueChange={(v) => setFilter(v as EngagementFilter)}>
+          <SelectTrigger className="h-7 w-auto gap-1.5 rounded-full px-2.5 text-[11px]" data-testid="engagement-filter">
+            <span className="text-muted-foreground">Filter by:</span>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FILTER_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
         <div className="text-xs text-muted-foreground py-3 text-center">Loading…</div>
+      ) : sortedRows.length === 0 ? (
+        <div className="text-xs text-muted-foreground py-3 text-center">No views in this period</div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
           {sortedRows.map((row) => {
             const isOpen = !!expanded[row.quoteId];
             const sortedViews = [...row.views].sort(
@@ -90,12 +168,16 @@ export function EngagementSection() {
             const displayName = hasRealClientName
               ? row.clientName
               : fallbackViewerName || "No client linked";
+            const recentlyViewed = isRecentlyViewed(row.lastViewedAt, now);
             return (
               <div
                 key={row.quoteId}
-                className="rounded-2xl border border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02] overflow-hidden"
+                className="relative rounded-2xl border border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02] overflow-hidden"
                 data-testid={`engagement-row-${row.quoteId}`}
               >
+                {recentlyViewed && (
+                  <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl border-2 border-red-500 animate-pulse" />
+                )}
                 <button
                   type="button"
                   onClick={() => setExpanded((s) => ({ ...s, [row.quoteId]: !s[row.quoteId] }))}

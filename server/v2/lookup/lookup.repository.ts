@@ -17,7 +17,7 @@ import {
   cruise_ship,
   cruise_itenary,
 } from '@shared/schema';
-import { eq, ilike, and } from 'drizzle-orm';
+import { eq, ilike, and, gte } from 'drizzle-orm';
 
 export const lookupRepository = {
   async getCountries() {
@@ -156,10 +156,12 @@ export const lookupRepository = {
   },
 
   async getCruiseItineraries(shipId: string) {
+    // Only offer sailings from today onward — past sailing dates aren't bookable.
+    const today = new Date().toISOString().slice(0, 10);
     return db
       .select()
       .from(cruise_itenary)
-      .where(eq(cruise_itenary.ship_id, shipId))
+      .where(and(eq(cruise_itenary.ship_id, shipId), gte(cruise_itenary.date, today)))
       .orderBy(cruise_itenary.date);
   },
 };

@@ -156,7 +156,7 @@ export function QuoteCruiseDetailsSection() {
                     />
                   ) : (
                     // No catalog voyages for this ship → free date entry.
-                    <DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9" />
+                    <DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9" disablePast />
                   )}
                 </FormControl>
                 <FormMessage />
