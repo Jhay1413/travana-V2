@@ -77,8 +77,8 @@ export default function AgentOverviewPage() {
   return (
     <section className="space-y-4">
       <ProfitStatBoxes profitStats={profitStats} isAgentView={isAgentView} />
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
-        <Card className="glass ringed grain rounded-3xl p-4 md:p-5">
+      <div className="grid gap-4 lg:grid-cols-[1.5fr_.65fr]">
+        <Card className="glass ringed grain min-w-0 rounded-3xl p-4 md:p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1">
               <div className="text-sm font-medium" data-testid="text-overview-title">
@@ -149,7 +149,7 @@ export default function AgentOverviewPage() {
           </Tabs>
         </Card>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <EngagementSection />
           <PinnedSection />
           <ExpiringQuotesSection userId={userId} tab={tab} />

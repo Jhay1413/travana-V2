@@ -11,5 +11,5 @@ import PipelineBoard from "@/features/social/components/boards/pipeline-board";
  */
 export function PipelineTab({ userId }: { userId: string; tab: string }) {
   if (!userId) return null;
-  return <PipelineBoard agentId={userId} embedded />;
+  return <PipelineBoard agentId={userId} embedded hideBooked />;
 }

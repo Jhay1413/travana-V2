@@ -128,14 +128,14 @@ export function EngagementSection() {
 
   return (
     <Card className="glass ringed grain rounded-3xl p-4 md:p-5" data-testid="card-engagement">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Eye className="h-4 w-4 text-black/60 dark:text-white/60" />
-          <div className="text-sm font-semibold">Quote Engagement</div>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Eye className="h-4 w-4 shrink-0 text-black/60 dark:text-white/60" />
+          <div className="truncate text-sm font-semibold">Quote Engagement</div>
         </div>
         <Select value={filter} onValueChange={(v) => setFilter(v as EngagementFilter)}>
-          <SelectTrigger className="h-7 w-auto gap-1.5 rounded-full px-2.5 text-[11px]" data-testid="engagement-filter">
-            <span className="text-muted-foreground">Filter by:</span>
+          <SelectTrigger className="h-7 w-auto shrink-0 gap-1.5 rounded-full px-2.5 text-[11px]" data-testid="engagement-filter">
+            <span className="text-muted-foreground hidden sm:inline">Filter by:</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

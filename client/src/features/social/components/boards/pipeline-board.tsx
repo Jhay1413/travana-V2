@@ -1098,6 +1098,7 @@ const QUOTE_STATUS_OPTIONS = [
 export default function PipelineBoard({
   agentId,
   embedded = false,
+  hideBooked = false,
 }: {
   /** When set, the board is locked to this agent — the agent selector and
    *  All/Mine toggle are hidden so the view can't escape the scope. Used to
@@ -1106,6 +1107,8 @@ export default function PipelineBoard({
   /** Embedded mode: drop the page-level title and full-bleed margins so the
    *  board fits inside a card instead of spanning the page. */
   embedded?: boolean;
+  /** Hide the Booked column (and skip fetching it). Used by the dashboard tab. */
+  hideBooked?: boolean;
 } = {}) {
   const lockAgent = !!agentId;
   const { data: currentUser } = useCurrentUser();
@@ -1161,7 +1164,7 @@ export default function PipelineBoard({
   const enquiryQ = usePipelineColumn("enquiry", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
   const quoteQ = usePipelineColumn("quote", PIPELINE_PAGE_SIZE, agentFilter, quoteStatusParam, { enabled: agentResolved });
   const inPlayQ = usePipelineColumn("in_play", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
-  const bookingQ = usePipelineColumn("booking", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
+  const bookingQ = usePipelineColumn("booking", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved && !hideBooked });
 
   const flatten = (q: typeof enquiryQ) => {
     if (!q.data?.pages) return { items: [] as Transaction[], total: 0, totalProfit: 0, totalValue: 0 };
@@ -1332,6 +1335,7 @@ export default function PipelineBoard({
 
   const qMap: Record<PipelineStage, typeof enquiryQ> = { Enquiry: enquiryQ, Quoted: quoteQ, "In Play": inPlayQ, Booked: bookingQ };
   const dMap: Record<PipelineStage, ReturnType<typeof flatten>> = { Enquiry: eD, Quoted: qD, "In Play": iD, Booked: bD };
+  const visibleStages = hideBooked ? STAGES.filter(s => s !== "Booked") : STAGES;
 
   // Full-bleed negative margins make the board span a padded page; inside an
   // embedded card we drop them so the board stays within the card's padding.
@@ -1433,7 +1437,7 @@ export default function PipelineBoard({
         {viewMode === "board" && (
           <>
             <div className={`flex gap-4 py-5 overflow-x-auto ${embedded ? "px-0" : "p-5 -mx-4 sm:-mx-6 px-4 sm:px-6"}`}>
-              {STAGES.map(s => {
+              {visibleStages.map(s => {
                 const q = qMap[s], d = dMap[s];
                 return (
                   <StageColumn
@@ -1472,7 +1476,7 @@ export default function PipelineBoard({
 
         {viewMode === "forecast" && (
           <PipelineForecastView
-            stageData={dMap}
+            stageData={hideBooked ? { Enquiry: eD, Quoted: qD, "In Play": iD } as any : dMap}
             isLoading={isLoading}
           />
         )}
