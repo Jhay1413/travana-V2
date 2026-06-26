@@ -20,13 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCountries, useDestinations, useResorts } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
 import axios from "@/api/client/axios-client";
@@ -199,24 +193,19 @@ export function AddAccommodationModal({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs font-medium text-black/60">Country</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={(v) => handleCountryChange(v, field.onChange)}
-                    disabled={countriesLoading}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                        <SelectValue placeholder="Select country..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {(countries || []).map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.country_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value ?? ""}
+                      onValueChange={(v) => handleCountryChange(v, field.onChange)}
+                      options={(countries || []).map((c) => ({ value: c.id, label: c.country_name }))}
+                      placeholder="Select country..."
+                      searchPlaceholder="Search countries..."
+                      emptyMessage="No countries found."
+                      isLoading={countriesLoading}
+                      disabled={countriesLoading}
+                      data-testid="select-accom-country"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -229,24 +218,19 @@ export function AddAccommodationModal({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs font-medium text-black/60">Destination</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={(v) => handleDestinationChange(v, field.onChange)}
-                    disabled={(!countryId && !field.value) || destinationsLoading}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                        <SelectValue placeholder={!countryId && !field.value ? "Select a country first" : "Select destination..."} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {destinationOptionsWithFallback.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value ?? ""}
+                      onValueChange={(v) => handleDestinationChange(v, field.onChange)}
+                      options={destinationOptionsWithFallback.map((d) => ({ value: d.id, label: d.name }))}
+                      placeholder={!countryId && !field.value ? "Select a country first" : "Select destination..."}
+                      searchPlaceholder="Search destinations..."
+                      emptyMessage="No destinations found."
+                      isLoading={destinationsLoading}
+                      disabled={(!countryId && !field.value) || destinationsLoading}
+                      data-testid="select-accom-destination"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -261,30 +245,23 @@ export function AddAccommodationModal({
                   <FormLabel className="text-xs font-medium text-black/60">
                     Resort <span className="text-red-500">*</span>
                   </FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    disabled={(!destinationId && !countryId && !field.value) || resortsLoading}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                        <SelectValue
-                          placeholder={
-                            !destinationId && !countryId && !field.value
-                              ? "Select a destination first"
-                              : "Select resort..."
-                          }
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {resortOptionsWithFallback.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value ?? ""}
+                      onValueChange={field.onChange}
+                      options={resortOptionsWithFallback.map((r) => ({ value: r.id, label: r.name }))}
+                      placeholder={
+                        !destinationId && !countryId && !field.value
+                          ? "Select a destination first"
+                          : "Select resort..."
+                      }
+                      searchPlaceholder="Search resorts..."
+                      emptyMessage="No resorts found."
+                      isLoading={resortsLoading}
+                      disabled={(!destinationId && !countryId && !field.value) || resortsLoading}
+                      data-testid="select-accom-resort"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

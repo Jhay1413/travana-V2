@@ -25,6 +25,14 @@ function splitDateTime(iso: string | null | undefined): { date: string; time: st
   };
 }
 
+/** Split a flight's arrival datetime, defaulting the arrival DATE to the
+ * departure date when the data has no arrival date and no arrival time. */
+function splitArrival(arrivalIso: string | null | undefined, departDate: string): { date: string; time: string } {
+  const arr = splitDateTime(arrivalIso);
+  if (!arr.date && !arr.time) arr.date = departDate;
+  return arr;
+}
+
 function toIso(val: Date | string | null | undefined): string | null | undefined {
   if (!val) return val as null | undefined;
   if (val instanceof Date) return val.toISOString();
@@ -52,9 +60,9 @@ function buildDefaultValues(bookingData: any): BookingFormValues {
   const primaryAccom = accommodations.find((a: any) => a.is_primary) || accommodations[0];
 
   const outDep = splitDateTime(toIso(outbound?.departure_date_time));
-  const outArr = splitDateTime(toIso(outbound?.arrival_date_time));
+  const outArr = splitArrival(toIso(outbound?.arrival_date_time), outDep.date);
   const inDep = splitDateTime(toIso(inbound?.departure_date_time));
-  const inArr = splitDateTime(toIso(inbound?.arrival_date_time));
+  const inArr = splitArrival(toIso(inbound?.arrival_date_time), inDep.date);
   const checkIn = splitDateTime(toIso(primaryAccom?.check_in_date_time));
 
   return {
@@ -93,7 +101,7 @@ function buildDefaultValues(bookingData: any): BookingFormValues {
     outboundFlightNumber: outbound?.flight_number || "",
     outboundConnectingLegs: outboundFlights.slice(1).map((f: any) => {
       const dep = splitDateTime(toIso(f.departure_date_time));
-      const arr = splitDateTime(toIso(f.arrival_date_time));
+      const arr = splitArrival(toIso(f.arrival_date_time), dep.date);
       return {
         departAirportId: f.departing_airport_id || "",
         departAirport: "",
@@ -116,7 +124,7 @@ function buildDefaultValues(bookingData: any): BookingFormValues {
     inboundFlightNumber: inbound?.flight_number || "",
     inboundConnectingLegs: inboundFlights.slice(1).map((f: any) => {
       const dep = splitDateTime(toIso(f.departure_date_time));
-      const arr = splitDateTime(toIso(f.arrival_date_time));
+      const arr = splitArrival(toIso(f.arrival_date_time), dep.date);
       return {
         departAirportId: f.departing_airport_id || "",
         departAirport: "",

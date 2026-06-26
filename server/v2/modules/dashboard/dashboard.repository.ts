@@ -97,6 +97,25 @@ export const dashboardRepository = {
           .where(and(gte(booking.date_created, weekStart), eq(transaction.is_test, false), ...orgFilter))
       : bookingProfitBase.where(and(gte(booking.date_created, weekStart), eq(transaction.is_test, false)));
 
+    // Upsell commission is recognised by `added_at` (the period it was added),
+    // independent of when the booking was created — so it is aggregated from
+    // booking_upsell directly and added on top of the package-commission tiles.
+    const upsellProfitBase = db
+      .select({
+        todayUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${todayStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+        weekUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${weekStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+        monthUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${monthStart.toISOString()} AND ${booking_upsell.added_at} < ${monthEnd.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+      })
+      .from(booking_upsell)
+      .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
+
+    const upsellProfitScoped = orgId
+      ? upsellProfitBase
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          .where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false), ...orgFilter))
+      : upsellProfitBase.where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false)));
+
     const bookingMonthBase = db
       .select({
         monthCount: sql<number>`COUNT(*)`,
@@ -207,8 +226,8 @@ export const dashboardRepository = {
       ? db.select({ id: userTable.id, name: userTable.name, firstName: userTable.firstName, email: userTable.email }).from(userTable).where(eq(userTable.orgId, orgId))
       : db.select({ id: userTable.id, name: userTable.name, firstName: userTable.firstName, email: userTable.email }).from(userTable);
 
-    const [bookingProfitStats, bookingMonthStats, openQuoteStats, agentBookingRows, agentQuoteRows, allUsers] = await Promise.all([
-      bookingProfitScoped, bookingMonthScoped, openQuoteScoped, agentBookingScoped, agentQuoteScoped, allUsersQuery,
+    const [bookingProfitStats, upsellProfitStats, bookingMonthStats, openQuoteStats, agentBookingRows, agentQuoteRows, allUsers] = await Promise.all([
+      bookingProfitScoped, upsellProfitScoped, bookingMonthScoped, openQuoteScoped, agentBookingScoped, agentQuoteScoped, allUsersQuery,
     ]);
 
     const agentMap = new Map<string, { id: string; name: string; revenue: number; commission: number; bookings: number; quotes: number }>();
@@ -237,14 +256,16 @@ export const dashboardRepository = {
     }
 
     const bp = bookingProfitStats[0];
+    const up = upsellProfitStats[0];
     const bm = bookingMonthStats[0];
     const qs = openQuoteStats[0];
     const monthCount = Number(bm.monthCount);
-    const monthProfit = Number(bm.monthProfit);
+    // Profit tiles = package commission + upsell commission (recognised by added_at).
+    const monthProfit = Number(bm.monthProfit) + Number(up.monthUpsell);
 
     return {
-      todayProfit: Number(bp.todayProfit),
-      weekProfit: Number(bp.weekProfit),
+      todayProfit: Number(bp.todayProfit) + Number(up.todayUpsell),
+      weekProfit: Number(bp.weekProfit) + Number(up.weekUpsell),
       monthProfit,
       monthBookingsCount: monthCount,
       monthAvgBookingProfit: monthCount > 0 ? monthProfit / monthCount : 0,

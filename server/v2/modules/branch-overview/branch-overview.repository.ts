@@ -34,7 +34,7 @@ import type {
   TourOperatorBreakdownRow,
 } from "./branch-overview.types";
 import { buildScopeConditions, needsClientJoin, type ScopeFilter } from "../../utils/scope-conditions";
-import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
+import { totalBookingCommissionExpr, totalQuoteCommissionExpr, totalUpsellCommissionExpr } from "../../utils/commission-sql";
 import { quoteStatsConds } from "../../utils/quote-conditions";
 
 const bookingActiveCond = sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`;
@@ -104,10 +104,16 @@ export const branchOverviewRepository = {
       (() => {
         const q = db
           .select({
-            todayCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-            weekCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-            monthCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-            ytdCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+            // KPI profit tiles mirror the admin dashboard's definition (org-level,
+            // all branches) so the per-branch numbers reconcile to it: package
+            // commission only, and no is_active filter. See dashboard.repository.ts.
+            // Upsell commission is added on top, recognised by `added_at` (the period
+            // it was added), so a SUM over ALL scoped bookings — not just those
+            // created in the window — is required (this query has no date_created filter).
+            todayCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: todayStart.toISOString() })}), 0)`,
+            weekCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: weekStart.toISOString() })}), 0)`,
+            monthCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
+            ytdCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: yearStart.toISOString() })}), 0)`,
             monthBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()})`,
           })
           .from(booking)
@@ -115,7 +121,7 @@ export const branchOverviewRepository = {
         const withClient = joinClient
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
-        return withClient.where(and(bookingActiveCond, ...baseCond));
+        return withClient.where(and(...baseCond));
       })(),
 
       // Active clients in last 90 days (distinct client_id on transactions)
@@ -498,12 +504,15 @@ export const branchOverviewRepository = {
     const joinClient = needsClientJoin(scope);
     const baseCond = buildScopeConditions(scope);
 
+    // Per-agent commission mirrors the KPI profit tiles: package commission only
+    // (no line-item commissions, no is_active filter), with upsell commission added
+    // on top via a separate added_at-based aggregate below.
     const bookingAgg = (() => {
       const q = db
         .select({
           agentId: transaction.user_id,
           bookings: sql<number>`COUNT(*)`,
-          commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
+          commission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
@@ -515,7 +524,33 @@ export const branchOverviewRepository = {
           and(
             gte(booking.date_created, monthStart),
             sql`${booking.date_created} < ${monthEnd.toISOString()}`,
-            bookingActiveCond,
+            ...baseCond,
+          ),
+        )
+        .groupBy(transaction.user_id);
+    })();
+
+    // Upsell commission is recognised by `added_at`, independent of the booking's
+    // creation month, so it is aggregated from booking_upsell directly and merged
+    // into each agent's commission below.
+    const upsellAgg = (() => {
+      const q = db
+        .select({
+          agentId: transaction.user_id,
+          upsell: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+        })
+        .from(booking_upsell)
+        .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
+      const withClient = joinClient
+        ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        : q;
+      return withClient
+        .where(
+          and(
+            eq(booking_upsell.is_active, true),
+            gte(booking_upsell.added_at, monthStart),
+            sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
             ...baseCond,
           ),
         )
@@ -547,10 +582,11 @@ export const branchOverviewRepository = {
         .groupBy(transaction.user_id);
     })();
 
-    const [bookingRows, quoteRows] = await Promise.all([bookingAgg, quoteAgg]);
+    const [bookingRows, upsellRows, quoteRows] = await Promise.all([bookingAgg, upsellAgg, quoteAgg]);
 
     const userIds = new Set<string>();
     for (const r of bookingRows) if (r.agentId) userIds.add(r.agentId);
+    for (const r of upsellRows) if (r.agentId) userIds.add(r.agentId);
     for (const r of quoteRows) if (r.agentId) userIds.add(r.agentId);
 
     const teamUsers = scope.branchId
@@ -611,6 +647,11 @@ export const branchOverviewRepository = {
       const row = map.get(r.agentId)!;
       row.bookings = Number(r.bookings);
       row.commission = Number(r.commission);
+    }
+    for (const r of upsellRows) {
+      if (!r.agentId) continue;
+      if (!map.has(r.agentId)) continue;
+      map.get(r.agentId)!.commission += Number(r.upsell);
     }
     for (const r of quoteRows) {
       if (!r.agentId) continue;

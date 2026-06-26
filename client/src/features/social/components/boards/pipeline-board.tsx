@@ -454,7 +454,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
                         {!isPrimary && (
                           <button
                             className="flex-shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors opacity-0 group-hover/qv:opacity-100"
-                            title="Set as primary"
+                            title="Set as main"
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowQuotes(false);
@@ -464,7 +464,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
                               });
                             }}
                           >
-                            Set primary
+                            Set as main
                           </button>
                         )}
                       </div>

@@ -50,18 +50,21 @@ export function totalBookingCommissionExpr(
  * Deliberately kept OUT of `totalBookingCommissionExpr()` — upsell commission is
  * attributed to the month it was added, not the booking's creation/travel month.
  * Pass `range` to restrict to upsells added within a half-open `[start, end)`
- * window (e.g. a report month); omit it to sum every active upsell on the booking.
+ * window (e.g. a report month); either bound may be omitted for an open-ended
+ * window (e.g. `{ start }` = everything added on/after `start`). Omit `range`
+ * entirely to sum every active upsell on the booking.
  *
  * @param bookingIdRef defaults to `booking.id`; pass a different reference when
  *   the query aliases the booking table or compares against a subquery.
  */
 export function totalUpsellCommissionExpr(
   bookingIdRef: SQL | unknown = booking.id,
-  range?: { start: Date | string; end: Date | string },
+  range?: { start?: Date | string; end?: Date | string },
 ): SQL<number> {
-  const rangeCond = range
-    ? sql`AND ${booking_upsell.added_at} >= ${range.start} AND ${booking_upsell.added_at} < ${range.end}`
-    : sql``;
+  const bounds: SQL[] = [];
+  if (range?.start) bounds.push(sql`AND ${booking_upsell.added_at} >= ${range.start}`);
+  if (range?.end) bounds.push(sql`AND ${booking_upsell.added_at} < ${range.end}`);
+  const rangeCond = bounds.length ? sql.join(bounds, sql` `) : sql``;
   return sql<number>`COALESCE((
     SELECT SUM(CAST(${booking_upsell.commission} AS DECIMAL))
     FROM ${booking_upsell}

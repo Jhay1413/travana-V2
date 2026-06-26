@@ -33,6 +33,8 @@ interface SearchableSelectProps {
   onAddNew?: () => void;
   /** Label for the add-new button (default: "Add new") */
   addNewLabel?: string;
+  /** Disable the trigger (e.g. while loading or until an upstream value is chosen) */
+  disabled?: boolean;
 }
 
 export function SearchableSelect({
@@ -50,6 +52,7 @@ export function SearchableSelect({
   selectedLabel,
   onAddNew,
   addNewLabel = "Add new",
+  disabled,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
 
@@ -62,6 +65,7 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          disabled={disabled}
           className={cn(
             "h-9 w-full justify-between rounded-xl border-black/10 bg-white/70 font-normal",
             !value && "text-muted-foreground",

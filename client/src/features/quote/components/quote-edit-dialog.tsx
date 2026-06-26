@@ -45,6 +45,14 @@ function splitDateTime(iso: string | undefined | null): { date: string; time: st
   };
 }
 
+/** Split a flight's arrival datetime, defaulting the arrival DATE to the
+ * departure date when the data has no arrival date and no arrival time. */
+function splitArrival(arrivalIso: string | undefined | null, departDate: string): { date: string; time: string } {
+  const arr = splitDateTime(arrivalIso);
+  if (!arr.date && !arr.time) arr.date = departDate;
+  return arr;
+}
+
 function toIso(val: Date | string | null | undefined): string | null | undefined {
   if (!val) return val as null | undefined;
   if (val instanceof Date) return val.toISOString();
@@ -152,9 +160,9 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
   const primaryAccom = accommodations.find((a) => a.is_primary) || accommodations[0];
 
   const outDep = splitDateTime(outbound?.departure_date_time);
-  const outArr = splitDateTime(outbound?.arrival_date_time);
+  const outArr = splitArrival(outbound?.arrival_date_time, outDep.date);
   const inDep = splitDateTime(inbound?.departure_date_time);
-  const inArr = splitDateTime(inbound?.arrival_date_time);
+  const inArr = splitArrival(inbound?.arrival_date_time, inDep.date);
 
   const checkIn = splitDateTime(primaryAccom?.check_in_date_time);
 
@@ -208,7 +216,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     outboundFlightNumber: outbound?.flight_number || "",
     outboundConnectingLegs: outboundFlights.slice(1).map((f) => {
       const dep = splitDateTime(f.departure_date_time);
-      const arr = splitDateTime(f.arrival_date_time);
+      const arr = splitArrival(f.arrival_date_time, dep.date);
       return {
         departAirportId: f.departing_airport_id || "",
         departAirport: "",
@@ -232,7 +240,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     inboundFlightNumber: inbound?.flight_number || "",
     inboundConnectingLegs: inboundFlights.slice(1).map((f) => {
       const dep = splitDateTime(f.departure_date_time);
-      const arr = splitDateTime(f.arrival_date_time);
+      const arr = splitArrival(f.arrival_date_time, dep.date);
       return {
         departAirportId: f.departing_airport_id || "",
         departAirport: "",

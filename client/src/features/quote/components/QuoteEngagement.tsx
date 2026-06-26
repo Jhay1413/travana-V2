@@ -67,6 +67,7 @@ export function QuoteEngagement({ quoteId, className }: QuoteEngagementProps) {
   const { data: viewStats, isLoading: viewsLoading } = useQuoteViews(quoteId);
   const { data: actions, isLoading: actionsLoading } = useQuoteCustomerActions(quoteId);
   const [collapsed, setCollapsed] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const isLoading = viewsLoading || actionsLoading;
   const clientViews: QuoteClientViewEntry[] = viewStats?.clientViews ?? [];
@@ -196,35 +197,59 @@ export function QuoteEngagement({ quoteId, className }: QuoteEngagementProps) {
               </div>
 
               {publicViews.length > 0 && (
-                <div
-                  className={cn(
-                    "mt-2 space-y-1",
-                    publicViews.length >= 5 && "max-h-40 overflow-y-auto pr-1"
+                <>
+                  <div
+                    className={cn(
+                      "mt-2 space-y-1",
+                      showAllHistory && publicViews.length >= 5 && "max-h-40 overflow-y-auto pr-1"
+                    )}
+                    data-testid="public-history-list"
+                  >
+                    {(showAllHistory ? publicViews : publicViews.slice(0, 2)).map((v) => {
+                      const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
+                      return (
+                        <div
+                          key={v.id}
+                          className="flex items-center gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5"
+                          data-testid={`public-view-${v.id}`}
+                        >
+                          <IconComp className="h-3 w-3 shrink-0 text-black/30" />
+                          <span className="text-[10px] text-black/60 flex-1">
+                            {v.browser || "Unknown browser"}
+                            {v.deviceType && v.deviceType !== "desktop" && (
+                              <span className="text-black/40"> · {v.deviceType}</span>
+                            )}
+                          </span>
+                          <span className="text-[10px] text-black/40 shrink-0">
+                            {formatTimeAgo(v.viewedAt)} · {formatDateTime(v.viewedAt)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {publicViews.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllHistory((v) => !v)}
+                      className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5 text-[10px] font-medium text-black/50 transition-colors hover:bg-black/[0.04] hover:text-black/70"
+                      data-testid="btn-toggle-public-history"
+                      aria-expanded={showAllHistory}
+                    >
+                      {showAllHistory ? (
+                        <>
+                          Show less
+                          <ChevronUp className="h-3 w-3" />
+                        </>
+                      ) : (
+                        <>
+                          Show all {publicViews.length}
+                          <ChevronDown className="h-3 w-3" />
+                        </>
+                      )}
+                    </button>
                   )}
-                  data-testid="public-history-list"
-                >
-                  {publicViews.map((v) => {
-                    const IconComp = deviceIcons[v.deviceType || ""] || Monitor;
-                    return (
-                      <div
-                        key={v.id}
-                        className="flex items-center gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-2.5 py-1.5"
-                        data-testid={`public-view-${v.id}`}
-                      >
-                        <IconComp className="h-3 w-3 shrink-0 text-black/30" />
-                        <span className="text-[10px] text-black/60 flex-1">
-                          {v.browser || "Unknown browser"}
-                          {v.deviceType && v.deviceType !== "desktop" && (
-                            <span className="text-black/40"> · {v.deviceType}</span>
-                          )}
-                        </span>
-                        <span className="text-[10px] text-black/40 shrink-0">
-                          {formatTimeAgo(v.viewedAt)} · {formatDateTime(v.viewedAt)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                </>
               )}
             </div>
           )}
