@@ -221,6 +221,17 @@ function isCardNearExpiry(t: Transaction, stage: PipelineStage): boolean {
   return false;
 }
 
+// Stage-aware "already expired" check. The board now surfaces expired-this-month
+// deals (see transaction.repository getPipelineByStatus); these cards pulse their
+// border so the agent can act on them.
+function isCardExpired(t: Transaction, stage: PipelineStage): boolean {
+  let expiry: Date | null = null;
+  if (stage === "Enquiry") expiry = getEnquiryExpiry(t);
+  else if (stage === "Quoted" || stage === "In Play") expiry = getQuoteExpiry(t);
+  if (!expiry) return false;
+  return expiry.getTime() <= Date.now();
+}
+
 function getAgentInitial(t: Transaction): string {
   return (t as any).assignedUser?.firstName?.[0]?.toUpperCase() || "?";
 }
@@ -249,6 +260,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
   const value = getTransactionValue(t);
   const { dest, country } = getDest(t);
   const nearExpiry = isCardNearExpiry(t, stage);
+  const expired = isCardExpired(t, stage);
   const tourOp = getTourOp(t);
   const quoteVariants = t.quote_variants || [];
   const duplicateCount = quoteVariants.filter(q => q.isQuoteCopy).length;
@@ -299,7 +311,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
 
   return (
     <div
-      className={`group/card bg-white rounded-xl border shadow-sm relative cursor-grab active:cursor-grabbing hover:shadow-md transition-all duration-200 active:scale-[1.02] ${isDragging ? "opacity-40" : ""} ${nearExpiry ? "animate-pulse border-red-300 ring-2 ring-red-400/70" : "border-gray-100 hover:border-gray-200"}`}
+      className={`group/card bg-white rounded-xl border shadow-sm relative cursor-grab active:cursor-grabbing hover:shadow-md transition-all duration-200 active:scale-[1.02] ${isDragging ? "opacity-40" : ""} border-gray-100 hover:border-gray-200`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("application/json", JSON.stringify({ transactionId: t.id, fromStage: stage }));
@@ -316,7 +328,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
         {/* Row 1: Client name + time ago */}
         <div className="flex items-start justify-between mb-1">
           <div className="flex-1 min-w-0">
-            <h4 className={`font-semibold text-[13px] truncate ${nearExpiry ? "text-red-600" : "text-gray-900"}`} data-testid={`pipeline-title-${t.id}`}>{clientName}</h4>
+            <h4 className={`font-semibold text-[13px] truncate ${(nearExpiry || expired) ? "animate-pulse text-red-600" : "text-gray-900"}`} data-testid={`pipeline-title-${t.id}`}>{clientName}</h4>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
             <span className="text-[11px] text-gray-400">{getTimeAgo(t.created_at)}</span>

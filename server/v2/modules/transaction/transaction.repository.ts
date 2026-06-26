@@ -316,8 +316,8 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
   const clientIds = Array.from(new Set(txns.map(t => t.client_id).filter(Boolean))) as string[];
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allUsers, allClients, allQuoteVariants] = await Promise.all([
-    db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
-    db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`, isNull(quote.deleted_at))),
+    db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status, date_created: enquiry_table.date_created, date_expiry: enquiry_table.date_expiry }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy, date_created: quote.date_created, date_expiry: quote.date_expiry }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`, isNull(quote.deleted_at))),
     db.select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, travel_date: booking.travel_date, adult: booking.adult, child: booking.child, infant: booking.infant, sales_price: booking.sales_price, package_commission: booking.package_commission, holiday_type_id: booking.holiday_type_id }).from(booking).where(inArray(booking.transaction_id, txnIds)),
     getPackageTypeMap(),
     userIds.length > 0 ? db.select({ id: user.id, firstName: user.firstName, lastName: user.lastName, name: user.name, email: user.email }).from(user).where(inArray(user.id, userIds)) : Promise.resolve([]),
@@ -432,17 +432,21 @@ export const transactionRepository = {
     ];
     if (agentId) conditions.push(eq(transaction.user_id, agentId));
 
-    // "Not expired" display filter, derived from dates the same way as
-    // server/v2/utils/expiry.ts (effectiveExpiry = date_expiry, else date_created + 7d).
+    // Display filter for the Enquiry / Quoted / In Play columns, derived from dates the
+    // same way as server/v2/utils/expiry.ts (effectiveExpiry = date_expiry, else date_created + 7d).
+    // We show items that are EITHER not yet expired (effectiveExpiry >= NOW()) OR expired but
+    // within the current calendar month (effectiveExpiry >= start-of-month). Those two cases
+    // collapse to a single bound: effectiveExpiry >= DATE_TRUNC('month', NOW()). Expired-this-month
+    // cards still surface so the agent can act on them (the client pulses their border); anything
+    // that expired in a previous month drops off the board.
     // NOTE: this filters DISPLAY only — it never mutates quote_status / enquiry.status.
-    // A stale enquiry or expired quote keeps its status but drops off the active board.
-    const enquiryNotExpired = sql`(
-      (e.date_expiry IS NOT NULL AND e.date_expiry >= NOW())
-      OR (e.date_expiry IS NULL AND e.date_created >= NOW() - INTERVAL '7 days')
+    const enquiryVisible = sql`(
+      (e.date_expiry IS NOT NULL AND e.date_expiry >= DATE_TRUNC('month', NOW()))
+      OR (e.date_expiry IS NULL AND e.date_created >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
     )`;
-    const quoteNotExpired = sql`(
-      (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= NOW())
-      OR (${quote.date_expiry} IS NULL AND ${quote.date_created} >= NOW() - INTERVAL '7 days')
+    const quoteVisible = sql`(
+      (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= DATE_TRUNC('month', NOW()))
+      OR (${quote.date_expiry} IS NULL AND ${quote.date_created} >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
     )`;
 
     if (column === "enquiry") {
@@ -453,7 +457,7 @@ export const transactionRepository = {
         WHERE e.transaction_id = ${transaction.id}
           AND e.is_active IS NOT FALSE
           AND e.status <> 'LOST'
-          AND ${enquiryNotExpired}
+          AND ${enquiryVisible}
       )`);
     } else if (column === "quoted") {
       // Quoted column: deal is on_quote AND its primary quote is 'quoted' and not expired.
@@ -467,7 +471,7 @@ export const transactionRepository = {
           AND ${quote.isQuoteCopy} = FALSE
           AND ${quote.deleted_at} IS NULL
           AND ${quote.quote_status}::text = ${quotedStatus}
-          AND ${quoteNotExpired}
+          AND ${quoteVisible}
       )`);
     } else if (column === "in_play") {
       // In Play column: deal is on_quote AND its primary quote is 'in_play' and not expired.
@@ -478,7 +482,7 @@ export const transactionRepository = {
           AND ${quote.isQuoteCopy} = FALSE
           AND ${quote.deleted_at} IS NULL
           AND ${quote.quote_status}::text = 'in_play'
-          AND ${quoteNotExpired}
+          AND ${quoteVisible}
       )`);
     } else {
       // booking column: transaction.status = 'on_booking', limited to bookings
